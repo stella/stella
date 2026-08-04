@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Edición bloqueada",
     "viewOnly": "Solo lectura"
   },
+  "guides": {
+    "action": {
+      "replay": "Repetir",
+      "skip": "Omitir",
+      "start": "Empezar"
+    },
+    "checklist": {
+      "progress": "{completed} de {total} completado"
+    },
+    "help": {
+      "buttonLabel": "Ayuda y guías",
+      "subtitle": "Recorridos interactivos del espacio de trabajo",
+      "title": "Ayuda y guías"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Omitido"
+    },
+    "tours": {
+      "chat": {
+        "description": "Escribe una instrucción y obtén una respuesta",
+        "examplePrompt": "Resume las obligaciones clave de este contrato",
+        "steps": {
+          "composer": {
+            "body": "Escribe tu pregunta o instrucción en el cuadro de mensaje.",
+            "title": "Escribe tu solicitud"
+          },
+          "send": {
+            "body": "Envía tu mensaje y el espacio de trabajo responde.",
+            "title": "Enviar"
+          },
+          "tools": {
+            "body": "Abre el menú de herramientas para adjuntar archivos, habilidades y fuentes.",
+            "title": "Añadir contexto"
+          }
+        },
+        "title": "Envía tu primer mensaje"
+      },
+      "documents": {
+        "description": "Sube un archivo y ábrelo",
+        "steps": {
+          "browse": {
+            "body": "Encuentra y abre cualquier documento que hayas añadido.",
+            "title": "Explora tus documentos"
+          },
+          "upload": {
+            "body": "Añade un archivo para incorporarlo a tu espacio de trabajo.",
+            "title": "Subir un documento"
+          }
+        },
+        "title": "Trabaja con documentos"
+      },
+      "playbooks": {
+        "description": "Convierte el conocimiento de revisión en un playbook reutilizable",
+        "steps": {
+          "create": {
+            "body": "Inicia un playbook para registrar cómo debe realizarse una revisión.",
+            "title": "Crear un playbook"
+          }
+        },
+        "title": "Crea un playbook"
+      },
+      "tabularReview": {
+        "description": "Extrae respuestas de muchos archivos a la vez",
+        "steps": {
+          "addColumn": {
+            "body": "Añade una pregunta para responder en cada fila.",
+            "title": "Añadir una columna"
+          }
+        },
+        "title": "Revisa en una tabla"
+      },
+      "workflows": {
+        "description": "Encadena pasos en un flujo de trabajo repetible",
+        "steps": {
+          "create": {
+            "body": "Combina pasos que se ejecutan juntos cuando lo necesites.",
+            "title": "Crear un flujo de trabajo"
+          }
+        },
+        "title": "Automatiza un flujo de trabajo"
+      }
+    },
+    "unavailable": "Esta guía no está disponible en este momento"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Término que anonimizar",

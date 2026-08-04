@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Editing blocked",
     "viewOnly": "View only"
   },
+  "guides": {
+    "action": {
+      "replay": "Replay",
+      "skip": "Skip",
+      "start": "Start"
+    },
+    "checklist": {
+      "progress": "{completed} of {total} complete"
+    },
+    "help": {
+      "buttonLabel": "Help and guides",
+      "subtitle": "Interactive tours of the workspace",
+      "title": "Help and guides"
+    },
+    "minutes": "{count} min",
+    "status": {
+      "skipped": "Skipped"
+    },
+    "tours": {
+      "chat": {
+        "description": "Write a prompt and get an answer",
+        "examplePrompt": "Summarize the key obligations in this contract",
+        "steps": {
+          "composer": {
+            "body": "Type your question or instruction in the message box.",
+            "title": "Write your request"
+          },
+          "send": {
+            "body": "Send your message and the workspace responds.",
+            "title": "Send it"
+          },
+          "tools": {
+            "body": "Open the tools menu to attach files, skills, and sources.",
+            "title": "Add context"
+          }
+        },
+        "title": "Send your first message"
+      },
+      "documents": {
+        "description": "Upload a file and open it",
+        "steps": {
+          "browse": {
+            "body": "Find and open any document you have added.",
+            "title": "Browse your documents"
+          },
+          "upload": {
+            "body": "Add a file to bring it into your workspace.",
+            "title": "Upload a document"
+          }
+        },
+        "title": "Work with documents"
+      },
+      "playbooks": {
+        "description": "Turn review know-how into a reusable playbook",
+        "steps": {
+          "create": {
+            "body": "Start a playbook to capture how a review should run.",
+            "title": "Create a playbook"
+          }
+        },
+        "title": "Build a playbook"
+      },
+      "tabularReview": {
+        "description": "Extract answers across many files at once",
+        "steps": {
+          "addColumn": {
+            "body": "Add a question to answer across every row.",
+            "title": "Add a column"
+          }
+        },
+        "title": "Review in a table"
+      },
+      "workflows": {
+        "description": "Chain steps into a repeatable workflow",
+        "steps": {
+          "create": {
+            "body": "Combine steps that run together on demand.",
+            "title": "Create a workflow"
+          }
+        },
+        "title": "Automate a workflow"
+      }
+    },
+    "unavailable": "This guide is not available right now"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Term to anonymize",

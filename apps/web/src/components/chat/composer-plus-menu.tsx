@@ -68,6 +68,8 @@ import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import { useGuideAnchor } from "@/features/guides/use-guide-anchor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -236,6 +238,7 @@ export const ComposerPlusMenu = ({
         disabled={disabled}
         render={
           <Button
+            {...useGuideAnchor(GUIDE_ANCHORS.chatToolsButton)}
             className={cn(
               "border-border size-7 shrink-0 rounded-full border",
               triggerClassName,

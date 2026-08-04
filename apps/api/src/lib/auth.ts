@@ -506,6 +506,58 @@ const normalizeOptionalPreference = (
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const GUIDE_PROGRESS_MAX_LENGTH = 4000;
+const GUIDE_TOUR_STATUS_VALUES: ReadonlySet<string> = new Set([
+  "not-started",
+  "completed",
+  "skipped",
+]);
+
+// Per-user onboarding-guide progress: a small JSON map of tour id -> status,
+// serialized to a text column so it rides Better Auth's session
+// `additionalFields` (no separate table, no extra route request). Ownership is
+// the session user; this only shape-checks and bounds the client-supplied blob.
+const normalizeGuideProgress = (value: unknown): string | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new APIError("BAD_REQUEST", {
+      message: "Guide progress must be a string",
+    });
+  }
+  if (value.length > GUIDE_PROGRESS_MAX_LENGTH) {
+    throw new APIError("BAD_REQUEST", {
+      message: "Guide progress is too long",
+    });
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new APIError("BAD_REQUEST", {
+      message: "Guide progress must be valid JSON",
+    });
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new APIError("BAD_REQUEST", {
+      message: "Guide progress must be a JSON object",
+    });
+  }
+  for (const status of Object.values(parsed)) {
+    if (typeof status !== "string" || !GUIDE_TOUR_STATUS_VALUES.has(status)) {
+      throw new APIError("BAD_REQUEST", {
+        message: "Guide progress has an invalid tour status",
+      });
+    }
+  }
+  return JSON.stringify(parsed);
+};
+
 const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
   user: TUser,
 ) => {
@@ -521,12 +573,14 @@ const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
     },
   );
   const userShortcuts = normalizeUserShortcutsField(user["userShortcuts"]);
+  const guideProgress = normalizeGuideProgress(user["guideProgress"]);
 
   return {
     ...user,
     ...(preferredName !== undefined ? { preferredName } : {}),
     ...(wordEditShortcut !== undefined ? { wordEditShortcut } : {}),
     ...(userShortcuts !== undefined ? { userShortcuts } : {}),
+    ...(guideProgress !== undefined ? { guideProgress } : {}),
   };
 };
 
@@ -745,6 +799,9 @@ const createAuth = () => {
         // Per-user keyboard-shortcut rebindings, serialized as JSON. Structural
         // validation + length cap happen in the create/update hooks below.
         userShortcuts: {
+        // Serialized JSON map of onboarding-guide tour id -> status. Shape and
+        // length are enforced in the create/update hooks below.
+        guideProgress: {
           type: "string",
           required: false,
         },

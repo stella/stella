@@ -1,5 +1,7 @@
 import type * as React from "react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useMemo,
   useRef,
@@ -102,6 +104,7 @@ import {
 } from "@/features/chat/queries";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useGuidesPreviewEnabled } from "@/hooks/use-guides-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -134,6 +137,13 @@ import {
 const SCROLLABLE_GROUP_CONTENT =
   "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
 
+// Lazy so the guides feature (and its spotlight engine) stays out of the shell
+// bundle; it loads only when the preview flag renders the entry.
+const GuideHelpDrawer = lazy(async () => {
+  const module = await import("@/features/guides/guide-help-drawer");
+  return { default: module.GuideHelpDrawer };
+});
+
 export function AppSidebar(props: AppSidebarProps) {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
@@ -145,6 +155,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const playbooksPreviewEnabled = usePlaybooksPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
+  const guidesPreviewEnabled = useGuidesPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
   });
@@ -698,6 +709,11 @@ export function AppSidebar(props: AppSidebarProps) {
       {/* User avatar at bottom */}
       <SidebarFooter>
         <SidebarMenu>
+          {guidesPreviewEnabled && (
+            <Suspense fallback={null}>
+              <GuideHelpDrawer />
+            </Suspense>
+          )}
           <FeedbackDialog userEmail={user.email} />
           <SidebarUserMenu user={user} />
         </SidebarMenu>

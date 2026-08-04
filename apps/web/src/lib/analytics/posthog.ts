@@ -15,7 +15,8 @@ import { logDevError } from "@/lib/errors/utils";
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   event === WEB_ANALYTICS_EVENTS.exception ||
   event === WEB_ANALYTICS_EVENTS.identify ||
-  event === WEB_ANALYTICS_EVENTS.pageViewed;
+  event === WEB_ANALYTICS_EVENTS.pageViewed ||
+  event === WEB_ANALYTICS_EVENTS.guideStepSkipped;
 
 // Browser-noise patterns we drop client-side before they hit
 // PostHog ingest. PostHog has no built-in `ignoreErrors` analogue
@@ -231,6 +232,9 @@ export const createPostHogAnalytics = (
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
         path,
       });
+    },
+    captureGuideStepSkipped: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
     },
     identifyUser: (user) => {
       const distinctId = posthog.get_distinct_id();

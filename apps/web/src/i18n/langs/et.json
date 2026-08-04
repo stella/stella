@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Muutmine on blokeeritud",
     "viewOnly": "Ainult vaatamiseks"
   },
+  "guides": {
+    "action": {
+      "replay": "Esita uuesti",
+      "skip": "Jäta vahele",
+      "start": "Alusta"
+    },
+    "checklist": {
+      "progress": "{completed} / {total} tehtud"
+    },
+    "help": {
+      "buttonLabel": "Abi ja juhendid",
+      "subtitle": "Interaktiivsed tuurid tööruumis",
+      "title": "Abi ja juhendid"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Vahele jäetud"
+    },
+    "tours": {
+      "chat": {
+        "description": "Kirjuta juhis ja saa vastus",
+        "examplePrompt": "Võta kokku selle lepingu peamised kohustused",
+        "steps": {
+          "composer": {
+            "body": "Sisesta oma küsimus või juhis sõnumikasti.",
+            "title": "Kirjuta oma päring"
+          },
+          "send": {
+            "body": "Saada oma sõnum ja tööruum vastab.",
+            "title": "Saada"
+          },
+          "tools": {
+            "body": "Ava tööriistade menüü, et lisada faile, oskusi ja allikaid.",
+            "title": "Lisa kontekst"
+          }
+        },
+        "title": "Saada oma esimene sõnum"
+      },
+      "documents": {
+        "description": "Laadi fail üles ja ava see",
+        "steps": {
+          "browse": {
+            "body": "Leia ja ava mis tahes lisatud dokument.",
+            "title": "Sirvi oma dokumente"
+          },
+          "upload": {
+            "body": "Lisa fail, et tuua see oma tööruumi.",
+            "title": "Laadi dokument üles"
+          }
+        },
+        "title": "Töö dokumentidega"
+      },
+      "playbooks": {
+        "description": "Muuda ülevaatuse oskusteave korduvkasutatavaks juhendiks",
+        "steps": {
+          "create": {
+            "body": "Alusta juhendit, et jäädvustada, kuidas ülevaatus peaks toimuma.",
+            "title": "Loo juhend"
+          }
+        },
+        "title": "Koosta juhend"
+      },
+      "tabularReview": {
+        "description": "Eralda vastused paljudest failidest korraga",
+        "steps": {
+          "addColumn": {
+            "body": "Lisa küsimus, millele igal real vastata.",
+            "title": "Lisa veerg"
+          }
+        },
+        "title": "Ülevaatus tabelis"
+      },
+      "workflows": {
+        "description": "Ühenda sammud korratavaks töövooks",
+        "steps": {
+          "create": {
+            "body": "Kombineeri sammud, mis käivituvad nõudmisel koos.",
+            "title": "Loo töövoog"
+          }
+        },
+        "title": "Automatiseeri töövoog"
+      }
+    },
+    "unavailable": "See juhend ei ole praegu saadaval"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonüümitav termin",

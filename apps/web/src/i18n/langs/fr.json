@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Modification bloquée",
     "viewOnly": "Lecture seule"
   },
+  "guides": {
+    "action": {
+      "replay": "Rejouer",
+      "skip": "Ignorer",
+      "start": "Commencer"
+    },
+    "checklist": {
+      "progress": "{completed} sur {total} terminés"
+    },
+    "help": {
+      "buttonLabel": "Aide et guides",
+      "subtitle": "Visites interactives de votre espace de travail",
+      "title": "Aide et guides"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Ignoré"
+    },
+    "tours": {
+      "chat": {
+        "description": "Rédigez une instruction et obtenez une réponse",
+        "examplePrompt": "Résumez les principales obligations de ce contrat",
+        "steps": {
+          "composer": {
+            "body": "Saisissez votre question ou instruction dans le champ de message.",
+            "title": "Rédigez votre demande"
+          },
+          "send": {
+            "body": "Envoyez votre message et votre espace de travail répond.",
+            "title": "Envoyer"
+          },
+          "tools": {
+            "body": "Ouvrez le menu des outils pour joindre des fichiers, des compétences et des sources.",
+            "title": "Ajouter du contexte"
+          }
+        },
+        "title": "Envoyez votre premier message"
+      },
+      "documents": {
+        "description": "Importez un fichier et ouvrez-le",
+        "steps": {
+          "browse": {
+            "body": "Trouvez et ouvrez tout document que vous avez ajouté.",
+            "title": "Parcourir vos documents"
+          },
+          "upload": {
+            "body": "Ajoutez un fichier pour le placer dans votre espace de travail.",
+            "title": "Importer un document"
+          }
+        },
+        "title": "Travailler avec des documents"
+      },
+      "playbooks": {
+        "description": "Transformez votre savoir-faire de révision en playbook réutilisable",
+        "steps": {
+          "create": {
+            "body": "Démarrez un playbook pour consigner le déroulement souhaité de la révision.",
+            "title": "Créer un playbook"
+          }
+        },
+        "title": "Concevoir un playbook"
+      },
+      "tabularReview": {
+        "description": "Extrayez des réponses de nombreux fichiers en une seule fois",
+        "steps": {
+          "addColumn": {
+            "body": "Ajoutez une question à traiter sur chaque ligne.",
+            "title": "Ajouter une colonne"
+          }
+        },
+        "title": "Réviser dans un tableau"
+      },
+      "workflows": {
+        "description": "Enchaînez des étapes dans un flux de travail reproductible",
+        "steps": {
+          "create": {
+            "body": "Combinez des étapes qui se lancent ensemble à la demande.",
+            "title": "Créer un flux de travail"
+          }
+        },
+        "title": "Automatiser un flux de travail"
+      }
+    },
+    "unavailable": "Ce guide est indisponible pour le moment"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Terme à anonymiser",

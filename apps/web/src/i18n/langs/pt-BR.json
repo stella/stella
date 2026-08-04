@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Edição bloqueada",
     "viewOnly": "Somente leitura"
   },
+  "guides": {
+    "action": {
+      "replay": "Repetir",
+      "skip": "Pular",
+      "start": "Começar"
+    },
+    "checklist": {
+      "progress": "{completed} de {total} concluídos"
+    },
+    "help": {
+      "buttonLabel": "Ajuda e guias",
+      "subtitle": "Tours interativos do espaço de trabalho",
+      "title": "Ajuda e guias"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Ignorado"
+    },
+    "tours": {
+      "chat": {
+        "description": "Escreva uma instrução e obtenha uma resposta",
+        "examplePrompt": "Resuma as principais obrigações deste contrato",
+        "steps": {
+          "composer": {
+            "body": "Digite sua pergunta ou instrução na caixa de mensagem.",
+            "title": "Escreva sua solicitação"
+          },
+          "send": {
+            "body": "Envie sua mensagem e o espaço de trabalho responde.",
+            "title": "Enviar"
+          },
+          "tools": {
+            "body": "Abra o menu de ferramentas para anexar arquivos, habilidades e fontes.",
+            "title": "Adicionar contexto"
+          }
+        },
+        "title": "Envie sua primeira mensagem"
+      },
+      "documents": {
+        "description": "Envie um arquivo e abra-o",
+        "steps": {
+          "browse": {
+            "body": "Encontre e abra qualquer documento que você adicionou.",
+            "title": "Navegue pelos seus documentos"
+          },
+          "upload": {
+            "body": "Adicione um arquivo para trazê-lo ao seu espaço de trabalho.",
+            "title": "Enviar um documento"
+          }
+        },
+        "title": "Trabalhe com documentos"
+      },
+      "playbooks": {
+        "description": "Transforme o conhecimento de revisão em um playbook reutilizável",
+        "steps": {
+          "create": {
+            "body": "Inicie um playbook para registrar como uma revisão deve ocorrer.",
+            "title": "Criar um playbook"
+          }
+        },
+        "title": "Monte um playbook"
+      },
+      "tabularReview": {
+        "description": "Extraia respostas de muitos arquivos de uma só vez",
+        "steps": {
+          "addColumn": {
+            "body": "Adicione uma pergunta a ser respondida em cada linha.",
+            "title": "Adicionar uma coluna"
+          }
+        },
+        "title": "Revise em uma tabela"
+      },
+      "workflows": {
+        "description": "Encadeie etapas em um fluxo de trabalho repetível",
+        "steps": {
+          "create": {
+            "body": "Combine etapas que são executadas juntas sob demanda.",
+            "title": "Criar um fluxo de trabalho"
+          }
+        },
+        "title": "Automatize um fluxo de trabalho"
+      }
+    },
+    "unavailable": "Este guia não está disponível no momento"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Termo a anonimizar",

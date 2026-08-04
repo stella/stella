@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Rediģēšana bloķēta",
     "viewOnly": "Tikai skatīšana"
   },
+  "guides": {
+    "action": {
+      "replay": "Atkārtot",
+      "skip": "Izlaist",
+      "start": "Sākt"
+    },
+    "checklist": {
+      "progress": "Pabeigti {completed} no {total}"
+    },
+    "help": {
+      "buttonLabel": "Palīdzība un ceļveži",
+      "subtitle": "Interaktīvi darba vietas pārskati",
+      "title": "Palīdzība un ceļveži"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Izlaists"
+    },
+    "tours": {
+      "chat": {
+        "description": "Uzrakstiet norādi un saņemiet atbildi",
+        "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
+        "steps": {
+          "composer": {
+            "body": "Ievadiet savu jautājumu vai norādi ziņojuma laukā.",
+            "title": "Uzrakstiet savu pieprasījumu"
+          },
+          "send": {
+            "body": "Nosūtiet ziņojumu, un darba vieta atbildēs.",
+            "title": "Nosūtīt"
+          },
+          "tools": {
+            "body": "Atveriet rīku izvēlni, lai pievienotu failus, prasmes un avotus.",
+            "title": "Pievienot kontekstu"
+          }
+        },
+        "title": "Nosūtiet savu pirmo ziņojumu"
+      },
+      "documents": {
+        "description": "Augšupielādējiet failu un atveriet to",
+        "steps": {
+          "browse": {
+            "body": "Atrodiet un atveriet jebkuru pievienoto dokumentu.",
+            "title": "Pārlūkot dokumentus"
+          },
+          "upload": {
+            "body": "Pievienojiet failu, lai ienestu to savā darba vietā.",
+            "title": "Augšupielādēt dokumentu"
+          }
+        },
+        "title": "Darbs ar dokumentiem"
+      },
+      "playbooks": {
+        "description": "Pārvērtiet pārskatīšanas zināšanas atkārtoti izmantojamā plānā",
+        "steps": {
+          "create": {
+            "body": "Sāciet plānu, lai fiksētu, kā jānorit pārskatīšanai.",
+            "title": "Izveidot plānu"
+          }
+        },
+        "title": "Izstrādāt plānu"
+      },
+      "tabularReview": {
+        "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
+        "steps": {
+          "addColumn": {
+            "body": "Pievienojiet jautājumu, uz kuru atbildēt katrā rindā.",
+            "title": "Pievienot kolonnu"
+          }
+        },
+        "title": "Pārskatīšana tabulā"
+      },
+      "workflows": {
+        "description": "Sasaistiet soļus atkārtojamā darbplūsmā",
+        "steps": {
+          "create": {
+            "body": "Apvienojiet soļus, kas pēc pieprasījuma tiek izpildīti kopā.",
+            "title": "Izveidot darbplūsmu"
+          }
+        },
+        "title": "Automatizēt darbplūsmu"
+      }
+    },
+    "unavailable": "Šis ceļvedis pašlaik nav pieejams"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizējamais termins",

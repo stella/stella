@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Redagavimas užblokuotas",
     "viewOnly": "Tik peržiūra"
   },
+  "guides": {
+    "action": {
+      "replay": "Kartoti",
+      "skip": "Praleisti",
+      "start": "Pradėti"
+    },
+    "checklist": {
+      "progress": "Atlikta {completed} iš {total}"
+    },
+    "help": {
+      "buttonLabel": "Pagalba ir vadovai",
+      "subtitle": "Interaktyvios darbo srities apžvalgos",
+      "title": "Pagalba ir vadovai"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Praleista"
+    },
+    "tours": {
+      "chat": {
+        "description": "Parašykite užklausą ir gaukite atsakymą",
+        "examplePrompt": "Apibendrinkite pagrindines šios sutarties prievoles",
+        "steps": {
+          "composer": {
+            "body": "Įveskite savo klausimą ar nurodymą žinutės laukelyje.",
+            "title": "Parašykite savo užklausą"
+          },
+          "send": {
+            "body": "Išsiųskite žinutę ir darbo sritis atsakys.",
+            "title": "Siųsti"
+          },
+          "tools": {
+            "body": "Atidarykite įrankių meniu, kad pridėtumėte failų, įgūdžių ir šaltinių.",
+            "title": "Pridėti kontekstą"
+          }
+        },
+        "title": "Išsiųskite pirmąją žinutę"
+      },
+      "documents": {
+        "description": "Įkelkite failą ir jį atidarykite",
+        "steps": {
+          "browse": {
+            "body": "Raskite ir atidarykite bet kurį pridėtą dokumentą.",
+            "title": "Naršyti dokumentus"
+          },
+          "upload": {
+            "body": "Pridėkite failą, kad įtrauktumėte jį į savo darbo sritį.",
+            "title": "Įkelti dokumentą"
+          }
+        },
+        "title": "Darbas su dokumentais"
+      },
+      "playbooks": {
+        "description": "Paverskite peržiūros patirtį pakartotinai naudojamu planu",
+        "steps": {
+          "create": {
+            "body": "Pradėkite planą, kad užfiksuotumėte, kaip turėtų vykti peržiūra.",
+            "title": "Sukurti planą"
+          }
+        },
+        "title": "Sudaryti planą"
+      },
+      "tabularReview": {
+        "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
+        "steps": {
+          "addColumn": {
+            "body": "Pridėkite klausimą, į kurį bus atsakyta kiekvienoje eilutėje.",
+            "title": "Pridėti stulpelį"
+          }
+        },
+        "title": "Peržiūra lentelėje"
+      },
+      "workflows": {
+        "description": "Sujunkite veiksmus į pakartojamą darbo eigą",
+        "steps": {
+          "create": {
+            "body": "Derinkite veiksmus, kurie pagal poreikį vykdomi kartu.",
+            "title": "Sukurti darbo eigą"
+          }
+        },
+        "title": "Automatizuoti darbo eigą"
+      }
+    },
+    "unavailable": "Šis vadovas šiuo metu nepasiekiamas"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizuotinas terminas",

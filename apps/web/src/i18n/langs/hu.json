@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "A szerkesztés letiltva",
     "viewOnly": "Csak megtekintés"
   },
+  "guides": {
+    "action": {
+      "replay": "Újrajátszás",
+      "skip": "Kihagyás",
+      "start": "Kezdés"
+    },
+    "checklist": {
+      "progress": "{completed} / {total} kész"
+    },
+    "help": {
+      "buttonLabel": "Súgó és útmutatók",
+      "subtitle": "Interaktív bemutatók a munkaterületen",
+      "title": "Súgó és útmutatók"
+    },
+    "minutes": "{count} perc",
+    "status": {
+      "skipped": "Kihagyva"
+    },
+    "tours": {
+      "chat": {
+        "description": "Írjon egy utasítást, és kapjon választ",
+        "examplePrompt": "Foglalja össze a szerződés legfontosabb kötelezettségeit",
+        "steps": {
+          "composer": {
+            "body": "Írja be kérdését vagy utasítását az üzenetmezőbe.",
+            "title": "Írja meg a kérését"
+          },
+          "send": {
+            "body": "Küldje el az üzenetét, és a munkaterület válaszol.",
+            "title": "Küldés"
+          },
+          "tools": {
+            "body": "Nyissa meg az eszközök menüt fájlok, képességek és források csatolásához.",
+            "title": "Kontextus hozzáadása"
+          }
+        },
+        "title": "Küldje el első üzenetét"
+      },
+      "documents": {
+        "description": "Töltsön fel egy fájlt, és nyissa meg",
+        "steps": {
+          "browse": {
+            "body": "Keresse meg és nyissa meg bármelyik hozzáadott dokumentumot.",
+            "title": "Dokumentumok tallózása"
+          },
+          "upload": {
+            "body": "Adjon hozzá egy fájlt, hogy bekerüljön a munkaterületére.",
+            "title": "Dokumentum feltöltése"
+          }
+        },
+        "title": "Munka dokumentumokkal"
+      },
+      "playbooks": {
+        "description": "Alakítsa át a felülvizsgálati tudást újrafelhasználható forgatókönyvvé",
+        "steps": {
+          "create": {
+            "body": "Indítson el egy forgatókönyvet, hogy rögzítse a felülvizsgálat menetét.",
+            "title": "Forgatókönyv létrehozása"
+          }
+        },
+        "title": "Forgatókönyv összeállítása"
+      },
+      "tabularReview": {
+        "description": "Nyerjen ki válaszokat sok fájlból egyszerre",
+        "steps": {
+          "addColumn": {
+            "body": "Adjon hozzá egy kérdést, amelyre minden sorban választ kap.",
+            "title": "Oszlop hozzáadása"
+          }
+        },
+        "title": "Áttekintés táblázatban"
+      },
+      "workflows": {
+        "description": "Fűzzön össze lépéseket ismételhető munkafolyamattá",
+        "steps": {
+          "create": {
+            "body": "Kombináljon lépéseket, amelyek igény szerint együtt futnak.",
+            "title": "Munkafolyamat létrehozása"
+          }
+        },
+        "title": "Munkafolyamat automatizálása"
+      }
+    },
+    "unavailable": "Ez az útmutató jelenleg nem érhető el"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizálandó kifejezés",

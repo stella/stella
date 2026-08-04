@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Úpravy zablokované",
     "viewOnly": "Len na čítanie"
   },
+  "guides": {
+    "action": {
+      "replay": "Prehrať znova",
+      "skip": "Preskočiť",
+      "start": "Začať"
+    },
+    "checklist": {
+      "progress": "{completed} z {total} dokončených"
+    },
+    "help": {
+      "buttonLabel": "Pomocník a sprievodcovia",
+      "subtitle": "Interaktívne prehliadky pracovného priestoru",
+      "title": "Pomocník a sprievodcovia"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Preskočené"
+    },
+    "tours": {
+      "chat": {
+        "description": "Napíšte pokyn a získajte odpoveď",
+        "examplePrompt": "Zhrňte kľúčové povinnosti v tejto zmluve",
+        "steps": {
+          "composer": {
+            "body": "Zadajte svoju otázku alebo pokyn do poľa správy.",
+            "title": "Napíšte svoju požiadavku"
+          },
+          "send": {
+            "body": "Odošlite správu a pracovný priestor odpovie.",
+            "title": "Odoslať"
+          },
+          "tools": {
+            "body": "Otvorte ponuku nástrojov a pripojte súbory, zručnosti a zdroje.",
+            "title": "Pridať kontext"
+          }
+        },
+        "title": "Odošlite svoju prvú správu"
+      },
+      "documents": {
+        "description": "Nahrajte súbor a otvorte ho",
+        "steps": {
+          "browse": {
+            "body": "Nájdite a otvorte ľubovoľný pridaný dokument.",
+            "title": "Prehľadávať dokumenty"
+          },
+          "upload": {
+            "body": "Pridajte súbor a preneste ho do pracovného priestoru.",
+            "title": "Nahrať dokument"
+          }
+        },
+        "title": "Práca s dokumentmi"
+      },
+      "playbooks": {
+        "description": "Premeňte znalosti z revízie na opakovane použiteľný playbook",
+        "steps": {
+          "create": {
+            "body": "Založte playbook a zachyťte, ako má revízia prebiehať.",
+            "title": "Vytvoriť playbook"
+          }
+        },
+        "title": "Zostaviť playbook"
+      },
+      "tabularReview": {
+        "description": "Získajte odpovede naprieč mnohými súbormi naraz",
+        "steps": {
+          "addColumn": {
+            "body": "Pridajte otázku, na ktorú sa odpovie v každom riadku.",
+            "title": "Pridať stĺpec"
+          }
+        },
+        "title": "Revízia v tabuľke"
+      },
+      "workflows": {
+        "description": "Zreťazte kroky do opakovateľného pracovného postupu",
+        "steps": {
+          "create": {
+            "body": "Skombinujte kroky, ktoré sa na požiadanie spustia spoločne.",
+            "title": "Vytvoriť pracovný postup"
+          }
+        },
+        "title": "Automatizovať pracovný postup"
+      }
+    },
+    "unavailable": "Tento sprievodca momentálne nie je k dispozícii"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Výraz na anonymizáciu",

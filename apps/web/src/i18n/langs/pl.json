@@ -1670,6 +1670,91 @@
     "unsupportedDocxEditTitle": "Edycja zablokowana",
     "viewOnly": "Tylko do odczytu"
   },
+  "guides": {
+    "action": {
+      "replay": "Powtórz",
+      "skip": "Pomiń",
+      "start": "Rozpocznij"
+    },
+    "checklist": {
+      "progress": "Ukończono {completed} z {total}"
+    },
+    "help": {
+      "buttonLabel": "Pomoc i przewodniki",
+      "subtitle": "Interaktywne przewodniki po obszarze roboczym",
+      "title": "Pomoc i przewodniki"
+    },
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Pominięto"
+    },
+    "tours": {
+      "chat": {
+        "description": "Napisz polecenie i uzyskaj odpowiedź",
+        "examplePrompt": "Podsumuj najważniejsze obowiązki wynikające z tej umowy",
+        "steps": {
+          "composer": {
+            "body": "Wpisz swoje pytanie lub polecenie w polu wiadomości.",
+            "title": "Napisz swoje zapytanie"
+          },
+          "send": {
+            "body": "Wyślij wiadomość, a obszar roboczy odpowie.",
+            "title": "Wyślij"
+          },
+          "tools": {
+            "body": "Otwórz menu narzędzi, aby dołączyć pliki, umiejętności i źródła.",
+            "title": "Dodaj kontekst"
+          }
+        },
+        "title": "Wyślij swoją pierwszą wiadomość"
+      },
+      "documents": {
+        "description": "Prześlij plik i otwórz go",
+        "steps": {
+          "browse": {
+            "body": "Znajdź i otwórz dowolny dodany dokument.",
+            "title": "Przeglądaj dokumenty"
+          },
+          "upload": {
+            "body": "Dodaj plik, aby wprowadzić go do obszaru roboczego.",
+            "title": "Prześlij dokument"
+          }
+        },
+        "title": "Praca z dokumentami"
+      },
+      "playbooks": {
+        "description": "Zamień wiedzę o przeglądzie w wielokrotnego użytku scenariusz",
+        "steps": {
+          "create": {
+            "body": "Rozpocznij scenariusz, aby uchwycić przebieg przeglądu.",
+            "title": "Utwórz scenariusz"
+          }
+        },
+        "title": "Zbuduj scenariusz"
+      },
+      "tabularReview": {
+        "description": "Wydobądź odpowiedzi z wielu plików naraz",
+        "steps": {
+          "addColumn": {
+            "body": "Dodaj pytanie, na które odpowiesz w każdym wierszu.",
+            "title": "Dodaj kolumnę"
+          }
+        },
+        "title": "Przegląd w tabeli"
+      },
+      "workflows": {
+        "description": "Połącz kroki w powtarzalny przepływ pracy",
+        "steps": {
+          "create": {
+            "body": "Połącz kroki, które uruchamiają się razem na żądanie.",
+            "title": "Utwórz przepływ pracy"
+          }
+        },
+        "title": "Zautomatyzuj przepływ pracy"
+      }
+    },
+    "unavailable": "Ten przewodnik jest obecnie niedostępny"
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Termin do anonimizacji",
