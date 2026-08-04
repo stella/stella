@@ -1057,11 +1057,12 @@ export const useChatSession = ({
       // the persisted inspector view is read-only, so unresolved proposals
       // would vanish. Keep the draft review session alive until the user
       // resolves it.
-      const hasPendingDraftReview = (
-        useReviewStore.getState().sessions[
-          createDocumentDraftReviewId(toolCallId)
-        ] ?? []
-      ).some((item) => item.status === "pending" || item.status === "applying");
+      const hasPendingDraftReview =
+        useReviewStore
+          .getState()
+          .sessions[createDocumentDraftReviewId(toolCallId)]?.some(
+            (item) => item.status === "pending" || item.status === "applying",
+          ) === true;
       if (hasPendingDraftReview) {
         stellaToast.add({
           title: t("chat.createDocument.savePendingReview"),
