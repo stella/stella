@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_UNRESOLVED_REF_HREF,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 
 type HydratedEntityValue = {
   contactRef?: string;
@@ -129,6 +132,34 @@ describe("chat ref registry", () => {
       entityRefs: [secondEntityRef],
       matterRefs: [matterRef, secondMatterRef],
     });
+  });
+
+  test("rewrites citations with unknown refs to the unresolved sentinel", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(
+      "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+    );
+    const matterRef = registry.toMatterRef(workspaceId);
+
+    // A fabricated entity has no minted ref: the href degrades to the
+    // sentinel (the web renderer shows the label as plain text), while the
+    // known matter ref in the same sentence still resolves. The label
+    // survives because only the href substring is rewritten, which is what
+    // keeps this safe across streaming chunk boundaries.
+    expect(
+      registry.resolveAssistantTextRefs(
+        `In [Matter](#stella-workspace-ref=${matterRef}): [Fake.docx](#stella-entity-ref=ent_99)`,
+      ),
+    ).toBe(
+      `In [Matter](#stella-workspace=${workspaceId}): ` +
+        `[Fake.docx](${CHAT_UNRESOLVED_REF_HREF})`,
+    );
+
+    expect(
+      registry.resolveAssistantTextRefs(
+        "[Ghost matter](#stella-workspace-ref=mat_42)",
+      ),
+    ).toBe(`[Ghost matter](${CHAT_UNRESOLVED_REF_HREF})`);
   });
 
   test("does not accept raw UUIDs as refs", () => {

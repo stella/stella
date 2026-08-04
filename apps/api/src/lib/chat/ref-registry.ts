@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -11,6 +12,16 @@ import {
 
 export const CHAT_ENTITY_REF_PREFIX = "#stella-entity-ref=";
 export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
+/**
+ * Replacement href for a ref the model cited but this turn never minted — a
+ * fabricated or mangled citation. The web renderer shows the link label as
+ * plain text for this href, so an invented document can never render as a
+ * real-looking clickable pill; the old behavior (pass the unknown ref
+ * through verbatim) did exactly that via the client's fallback-workspace
+ * chip. Kept href-shaped so the rewrite stays safe across streaming chunk
+ * boundaries, where the link label may already have been flushed.
+ */
+export const CHAT_UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
 const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
 const UUID_PATTERN =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -217,12 +228,27 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       },
     });
 
+  const reportUnknownAssistantRef = (kind: string, ref: string) => {
+    // The ref itself is a per-turn opaque token (never a tenant id), so it is
+    // safe context; a hallucinated citation should be visible in telemetry.
+    captureError(
+      new TelemetryError({
+        message: "Assistant text cited a chat ref this turn never minted",
+      }),
+      { source: "chat-ref-registry", kind, ref },
+    );
+  };
+
   const resolveAssistantTextRefs = (text: string) => {
     const withWorkspaceRefs = replaceRefLinks({
       regex: WORKSPACE_REF_LINK_REGEX,
       resolve: (ref) => {
         const workspaceId = matterState.refToTarget.get(ref);
-        return workspaceId ? `#stella-workspace=${workspaceId}` : null;
+        if (!workspaceId) {
+          reportUnknownAssistantRef("matter", ref);
+          return CHAT_UNRESOLVED_REF_HREF;
+        }
+        return `#stella-workspace=${workspaceId}`;
       },
       text,
     });
@@ -231,9 +257,11 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       regex: ENTITY_REF_LINK_REGEX,
       resolve: (ref) => {
         const target = entityState.refToTarget.get(ref);
-        return target
-          ? `#stella-entity=${target.workspaceId}:${target.entityId}`
-          : null;
+        if (!target) {
+          reportUnknownAssistantRef("entity", ref);
+          return CHAT_UNRESOLVED_REF_HREF;
+        }
+        return `#stella-entity=${target.workspaceId}:${target.entityId}`;
       },
       text: withWorkspaceRefs,
     });
