@@ -44,6 +44,7 @@ jobs:
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
@@ -94,6 +95,7 @@ jobs:
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
               echo "landing_build_required=true"
+              echo "legal_atlas_image_required=true"
               echo "mobile_build_required=true"
               echo "ocr_image_required=true"
               echo "package_checks_required=true"
@@ -113,6 +115,7 @@ jobs:
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
               echo "landing_build_required=false"
+              echo "legal_atlas_image_required=false"
               echo "mobile_build_required=false"
               echo "ocr_image_required=false"
               echo "package_checks_required=true"
@@ -144,6 +147,7 @@ jobs:
           # runner just to decide it has nothing to do.
           api_image_deps_required=false
           landing_build_required=false
+          legal_atlas_image_required=false
           mobile_build_required=false
           ocr_image_required=false
           web_build_required=false
@@ -167,6 +171,11 @@ jobs:
             case "$file" in
               apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 api_image_deps_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+                legal_atlas_image_required=true
                 ;;
             esac
             case "$file" in
@@ -195,6 +204,7 @@ jobs:
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
             echo "landing_build_required=$landing_build_required"
+            echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
@@ -1566,8 +1576,9 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1577,41 +1588,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether legal-atlas-runner image inputs changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No legal-atlas-runner image-affecting paths changed; skipping image build."
-          fi
-
       - name: Set up Docker Buildx
-        if: steps.changed.outputs.run == 'true'
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Build legal-atlas-runner image
-        if: steps.changed.outputs.run == 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
