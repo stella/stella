@@ -928,6 +928,13 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       .notNull()
       .default(sql`'{}'::varchar(64)[]`),
     pendingRevision: p.integer("pending_revision").default(0).notNull(),
+    /**
+     * When a reservation last crossed the external append boundary. Only the
+     * append reservation sets it — the projection trigger never does — so
+     * its absence, with no committed copy, proves nothing has reached the
+     * engine for this row and the backfill can append without a delete.
+     */
+    appendReservedAt: timestamptz("append_reserved_at"),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
