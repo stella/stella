@@ -1,0 +1,29 @@
+name: Setup Bun with install cache
+description: Install Bun and persist its global install cache keyed on bun.lock
+
+inputs:
+  bun-version-file:
+    description: >-
+      Version file forwarded to setup-bun. Pass an empty string to install
+      the latest Bun instead of the pinned version.
+    required: false
+    default: package.json
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version-file: ${{ inputs.bun-version-file }}
+
+    - name: Restore Bun install cache
+      # Caches downloaded package tarballs (~/.bun/install/cache), not
+      # node_modules, so `bun ci` still resolves against the frozen lockfile
+      # and only skips re-downloading unchanged packages.
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: ~/.bun/install/cache
+        key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          bun-install-${{ runner.os }}-
