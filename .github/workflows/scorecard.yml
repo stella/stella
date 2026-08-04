@@ -14,6 +14,8 @@ permissions: read-all
 jobs:
   scorecard:
     runs-on: ubuntu-latest
+    # Backstop against a wedged runner squatting the default 6h budget.
+    timeout-minutes: 15
     permissions:
       # Required to checkout the repository
       contents: read
@@ -22,19 +24,32 @@ jobs:
       # Required for the GITHUB_TOKEN to make API calls
       id-token: write
     steps:
+      # A hung checkout is a runner/network fault, not a scan result, so it
+      # skips the scan instead of failing the run. The scan steps below still
+      # report failures normally.
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        continue-on-error: true
         with:
           persist-credentials: false
 
+      - name: Report skipped scan
+        if: steps.checkout.outcome != 'success'
+        run: echo "::warning::Checkout did not complete; skipping the Scorecard scan for this commit."
+
       - name: Run OpenSSF Scorecard
+        if: steps.checkout.outcome == 'success'
         uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        timeout-minutes: 10
         with:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
 
       - name: Upload SARIF to GitHub Security tab
+        if: steps.checkout.outcome == 'success'
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: results.sarif
