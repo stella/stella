@@ -1,9 +1,14 @@
 import { PDF_MIME_TYPE } from "@/consts";
-import type { FieldId, PropertyId, WorkspaceEntity } from "@/lib/types";
+import type {
+  FieldId,
+  OcrExportStatus,
+  PropertyId,
+  WorkspaceEntity,
+} from "@/lib/types";
 
 export type OcrSource = {
   encrypted: boolean;
-  exportStatus: "ready" | "unavailable";
+  exportStatus: OcrExportStatus;
   fieldId: FieldId;
   fileName: string;
   mimeType: string;
@@ -11,6 +16,29 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
+
+/**
+ * The searchable PDF is a stored derivative that can lag or fail behind the
+ * text, so an export offer is per format rather than per source.
+ */
+export const getOcrExportFormats = (
+  exportStatus: OcrExportStatus,
+): readonly OcrExportFormat[] => {
+  switch (exportStatus) {
+    case "text-and-pdf":
+      return ["searchable-pdf", "text"];
+    case "text":
+      return ["text"];
+    case "unavailable":
+      return [];
+    default:
+      exportStatus satisfies never;
+      return [];
+  }
+};
+
+export const hasOcrExport = (source: OcrSource): boolean =>
+  getOcrExportFormats(source.exportStatus).length > 0;
 
 type GetOcrSourceInput = {
   fields: WorkspaceEntity["fields"];

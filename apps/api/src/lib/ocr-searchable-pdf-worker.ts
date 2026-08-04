@@ -19,7 +19,7 @@ const INPUT_HEADER_BYTES = 4;
 
 class OcrSearchablePdfWorkerError extends TaggedError(
   "OcrSearchablePdfWorkerError",
-)<{ message: string; cause?: unknown }>() {}
+)<{ message: string; cause?: unknown }> {}
 
 const fail = (message: string): never => {
   throw new OcrSearchablePdfWorkerError({ message });

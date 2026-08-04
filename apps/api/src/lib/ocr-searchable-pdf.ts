@@ -25,7 +25,7 @@ const MAX_DERIVATIVE_OVERHEAD_BYTES = 32 * 1024 * 1024;
 class OcrSearchablePdfError extends TaggedError("OcrSearchablePdfError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 const encodeWorkerInput = (
   source: ArrayBuffer,

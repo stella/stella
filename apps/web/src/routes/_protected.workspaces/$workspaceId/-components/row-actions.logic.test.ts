@@ -5,8 +5,10 @@ import type { WorkspaceEntity } from "@/lib/types";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
+  getOcrExportFormats,
   getOcrSource,
   getOcrSources,
+  hasOcrExport,
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 
@@ -98,6 +100,32 @@ describe("getOcrSource", () => {
         fileName: "selected.pdf",
       }),
     ]);
+  });
+});
+
+describe("OCR export formats", () => {
+  test("offers the searchable PDF only once its derivative is stored", () => {
+    expect(getOcrExportFormats("text-and-pdf")).toEqual([
+      "searchable-pdf",
+      "text",
+    ]);
+    expect(getOcrExportFormats("text")).toEqual(["text"]);
+    expect(getOcrExportFormats("unavailable")).toEqual([]);
+  });
+
+  test("keeps a text-only source exportable", () => {
+    const source = {
+      encrypted: false,
+      exportStatus: "text",
+      fieldId: selectedFieldId,
+      fileName: "selected.pdf",
+      mimeType: "application/pdf",
+    } as const;
+
+    expect(hasOcrExport(source)).toBe(true);
+    expect(hasOcrExport({ ...source, exportStatus: "unavailable" })).toBe(
+      false,
+    );
   });
 });
 

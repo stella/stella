@@ -80,6 +80,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type {
+  OcrExportStatus,
   PropertyId,
   WorkspaceCellMetadata,
   WorkspaceEntity,
@@ -104,7 +105,9 @@ import {
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFileName,
+  getOcrExportFormats,
   getPdfDownloadFileName,
+  hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
   type RowActionContext,
@@ -146,25 +149,35 @@ type RowActionsProps = {
 };
 
 const OcrExportMenuItems = ({
+  exportStatus,
   onDownload,
   searchablePdfLabel,
   textLabel,
 }: {
+  exportStatus: OcrExportStatus;
   onDownload: (format: OcrExportFormat) => void;
   searchablePdfLabel: string;
   textLabel: string;
-}) => (
-  <>
-    <MenuItem onClick={() => onDownload("searchable-pdf")}>
-      <FileOutputIcon />
-      {searchablePdfLabel}
-    </MenuItem>
-    <MenuItem onClick={() => onDownload("text")}>
-      <FileTextIcon />
-      {textLabel}
-    </MenuItem>
-  </>
-);
+}) => {
+  const formats = getOcrExportFormats(exportStatus);
+
+  return (
+    <>
+      {formats.includes("searchable-pdf") && (
+        <MenuItem onClick={() => onDownload("searchable-pdf")}>
+          <FileOutputIcon />
+          {searchablePdfLabel}
+        </MenuItem>
+      )}
+      {formats.includes("text") && (
+        <MenuItem onClick={() => onDownload("text")}>
+          <FileTextIcon />
+          {textLabel}
+        </MenuItem>
+      )}
+    </>
+  );
+};
 
 export const RowActions = ({
   entity,
@@ -298,12 +311,10 @@ export const RowActions = ({
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
   let exportableOcrSources: readonly OcrSource[] = [];
-  if (!isBulk && isCellContext && ocrSource?.exportStatus === "ready") {
+  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
     exportableOcrSources = [ocrSource];
   } else if (!isBulk && !isCellContext) {
-    exportableOcrSources = ocrSources.filter(
-      (source) => source.exportStatus === "ready",
-    );
+    exportableOcrSources = ocrSources.filter(hasOcrExport);
   }
   const hasDownloadVariants =
     !isBulk && (hasPdfConversion || exportableOcrSources.length > 0);
@@ -872,6 +883,7 @@ export const RowActions = ({
             {exportableOcrSources.map((source) => (
               <OcrExportMenuItems
                 key={source.fieldId}
+                exportStatus={source.exportStatus}
                 onDownload={(format) => {
                   detached(handleOcrExport(source, format), "RowActions");
                 }}
@@ -926,6 +938,7 @@ export const RowActions = ({
                     exportableOcrSources.map((source) => (
                       <OcrExportMenuItems
                         key={source.fieldId}
+                        exportStatus={source.exportStatus}
                         onDownload={(format) => {
                           detached(
                             handleOcrExport(source, format),
@@ -949,6 +962,7 @@ export const RowActions = ({
                         </MenuSubTrigger>
                         <MenuSubPopup>
                           <OcrExportMenuItems
+                            exportStatus={source.exportStatus}
                             onDownload={(format) => {
                               detached(
                                 handleOcrExport(source, format),

@@ -34,6 +34,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
+import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
   serializeDocumentOcrPayload,
@@ -166,6 +167,56 @@ export const indexOcrProjection = async ({
       code: SEARCH_INDEX_FAILURE_CODE,
       message: "OCR text was stored but search indexing failed",
       cause: indexed.error,
+    });
+  }
+};
+
+/**
+ * Builds and stores the run's cached searchable PDF.
+ *
+ * The source read, the overlay, and the derivative write are one stage under a
+ * single failure code: a storage blip is as retryable as a generation failure,
+ * so neither can leave a persisted projection permanently without its PDF.
+ */
+const writeOcrSearchablePdfDerivative = async ({
+  lifecycleSignal,
+  payload,
+  run,
+  sourceKey,
+}: {
+  lifecycleSignal: AbortSignal;
+  payload: DocumentOcrPayload;
+  run: typeof documentProcessingRuns.$inferSelect;
+  sourceKey: string;
+}): Promise<void> => {
+  const written = await Result.tryPromise({
+    try: async () => {
+      const sourceBuffer = await getS3().file(sourceKey).arrayBuffer();
+      lifecycleSignal.throwIfAborted();
+      const searchablePdf = await createOcrSearchablePdf(sourceBuffer, payload);
+      if (Result.isError(searchablePdf)) {
+        throw searchablePdf.error;
+      }
+      lifecycleSignal.throwIfAborted();
+
+      await getS3().write(
+        createOcrSearchablePdfKey({
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          runId: run.id,
+        }),
+        searchablePdf.value,
+        { type: PDF_MIME_TYPE },
+      );
+    },
+    catch: (cause) => cause,
+  });
+  lifecycleSignal.throwIfAborted();
+  if (Result.isError(written)) {
+    throw new DocumentProcessingJobError({
+      code: SEARCHABLE_PDF_FAILURE_CODE,
+      message: "OCR text was stored but the searchable PDF was not",
+      cause: written.error,
     });
   }
 };
@@ -1076,38 +1127,24 @@ export const processDocumentProcessingRun = async (
       }
       lifecycleSignal.throwIfAborted();
 
+      // The derivative is written before indexing: a failed index leaves a
+      // retryable run that `recoverFailedSearchIndex` completes without
+      // revisiting storage, so ordering it after indexing would let that
+      // replay mark a run succeeded that never got its searchable PDF.
+      if (persistenceOutcome === "persisted") {
+        await writeOcrSearchablePdfDerivative({
+          lifecycleSignal,
+          payload: result.value.payload,
+          run,
+          sourceKey,
+        });
+      }
+
       await indexOcrProjection({
         indexEntity: async () =>
           await getSearchProvider().indexEntity(run.entityId),
       });
       lifecycleSignal.throwIfAborted();
-
-      if (persistenceOutcome === "persisted") {
-        const sourceBuffer = await getS3().file(sourceKey).arrayBuffer();
-        lifecycleSignal.throwIfAborted();
-        const searchablePdf = await createOcrSearchablePdf(
-          sourceBuffer,
-          result.value.payload,
-        );
-        if (Result.isError(searchablePdf)) {
-          throw new DocumentProcessingJobError({
-            code: SEARCHABLE_PDF_FAILURE_CODE,
-            message: searchablePdf.error.message,
-            cause: searchablePdf.error,
-          });
-        }
-        lifecycleSignal.throwIfAborted();
-
-        const searchablePdfKey = createOcrSearchablePdfKey({
-          organizationId: run.organizationId,
-          workspaceId: run.workspaceId,
-          runId: run.id,
-        });
-        await getS3().write(searchablePdfKey, searchablePdf.value, {
-          type: PDF_MIME_TYPE,
-        });
-        lifecycleSignal.throwIfAborted();
-      }
 
       const completed = await rootDb
         .update(documentProcessingRuns)

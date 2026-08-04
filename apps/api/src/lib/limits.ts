@@ -229,10 +229,9 @@ export const LIMITS = {
   extractedContentMaxChars: 500_000,
   /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
   documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
-  /** Max cached OCR derivatives captured by one bulk entity deletion. */
-  entityDeletionOcrDerivativesMax: 10_000,
-  /** Cursor page size for matter-deletion OCR derivative cleanup. */
-  workspaceDeletionOcrDerivativeBatchSize: 1000,
+  /** Cursor page size for document- and matter-deletion OCR derivative
+   *  cleanup. Also caps the storage keys recorded per cleanup request. */
+  ocrDerivativeCleanupBatchSize: 1000,
   /** Hard timeout for adding a searchable text layer to one PDF. */
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */

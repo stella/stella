@@ -146,12 +146,15 @@ export type WorkspacePropertyOption = {
   value: string;
 };
 
+/** Mirrors `OcrExportStatus` in apps/api/src/lib/entities/query-entities.ts. */
+export type OcrExportStatus = "text-and-pdf" | "text" | "unavailable";
+
 export type WorkspaceField = {
   entityId: EntityId;
   id: FieldId;
   propertyId: PropertyId;
   content: WorkspaceFieldContent;
-  ocrExportStatus?: "ready" | "unavailable";
+  ocrExportStatus?: OcrExportStatus;
 };
 
 export type WorkspaceCellMetadata = {
