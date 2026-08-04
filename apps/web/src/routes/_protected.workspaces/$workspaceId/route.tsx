@@ -23,7 +23,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
@@ -279,7 +279,7 @@ function RouteComponent() {
   const handleOpenChat = () => {
     openChat({ workspaceId, contextMatterIds: [workspaceId] });
   };
-  useHotkey(HOTKEYS.NEW_CHAT, handleOpenChat);
+  useHotkey(useEffectiveHotkey("newChat"), handleOpenChat);
 
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so

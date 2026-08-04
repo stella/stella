@@ -6,7 +6,11 @@ import {
   SHORTCUT_CONTEXTS,
   SHORTCUT_GROUPS,
 } from "@/lib/hotkeys";
-import type { ShortcutBinding } from "@/lib/hotkeys";
+import {
+  bindingKey,
+  collectShortcutCandidates,
+  findContextCollisions,
+} from "@/lib/shortcut-overrides";
 
 const allShortcuts = SHORTCUT_GROUPS.flatMap((group) =>
   group.shortcuts.map((shortcut) => ({
@@ -14,10 +18,6 @@ const allShortcuts = SHORTCUT_GROUPS.flatMap((group) =>
     ...shortcut,
   })),
 );
-
-/** Canonical identity for a binding, used to detect collisions. */
-const bindingKey = (binding: ShortcutBinding): string =>
-  binding.type === "hotkey" ? `hotkey:${binding.hotkey}` : `char:${binding.char}`;
 
 const registryModHotkeys = SHORTCUT_GROUPS.flatMap((group) =>
   group.shortcuts.flatMap((shortcut) =>
@@ -41,6 +41,11 @@ describe("shortcut registry is the single source of truth", () => {
     for (const shortcut of allShortcuts) {
       expect(formatShortcutBinding(shortcut.binding).length).toBeGreaterThan(0);
     }
+  });
+
+  test("every registry shortcut has a unique, stable id", () => {
+    const ids = allShortcuts.map((shortcut) => shortcut.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   test("the hold-Mod overlay is exactly the Mod-chord projection of the registry", () => {
@@ -71,17 +76,14 @@ describe("shortcut registry is the single source of truth", () => {
 });
 
 describe("no colliding shortcuts within a context", () => {
-  // Kills the collision bug class: the same key combo bound twice inside one
-  // ShortcutContext (directly, or via a "global" shortcut active everywhere) is
-  // a test failure.
-  test.each([...SHORTCUT_CONTEXTS])("context %s has no duplicate combos", (context) => {
-    const active = allShortcuts.filter((shortcut) =>
-      shortcut.contexts.some((c) => c === context || c === "global"),
+  // Kills the collision bug class through the SAME shared checker the runtime
+  // rebind save-guard uses: the default registry must be collision-free in
+  // every context.
+  test("the default registry has no in-context collisions", () => {
+    const collisions = findContextCollisions(
+      collectShortcutCandidates(SHORTCUT_GROUPS),
+      SHORTCUT_CONTEXTS,
     );
-    const combos = active.map((shortcut) => bindingKey(shortcut.binding));
-    const duplicates = combos.filter(
-      (combo, index) => combos.indexOf(combo) !== index,
-    );
-    expect(duplicates).toEqual([]);
+    expect(collisions).toEqual([]);
   });
 });

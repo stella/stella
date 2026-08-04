@@ -39,6 +39,25 @@ export const SHORTCUT_CONTEXTS: readonly ShortcutContext[] = [
 ];
 
 /**
+ * Stable identity for every registry entry. Closed union so the echo matcher
+ * and the per-user override map can reference entries type-safely: adding an
+ * entry to {@link SHORTCUT_GROUPS} without listing its id here fails typecheck,
+ * and an override or echo can only ever name a real shortcut.
+ */
+export type ShortcutId =
+  | "search"
+  | "toggleSidebar"
+  | "toggleChat"
+  | "newMatter"
+  | "newChat"
+  | "selectAll"
+  | "acceptSuggestion"
+  | "rejectSuggestion"
+  | "previousSuggestion"
+  | "nextSuggestion"
+  | "showShortcuts";
+
+/**
  * How a shortcut is bound. `hotkey` maps to a @tanstack `Hotkey` (bound with
  * `useHotkey`, displayed with `formatForDisplay`); `char` is a bare produced
  * character (layout-correct, matched via `KeyboardEvent.key`).
@@ -48,6 +67,7 @@ export type ShortcutBinding =
   | { readonly type: "char"; readonly char: string };
 
 export type ShortcutDescriptor = {
+  readonly id: ShortcutId;
   readonly binding: ShortcutBinding;
   readonly labelKey: TranslationKey;
   readonly contexts: readonly ShortcutContext[];
@@ -70,16 +90,19 @@ export const SHORTCUT_GROUPS = [
     categoryKey: "navigation.shortcutCategories.navigation",
     shortcuts: [
       {
+        id: "search",
         binding: { type: "hotkey", hotkey: HOTKEYS.SEARCH },
         labelKey: "navigation.search",
         contexts: ["global"],
       },
       {
+        id: "toggleSidebar",
         binding: { type: "hotkey", hotkey: HOTKEYS.TOGGLE_SIDEBAR },
         labelKey: "navigation.toggleSidebar",
         contexts: ["global"],
       },
       {
+        id: "toggleChat",
         binding: { type: "hotkey", hotkey: HOTKEYS.TOGGLE_CHAT },
         labelKey: "navigation.toggleChat",
         contexts: ["global"],
@@ -90,16 +113,19 @@ export const SHORTCUT_GROUPS = [
     categoryKey: "common.actions",
     shortcuts: [
       {
+        id: "newMatter",
         binding: { type: "hotkey", hotkey: HOTKEYS.NEW_MATTER },
         labelKey: "common.newMatter",
         contexts: ["global", "workspace"],
       },
       {
+        id: "newChat",
         binding: { type: "hotkey", hotkey: HOTKEYS.NEW_CHAT },
         labelKey: "chat.newChat",
         contexts: ["workspace"],
       },
       {
+        id: "selectAll",
         binding: { type: "hotkey", hotkey: HOTKEYS.SELECT_ALL },
         labelKey: "folio.selectAll",
         contexts: ["workspace"],
@@ -110,21 +136,25 @@ export const SHORTCUT_GROUPS = [
     categoryKey: "navigation.shortcutCategories.review",
     shortcuts: [
       {
+        id: "acceptSuggestion",
         binding: { type: "hotkey", hotkey: HOTKEYS.ACCEPT_SUGGESTION },
         labelKey: "common.accept",
         contexts: ["pdf"],
       },
       {
+        id: "rejectSuggestion",
         binding: { type: "hotkey", hotkey: HOTKEYS.REJECT_SUGGESTION },
         labelKey: "docxReview.reject",
         contexts: ["pdf"],
       },
       {
+        id: "previousSuggestion",
         binding: { type: "hotkey", hotkey: HOTKEYS.PREVIOUS_SUGGESTION },
         labelKey: "common.previous",
         contexts: ["pdf"],
       },
       {
+        id: "nextSuggestion",
         binding: { type: "hotkey", hotkey: HOTKEYS.NEXT_SUGGESTION },
         labelKey: "common.next",
         contexts: ["pdf"],
@@ -135,6 +165,7 @@ export const SHORTCUT_GROUPS = [
     categoryKey: "navigation.shortcutCategories.help",
     shortcuts: [
       {
+        id: "showShortcuts",
         binding: { type: "char", char: SHOW_SHORTCUTS_KEY },
         labelKey: "navigation.showShortcuts",
         contexts: ["global"],
@@ -151,33 +182,69 @@ export const SHORTCUT_GROUPS = [
 export const formatShortcutBinding = (binding: ShortcutBinding): string =>
   binding.type === "hotkey" ? formatForDisplay(binding.hotkey) : binding.char;
 
-/**
- * Hold-Mod overlay content, derived from {@link SHORTCUT_GROUPS}. The overlay
- * is reachable only by holding Mod, so it lists exactly the Mod-chord
- * shortcuts; every other binding (bare chars, Alt chords) is cheatsheet-only.
- *
- * Types are derived from the value (not annotated) so the literal label/category
- * keys survive: annotating them as the broad `TranslationKey` union would force
- * `t()` onto its interpolation overload for keys that take no arguments.
- */
-export const OVERLAY_HINT_GROUPS = SHORTCUT_GROUPS.map((group) => ({
-  categoryKey: group.categoryKey,
-  hints: group.shortcuts.flatMap((shortcut) =>
-    shortcut.binding.type === "hotkey" &&
-    shortcut.binding.hotkey.startsWith("Mod")
-      ? [
-          {
-            hotkey: shortcut.binding.hotkey,
-            labelKey: shortcut.labelKey,
-            contexts: shortcut.contexts,
-          },
-        ]
-      : [],
-  ),
-})).filter((group) => group.hints.length > 0);
+export type OverlayHint = {
+  readonly hotkey: Hotkey;
+  readonly labelKey: TranslationKey;
+  readonly contexts: readonly ShortcutContext[];
+};
 
-export type OverlayHintGroup = (typeof OVERLAY_HINT_GROUPS)[number];
-export type OverlayHint = OverlayHintGroup["hints"][number];
+export type OverlayHintGroup = {
+  readonly categoryKey: TranslationKey;
+  readonly hints: readonly OverlayHint[];
+};
+
+/**
+ * Project a shortcut registry into hold-Mod overlay content. The overlay is
+ * reachable only by holding Mod, so it lists exactly the Mod-chord shortcuts;
+ * every other binding (bare chars, Alt chords) is cheatsheet-only.
+ *
+ * Kept a pure function of its argument (not hardcoded to {@link SHORTCUT_GROUPS})
+ * so the overlay can pass the per-user *effective* registry and rebindings take
+ * effect there too.
+ */
+export const deriveOverlayHintGroups = (
+  groups: readonly ShortcutGroup[],
+): OverlayHintGroup[] =>
+  groups
+    .map((group) => ({
+      categoryKey: group.categoryKey,
+      hints: group.shortcuts.flatMap((shortcut) =>
+        shortcut.binding.type === "hotkey" &&
+        shortcut.binding.hotkey.startsWith("Mod")
+          ? [
+              {
+                hotkey: shortcut.binding.hotkey,
+                labelKey: shortcut.labelKey,
+                contexts: shortcut.contexts,
+              },
+            ]
+          : [],
+      ),
+    }))
+    .filter((group) => group.hints.length > 0);
+
+/**
+ * Hold-Mod overlay content for the default registry. The overlay renders the
+ * effective (per-user) projection at runtime; this default backs the
+ * single-source-of-truth tests.
+ */
+export const OVERLAY_HINT_GROUPS = deriveOverlayHintGroups(SHORTCUT_GROUPS);
+
+/**
+ * Whether a keyboard event originates from a text-entry control. Global
+ * shortcut handlers (the `?` cheatsheet, the press-echo listener) share this
+ * guard so they never fire while the user is typing.
+ */
+export const isEditableEventTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+};
 
 const CTRL_PREFIX_RE = /^Ctrl\+/u;
 

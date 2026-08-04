@@ -2135,7 +2135,13 @@
       "review": "Revisão do documento"
     },
     "shortcutsDialog": {
+      "collision": "Já atribuído a {label}",
       "description": "Explore os atalhos de teclado para trabalhar mais rápido.",
+      "editShortcut": "Alterar atalho",
+      "invalidBinding": "Adicione uma tecla que não seja modificadora",
+      "notRebindable": "Este atalho não pode ser alterado",
+      "pressKeys": "Pressione as novas teclas…",
+      "resetToDefault": "Restaurar padrão",
       "title": "Atalhos de teclado"
     },
     "showShortcuts": "Mostrar atalhos de teclado",

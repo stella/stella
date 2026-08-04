@@ -12,12 +12,13 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
+  deriveOverlayHintGroups,
   formatHintKey,
   MOD_KEY,
-  OVERLAY_HINT_GROUPS,
   triggerHotkey,
 } from "@/lib/hotkeys";
 import type { OverlayHint, ShortcutContext } from "@/lib/hotkeys";
+import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
 
 const HOLD_DELAY_MS = 500;
 const HIGHLIGHT_DURATION_MS = 150;
@@ -36,6 +37,7 @@ export function ShortcutHintsOverlay() {
 
 function ShortcutHintsOverlayContent() {
   const t = useTranslations();
+  const overlayHintGroups = deriveOverlayHintGroups(useEffectiveShortcutGroups());
   const isMountedRef = useRef(false);
   const isSuppressedUntilReleaseRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -132,7 +134,7 @@ function ShortcutHintsOverlayContent() {
     <Dialog onOpenChange={handleOpenChange} open={isVisible}>
       <DialogPopup className="w-64 p-4" initialFocus={false} showCloseButton>
         <div className="flex flex-col gap-3">
-          {OVERLAY_HINT_GROUPS.map((group) => (
+          {overlayHintGroups.map((group) => (
             <div key={group.categoryKey}>
               <h3 className="text-muted-foreground mb-1 px-2 text-xs font-medium">
                 {t(group.categoryKey)}

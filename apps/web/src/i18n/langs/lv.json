@@ -2135,7 +2135,13 @@
       "review": "Dokumenta pārskatīšana"
     },
     "shortcutsDialog": {
+      "collision": "Jau piešķirts: {label}",
       "description": "Pārlūkojiet tastatūras saīsnes, lai strādātu ātrāk.",
+      "editShortcut": "Mainīt saīsni",
+      "invalidBinding": "Pievienojiet taustiņu, kas nav modifikators",
+      "notRebindable": "Šo saīsni nevar mainīt",
+      "pressKeys": "Nospiediet jaunos taustiņus…",
+      "resetToDefault": "Atiestatīt uz noklusējumu",
       "title": "Tastatūras saīsnes"
     },
     "showShortcuts": "Rādīt tastatūras saīsnes",

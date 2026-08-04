@@ -2135,7 +2135,13 @@
       "review": "Dokumentprüfung"
     },
     "shortcutsDialog": {
+      "collision": "Bereits {label} zugewiesen",
       "description": "Durchsuchen Sie Tastenkürzel, um schneller zu arbeiten.",
+      "editShortcut": "Tastenkürzel ändern",
+      "invalidBinding": "Fügen Sie eine Nicht-Modifikatortaste hinzu",
+      "notRebindable": "Dieses Tastenkürzel kann nicht geändert werden",
+      "pressKeys": "Neue Tasten drücken…",
+      "resetToDefault": "Auf Standard zurücksetzen",
       "title": "Tastenkürzel"
     },
     "showShortcuts": "Tastenkürzel anzeigen",

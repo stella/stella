@@ -97,6 +97,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
+import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -496,11 +497,13 @@ const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
       maxLength: WORD_EDIT_SHORTCUT_MAX_LENGTH,
     },
   );
+  const userShortcuts = normalizeUserShortcutsField(user["userShortcuts"]);
 
   return {
     ...user,
     ...(preferredName !== undefined ? { preferredName } : {}),
     ...(wordEditShortcut !== undefined ? { wordEditShortcut } : {}),
+    ...(userShortcuts !== undefined ? { userShortcuts } : {}),
   };
 };
 
@@ -713,6 +716,12 @@ const createAuth = () => {
           required: false,
         },
         wordEditShortcut: {
+          type: "string",
+          required: false,
+        },
+        // Per-user keyboard-shortcut rebindings, serialized as JSON. Structural
+        // validation + length cap happen in the create/update hooks below.
+        userShortcuts: {
           type: "string",
           required: false,
         },

@@ -72,7 +72,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { isFileDisplayable } from "@/lib/types";
@@ -470,7 +470,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }, [visibleNodes]);
 
   useHotkey(
-    HOTKEYS.SELECT_ALL,
+    useEffectiveHotkey("selectAll"),
     () => {
       setSelectedIds(allVisibleIds);
     },

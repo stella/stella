@@ -1,7 +1,10 @@
 import { useId, useState } from "react";
 
+import { formatForDisplay, useHotkeyRecorder } from "@tanstack/react-hotkeys";
+import type { Hotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogDescription,
@@ -10,23 +13,40 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   formatShortcutBinding,
-  SHORTCUT_GROUPS,
+  isEditableEventTarget,
   SHOW_SHORTCUTS_KEY,
 } from "@/lib/hotkeys";
+import type {
+  ShortcutDescriptor,
+  ShortcutGroup,
+  ShortcutId,
+} from "@/lib/hotkeys";
+import type { RebindError } from "@/lib/shortcut-overrides";
+import {
+  useEffectiveShortcutGroups,
+  useShortcutRebinding,
+} from "@/lib/use-effective-shortcuts";
+import { useShortcutEchoStore } from "@/lib/use-shortcut-echo";
 
 /**
  * A browsable reference of every app-level keyboard shortcut, opened with `?`.
- * Complements the transient hold-Mod overlay: both render from the single
- * `SHORTCUT_GROUPS` registry, so the two surfaces can never drift apart.
+ * Renders the per-user effective registry, flashes the row for whatever
+ * shortcut was just pressed, and lets the user rebind hotkey-chord shortcuts in
+ * place. Complements the transient hold-Mod overlay: both read the same
+ * registry, so the surfaces cannot drift apart.
  */
 export function KeyboardShortcutsDialog() {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   useShowShortcutsHotkey(setOpen);
+
+  const groups = useEffectiveShortcutGroups();
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
@@ -38,7 +58,7 @@ export function KeyboardShortcutsDialog() {
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-6">
-          {SHORTCUT_GROUPS.map((group) => (
+          {groups.map((group) => (
             <ShortcutGroupSection group={group} key={group.categoryKey} />
           ))}
         </DialogPanel>
@@ -48,12 +68,13 @@ export function KeyboardShortcutsDialog() {
 }
 
 type ShortcutGroupSectionProps = {
-  group: (typeof SHORTCUT_GROUPS)[number];
+  group: ShortcutGroup;
 };
 
 const ShortcutGroupSection = ({ group }: ShortcutGroupSectionProps) => {
   const t = useTranslations();
   const headingId = useId();
+  const { overrides, rebind, reset } = useShortcutRebinding();
 
   return (
     <section aria-labelledby={headingId}>
@@ -65,32 +86,208 @@ const ShortcutGroupSection = ({ group }: ShortcutGroupSectionProps) => {
       </h3>
       <ul className="flex flex-col gap-1">
         {group.shortcuts.map((shortcut) => (
-          <li
-            className="flex items-center justify-between gap-4 py-1"
-            key={shortcut.labelKey}
-          >
-            <span className="text-foreground text-sm">
-              {t(shortcut.labelKey)}
-            </span>
-            <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-              {formatShortcutBinding(shortcut.binding)}
-            </kbd>
-          </li>
+          <ShortcutRow
+            isOverridden={overrides[shortcut.id] !== undefined}
+            key={shortcut.id}
+            onRebind={rebind}
+            onReset={reset}
+            shortcut={shortcut}
+          />
         ))}
       </ul>
     </section>
   );
 };
 
-const isEditableTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
+type ShortcutRowProps = {
+  shortcut: ShortcutDescriptor;
+  isOverridden: boolean;
+  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onReset: (id: ShortcutId) => Promise<void>;
+};
+
+const ShortcutRow = ({
+  shortcut,
+  isOverridden,
+  onRebind,
+  onReset,
+}: ShortcutRowProps) => {
+  const t = useTranslations();
+  const isFlashing = useShortcutEchoStore(
+    (store) => store.echo?.shortcutId === shortcut.id,
+  );
+
+  return (
+    <li
+      className={cn(
+        "flex items-center justify-between gap-4 rounded px-1 py-1 transition-colors",
+        isFlashing && "bg-accent/60",
+      )}
+    >
+      <span className="text-foreground text-sm">{t(shortcut.labelKey)}</span>
+      {shortcut.binding.type === "hotkey" ? (
+        <RebindableBinding
+          hotkey={shortcut.binding.hotkey}
+          id={shortcut.id}
+          isOverridden={isOverridden}
+          onRebind={onRebind}
+          onReset={onReset}
+        />
+      ) : (
+        <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+          {shortcut.binding.char}
+        </kbd>
+      )}
+    </li>
+  );
+};
+
+type RebindableBindingProps = {
+  id: ShortcutId;
+  hotkey: Hotkey;
+  isOverridden: boolean;
+  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onReset: (id: ShortcutId) => Promise<void>;
+};
+
+const RebindableBinding = ({
+  id,
+  hotkey,
+  isOverridden,
+  onRebind,
+  onReset,
+}: RebindableBindingProps) => {
+  const t = useTranslations();
+  const [pending, setPending] = useState<Hotkey | null>(null);
+  const [error, setError] = useState<RebindError | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const recorder = useHotkeyRecorder({
+    onRecord: (recorded) => {
+      setPending(recorded);
+    },
+  });
+
+  const isEditing = recorder.isRecording || pending !== null;
+  const preview = pending ?? recorder.recordedHotkey;
+
+  const startEdit = () => {
+    setError(null);
+    setPending(null);
+    recorder.startRecording();
+  };
+
+  const cancelEdit = () => {
+    recorder.cancelRecording();
+    setPending(null);
+    setError(null);
+  };
+
+  const save = async () => {
+    if (!pending) {
+      return;
+    }
+    setIsBusy(true);
+    setError(null);
+    try {
+      const rejection = await onRebind(id, pending);
+      if (rejection) {
+        setError(rejection);
+        return;
+      }
+      setPending(null);
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const resetToDefault = async () => {
+    setIsBusy(true);
+    try {
+      await onReset(id);
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const errorText = (() => {
+    if (!error) {
+      return null;
+    }
+    switch (error.type) {
+      case "collision":
+        return t("navigation.shortcutsDialog.collision", {
+          label: t(error.conflictLabelKey),
+        });
+      case "invalidBinding":
+        return t("navigation.shortcutsDialog.invalidBinding");
+      case "notRebindable":
+        return t("navigation.shortcutsDialog.notRebindable");
+      default: {
+        const _exhaustive: never = error;
+        return _exhaustive;
+      }
+    }
+  })();
+
+  if (isEditing) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-2">
+          <kbd className="border-primary bg-muted text-foreground min-w-16 rounded border border-dashed px-1.5 py-0.5 text-center text-xs">
+            {preview
+              ? formatForDisplay(preview)
+              : t("navigation.shortcutsDialog.pressKeys")}
+          </kbd>
+          <Button
+            disabled={!pending || isBusy}
+            onClick={save}
+            size="sm"
+            variant="default"
+          >
+            {t("common.save")}
+          </Button>
+          <Button onClick={cancelEdit} size="sm" variant="ghost">
+            {t("common.cancel")}
+          </Button>
+        </div>
+        {errorText ? (
+          <span className="text-destructive text-xs">{errorText}</span>
+        ) : null}
+      </div>
+    );
   }
-  if (target.isContentEditable) {
-    return true;
-  }
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+  return (
+    <div className="flex items-center gap-2">
+      {isOverridden ? (
+        <Button
+          disabled={isBusy}
+          onClick={resetToDefault}
+          size="sm"
+          variant="ghost"
+        >
+          {t("navigation.shortcutsDialog.resetToDefault")}
+        </Button>
+      ) : null}
+      <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+        {formatShortcutBinding({ type: "hotkey", hotkey })}
+      </kbd>
+      <Button
+        aria-label={t("navigation.shortcutsDialog.editShortcut")}
+        disabled={isBusy}
+        onClick={startEdit}
+        size="sm"
+        variant="ghost"
+      >
+        {t("common.edit")}
+      </Button>
+    </div>
+  );
 };
 
 /**
@@ -114,7 +311,7 @@ const useShowShortcutsHotkey = (
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
-      if (isEditableTarget(event.target)) {
+      if (isEditableEventTarget(event.target)) {
         return;
       }
       event.preventDefault();

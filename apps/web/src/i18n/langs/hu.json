@@ -2135,7 +2135,13 @@
       "review": "Dokumentum áttekintése"
     },
     "shortcutsDialog": {
+      "collision": "Már hozzárendelve ehhez: {label}",
       "description": "Böngéssze a billentyűparancsokat a gyorsabb munkához.",
+      "editShortcut": "Billentyűparancs módosítása",
+      "invalidBinding": "Adjon hozzá egy nem módosító billentyűt",
+      "notRebindable": "Ez a billentyűparancs nem módosítható",
+      "pressKeys": "Nyomja le az új billentyűket…",
+      "resetToDefault": "Visszaállítás alapértelmezettre",
       "title": "Billentyűparancsok"
     },
     "showShortcuts": "Billentyűparancsok megjelenítése",

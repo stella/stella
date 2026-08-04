@@ -103,7 +103,8 @@ import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
+import { NAV_KEY } from "@/lib/hotkeys";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -231,11 +232,12 @@ export function AppSidebar(props: AppSidebarProps) {
     });
   };
 
-  useHotkey(HOTKEYS.SEARCH, () => {
+  const searchHotkey = useEffectiveHotkey("search");
+  useHotkey(searchHotkey, () => {
     setSearchOpen((prev) => !prev);
   });
 
-  useHotkey(HOTKEYS.NEW_MATTER, () => {
+  useHotkey(useEffectiveHotkey("newMatter"), () => {
     handleCreateWorkspace();
   });
 
@@ -596,7 +598,7 @@ export function AppSidebar(props: AppSidebarProps) {
                         return (
                           <SidebarMenuBadge>
                             <kbd className="text-muted-foreground text-[0.625rem]">
-                              {formatForDisplay(HOTKEYS.SEARCH)}
+                              {formatForDisplay(searchHotkey)}
                             </kbd>
                           </SidebarMenuBadge>
                         );

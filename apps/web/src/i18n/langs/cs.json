@@ -2135,7 +2135,13 @@
       "review": "Revize dokumentu"
     },
     "shortcutsDialog": {
+      "collision": "Již přiřazeno k {label}",
       "description": "Procházejte klávesové zkratky a pracujte rychleji.",
+      "editShortcut": "Změnit zkratku",
+      "invalidBinding": "Přidejte klávesu, která není modifikátor",
+      "notRebindable": "Tuto zkratku nelze změnit",
+      "pressKeys": "Stiskněte nové klávesy…",
+      "resetToDefault": "Obnovit výchozí",
       "title": "Klávesové zkratky"
     },
     "showShortcuts": "Zobrazit klávesové zkratky",

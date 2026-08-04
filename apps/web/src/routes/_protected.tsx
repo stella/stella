@@ -49,6 +49,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
+import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
   SidebarInset,
@@ -71,7 +72,7 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -321,7 +322,7 @@ function ProtectedComponent() {
       });
     }
   }, [activeWorkspaceId]);
-  useHotkey(HOTKEYS.TOGGLE_CHAT, handleToggleInspectorHotkey);
+  useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
 
   return (
     <AuthenticatedUserProvider user={analyticsUser}>
@@ -335,6 +336,7 @@ function ProtectedComponent() {
               <ProtectedContent />
               <WorkspaceInspectorSidePanel />
               <ShortcutHintsOverlay />
+              <ShortcutEchoHud />
               <KeyboardShortcutsDialog />
               <ModelSelectorDialog />
             </ChatEditorProvider>
