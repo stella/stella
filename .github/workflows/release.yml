@@ -508,9 +508,14 @@ jobs:
             exit 1
           fi
 
+          # Pin the certificate identity (SAN) to this workflow at a ref that
+          # legitimately produces release attestations: the release tag itself
+          # (tag push) or main (workflow_dispatch runs from the default
+          # branch). A same-path workflow on any other ref must not pass.
+          identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RELEASE_REF//./\\.}|refs/heads/main)\$"
           verification="$(gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+            --cert-identity-regex "$identity_pattern" \
             --predicate-type "$PREDICATE_TYPE" \
             --deny-self-hosted-runners \
             --format json)"
@@ -649,10 +654,14 @@ jobs:
               and .releaseSha == $release_sha
               and .targetEnvironment == $target_environment' \
             release-web-image/source-receipt.json >/dev/null
+          # The build was dispatched at ref=main above, so require the
+          # attestation's source ref to match: a same-path workflow on
+          # another branch of the infra repo must not pass.
           gh attestation verify release-web-image/stella-web.tar \
             --bundle release-web-image/stella-web.intoto.jsonl \
             --repo "${GITHUB_REPOSITORY_OWNER}/stella-infra" \
             --signer-workflow "${GITHUB_REPOSITORY_OWNER}/stella-infra/.github/workflows/build-release-web.yml" \
+            --source-ref refs/heads/main \
             --deny-self-hosted-runners >/dev/null
           archive_digest="$(sha256sum release-web-image/stella-web.tar | awk '{print $1}')"
           echo "digest=sha256:${archive_digest}" >> "$GITHUB_OUTPUT"
@@ -783,9 +792,13 @@ jobs:
               echo "::error::Existing API image tag does not match its release receipt."
               exit 1
             fi
+            # Same ref pinning as the web image receipt: release
+            # attestations come from this workflow at the release tag
+            # (tag push) or main (workflow_dispatch).
+            identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RELEASE_REF//./\\.}|refs/heads/main)\$"
             gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
               --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --cert-identity-regex "$identity_pattern" \
               --deny-self-hosted-runners >/dev/null
             docker pull --platform linux/arm64 "${IMAGE}@${tagged_digest}" >/dev/null
             image_env="$(docker image inspect "${IMAGE}@${tagged_digest}" --format '{{json .Config.Env}}')"
