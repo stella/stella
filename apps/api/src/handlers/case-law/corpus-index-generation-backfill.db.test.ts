@@ -794,6 +794,7 @@ test(
                       {
                         indexIds: selected.generationPendingIndexIds,
                         revision: selected.generationPendingRevision,
+                        mayHaveCopy: true,
                       },
                     ]),
                   ),
@@ -949,7 +950,7 @@ test(
               mode: {
                 generation,
                 reservations: new Map([
-                  [row.id, { indexIds: [target], revision }],
+                  [row.id, { indexIds: [target], revision, mayHaveCopy: true }],
                 ]),
                 type: "generation-rebuild",
               },
@@ -2076,6 +2077,7 @@ test(
                   {
                     indexIds: selected.generationPendingIndexIds,
                     revision: selected.generationPendingRevision,
+                    mayHaveCopy: true,
                   },
                 ]),
               ),

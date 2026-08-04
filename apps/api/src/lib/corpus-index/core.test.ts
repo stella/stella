@@ -416,6 +416,7 @@ describe("fenced serving-generation appends", () => {
               {
                 indexIds: [corpusIndexId(generation, selected.country)],
                 revision: 1,
+                mayHaveCopy: true,
               },
             ]),
           );
@@ -624,6 +625,7 @@ describe("failed index jobs always reach the audit trail", () => {
               {
                 indexIds: [corpusIndexId(generation, selected.country)],
                 revision: 1,
+                mayHaveCopy: true,
               },
             ]),
           ),
@@ -732,6 +734,7 @@ describe("failed index jobs always reach the audit trail", () => {
                 selected.projectionIndexId,
               ],
               revision: 2,
+              mayHaveCopy: true,
             },
           ]),
         ),
@@ -788,6 +791,7 @@ describe("failed index jobs always reach the audit trail", () => {
                   selected.projectionIndexId,
                 ],
                 revision: 2,
+                mayHaveCopy: true,
               },
             ]),
           ),
@@ -827,6 +831,7 @@ describe("failed index jobs always reach the audit trail", () => {
                   lateReservedIndexId,
                 ],
                 revision: 2,
+                mayHaveCopy: true,
               },
             ]),
           ),
@@ -931,6 +936,7 @@ describe("first-ever fenced appends", () => {
             {
               indexIds: [corpusIndexId(generation, selected.country)],
               revision: 1,
+              mayHaveCopy: false,
             },
           ]),
         ),
