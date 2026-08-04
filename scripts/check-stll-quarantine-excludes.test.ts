@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { checkQuarantineExcludes } from "./check-stll-quarantine-excludes";
+import {
+  checkQuarantineExcludes,
+  pruneExpiredExcludes,
+} from "./check-stll-quarantine-excludes";
 
 const lockfile = `
 "packages": {
@@ -31,7 +34,9 @@ describe("quarantine exclude guard", () => {
     expect(result.activeTemporaryCount).toBe(1);
   });
 
-  test("rejects a temporary exclusion at its exact expiry", () => {
+  // An expiry is a wall-clock instant. Failing at it turned every open branch
+  // red at once for a change nobody made, so the instant only warns.
+  test("warns rather than fails at the exact expiry", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig(
         '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
@@ -40,8 +45,38 @@ describe("quarantine exclude guard", () => {
       now: new Date("2026-08-06T21:35:30.036Z"),
     });
 
-    expect(result.errors).toContain(
-      'bunfig.toml temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z. Remove it: the configured release-age gate can admit the package now.',
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.at(0)).toContain(
+      'temporary quarantine exclude "better-result" expired at',
+    );
+  });
+
+  // Nothing to say before it expires: the removal arrives on its own.
+  test("stays silent until the expiry", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
+      ),
+      lockfile,
+      now: new Date("2026-08-06T21:35:30.035Z"),
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  test("fails once an expired exclusion is ignored past the notice window", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
+      ),
+      lockfile,
+      now: new Date("2026-08-07T21:35:30.036Z"),
+    });
+
+    expect(result.warnings).toEqual([]);
+    expect(result.errors.at(0)).toContain(
+      'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
     );
   });
 
@@ -73,6 +108,86 @@ describe("quarantine exclude guard", () => {
 
     expect(result.firstPartyCount).toBe(2);
     expect(result.errors.at(0)).toContain('"@stll/shipped",');
+  });
+
+  test("prunes only the expired entries", () => {
+    const bunfig = `
+[install]
+minimumReleaseAge = 432_000
+minimumReleaseAgeExcludes = [
+  "@stll/native",
+  # Security patches for dependency-audit findings.
+  "brace-expansion", # quarantine-expires: 2026-08-04T10:00:32.762Z
+  "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
+  "drizzle-kit",
+]
+`;
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-08-04T10:37:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual(["brace-expansion"]);
+    expect(result.bunfig).not.toContain("brace-expansion");
+    expect(result.bunfig).toContain('"fast-uri", # quarantine-expires:');
+    expect(result.bunfig).toContain('"@stll/native"');
+    expect(result.bunfig).toContain('"drizzle-kit"');
+    // The pruned file is what the guard should then accept.
+    expect(
+      checkQuarantineExcludes({
+        bunfig: result.bunfig,
+        lockfile,
+        now: new Date("2026-08-04T10:37:00.000Z"),
+      }).errors,
+    ).toEqual([]);
+  });
+
+  // Matching by name would take the renewed entry with the expired one, which
+  // silently drops a package back out of the quarantine before its time.
+  test("keeps a renewed entry when an expired one shares its name", () => {
+    const bunfig = `
+[install]
+minimumReleaseAge = 432_000
+minimumReleaseAgeExcludes = [
+  "@stll/native",
+  "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
+  "fast-uri", # quarantine-expires: 2026-09-01T09:16:56.212Z
+]
+`;
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-08-06T00:00:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual(["fast-uri"]);
+    expect(result.bunfig).toContain(
+      '"fast-uri", # quarantine-expires: 2026-09-01T09:16:56.212Z',
+    );
+    expect(result.bunfig).not.toContain("2026-08-05T09:16:56.212Z");
+  });
+
+  test("leaves a malformed annotation for the guard to report", () => {
+    const bunfig = createBunfig('"better-result", # quarantine-expires: nope');
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-09-01T00:00:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual([]);
+    expect(result.bunfig).toBe(bunfig);
+  });
+
+  test("leaves a file with nothing expired untouched", () => {
+    const bunfig = createBunfig(
+      '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
+    );
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-08-04T00:00:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual([]);
+    expect(result.bunfig).toBe(bunfig);
   });
 
   test("retains the first-party package coverage guard", () => {

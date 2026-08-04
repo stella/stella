@@ -4,8 +4,16 @@
  * 1. Every first-party `@stll/*` package the lockfile resolves from npm must
  *    be excluded.
  * 2. A temporary third-party exclusion annotated with
- *    `# quarantine-expires: <timestamp>` fails at that timestamp, when Bun's
- *    release-age gate can take over again.
+ *    `# quarantine-expires: <timestamp>` must be removed once Bun's release-age
+ *    gate can take over again.
+ *
+ * An expiry is a wall-clock instant, so failing at that instant turns every
+ * open branch red at once for a change nobody made. Removal is automatic
+ * instead: `quarantine-prune.yml` runs `--prune` hourly and opens the PR that
+ * deletes the entry. An expired entry is therefore only a warning while that
+ * PR waits to be merged, and fails once it has been ignored past the window.
+ * It has to fail eventually: a stale exclude is not inert, because the next
+ * version of that package published would skip the quarantine unnoticed.
  *
  * The 5-day quarantine is a supply-chain control for third-party code. First-
  * party packages publish continuously, so they are excluded by name. The
@@ -22,12 +30,13 @@
  * Run: `bun scripts/check-stll-quarantine-excludes.ts`
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
+const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -63,6 +72,49 @@ type TemporaryExcludesResult = {
   errors: string[];
 };
 
+type ParsedTemporaryExclude =
+  | { error: string; kind: "error" }
+  | { expiresAt: string; kind: "entry"; name: string };
+
+/**
+ * One annotated line. Both the guard and the prune read it through here, so
+ * neither can disagree with the other about what a line means.
+ */
+const parseTemporaryExcludeLine = (line: string): ParsedTemporaryExclude => {
+  const commentStart = line.indexOf("#");
+  const declaration = line.slice(0, commentStart).trim();
+  const comment = line.slice(commentStart + 1).trim();
+  const quotedName = declaration.endsWith(",")
+    ? declaration.slice(0, -1).trim()
+    : declaration;
+  const isQuotedName =
+    quotedName.startsWith('"') &&
+    quotedName.endsWith('"') &&
+    !quotedName.slice(1, -1).includes('"');
+  if (!comment.startsWith(EXPIRY_MARKER) || !isQuotedName) {
+    return {
+      error: `${BUNFIG} has a malformed temporary quarantine annotation: ${line.trim()}`,
+      kind: "error",
+    };
+  }
+
+  const name = quotedName.slice(1, -1);
+  const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
+  const expiresAtMs = Date.parse(expiresAt);
+  if (
+    !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
+    Number.isNaN(expiresAtMs) ||
+    new Date(expiresAtMs).toISOString() !== expiresAt
+  ) {
+    return {
+      error: `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
+      kind: "error",
+    };
+  }
+
+  return { expiresAt, kind: "entry", name };
+};
+
 const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
   const entries: TemporaryExclude[] = [];
   const errors: string[] = [];
@@ -72,38 +124,13 @@ const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
       continue;
     }
 
-    const commentStart = line.indexOf("#");
-    const declaration = line.slice(0, commentStart).trim();
-    const comment = line.slice(commentStart + 1).trim();
-    const quotedName = declaration.endsWith(",")
-      ? declaration.slice(0, -1).trim()
-      : declaration;
-    const isQuotedName =
-      quotedName.startsWith('"') &&
-      quotedName.endsWith('"') &&
-      !quotedName.slice(1, -1).includes('"');
-    if (!comment.startsWith(EXPIRY_MARKER) || !isQuotedName) {
-      errors.push(
-        `${BUNFIG} has a malformed temporary quarantine annotation: ${line.trim()}`,
-      );
+    const parsed = parseTemporaryExcludeLine(line);
+    if (parsed.kind === "error") {
+      errors.push(parsed.error);
       continue;
     }
 
-    const name = quotedName.slice(1, -1);
-    const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
-    const expiresAtMs = Date.parse(expiresAt);
-    if (
-      !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
-      Number.isNaN(expiresAtMs) ||
-      new Date(expiresAtMs).toISOString() !== expiresAt
-    ) {
-      errors.push(
-        `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
-      );
-      continue;
-    }
-
-    entries.push({ expiresAt, name });
+    entries.push({ expiresAt: parsed.expiresAt, name: parsed.name });
   }
 
   return { entries, errors };
@@ -138,11 +165,16 @@ const readRegistryStllPackages = (lockfile: string): Set<string> =>
     ),
   );
 
+const HOUR_MS = 60 * 60 * 1000;
+/** How long an expired entry is tolerated while its removal PR waits. */
+const NOTICE_WINDOW_MS = 24 * HOUR_MS;
+
 export type QuarantineExcludeCheckResult = {
   errors: string[];
   excludeCount: number;
   firstPartyCount: number;
   activeTemporaryCount: number;
+  warnings: string[];
 };
 
 export const checkQuarantineExcludes = ({
@@ -176,14 +208,27 @@ export const checkQuarantineExcludes = ({
   }
 
   const nowMs = now.getTime();
+  const warnings: string[] = [];
   for (const { expiresAt, name } of temporary.entries) {
-    if (nowMs < Date.parse(expiresAt)) {
+    const expiresAtMs = Date.parse(expiresAt);
+
+    if (nowMs >= expiresAtMs + NOTICE_WINDOW_MS) {
+      errors.push(
+        `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt} ` +
+          `and is still here. Remove it (\`bun ${SCRIPT_PATH} --prune\`): the ` +
+          `release-age gate admits the package on its own now, and leaving the ` +
+          `entry lets the next version of it publish straight past the quarantine.`,
+      );
       continue;
     }
-    errors.push(
-      `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt}. ` +
-        `Remove it: the configured release-age gate can admit the package now.`,
-    );
+
+    if (nowMs >= expiresAtMs) {
+      warnings.push(
+        `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt}. ` +
+          `Its removal PR opens automatically; merge it, or run ` +
+          `\`bun ${SCRIPT_PATH} --prune\` to do it by hand.`,
+      );
+    }
   }
 
   return {
@@ -191,14 +236,97 @@ export const checkQuarantineExcludes = ({
     errors,
     excludeCount: excludes.size,
     firstPartyCount: firstPartyPackages.size,
+    warnings,
   };
 };
 
+export type PruneResult = {
+  bunfig: string;
+  pruned: string[];
+};
+
+/**
+ * Drops the entries whose expiry has passed. Only the entry line goes: the
+ * comments above the block explain why the remaining entries are there.
+ */
+export const pruneExpiredExcludes = ({
+  bunfig,
+  now = new Date(),
+}: {
+  bunfig: string;
+  now?: Date;
+}): PruneResult => {
+  const blockStart = bunfig.indexOf("minimumReleaseAgeExcludes");
+  if (blockStart === -1) {
+    return { bunfig, pruned: [] };
+  }
+  const blockEnd = bunfig.indexOf("]", blockStart);
+  const pruned: string[] = [];
+
+  // Each line is judged by its own annotation. Matching by name instead would
+  // delete every entry sharing that name, including one whose expiry was
+  // renewed and has not passed.
+  const block = bunfig
+    .slice(blockStart, blockEnd)
+    .split("\n")
+    .filter((line) => {
+      if (!line.includes(EXPIRY_MARKER)) {
+        return true;
+      }
+      const parsed = parseTemporaryExcludeLine(line);
+      // A malformed annotation is the guard's to report, not this to delete.
+      if (parsed.kind !== "entry") {
+        return true;
+      }
+      if (now.getTime() < Date.parse(parsed.expiresAt)) {
+        return true;
+      }
+      pruned.push(parsed.name);
+      return false;
+    })
+    .join("\n");
+
+  if (pruned.length === 0) {
+    return { bunfig, pruned: [] };
+  }
+
+  return {
+    bunfig: bunfig.slice(0, blockStart) + block + bunfig.slice(blockEnd),
+    pruned,
+  };
+};
+
+const prune = () => {
+  const bunfigPath = path.join(REPO_ROOT, BUNFIG);
+  const { bunfig, pruned } = pruneExpiredExcludes({
+    bunfig: readFileSync(bunfigPath, "utf-8"),
+  });
+
+  if (pruned.length === 0) {
+    console.log(`${BUNFIG}: no expired quarantine excludes to remove.`);
+    return;
+  }
+
+  writeFileSync(bunfigPath, bunfig);
+  console.log(
+    `${BUNFIG}: removed ${pruned.length} expired quarantine exclude(s): ${pruned.join(", ")}.`,
+  );
+};
+
 const main = () => {
+  if (process.argv.includes("--prune")) {
+    prune();
+    return;
+  }
+
   const result = checkQuarantineExcludes({
     bunfig: readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8"),
     lockfile: readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8"),
   });
+
+  if (result.warnings.length > 0) {
+    console.warn(`${result.warnings.join("\n")}\n`);
+  }
 
   if (result.errors.length > 0) {
     console.error(result.errors.join("\n\n"));
