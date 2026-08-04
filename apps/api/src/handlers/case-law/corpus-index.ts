@@ -311,6 +311,18 @@ export const reserveGenerationProjectionTargets = async (
         AND d.country ~ '^[A-Za-z]{2,8}$'
         AND ${sql.raw(redistributableCaseLawSourceSqlFor("source"))}
       FOR UPDATE OF d, source
+    ), prior AS (
+      -- Read under the decision row locks taken in "live": whether an
+      -- earlier reservation ever crossed the append boundary, or a
+      -- committed copy exists. The trigger seeds projections without
+      -- either marker, so their absence proves nothing has reached the
+      -- engine for this row.
+      SELECT projection.decision_id,
+             (projection.append_reserved_at IS NOT NULL
+               OR projection.index_id IS NOT NULL) AS may_have_copy
+      FROM ${caseLawCorpusIndexProjections} AS projection
+      INNER JOIN live ON live.id = projection.decision_id
+      WHERE projection.generation = ${generation}
     ), queued AS (
       INSERT INTO ${caseLawCorpusIndexProjections} AS projection (
         generation,
@@ -319,9 +331,10 @@ export const reserveGenerationProjectionTargets = async (
         pending_hash,
         pending_index_ids,
         pending_revision,
+        append_reserved_at,
         updated_at
       )
-      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], 1, now()
+      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], 1, now(), now()
       FROM live
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET pending_action = EXCLUDED.pending_action,
@@ -333,13 +346,16 @@ export const reserveGenerationProjectionTargets = async (
             ) AS target
           ),
           pending_revision = projection.pending_revision + 1,
+          append_reserved_at = EXCLUDED.append_reserved_at,
           updated_at = EXCLUDED.updated_at
       RETURNING decision_id, pending_index_ids, pending_revision
     )
-    SELECT decision_id AS id,
-           pending_index_ids AS "pendingIndexIds",
-           pending_revision AS "pendingRevision"
+    SELECT queued.decision_id AS id,
+           queued.pending_index_ids AS "pendingIndexIds",
+           queued.pending_revision AS "pendingRevision",
+           COALESCE(prior.may_have_copy, false) AS "mayHaveCopy"
     FROM queued
+    LEFT JOIN prior ON prior.decision_id = queued.decision_id
   `);
   return resolveReservedAppendTargets(reserved, rows);
 };

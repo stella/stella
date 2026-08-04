@@ -220,6 +220,9 @@ export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
       targets.set(id, {
         indexIds: entry["pendingIndexIds"],
         revision: entry["pendingRevision"],
+        // Absent flag reads as true: deleting when unsure is the safe
+        // direction, skipping is only ever justified by explicit proof.
+        mayHaveCopy: entry["mayHaveCopy"] !== false,
       });
     }
   }
@@ -350,6 +353,13 @@ type FencedIncrementalBackfillOptions<
 export type ReservedAppendTargets = {
   indexIds: readonly string[];
   revision: number;
+  /**
+   * Whether anything may have reached the engine for this row before this
+   * reservation: an earlier reservation crossed the append boundary, or a
+   * committed copy exists. The projection trigger seeds rows with neither
+   * marker, so false is proof there is nothing to delete.
+   */
+  mayHaveCopy: boolean;
 };
 
 type CorpusIndexMarkMode<TBrand extends SafeIdType> =
@@ -1092,13 +1102,12 @@ export const createCorpusIndexer = <
           const previousIndexes = new Set<string>();
           const durableTargets =
             reservedTargets === null ? undefined : reservedTargets.get(row.id);
-          // A fresh reservation proves there is nothing to delete: the target
-          // is persisted before any external append, so a replayed page always
-          // re-reserves at revision 2 or higher. Deleting only on replays
-          // removes one engine round-trip per never-indexed row — and a
-          // backlog drain is almost entirely never-indexed rows, so those
-          // round-trips were its entire cost profile.
-          if (durableTargets !== undefined && durableTargets.revision > 1) {
+          // Delete only when something may actually be there: an earlier
+          // reservation that crossed the append boundary, or a committed
+          // copy. The projection trigger seeds pending rows with neither, so
+          // a backlog drain — almost entirely never-appended rows — skips
+          // the per-row engine round-trip that was its entire cost profile.
+          if (durableTargets !== undefined && durableTargets.mayHaveCopy) {
             previousIndexes.add(indexId);
             for (const projectionIndexId of adapter.generationProjectionIndexIds(
               row,
