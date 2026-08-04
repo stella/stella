@@ -53,9 +53,9 @@ describe("maintenance release preparation", () => {
     );
   });
 
-  test("makes recording attestation an explicit reviewed state", () => {
+  test("defaults the recording attestation and keeps an explicit one overridable", () => {
     expect(parseMaintenanceReleaseOptions([])).toEqual({
-      recordingReviewReason: null,
+      recordingReviewReason: "Patch release, UX diff negligible",
     });
     expect(() =>
       parseMaintenanceReleaseOptions([

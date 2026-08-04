@@ -169,6 +169,14 @@ pushing a release tag, so a stale recording fails the tag push instead of
 shipping a landing page that has quietly drifted from the product. Clear it
 with `bun run marketing:reshoot` before bumping `VERSION`.
 
+`bun run release:maintenance` does not stop on stale recordings. It carries
+them forward under a standing attestation, `Patch release, UX diff
+negligible`, printing which captures it covered. A patch release therefore
+ships whatever footage is already committed: reshoot before cutting one if
+the product has visibly moved, and pass `--confirm-current-recordings-reviewed
+--reason "<review reason>"` to record a specific review instead of the
+default.
+
 ### Manual verification escape hatch
 
 When existing media has been visually reviewed against the current app and
