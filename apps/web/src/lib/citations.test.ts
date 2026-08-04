@@ -73,3 +73,106 @@ describe("iterateJustificationCitations — docx-folio status threading", () => 
     expect("blockId" in citation).toBe(false);
   });
 });
+
+describe("iterateJustificationCitations — pdf-bates block", () => {
+  test("yields one citation per bates reference", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        {
+          kind: "pdf-bates",
+          fileFieldId: "pdf-field-1",
+          statements: [
+            {
+              text: "Clause 4.1 applies.",
+              citations: [
+                { bates: "ACME-0001", pageNumber: 1 },
+                { bates: "ACME-0002", pageNumber: 2 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const citations = [...iterateJustificationCitations(content)];
+    expect(citations).toEqual([
+      {
+        kind: "pdf-bates",
+        fileFieldId: "pdf-field-1",
+        bates: "ACME-0001",
+        pageNumber: 1,
+      },
+      {
+        kind: "pdf-bates",
+        fileFieldId: "pdf-field-1",
+        bates: "ACME-0002",
+        pageNumber: 2,
+      },
+    ]);
+  });
+});
+
+describe("iterateJustificationCitations — mixed blocks", () => {
+  test("yields citations from all document blocks and skips playbook-verdict", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        {
+          kind: "pdf-bates",
+          fileFieldId: "pdf-field-1",
+          statements: [
+            { text: "first", citations: [{ bates: "REF-001", pageNumber: 5 }] },
+          ],
+        },
+        {
+          // playbook-verdict carries no document citations — should be skipped
+          kind: "playbook-verdict",
+          rationale: "Meets tier 2",
+        },
+        {
+          kind: "docx-folio",
+          fileFieldId: "docx-field-1",
+          statements: [
+            {
+              text: "second",
+              citations: [
+                {
+                  citationStatus: "verified",
+                  blockId: "BLK-42",
+                  text: "second",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const citations = [...iterateJustificationCitations(content)];
+    expect(citations).toHaveLength(2);
+    expect(citations[0]).toMatchObject({ kind: "pdf-bates", bates: "REF-001" });
+    expect(citations[1]).toMatchObject({
+      kind: "docx-folio",
+      blockId: "BLK-42",
+    });
+  });
+});
+
+describe("iterateJustificationCitations — empty input", () => {
+  test("yields nothing for an empty blocks array", () => {
+    const content: JustificationContent = { version: 1, blocks: [] };
+    expect([...iterateJustificationCitations(content)]).toEqual([]);
+  });
+
+  test("yields nothing for blocks with no statements", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        { kind: "pdf-bates", fileFieldId: "f", statements: [] },
+        { kind: "docx-folio", fileFieldId: "f", statements: [] },
+      ],
+    };
+    expect([...iterateJustificationCitations(content)]).toEqual([]);
+  });
+});
