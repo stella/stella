@@ -824,7 +824,6 @@
     },
     "back": "Zpět",
     "cancel": "Zrušit",
-    "captions": "Titulky",
     "caseLaw": "Judikatura",
     "category": "Kategorie",
     "categoryName": "Název kategorie",
@@ -961,7 +960,6 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
-    "playVideo": "Přehrát video",
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Duplikování spisu",
     "emptyDocuments": {
       "description": "Nahrajte dokumenty a získejte extrakci tabulek, organizaci dokumentů, úpravy přímo v prohlížeči a vyhledávání napříč tímto spisem.",
-      "title": "Nahrajte první dokumenty",
-      "videoLabel": "Přehled dokumentů ve spisu"
+      "title": "Nahrajte první dokumenty"
     },
     "emptyMatters": {
       "description": "Vytvořte spis pro organizaci dokumentů, kontaktů, úkolů a týmové aktivity na jednom místě.",
-      "title": "Vytvořte první spis",
-      "videoLabel": "Přehled nastavení spisu"
+      "title": "Vytvořte první spis"
     },
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
     "exportToCsv": "Uložit do CSV",

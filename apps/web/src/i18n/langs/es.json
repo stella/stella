@@ -824,7 +824,6 @@
     },
     "back": "Volver",
     "cancel": "Cancelar",
-    "captions": "Subtítulos",
     "caseLaw": "Jurisprudencia",
     "category": "Categoría",
     "categoryName": "Nombre de categoría",
@@ -961,7 +960,6 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
-    "playVideo": "Reproducir vídeo",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Duplicando asunto",
     "emptyDocuments": {
       "description": "Suba documentos para habilitar la extracción de tablas, la organización de documentos, la edición en el navegador y la búsqueda en este asunto.",
-      "title": "Suba sus primeros documentos",
-      "videoLabel": "Resumen de documentos del asunto"
+      "title": "Suba sus primeros documentos"
     },
     "emptyMatters": {
       "description": "Cree un asunto para organizar documentos, contactos, tareas y actividad del equipo en un solo lugar.",
-      "title": "Cree su primer asunto",
-      "videoLabel": "Resumen de configuración del asunto"
+      "title": "Cree su primer asunto"
     },
     "entitiesCount": "{count, plural, one {# elemento} other {# elementos}}",
     "exportToCsv": "Exportar a CSV",

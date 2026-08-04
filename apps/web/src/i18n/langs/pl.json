@@ -824,7 +824,6 @@
     },
     "back": "Wstecz",
     "cancel": "Anuluj",
-    "captions": "Napisy",
     "caseLaw": "Orzecznictwo",
     "category": "Kategoria",
     "categoryName": "Nazwa kategorii",
@@ -961,7 +960,6 @@
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
     "pin": "Przypnij",
-    "playVideo": "Odtwórz wideo",
     "playbooks": "Playbooki",
     "preparing": "Przygotowywanie…",
     "preview": "Podgląd",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Duplikowanie sprawy",
     "emptyDocuments": {
       "description": "Prześlij dokumenty, aby włączyć wyodrębnianie tabel, porządkowanie dokumentów, edycję w przeglądarce i wyszukiwanie w tej sprawie.",
-      "title": "Prześlij pierwsze dokumenty",
-      "videoLabel": "Przegląd dokumentów sprawy"
+      "title": "Prześlij pierwsze dokumenty"
     },
     "emptyMatters": {
       "description": "Utwórz sprawę, aby uporządkować dokumenty, kontakty, zadania i aktywność zespołu w jednym miejscu.",
-      "title": "Utwórz pierwszą sprawę",
-      "videoLabel": "Przegląd konfiguracji sprawy"
+      "title": "Utwórz pierwszą sprawę"
     },
     "entitiesCount": "{count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}}",
     "exportToCsv": "Eksportuj do CSV",

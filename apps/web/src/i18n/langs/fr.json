@@ -824,7 +824,6 @@
     },
     "back": "Retour",
     "cancel": "Annuler",
-    "captions": "Légendes",
     "caseLaw": "Jurisprudence",
     "category": "Catégorie",
     "categoryName": "Nom de la catégorie",
@@ -961,7 +960,6 @@
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "pin": "Épingler",
-    "playVideo": "Lire la vidéo",
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Duplication du dossier",
     "emptyDocuments": {
       "description": "Importez des documents pour activer l’extraction de tableaux, l’organisation des documents, la modification dans le navigateur et la recherche dans ce dossier.",
-      "title": "Importez vos premiers documents",
-      "videoLabel": "Vue d’ensemble des documents du dossier"
+      "title": "Importez vos premiers documents"
     },
     "emptyMatters": {
       "description": "Créez un dossier pour organiser les documents, contacts, tâches et l’activité de l’équipe au même endroit.",
-      "title": "Créez votre premier dossier",
-      "videoLabel": "Présentation de la configuration du dossier"
+      "title": "Créez votre premier dossier"
     },
     "entitiesCount": "{count, plural, one {# élément} other {# éléments}}",
     "exportToCsv": "Exporter en CSV",

@@ -824,7 +824,6 @@
     },
     "back": "Atpakaļ",
     "cancel": "Atcelt",
-    "captions": "Subtitri",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
     "categoryName": "Kategorijas nosaukums",
@@ -961,7 +960,6 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
-    "playVideo": "Atskaņot video",
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Dublē lietu",
     "emptyDocuments": {
       "description": "Augšupielādējiet dokumentus, lai iespējotu tabulu izguvi, dokumentu kārtošanu, rediģēšanu pārlūkā un meklēšanu šajā lietā.",
-      "title": "Augšupielādējiet pirmos dokumentus",
-      "videoLabel": "Lietas dokumentu pārskats"
+      "title": "Augšupielādējiet pirmos dokumentus"
     },
     "emptyMatters": {
       "description": "Izveidojiet lietu, lai vienuviet organizētu dokumentus, kontaktpersonas, uzdevumus un komandas aktivitātes.",
-      "title": "Izveidojiet pirmo lietu",
-      "videoLabel": "Lietas iestatīšanas pārskats"
+      "title": "Izveidojiet pirmo lietu"
     },
     "entitiesCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
     "exportToCsv": "Eksportēt uz CSV",

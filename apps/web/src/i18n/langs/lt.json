@@ -824,7 +824,6 @@
     },
     "back": "Atgal",
     "cancel": "Atšaukti",
-    "captions": "Subtitrai",
     "caseLaw": "Teismų praktika",
     "category": "Kategorija",
     "categoryName": "Kategorijos pavadinimas",
@@ -961,7 +960,6 @@
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
-    "playVideo": "Paleisti vaizdo įrašą",
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Byla dubliuojama",
     "emptyDocuments": {
       "description": "Įkelkite dokumentus, kad galėtumėte išgauti lenteles, tvarkyti dokumentus, redaguoti naršyklėje ir ieškoti šioje byloje.",
-      "title": "Įkelkite pirmuosius dokumentus",
-      "videoLabel": "Bylos dokumentų apžvalga"
+      "title": "Įkelkite pirmuosius dokumentus"
     },
     "emptyMatters": {
       "description": "Sukurkite bylą, kad vienoje vietoje tvarkytumėte dokumentus, kontaktus, užduotis ir komandos veiklą.",
-      "title": "Sukurkite pirmąją bylą",
-      "videoLabel": "Bylos nustatymo apžvalga"
+      "title": "Sukurkite pirmąją bylą"
     },
     "entitiesCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
     "exportToCsv": "Eksportuoti į CSV",

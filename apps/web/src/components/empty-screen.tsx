@@ -1,12 +1,6 @@
-import { useState } from "react";
-import type { ComponentProps, CSSProperties, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
-import {
-  CircleHelpIcon,
-  ExternalLinkIcon,
-  PlayIcon,
-  XIcon,
-} from "lucide-react";
+import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -14,12 +8,9 @@ import { Button } from "@stll/ui/components/button";
 import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
-export const EMPTY_SCREEN_PLACEHOLDER_YOUTUBE_URL =
-  "https://www.youtube.com/watch?v=M7lc1UVf-VE";
 
 type EmptyScreenMediaPlacement = "side" | "bottom";
 
@@ -31,48 +22,17 @@ type EmptyScreenAction = {
   disabled?: boolean;
 };
 
-type EmptyScreenVideo = {
-  title: string;
-} & (
-  | {
-      type: "youtube";
-      url: string;
-    }
-  | {
-      type: "native";
-      src: string;
-      aspectRatio?: string;
-      captionsSrc: string;
-      poster?: string;
-    }
-  | {
-      type: "preview";
-    }
-  | {
-      type: "image";
-      src: string;
-      aspectRatio?: string;
-    }
-);
-
 type EmptyScreenProps = {
   title: string;
   description: string;
   primaryAction: EmptyScreenAction;
   docsHref?: string;
   supportEmail?: string;
-  video?: EmptyScreenVideo;
   preview?: ReactNode;
   mediaPlacement?: EmptyScreenMediaPlacement;
   mediaContainerClassName?: string;
   showHelpBar?: boolean;
   className?: string;
-};
-
-type CredentiallessIframeProps = ComponentProps<"iframe"> & {
-  credentialless?: boolean;
-  sandbox: string;
-  title: string;
 };
 
 export const EmptyScreen = ({
@@ -81,16 +41,13 @@ export const EmptyScreen = ({
   primaryAction,
   docsHref,
   supportEmail = DEFAULT_SUPPORT_EMAIL,
-  video,
   preview,
   mediaPlacement = "side",
   mediaContainerClassName,
   showHelpBar = true,
   className,
 }: EmptyScreenProps) => {
-  const [isVideoOpen, setIsVideoOpen] = useState(false);
-  const canPlayVideo = getPlayableVideo(video) !== undefined;
-  const hasMedia = video !== undefined || preview !== undefined;
+  const hasMedia = preview !== undefined;
   const isBottomMedia = mediaPlacement === "bottom";
   const sizeClass = hasMedia
     ? "min-h-[520px] flex-1 px-6 py-12"
@@ -129,22 +86,14 @@ export const EmptyScreen = ({
             mediaContainerClassName,
           )}
         >
-          <EmptyScreenMedia
-            onPlay={() => setIsVideoOpen(true)}
-            preview={preview}
-            video={video}
-          />
+          <EmptyScreenMedia preview={preview} />
         </div>
       </>
     );
   } else {
     body = (
       <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
-        <EmptyScreenMedia
-          onPlay={() => setIsVideoOpen(true)}
-          preview={preview}
-          video={video}
-        />
+        <EmptyScreenMedia preview={preview} />
         <EmptyScreenContent
           description={description}
           docsHref={docsHref}
@@ -168,12 +117,6 @@ export const EmptyScreen = ({
       {body}
       {showHelpBar && (
         <HelpBar docsHref={docsHref} supportEmail={supportEmail} />
-      )}
-      {canPlayVideo && isVideoOpen && video && (
-        <EmptyScreenVideoOverlay
-          onClose={() => setIsVideoOpen(false)}
-          video={video}
-        />
       )}
     </section>
   );
@@ -232,308 +175,24 @@ const EmptyScreenContent = ({
 };
 
 type EmptyScreenMediaProps = {
-  video: EmptyScreenVideo | undefined;
   preview: ReactNode | undefined;
-  onPlay: () => void;
 };
 
-const EmptyScreenMedia = ({
-  video,
-  preview,
-  onPlay,
-}: EmptyScreenMediaProps) => {
+const EmptyScreenMedia = ({ preview }: EmptyScreenMediaProps) => {
   const tCommon = useTranslations("common");
-  const videoTitle = video?.title ?? tCommon("preview");
-  const canPlay = getPlayableVideo(video) !== undefined;
-  const mediaContent = (
-    <EmptyScreenMediaContent
-      preview={preview}
-      video={video}
-      videoTitle={videoTitle}
-    />
-  );
 
   return (
     <div className="border-border/80 bg-card/80 relative overflow-hidden rounded-xl border shadow-xs">
       <div className="border-border/70 bg-muted/40 flex h-8 items-center gap-1.5 border-b px-3">
         <span className="text-muted-foreground truncate text-xs">
-          {videoTitle}
+          {tCommon("preview")}
         </span>
       </div>
-      {canPlay ? (
-        <button
-          aria-label={`${tCommon("playVideo")}: ${videoTitle}`}
-          className="bg-muted/40 relative block aspect-video w-full cursor-pointer text-start"
-          onClick={onPlay}
-          style={getVideoAspectRatioStyle(video)}
-          type="button"
-        >
-          {mediaContent}
-          <span className="bg-background/88 text-foreground hover:bg-background focus-visible:ring-ring absolute inset-0 m-auto flex h-11 w-fit items-center gap-2 rounded-full border px-4 text-sm font-medium shadow-sm transition outline-none focus-visible:ring-2">
-            <PlayIcon className="size-4 fill-current" />
-            {tCommon("playVideo")}
-          </span>
-        </button>
-      ) : (
-        <div
-          className="bg-muted/40 relative aspect-video"
-          style={getVideoAspectRatioStyle(video)}
-        >
-          {mediaContent}
-        </div>
-      )}
-    </div>
-  );
-};
-
-type EmptyScreenMediaContentProps = {
-  video: EmptyScreenVideo | undefined;
-  preview: ReactNode | undefined;
-  videoTitle: string;
-};
-
-const EmptyScreenMediaContent = ({
-  video,
-  preview,
-  videoTitle,
-}: EmptyScreenMediaContentProps): ReactNode => {
-  const tCommon = useTranslations("common");
-
-  if (video?.type === "native") {
-    return (
-      <video
-        aria-hidden="true"
-        className="size-full object-cover"
-        muted
-        poster={video.poster}
-        preload="metadata"
-      >
-        <source src={video.src} />
-        <track
-          kind="captions"
-          label={tCommon("captions")}
-          src={video.captionsSrc}
-          srcLang="en"
-        />
-      </video>
-    );
-  }
-
-  if (video?.type === "image") {
-    return (
-      <img
-        alt={videoTitle}
-        className="size-full object-cover"
-        src={video.src}
-      />
-    );
-  }
-
-  return preview ?? <DefaultEmptyPreview />;
-};
-
-type PlayableVideo =
-  | {
-      type: "youtube";
-      src: string;
-      title: string;
-    }
-  | {
-      type: "native";
-      src: string;
-      aspectRatio: string | undefined;
-      captionsSrc: string;
-      title: string;
-    };
-
-const getPlayableVideo = (
-  video: EmptyScreenVideo | undefined,
-): PlayableVideo | undefined => {
-  if (!video || video.type === "preview") {
-    return undefined;
-  }
-
-  if (video.type === "image") {
-    return undefined;
-  }
-
-  if (video.type === "native") {
-    return {
-      type: "native",
-      src: video.src,
-      aspectRatio: video.aspectRatio,
-      captionsSrc: video.captionsSrc,
-      title: video.title,
-    };
-  }
-
-  const src = toYouTubeEmbedUrl(video.url);
-  if (!src) {
-    return undefined;
-  }
-
-  return {
-    type: "youtube",
-    src,
-    title: video.title,
-  };
-};
-
-const getVideoAspectRatioStyle = (
-  video: EmptyScreenVideo | PlayableVideo | undefined,
-): CSSProperties | undefined => {
-  if (!video || !("aspectRatio" in video) || !video.aspectRatio) {
-    return undefined;
-  }
-
-  return { aspectRatio: video.aspectRatio };
-};
-
-type EmptyScreenVideoOverlayProps = {
-  video: EmptyScreenVideo;
-  onClose: () => void;
-};
-
-const EmptyScreenVideoOverlay = ({
-  video,
-  onClose,
-}: EmptyScreenVideoOverlayProps) => {
-  const tCommon = useTranslations("common");
-  const playableVideo = getPlayableVideo(video);
-
-  useExternalSyncEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  if (!playableVideo) {
-    return null;
-  }
-
-  return (
-    <div
-      aria-label={playableVideo.title}
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 p-6 backdrop-blur-sm"
-      role="dialog"
-    >
-      <div className="border-border/80 bg-card relative w-full max-w-5xl overflow-hidden rounded-xl border shadow-2xl">
-        <div className="border-border/70 bg-muted/40 flex h-8 items-center gap-1.5 border-b px-3">
-          <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-            {playableVideo.title}
-          </span>
-          <Button
-            aria-label={tCommon("close")}
-            className="size-6"
-            onClick={onClose}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <XIcon className="size-3.5" />
-          </Button>
-        </div>
-        <div className="bg-foreground">
-          {playableVideo.type === "youtube" ? (
-            <CredentiallessIframe
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="aspect-video w-full"
-              credentialless
-              loading="lazy"
-              referrerPolicy="strict-origin-when-cross-origin"
-              sandbox="allow-scripts allow-presentation allow-popups"
-              src={playableVideo.src}
-              title={playableVideo.title}
-            />
-          ) : (
-            <video
-              aria-label={playableVideo.title}
-              autoPlay
-              className="w-full"
-              controls
-              style={getVideoAspectRatioStyle(playableVideo)}
-            >
-              <source src={playableVideo.src} />
-              <track
-                kind="captions"
-                label={tCommon("captions")}
-                src={playableVideo.captionsSrc}
-                srcLang="en"
-              />
-            </video>
-          )}
-        </div>
+      <div className="bg-muted/40 relative aspect-video">
+        {preview ?? <DefaultEmptyPreview />}
       </div>
     </div>
   );
-};
-
-const CredentiallessIframe = ({
-  sandbox,
-  title,
-  ...props
-}: CredentiallessIframeProps) => (
-  <iframe {...props} sandbox={sandbox} title={title} />
-);
-
-const toYouTubeEmbedUrl = (url: string): string | undefined => {
-  const safeUrl = sanitizeHref(url);
-  if (!safeUrl || !URL.canParse(safeUrl)) {
-    return undefined;
-  }
-
-  const parsed = new URL(safeUrl);
-  const host = parsed.hostname.replace(/^www\./u, "");
-  const id = getYouTubeVideoId(host, parsed);
-  if (!id) {
-    return undefined;
-  }
-
-  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`;
-};
-
-const getYouTubeVideoId = (host: string, parsed: URL): string | undefined => {
-  if (host === "youtu.be") {
-    return normalizeYouTubeId(parsed.pathname.slice(1));
-  }
-
-  if (host === "youtube.com" || host === "m.youtube.com") {
-    const watchId = parsed.searchParams.get("v");
-    if (watchId) {
-      return normalizeYouTubeId(watchId);
-    }
-    return getEmbedPathId(parsed);
-  }
-
-  if (host === "youtube-nocookie.com") {
-    return getEmbedPathId(parsed);
-  }
-
-  return undefined;
-};
-
-const getEmbedPathId = (parsed: URL): string | undefined => {
-  const [prefix, id] = parsed.pathname.split("/").filter(Boolean);
-  if (prefix !== "embed") {
-    return undefined;
-  }
-  return normalizeYouTubeId(id);
-};
-
-const normalizeYouTubeId = (id: string | undefined): string | undefined => {
-  if (!id || !/^[A-Za-z0-9_-]{11}$/u.test(id)) {
-    return undefined;
-  }
-  return id;
 };
 
 const DefaultEmptyPreview = () => (

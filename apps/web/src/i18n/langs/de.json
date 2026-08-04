@@ -824,7 +824,6 @@
     },
     "back": "Zurück",
     "cancel": "Abbrechen",
-    "captions": "Untertitel",
     "caseLaw": "Rechtsprechung",
     "category": "Kategorie",
     "categoryName": "Kategoriename",
@@ -961,7 +960,6 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "pin": "Anheften",
-    "playVideo": "Video abspielen",
     "playbooks": "Playbooks",
     "preparing": "Wird vorbereitet…",
     "preview": "Vorschau",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Akte wird dupliziert",
     "emptyDocuments": {
       "description": "Laden Sie Dokumente hoch, um Tabellenextraktion, Dokumentorganisation, Bearbeitung im Browser und Suche in dieser Akte zu ermöglichen.",
-      "title": "Laden Sie Ihre ersten Dokumente hoch",
-      "videoLabel": "Dokumentenübersicht der Akte"
+      "title": "Laden Sie Ihre ersten Dokumente hoch"
     },
     "emptyMatters": {
       "description": "Erstellen Sie eine Akte, um Dokumente, Kontakte, Aufgaben und Teamaktivitäten an einem Ort zu organisieren.",
-      "title": "Erstellen Sie Ihre erste Akte",
-      "videoLabel": "Überblick zur Akteneinrichtung"
+      "title": "Erstellen Sie Ihre erste Akte"
     },
     "entitiesCount": "{count, plural, one {# Element} other {# Elemente}}",
     "exportToCsv": "Als CSV exportieren",

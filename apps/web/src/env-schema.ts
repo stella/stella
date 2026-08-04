@@ -67,7 +67,6 @@ export const envWebClientSchema = {
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
   VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
   VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
-  VITE_EMPTY_STATE_MATTERS_VIDEO_URL: v.optional(v.pipe(v.string(), v.url())),
   // Base URL the desktop-app download buttons point at. Defaults
   // to upstream GitHub releases; self-hosters who mirror the
   // binaries can point this at their own host (filenames are

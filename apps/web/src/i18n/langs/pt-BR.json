@@ -824,7 +824,6 @@
     },
     "back": "Voltar",
     "cancel": "Cancelar",
-    "captions": "Legendas",
     "caseLaw": "Jurisprudência",
     "category": "Categoria",
     "categoryName": "Nome da categoria",
@@ -961,7 +960,6 @@
     "organization": "Organização",
     "organizationName": "Nome da organização",
     "pin": "Fixar",
-    "playVideo": "Reproduzir vídeo",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Visualização",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Duplicando caso",
     "emptyDocuments": {
       "description": "Envie documentos para habilitar extração de tabelas, organização de documentos, edição no navegador e pesquisa neste caso.",
-      "title": "Envie seus primeiros documentos",
-      "videoLabel": "Visão geral dos documentos do caso"
+      "title": "Envie seus primeiros documentos"
     },
     "emptyMatters": {
       "description": "Crie um caso para organizar documentos, contatos, tarefas e atividade da equipe em um só lugar.",
-      "title": "Crie seu primeiro caso",
-      "videoLabel": "Visão geral da configuração do caso"
+      "title": "Crie seu primeiro caso"
     },
     "entitiesCount": "{count, plural, one {# item} many {# itens} other {# itens}}",
     "exportToCsv": "Exportar para CSV",

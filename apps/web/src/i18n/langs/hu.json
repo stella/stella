@@ -824,7 +824,6 @@
     },
     "back": "Vissza",
     "cancel": "Mégse",
-    "captions": "Feliratok",
     "caseLaw": "Ítélkezési gyakorlat",
     "category": "Kategória",
     "categoryName": "Kategória neve",
@@ -961,7 +960,6 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
-    "playVideo": "Videó lejátszása",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
@@ -3333,13 +3331,11 @@
     "duplicatingWorkspace": "Ügy másolása folyamatban",
     "emptyDocuments": {
       "description": "Töltsön fel dokumentumokat a táblázatok kinyeréséhez, a dokumentumok rendszerezéséhez, a böngészőn belüli szerkesztéshez és az ügyön belüli kereséshez.",
-      "title": "Töltse fel az első dokumentumokat",
-      "videoLabel": "Ügy dokumentumainak áttekintése"
+      "title": "Töltse fel az első dokumentumokat"
     },
     "emptyMatters": {
       "description": "Hozzon létre egy ügyet, hogy egy helyen rendezze a dokumentumokat, kapcsolattartókat, feladatokat és a csapat tevékenységét.",
-      "title": "Hozza létre az első ügyét",
-      "videoLabel": "Ügybeállítás áttekintése"
+      "title": "Hozza létre az első ügyét"
     },
     "entitiesCount": "{count, plural, one {# elem} other {# elem}}",
     "exportToCsv": "Exportálás CSV-be",

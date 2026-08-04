@@ -37,7 +37,6 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
-import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -309,12 +308,7 @@ const MattersContent = ({
                       icon: PlusIcon,
                       onClick: () => openCreateMatter(),
                     }}
-                    mediaPlacement="bottom"
                     title={t("workspaces.emptyMatters.title")}
-                    video={{
-                      ...EMPTY_SCREEN_MATTERS_VIDEO,
-                      title: t("workspaces.emptyMatters.videoLabel"),
-                    }}
                   />
                 );
               }
