@@ -30,14 +30,14 @@ const flattenShortcuts = (groups: readonly ShortcutGroup[]) =>
  * chord. `char` bindings (e.g. `?`) are layout characters, not chords, so they
  * are read-only and can never appear in an override map.
  */
-export const REBINDABLE_SHORTCUT_IDS: ReadonlySet<ShortcutId> = new Set(
+export const REBINDABLE_SHORTCUT_IDS: readonly ShortcutId[] = Object.freeze(
   flattenShortcuts(SHORTCUT_GROUPS).flatMap((shortcut) =>
     shortcut.binding.type === "hotkey" ? [shortcut.id] : [],
   ),
 );
 
 export const isRebindableShortcut = (id: ShortcutId): boolean =>
-  REBINDABLE_SHORTCUT_IDS.has(id);
+  REBINDABLE_SHORTCUT_IDS.includes(id);
 
 const isShortcutId = (value: string): value is ShortcutId =>
   flattenShortcuts(SHORTCUT_GROUPS).some((shortcut) => shortcut.id === value);
@@ -170,9 +170,12 @@ export const findContextCollisions = (
     const idsByBinding = new Map<string, ShortcutId[]>();
     for (const candidate of active) {
       const key = bindingKey(candidate.binding);
-      const ids = idsByBinding.get(key) ?? [];
-      ids.push(candidate.id);
-      idsByBinding.set(key, ids);
+      const ids = idsByBinding.get(key);
+      if (ids) {
+        ids.push(candidate.id);
+        continue;
+      }
+      idsByBinding.set(key, [candidate.id]);
     }
     for (const [key, ids] of idsByBinding) {
       if (ids.length > 1) {

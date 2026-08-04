@@ -14,6 +14,7 @@
   "apps/web/src/components/inspector/inspector-panel.tsx::InspectorPanel": 9,
   "apps/web/src/components/inspector/inspector-rail.tsx::VerticalTab": 0,
   "apps/web/src/components/inspector/versions-facet.tsx::VersionsFacet": 1,
+  "apps/web/src/components/keyboard-shortcuts-dialog.tsx::RebindableBinding": 0,
   "apps/web/src/components/pdf/page-citation.tsx::PageCitation": 0,
   "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx::PeekPrintButton": 1,
   "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx::PreparedPdfPrintButton": 1,

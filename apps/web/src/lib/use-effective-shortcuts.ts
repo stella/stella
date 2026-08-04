@@ -45,15 +45,21 @@ export const useEffectiveShortcutGroups = (): ShortcutGroup[] => {
   return applyOverridesToGroups(SHORTCUT_GROUPS, overrides);
 };
 
-const DEFAULT_HOTKEY_BY_ID = new Map<ShortcutId, Hotkey>(
-  SHORTCUT_GROUPS.flatMap((group) =>
-    group.shortcuts.flatMap((shortcut) =>
-      shortcut.binding.type === "hotkey"
-        ? [[shortcut.id, shortcut.binding.hotkey]]
-        : [],
-    ),
-  ),
-);
+/**
+ * The registry's default chord for an id, or `undefined` when that shortcut's
+ * default is a `char` binding. The registry is a small compiled-in constant, so
+ * scanning it beats holding a module-level lookup table alive.
+ */
+const defaultHotkeyFor = (id: ShortcutId): Hotkey | undefined => {
+  for (const group of SHORTCUT_GROUPS) {
+    for (const shortcut of group.shortcuts) {
+      if (shortcut.id === id && shortcut.binding.type === "hotkey") {
+        return shortcut.binding.hotkey;
+      }
+    }
+  }
+  return undefined;
+};
 
 /**
  * The effective hotkey for a rebindable shortcut: the user's override if set,
@@ -67,7 +73,7 @@ export const useEffectiveHotkey = (id: ShortcutId): Hotkey => {
   if (override) {
     return override.hotkey;
   }
-  const fallback = DEFAULT_HOTKEY_BY_ID.get(id);
+  const fallback = defaultHotkeyFor(id);
   if (!fallback) {
     // Ids reach this hook only from hotkey call sites; a missing default means
     // the registry and call site disagree — a programmer error, not runtime.
