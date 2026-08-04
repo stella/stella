@@ -1,11 +1,10 @@
+# GitHub injects a "Report a security vulnerability" entry of its own
+# whenever SECURITY.md is present, so this file must not add one.
 blank_issues_enabled: false
 contact_links:
   - name: 💬 Discord
     url: https://discord.gg/8dZjmVFjTK
     about: Questions, setup help, and development chat.
-  - name: 🔒 Security vulnerability
-    url: https://github.com/stella/stella/security/policy
-    about: Do not open a public issue. Report privately to security@stll.app.
   - name: 📖 Contributing guide
     url: https://github.com/stella/stella/blob/main/CONTRIBUTING.md
     about: Local setup, conventions, and the pull request checklist.
