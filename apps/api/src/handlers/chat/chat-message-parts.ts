@@ -439,10 +439,14 @@ const getChatToolCallExtension = (
   part: ChatToolCallPart,
   property: "approval" | "metadata",
 ): unknown => {
-  if (!isRecord(part)) {
-    return panic("Chat tool call must remain an object");
+  switch (property) {
+    case "approval":
+      return "approval" in part ? part.approval : undefined;
+    case "metadata":
+      return "metadata" in part ? part.metadata : undefined;
+    default:
+      return property satisfies never;
   }
-  return part[property];
 };
 
 const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
