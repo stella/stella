@@ -84,18 +84,27 @@ describe("pickExtractionSource", () => {
    * what keeps those files off the derivative.
    */
   test("recovers the parser from the file name when the stored type is generic", () => {
-    expect(
-      pickExtractionSource(
-        fileField({
-          fileName: "schedule.xlsx",
-          mimeType: "application/octet-stream",
-          pdfFileId: "file_derivative",
-        }),
-      ),
-    ).toEqual({
-      fileId: "file_original",
-      storageMimeType: "application/octet-stream",
-      extractionMimeType: XLSX_MIME_TYPE,
-    });
+    const cases = [
+      { fileName: "schedule.xlsx", extractionMimeType: XLSX_MIME_TYPE },
+      { fileName: "deck.pptx", extractionMimeType: PPTX_MIME_TYPE },
+      { fileName: "contract.docx", extractionMimeType: DOCX_MIME_TYPE },
+      { fileName: "scan.pdf", extractionMimeType: PDF_MIME_TYPE },
+    ];
+
+    for (const { fileName, extractionMimeType } of cases) {
+      expect(
+        pickExtractionSource(
+          fileField({
+            fileName,
+            mimeType: "application/octet-stream",
+            pdfFileId: "file_derivative",
+          }),
+        ),
+      ).toEqual({
+        fileId: "file_original",
+        storageMimeType: "application/octet-stream",
+        extractionMimeType,
+      });
+    }
   });
 });
