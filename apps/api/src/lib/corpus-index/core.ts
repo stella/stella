@@ -1090,18 +1090,23 @@ export const createCorpusIndexer = <
           // before its database mark commits. Delete its deterministic target
           // copies first, so a retry converges instead of appending duplicates.
           const previousIndexes = new Set<string>();
-          if (reservedTargets !== null) {
+          const durableTargets =
+            reservedTargets === null ? undefined : reservedTargets.get(row.id);
+          // A fresh reservation proves there is nothing to delete: the target
+          // is persisted before any external append, so a replayed page always
+          // re-reserves at revision 2 or higher. Deleting only on replays
+          // removes one engine round-trip per never-indexed row — and a
+          // backlog drain is almost entirely never-indexed rows, so those
+          // round-trips were its entire cost profile.
+          if (durableTargets !== undefined && durableTargets.revision > 1) {
             previousIndexes.add(indexId);
             for (const projectionIndexId of adapter.generationProjectionIndexIds(
               row,
             )) {
               previousIndexes.add(projectionIndexId);
             }
-            const durableTargets = reservedTargets.get(row.id);
-            if (durableTargets !== undefined) {
-              for (const reservedIndexId of durableTargets.indexIds) {
-                previousIndexes.add(reservedIndexId);
-              }
+            for (const reservedIndexId of durableTargets.indexIds) {
+              previousIndexes.add(reservedIndexId);
             }
           }
           if (row.indexedGeneration?.startsWith(`${generation}_`) === true) {
