@@ -15,6 +15,9 @@ import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -80,12 +83,13 @@ type BuildChatWriteToolsProps = ChatRegistryContextDeps & {
     ChatRegistryContextDeps["pinServerValidatedWorkspaceId"]
   >;
   refRegistry: ChatRefRegistry;
+  toolDefectMemo: ChatToolDefectMemo;
 };
 
 export const buildChatWriteTools = (
   props: BuildChatWriteToolsProps,
 ): ChatToolMap => {
-  const { refRegistry, ...contextDeps } = props;
+  const { refRegistry, toolDefectMemo, ...contextDeps } = props;
   const context = buildMcpContextFromChat(contextDeps);
 
   const tools: ChatToolMap = {};
@@ -99,13 +103,26 @@ export const buildChatWriteTools = (
       description: definition.description,
       inputSchema: toToolInputSchema(definition.inputSchema),
     }).server(async (args: unknown) => {
+      const toolArgs = isRecord(args) ? args : {};
+      // Same mechanical retry policy as the code-mode read runner: a call
+      // that already failed with a server defect this turn is refused before
+      // dispatch instead of re-executed.
+      if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
+        throw new ChatToolError({
+          kind: "server-defect",
+          message: knownDefectRefusalMessage(toolName),
+        });
+      }
       const result = await runRegistryWriteTool({
-        args: isRecord(args) ? args : {},
+        args: toolArgs,
         context,
         refRegistry,
         toolName,
       });
       if (Result.isError(result)) {
+        if (result.error.kind === "server-defect") {
+          toolDefectMemo.recordDefect(toolName, toolArgs);
+        }
         throw result.error;
       }
       return result.value;

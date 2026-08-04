@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -10,6 +11,8 @@ import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
+import type { McpErrorCode } from "@/api/mcp/error-codes";
+import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
@@ -87,6 +90,55 @@ export const REF_PROJECTION_FAILURE_MESSAGE =
   "could not map to a reference. This is a server-side defect, not a " +
   "problem with your input; do not retry this call.";
 
+const MCP_CODE_TO_CHAT_KIND = {
+  validation_error: "invalid-input",
+  missing_scope: "unavailable",
+  feature_disabled: "unavailable",
+  not_found: "not-found",
+  confirmation_required: "invalid-input",
+  permission_denied: "unavailable",
+  usage_limited: "limit",
+  // A 409 needs a different action (refetch state, rename, regenerate), which
+  // is the model correcting its input, not a defect or a bare retry.
+  conflict: "invalid-input",
+  rate_limited: "transient",
+  unknown_tool: "unavailable",
+  internal_error: "server-defect",
+} as const satisfies Record<McpErrorCode, ChatToolErrorKind>;
+
+const isMcpErrorCode = (value: unknown): value is McpErrorCode =>
+  typeof value === "string" && MCP_ERROR_CODES.some((code) => code === value);
+
+/**
+ * Classify a finished registry `isError` result into a chat error kind via the
+ * envelope's stable `error.code` (`structuredErrorResult`). Legacy code-less
+ * plain-text errors ("Forbidden", bespoke hints) default to `invalid-input`:
+ * the conservative non-blocking kind, since a wrong `server-defect` would
+ * suppress legitimate corrected retries. The boundary parse of an
+ * already-serialized envelope is not control flow.
+ */
+export const classifyRegistryErrorKind = (
+  message: string,
+): ChatToolErrorKind => {
+  try {
+    const parsed: unknown = JSON.parse(message);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "error" in parsed &&
+      typeof parsed.error === "object" &&
+      parsed.error !== null &&
+      "code" in parsed.error &&
+      isMcpErrorCode(parsed.error.code)
+    ) {
+      return MCP_CODE_TO_CHAT_KIND[parsed.error.code];
+    }
+  } catch {
+    // Legacy plain-text error; fall through to the default.
+  }
+  return "invalid-input";
+};
+
 /**
  * A finished registry result is a single text content block holding the
  * handler's JSON payload (`textResult`). Parse it back into the plain object the
@@ -105,6 +157,7 @@ export const parsePayload = (
   } catch {
     return Result.err(
       new ChatToolError({
+        kind: "server-defect",
         message: "The tool returned a response that could not be read.",
       }),
     );
@@ -139,6 +192,7 @@ export const runRegistryReadTool = async ({
   if (!READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable) {
     return Result.err(
       new ChatToolError({
+        kind: "unavailable",
         message: `Tool ${toolName} is not available in chat.`,
       }),
     );
@@ -150,6 +204,7 @@ export const runRegistryReadTool = async ({
   if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({
+        kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
       }),
     );
@@ -172,7 +227,9 @@ export const runRegistryReadTool = async ({
 
   if (finished.isError === true) {
     const message = firstTextContent(finished) || DEFAULT_TOOL_ERROR_MESSAGE;
-    return Result.err(new ChatToolError({ message }));
+    return Result.err(
+      new ChatToolError({ kind: classifyRegistryErrorKind(message), message }),
+    );
   }
 
   const payload = parsePayload(finished);
@@ -202,6 +259,7 @@ export const runRegistryReadTool = async ({
   const offendingPath = findUndeclaredUuidPath({ toolName, payload: hydrated });
   if (offendingPath !== undefined) {
     const error = new ChatToolError({
+      kind: "server-defect",
       message: REF_PROJECTION_FAILURE_MESSAGE,
     });
     captureError(error, {

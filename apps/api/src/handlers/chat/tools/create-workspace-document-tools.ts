@@ -84,16 +84,19 @@ const toChatToolError = (
   switch (error._tag) {
     case "DocumentTooLargeError":
       return new ChatToolError({
+        kind: "limit",
         message:
           "The generated document exceeds stella's document size limit, so it could not be created.",
       });
     case "EntityLimitError":
       return new ChatToolError({
+        kind: "limit",
         message:
           "This matter has reached the document limit, so the document could not be created.",
       });
     case "MissingFilePropertyError":
       return new ChatToolError({
+        kind: "server-defect",
         message:
           "This matter is missing a file property, so the document could not be created.",
       });
@@ -149,7 +152,10 @@ export const createCreateWorkspaceDocumentTools = ({
   }).server(async ({ title, markdown }) => {
     const trimmedTitle = title.trim();
     if (trimmedTitle.length === 0) {
-      throw new ChatToolError({ message: "Document title cannot be blank." });
+      throw new ChatToolError({
+        kind: "invalid-input",
+        message: "Document title cannot be blank.",
+      });
     }
 
     // `markdownToStellaDocx` (folio-core's markdown parser + DOCX composer)
@@ -165,6 +171,7 @@ export const createCreateWorkspaceDocumentTools = ({
         source: "create_workspace_document",
       });
       throw new ChatToolError({
+        kind: "server-defect",
         message: "The document body could not be converted to DOCX.",
         cause: docxResult.error,
       });

@@ -609,12 +609,14 @@ export const createEditWorkspaceDocumentTools = ({
     });
     if (Result.isError(loaded)) {
       throw new ChatToolError({
+        kind: "server-defect",
         message: loaded.error.message,
         cause: loaded.error,
       });
     }
     if (loaded.value.entityVersionId !== baseVersionId) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message:
           "The document changed after these edits were proposed; regenerate " +
           "the edit against the current version.",
@@ -635,6 +637,7 @@ export const createEditWorkspaceDocumentTools = ({
         .map((skip) => `${skip.id} (${skip.reason})`)
         .join(", ");
       throw new ChatToolError({
+        kind: "invalid-input",
         message: `No operations could be applied in "${docxEditRepresentation}" mode. Skipped: ${skippedSummary}`,
       });
     }
@@ -642,6 +645,7 @@ export const createEditWorkspaceDocumentTools = ({
     const validation = await validateDocxBuffer(applied.buffer);
     if (!validation.valid) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message: `The edited document failed validation: ${validation.error}`,
       });
     }
@@ -653,6 +657,7 @@ export const createEditWorkspaceDocumentTools = ({
     });
     if (Result.isError(scanResult)) {
       throw new ChatToolError({
+        kind: "server-defect",
         message: "The edited document security scan failed",
         cause: scanResult.error,
       });
@@ -662,6 +667,7 @@ export const createEditWorkspaceDocumentTools = ({
         finding.severity === "reject" ? [finding.message] : [],
       );
       throw new ChatToolError({
+        kind: "invalid-input",
         message: `The edited document was rejected: ${reasons.join("; ")}`,
       });
     }
@@ -683,6 +689,7 @@ export const createEditWorkspaceDocumentTools = ({
     });
     if (Result.isError(written)) {
       throw new ChatToolError({
+        kind: "server-defect",
         message: written.error.message,
         cause: written.error,
       });

@@ -22,6 +22,9 @@ import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adap
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -122,22 +125,36 @@ type BuildChatCodeModeProps = Omit<
   "pinServerValidatedWorkspaceId"
 > & {
   refRegistry: ChatRefRegistry;
+  toolDefectMemo: ChatToolDefectMemo;
 };
 
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
-  const { refRegistry, ...contextDeps } = props;
+  const { refRegistry, toolDefectMemo, ...contextDeps } = props;
   const context = buildMcpContextFromChat(contextDeps);
 
   const tools = buildChatReadTools(async (toolName, args) => {
+    const toolArgs = isRecord(args) ? args : {};
+    // Mechanical retry policy: an identical call that already failed with a
+    // server defect this turn is refused before dispatch. "Do not retry this
+    // call" is enforced here, not left to the model's reading of error prose.
+    if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
+      throw new ChatToolError({
+        kind: "server-defect",
+        message: knownDefectRefusalMessage(toolName),
+      });
+    }
     const result = await runRegistryReadTool({
       toolName,
-      args: isRecord(args) ? args : {},
+      args: toolArgs,
       context,
       refRegistry,
     });
     if (Result.isError(result)) {
+      if (result.error.kind === "server-defect") {
+        toolDefectMemo.recordDefect(toolName, toolArgs);
+      }
       throw result.error;
     }
     return result.value;

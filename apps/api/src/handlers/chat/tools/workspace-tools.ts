@@ -142,6 +142,7 @@ const requireAllowedWorkspaceId = ({
   const allowedWorkspaceId = allowedIdsByValue.get(workspaceId);
   if (!allowedWorkspaceId) {
     throw new ChatToolError({
+      kind: "not-found",
       message: "Workspace not in the allowed set.",
     });
   }
@@ -206,6 +207,7 @@ export const createWorkspaceTools = ({
 
       if (!property) {
         throw new ChatToolError({
+          kind: "not-found",
           message: `Property "${propertyId}" not found. Check the system prompt for available property IDs.`,
         });
       }
@@ -216,12 +218,14 @@ export const createWorkspaceTools = ({
       switch (propType) {
         case "file":
           throw new ChatToolError({
+            kind: "invalid-input",
             message:
               'Property is "file"; use the document creation or upload tools instead.',
           });
         case "text": {
           if (typeof value !== "string") {
             throw new ChatToolError({
+              kind: "invalid-input",
               message: `Property is "text"; pass a string value, not ${typeof value}.`,
             });
           }
@@ -231,6 +235,7 @@ export const createWorkspaceTools = ({
         case "single-select": {
           if (value !== null && typeof value !== "string") {
             throw new ChatToolError({
+              kind: "invalid-input",
               message: `Property is "single-select"; pass a string or null, not ${typeof value}.`,
             });
           }
@@ -248,6 +253,7 @@ export const createWorkspaceTools = ({
             );
             if (!valid.has(value)) {
               throw new ChatToolError({
+                kind: "invalid-input",
                 message: `Invalid option "${value}". Valid: ${[...valid].join(", ")}`,
               });
             }
@@ -262,6 +268,7 @@ export const createWorkspaceTools = ({
         case "multi-select": {
           if (!Array.isArray(value)) {
             throw new ChatToolError({
+              kind: "invalid-input",
               message: 'Property is "multi-select"; pass an array of strings.',
             });
           }
@@ -275,6 +282,7 @@ export const createWorkspaceTools = ({
         case "date": {
           if (value !== null && typeof value !== "string") {
             throw new ChatToolError({
+              kind: "invalid-input",
               message:
                 'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
             });
@@ -285,6 +293,7 @@ export const createWorkspaceTools = ({
         case "int": {
           if (value !== null && typeof value !== "number") {
             throw new ChatToolError({
+              kind: "invalid-input",
               message: `Property is "int"; pass a number or null, not ${typeof value}.`,
             });
           }
@@ -314,17 +323,20 @@ export const createWorkspaceTools = ({
 
       if (!entity) {
         throw new ChatToolError({
+          kind: "not-found",
           message: `Entity "${entityId}" not found.`,
         });
       }
       if (entity.readOnly) {
         throw new ChatToolError({
+          kind: "invalid-input",
           message: `Entity "${entityId}" is read-only.`,
         });
       }
 
       if (!entity.currentVersionId) {
         throw new ChatToolError({
+          kind: "not-found",
           message: `Entity "${entityId}" has no current version and cannot be updated.`,
         });
       }

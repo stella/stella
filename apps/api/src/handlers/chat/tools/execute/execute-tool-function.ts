@@ -156,6 +156,7 @@ const mapExecutionError = (error: ExecuteToolExecutionError) => {
 
   if (DatabaseError.is(error)) {
     return new ChatToolError({
+      kind: "server-defect",
       message:
         "The tool could not load the requested data because a data operation failed.",
     });
@@ -163,12 +164,14 @@ const mapExecutionError = (error: ExecuteToolExecutionError) => {
 
   if (DatabaseRlsError.is(error)) {
     return new ChatToolError({
+      kind: "server-defect",
       message:
         "The tool could not load the requested data because the data operation was rejected.",
     });
   }
 
   return new ChatToolError({
+    kind: "server-defect",
     message: "The tool failed while processing the request.",
   });
 };

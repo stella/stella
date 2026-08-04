@@ -99,6 +99,7 @@ export const createSkillTools = ({
       });
       if (Result.isError(skillResult)) {
         throw new ChatToolError({
+          kind: "server-defect",
           message: "Skill could not be loaded.",
           cause: skillResult.error,
         });
@@ -146,6 +147,7 @@ export const createSkillTools = ({
       });
       if (Result.isError(resourcesResult)) {
         throw new ChatToolError({
+          kind: "server-defect",
           message: "Skill resources could not be listed.",
           cause: resourcesResult.error,
         });
@@ -154,6 +156,7 @@ export const createSkillTools = ({
       const resources = resourcesResult.value;
       if (!resources.some((resource) => resource.path === path)) {
         throw new ChatToolError({
+          kind: "not-found",
           message: "Unknown or unavailable skill resource path.",
         });
       }
@@ -230,6 +233,7 @@ const readSkillResourceContent = async ({
   });
   if (Result.isError(resourceResult)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Skill resource could not be read.",
       cause: resourceResult.error,
     });
@@ -418,6 +422,7 @@ const updateCurrentSkillBody = async ({
   );
   if (Result.isError(result)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill body could not be updated.",
       cause: result.error,
     });
@@ -451,6 +456,7 @@ const updateCurrentSkillResource = async ({
   );
   if (!activeResource) {
     throw new ChatToolError({
+      kind: "not-found",
       message: "Resource is not part of the current active skill.",
     });
   }
@@ -473,6 +479,7 @@ const updateCurrentSkillResource = async ({
   );
   if (Result.isError(existingResource)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill resource could not be loaded.",
       cause: existingResource.error,
     });
@@ -480,6 +487,7 @@ const updateCurrentSkillResource = async ({
   const row = existingResource.value.at(0);
   if (!row) {
     throw new ChatToolError({
+      kind: "not-found",
       message: "Resource is not part of the current active skill.",
     });
   }
@@ -509,6 +517,7 @@ const updateCurrentSkillResource = async ({
   );
   if (Result.isError(result)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill resource could not be updated.",
       cause: result.error,
     });
@@ -541,7 +550,10 @@ const createCurrentSkillResource = async ({
 }: CreateCurrentSkillResourceProps) => {
   const trimmedPath = path.trim();
   if (!RESOURCE_PATH_PATTERN.test(trimmedPath)) {
-    throw new ChatToolError({ message: "Invalid resource path." });
+    throw new ChatToolError({
+      kind: "invalid-input",
+      message: "Invalid resource path.",
+    });
   }
 
   const existingCount = await safeDb((tx) =>
@@ -552,12 +564,14 @@ const createCurrentSkillResource = async ({
   );
   if (Result.isError(existingCount)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill files could not be counted.",
       cause: existingCount.error,
     });
   }
   if (existingCount.value >= LIMITS.agentSkillResourcesPerSkill) {
     throw new ChatToolError({
+      kind: "limit",
       message: "Skill has reached the maximum number of files.",
     });
   }
@@ -573,12 +587,16 @@ const createCurrentSkillResource = async ({
   );
   if (Result.isError(duplicateCount)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill files could not be checked.",
       cause: duplicateCount.error,
     });
   }
   if (duplicateCount.value > 0) {
-    throw new ChatToolError({ message: "File already exists." });
+    throw new ChatToolError({
+      kind: "invalid-input",
+      message: "File already exists.",
+    });
   }
 
   const kind = inferResourceKind(trimmedPath);
@@ -621,12 +639,14 @@ const createCurrentSkillResource = async ({
   );
   if (Result.isError(result)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill resource could not be created.",
       cause: result.error,
     });
   }
   if (!result.value) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Current skill resource could not be created.",
     });
   }
@@ -690,6 +710,7 @@ const assertAvailableSkill = ({
 }) => {
   if (!availableSkillIds.has(skillName)) {
     throw new ChatToolError({
+      kind: "not-found",
       message:
         `No skill named "${skillName}" is available in this chat context. ` +
         "Continue without it or choose an exact name from the skill catalog.",

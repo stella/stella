@@ -141,6 +141,7 @@ export const createChatHistoryTools = ({
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
         throw new ChatToolError({
+          kind: "invalid-input",
           message: "Chat history search query must not be empty.",
         });
       }
@@ -169,6 +170,7 @@ export const createChatHistoryTools = ({
 
       if (Result.isError(result)) {
         throw new ChatToolError({
+          kind: "server-defect",
           message: "Failed to search chat history.",
           cause: result.error,
         });
@@ -247,6 +249,7 @@ export const createChatHistoryTools = ({
 
       if (Result.isError(result)) {
         throw new ChatToolError({
+          kind: "server-defect",
           message: "Failed to expand chat history.",
           cause: result.error,
         });

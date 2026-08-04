@@ -138,6 +138,7 @@ const createWebSearchTool = (
     ): Promise<WebSearchOutput> => {
       if (!context?.toolCallId) {
         throw new ChatToolError({
+          kind: "server-defect",
           message: "TanStack AI did not provide a tool call id for web_search.",
         });
       }
@@ -172,6 +173,7 @@ const createWebSearchTool = (
         return output;
       } catch (error) {
         throw new ChatToolError({
+          kind: "transient",
           message: `Web search failed for query "${query.slice(0, 80)}".`,
           cause: error,
         });
@@ -192,6 +194,7 @@ const createFetchUrlTool = (
   }).server(async ({ url, maxChars }, context): Promise<FetchUrlOutput> => {
     if (!fetchableUrls.has(url)) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message:
           "URL fetching is only allowed for exact URLs returned by web_search in this request.",
       });
@@ -214,6 +217,7 @@ const createFetchUrlTool = (
       };
     } catch (error) {
       throw new ChatToolError({
+        kind: "transient",
         message: `Failed to fetch ${url.slice(0, 120)}.`,
         cause: error,
       });

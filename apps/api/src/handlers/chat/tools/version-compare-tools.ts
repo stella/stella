@@ -93,28 +93,33 @@ const resolveActiveFilePropertyId = async (
 
   if (Result.isError(activeField)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: "Failed to look up the active file field.",
       cause: activeField.error,
     });
   }
   if (!activeField.value) {
     throw new ChatToolError({
+      kind: "not-found",
       message: "The active file field was not found in your workspaces.",
     });
   }
   const activeEntityVersion = activeField.value.entityVersion;
   if (!activeEntityVersion) {
     throw new ChatToolError({
+      kind: "not-found",
       message: "The active file field is missing its document version.",
     });
   }
   if (activeEntityVersion.entityId !== activeFileContext.entityId) {
     throw new ChatToolError({
+      kind: "invalid-input",
       message: "The active file field does not belong to this document.",
     });
   }
   if (!isDocxFileContent(activeField.value.content)) {
     throw new ChatToolError({
+      kind: "invalid-input",
       message: "The active file field is not a DOCX file.",
     });
   }
@@ -156,12 +161,14 @@ const resolveVersionDocx = async (
 
   if (Result.isError(version)) {
     throw new ChatToolError({
+      kind: "server-defect",
       message: `Failed to look up the ${label} version.`,
       cause: version.error,
     });
   }
   if (!version.value) {
     throw new ChatToolError({
+      kind: "not-found",
       message: `The ${label} version was not found in your workspaces.`,
     });
   }
@@ -172,6 +179,7 @@ const resolveVersionDocx = async (
 
   if (!field || !isDocxFileContent(field.content)) {
     throw new ChatToolError({
+      kind: "not-found",
       message: `The ${label} version does not contain the active DOCX file.`,
     });
   }
@@ -252,11 +260,13 @@ export const createVersionCompareTools = ({
 
     if (base.entityId !== revised.entityId) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message: "The base and revised versions belong to different documents.",
       });
     }
     if (base.entityId !== activeFileContext.entityId) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message:
           "The base and revised versions must belong to the active document.",
       });
