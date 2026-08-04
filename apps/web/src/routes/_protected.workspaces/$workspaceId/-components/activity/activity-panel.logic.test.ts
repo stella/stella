@@ -37,6 +37,7 @@ const item = (
   performer,
   runId,
   target: {
+    color: null,
     deleted: false,
     encrypted: false,
     entityId: "entity-1",
