@@ -166,6 +166,7 @@ import {
 } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -179,6 +180,7 @@ import {
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { getAppBaseUrl } from "@/api/mcp/tool-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
@@ -2518,7 +2520,19 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] =>
     part.type === "text"
-      ? { ...part, content: refRegistry.hydrateAssistantTextRefs(part.content) }
+      ? {
+          ...part,
+          content: refRegistry.hydrateAssistantTextRefs(
+            // Pasted workspace URLs first: "Copy link" and the URL bar give
+            // the user a raw workspace UUID the ingress guard would redact;
+            // rewriting to a mention keeps the pointing intent as a ref.
+            rewriteWorkspaceUrlsToMentions({
+              appBaseUrl: getAppBaseUrl(),
+              refRegistry,
+              text: part.content,
+            }),
+          ),
+        }
       : part;
 
   return messages.map((message) => {
