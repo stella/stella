@@ -23,6 +23,31 @@ describe("document icon MIME classification", () => {
     expect(getDocumentIconKind("text/plain")).toBe("text");
   });
 
+  // text/csv also matches the generic text/ prefix, so it must be classified
+  // before the text fallback to keep its own icon.
+  test("separates CSV from spreadsheet workbooks and plain text", () => {
+    expect(getDocumentIconKind("text/csv")).toBe("csv");
+    expect(
+      getDocumentIconKind(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ),
+    ).toBe("excel");
+  });
+
+  // Each mark names one format. A format must never borrow another's mark,
+  // so every member of the old catch-all "word"/"spreadsheet" groups is pinned.
+  test("gives RTF, ODT, and ODS their own marks", () => {
+    expect(getDocumentIconKind("application/rtf")).toBe("rtf");
+    expect(getDocumentIconKind("application/vnd.oasis.opendocument.text")).toBe(
+      "openDocumentText",
+    );
+    expect(
+      getDocumentIconKind("application/vnd.oasis.opendocument.spreadsheet"),
+    ).toBe("openDocumentSheet");
+    expect(getDocumentIconKind("application/msword")).toBe("word");
+    expect(getDocumentIconKind("application/vnd.ms-excel")).toBe("excel");
+  });
+
   test("classifies markdown by MIME or extension", () => {
     expect(getDocumentIconKind("text/markdown")).toBe("markdown");
     expect(getDocumentIconKind("application/octet-stream", "notes.md")).toBe(

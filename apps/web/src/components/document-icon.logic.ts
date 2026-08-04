@@ -4,15 +4,31 @@ import { EML_MIME, MSG_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
 const wordMimeTypes = Object.freeze({
   "application/msword": true,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+});
+
+const rtfMimeTypes = Object.freeze({
   "application/rtf": true,
+  "text/rtf": true,
+});
+
+const openDocumentTextMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.text": true,
 });
 
-const spreadsheetMimeTypes = Object.freeze({
+// Each format carries its own mark: the Excel and Word marks are reserved for
+// the formats they name, and RTF/ODT/ODS get theirs.
+const excelMimeTypes = Object.freeze({
   "application/vnd.ms-excel": true,
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+});
+
+const openDocumentSheetMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.spreadsheet": true,
+});
+
+const csvMimeTypes = Object.freeze({
   "text/csv": true,
+  "application/csv": true,
 });
 
 const imageMimeTypes = Object.freeze({
@@ -27,7 +43,11 @@ const emailMimeTypes = Object.freeze({ [EML_MIME]: true, [MSG_MIME]: true });
 export type DocumentIconKind =
   | "pdf"
   | "word"
-  | "spreadsheet"
+  | "rtf"
+  | "openDocumentText"
+  | "excel"
+  | "openDocumentSheet"
+  | "csv"
   | "image"
   | "email"
   | "markdown"
@@ -46,8 +66,24 @@ export const getDocumentIconKind = (
     return "word";
   }
 
-  if (Object.hasOwn(spreadsheetMimeTypes, mimeType)) {
-    return "spreadsheet";
+  if (Object.hasOwn(rtfMimeTypes, mimeType)) {
+    return "rtf";
+  }
+
+  if (Object.hasOwn(openDocumentTextMimeTypes, mimeType)) {
+    return "openDocumentText";
+  }
+
+  if (Object.hasOwn(excelMimeTypes, mimeType)) {
+    return "excel";
+  }
+
+  if (Object.hasOwn(openDocumentSheetMimeTypes, mimeType)) {
+    return "openDocumentSheet";
+  }
+
+  if (Object.hasOwn(csvMimeTypes, mimeType)) {
+    return "csv";
   }
 
   if (Object.hasOwn(imageMimeTypes, mimeType)) {
