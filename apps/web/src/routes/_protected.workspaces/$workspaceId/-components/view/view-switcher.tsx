@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   attachClosestEdge,
@@ -413,7 +413,9 @@ const ViewTab = ({
     null,
   );
   const updateView = useUpdateView(workspaceId);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Held as state rather than a ref so registration follows the node: the
+  // wrapper is replaced whenever the tab enters or leaves rename mode.
+  const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
   const handleReorder = useLatestCallback(onReorder);
 
   // Seed the draft from the current name each time rename begins,
@@ -426,15 +428,14 @@ const ViewTab = ({
   }
 
   useExternalSyncEffect(() => {
-    const el = containerRef.current;
-    if (!el) {
+    if (!tabContainer) {
       return undefined;
     }
     return combine(
       ...(canUpdateView
         ? [
             draggable({
-              element: el,
+              element: tabContainer,
               getInitialData: () => ({
                 type: VIEW_DRAG_TYPE,
                 viewId: id,
@@ -443,7 +444,7 @@ const ViewTab = ({
           ]
         : []),
       dropTargetForElements({
-        element: el,
+        element: tabContainer,
         canDrop: ({ source }) =>
           source.data["type"] === VIEW_DRAG_TYPE &&
           source.data["viewId"] !== id,
@@ -468,7 +469,7 @@ const ViewTab = ({
         },
       }),
     );
-  }, [id, canUpdateView, handleReorder]);
+  }, [id, canUpdateView, handleReorder, tabContainer]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -515,7 +516,7 @@ const ViewTab = ({
   }
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative" ref={setTabContainer}>
       {dropPosition !== null && (
         <span
           aria-hidden="true"
@@ -749,6 +750,10 @@ const useViewActionsMenu = ({
           render={
             <Button
               className="absolute inset-e-0 top-1/2 -translate-y-1/2"
+              // This button sits inside the tab, which is a draggable. Without
+              // this, pressing it to open the menu starts a tab drag whose
+              // native preview is not the tab. Dragging belongs to the tab.
+              draggable={false}
               size="icon-xs"
               variant="ghost"
             />
