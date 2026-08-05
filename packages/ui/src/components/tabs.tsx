@@ -1,10 +1,17 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
 import { cn } from "@stll/ui/lib/utils";
 
 type TabsVariant = "default" | "underline";
+
+// Layout effects never run while rendering on the server, so fall back to
+// `useEffect` there to avoid React's server-side layout-effect warning.
+const useIsoLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
   return (
@@ -23,10 +30,34 @@ function TabsList({
   variant = "default",
   className,
   children,
+  ref,
   ...props
 }: TabsPrimitive.List.Props & {
   variant?: TabsVariant;
 }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const tabOrderRef = useRef<readonly Element[]>([]);
+  const [, setRemeasureToken] = useState(0);
+
+  // Base UI measures the indicator during render, so a commit that moves tabs
+  // (a drag reorder, an insertion, a removal) measures the pre-commit DOM and
+  // leaves the underline behind. Its ResizeObserver cannot correct that: the
+  // tabs changed position, not size. Re-render once the new order is committed
+  // so the measurement sees where the active tab actually is.
+  useIsoLayoutEffect(() => {
+    const tabs = listRef.current ? [...listRef.current.children] : [];
+    const previousTabs = tabOrderRef.current;
+    tabOrderRef.current = tabs;
+
+    const isSameOrder =
+      tabs.length === previousTabs.length &&
+      tabs.every((tab, index) => tab === previousTabs[index]);
+
+    if (!isSameOrder) {
+      setRemeasureToken((token) => token + 1);
+    }
+  });
+
   return (
     <TabsPrimitive.List
       className={cn(
@@ -38,6 +69,16 @@ function TabsList({
         className,
       )}
       data-slot="tabs-list"
+      ref={(node) => {
+        listRef.current = node;
+        if (typeof ref === "function") {
+          return ref(node);
+        }
+        if (ref) {
+          ref.current = node;
+        }
+        return undefined;
+      }}
       {...props}
     >
       {children}
