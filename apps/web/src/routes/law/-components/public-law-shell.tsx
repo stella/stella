@@ -52,10 +52,21 @@ import {
 import { detached } from "@/lib/detached";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
   return { default: module.SignInDialog };
+});
+
+const AppSidebar = lazy(async () => {
+  const module = await import("@/components/app-sidebar");
+  return { default: module.AppSidebar };
+});
+
+const CreateMatterDialog = lazy(async () => {
+  const module = await import("@/components/workspaces/create-matter-dialog");
+  return { default: module.CreateMatterDialog };
 });
 
 const SearchDialog = lazy(async () => {
@@ -65,6 +76,9 @@ const SearchDialog = lazy(async () => {
 
 export function PublicLawShell() {
   const authStatus = useClientAuthStatus();
+  const createMatterDialogOpen = useCreateMatterStore(
+    (state) => state.dialog.status === "open",
+  );
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
   const requestAuth = (redirectTo: string) => {
     setAuthRedirectTo(redirectTo);
@@ -72,7 +86,20 @@ export function PublicLawShell() {
 
   const shell = (
     <SidebarProvider>
-      <PublicLawSidebar authStatus={authStatus} requestAuth={requestAuth} />
+      {authStatus.isAuthenticated ? (
+        <Suspense
+          fallback={
+            <PublicLawSidebar
+              authStatus={authStatus}
+              requestAuth={requestAuth}
+            />
+          }
+        >
+          <AppSidebar />
+        </Suspense>
+      ) : (
+        <PublicLawSidebar authStatus={authStatus} requestAuth={requestAuth} />
+      )}
       <SidebarInset className="flex flex-col">
         <PublicLawTopBar />
         <Outlet />
@@ -91,6 +118,11 @@ export function PublicLawShell() {
             open
             redirectTo={authRedirectTo}
           />
+        </Suspense>
+      )}
+      {authStatus.isAuthenticated && createMatterDialogOpen && (
+        <Suspense fallback={null}>
+          <CreateMatterDialog />
         </Suspense>
       )}
     </SidebarProvider>

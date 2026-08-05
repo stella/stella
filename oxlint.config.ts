@@ -1408,9 +1408,9 @@ export default defineConfig({
       // See apps/web/src/lib/authenticated-user-context.tsx for the identity
       // read that survives navigation.
       //
-      // The sidebar and user menu are deliberately NOT listed: they render
-      // only inside `_protected` (`routes/_protected.tsx`), so a strict read
-      // bound to that tree can never outlive its match. Add a component here
+      // The authenticated sidebar and user menu render in both `_protected`
+      // and the top-level `/law` tree. Their create-matter flow does too, so
+      // those modules must remain route-neutral. Add another component here
       // when it can be mounted while a different top-level tree is active.
       files: [
         "apps/web/src/components/docx/**/*.tsx",
@@ -1419,6 +1419,10 @@ export default defineConfig({
         "apps/web/src/components/inspector/**/*.ts",
         "apps/web/src/components/ai-suggestions/**/*.tsx",
         "apps/web/src/components/ai-suggestions/**/*.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/contact-picker.tsx",
+        "apps/web/src/components/sidebar-user-menu.tsx",
+        "apps/web/src/components/workspaces/create-matter-dialog.tsx",
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":

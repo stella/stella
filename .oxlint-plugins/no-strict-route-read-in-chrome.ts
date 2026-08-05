@@ -11,11 +11,13 @@
 // the read throws and the surrounding error boundary swallows the component.
 //
 // The escape hatches are already the house style: `shouldThrow: false` on
-// `useMatch`/`useRouteContext`, `strict: false` on `useParams`/`useSearch`
-// (see inspector-panel.tsx, app-sidebar.tsx, the breadcrumbs). For identity,
-// read `useMaybeAuthenticatedUser` from @/lib/authenticated-user-context
-// rather than route context: the provider wraps every tree that can mount
-// chrome, so the value does not disappear on navigation.
+// `useMatch`, `strict: false` on `useParams`/`useSearch`/`useRouteContext`
+// (see inspector-panel.tsx, app-sidebar.tsx, the breadcrumbs). A route API's
+// navigation helper is also safe because it does not read the current match;
+// its route-bound data hooks are not. For identity, read
+// `useMaybeAuthenticatedUser` from @/lib/authenticated-user-context rather
+// than route context: the provider wraps every tree that can mount chrome, so
+// the value does not disappear on navigation.
 //
 // Scope this rule with `overrides.files` in oxlint.config.ts for chrome
 // modules; route and page content stays free to read strictly.
@@ -33,8 +35,8 @@ const STRICT_ROUTE_READS = new Set([
   "useSearch",
 ]);
 
-// Properties that opt a read out of throwing. `shouldThrow` covers
-// useMatch/useRouteContext; `strict` covers useParams/useSearch.
+// Properties that opt a read out of throwing. `shouldThrow` covers useMatch;
+// `strict` covers the route data hooks.
 const OPT_OUT_PROPERTIES = new Set(["shouldThrow", "strict"]);
 
 const isFalseLiteral = (node) =>
@@ -67,14 +69,15 @@ export default {
         type: "problem",
         messages: {
           strictRouteRead:
-            "Persistent chrome outlives the route it renders under, so a strict `from:` read throws Invariant failed on any route outside that tree. Pass `shouldThrow: false` (useMatch/useRouteContext) or `strict: false` (useParams/useSearch) and handle the absent case, or read the value from a provider that wraps every tree — useMaybeAuthenticatedUser for the current user.",
-          routeApiInChrome:
-            "getRouteApi binds this module to one route, but persistent chrome mounts across routes. Read the value non-strictly, or from a provider that wraps every tree.",
+            "Persistent chrome outlives the route it renders under, so a strict `from:` read throws Invariant failed on any route outside that tree. Pass `shouldThrow: false` (useMatch) or `strict: false` (route data hooks) and handle the absent case, or read the value from a provider that wraps every tree — useMaybeAuthenticatedUser for the current user.",
+          routeApiStrictRead:
+            "This route API data hook is bound strictly to one route, but persistent chrome mounts across routes. Use a non-strict router hook, or read the value from a provider that wraps every tree.",
         },
       },
       create(context) {
+        const getRouteApiAliases = new Set();
+        const routeApiBindings = new Set();
         const strictReadAliases = new Map();
-        const routeApiAliases = new Set();
 
         return {
           ImportDeclaration(node) {
@@ -87,7 +90,7 @@ export default {
               }
               const imported = getImportedName(specifier);
               if (imported === "getRouteApi") {
-                routeApiAliases.add(specifier.local.name);
+                getRouteApiAliases.add(specifier.local.name);
                 continue;
               }
               if (imported && STRICT_ROUTE_READS.has(imported)) {
@@ -96,18 +99,36 @@ export default {
             }
           },
 
+          VariableDeclarator(node) {
+            if (!isIdentifier(node.id)) {
+              return;
+            }
+            const init = node.init;
+            if (
+              init?.type !== "CallExpression" ||
+              !isIdentifier(init.callee) ||
+              !getRouteApiAliases.has(init.callee.name)
+            ) {
+              return;
+            }
+            routeApiBindings.add(node.id.name);
+          },
+
           CallExpression(node) {
             const callee = node.callee;
-            if (!isIdentifier(callee)) {
+            if (
+              callee?.type === "MemberExpression" &&
+              callee.computed === false &&
+              isIdentifier(callee.object) &&
+              routeApiBindings.has(callee.object.name) &&
+              isIdentifier(callee.property) &&
+              STRICT_ROUTE_READS.has(callee.property.name)
+            ) {
+              context.report({ node, messageId: "routeApiStrictRead" });
               return;
             }
 
-            if (routeApiAliases.has(callee.name)) {
-              context.report({ node, messageId: "routeApiInChrome" });
-              return;
-            }
-
-            if (!strictReadAliases.has(callee.name)) {
+            if (!isIdentifier(callee) || !strictReadAliases.has(callee.name)) {
               return;
             }
 

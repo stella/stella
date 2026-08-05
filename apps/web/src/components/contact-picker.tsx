@@ -2,7 +2,6 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -18,6 +17,7 @@ import {
 } from "@stll/ui/components/combobox";
 
 import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 type ContactResult = {
   id: string;
@@ -62,10 +62,7 @@ export const ContactPicker = ({
   inputRef,
 }: ContactPickerProps) => {
   const t = useTranslations();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 

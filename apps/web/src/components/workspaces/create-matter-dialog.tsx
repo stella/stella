@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   BuildingIcon,
@@ -46,6 +46,7 @@ import {
 } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocale } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
@@ -56,8 +57,6 @@ import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
-
-const routeApi = getRouteApi("/_protected");
 
 const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
   <div className="bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-2">
@@ -197,9 +196,7 @@ const CreateMatterDialogBody = ({
   const t = useTranslations();
   const locale = useLocale();
   const navigate = useNavigate();
-  const currentUser = routeApi.useRouteContext({
-    select: (ctx) => ctx.user,
-  });
+  const currentUser = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const createWorkspace = useCreateWorkspace();
   const createContact = useCreateContact();

@@ -8,8 +8,6 @@ import {
   useRouteContext,
 } from "@tanstack/react-router";
 
-// Route-bound module binding in chrome — MUST flag.
-// oxlint-disable-next-line no-strict-route-read-in-chrome/no-strict-route-read-in-chrome
 const routeApi = getRouteApi("/_protected");
 
 export function ChromeFixture() {
@@ -30,7 +28,14 @@ export function ChromeFixture() {
   // Opted out via strict — must NOT flag.
   const safeParams = useParams({ strict: false });
 
+  // A route API's data hooks remain strict — MUST flag.
+  // oxlint-disable-next-line no-strict-route-read-in-chrome/no-strict-route-read-in-chrome
+  const routeUser = routeApi.useRouteContext();
+
+  // Navigation does not read the current route match — must NOT flag.
+  const navigate = routeApi.useNavigate();
+
   return `${user}${match.id}${safeMatch?.id ?? ""}${String(
     safeParams === undefined,
-  )}${routeApi.id}`;
+  )}${routeUser.user.id}${String(navigate)}`;
 }
