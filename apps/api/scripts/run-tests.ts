@@ -55,14 +55,13 @@ const TYPE_ONLY_IMPORT_RE =
 // (like the typecheck and network baselines), not a mechanical way to make
 // CI green. Two budgets, because the batch kinds have different floors:
 // DB-touching batches boot PGlite from the prebuilt snapshot (see below),
-// logic batches never connect at all (Linux RSS accounting runs hotter
-// than macOS; both budgets are calibrated from Linux runner logs — logic
-// batches measured ~750 MB).
-// DB batches: measured 2072 MB for a 3-file snapshot-booted batch (macOS,
-// 2026-08-05; each file boots its own PGlite instance and WASM memory is
-// retained for the process lifetime). Logic batches: measured 1520 MB for
-// the heaviest 50-file batch on the same run (chat stream suites carry the
-// largest module graphs).
+// logic batches never connect at all. Measured on a full macOS run,
+// 2026-08-05: worst DB batch 2072 MB (3 snapshot-booted files; each file
+// boots its own PGlite instance and WASM memory is retained for the
+// process lifetime), worst logic batch 1520 MB (50 files; chat stream
+// suites carry the largest module graphs). Linux RSS accounting runs
+// hotter than macOS, so both budgets carry headroom above those figures;
+// recalibrate from the peak-RSS lines the runner prints on CI.
 const MAX_DB_BATCH_PEAK_RSS_MB = 2560;
 const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
 const BYTES_PER_MB = 1024 * 1024;
@@ -181,6 +180,18 @@ const buildTestDbSnapshot = async (): Promise<string> => {
     `stella-pglite-test-snapshot-${process.pid}.tar`,
   );
   console.log("Building the PGlite test-database snapshot ...");
+  // Registered before the build so a failed build's partial file is also
+  // removed; `exit` does not fire on signals, so cover those explicitly.
+  const cleanupSnapshot = () => {
+    rmSync(snapshotPath, { force: true });
+  };
+  process.on("exit", cleanupSnapshot);
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      cleanupSnapshot();
+      process.exit(1);
+    });
+  }
   const builder = Bun.spawn({
     cmd: [
       process.execPath,
@@ -197,9 +208,6 @@ const buildTestDbSnapshot = async (): Promise<string> => {
     console.error("PGlite snapshot build failed; aborting the test run.");
     process.exit(builderExitCode);
   }
-  process.on("exit", () => {
-    rmSync(snapshotPath, { force: true });
-  });
   return snapshotPath;
 };
 

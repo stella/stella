@@ -26,57 +26,60 @@ let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
 
-beforeAll(async () => {
-  client = await createTestPglite();
-  db = drizzle({ client });
+beforeAll(
+  async () => {
+    client = await createTestPglite();
+    db = drizzle({ client });
 
-  await db.insert(caseLawSources).values({
-    id: sourceId,
-    adapterKey: "test",
-    name: "Test source",
-  });
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: "test",
+      name: "Test source",
+    });
 
-  await db.insert(caseLawDecisions).values([
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "1 Cdo 1/2020",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2020-03-15",
-    },
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "2 Cdo 2/2020",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2020-05-20",
-    },
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "3 Cdo 3/2021",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2021-01-10",
-    },
-    {
-      // A dateless decision exercises the COALESCE undated-year/month fallback,
-      // the literal that previously got bound as a parameter.
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "4 Cdo 4/undated",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: null,
-    },
-  ]);
-}, 120_000);
+    await db.insert(caseLawDecisions).values([
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "1 Cdo 1/2020",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-03-15",
+      },
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "2 Cdo 2/2020",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-05-20",
+      },
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "3 Cdo 3/2021",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2021-01-10",
+      },
+      {
+        // A dateless decision exercises the COALESCE undated-year/month fallback,
+        // the literal that previously got bound as a parameter.
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "4 Cdo 4/undated",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: null,
+      },
+    ]);
+  },
+  { timeout: 120_000 },
+);
 
 afterAll(async () => {
   await client.close();
