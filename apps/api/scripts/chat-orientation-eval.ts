@@ -738,6 +738,13 @@ const runBenchTask = async ({
     body: {
       threadId,
       sendMode: SEND_MODE,
+      // Matter-pinned tasks mirror the UI's matter chat, which binds the
+      // thread to the workspace: `workspaceId` is what renders the
+      // connected-matter prompt section (extracted properties included),
+      // while `contextMatterIds` scopes tool authorization.
+      ...(task.contextScope === "matter"
+        ? { workspaceId: fixture.matterId }
+        : {}),
       contextMatterIds:
         task.contextScope === "matter" ? [fixture.matterId] : [],
       message: {
@@ -768,7 +775,12 @@ const runBenchTask = async ({
   if (streamResponse.ok) {
     const messagesPayload = await client.requestJson({
       method: "GET",
-      path: `${API_VERSION_PREFIX}/chat/threads/${threadId}/messages`,
+      // A workspace-bound thread's scope must match the request, so
+      // matter-pinned tasks pass the workspace id along.
+      path:
+        task.contextScope === "matter"
+          ? `${API_VERSION_PREFIX}/chat/threads/${threadId}/messages?workspaceId=${fixture.matterId}`
+          : `${API_VERSION_PREFIX}/chat/threads/${threadId}/messages`,
     });
     turn = parseAssistantTurn(messagesPayload);
   }
