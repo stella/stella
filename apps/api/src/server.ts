@@ -134,6 +134,8 @@ import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATH = "/health";
 const DEFAULT_API_PORT = 3001;
+// Keep-alive idle timeout in seconds; see the `api.listen` call.
+const HTTP_IDLE_TIMEOUT_S = 75;
 // Emit the per-request query count in local/CI runs only, so the e2e guard
 // can assert per-route budgets without deployed environments paying any
 // per-query cost. Must match the logger gate in db/root.ts.
@@ -654,7 +656,17 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
-  api.listen(getApiPort());
+  api.listen({
+    port: getApiPort(),
+    // Longer than the load balancer's 60 s idle timeout (Bun defaults to
+    // 10 s). The balancer may reuse an idle backend connection any time
+    // before its own timeout expires, so the server must never close
+    // first: a request written onto a connection the server is closing is
+    // lost in flight and the client hangs with no response and no
+    // server-side log line. The SSE keep-alive heartbeat (20 s) stays
+    // well inside this window.
+    idleTimeout: HTTP_IDLE_TIMEOUT_S,
+  });
 
   // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
   // workers on SIGTERM/SIGINT (deploy, container stop, or a local
