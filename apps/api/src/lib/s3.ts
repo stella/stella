@@ -1,9 +1,10 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
@@ -492,6 +493,37 @@ export const writeS3ObjectWithRetry = async (
     }
   }
   throw lastError;
+};
+
+class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
+  message: string;
+}> {}
+
+/** Read one object while allowing the caller to cancel the HTTP request. */
+export const getS3ObjectWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<ArrayBuffer> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const response = await _abortableClient.send(
+    new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
+  if (!response.Body) {
+    throw new S3ObjectReadError({
+      message: "S3 returned an object without a response body",
+    });
+  }
+  const bytes = await response.Body.transformToByteArray();
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
+  }
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 };
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */

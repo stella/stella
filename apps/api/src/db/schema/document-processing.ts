@@ -18,7 +18,7 @@ import { entities, entityVersions, fields } from "./entities";
  * than an OCR boolean: future processors can share the immutable-source and
  * durable-retry contract without a schema rewrite.
  */
-export const DOCUMENT_PROCESSING_KINDS = ["ocr"] as const;
+export const DOCUMENT_PROCESSING_KINDS = ["native-extraction", "ocr"] as const;
 export type DocumentProcessingKind = (typeof DOCUMENT_PROCESSING_KINDS)[number];
 
 /** Durable lifecycle for one immutable processing request. */
@@ -186,7 +186,7 @@ export const documentProcessingRuns = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "document_processing_runs_kind_values_check",
-      sql`${table.kind} IN ('ocr')`,
+      sql`${table.kind} IN ('native-extraction', 'ocr')`,
     ),
     p.check(
       "document_processing_runs_status_values_check",

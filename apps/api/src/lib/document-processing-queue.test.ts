@@ -9,18 +9,16 @@ import {
   classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
   DocumentProcessingJobError,
-  indexOcrProjection,
-  isAutomaticOcrRepairCandidate,
+  indexDocumentProjection,
+  isCurrentNativeExtractionSource,
   isCurrentOcrSource,
   isPreservableAutomaticProjection,
-  isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
   ownsPromotedManualOcrClaim,
   readRepairScanCursor,
-  revivableAutomaticOcrCancellationCodes,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
   settleDocumentProcessingAttemptError,
@@ -105,7 +103,10 @@ describe("OCR derivative durability", () => {
     const derivative = processSource.indexOf(
       "await writeOcrSearchablePdfDerivative",
     );
-    const searchIndex = processSource.indexOf("await indexOcrProjection");
+    const searchIndex = processSource.indexOf(
+      "await indexDocumentProjection",
+      derivative,
+    );
 
     expect(persistence).toBeGreaterThan(-1);
     expect(derivative).toBeGreaterThan(persistence);
@@ -132,21 +133,6 @@ describe("OCR derivative durability", () => {
       expect(stageSource).toContain(storageCall);
     }
     expect(stageSource).toContain("code: SEARCHABLE_PDF_FAILURE_CODE");
-  });
-
-  test("retries derivative failures within the bounded attempt budget", () => {
-    expect(
-      isRetryableOcrDerivativeFailure({
-        attemptCount: 1,
-        errorCode: "searchable_pdf_failed",
-      }),
-    ).toBe(true);
-    expect(
-      isRetryableOcrDerivativeFailure({
-        attemptCount: 5,
-        errorCode: "searchable_pdf_failed",
-      }),
-    ).toBe(false);
   });
 
   test("retries derivative failures within the bounded attempt budget", () => {
@@ -246,6 +232,33 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
+  test("dispatches every durable processing kind and repairs native gaps", () => {
+    const dispatchStart = queueSource.indexOf(
+      "export const dispatchQueuedDocumentProcessingRuns",
+    );
+    const dispatchEnd = queueSource.indexOf(
+      "const dispatchScheduledDocumentProcessingRetries",
+      dispatchStart,
+    );
+    const dispatchSource = queueSource.slice(dispatchStart, dispatchEnd);
+    const repairStart = queueSource.indexOf(
+      "const recoverMissingNativeExtractionRuns",
+    );
+    const repairEnd = queueSource.indexOf(
+      "const updateQueuedRunSchedule",
+      repairStart,
+    );
+    const repairSource = queueSource.slice(repairStart, repairEnd);
+
+    expect(dispatchStart).toBeGreaterThan(-1);
+    expect(dispatchSource).not.toContain(
+      'eq(documentProcessingRuns.kind, "ocr")',
+    );
+    expect(repairStart).toBeGreaterThan(-1);
+    expect(repairSource).toContain("persistMissingNativeExtractionRuns");
+    expect(repairSource).not.toContain("organizationSettings");
+  });
+
   test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",
@@ -391,6 +404,74 @@ describe("isCurrentOcrSource", () => {
   });
 });
 
+describe("isCurrentNativeExtractionSource", () => {
+  const docxRun = {
+    entityVersionId: run.entityVersionId,
+    fieldId: selectedSourceField.id,
+    sourceFileId: selectedFileContent.id,
+    sourceSha256Hex: selectedFileContent.sha256Hex,
+  };
+  const docxSource = {
+    content: selectedFileContent,
+    currentVersionId: run.entityVersionId,
+    entityReadOnly: false,
+    fieldEntityVersionId: run.entityVersionId,
+    versionDeletedAt: null,
+  };
+
+  test("accepts the exact live immutable DOCX source", () => {
+    expect(isCurrentNativeExtractionSource(docxRun, docxSource)).toBe(true);
+  });
+
+  test("rejects a replaced DOCX source", () => {
+    expect(
+      isCurrentNativeExtractionSource(docxRun, {
+        ...docxSource,
+        content: { ...selectedFileContent, sha256Hex: "c".repeat(64) },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects every stale or ineligible native source state", () => {
+    const rejectionCases = {
+      deletedVersion: {
+        ...docxSource,
+        versionDeletedAt: new Date(),
+      },
+      encryptedFile: {
+        ...docxSource,
+        content: { ...selectedFileContent, encrypted: true },
+      },
+      mismatchedCurrentVersion: {
+        ...docxSource,
+        currentVersionId: toSafeId<"entityVersion">("other_version"),
+      },
+      mismatchedFieldVersion: {
+        ...docxSource,
+        fieldEntityVersionId: toSafeId<"entityVersion">("other_version"),
+      },
+      readOnlyEntity: {
+        ...docxSource,
+        entityReadOnly: true,
+      },
+    } satisfies Record<
+      string,
+      Parameters<typeof isCurrentNativeExtractionSource>[1]
+    >;
+
+    expect(Object.keys(rejectionCases).sort()).toEqual([
+      "deletedVersion",
+      "encryptedFile",
+      "mismatchedCurrentVersion",
+      "mismatchedFieldVersion",
+      "readOnlyEntity",
+    ]);
+    for (const candidate of Object.values(rejectionCases)) {
+      expect(isCurrentNativeExtractionSource(docxRun, candidate)).toBe(false);
+    }
+  });
+});
+
 describe("classifyOcrProjectionSource", () => {
   test("preserves an inactive workspace cancellation for recovery", () => {
     expect(
@@ -460,25 +541,6 @@ describe("classifyOcrWorkspaceDispatch", () => {
   });
 });
 
-describe("isAutomaticOcrRepairCandidate", () => {
-  test("only repairs an unencrypted PDF source", () => {
-    expect(isAutomaticOcrRepairCandidate(fileContent)).toBe(true);
-    expect(
-      isAutomaticOcrRepairCandidate({
-        ...fileContent,
-        encrypted: true,
-      }),
-    ).toBe(false);
-    expect(
-      isAutomaticOcrRepairCandidate({
-        ...fileContent,
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("requiresOcrPolicy", () => {
   test("applies opt-out to every automatic request source", () => {
     expect(requiresOcrPolicy("upload")).toBe(true);
@@ -524,44 +586,6 @@ describe("ownsPromotedManualOcrClaim", () => {
         false,
       );
     }
-  });
-});
-
-describe("isReversibleAutomaticOcrCancellation", () => {
-  test("revives policy and workspace cancellations, but not source cancellation", () => {
-    expect(
-      isReversibleAutomaticOcrCancellation({
-        errorCode: "policy_disabled",
-        status: "cancelled",
-      }),
-    ).toBe(true);
-    expect(
-      isReversibleAutomaticOcrCancellation({
-        errorCode: "workspace_unavailable",
-        status: "cancelled",
-      }),
-    ).toBe(true);
-    expect(
-      isReversibleAutomaticOcrCancellation({
-        errorCode: "source_superseded",
-        status: "cancelled",
-      }),
-    ).toBe(false);
-  });
-});
-
-describe("revivableAutomaticOcrCancellationCodes", () => {
-  test("revives a superseded run only after the source is locked and rechecked", () => {
-    expect(
-      revivableAutomaticOcrCancellationCodes({
-        hasLockedExactSource: false,
-      }),
-    ).not.toContain("source_superseded");
-    expect(
-      revivableAutomaticOcrCancellationCodes({
-        hasLockedExactSource: true,
-      }),
-    ).toContain("source_superseded");
   });
 });
 
@@ -637,7 +661,7 @@ describe("automatic projection ownership", () => {
 
 describe("bounded search-index replay", () => {
   test("classifies a stalled initial index write for durable replay", async () => {
-    const rejection: unknown = await indexOcrProjection({
+    const rejection: unknown = await indexDocumentProjection({
       indexEntity: async () => await new Promise<void>(() => {}),
       timeoutMs: 5,
     }).then(
@@ -653,10 +677,10 @@ describe("bounded search-index replay", () => {
     expect(isRetryableSearchIndexFailure(rejection.code)).toBe(true);
     expect(rejection.cause).toBeInstanceOf(TimeoutError);
     expect(rejection.cause).toMatchObject({
-      label: "document OCR initial search index",
+      label: "document processing initial search index",
       timeoutMs: 5,
     });
-    expect(queueSource).toContain("await indexOcrProjection({");
+    expect(queueSource).toContain("await indexDocumentProjection({");
   });
 
   test("recovers from the current projection rather than the failed run source", () => {
@@ -871,24 +895,21 @@ describe("automatic OCR failure recovery", () => {
 });
 
 describe("unconfigured worker lifecycle", () => {
-  test("keeps the entrypoint dormant without constructing a queue consumer", () => {
-    const unconfiguredBranchStart = queueSource.indexOf(
-      "if (!isDocumentOcrProviderConfigured())",
+  test("starts native processing while publishing OCR readiness only when configured", () => {
+    const providerCheck = queueSource.indexOf(
+      "const ocrProviderConfigured = isDocumentOcrProviderConfigured()",
     );
     const consumerStart = queueSource.indexOf(
       "const worker = new Worker<DocumentProcessingJobData>",
-      unconfiguredBranchStart,
     );
-    const unconfiguredBranch = queueSource.slice(
-      unconfiguredBranchStart,
+    const readinessGuard = queueSource.indexOf(
+      "if (ocrProviderConfigured)",
       consumerStart,
     );
 
-    expect(unconfiguredBranchStart).toBeGreaterThan(-1);
-    expect(consumerStart).toBeGreaterThan(unconfiguredBranchStart);
-    expect(unconfiguredBranch).toContain("setInterval(");
-    expect(unconfiguredBranch).toContain("clearInterval(keepAliveInterval)");
-    expect(unconfiguredBranch).not.toContain("new Worker");
+    expect(providerCheck).toBeGreaterThan(-1);
+    expect(consumerStart).toBeGreaterThan(providerCheck);
+    expect(readinessGuard).toBeGreaterThan(consumerStart);
   });
 });
 

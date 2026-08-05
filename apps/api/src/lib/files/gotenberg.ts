@@ -4,81 +4,12 @@ import { env } from "@/api/env";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 
-/**
- * MIME types that Gotenberg's LibreOffice route can convert
- * to PDF. Derived from the official documentation:
- * https://gotenberg.dev/docs/convert-with-libreoffice/convert-to-pdf
- */
-const CONVERTIBLE_MIME_TYPES = {
-  // Word processing
-  "application/msword": null,
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    null,
-  "application/vnd.oasis.opendocument.text": null,
-  "application/rtf": null,
-  "text/plain": null,
-  "application/vnd.apple.pages": null,
-
-  // Spreadsheets
-  "application/vnd.ms-excel": null,
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": null,
-  "application/vnd.oasis.opendocument.spreadsheet": null,
-  "text/csv": null,
-
-  // Presentations
-  "application/vnd.ms-powerpoint": null,
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-    null,
-  "application/vnd.oasis.opendocument.presentation": null,
-
-  // Images
-  "image/jpeg": null,
-  "image/png": null,
-  "image/gif": null,
-  "image/tiff": null,
-  "image/bmp": null,
-  "image/webp": null,
-
-  // Web
-  "text/html": null,
-  "application/xhtml+xml": null,
-} as const satisfies Record<string, null>;
-
-export const isConvertibleMimeType = (mimeType: string): boolean =>
-  mimeType in CONVERTIBLE_MIME_TYPES;
-
-/**
- * MIME types that the frontend can render natively without
- * Gotenberg conversion. Currently only DOCX (via Folio).
- * Images intentionally remain converted to PDF.
- */
-const NATIVELY_RENDERABLE_MIME_TYPES = {
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    null,
-} as const satisfies Record<string, null>;
-
-export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
-  mimeType in NATIVELY_RENDERABLE_MIME_TYPES;
-
-type ShouldGeneratePdfDerivativeOptions = {
-  encrypted?: boolean;
-  mimeType: string;
-};
-
-export const shouldGeneratePdfDerivative = ({
-  encrypted = false,
-  mimeType,
-}: ShouldGeneratePdfDerivativeOptions): boolean =>
-  !encrypted &&
-  isConvertibleMimeType(mimeType) &&
-  !isNativelyRenderableMimeType(mimeType);
-
-export const pdfDerivativeStateForFile = (
-  options: ShouldGeneratePdfDerivativeOptions,
-) =>
-  shouldGeneratePdfDerivative(options)
-    ? ({ status: "pending" } as const)
-    : ({ status: "not-required" } as const);
+export {
+  isConvertibleMimeType,
+  isNativelyRenderableMimeType,
+  pdfDerivativeStateForFile,
+  shouldGeneratePdfDerivative,
+} from "@/api/lib/files/pdf-derivative-policy";
 
 /**
  * Spreadsheet MIME types (.xls, .xlsx) that benefit from the

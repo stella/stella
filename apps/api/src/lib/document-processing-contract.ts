@@ -1,6 +1,9 @@
 /** Persisted-output contract: v2 adds page geometry and a searchable PDF. */
 export const DOCUMENT_OCR_PROCESSOR_VERSION = 2;
 
+/** Persisted-output contract for sandboxed native text extraction. */
+export const DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION = 1;
+
 export type DocumentOcrLine = {
   box: readonly [number, number, number, number];
   confidence: number;

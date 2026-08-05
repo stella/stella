@@ -236,6 +236,8 @@ export const LIMITS = {
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,
+  /** Wall-clock ceiling for one document-processing object-storage read. */
+  documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in
    *  `read_content_across_matters`: the S3 file fetch plus the in-process
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s

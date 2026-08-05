@@ -1,10 +1,12 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 // `processExtraction` reads through the `rootDb` module-level singleton
 // directly (no injected `safeDb`), so the query call is captured by mocking
@@ -19,6 +21,7 @@ const fieldId = toSafeId<"field">("field_1");
 const propertyId = toSafeId<"property">("property_1");
 const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const runId = toSafeId<"documentProcessingRun">("run_1");
 const fileContent = {
   encrypted: false,
   fileName: "readable.pdf",
@@ -47,25 +50,33 @@ const transactionMock = mock(
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
   ) => await runTransaction({ execute: executeMock }),
 );
-const arrayBufferMock = mock(async () => new ArrayBuffer(8));
-const getS3Mock = mock(() => ({
-  file: () => ({ arrayBuffer: arrayBufferMock }),
+const returningMock = mock(async () => [{ id: runId }]);
+const onConflictDoNothingMock = mock(() => ({ returning: returningMock }));
+const valuesMock = mock(() => ({
+  onConflictDoNothing: onConflictDoNothingMock,
 }));
+const insertMock = mock(() => ({ values: valuesMock }));
+const getS3ObjectWithSignalMock = mock(
+  async (_key: string, _signal: AbortSignal) => new ArrayBuffer(8),
+);
 const s3DeleteMock = mock(async () => undefined);
 const s3WriteMock = mock(async () => undefined);
-const extractFileTextMock = mock(
-  async (): Promise<string | null> => "native text",
+const extractFileTextResultMock = mock(
+  async (): Promise<Result<string | null, ExtractionWorkerError>> =>
+    Result.ok("native text"),
 );
 const encryptContentMock = mock(async () => ({
   ciphertext: Buffer.from("ciphertext"),
   iv: Buffer.from("iv"),
 }));
 const requestAutomaticDocumentOcrMock = mock(async () => undefined);
+const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: {
     execute: executeMock,
+    insert: insertMock,
     query: { entities: { findFirst: findFirstMock } },
     transaction: transactionMock,
   },
@@ -76,21 +87,29 @@ void mock.module("@/api/lib/content-encryption", () => ({
 void mock.module("@/api/lib/document-processing-automatic-request", () => ({
   requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
 }));
+void mock.module("@/api/lib/document-processing-enqueue", () => ({
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
+}));
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: getS3Mock,
+  getS3ObjectWithSignal: getS3ObjectWithSignalMock,
   putS3ObjectWithSignal: s3WriteMock,
 }));
 void mock.module("@/api/lib/search/extract-content", () => ({
-  extractFileText: extractFileTextMock,
+  canExtractMimeType: () => true,
+  extractFileTextResult: extractFileTextResultMock,
   resolveExtractionMimeType: ({ mimeType }: { mimeType: string }) => mimeType,
 }));
 void mock.module("@/api/lib/search/provider", () => ({
   getSearchProvider: () => ({ indexEntity: indexEntityMock }),
 }));
 
-const { persistNativeExtractionProjection, processExtraction } =
-  await import("@/api/lib/search/process-extraction");
+const {
+  executeNativeExtraction,
+  persistNativeExtractionProjection,
+  processExtraction,
+  requiresDurableNativeExtraction,
+} = await import("@/api/lib/search/process-extraction");
 
 beforeEach(() => {
   findFirstResult = null;
@@ -98,20 +117,55 @@ beforeEach(() => {
   executeMock.mockReset();
   executeMock.mockImplementation(async (_query: SQL) => [{ entityId }]);
   transactionMock.mockClear();
-  arrayBufferMock.mockClear();
-  getS3Mock.mockClear();
-  extractFileTextMock.mockReset();
-  extractFileTextMock.mockImplementation(async () => "native text");
+  insertMock.mockClear();
+  valuesMock.mockClear();
+  onConflictDoNothingMock.mockClear();
+  returningMock.mockReset();
+  returningMock.mockImplementation(async () => [{ id: runId }]);
+  getS3ObjectWithSignalMock.mockClear();
+  extractFileTextResultMock.mockReset();
+  extractFileTextResultMock.mockImplementation(async () =>
+    Result.ok("native text"),
+  );
   encryptContentMock.mockReset();
   encryptContentMock.mockImplementation(async () => ({
     ciphertext: Buffer.from("ciphertext"),
     iv: Buffer.from("iv"),
   }));
   requestAutomaticDocumentOcrMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
 });
 
 describe("processExtraction", () => {
+  // Files with a pending PDF derivative wait for it so extraction reads the
+  // rendered PDF rather than the original bytes.
+  test("requires durable extraction only after any pending PDF derivative exists", () => {
+    expect(requiresDurableNativeExtraction(fileContent)).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "contract.docx",
+        mimeType: DOCX_MIME_TYPE,
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+      }),
+    ).toBe(false);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        pdfFileId: "derived_pdf_1",
+      }),
+    ).toBe(true);
+  });
+
   test("orders the current version's fields by id, matching readEntityByIdHandler, so 'first file field' selection is deterministic", async () => {
     await processExtraction(entityId);
 
@@ -138,60 +192,86 @@ describe("processExtraction", () => {
     );
   });
 
-  test("requests OCR when native PDF extraction yields no text", async () => {
+  test("commits and enqueues a durable native run before extraction", async () => {
     findFirstResult = extractionEntity;
-    extractFileTextMock.mockImplementationOnce(async () => null);
 
     await processExtraction(entityId);
 
-    expect(requestAutomaticDocumentOcrMock).toHaveBeenCalledWith(
+    expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         entityId,
         entityVersionId,
         fieldId,
+        kind: "native-extraction",
         sourceFileId: fileContent.id,
       }),
     );
-    expect(encryptContentMock).not.toHaveBeenCalled();
-    expect(indexEntityMock).toHaveBeenCalledWith(entityId);
+    expect(enqueueDocumentProcessingRunMock).toHaveBeenCalledWith(runId);
+    expect(extractFileTextResultMock).not.toHaveBeenCalled();
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
+    expect(indexEntityMock).not.toHaveBeenCalled();
   });
 
-  test("propagates encryption failure without sending readable text to OCR", async () => {
-    findFirstResult = extractionEntity;
-    const encryptionError = new Error("encryption unavailable");
-    encryptContentMock.mockImplementationOnce(async () => {
-      throw encryptionError;
+  test("keeps a sandbox failure distinct from a valid empty document", async () => {
+    const workerError = new ExtractionWorkerError({
+      exitCode: 1,
+      message: "sandbox crashed",
     });
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.err(workerError),
+    );
 
-    const rejection: unknown = await processExtraction(entityId).then(
+    const rejection: unknown = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    }).then(
       () => null,
       (error: unknown) => error,
     );
 
-    expect(rejection).toBe(encryptionError);
+    expect(rejection).toBe(workerError);
+    expect(encryptContentMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(executeMock).not.toHaveBeenCalled();
-    expect(indexEntityMock).not.toHaveBeenCalled();
   });
 
-  test("propagates projection failure without sending readable text to OCR", async () => {
-    findFirstResult = extractionEntity;
-    const persistenceError = new Error("database unavailable");
-    executeMock
-      .mockResolvedValueOnce([{ entityId }])
-      .mockImplementationOnce(async () => {
-        throw persistenceError;
-      });
-
-    const rejection: unknown = await processExtraction(entityId).then(
-      () => null,
-      (error: unknown) => error,
+  test("persists a valid empty DOCX as a terminal zero-length projection", async () => {
+    const docxContent = {
+      ...fileContent,
+      fileName: "empty.docx",
+      mimeType: DOCX_MIME_TYPE,
+    } satisfies FieldContent;
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.ok(null),
     );
 
-    expect(rejection).toBe(persistenceError);
-    expect(encryptContentMock).toHaveBeenCalled();
+    const outcome = await executeNativeExtraction({
+      fileField: docxContent,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: docxContent.id,
+        sourceSha256Hex: docxContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(encryptContentMock).toHaveBeenCalledWith(organizationId, "");
+    expect(executeMock).toHaveBeenCalledTimes(2);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
-    expect(indexEntityMock).not.toHaveBeenCalled();
   });
 
   test("serializes native persistence and fences a current manual OCR selection", async () => {
@@ -217,7 +297,7 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(true);
+    expect(persisted).toBe("persisted");
     const lockQuery = executeMock.mock.calls.at(0)?.[0];
     const writeQuery = executeMock.mock.calls.at(1)?.[0];
     expect(lockQuery).toBeDefined();
@@ -282,7 +362,7 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(false);
+    expect(persisted).toBe("source_cancelled");
     expect(executeMock).toHaveBeenCalledTimes(1);
   });
 
@@ -304,7 +384,31 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(false);
+    expect(persisted).toBe("preserved");
     expect(executeMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("surfaces preserved manual OCR ownership and skips automatic fallback", async () => {
+    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.ok(null),
+    );
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("preserved");
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 });
