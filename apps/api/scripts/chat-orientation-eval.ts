@@ -233,11 +233,11 @@ const parseCliOptions = (argv: string[]): CliOptions => {
     }
     switch (flag) {
       case "--api":
-        options.apiBase = takeValue(flag, index).replace(/\/$/, "");
+        options.apiBase = takeValue(flag, index).replace(/\/$/u, "");
         index += 1;
         break;
       case "--web-origin":
-        options.webOrigin = takeValue(flag, index).replace(/\/$/, "");
+        options.webOrigin = takeValue(flag, index).replace(/\/$/u, "");
         index += 1;
         break;
       case "--email":

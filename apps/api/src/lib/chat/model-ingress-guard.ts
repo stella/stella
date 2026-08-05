@@ -78,7 +78,7 @@ const redactString = (
   for (const id of workspaceIds) {
     if (redacted.includes(id)) {
       state.paths.push(path);
-      redacted = redacted.replaceAll(id, TENANT_ID_REDACTION_PLACEHOLDER);
+      redacted = redacted.replaceAll(id, () => TENANT_ID_REDACTION_PLACEHOLDER);
     }
   }
   return redacted;
@@ -114,9 +114,9 @@ const redactContainerInPlace = (
   };
 
   if (Array.isArray(container)) {
-    container.forEach((entry, index) =>
-      visit(entry, index, `${path}[${index}]`),
-    );
+    for (const [index, entry] of container.entries()) {
+      visit(entry, index, `${path}[${index}]`);
+    }
     return;
   }
   for (const [key, entry] of Object.entries(container)) {

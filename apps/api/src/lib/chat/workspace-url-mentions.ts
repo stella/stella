@@ -39,9 +39,9 @@ export const rewriteWorkspaceUrlsToMentions = ({
     `${escapedBase}/workspaces/(${UUID_PATTERN})(?:/[^\\s)\\]]*)?`,
     "giu",
   );
-  return text.replaceAll(urlRegex, (_url, workspaceId: string) => {
+  return text.replaceAll(urlRegex, (_url, capturedUuid: string) => {
     const matterRef = refRegistry.toMatterRef(
-      brandPersistedWorkspaceId(workspaceId),
+      brandPersistedWorkspaceId(capturedUuid),
     );
     return `[matter](${CHAT_WORKSPACE_REF_PREFIX}${matterRef})`;
   });
