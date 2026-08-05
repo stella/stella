@@ -18,7 +18,8 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { containsRawUuid, dehydrateInputRefs } = await import("./ref-mediation");
-const { runRegistryReadTool } = await import("./run-registry-tool");
+const { PROJECTION_SCHEMA_FAILURE_MESSAGE, runRegistryReadTool } =
+  await import("./run-registry-tool");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -165,6 +166,138 @@ describe("runRegistryReadTool", () => {
     );
     const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
     expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
+  });
+
+  // A scopedDb whose relational query double serves read_document's two
+  // entity reads (workspace resolution, then the current-version load) from
+  // one superset row, mirroring the contract corpus' fixture style.
+  const readDocumentScopedDb = (fieldRows: readonly unknown[]): ScopedDb => {
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => ({
+            workspaceId: WS_UUID,
+            kind: "document",
+            name: "NDA draft",
+            currentVersion: { id: "version-1", fields: fieldRows },
+          }),
+        },
+      },
+    };
+    return asTestRaw<ScopedDb>(
+      async (run: (transaction: unknown) => unknown) => await run(tx),
+    );
+  };
+
+  const FIELD_UUID = "37286c24-6145-572e-ad27-15a1d4454d59";
+  const PROPERTY_UUID = "6111c8e9-1404-5b6f-8a9a-0e3a93e8179a";
+  const ENTITY_UUID = "c09ec856-d945-5ecc-82e3-bb5382165f34";
+
+  test("strict projection parse refuses an undeclared handler field before it can flow", async () => {
+    const registry = createChatRefRegistry();
+    const entityRef = registry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    // Doctored field row: `extractorRunId` is a handler field nobody
+    // classified in the projection schema, carrying a UUID. Unlike the
+    // runtime backstop (which only fires on UUID-shaped values), the strict
+    // parse refuses the undeclared KEY itself, so the class is closed even
+    // for payload slots that happen to be null or non-UUID today.
+    const result = await runRegistryReadTool({
+      args: { entity_id: entityRef },
+      context: buildContext({
+        scopedDb: readDocumentScopedDb([
+          {
+            id: FIELD_UUID,
+            propertyId: PROPERTY_UUID,
+            content: { version: 1, type: "text", value: "Body text" },
+            extractorRunId: OTHER_WS_UUID,
+          },
+        ]),
+      }),
+      refRegistry: registry,
+      toolName: "read_document",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.kind).toBe("server-defect");
+      expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
+      expect(result.error.message).not.toContain(OTHER_WS_UUID);
+    }
+    // Telemetry carries the offending path(s), never the refused value.
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: PROJECTION_SCHEMA_FAILURE_MESSAGE }),
+      expect.objectContaining({
+        source: "run-registry-tool",
+        toolName: "read_document",
+        paths: expect.stringContaining("fields[].extractorRunId"),
+      }),
+    );
+    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
+  });
+
+  test("file-content plumbing UUIDs are stripped from the projected payload", async () => {
+    const registry = createChatRefRegistry();
+    const entityRef = registry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    // The second prod backstop trip: a file field's `content.id`/
+    // `content.pdfFileId` UUIDs. The projection schema declares them as
+    // stripped, so the call succeeds and the plumbing never reaches the model.
+    const result = await runRegistryReadTool({
+      args: { entity_id: entityRef },
+      context: buildContext({
+        scopedDb: readDocumentScopedDb([
+          {
+            id: FIELD_UUID,
+            propertyId: PROPERTY_UUID,
+            content: {
+              version: 1,
+              type: "file",
+              id: OTHER_WS_UUID,
+              fileName: "nda.docx",
+              mimeType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              sizeBytes: 1234,
+              encrypted: false,
+              sha256Hex: "a".repeat(64),
+              pdfFileId: OTHER_WS_UUID,
+              pdfDerivative: { status: "ready" },
+              thumbnailFileId: null,
+            },
+          },
+        ]),
+      }),
+      refRegistry: registry,
+      toolName: "read_document",
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    expect(result.unwrap()).toEqual({
+      entityId: entityRef,
+      kind: "document",
+      name: "NDA draft",
+      fields: [
+        {
+          // Field-row handle: declared passthrough, survives verbatim.
+          id: FIELD_UUID,
+          propertyId: "prop_1",
+          content: {
+            version: 1,
+            type: "file",
+            fileName: "nda.docx",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            sizeBytes: 1234,
+            encrypted: false,
+          },
+        },
+      ],
+    });
   });
 
   test("refuses a read tool the ref map keeps off the chat surface", async () => {
