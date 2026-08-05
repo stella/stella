@@ -222,18 +222,16 @@ const matchesContains = (
 };
 
 /**
- * Whether a leaf is an incomplete filter — an ordered comparison or a
- * value-bearing predicate whose value has not been entered yet. `eq`/`neq`
- * against `""` and `is_empty`/`is_not_empty`/`is_truthy` are complete.
+ * Whether a leaf is an incomplete filter — a comparison or value-bearing
+ * predicate whose value has not been entered yet. `is_empty`/`is_not_empty`/
+ * `is_truthy` carry no value by design and are complete.
+ *
+ * A comparison against `""` is incomplete, `eq`/`neq` included: it is the row a
+ * picker seeds, and blankness is expressed by `is_empty`.
  */
 const isIncompleteLeaf = (node: CompareNode | PredicateNode): boolean => {
   if (node.type === "compare") {
-    return (
-      node.op !== "eq" &&
-      node.op !== "neq" &&
-      node.right.type === "literal" &&
-      String(node.right.value) === ""
-    );
+    return node.right.type === "literal" && String(node.right.value) === "";
   }
   return (
     node.op !== "is_empty" &&

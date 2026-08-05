@@ -8,6 +8,7 @@ import {
 } from "./evaluate";
 import {
   type CompareOp,
+  COMPARE_OPS,
   type ConditionNode,
   conditionNodeSchema,
   emptyCondition,
@@ -117,11 +118,12 @@ describe("compare operators", () => {
       op: "is_empty",
     };
 
-    // Incomplete leaves prune away; complete ones (incl. `eq ""`, `is_empty`) stay.
+    // Incomplete leaves prune away, including `eq ""` — a seeded row whose
+    // value was never entered. Complete ones (incl. `is_empty`) stay.
     expect(pruneIncomplete(incompleteGt)).toBeNull();
     expect(pruneIncomplete(incompleteContains)).toBeNull();
+    expect(pruneIncomplete(eqEmpty)).toBeNull();
     expect(pruneIncomplete(real)).toEqual(real);
-    expect(pruneIncomplete(eqEmpty)).toEqual(eqEmpty);
     expect(pruneIncomplete(isEmpty)).toEqual(isEmpty);
 
     // A group keeps real children and drops incomplete ones...
@@ -142,6 +144,19 @@ describe("compare operators", () => {
       }),
     ).toBeNull();
   });
+
+  // Blankness is `is_empty`, so no operator turns `""` into a real constraint.
+  // An invariant over the whole operator union: a per-operator exception like
+  // the `eq`/`neq` one this replaced cannot be reintroduced silently, and a new
+  // `CompareOp` is covered the moment it is added.
+  test.each([...COMPARE_OPS])(
+    "pruneIncomplete drops a blank `%s` comparison",
+    (op) => {
+      expect(
+        pruneIncomplete(compare({ type: "property", propertyId: "x" }, op, "")),
+      ).toBeNull();
+    },
+  );
 });
 
 describe("predicate operators", () => {
