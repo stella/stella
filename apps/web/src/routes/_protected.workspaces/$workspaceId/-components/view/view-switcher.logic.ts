@@ -39,6 +39,13 @@ type ReorderViewIdsArgs = {
  * `null` when the drop changes nothing. The insertion point is expressed
  * relative to the target rather than by its index, so the result depends only
  * on which edge was hit and never on the direction the tab was dragged from.
+ *
+ * Deliberately not `reorderWithEdge` from
+ * `@atlaskit/pragmatic-drag-and-drop-hitbox/util/reorder-with-edge`, which is
+ * already a dependency: it hardcodes `right` as "later in the order" and so
+ * mirrors wrongly under an RTL UI, and it works in indexes, which is what made
+ * the original drop ambiguous. Take a `ViewDropPosition` instead, resolved
+ * against the writing direction by `toViewDropPosition`.
  */
 export const reorderViewIds = ({
   ids,

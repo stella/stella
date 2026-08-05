@@ -58,6 +58,8 @@ import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
+import type { TextDirection } from "@/i18n/i18n-store";
+import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -81,18 +83,16 @@ import {
 const VIEW_DRAG_TYPE = "stella/view-id";
 
 type ViewDropTarget = {
-  element: Element;
   data: Record<string | symbol, unknown>;
 };
 
 // The strip mirrors under an RTL UI, so the physical edge the pointer is
 // nearest only names a position once it is read against the direction the tab
 // is laid out in.
-const resolveDropPosition = ({ element, data }: ViewDropTarget) =>
-  toViewDropPosition(
-    extractClosestEdge(data),
-    getComputedStyle(element).direction === "rtl" ? "rtl" : "ltr",
-  );
+const resolveDropPosition = (
+  { data }: ViewDropTarget,
+  direction: TextDirection,
+) => toViewDropPosition(extractClosestEdge(data), direction);
 
 const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = Object.freeze([
   "overview",
@@ -209,6 +209,25 @@ export const ViewSwitcher = ({
   const disallowedTemplateLayouts = new Set<ViewLayoutType>(
     hasOverviewView ? ["overview"] : [],
   );
+  const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
+
+  // Bounds the tabs' stickiness. A sticky drop target survives the pointer
+  // leaving it only while its parent target is unchanged, so without a target
+  // around the strip the tabs stay sticky across the whole page: the insertion
+  // line would stay lit over unrelated chrome, and releasing there would
+  // reorder. This target is not sticky itself, so leaving the strip drops the
+  // tab out with it.
+  useExternalSyncEffect(() => {
+    if (!stripContainer) {
+      return undefined;
+    }
+    return dropTargetForElements({
+      element: stripContainer,
+      canDrop: ({ source }) => source.data["type"] === VIEW_DRAG_TYPE,
+    });
+  }, [stripContainer]);
 
   const handleReorder = (
     draggedId: string,
@@ -240,7 +259,10 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      ref={setStripContainer}
+    >
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
@@ -259,7 +281,7 @@ export const ViewSwitcher = ({
                       })
                     : null
                 }
-                isMenuOpen={viewActions.isMenuOpen}
+                isAnyMenuOpen={viewActions.isAnyMenuOpen}
                 isRenaming={renamingViewId === view.id}
                 key={view.id}
                 onOpenContextMenu={(event) =>
@@ -382,7 +404,7 @@ type ViewTabProps = {
   workspaceId: string;
   view: WorkspaceView;
   isRenaming: boolean;
-  isMenuOpen: boolean;
+  isAnyMenuOpen: boolean;
   actions: React.ReactNode;
   onSelect: () => void;
   onReorder: (
@@ -399,7 +421,7 @@ const ViewTab = ({
   workspaceId,
   view,
   isRenaming,
-  isMenuOpen,
+  isAnyMenuOpen,
   actions,
   onSelect,
   onReorder,
@@ -423,8 +445,10 @@ const ViewTab = ({
   // Read at drag start so opening or closing a menu does not re-register the
   // draggable. A press that lands on an open menu's dismiss layer still
   // reaches the tab, and the drag it starts previews that layer instead of
-  // the tab; refuse the drag until the menu is gone.
-  const canDragTab = useLatestCallback(() => !isMenuOpen);
+  // the tab; refuse the drag until the menu is gone. The layer spans the
+  // strip, so any open menu gates every tab.
+  const canDragTab = useLatestCallback(() => !isAnyMenuOpen);
+  const direction = useI18nStore((state) => getLangDir(state.lang));
 
   // Seed the draft from the current name each time rename begins,
   // since the trigger now lives in the parent (menu or double-click).
@@ -464,13 +488,15 @@ const ViewTab = ({
           ),
         // Keep this tab as the drop target while the pointer crosses the gap to
         // the next one, so the insertion line does not flicker between tabs.
+        // The strip's own drop target bounds how far the stickiness carries.
         getIsSticky: () => true,
-        onDrag: ({ self }) => setDropPosition(resolveDropPosition(self)),
+        onDrag: ({ self }) =>
+          setDropPosition(resolveDropPosition(self, direction)),
         onDragLeave: () => setDropPosition(null),
         onDrop: ({ source, self }) => {
           setDropPosition(null);
           const draggedViewId = source.data["viewId"];
-          const position = resolveDropPosition(self);
+          const position = resolveDropPosition(self, direction);
           if (typeof draggedViewId !== "string" || position === null) {
             return;
           }
@@ -478,7 +504,7 @@ const ViewTab = ({
         },
       }),
     );
-  }, [id, canUpdateView, canDragTab, handleReorder, tabContainer]);
+  }, [id, canUpdateView, canDragTab, direction, handleReorder, tabContainer]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -826,9 +852,9 @@ const useViewActionsMenu = ({
   );
 
   // A drag started while a menu is open produces a native preview of the
-  // dismiss layer rather than the tab, so the tabs refuse to drag until the
-  // menu closes.
-  const isMenuOpen = isActionsOpen || contextMenu.open;
+  // dismiss layer rather than the tab. The layer covers the whole strip, so
+  // this gates every tab, not just the one whose menu is open.
+  const isAnyMenuOpen = isActionsOpen || contextMenu.open;
 
-  return { openFor, renderActions, overlays, isMenuOpen };
+  return { openFor, renderActions, overlays, isAnyMenuOpen };
 };
