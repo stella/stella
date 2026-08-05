@@ -548,11 +548,9 @@ describe("processDecision — source raw upload failure", () => {
     // never returns to the decision and its raw source is lost. Only a
     // retryable outcome reaches the page-level cursor hold.
     await mock.module("@/api/lib/s3", () => ({
-      getS3: () => ({
-        write: () => {
-          throw new Error("an unexpected error has occurred");
-        },
-      }),
+      writeS3ObjectWithRetry: () => {
+        throw new Error("an unexpected error has occurred");
+      },
     }));
 
     const scopedDb: ScopedDb = async (callback) => {
@@ -616,13 +614,11 @@ describe("processDecision — source raw upload failure", () => {
       },
     }));
     await mock.module("@/api/lib/s3", () => ({
-      getS3: () => ({
-        write: () => {
-          throw Object.assign(new Error("an unexpected error has occurred"), {
-            code: "AccessDenied",
-          });
-        },
-      }),
+      writeS3ObjectWithRetry: () => {
+        throw Object.assign(new Error("an unexpected error has occurred"), {
+          code: "AccessDenied",
+        });
+      },
     }));
 
     const scopedDb: ScopedDb = async (callback) => {

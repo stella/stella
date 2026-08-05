@@ -5,6 +5,7 @@ import {
   getS3,
   isS3Stale,
   resolveS3Credentials,
+  writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 
 const jsonResponse = (body: unknown): Response =>
@@ -200,5 +201,94 @@ describe("credentialsFromEnvValues", () => {
       credentialsFromEnvValues("  use-iam-role  ", "  use-iam-role  "),
     ).toBeNull();
     expect(credentialsFromEnvValues("Use-Iam-Role", "use-iam-role")).toBeNull();
+  });
+});
+
+describe("writeS3ObjectWithRetry", () => {
+  const object = {
+    contentType: "text/html",
+    data: "<html></html>",
+    key: "case-law/raw/source/hash",
+  };
+
+  const failingWriter =
+    (
+      attempts: { code?: string; count: number },
+      failuresBeforeSuccess: number,
+    ) =>
+    async (): Promise<string> => {
+      attempts.count += 1;
+      if (attempts.count > failuresBeforeSuccess) {
+        return await Promise.resolve("written");
+      }
+      throw Object.assign(new Error("an unexpected error has occurred"), {
+        ...(attempts.code === undefined ? {} : { code: attempts.code }),
+      });
+    };
+
+  test("a transient failure does not reach the caller", async () => {
+    // The failure this helper exists for: one `ConnectionClosed` from a
+    // dropped idle socket propagating out of a bare write. The case-law
+    // pipeline holds its page cursor on any raw-upload failure, so a single
+    // recoverable blip is enough to stall a whole source.
+    const attempts = { code: "ConnectionClosed", count: 0 };
+
+    await writeS3ObjectWithRetry(object, failingWriter(attempts, 1));
+
+    expect(attempts.count).toBe(2);
+  });
+
+  test("an unrecognised code retries rather than wedging the caller", async () => {
+    // Retryability is a denylist, so a transport code nobody enumerated
+    // still recovers. An allowlist would reintroduce the stall for every
+    // code the list happens to miss.
+    const attempts = { code: "SomeCodeNobodyEnumerated", count: 0 };
+
+    await writeS3ObjectWithRetry(object, failingWriter(attempts, 1));
+
+    expect(attempts.count).toBe(2);
+  });
+
+  test("a terminal rejection is not retried", async () => {
+    // AccessDenied is a decision, not a blip: replaying the same bytes
+    // reproduces it, so retrying only delays the caller's failure.
+    const attempts = { code: "AccessDenied", count: 0 };
+
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection = await writeS3ObjectWithRetry(
+      object,
+      failingWriter(attempts, Number.POSITIVE_INFINITY),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(attempts.count).toBe(1);
+  });
+
+  test("retries stay bounded and surface the last failure", async () => {
+    // A permanently transient-looking failure must still terminate: the
+    // caller needs to hear about it rather than have the write spin.
+    const attempts = { code: "ConnectionClosed", count: 0 };
+    const failures: Error[] = [];
+    const write = async (): Promise<never> => {
+      attempts.count += 1;
+      const failure = Object.assign(
+        new Error(`write attempt ${attempts.count} failed`),
+        { code: attempts.code },
+      );
+      failures.push(failure);
+      throw failure;
+    };
+
+    const rejection = await writeS3ObjectWithRetry(object, write).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(attempts.count).toBe(3);
+    expect(rejection).toBe(failures.at(2));
   });
 });
