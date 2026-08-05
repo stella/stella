@@ -149,6 +149,7 @@ export default defineConfig({
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
     "no-prompt-boundary-casts/no-prompt-boundary-casts": "error",
+    "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-public-law-browser-globals/no-public-law-browser-globals": "off",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
@@ -403,6 +404,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
+    "./.oxlint-plugins/no-partial-record-satisfies.ts",
   ],
 
   overrides: [

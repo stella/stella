@@ -112,31 +112,54 @@ export const OPERATOR_LABEL_KEYS = {
 const INT_OPERATOR_LABEL_KEYS = {
   eq: "filters.numEq",
   neq: "filters.numNeq",
+  contains: null,
+  not_contains: null,
+  starts_with: null,
+  ends_with: null,
+  contains_all: null,
+  in: null,
   gt: "filters.numGt",
   lt: "filters.numLt",
   gte: "filters.numGte",
   lte: "filters.numLte",
-} as const satisfies Partial<Record<ConditionOperator, TranslationKey>>;
+  is_empty: null,
+  is_not_empty: null,
+} as const satisfies Record<ConditionOperator, TranslationKey | null>;
 
 const DATE_OPERATOR_LABEL_KEYS = {
+  eq: null,
+  neq: null,
+  contains: null,
+  not_contains: null,
+  starts_with: null,
+  ends_with: null,
+  contains_all: null,
+  in: null,
   gt: "filters.dateAfter",
   lt: "filters.dateBefore",
   gte: "filters.dateOnOrAfter",
   lte: "filters.dateOnOrBefore",
-} as const satisfies Partial<Record<ConditionOperator, TranslationKey>>;
+  is_empty: null,
+  is_not_empty: null,
+} as const satisfies Record<ConditionOperator, TranslationKey | null>;
 
 /**
  * The exact label keys an operator may resolve to, derived from the maps
  * above — not the full `TranslationKey` nor every `filters.*` key (some of
- * which carry ICU params), so `t()` accepts a single argument.
+ * which carry ICU params), so `t()` accepts a single argument. `null` is an
+ * absent per-value-type override (see `INT_`/`DATE_OPERATOR_LABEL_KEYS`), not
+ * a resolvable label, so it is excluded here; `labelFrom` always falls back
+ * to `OPERATOR_LABEL_KEYS` before returning.
  */
-type OperatorLabelKey =
+type OperatorLabelKey = Exclude<
   | (typeof OPERATOR_LABEL_KEYS)[keyof typeof OPERATOR_LABEL_KEYS]
   | (typeof INT_OPERATOR_LABEL_KEYS)[keyof typeof INT_OPERATOR_LABEL_KEYS]
-  | (typeof DATE_OPERATOR_LABEL_KEYS)[keyof typeof DATE_OPERATOR_LABEL_KEYS];
+  | (typeof DATE_OPERATOR_LABEL_KEYS)[keyof typeof DATE_OPERATOR_LABEL_KEYS],
+  null
+>;
 
 const labelFrom = (
-  overrides: Partial<Record<ConditionOperator, OperatorLabelKey>>,
+  overrides: Record<ConditionOperator, OperatorLabelKey | null>,
   operator: ConditionOperator,
 ): OperatorLabelKey => overrides[operator] ?? OPERATOR_LABEL_KEYS[operator];
 

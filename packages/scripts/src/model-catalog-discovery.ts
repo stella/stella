@@ -27,6 +27,7 @@ type DatedReviewReason = `${number}-${number}-${number}: ${string}`;
  * Stable, general-purpose models intentionally not exposed in the picker.
  * Entries are exact and dated: a future ID can never inherit an exclusion.
  */
+// oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- DiscoveryModelKey is `${provider}:${string}`, an unbounded template-literal type; a total record is not constructible. Absence here means "no reviewed exclusion for this model ID" (the default, checked via `!== undefined` in findUnreviewedModels), not an unclassified union member.
 export const REVIEWED_MODEL_EXCLUSIONS = {
   "openai:gpt-5.6-luna":
     "2026-07-23: specialized GPT-5.6 tier; offer the portable gpt-5.6 ID",
