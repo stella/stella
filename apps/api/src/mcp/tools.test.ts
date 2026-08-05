@@ -59,6 +59,7 @@ const s3WriteMock = mock(async () => undefined);
 
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
+  getS3ObjectWithSignal: async () => await s3ArrayBufferMock(),
   getS3: () => ({ file: s3FileMock }),
   putS3ObjectWithSignal: s3WriteMock,
   resolveS3Credentials: async () => ({
