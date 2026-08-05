@@ -25,6 +25,7 @@ export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
 
 const HTTP_STATUS_MIN = 100;
 const HTTP_STATUS_MAX = 599;
+const HTTP_SERVER_ERROR_MIN = 500;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
@@ -104,7 +105,7 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
     if (statusCode === 404) {
       return "model_unavailable";
     }
-    if (statusCode !== null && statusCode >= 500) {
+    if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
       return "provider_unavailable";
     }
   }
@@ -119,6 +120,30 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   }
   return "unknown";
 };
+
+/**
+ * Whether a failure is one this service anticipated, so a telemetry sink can
+ * record it as an operational state rather than a defect.
+ *
+ * A named kind is anticipated by construction. So is a `HandlerError` below
+ * 500: the AI stack raises those itself, with curated user-facing copy, for a
+ * configuration state the caller can act on (no key for the role, 403; a
+ * provider or model that does not serve it, 400). They are invisible to
+ * `classifyAIError`, which names failures from the provider's HTTP status;
+ * `HandlerError` carries a `status` of its own, so a 403 reaches the
+ * classifier looking like a provider error, matches none of the mapped
+ * statuses, and falls through to `unknown`: "a shape this code does not
+ * anticipate", the exact opposite of what it is.
+ *
+ * The request layer already draws this line: `runSafeHandler` reports a
+ * handler failure from 500 up and answers a 4xx as an ordinary response.
+ */
+export const isAnticipatedAIFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+): boolean =>
+  kind !== "unknown" ||
+  (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
 type AIHandlerErrorFallback = {
   status: HandlerErrorStatusCode;

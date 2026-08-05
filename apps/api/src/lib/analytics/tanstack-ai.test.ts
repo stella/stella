@@ -461,4 +461,47 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       }
     });
   }
+
+  test("logs a configuration refusal at WARN with its status", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { classifyAIError } = await import("@/api/lib/ai-error");
+    const { logger } = await import("@/api/lib/observability/logger");
+    const { HandlerError } = await import("@/api/lib/errors/tagged-errors");
+    // What the model resolver raises when the role has no key configured.
+    const error = new HandlerError({
+      status: 403,
+      message: 'AI is not available for the "fast" role on this deployment.',
+    });
+
+    // The classifier names failures by provider status, so it cannot name
+    // this one; severity must not follow from that alone.
+    expect(classifyAIError(error)).toBe("unknown");
+
+    const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: { capture: () => undefined, flush: async () => undefined },
+        feature: "templates.suggestFields",
+        traceId: "trace_byok_role",
+      }).captureError(error);
+
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.anything(),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.error_kind": "unknown",
+          "error.status_code": 403,
+        }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 });
