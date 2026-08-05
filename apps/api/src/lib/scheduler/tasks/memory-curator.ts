@@ -7,6 +7,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
+import { memorySchedulerAuditColumns } from "@/api/lib/memory/memory-scheduler-audit";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const MEMORY_CURATOR_TASK = "memory.curator" as const;
@@ -187,6 +188,11 @@ const recordMemoryLifecycleAuditEvents = async (
       resourceId: row.id,
       changes: { status: { old: oldStatus, new: newStatus } },
       metadata: { source: MEMORY_CURATOR_TASK },
+      ...memorySchedulerAuditColumns({
+        id: "memory-curator",
+        name: "Memory curator",
+        source: MEMORY_CURATOR_TASK,
+      }),
     })),
   );
 };

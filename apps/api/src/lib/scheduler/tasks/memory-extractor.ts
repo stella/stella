@@ -26,6 +26,7 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
+import { memorySchedulerAuditColumns } from "@/api/lib/memory/memory-scheduler-audit";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { runMemoryExtractionFailureStamp } from "@/api/lib/scheduler/tasks/memory-extractor-failure";
 import {
@@ -495,6 +496,7 @@ const persistSuggestions = async ({
       .where(
         and(
           eq(chatThreadCompactions.id, compaction.compactionId),
+          eq(chatThreadCompactions.status, "active"),
           isNull(chatThreadCompactions.memoryExtractedAt),
         ),
       )
@@ -565,6 +567,11 @@ const recordExtractedMemoryAuditEvents = async (
         source: MEMORY_EXTRACTOR_TASK,
         sourceMessageId: compaction.sourceMessageId,
       },
+      ...memorySchedulerAuditColumns({
+        id: "memory-extractor",
+        name: "Memory extractor",
+        source: MEMORY_EXTRACTOR_TASK,
+      }),
     })),
   );
 };

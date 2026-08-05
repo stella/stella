@@ -100,6 +100,7 @@ export const createRememberTool = ({
 
     if (resolvedScope === "workspace" && workspaceId === null) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message:
           "Workspace-scoped memory is only available when the chat is connected to a matter.",
       });
@@ -107,6 +108,7 @@ export const createRememberTool = ({
 
     if (resolvedScope === "workspace" && !canManageWorkspaceMemory) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message: "You do not have permission to manage shared matter memory.",
       });
     }
@@ -114,6 +116,7 @@ export const createRememberTool = ({
     const resolvedKind = kind ?? "preference";
     if (resolvedScope === "user" && MATTER_KINDS.has(resolvedKind)) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message: `Kind "${resolvedKind}" is only allowed on matter-scoped memory.`,
       });
     }
@@ -124,6 +127,7 @@ export const createRememberTool = ({
     const sanitized = sanitizeMemoryContent(content);
     if (Result.isError(sanitized)) {
       throw new ChatToolError({
+        kind: "invalid-input",
         message:
           "That memory could not be saved because it contained control or model-instruction sequences.",
       });
@@ -181,6 +185,7 @@ export const createRememberTool = ({
 
     if (Result.isError(insertResult)) {
       throw new ChatToolError({
+        kind: "server-defect",
         message: "Failed to save memory.",
         cause: insertResult.error,
       });

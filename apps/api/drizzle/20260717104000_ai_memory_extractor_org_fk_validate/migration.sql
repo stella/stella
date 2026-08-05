@@ -4,3 +4,5 @@ SET lock_timeout = '1s';--> statement-breakpoint
 -- scan does not need a backfill and may run without a statement timeout.
 SET statement_timeout = 0;--> statement-breakpoint
 ALTER TABLE "chat_thread_compactions" VALIDATE CONSTRAINT "chat_compactions_memory_extraction_org_fk";
+--> statement-breakpoint
+SET statement_timeout = '5s';

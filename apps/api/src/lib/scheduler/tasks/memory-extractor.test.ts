@@ -9,6 +9,10 @@ import {
 
 import { runMemoryExtractionFailureStamp } from "./memory-extractor-failure";
 
+const extractorSource = await Bun.file(
+  new URL("memory-extractor.ts", import.meta.url),
+).text();
+
 describe("escapeUntrustedSummary", () => {
   test("cannot close the extraction trust delimiter", () => {
     const escaped = escapeUntrustedSummary(
@@ -45,6 +49,14 @@ describe("memory extraction failure recovery", () => {
     if (Result.isError(result)) {
       expect(result.error).toBe(stampError);
     }
+  });
+});
+
+describe("memory extraction claim", () => {
+  test("requires the compaction to remain active after the provider call", () => {
+    expect(extractorSource).toContain(
+      `eq(chatThreadCompactions.status, "active"),\n          isNull(chatThreadCompactions.memoryExtractedAt)`,
+    );
   });
 });
 

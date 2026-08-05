@@ -677,9 +677,10 @@ export const chatThreadCompactions = p.pgTable(
  * Persistent AI memory: typed facts and preferences the assistant
  * recalls across sessions, scoped to the firm (organization), the
  * lawyer (user), or a matter (workspace). Read precedence is matter
- * > user > firm. Memories are archive-only (never hard-deleted) and
- * tenant-isolated via RLS; matter-derived content is additionally
- * gated by `sourceDataWorkspaceIds` so it cannot cross matters.
+ * > user > firm. User-managed lifecycle changes are archive-only, while
+ * deleting a source matter erases every memory derived from it. Memories are
+ * tenant-isolated via RLS; matter-derived content is additionally gated by
+ * `sourceDataWorkspaceIds` so it cannot cross matters.
  */
 export const aiMemories = p.pgTable(
   "ai_memories",
@@ -766,6 +767,9 @@ export const aiMemories = p.pgTable(
       .index("ai_memories_source_message_idx")
       .on(table.sourceMessageId)
       .where(isNotNull(table.sourceMessageId)),
+    p
+      .index("ai_memories_source_workspaces_gin_idx")
+      .using("gin", table.sourceDataWorkspaceIds),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],

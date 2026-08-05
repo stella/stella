@@ -37,6 +37,7 @@ CREATE INDEX "ai_memories_org_status_created_idx" ON "ai_memories" ("organizatio
 CREATE INDEX "ai_memories_user_status_idx" ON "ai_memories" ("user_id", "status") WHERE user_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "ai_memories_workspace_status_idx" ON "ai_memories" ("workspace_id", "status") WHERE workspace_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "ai_memories_source_message_idx" ON "ai_memories" ("source_message_id") WHERE source_message_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "ai_memories_source_workspaces_gin_idx" ON "ai_memories" USING gin ("source_data_workspace_ids");--> statement-breakpoint
 CREATE INDEX "ai_memories_active_lifecycle_idx" ON "ai_memories" ("last_used_at") WHERE status = 'active' AND pinned = false;--> statement-breakpoint
 CREATE INDEX "ai_memories_stale_lifecycle_idx" ON "ai_memories" ("last_used_at") WHERE status = 'stale' AND pinned = false;--> statement-breakpoint
 CREATE INDEX "ai_memories_suggested_lifecycle_idx" ON "ai_memories" ("created_at") WHERE status = 'suggested' AND pinned = false;--> statement-breakpoint

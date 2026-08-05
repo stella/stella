@@ -1011,6 +1011,14 @@ const sendMessage = createSafeRootHandler(
         mentions: parsedMessage.mentions,
         message: parsedMessage.message,
       }).filter((id) => accessibleSet.has(id));
+      const dataScopeAfterIncomingMessage =
+        recomputedDataWorkspaceIds ??
+        Array.from(
+          new Set([
+            ...thread.data.dataWorkspaceIds,
+            ...incomingMessageWorkspaceIds,
+          ]),
+        );
 
       // Resolve the opaque sandbox boundary before persisting or claiming the
       // turn. A disabled or incomplete deployment must reject the explicit
@@ -1045,7 +1053,6 @@ const sendMessage = createSafeRootHandler(
         return yield* Result.err(sandboxRunResult.error);
       }
       const sandboxRun = sandboxRunResult.value;
-
       const turnAcceptance =
         parsedMessage.message.role === "user" &&
         latestMessagePlan.persistencePlan.type !== "none"
