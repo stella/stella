@@ -19,15 +19,15 @@ import {
 // masquerade as a live registration.
 const WEB_SRC_DIR = path.resolve(import.meta.dir, "../..");
 const GUIDES_SLICE_SEGMENT = `${path.sep}features${path.sep}guides${path.sep}`;
-const USE_GUIDE_ANCHOR_CALL =
-  /useGuideAnchor\(\s*GUIDE_ANCHORS\.([A-Za-z0-9_]+)\s*\)/gu;
+const GUIDE_ANCHOR_CALL =
+  /\bguideAnchor\(\s*GUIDE_ANCHORS\.([A-Za-z0-9_]+)\s*\)/gu;
 
 const anchorIdByKey = new Map<string, GuideAnchorId>(
   Object.entries(GUIDE_ANCHORS),
 );
 
 // Static scan: which anchors are actually marked on a live element somewhere in
-// the app (outside the guides slice)? Deleting a component's `useGuideAnchor`
+// the app (outside the guides slice)? Deleting a component's `guideAnchor`
 // call drops its id from this set, failing the registration test below.
 const registeredAnchorIds: ReadonlySet<GuideAnchorId> = (() => {
   const registered = new Set<GuideAnchorId>();
@@ -37,7 +37,7 @@ const registeredAnchorIds: ReadonlySet<GuideAnchorId> = (() => {
       continue;
     }
     const source = readFileSync(file, "utf-8");
-    for (const match of source.matchAll(USE_GUIDE_ANCHOR_CALL)) {
+    for (const match of source.matchAll(GUIDE_ANCHOR_CALL)) {
       const id = anchorIdByKey.get(match[1] ?? "");
       if (id) {
         registered.add(id);
@@ -57,7 +57,7 @@ describe("guide anchor registration", () => {
     const missing = ALL_ANCHOR_IDS.filter(
       (id) => !PENDING_ANCHOR_IDS.has(id) && !registeredAnchorIds.has(id),
     );
-    // If this fails, either the anchor lost its `useGuideAnchor(...)` call (wire
+    // If this fails, either the anchor lost its `guideAnchor(...)` call (wire
     // it back or delete the anchor + its tour step) or a new anchor still needs
     // registering (add the call, or list it in PENDING_GUIDE_ANCHOR_IDS).
     expect(missing).toEqual([]);

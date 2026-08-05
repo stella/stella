@@ -21,8 +21,8 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useGuideAnchor } from "@/features/guides/use-guide-anchor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -179,7 +179,7 @@ export const ChatInputSurface = ({
     // handlers so the row sits outside the border but still inside scope.
     <div className={cn("flex flex-col", className)}>
       <div
-        {...useGuideAnchor(GUIDE_ANCHORS.chatComposer)}
+        {...guideAnchor(GUIDE_ANCHORS.chatComposer)}
         className={cn(
           "bg-background rounded-lg border",
           "transition-colors",

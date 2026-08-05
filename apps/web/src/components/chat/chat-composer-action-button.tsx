@@ -9,8 +9,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import type { ChatComposerActionState } from "@/components/chat/chat-composer-action-button.logic";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
+import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useGuideAnchor } from "@/features/guides/use-guide-anchor";
 
 type ChatComposerActionButtonProps = ChatComposerActionState & {
   className?: string;
@@ -64,7 +64,7 @@ export const ChatComposerActionButton = (
 
   return (
     <Button
-      {...useGuideAnchor(GUIDE_ANCHORS.chatSend)}
+      {...guideAnchor(GUIDE_ANCHORS.chatSend)}
       aria-label={label}
       // Canonical composer send/stop/retry look, baked in so every chat
       // surface renders the identical round, foreground-filled button

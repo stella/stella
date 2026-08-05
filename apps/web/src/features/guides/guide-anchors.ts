@@ -24,7 +24,7 @@ export const GUIDE_ANCHORS = {
 
 export type GuideAnchorId = (typeof GUIDE_ANCHORS)[keyof typeof GUIDE_ANCHORS];
 
-// Anchors whose owning UI is not yet marked with `useGuideAnchor()`. Tours that
+// Anchors whose owning UI is not yet marked with `guideAnchor()`. Tours that
 // reference them rely on the runner's graceful skip until wiring lands. The
 // structural test (`guides.test.tsx`) requires every non-pending anchor to be
 // registered in app source and forbids a pending anchor from already being
