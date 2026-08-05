@@ -761,6 +761,7 @@ function RouteComponentInner({
                         onUnlockedChange={setDocxUnlocked}
                         propertyId={filePropertyId}
                         scaleOffset={scaleOffset}
+                        surface="fullView"
                         workspaceId={workspaceId}
                       />
                     </Suspense>
