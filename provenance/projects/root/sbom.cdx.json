@@ -314,10 +314,10 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#27"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -629,6 +629,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
           },
           {
@@ -711,9 +714,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#1"
@@ -3139,10 +3139,10 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#27"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -3454,6 +3454,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
           },
           {
@@ -3536,9 +3539,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#1"
@@ -5056,6 +5056,9 @@
             "location": "apps/api/src/lib/legal-search/parsers/sk-courts.ts#39"
           },
           {
+            "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/search/extraction-worker.ts#18"
           },
           {
@@ -5640,10 +5643,10 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#27"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -5955,6 +5958,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
           },
           {
@@ -6037,9 +6043,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#1"
@@ -9034,16 +9037,31 @@
             "location": "apps/web/src/lib/hotkeys.ts#2"
           },
           {
+            "location": "apps/web/src/lib/shortcut-overrides.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/shortcut-overrides.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/use-effective-shortcuts.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-shortcut-echo.ts#1"
+          },
+          {
             "location": "apps/web/src/app-providers.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#36"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#9"
           },
           {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#3"
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#3"
           },
           {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#4"
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#3"
@@ -9329,6 +9347,9 @@
           },
           {
             "location": "apps/web/src/lib/usage-queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/use-effective-shortcuts.ts#2"
           },
           {
             "location": "apps/web/src/lib/web-search/queries.ts#1"
@@ -10409,9 +10430,6 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#18"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#5"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
@@ -12484,10 +12502,10 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#27"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -12799,6 +12817,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
           },
           {
@@ -12881,9 +12902,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#1"
@@ -14138,6 +14156,9 @@
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
           },
           {
+            "location": "apps/api/src/lib/user-shortcuts.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/auth.ts#2"
           },
           {
@@ -14157,6 +14178,9 @@
           },
           {
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/user-shortcuts.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth.ts#18"
@@ -15806,6 +15830,9 @@
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat/persisted-message-content.ts#1"
           },
           {
@@ -15963,6 +15990,12 @@
           },
           {
             "location": "apps/api/src/lib/oauth-connections.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-searchable-pdf.ts#1"
           },
           {
             "location": "apps/api/src/lib/operator-read-db.ts#1"
@@ -16287,6 +16320,12 @@
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/shortcut-overrides.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/use-effective-shortcuts.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -18253,6 +18292,9 @@
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat/persisted-message-content.ts#1"
           },
           {
@@ -18410,6 +18452,12 @@
           },
           {
             "location": "apps/api/src/lib/oauth-connections.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-searchable-pdf.ts#1"
           },
           {
             "location": "apps/api/src/lib/operator-read-db.ts#1"
@@ -18734,6 +18782,12 @@
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/shortcut-overrides.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/use-effective-shortcuts.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -20539,6 +20593,9 @@
             "location": "apps/api/src/handlers/files/get.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/files/ocr-export.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/flows/create.ts#2"
           },
           {
@@ -21311,6 +21368,12 @@
           },
           {
             "location": "apps/api/src/lib/oauth-connections.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-derivative-pages.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ocr-derivative-pages.ts#2"
           },
           {
             "location": "apps/api/src/lib/operator-read-db.ts#2"
@@ -22277,6 +22340,9 @@
           },
           {
             "location": "apps/api/src/handlers/files/get.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/files/ocr-export.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/routes.ts#2"
@@ -23830,7 +23896,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#34"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#35"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#43"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
@@ -24011,6 +24077,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/components/language-picker.tsx#1"
@@ -24334,10 +24403,10 @@
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#15"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#16"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#17"
@@ -24454,7 +24523,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#9"
@@ -26108,10 +26177,10 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#27"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -26423,6 +26492,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
           },
           {
@@ -26505,9 +26577,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#1"
@@ -28068,9 +28137,6 @@
             "location": "apps/web/src/components/search-dialog.tsx#34"
           },
           {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#6"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#3"
           },
           {
@@ -28251,7 +28317,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#35"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#36"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#44"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
@@ -28494,6 +28560,9 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#4"
           },
           {
+            "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#6"
+          },
+          {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#5"
           },
           {
@@ -28536,7 +28605,7 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#7"
+            "location": "apps/web/src/components/shortcut-echo-hud.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#13"
@@ -28959,7 +29028,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#17"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#18"
@@ -29088,7 +29157,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#10"
@@ -29614,9 +29683,6 @@
           },
           {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
-          },
-          {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#4"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
@@ -30201,6 +30267,9 @@
             "location": "apps/web/src/lib/dev-store.ts#3"
           },
           {
+            "location": "apps/web/src/lib/keyboard-shortcuts-dialog-store.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/model-selector-store.ts#1"
           },
           {
@@ -30214,6 +30283,9 @@
           },
           {
             "location": "apps/web/src/lib/pinned-store.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/use-shortcut-echo.ts#2"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
