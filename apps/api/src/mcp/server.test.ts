@@ -7,6 +7,7 @@ import type {
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  MCP_STATELESS_ALLOW_HEADER,
   STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -221,27 +222,36 @@ describe("handleMcpHttpRequest", () => {
     });
   });
 
-  test("refuses the standalone SSE stream with 405 so clients stay on request/response", async () => {
+  test("refuses every session operation with 405 so clients stay on request/response", async () => {
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",
       scopes: ["stella:read"],
       userId: "user_1",
     });
 
-    const response = await handleMcpHttpRequest(
-      new Request("http://localhost/mcp", {
-        headers: {
-          accept: "text/event-stream",
-          authorization: "Bearer token",
-        },
-        method: "GET",
-      }),
+    // GET opens the notification stream and DELETE ends a session. A
+    // per-request transport can honour neither, so neither may be advertised.
+    const responses = await Promise.all(
+      ["GET", "DELETE"].map(
+        async (method) =>
+          await handleMcpHttpRequest(
+            new Request("http://localhost/mcp", {
+              headers: {
+                accept: "text/event-stream",
+                authorization: "Bearer token",
+              },
+              method,
+            }),
+          ),
+      ),
     );
 
-    expect(response.status).toBe(405);
-    expect(response.headers.get("Allow")).toBe("OPTIONS, POST, DELETE");
-    // Refusing a stream is not a credential problem: no re-consent trigger.
-    expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    for (const response of responses) {
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+      // Refusing a session is not a credential problem: no re-consent trigger.
+      expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    }
     expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
   });
 
@@ -286,7 +296,6 @@ describe("handleMcpHttpRequest", () => {
     );
 
     for (const response of responses) {
-      // A bodiless response (DELETE) carries no content type at all.
       const contentType = response.headers.get("content-type") ?? "";
 
       expect(contentType).not.toContain("text/event-stream");

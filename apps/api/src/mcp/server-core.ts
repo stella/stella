@@ -15,7 +15,7 @@ import type {
 
 import type { McpSession } from "@/api/mcp/auth";
 import {
-  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+  MCP_STATELESS_ALLOW_HEADER,
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
@@ -191,25 +191,30 @@ const accessDeniedResponse = ({
 };
 
 /**
- * The transport is stateless: every request gets its own server and transport,
- * both closed as soon as the response is built. Nothing survives to push
- * server-initiated messages, so the standalone `GET` stream cannot be served.
- * Left to the SDK, `GET` still answers `200 text/event-stream`, and the
- * per-request `close()` ends that body before it reaches the client; the client
- * sees the stream die on open, reconnects, and loops there instead of calling
- * tools. The spec's answer for an endpoint that offers no stream is 405, which
- * clients handle by staying on plain request/response.
+ * `GET` opens the standalone notification stream and `DELETE` terminates a
+ * session. Both presuppose state that outlives a request, and this transport
+ * has none: every request gets its own server and transport, closed as soon as
+ * the response is built.
+ *
+ * `GET` is the one that bites. Left to the SDK it answers
+ * `200 text/event-stream`, and the per-request `close()` ends that body before
+ * it reaches the client; the client sees the stream die on open, reconnects,
+ * and loops there instead of calling tools. 405 is what the spec prescribes for
+ * an endpoint that serves no stream, and clients handle it by staying on plain
+ * request/response.
  */
-const sseUnsupportedResponse = () => {
+const SESSION_ONLY_HTTP_METHODS = new Set(["GET", "DELETE"]);
+
+const sessionOperationUnsupportedResponse = () => {
   const headers = createMcpCorsHeaders();
-  headers.set("Allow", MCP_SSE_UNSUPPORTED_ALLOW_HEADER);
+  headers.set("Allow", MCP_STATELESS_ALLOW_HEADER);
   headers.set("Content-Type", "application/json");
 
   return new Response(
     JSON.stringify({
       error: {
         code: -32_000,
-        message: "Method Not Allowed: this endpoint serves no SSE stream.",
+        message: "Method Not Allowed: this endpoint serves no session.",
       },
       id: null,
       jsonrpc: "2.0",
@@ -415,11 +420,15 @@ export const createMcpHttpRequestHandler = ({
     try {
       const session = await authenticateMcpRequest(token, mode);
 
-      // Refuse the stream only after the token is accepted, so an
+      // Refuse session operations only after the token is accepted, so an
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
-      if (request.method === "GET") {
-        return withMcpCors(sseUnsupportedResponse(), session, mode);
+      if (SESSION_ONLY_HTTP_METHODS.has(request.method)) {
+        return withMcpCors(
+          sessionOperationUnsupportedResponse(),
+          session,
+          mode,
+        );
       }
 
       server = await createMcpServer({ clientIp, mode, request, session });

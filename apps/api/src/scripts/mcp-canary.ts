@@ -25,7 +25,7 @@ import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
   MCP_DISCOVERY_PATH,
   MCP_HTTP_PATH,
-  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+  MCP_STATELESS_ALLOW_HEADER,
 } from "@/api/mcp/constants";
 
 const PROBE_TIMEOUT_MS = 20_000;
@@ -41,7 +41,7 @@ const parseAllowedMethods = (allow: string | null): string[] =>
     .toSorted();
 
 const EXPECTED_ALLOWED_METHODS = parseAllowedMethods(
-  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+  MCP_STATELESS_ALLOW_HEADER,
 );
 
 const PROBE_STATUS = {
@@ -181,7 +181,7 @@ export const evaluateStreamRefusal = ({
   if (allowed.join(",") !== EXPECTED_ALLOWED_METHODS.join(",")) {
     return failed(
       name,
-      `405 allowing ${allowed.join(", ") || "nothing"} (expected ${MCP_SSE_UNSUPPORTED_ALLOW_HEADER})`,
+      `405 allowing ${allowed.join(", ") || "nothing"} (expected ${MCP_STATELESS_ALLOW_HEADER})`,
     );
   }
   return passed(name, "405, so clients stay on request/response");

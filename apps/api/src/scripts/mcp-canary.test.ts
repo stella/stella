@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { MCP_SSE_UNSUPPORTED_ALLOW_HEADER } from "@/api/mcp/constants";
+import { MCP_STATELESS_ALLOW_HEADER } from "@/api/mcp/constants";
 
 import {
   AUTHENTICATED_PROBES,
@@ -13,7 +13,7 @@ import {
 } from "./mcp-canary";
 
 const REFUSAL = {
-  allow: MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+  allow: MCP_STATELESS_ALLOW_HEADER,
   contentType: "application/json",
   status: 405,
 };
@@ -64,9 +64,17 @@ describe("evaluateStreamRefusal", () => {
   test("accepts any ordering and spacing of the advertised methods", () => {
     // Order is the server's business; the method set is the contract.
     expect(
-      evaluateStreamRefusal({ ...REFUSAL, allow: "post,DELETE ,  options" })
-        .status,
+      evaluateStreamRefusal({ ...REFUSAL, allow: "post ,  OPTIONS" }).status,
     ).toBe("passed");
+  });
+
+  test("fails a 405 that still advertises a session operation", () => {
+    // DELETE is a session operation too, so advertising it would promise a
+    // session this endpoint does not have.
+    expect(
+      evaluateStreamRefusal({ ...REFUSAL, allow: "OPTIONS, POST, DELETE" })
+        .status,
+    ).toBe("failed");
   });
 });
 
