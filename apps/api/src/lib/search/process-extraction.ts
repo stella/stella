@@ -1,26 +1,24 @@
-/**
- * Async pipeline: download file from S3 → extract text →
- * encrypt → store → re-index.
- *
- * Called fire-and-forget after file uploads; failures are
- * captured by the caller via captureError.
- */
+/** Durable native extraction request and worker-side execution. */
 
 import { panic, Result } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { documentProcessingRuns } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
+import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {
-  extractFileText,
+  canExtractMimeType,
+  extractFileTextResult,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -51,6 +49,24 @@ const pickExtractionSource = (
       mimeType: fileField.mimeType,
     }),
   };
+};
+
+export const requiresDurableNativeExtraction = (
+  fileField: Extract<FieldContent, { type: "file" }>,
+): boolean => {
+  if (fileField.encrypted) {
+    return false;
+  }
+  if (
+    fileField.pdfFileId === null &&
+    shouldGeneratePdfDerivative({
+      encrypted: fileField.encrypted,
+      mimeType: fileField.mimeType,
+    })
+  ) {
+    return false;
+  }
+  return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
 };
 
 type NativeExtractionProjectionOptions = {
@@ -186,11 +202,80 @@ export const persistNativeExtractionProjection = async ({
     return persisted.at(0) !== undefined;
   });
 
+type NativeExtractionRun = Pick<
+  typeof documentProcessingRuns.$inferSelect,
+  | "entityId"
+  | "entityVersionId"
+  | "fieldId"
+  | "organizationId"
+  | "sourceFileId"
+  | "sourceSha256Hex"
+  | "workspaceId"
+>;
+
+export const executeNativeExtraction = async ({
+  fileField,
+  lifecycleSignal,
+  run,
+}: {
+  fileField: Extract<FieldContent, { type: "file" }>;
+  lifecycleSignal: AbortSignal;
+  run: NativeExtractionRun;
+}): Promise<void> => {
+  const source = pickExtractionSource(fileField);
+  const key = createFileKey({
+    organizationId: run.organizationId,
+    workspaceId: run.workspaceId,
+    fileId: source.fileId,
+    mimeType: source.storageMimeType,
+  });
+  const buffer = await getS3().file(key).arrayBuffer();
+  lifecycleSignal.throwIfAborted();
+  const extraction = await extractFileTextResult(
+    buffer,
+    source.extractionMimeType,
+  );
+  if (Result.isError(extraction)) {
+    throw extraction.error;
+  }
+  lifecycleSignal.throwIfAborted();
+
+  const text = extraction.value;
+  const persistedText = text ?? "";
+  const encrypted = await encryptContent(run.organizationId, persistedText);
+  lifecycleSignal.throwIfAborted();
+  await persistNativeExtractionProjection({
+    charCount: persistedText.length,
+    ciphertext: encrypted.ciphertext,
+    entityId: run.entityId,
+    entityVersionId: run.entityVersionId,
+    fieldId: run.fieldId,
+    iv: encrypted.iv,
+    organizationId: run.organizationId,
+    sourceFileId: run.sourceFileId,
+    sourceSha256Hex: run.sourceSha256Hex,
+    workspaceId: run.workspaceId,
+  });
+
+  if (text === null && fileField.mimeType === PDF_MIME_TYPE) {
+    await requestAutomaticDocumentOcr({
+      entityId: run.entityId,
+      entityVersionId: run.entityVersionId,
+      fieldId: run.fieldId,
+      organizationId: run.organizationId,
+      requestSource: "upload",
+      sourceFileId: run.sourceFileId,
+      sourceSha256Hex: run.sourceSha256Hex,
+      workspaceId: run.workspaceId,
+    });
+  }
+};
+
 /**
- * Extract text from the entity's file, encrypt it, store it,
- * and (re-)index the entity for search. This function always
- * indexes the entity at the end, even when extraction is
- * skipped, so callers don't need a separate indexEntity call.
+ * Durably request native extraction for the entity's selected file. The
+ * document-processing worker owns extraction, persistence, indexing, and
+ * retries; callers may still treat this as best-effort because the committed
+ * run and bounded repair scan own eventual completion.
  */
 export const processExtraction = async (
   entityId: SafeId<"entity">,
@@ -250,84 +335,70 @@ export const processExtraction = async (
       (options?.filePropertyId === undefined ||
         field.propertyId === options.filePropertyId),
   );
-  const canExtract = fileField && !fileField.encrypted;
-  let shouldRequestAutomaticOcr = false;
-
-  if (canExtract) {
-    const orgId = toSafeId<"organization">(workspace.organizationId);
-    const wsId = toSafeId<"workspace">(workspace.id);
-    const extraction = await Result.tryPromise({
-      try: async () => {
-        const source = pickExtractionSource(fileField);
-        const key = createFileKey({
-          organizationId: orgId,
-          workspaceId: wsId,
-          fileId: source.fileId,
-          mimeType: source.storageMimeType,
-        });
-        const buffer = await getS3().file(key).arrayBuffer();
-        return await extractFileText(buffer, source.extractionMimeType, {
-          entityId,
-          fileId: source.fileId,
-        });
-      },
-      catch: (cause) => cause,
-    });
-    if (Result.isError(extraction)) {
-      // Extraction failures must not prevent search
-      // indexing; the entity is still searchable by its
-      // field-level text.
-      captureError(extraction.error, {
-        entityId,
-        mimeType: fileField.mimeType,
-      });
-      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE;
-    } else {
-      const text = extraction.value;
-      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE && !text;
-      if (text) {
-        // Native extraction succeeded. Encryption and durable projection
-        // failures must propagate to the caller; they are not evidence that
-        // the legal document needs to be sent to an external OCR provider.
-        const encrypted = await encryptContent(workspace.organizationId, text);
-        const sourceField =
-          fileFieldRow ?? panic("Extraction source field is missing");
-        await persistNativeExtractionProjection({
-          charCount: text.length,
-          ciphertext: encrypted.ciphertext,
-          entityId,
-          entityVersionId: version.id,
-          fieldId: sourceField.id,
-          iv: encrypted.iv,
-          organizationId: orgId,
-          sourceFileId: fileField.id,
-          sourceSha256Hex: fileField.sha256Hex,
-          workspaceId: wsId,
-        });
-      }
-    }
+  if (
+    !(fileField && fileFieldRow && requiresDurableNativeExtraction(fileField))
+  ) {
+    await getSearchProvider().indexEntity(entityId);
+    return;
   }
 
-  if (shouldRequestAutomaticOcr && fileFieldRow && fileField) {
-    await requestAutomaticDocumentOcr({
+  const organizationId = toSafeId<"organization">(workspace.organizationId);
+  const workspaceId = toSafeId<"workspace">(workspace.id);
+  const inserted = await rootDb
+    .insert(documentProcessingRuns)
+    .values({
+      id: createSafeId<"documentProcessingRun">(),
       entityId,
       entityVersionId: version.id,
       fieldId: fileFieldRow.id,
-      organizationId: workspace.organizationId,
+      kind: "native-extraction",
+      organizationId,
+      processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+      requestedBy: null,
       requestSource: "upload",
       sourceFileId: fileField.id,
       sourceSha256Hex: fileField.sha256Hex,
-      workspaceId: workspace.id,
-    }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId: fileFieldRow.id,
-        mimeType: fileField.mimeType,
-      });
-    });
+      workspaceId,
+    })
+    .onConflictDoNothing({
+      target: [
+        documentProcessingRuns.organizationId,
+        documentProcessingRuns.kind,
+        documentProcessingRuns.entityVersionId,
+        documentProcessingRuns.fieldId,
+        documentProcessingRuns.sourceFileId,
+        documentProcessingRuns.sourceSha256Hex,
+        documentProcessingRuns.processorVersion,
+      ],
+    })
+    .returning({ id: documentProcessingRuns.id });
+  const created = inserted.at(0);
+  const queued =
+    created ??
+    (
+      await rootDb
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.organizationId, organizationId),
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.entityId, entityId),
+            eq(documentProcessingRuns.entityVersionId, version.id),
+            eq(documentProcessingRuns.fieldId, fileFieldRow.id),
+            eq(documentProcessingRuns.sourceFileId, fileField.id),
+            eq(documentProcessingRuns.sourceSha256Hex, fileField.sha256Hex),
+            eq(documentProcessingRuns.kind, "native-extraction"),
+            eq(
+              documentProcessingRuns.processorVersion,
+              DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+            ),
+            eq(documentProcessingRuns.status, "queued"),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+  if (queued) {
+    await enqueueDocumentProcessingRun(queued.id);
   }
-
-  // Always index: includes extracted content when available,
-  // field-level text otherwise.
-  await getSearchProvider().indexEntity(entityId);
 };

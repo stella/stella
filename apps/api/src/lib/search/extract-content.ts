@@ -95,14 +95,13 @@ export const resolveExtractionMimeType = ({
   return TEXT_EXTENSION_MIME_TYPES[extension] ?? normalized;
 };
 
-export const extractFileText = async (
+export const extractFileTextResult = async (
   buffer: ArrayBuffer,
   mimeType: string,
-  context?: Record<string, string>,
 ) => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
-    return null;
+    return Result.ok(null);
   }
 
   const result = await spawnWorker({
@@ -117,14 +116,31 @@ export const extractFileText = async (
       message: result.error.message,
       exitCode: result.error.exitCode,
     });
-    captureError(error, {
-      mimeType: normalizedMimeType,
+    return Result.err(error);
+  }
+
+  return Result.ok(result.value || null);
+};
+
+/**
+ * Best-effort extraction for request paths where an empty fallback is valid.
+ * Durable document processing uses `extractFileTextResult` so a sandbox crash
+ * can never be mistaken for a successfully empty document.
+ */
+export const extractFileText = async (
+  buffer: ArrayBuffer,
+  mimeType: string,
+  context?: Record<string, string>,
+): Promise<string | null> => {
+  const result = await extractFileTextResult(buffer, mimeType);
+  if (Result.isError(result)) {
+    captureError(result.error, {
+      mimeType: normalizeMimeType(mimeType),
       sizeBytes: String(buffer.byteLength),
       exitCode: String(result.error.exitCode),
       ...context,
     });
     return null;
   }
-
-  return result.value || null;
+  return result.value;
 };

@@ -902,11 +902,10 @@ export const fields = p.pgTable(
     // Bounded document-processing recovery has a global ID cursor, so its
     // partial candidate index must start with that cursor column.
     p
-      .index("fields_document_processing_pdf_candidate_idx")
+      .index("fields_document_processing_native_candidate_idx")
       .on(table.id, table.workspaceId, table.entityVersionId)
       .where(
         sql`${table.content}->>'type' = 'file'
-          AND ${table.content}->>'mimeType' = 'application/pdf'
           AND ${table.content}->>'encrypted' = 'false'`,
       ),
     p

@@ -36,7 +36,7 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
-  DOCUMENT_OCR_PROCESSOR_VERSION,
+  DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
   serializeDocumentOcrPayload,
 } from "@/api/lib/document-processing-contract";
 import {
@@ -60,6 +60,10 @@ import {
 } from "@/api/lib/redis-client";
 import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import {
+  executeNativeExtraction,
+  requiresDurableNativeExtraction,
+} from "@/api/lib/search/process-extraction";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -69,7 +73,6 @@ import { toSafeId } from "@/api/types";
 const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 30_000;
-const DORMANT_WORKER_KEEP_ALIVE_MS = 60 * 60_000;
 const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
@@ -111,13 +114,9 @@ const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
   "processing_failed",
   "request_failed",
 ] as const;
-const REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES = [
-  "policy_disabled",
-  "workspace_unavailable",
-] as const;
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
-type CurrentOcrSource = {
+type CurrentDocumentSource = {
   content: FieldContent;
   currentVersionId: SafeId<"entityVersion"> | null;
   entityReadOnly: boolean;
@@ -147,7 +146,7 @@ export class DocumentProcessingJobError extends TaggedError(
   cause?: unknown;
 }> {}
 
-export const indexOcrProjection = async ({
+export const indexDocumentProjection = async ({
   indexEntity,
   timeoutMs = SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
 }: {
@@ -157,7 +156,7 @@ export const indexOcrProjection = async ({
   const indexed = await Result.tryPromise({
     try: async () =>
       await withTimeout(indexEntity, {
-        label: "document OCR initial search index",
+        label: "document processing initial search index",
         timeoutMs,
       }),
     catch: (cause) => cause,
@@ -165,7 +164,7 @@ export const indexOcrProjection = async ({
   if (Result.isError(indexed)) {
     throw new DocumentProcessingJobError({
       code: SEARCH_INDEX_FAILURE_CODE,
-      message: "OCR text was stored but search indexing failed",
+      message: "Document text was stored but search indexing failed",
       cause: indexed.error,
     });
   }
@@ -231,7 +230,7 @@ export const isCurrentOcrSource = ({
     sourceFileId: string;
     sourceSha256Hex: string;
   };
-  source: CurrentOcrSource | null;
+  source: CurrentDocumentSource | null;
 }): boolean =>
   source !== null &&
   !source.entityReadOnly &&
@@ -243,6 +242,27 @@ export const isCurrentOcrSource = ({
   source.content.sha256Hex === run.sourceSha256Hex &&
   source.content.mimeType === PDF_MIME_TYPE &&
   !source.content.encrypted;
+
+export const isCurrentNativeExtractionSource = (
+  run: {
+    entityVersionId: SafeId<"entityVersion">;
+    fieldId: SafeId<"field">;
+    sourceFileId: string;
+    sourceSha256Hex: string;
+  },
+  source: CurrentDocumentSource | null,
+): source is CurrentDocumentSource & {
+  content: Extract<FieldContent, { type: "file" }>;
+} =>
+  source !== null &&
+  !source.entityReadOnly &&
+  source.versionDeletedAt === null &&
+  source.currentVersionId === run.entityVersionId &&
+  source.fieldEntityVersionId === run.entityVersionId &&
+  source.content.type === "file" &&
+  source.content.id === run.sourceFileId &&
+  source.content.sha256Hex === run.sourceSha256Hex &&
+  requiresDurableNativeExtraction(source.content);
 
 export const isPreservableAutomaticProjection = ({
   currentEntityVersionId,
@@ -304,7 +324,7 @@ export const classifyOcrProjectionSource = ({
     sourceFileId: string;
     sourceSha256Hex: string;
   };
-  source: CurrentOcrSource | null;
+  source: CurrentDocumentSource | null;
   workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
 }): "current" | "source_superseded" | "workspace_unavailable" => {
   if (workspaceStatus !== "active") {
@@ -328,41 +348,6 @@ export const classifyOcrWorkspaceDispatch = ({
   }
   return "workspace_unavailable";
 };
-
-export const isAutomaticOcrRepairCandidate = (
-  content: FieldContent,
-): content is Extract<FieldContent, { type: "file" }> =>
-  content.type === "file" &&
-  content.mimeType === PDF_MIME_TYPE &&
-  !content.encrypted;
-
-export const isReversibleAutomaticOcrCancellation = ({
-  errorCode,
-  status,
-}: {
-  errorCode: string | null;
-  status: (typeof documentProcessingRuns.$inferSelect)["status"];
-}): boolean => {
-  if (status !== "cancelled") {
-    return false;
-  }
-  return (
-    errorCode === REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES[0] ||
-    errorCode === REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES[1]
-  );
-};
-
-export const revivableAutomaticOcrCancellationCodes = ({
-  hasLockedExactSource,
-}: {
-  hasLockedExactSource: boolean;
-}): readonly string[] =>
-  hasLockedExactSource
-    ? [
-        ...REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
-        SOURCE_SUPERSEDED_CANCELLATION_CODE,
-      ]
-    : REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES;
 
 const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
@@ -493,7 +478,7 @@ const startDocumentProcessingLeaseHeartbeat = ({
   };
 };
 
-const readCurrentOcrSource = async ({
+const readCurrentDocumentSource = async ({
   entityId,
   fieldId,
   organizationId,
@@ -503,7 +488,7 @@ const readCurrentOcrSource = async ({
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-}): Promise<CurrentOcrSource | null> => {
+}): Promise<CurrentDocumentSource | null> => {
   const rows = await rootDb
     .select({
       content: fields.content,
@@ -839,6 +824,43 @@ export const settleDocumentProcessingAttemptError = async ({
   return "failed";
 };
 
+const completeDocumentProcessingRun = async ({
+  claimToken,
+  run,
+}: {
+  claimToken: string;
+  run: typeof documentProcessingRuns.$inferSelect;
+}): Promise<boolean> => {
+  const completed = await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      claimedAt: null,
+      claimedBy: null,
+      errorAt: null,
+      errorCode: null,
+      finishedAt: new Date(),
+      nextAttemptAt: null,
+      status: "succeeded",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.id, run.id),
+        eq(documentProcessingRuns.status, "running"),
+        eq(documentProcessingRuns.claimedBy, claimToken),
+      ),
+    )
+    .returning({ id: documentProcessingRuns.id });
+  if (!completed.at(0)) {
+    return false;
+  }
+  broadcast(run.workspaceId, {
+    type: "invalidate-query",
+    data: ["entities", run.workspaceId],
+  });
+  return true;
+};
+
 export const processDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
   lifecycleSignal: AbortSignal,
@@ -850,6 +872,7 @@ export const processDocumentProcessingRun = async (
       .select({
         entityId: documentProcessingRuns.entityId,
         entityVersionId: documentProcessingRuns.entityVersionId,
+        kind: documentProcessingRuns.kind,
         organizationId: documentProcessingRuns.organizationId,
         requestSource: documentProcessingRuns.requestSource,
         workspaceId: documentProcessingRuns.workspaceId,
@@ -958,6 +981,7 @@ export const processDocumentProcessingRun = async (
       .limit(1)
       .for("update");
     if (
+      runContext.kind === "ocr" &&
       requiresOcrPolicy(runContext.requestSource) &&
       settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
     ) {
@@ -1026,6 +1050,7 @@ export const processDocumentProcessingRun = async (
         .where(eq(documentProcessingRuns.id, run.id))
         .limit(1);
       if (
+        run.kind === "ocr" &&
         requiresOcrPolicy(
           currentRuns.at(0)?.requestSource ?? run.requestSource,
         ) &&
@@ -1059,12 +1084,47 @@ export const processDocumentProcessingRun = async (
         }
       }
 
-      const source = await readCurrentOcrSource({
+      const source = await readCurrentDocumentSource({
         entityId: run.entityId,
         fieldId: run.fieldId,
         organizationId: run.organizationId,
         workspaceId: run.workspaceId,
       });
+      switch (run.kind) {
+        case "native-extraction": {
+          if (!isCurrentNativeExtractionSource(run, source)) {
+            await markRunCancelled(run.id, claimToken, "source_superseded");
+            return;
+          }
+          await executeNativeExtraction({
+            fileField: source.content,
+            lifecycleSignal,
+            run,
+          });
+          lifecycleSignal.throwIfAborted();
+          const persistedSource = await readCurrentDocumentSource({
+            entityId: run.entityId,
+            fieldId: run.fieldId,
+            organizationId: run.organizationId,
+            workspaceId: run.workspaceId,
+          });
+          if (!isCurrentNativeExtractionSource(run, persistedSource)) {
+            await markRunCancelled(run.id, claimToken, "source_superseded");
+            return;
+          }
+          await indexDocumentProjection({
+            indexEntity: async () =>
+              await getSearchProvider().indexEntity(run.entityId),
+          });
+          lifecycleSignal.throwIfAborted();
+          await completeDocumentProcessingRun({ claimToken, run });
+          return;
+        }
+        case "ocr":
+          break;
+        default:
+          run.kind satisfies never;
+      }
       if (!isCurrentOcrSource({ run, source })) {
         await markRunCancelled(run.id, claimToken, "source_superseded");
         return;
@@ -1140,39 +1200,13 @@ export const processDocumentProcessingRun = async (
         });
       }
 
-      await indexOcrProjection({
+      await indexDocumentProjection({
         indexEntity: async () =>
           await getSearchProvider().indexEntity(run.entityId),
       });
       lifecycleSignal.throwIfAborted();
 
-      const completed = await rootDb
-        .update(documentProcessingRuns)
-        .set({
-          claimedAt: null,
-          claimedBy: null,
-          errorAt: null,
-          errorCode: null,
-          finishedAt: new Date(),
-          status: "succeeded",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, run.id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        )
-        .returning({ id: documentProcessingRuns.id });
-      if (!completed.at(0)) {
-        return;
-      }
-
-      broadcast(run.workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", run.workspaceId],
-      });
+      await completeDocumentProcessingRun({ claimToken, run });
     },
     catch: (cause) => cause,
   });
@@ -1345,7 +1379,7 @@ const earlierFileFields = alias(
   "document_processing_earlier_file_fields",
 );
 
-type AutomaticOcrCandidate = {
+type DocumentProcessingCandidate = {
   content: Extract<FieldContent, { type: "file" }>;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
@@ -1406,8 +1440,8 @@ export const writeRepairScanCursor = async ({
     ),
   ) === 1;
 
-const isSameAutomaticOcrSource = (
-  candidate: AutomaticOcrCandidate,
+const isSameNativeExtractionSource = (
+  candidate: DocumentProcessingCandidate,
   field: {
     content: FieldContent;
     entityVersionId: SafeId<"entityVersion">;
@@ -1415,15 +1449,16 @@ const isSameAutomaticOcrSource = (
     workspaceId: SafeId<"workspace">;
   },
 ): boolean =>
-  isAutomaticOcrRepairCandidate(field.content) &&
+  field.content.type === "file" &&
+  requiresDurableNativeExtraction(field.content) &&
   field.id === candidate.fieldId &&
   field.workspaceId === candidate.workspaceId &&
   field.entityVersionId === candidate.entityVersionId &&
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
 
-const persistRepairableOcrRuns = async (
-  candidates: AutomaticOcrCandidate[],
+const persistMissingNativeExtractionRuns = async (
+  candidates: DocumentProcessingCandidate[],
 ): Promise<SafeId<"documentProcessingRun">[]> => {
   if (candidates.length === 0) {
     return [];
@@ -1475,135 +1510,118 @@ const persistRepairableOcrRuns = async (
             candidates.map((candidate) => candidate.workspaceId),
           ),
         ),
-      );
+      )
+      .limit(RECONCILE_BATCH_SIZE);
     const currentFieldById = new Map(
       currentFields.map((field) => [field.id, field]),
     );
-    const currentCandidates = candidates.filter((candidate) => {
+    const currentProjections = await tx
+      .select({
+        entityId: extractedContent.entityId,
+        sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+        sourceFieldId: extractedContent.sourceFieldId,
+        sourceFileId: extractedContent.sourceFileId,
+        sourceSha256Hex: extractedContent.sourceSha256Hex,
+      })
+      .from(extractedContent)
+      .where(
+        and(
+          inArray(
+            extractedContent.organizationId,
+            candidates.map((candidate) => candidate.organizationId),
+          ),
+          inArray(
+            extractedContent.workspaceId,
+            candidates.map((candidate) => candidate.workspaceId),
+          ),
+          inArray(
+            extractedContent.entityId,
+            candidates.map(({ entityId }) => entityId),
+          ),
+        ),
+      )
+      .limit(RECONCILE_BATCH_SIZE);
+    const currentProjectionByEntityId = new Map(
+      currentProjections.map((projection) => [projection.entityId, projection]),
+    );
+    const values = candidates.flatMap((candidate) => {
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
-      return (
-        entity?.currentVersionId === candidate.entityVersionId &&
-        entity.workspaceId === candidate.workspaceId &&
-        !entity.readOnly &&
-        field !== undefined &&
-        isSameAutomaticOcrSource(candidate, field)
-      );
-    });
-    if (currentCandidates.length === 0) {
-      return [];
-    }
-
-    const projectionScope = or(
-      ...currentCandidates.map((candidate) =>
-        and(
-          eq(extractedContent.organizationId, candidate.organizationId),
-          eq(extractedContent.workspaceId, candidate.workspaceId),
-          eq(extractedContent.entityId, candidate.entityId),
-        ),
-      ),
-    );
-    const projectedRows = projectionScope
-      ? await tx
-          .select({
-            entityId: extractedContent.entityId,
-            sourceEntityVersionId: extractedContent.sourceEntityVersionId,
-            sourceFieldId: extractedContent.sourceFieldId,
-            sourceFileId: extractedContent.sourceFileId,
-            sourceSha256Hex: extractedContent.sourceSha256Hex,
-          })
-          .from(extractedContent)
-          .where(projectionScope)
-      : [];
-    const projectionsByEntityId = new Map(
-      projectedRows.map((projection) => [projection.entityId, projection]),
-    );
-    const projectionSourceFieldIds = projectedRows.flatMap(
-      ({ sourceFieldId }) => (sourceFieldId === null ? [] : [sourceFieldId]),
-    );
-    const projectionSourceFields =
-      projectionSourceFieldIds.length === 0
-        ? []
-        : await tx
-            .select({
-              content: fields.content,
-              entityVersionId: fields.entityVersionId,
-              id: fields.id,
-              workspaceId: fields.workspaceId,
-            })
-            .from(fields)
-            .where(
-              and(
-                inArray(fields.id, projectionSourceFieldIds),
-                inArray(
-                  fields.workspaceId,
-                  currentCandidates.map((candidate) => candidate.workspaceId),
-                ),
-              ),
-            )
-            .limit(RECONCILE_BATCH_SIZE);
-    const projectionSourceFieldsById = new Map(
-      projectionSourceFields.map((field) => [field.id, field]),
-    );
-    const projectedEntityIds = new Set(
-      currentCandidates.flatMap((candidate) => {
-        const projection = projectionsByEntityId.get(candidate.entityId);
-        return projection &&
-          isPreservableAutomaticProjection({
-            currentEntityVersionId: candidate.entityVersionId,
-            currentWorkspaceId: candidate.workspaceId,
-            provenance: projection,
-            sourceField:
-              projection.sourceFieldId === null
-                ? null
-                : (projectionSourceFieldsById.get(projection.sourceFieldId) ??
-                  null),
-          })
-          ? [candidate.entityId]
-          : [];
-      }),
-    );
-    const values = currentCandidates
-      .filter(({ entityId }) => !projectedEntityIds.has(entityId))
-      .map(
-        (candidate) =>
-          ({
+      const projection = currentProjectionByEntityId.get(candidate.entityId);
+      const hasCurrentProjection =
+        projection !== undefined &&
+        ((projection.sourceEntityVersionId === null &&
+          projection.sourceFieldId === null &&
+          projection.sourceFileId === null &&
+          projection.sourceSha256Hex === null) ||
+          (projection.sourceEntityVersionId === candidate.entityVersionId &&
+            projection.sourceFieldId === candidate.fieldId &&
+            projection.sourceFileId === candidate.content.id &&
+            projection.sourceSha256Hex === candidate.content.sha256Hex));
+      if (
+        entity?.currentVersionId !== candidate.entityVersionId ||
+        entity.workspaceId !== candidate.workspaceId ||
+        entity.readOnly ||
+        !field ||
+        !isSameNativeExtractionSource(candidate, field)
+      ) {
+        return [];
+      }
+      if (hasCurrentProjection) {
+        const failedAt = new Date();
+        return [
+          {
             id: createSafeId<"documentProcessingRun">(),
             entityId: candidate.entityId,
             entityVersionId: candidate.entityVersionId,
+            errorAt: failedAt,
+            errorCode: SEARCH_INDEX_FAILURE_CODE,
             fieldId: candidate.fieldId,
-            kind: "ocr",
+            kind: "native-extraction",
+            nextAttemptAt: failedAt,
             organizationId: candidate.organizationId,
-            processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+            processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
             requestedBy: null,
             requestSource: "repair",
             sourceFileId: candidate.content.id,
             sourceSha256Hex: candidate.content.sha256Hex,
+            status: "failed",
             workspaceId: candidate.workspaceId,
-          }) satisfies typeof documentProcessingRuns.$inferInsert,
-      );
+          } satisfies typeof documentProcessingRuns.$inferInsert,
+        ];
+      }
+      return [
+        {
+          id: createSafeId<"documentProcessingRun">(),
+          entityId: candidate.entityId,
+          entityVersionId: candidate.entityVersionId,
+          fieldId: candidate.fieldId,
+          kind: "native-extraction",
+          organizationId: candidate.organizationId,
+          processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+          requestedBy: null,
+          requestSource: "repair",
+          sourceFileId: candidate.content.id,
+          sourceSha256Hex: candidate.content.sha256Hex,
+          workspaceId: candidate.workspaceId,
+        } satisfies typeof documentProcessingRuns.$inferInsert,
+      ];
+    });
     if (values.length === 0) {
       return [];
     }
 
-    // `currentCandidates` passed the exact field/hash check after the entity's
-    // current version was locked above. Only that locked recheck may revive a
-    // source-superseded run for the same immutable source.
-    const cancellationCodes = revivableAutomaticOcrCancellationCodes({
-      hasLockedExactSource: currentCandidates.length > 0,
-    });
-    const repairableConflict = or(
-      eq(documentProcessingRuns.status, "succeeded"),
-      and(
-        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-        eq(documentProcessingRuns.status, "cancelled"),
-        inArray(documentProcessingRuns.errorCode, cancellationCodes),
-      ),
+    const repairableConflict = and(
+      eq(documentProcessingRuns.status, "cancelled"),
+      inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+      inArray(documentProcessingRuns.errorCode, [
+        SOURCE_SUPERSEDED_CANCELLATION_CODE,
+        "workspace_unavailable",
+      ]),
     );
     if (!repairableConflict) {
       return [];
     }
-
     const queuedAt = new Date();
     const queued = await tx
       .insert(documentProcessingRuns)
@@ -1619,13 +1637,12 @@ const persistRepairableOcrRuns = async (
           documentProcessingRuns.processorVersion,
         ],
         set: {
-          errorAt: null,
-          errorCode: null,
+          errorAt: sql`excluded.error_at`,
+          errorCode: sql`excluded.error_code`,
           finishedAt: null,
-          nextAttemptAt: null,
-          requestedBy: null,
+          nextAttemptAt: sql`excluded.next_attempt_at`,
           requestSource: "repair",
-          status: "queued",
+          status: sql`excluded.status`,
           updatedAt: queuedAt,
         },
         setWhere: repairableConflict,
@@ -1671,7 +1688,7 @@ export const tryEnqueueDocumentProcessingRun = async ({
   return { runId, status: "enqueued" };
 };
 
-const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
+const recoverMissingNativeExtractionRuns = async (): Promise<number> => {
   const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
   const cursor = await readRepairScanCursor();
   const candidates = await rootDb
@@ -1702,20 +1719,12 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
       ),
     )
     .innerJoin(workspaces, eq(workspaces.id, fields.workspaceId))
-    .innerJoin(
-      organizationSettings,
-      and(
-        eq(organizationSettings.organizationId, workspaces.organizationId),
-        eq(organizationSettings.documentProcessingMode, "searchable-text"),
-      ),
-    )
     .where(
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
         eq(workspaces.status, "active"),
         sql`${fields.content}->>'type' = 'file'
-          AND ${fields.content}->>'mimeType' = 'application/pdf'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
           rootDb
@@ -1743,12 +1752,15 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
   }
 
   const repairCandidates = candidates.flatMap((candidate) => {
-    if (!isAutomaticOcrRepairCandidate(candidate.content)) {
+    if (
+      candidate.content.type !== "file" ||
+      !requiresDurableNativeExtraction(candidate.content)
+    ) {
       return [];
     }
     return [{ ...candidate, content: candidate.content }];
   });
-  const runIds = await persistRepairableOcrRuns(repairCandidates);
+  const runIds = await persistMissingNativeExtractionRuns(repairCandidates);
   await writeRepairScanCursor({
     expectedCursor: cursor,
     nextCursor:
@@ -1800,7 +1812,6 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .from(documentProcessingRuns)
     .where(
       and(
-        eq(documentProcessingRuns.kind, "ocr"),
         eq(documentProcessingRuns.status, "queued"),
         selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
           ? isNotNull(documentProcessingRuns.nextAttemptAt)
@@ -2415,7 +2426,7 @@ const reconcileDocumentProcessing = async ({
       phases: [
         {
           name: RECONCILIATION_PHASE.REPAIR,
-          run: recoverMissingAutomaticOcrRuns,
+          run: recoverMissingNativeExtractionRuns,
         },
         {
           name: RECONCILIATION_PHASE.REINDEX,
@@ -2480,30 +2491,7 @@ export const abortDocumentProcessingWorkerBeforeClose = async ({
 
 export const initDocumentProcessingWorker = () => {
   const lifecycle = new AbortController();
-  if (!isDocumentOcrProviderConfigured()) {
-    logger.info("document_processing.worker_not_started", {
-      reason: "ocr_provider_not_configured",
-    });
-    // Signal listeners do not keep Bun alive. The self-host worker service is
-    // still a long-lived process when OCR is unconfigured, so retain one
-    // dormant handle until the entrypoint asks this lifecycle to close.
-    const keepAliveInterval = setInterval(
-      () => undefined,
-      DORMANT_WORKER_KEEP_ALIVE_MS,
-    );
-    return {
-      close: async (): Promise<void> => {
-        lifecycle.abort();
-        clearInterval(keepAliveInterval);
-        const client = reconciliationRedisClient;
-        reconciliationRedisClient = null;
-        if (client) {
-          client.close();
-        }
-        await Promise.resolve();
-      },
-    };
-  }
+  const ocrProviderConfigured = isDocumentOcrProviderConfigured();
 
   const worker = new Worker<DocumentProcessingJobData>(
     DOCUMENT_PROCESSING_QUEUE_NAME,
@@ -2531,7 +2519,9 @@ export const initDocumentProcessingWorker = () => {
       if (closing) {
         return undefined;
       }
-      readiness = startDocumentOcrWorkerReadiness();
+      if (ocrProviderConfigured) {
+        readiness = startDocumentOcrWorkerReadiness();
+      }
       return undefined;
     }),
     "document-processing.publish-readiness",
