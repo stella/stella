@@ -98,6 +98,33 @@ describe("chat search indexing", () => {
     ).toBe("Review the termination clause. Agreement.pdf @agreement document");
   });
 
+  test("indexes citation labels without their link targets", async () => {
+    const { extractMessageSearchText } = await import("./index-chat");
+    const workspaceId = "db9b500f-aa40-4bee-bd7e-624ef4be6193";
+    const entityId = "6d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e55";
+
+    const indexed = extractMessageSearchText({
+      version: 2,
+      data: [
+        {
+          type: "text",
+          content: [
+            `The matter **[FlightOps Cloud - IT & SaaS](#stella-workspace=${workspaceId})**`,
+            `holds [the retainer](#stella-entity=${workspaceId}:${entityId})`,
+            "and its [public filing](https://example.com/filing 'Filing').",
+          ].join(" "),
+        },
+      ],
+    });
+
+    expect(indexed).toBe(
+      "The matter **FlightOps Cloud - IT & SaaS** holds the retainer and its public filing.",
+    );
+    expect(indexed).not.toContain(workspaceId);
+    expect(indexed).not.toContain("#stella-");
+    expect(indexed).not.toContain("https://");
+  });
+
   test("indexes only source-document metadata that previews can display", async () => {
     const { extractMessageSearchText } = await import("./index-chat");
 
