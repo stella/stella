@@ -41,6 +41,97 @@ type CaptureRequestErrorOptions = {
 
 const SERVER_DISTINCT_ID = "server";
 
+const CAPTURE_WINDOW_MS = 60_000;
+const CAPTURE_MAX_TRACKED_KEYS = 500;
+
+type CaptureWindow = { startedAt: number; suppressed: number };
+
+const captureWindows = new Map<string, CaptureWindow>();
+
+/**
+ * Structural key for repeat suppression: error class, stable code, and code
+ * location, deliberately excluding the caller's correlation context.
+ *
+ * A stuck loop re-reports the same defect with a fresh request or entity ID
+ * every cycle, so keying on context would defeat the throttle in exactly the
+ * case that motivates it. Two call sites that genuinely share a class, code,
+ * and frame are the same defect.
+ */
+const captureWindowKey = (properties: ExceptionProperties): string => {
+  // `ExceptionProperties` widens every value to include `$exception_list`, so
+  // read each field back as a string rather than stringifying whatever is there.
+  const field = (key: string): string => {
+    const value = properties[key];
+    return typeof value === "string" ? value : "";
+  };
+  return [
+    field("error.class"),
+    field("error.code"),
+    field("error.frame"),
+    field("error.cause.frame"),
+  ].join("|");
+};
+
+/**
+ * Drop the key whose window opened longest ago once the map is full, so a
+ * process that sees an unbounded variety of errors cannot grow this map
+ * without limit. Evicting an old window at worst re-reports its next
+ * occurrence immediately, which is the safe direction.
+ */
+const evictOldestCaptureWindow = (key: string): void => {
+  if (
+    captureWindows.has(key) ||
+    captureWindows.size < CAPTURE_MAX_TRACKED_KEYS
+  ) {
+    return;
+  }
+  let oldestKey: string | undefined;
+  let oldestStartedAt = Number.POSITIVE_INFINITY;
+  for (const [candidate, window] of captureWindows) {
+    if (window.startedAt < oldestStartedAt) {
+      oldestStartedAt = window.startedAt;
+      oldestKey = candidate;
+    }
+  }
+  if (oldestKey !== undefined) {
+    captureWindows.delete(oldestKey);
+  }
+};
+
+/**
+ * Rate-limit identical errors to one reported event per window.
+ *
+ * Returns the number of occurrences suppressed since the last report, or
+ * `null` when this occurrence is itself suppressed. A persistently failing
+ * loop otherwise spends one ingested event per iteration, all carrying the
+ * same structural payload, since the redaction contract above means repeats
+ * differ only in correlation IDs.
+ *
+ * The suppressed count rides along on the next reported event rather than
+ * being dropped, so the failure's rate stays recoverable and nothing is
+ * silently swallowed. Counting is lazy: the tail of a window that never sees
+ * another occurrence is not reported, which is the case where the error has
+ * stopped and the rate no longer matters.
+ */
+const admitCapture = (key: string, now: number): number | null => {
+  const open = captureWindows.get(key);
+  if (open !== undefined && now - open.startedAt < CAPTURE_WINDOW_MS) {
+    open.suppressed += 1;
+    return null;
+  }
+  evictOldestCaptureWindow(key);
+  captureWindows.set(key, { startedAt: now, suppressed: 0 });
+  return open?.suppressed ?? 0;
+};
+
+/**
+ * Reset the suppression state. Tests only: the windows are module state, so
+ * one test's captures would otherwise throttle the next test's.
+ */
+export const resetCaptureWindows = (): void => {
+  captureWindows.clear();
+};
+
 const captureErrorWithOptions = (
   error: unknown,
   options: CaptureErrorOptions,
@@ -72,12 +163,22 @@ const captureErrorWithOptions = (
     ...(options.sessionId ? { session_id: options.sessionId } : {}),
   };
 
+  // Before the throttle: dev sinks are local and unmetered, and a developer
+  // reproducing a tight failure loop needs every occurrence.
   logDevError(error, properties);
+
+  const suppressed = admitCapture(captureWindowKey(properties), Date.now());
+  if (suppressed === null) {
+    return;
+  }
 
   getAnalytics().capture({
     distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
     event: SERVER_ANALYTICS_EVENTS.exception,
-    properties,
+    properties:
+      suppressed > 0
+        ? { ...properties, suppressed_repeats: String(suppressed) }
+        : properties,
   });
 };
 
