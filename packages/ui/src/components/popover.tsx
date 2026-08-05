@@ -55,9 +55,8 @@ function PopoverPopup({
         alignOffset={alignOffset}
         anchor={anchor}
         className={cn(
-          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width)",
           OVERLAY_LAYER_CLASS_NAMES[layer],
-          anchor && "transition-none",
         )}
         data-slot="popover-positioner"
         side={side}
