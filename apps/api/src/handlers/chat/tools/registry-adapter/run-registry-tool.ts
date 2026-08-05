@@ -1,7 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { panic, Result } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -22,19 +21,10 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import type { ChatProjectionSchema } from "./projection-schema";
-import {
-  applyProjectionSchema,
-  deriveRefMediationEntry,
-} from "./projection-schema";
+import { projectForChat } from "./projection-schema";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
-import {
-  dehydrateInputRefs,
-  findUndeclaredUuidPathIn,
-  hydrateRefs,
-  stripDeclaredPaths,
-} from "./ref-mediation";
+import { dehydrateInputRefs } from "./ref-mediation";
 
 /**
  * The read-only registry handlers chat may drive, gathered from the per-domain
@@ -81,67 +71,6 @@ export const firstTextContent = (result: CallToolResult): string => {
 
 /** Fallback for an `isError` result whose content carries no text block. */
 export const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
-
-/**
- * Surfaced to the model when a hydrated payload still carries a raw uuid.
- * Deliberately does not say "anonymization": the anonymization feature (the
- * anonymized MCP surface) is a different mechanism and is not involved —
- * chat egress runs in default mode. This is the chat ref projection's own
- * fail-closed invariant, it fires regardless of any anonymization setting,
- * and the model can do nothing about it, so the message says both.
- */
-export const REF_PROJECTION_FAILURE_MESSAGE =
-  "The tool result contained an internal identifier the chat projection " +
-  "could not map to a reference. This is a server-side defect, not a " +
-  "problem with your input; do not retry this call.";
-
-/**
- * Surfaced to the model when a converted tool's payload fails its projection
- * schema's strict parse: a handler emitted a field nobody classified (or a
- * declared field changed shape). Same fail-closed semantics as
- * `REF_PROJECTION_FAILURE_MESSAGE`; the parse fires before strip/hydrate, so
- * the undeclared field never reaches the model by construction.
- */
-export const PROJECTION_SCHEMA_FAILURE_MESSAGE =
-  "The tool result did not match the shape the chat projection declares " +
-  "for this tool. This is a server-side defect, not a problem with your " +
-  "input; do not retry this call.";
-
-/**
- * Strict-parse a projected tool's payload against its projection schema.
- * Shared by the read and write orchestrators. The failure carries only issue
- * paths (never values) to telemetry, mirroring the UUID backstop's no-leak
- * discipline.
- */
-export const applyEntryProjection = ({
-  payload,
-  projection,
-  source,
-  toolName,
-}: {
-  payload: unknown;
-  projection: ChatProjectionSchema;
-  source: "run-registry-tool" | "run-registry-write-tool";
-  toolName: string;
-}): Result<unknown, ChatToolError> => {
-  const projected = applyProjectionSchema({
-    payload,
-    schema: projection,
-  });
-  if (Result.isError(projected)) {
-    const error = new ChatToolError({
-      kind: "server-defect",
-      message: PROJECTION_SCHEMA_FAILURE_MESSAGE,
-    });
-    captureError(error, {
-      source,
-      toolName,
-      paths: projected.error.issuePaths.join(", "),
-    });
-    return Result.err(error);
-  }
-  return Result.ok(projected.value);
-};
 
 const MCP_CODE_TO_CHAT_KIND = {
   validation_error: "invalid-input",
@@ -234,7 +163,8 @@ export type RunRegistryReadToolProps = {
  * 3. Run the handler and finalize its egress in DEFAULT mode (chat is not the
  *    anonymized surface).
  * 4. Map an `isError` result into a `ChatToolError`; otherwise parse the JSON
- *    payload, hydrate its tenant UUIDs into chat refs, and return the object.
+ *    payload and project it for chat in a single schema-driven pass
+ *    (`projectForChat`: strict parse, strip, ref hydration, UUID invariant).
  */
 export const runRegistryReadTool = async ({
   toolName,
@@ -291,56 +221,16 @@ export const runRegistryReadTool = async ({
     return Result.err(payload.error);
   }
 
-  // Strict-parse the payload against the projection schema BEFORE
-  // strip/hydrate. An unknown key — a field nobody classified — fails closed
-  // here, so an undeclared field is structurally unable to reach the model;
-  // the error carries only issue paths (never values) to telemetry.
-  const projected = applyEntryProjection({
+  // One schema-driven pass: strict parse (an unknown key — a field nobody
+  // classified — fails closed before it can reach the model), then strip,
+  // ref hydration, and the fail-closed "no tenant UUID reaches the model"
+  // invariant in the same walk. Failures carry only paths to telemetry.
+  return projectForChat({
+    dehydration: dehydrated.value,
     payload: payload.value,
-    projection: entry.projection,
+    refRegistry,
+    schema: entry.projection,
     source: "run-registry-tool",
     toolName,
   });
-  if (Result.isError(projected)) {
-    return Result.err(projected.error);
-  }
-
-  const mediation = deriveRefMediationEntry(entry.projection);
-  const stripped = stripDeclaredPaths({
-    output: projected.value,
-    stripPaths: mediation.stripPaths,
-  });
-  const hydrated = hydrateRefs({
-    dehydration: dehydrated.value,
-    output: stripped,
-    outputRefs: mediation.outputRefs,
-    refRegistry,
-  });
-
-  // Runtime backstop for the "no tenant UUID reaches the model" invariant: the
-  // ref-field map is documentation the type system cannot fully enforce (a
-  // wrong or missing path silently skips hydration), so re-check the finished
-  // payload path-by-path rather than trusting the static mapping alone. A
-  // UUID surviving anywhere the tool's `passthroughIdPaths` does not license
-  // fails closed instead of leaking; the error message never repeats the
-  // payload or the path, so it cannot itself leak the value it is refusing,
-  // while the offending path (never the value) still reaches telemetry.
-  const offendingPath = findUndeclaredUuidPathIn({
-    passthroughIdPaths: mediation.passthroughIdPaths,
-    payload: hydrated,
-  });
-  if (offendingPath !== undefined) {
-    const error = new ChatToolError({
-      kind: "server-defect",
-      message: REF_PROJECTION_FAILURE_MESSAGE,
-    });
-    captureError(error, {
-      source: "run-registry-tool",
-      toolName,
-      path: offendingPath,
-    });
-    return Result.err(error);
-  }
-
-  return Result.ok(hydrated);
 };
