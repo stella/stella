@@ -3,10 +3,14 @@
  * tasks through Stella's chat without tool-call failures?
  *
  * The script signs in with the dev OTP flow, creates a dedicated eval matter
- * with known contents (2 documents, 2 tasks), runs a fixed set of orientation
- * prompts in fresh chat threads, and scores each turn from the persisted
- * assistant message parts (tool-call counts, terminal tool states, expected
- * names in the final text).
+ * with known contents (2 documents, 2 tasks, and an extracted "Change of
+ * control" text column with a value on each document), runs a fixed set of
+ * orientation prompts in fresh chat threads, and scores each turn from the
+ * persisted assistant message parts (tool-call counts, terminal tool states,
+ * expected names in the final text, and for task 5 the absence of
+ * content-search tool calls: the extracted column already answers the
+ * question, so a preference-respecting model must not fall back to
+ * search_across_matters / read_content_across_matters).
  *
  * Prerequisites:
  *  - Local dev stack running: `bun run dev` (API on 3001, web origin 3000).
@@ -84,6 +88,8 @@ type Fixture = {
   docBetaName: string;
   taskOneName: string;
   taskTwoName: string;
+  /** Extracted text column; docAlpha holds "Yes", docBeta holds "No". */
+  changeOfControlPropertyName: string;
   entityIds: string[];
 };
 
@@ -96,6 +102,16 @@ type BenchTask = {
   contextScope: "matter" | "none";
   expected: (fixture: Fixture) => string[];
   maxToolCalls: number;
+  /** Tool names the turn must not use. Persisted `tool-call` parts carry the
+   * tool `name` and its serialized `arguments` string (CHAT_PART_VALIDATORS
+   * in apps/api/src/handlers/chat/chat-message-parts.ts), so a direct call
+   * is caught by its part name and a code-mode call by the
+   * `external_<name>(...)` invocation inside the `execute_typescript`
+   * arguments (the model-written source code). Scoring therefore substring-
+   * matches each forbidden name against "<name> <arguments>" per tool call;
+   * when a tool part carries no recoverable name the check is skipped with
+   * a note instead of failing. */
+  notCalledToolNames?: readonly string[];
 };
 
 const BENCH_TASKS: readonly BenchTask[] = [
@@ -139,6 +155,25 @@ const BENCH_TASKS: readonly BenchTask[] = [
     expected: (fixture) => [fixture.docAlphaName, fixture.docBetaName],
     maxToolCalls: 6,
   },
+  {
+    index: 5,
+    label: "extracted-data-first",
+    // Deliberately no "answer from the extracted review data" hint: the task
+    // measures whether the model prefers the existing extracted column over
+    // running its own content search, not instruction-following.
+    buildPrompt: () =>
+      "Which documents in this matter have a change of control clause?",
+    contextScope: "matter",
+    // Only the Yes-document is asserted. The No-document may legitimately
+    // appear in a correct answer ("Beta has no such clause"), so its
+    // presence in the text is not a reliable failure signal.
+    expected: (fixture) => [fixture.docAlphaName],
+    maxToolCalls: 5,
+    notCalledToolNames: [
+      "search_across_matters",
+      "read_content_across_matters",
+    ],
+  },
 ];
 
 type TaskScore = {
@@ -147,6 +182,8 @@ type TaskScore = {
   unresolvedRefSentinels: number;
   redactionMarkers: number;
   missingExpected: string[];
+  /** Forbidden tool names (task.notCalledToolNames) the turn used anyway. */
+  forbiddenToolUses: string[];
 };
 
 type TaskResult = {
@@ -439,6 +476,57 @@ const createEntity = async (
   return entityId;
 };
 
+/** PUT /v1/properties/:workspaceId (apps/api/src/handlers/properties/create.ts).
+ * A manual-input text column keeps the fixture free of select-option shapes. */
+const createTextProperty = async (
+  client: ApiClient,
+  matterId: string,
+  name: string,
+): Promise<string> => {
+  const payload = await client.requestJson({
+    method: "PUT",
+    path: `${API_VERSION_PREFIX}/properties/${matterId}`,
+    body: {
+      queryKey: INVALIDATE_QUERY_KEY,
+      name,
+      contentType: "text",
+      toolType: "manual-input",
+    },
+  });
+  const propertyId = isRecord(payload) ? getString(payload, "id") : undefined;
+  if (propertyId === undefined) {
+    throw new EvalHarnessError(`Property create for "${name}" returned no id`);
+  }
+  return propertyId;
+};
+
+/** POST /v1/fields/:workspaceId (apps/api/src/handlers/fields/upsert-by-id.ts):
+ * sets one cell (entity x property) of the matter table. */
+const setTextField = async ({
+  client,
+  matterId,
+  propertyId,
+  entityId,
+  value,
+}: {
+  client: ApiClient;
+  matterId: string;
+  propertyId: string;
+  entityId: string;
+  value: string;
+}): Promise<void> => {
+  await client.requestJson({
+    method: "POST",
+    path: `${API_VERSION_PREFIX}/fields/${matterId}`,
+    body: {
+      queryKey: INVALIDATE_QUERY_KEY,
+      propertyId,
+      entityId,
+      content: { version: 1, type: "text", value },
+    },
+  });
+};
+
 const createFixture = async (client: ApiClient): Promise<Fixture> => {
   const runId = shortRunId();
   const matterId = Bun.randomUUIDv7();
@@ -460,12 +548,48 @@ const createFixture = async (client: ApiClient): Promise<Fixture> => {
   const taskOneName = `EvalTask One ${runId}`;
   const taskTwoName = `EvalTask Two ${runId}`;
 
+  const docAlphaId = await createEntity(
+    client,
+    matterId,
+    "document",
+    docAlphaName,
+  );
+  const docBetaId = await createEntity(
+    client,
+    matterId,
+    "document",
+    docBetaName,
+  );
   const entityIds = [
-    await createEntity(client, matterId, "document", docAlphaName),
-    await createEntity(client, matterId, "document", docBetaName),
+    docAlphaId,
+    docBetaId,
     await createEntity(client, matterId, "task", taskOneName),
     await createEntity(client, matterId, "task", taskTwoName),
   ];
+
+  // Extracted review column for task 5: the answer to "which documents have
+  // a change of control clause" already sits in the table, so the model has
+  // no reason to run a content search.
+  const changeOfControlPropertyName = `Change of control ${runId}`;
+  const propertyId = await createTextProperty(
+    client,
+    matterId,
+    changeOfControlPropertyName,
+  );
+  await setTextField({
+    client,
+    matterId,
+    propertyId,
+    entityId: docAlphaId,
+    value: "Yes",
+  });
+  await setTextField({
+    client,
+    matterId,
+    propertyId,
+    entityId: docBetaId,
+    value: "No",
+  });
 
   return {
     runId,
@@ -475,6 +599,7 @@ const createFixture = async (client: ApiClient): Promise<Fixture> => {
     docBetaName,
     taskOneName,
     taskTwoName,
+    changeOfControlPropertyName,
     entityIds,
   };
 };
@@ -500,6 +625,13 @@ type ParsedAssistantTurn = {
   text: string;
   toolCalls: number;
   toolErrors: number;
+  /** One "<name> <arguments>" entry per tool-call part whose name was
+   * recoverable; the arguments string covers code-mode, where the external
+   * tool invocations live inside the execute_typescript source code. */
+  toolCallSignatures: string[];
+  /** False when any tool-call part carried no recoverable name, so
+   * notCalledToolNames checks must be skipped rather than trusted. */
+  toolNamesRecoverable: boolean;
 };
 
 const isToolCallPartType = (type: string): boolean =>
@@ -507,8 +639,30 @@ const isToolCallPartType = (type: string): boolean =>
   type === "dynamic-tool" ||
   (type.startsWith("tool-") && type !== "tool-result");
 
+const toolCallPartName = (
+  part: Record<string, unknown>,
+  type: string,
+): string | undefined => {
+  // Persisted TanStack tool-call parts use `name`; dynamic-tool parts use
+  // `toolName`; legacy `tool-<name>` part types encode the name in the type.
+  const name = getString(part, "name") ?? getString(part, "toolName");
+  if (name !== undefined) {
+    return name;
+  }
+  if (type.startsWith("tool-") && type !== "tool-call") {
+    return type.slice("tool-".length);
+  }
+  return undefined;
+};
+
 const parseAssistantTurn = (messagesPayload: unknown): ParsedAssistantTurn => {
-  const turn: ParsedAssistantTurn = { text: "", toolCalls: 0, toolErrors: 0 };
+  const turn: ParsedAssistantTurn = {
+    text: "",
+    toolCalls: 0,
+    toolErrors: 0,
+    toolCallSignatures: [],
+    toolNamesRecoverable: true,
+  };
   if (!isRecord(messagesPayload)) {
     return turn;
   }
@@ -546,6 +700,14 @@ const parseAssistantTurn = (messagesPayload: unknown): ParsedAssistantTurn => {
         turn.toolCalls += 1;
         if (getString(part, "state") === "error") {
           turn.toolErrors += 1;
+        }
+        const toolName = toolCallPartName(part, type);
+        if (toolName === undefined) {
+          turn.toolNamesRecoverable = false;
+        } else {
+          turn.toolCallSignatures.push(
+            `${toolName} ${getString(part, "arguments") ?? ""}`,
+          );
         }
       }
     }
@@ -596,7 +758,13 @@ const runBenchTask = async ({
     );
   }
 
-  let turn: ParsedAssistantTurn = { text: "", toolCalls: 0, toolErrors: 0 };
+  let turn: ParsedAssistantTurn = {
+    text: "",
+    toolCalls: 0,
+    toolErrors: 0,
+    toolCallSignatures: [],
+    toolNamesRecoverable: true,
+  };
   if (streamResponse.ok) {
     const messagesPayload = await client.requestJson({
       method: "GET",
@@ -610,6 +778,26 @@ const runBenchTask = async ({
     .expected(fixture)
     .filter((name) => !finalTextLower.includes(name.toLowerCase()));
 
+  const forbiddenToolUses: string[] = [];
+  if (task.notCalledToolNames !== undefined && turn.toolCalls > 0) {
+    if (turn.toolNamesRecoverable) {
+      for (const forbidden of task.notCalledToolNames) {
+        if (
+          turn.toolCallSignatures.some((signature) =>
+            signature.includes(forbidden),
+          )
+        ) {
+          forbiddenToolUses.push(forbidden);
+        }
+      }
+    } else {
+      notes.push(
+        "tool names not recoverable from persisted parts; " +
+          "notCalledToolNames check skipped",
+      );
+    }
+  }
+
   const score: TaskScore = {
     toolCalls: turn.toolCalls,
     toolErrors: turn.toolErrors,
@@ -619,6 +807,7 @@ const runBenchTask = async ({
     ),
     redactionMarkers: countOccurrences(turn.text, REDACTION_MARKER),
     missingExpected,
+    forbiddenToolUses,
   };
 
   if (missingExpected.length > 0) {
@@ -636,12 +825,16 @@ const runBenchTask = async ({
   if (score.redactionMarkers > 0) {
     notes.push(`${score.redactionMarkers} redaction marker(s)`);
   }
+  if (score.forbiddenToolUses.length > 0) {
+    notes.push(`used forbidden tool(s): ${score.forbiddenToolUses.join(", ")}`);
+  }
 
   const pass =
     streamResponse.ok &&
     missingExpected.length === 0 &&
     score.toolErrors === 0 &&
-    score.toolCalls <= task.maxToolCalls;
+    score.toolCalls <= task.maxToolCalls &&
+    score.forbiddenToolUses.length === 0;
 
   return {
     taskIndex: task.index,
