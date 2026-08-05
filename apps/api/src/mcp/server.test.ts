@@ -1,12 +1,18 @@
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
   Tool as McpTool,
   ReadResourceResult,
   Resource,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  MCP_STATELESS_ALLOW_HEADER,
   STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -29,7 +35,13 @@ const getMcpToolRequiredScopesHintMock = mock(
   (_toolName: string): readonly ToolScope[] | undefined => undefined,
 );
 const handleMcpToolCallMock = mock();
-const listMcpToolsMock = mock(async (): Promise<McpTool[]> => []);
+const listMcpToolsMock = mock(
+  async (
+    _context?: unknown,
+    _mode?: unknown,
+    _scopes?: unknown,
+  ): Promise<McpTool[]> => [],
+);
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
@@ -54,6 +66,43 @@ const createMcpRequest = (body: unknown) =>
       accept: "application/json, text/event-stream",
       authorization: "Bearer token",
       "content-type": "application/json",
+    },
+    method: "POST",
+  });
+
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
+
+const createModernMcpRequest = ({
+  id,
+  method,
+  params = {},
+  token = "token",
+}: {
+  id: number;
+  method: string;
+  params?: Record<string, unknown>;
+  token?: string;
+}) =>
+  new Request("http://localhost/mcp", {
+    body: JSON.stringify({
+      id,
+      jsonrpc: "2.0",
+      method,
+      params: {
+        ...params,
+        _meta: {
+          [CLIENT_CAPABILITIES_META_KEY]: {},
+          [CLIENT_INFO_META_KEY]: { name: "stella-test", version: "1.0.0" },
+          [PROTOCOL_VERSION_META_KEY]: MODERN_PROTOCOL_VERSION,
+        },
+      },
+    }),
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      "mcp-method": method,
+      "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
     },
     method: "POST",
   });
@@ -196,6 +245,89 @@ describe("handleMcpHttpRequest", () => {
     });
   });
 
+  test("captures modern handler failures and preserves the retryable transport contract", async () => {
+    const error = new Error("database connection refused");
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockRejectedValue(error);
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("2");
+    expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+      mode: "default",
+      phase: "transport",
+      source: "mcp",
+    });
+  });
+
+  test("builds a fresh modern server for each authenticated session", async () => {
+    authenticateMcpRequestMock.mockImplementation((token: string) => ({
+      organizationId: token === "first" ? "org_1" : "org_2",
+      scopes: ["stella:read"],
+      userId: token === "first" ? "user_1" : "user_2",
+    }));
+    resolveMcpSessionContextMock.mockImplementation(
+      (session: { organizationId: string }) => ({
+        organizationId: session.organizationId,
+      }),
+    );
+    listMcpToolsMock.mockImplementation(async (context?: unknown) => {
+      if (!isRecord(context) || typeof context["organizationId"] !== "string") {
+        throw new Error("Expected an organization-scoped MCP context");
+      }
+      return [
+        {
+          description: "Tenant-specific tool",
+          inputSchema: { properties: {}, type: "object" },
+          name: `tool_for_${context["organizationId"]}`,
+        },
+      ];
+    });
+
+    const responses = await Promise.all([
+      handleMcpHttpRequest(
+        createModernMcpRequest({ id: 1, method: "tools/list", token: "first" }),
+      ),
+      handleMcpHttpRequest(
+        createModernMcpRequest({
+          id: 2,
+          method: "tools/list",
+          token: "second",
+        }),
+      ),
+    ]);
+    const bodies = await Promise.all(
+      responses.map(
+        async (response) =>
+          await readTestJson<McpJsonResponse<{ tools: McpTool[] }>>(response),
+      ),
+    );
+
+    expect(resolveMcpSessionContextMock).toHaveBeenCalledTimes(2);
+    expect(bodies.map((body) => body.result.tools.at(0)?.name)).toEqual([
+      "tool_for_org_1",
+      "tool_for_org_2",
+    ]);
+    expect(listMcpToolsMock).toHaveBeenCalledWith(
+      { organizationId: "org_1" },
+      "default",
+      ["stella:read"],
+    );
+    expect(listMcpToolsMock).toHaveBeenCalledWith(
+      { organizationId: "org_2" },
+      "default",
+      ["stella:read"],
+    );
+  });
+
   test("captures a token-verification infrastructure outage as a retryable 5xx, not a 401", async () => {
     const error = new McpTokenVerificationError({
       message: "Token verification is temporarily unavailable",
@@ -219,6 +351,86 @@ describe("handleMcpHttpRequest", () => {
       phase: "transport",
       source: "mcp",
     });
+  });
+
+  test("refuses every session operation with 405 so clients stay on request/response", async () => {
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+
+    // GET opens the notification stream and DELETE ends a session. A
+    // per-request transport can honour neither, so neither may be advertised.
+    const responses = await Promise.all(
+      ["GET", "DELETE"].map(
+        async (method) =>
+          await handleMcpHttpRequest(
+            new Request("http://localhost/mcp", {
+              headers: {
+                accept: "text/event-stream",
+                authorization: "Bearer token",
+              },
+              method,
+            }),
+          ),
+      ),
+    );
+
+    for (const response of responses) {
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+      // Refusing a session is not a credential problem: no re-consent trigger.
+      expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    }
+    expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
+  });
+
+  test("keeps an unauthenticated GET on the 401 discovery path", async () => {
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", { method: "GET" }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("WWW-Authenticate")).not.toBeNull();
+    expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+  });
+
+  test("never answers with a stream body, which per-request teardown truncates", async () => {
+    // Server and transport are built per request and closed once the response
+    // is built, so any streamed body reaches the client already ended. Every
+    // method must therefore resolve to a complete, buffered response.
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+
+    const requests = [
+      new Request("http://localhost/mcp", {
+        headers: {
+          accept: "text/event-stream",
+          authorization: "Bearer token",
+        },
+        method: "GET",
+      }),
+      createMcpRequest({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
+      new Request("http://localhost/mcp", {
+        headers: { authorization: "Bearer token" },
+        method: "DELETE",
+      }),
+    ];
+
+    const responses = await Promise.all(
+      requests.map(async (request) => await handleMcpHttpRequest(request)),
+    );
+
+    for (const response of responses) {
+      const contentType = response.headers.get("content-type") ?? "";
+
+      expect(contentType).not.toContain("text/event-stream");
+    }
   });
 
   test("answers a gateway load fault during tools/call with a retryable internal_error, not unknown_tool", async () => {

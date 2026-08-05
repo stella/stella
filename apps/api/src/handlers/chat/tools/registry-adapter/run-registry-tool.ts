@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
 import { projectForChat } from "@/api/lib/chat/projection-schema";

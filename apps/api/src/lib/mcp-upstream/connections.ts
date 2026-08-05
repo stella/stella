@@ -1,7 +1,4 @@
-import {
-  CallToolResultSchema,
-  type CallToolResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
@@ -395,14 +392,12 @@ const isExecutableMcpTool = (value: unknown): value is ExecutableMcpTool =>
   "execute" in value &&
   typeof value.execute === "function";
 
-const asCallToolResult = (value: unknown): CallToolResult => {
-  const parsed = CallToolResultSchema.safeParse(value);
-  if (parsed.success) {
-    return parsed.data;
-  }
-
-  return textResult(value);
-};
+// `@tanstack/ai-mcp` deliberately unwraps the protocol result before exposing
+// `execute`: text content becomes a string and declared structured output
+// becomes the raw object. Treat every value here as application output. A raw
+// object that happens to contain `content` or `resultType` must not be trusted
+// as a protocol envelope and allowed to overwrite our own result shape.
+const asCallToolResult = (value: unknown): CallToolResult => textResult(value);
 
 export const proxyMcpToolCall = async ({
   args,

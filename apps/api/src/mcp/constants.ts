@@ -54,6 +54,14 @@ export type McpOAuthScope = (typeof MCP_OAUTH_SCOPES)[number];
 export const MCP_HTTP_PATH = "/mcp";
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
 
+/**
+ * What the stateless transport serves. `GET` (the standalone notification
+ * stream) and `DELETE` (session termination) are both session operations a
+ * per-request transport cannot honour, so neither is advertised. Shared so the
+ * endpoint and anything probing it cannot drift apart on the contract.
+ */
+export const MCP_STATELESS_ALLOW_HEADER = "OPTIONS, POST";
+
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 

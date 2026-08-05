@@ -1,0 +1,51 @@
+name: MCP canary
+
+on:
+  schedule:
+    # Overnight, offset from the other nightly jobs so a shared runner queue
+    # does not delay the probe past its own timeout.
+    - cron: "43 2 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: API base URL to probe
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  mcp-canary:
+    name: MCP transport contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: mcp-canary
+      cancel-in-progress: true
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # The token is optional on purpose: without it the public probes still
+      # run and the authenticated ones report as skipped, so a missing secret
+      # never masquerades as full coverage.
+      - name: Probe the MCP transport contract
+        env:
+          MCP_CANARY_BASE_URL: ${{ inputs.base_url || vars.MCP_CANARY_BASE_URL || 'https://api.stll.app' }}
+          MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
+        run: bun run canary:mcp

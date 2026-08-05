@@ -1,4 +1,4 @@
-import { McpError } from "@modelcontextprotocol/sdk/types.js";
+import { ProtocolError } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
 import { DIRECTIVE_KINDS } from "@stll/template-conditions";
@@ -48,6 +48,6 @@ describe("MCP resources", () => {
   test("throws for an unknown resource uri", () => {
     expect(() =>
       readMcpResource("stella://reference/unknown", "default"),
-    ).toThrow(McpError);
+    ).toThrow(ProtocolError);
   });
 });

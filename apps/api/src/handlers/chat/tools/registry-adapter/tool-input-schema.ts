@@ -7,14 +7,31 @@ import type { JsonSchema } from "@/api/mcp/tool-types";
  * (`McpTool["inputSchema"]`). code-mode's `toolDefinition` types `inputSchema`
  * as `SchemaInput`, whose plain-JSON-Schema branch is a nominally distinct
  * interface, so the two JSON-Schema *types* do not unify structurally even
- * though the value is a valid JSON Schema. Projected inputs are only read by
- * code-mode's stub generator for the system prompt; the registry handler still
- * validates its args with its own Valibot schema, so no validation is lost.
- * Shared by the read projection (`chat-code-mode.ts`) and the write projection
- * (`registry-write-tools.ts`) so this stays the single such boundary cast.
+ * though the value is a valid JSON Schema. Rebuilding the JSON value avoids an
+ * assertion while preserving every keyword, including extension keywords the
+ * target's string index explicitly permits. Shared by the read projection
+ * (`chat-code-mode.ts`) and the write projection (`registry-write-tools.ts`) so
+ * this stays the single conversion boundary.
  */
-export const toToolInputSchema = (schema: JsonSchema): JSONSchema => ({
-  type: schema.type,
-  ...(schema.properties === undefined ? {} : { properties: schema.properties }),
-  ...(schema.required === undefined ? {} : { required: schema.required }),
-});
+const copyJsonValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => copyJsonValue(item));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]: [string, unknown]) => [
+        key,
+        copyJsonValue(nested),
+      ]),
+    );
+  }
+  return value;
+};
+
+export const toToolInputSchema = (schema: JsonSchema): JSONSchema => {
+  const converted: JSONSchema = {};
+  for (const [key, value] of Object.entries(schema)) {
+    converted[key] = copyJsonValue(value);
+  }
+  return converted;
+};

@@ -1,20 +1,22 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  createMcpHandler,
+  isLegacyRequest,
+  Server,
+  WebStandardStreamableHTTPServerTransport,
+} from "@modelcontextprotocol/server";
 import type {
+  AuthInfo,
   CallToolResult,
+  McpHttpHandler,
   Tool as McpTool,
   ReadResourceResult,
   Resource,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 
 import type { McpSession } from "@/api/mcp/auth";
 import {
+  MCP_STATELESS_ALLOW_HEADER,
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
@@ -189,6 +191,83 @@ const accessDeniedResponse = ({
   });
 };
 
+/**
+ * `GET` opens the standalone notification stream and `DELETE` terminates a
+ * session. Both presuppose state that outlives a request, and this transport
+ * has none: every request gets its own server and transport, closed as soon as
+ * the response is built.
+ *
+ * `GET` is the one that bites. Left to the SDK it answers
+ * `200 text/event-stream`, and the per-request `close()` ends that body before
+ * it reaches the client; the client sees the stream die on open, reconnects,
+ * and loops there instead of calling tools. 405 is what the spec prescribes for
+ * an endpoint that serves no stream, and clients handle it by staying on plain
+ * request/response.
+ */
+const SESSION_ONLY_HTTP_METHODS = new Set(["GET", "DELETE"]);
+
+const sessionOperationUnsupportedResponse = () => {
+  const headers = createMcpCorsHeaders();
+  headers.set("Allow", MCP_STATELESS_ALLOW_HEADER);
+  headers.set("Content-Type", "application/json");
+
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: -32_000,
+        message: "Method Not Allowed: this endpoint serves no session.",
+      },
+      id: null,
+      jsonrpc: "2.0",
+    }),
+    { headers, status: 405 },
+  );
+};
+
+/**
+ * The handler factory receives only `{ era, authInfo, requestInfo }`, and auth
+ * is strictly pass-through, so the session we already resolved rides along on
+ * `authInfo.extra` under a namespaced key. The value is ours from a few
+ * microseconds earlier, not caller input: a missing or malformed one is a wiring
+ * bug, so it panics rather than degrading to an unauthenticated instance.
+ */
+const FACTORY_STATE_KEY = "app.stll.mcp/factory-state";
+
+type McpFactoryState = {
+  clientIp: string | null;
+  session: McpSession;
+};
+
+const isMcpFactoryState = (value: unknown): value is McpFactoryState => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const { clientIp, session }: Record<string, unknown> = { ...value };
+  if (typeof session !== "object" || session === null) {
+    return false;
+  }
+
+  const { organizationId, scopes, userId }: Record<string, unknown> = {
+    ...session,
+  };
+  return (
+    (clientIp === null || typeof clientIp === "string") &&
+    typeof organizationId === "string" &&
+    Array.isArray(scopes) &&
+    typeof userId === "string"
+  );
+};
+
+const readFactoryState = (
+  extra: Record<string, unknown> | undefined,
+): McpFactoryState => {
+  const state = extra?.[FACTORY_STATE_KEY];
+  if (!isMcpFactoryState(state)) {
+    panic("The MCP handler factory ran without its per-request session state");
+  }
+  return state;
+};
+
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
@@ -261,7 +340,7 @@ export const createMcpHttpRequestHandler = ({
       },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    server.setRequestHandler("tools/list", async () => ({
       tools: await listMcpTools(context, mode, session.scopes),
     }));
 
@@ -270,15 +349,15 @@ export const createMcpHttpRequestHandler = ({
     // per-tool scope gate. Every request already carries a valid session token.
     // The SDK accepts synchronous request handlers, and both resource reads are
     // synchronous, so neither needs an async wrapper.
-    server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    server.setRequestHandler("resources/list", () => ({
       resources: listMcpResources(mode),
     }));
 
-    server.setRequestHandler(ReadResourceRequestSchema, (resourceRequest) =>
+    server.setRequestHandler("resources/read", (resourceRequest) =>
       readMcpResource(resourceRequest.params.uri, mode),
     );
 
-    server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
+    server.setRequestHandler("tools/call", async (toolRequest) => {
       const toolName = toolRequest.params.name;
       const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
       const missingHintedScope = requiredScopesHint?.find(
@@ -357,6 +436,83 @@ export const createMcpHttpRequestHandler = ({
     return server;
   };
 
+  // One handler per mode, built once. The handler owns per-request instance
+  // lifetime; building one per request would put teardown back on our side of
+  // the boundary, which is the mistake this replaces.
+  //
+  // `legacy: "reject"` because the built-in fallback answers 2025-era requests
+  // with an SSE stream, and this endpoint has always answered them with a
+  // single JSON body. Published CLI releases parse that body as JSON, so the
+  // shape is a compatibility promise, not an implementation detail; legacy
+  // traffic is served below instead.
+  const handlers = new Map<McpMode, McpHttpHandler>();
+  const handlerForMode = (mode: McpMode): McpHttpHandler => {
+    const existing = handlers.get(mode);
+    if (existing) {
+      return existing;
+    }
+
+    const handler = createMcpHandler(
+      async ({ authInfo, requestInfo }) => {
+        const { clientIp, session } = readFactoryState(authInfo?.extra);
+        if (!requestInfo) {
+          panic("The MCP handler factory ran without its HTTP request");
+        }
+        return createMcpServer({
+          clientIp,
+          mode,
+          request: requestInfo,
+          session,
+        });
+      },
+      {
+        legacy: "reject",
+        // The v2 handler converts factory/dispatch exceptions into responses
+        // internally, so they never reach the outer transport catch. Preserve
+        // the endpoint's observability contract through the handler's reporting
+        // hook; the response is normalized to the retryable contract below.
+        onerror: (error) => {
+          captureError(error, { phase: "transport", mode, source: "mcp" });
+        },
+      },
+    );
+    handlers.set(mode, handler);
+    return handler;
+  };
+
+  /**
+   * The 2025-era leg, wired exactly as it was before the modern handler landed:
+   * a per-request server over the streamable transport in JSON mode. Closing
+   * both afterwards is safe here and only here, because the response is fully
+   * buffered by construction and the streaming methods never reach this path.
+   */
+  const serveLegacyRequest = async ({
+    authInfo,
+    clientIp,
+    mode,
+    request,
+    session,
+  }: {
+    authInfo: AuthInfo;
+    clientIp: string | null;
+    mode: McpMode;
+    request: Request;
+    session: McpSession;
+  }): Promise<Response> => {
+    const server = await createMcpServer({ clientIp, mode, request, session });
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      enableJsonResponse: true,
+    });
+
+    try {
+      await server.connect(transport);
+      return await transport.handleRequest(request, { authInfo });
+    } finally {
+      await transport.close().catch(() => null);
+      await server.close().catch(() => null);
+    }
+  };
+
   return async (
     request: Request,
     {
@@ -380,25 +536,42 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    let server: Awaited<ReturnType<typeof createMcpServer>> | undefined;
-    let transport: WebStandardStreamableHTTPServerTransport | undefined;
-
     try {
       const session = await authenticateMcpRequest(token, mode);
-      server = await createMcpServer({ clientIp, mode, request, session });
-      transport = new WebStandardStreamableHTTPServerTransport({
-        enableJsonResponse: true,
-      });
 
-      await server.connect(transport);
+      // Refuse session operations only after the token is accepted, so an
+      // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
+      // drives OAuth discovery.
+      if (SESSION_ONLY_HTTP_METHODS.has(request.method)) {
+        return withMcpCors(
+          sessionOperationUnsupportedResponse(),
+          session,
+          mode,
+        );
+      }
 
-      const response = await transport.handleRequest(request, {
-        authInfo: {
-          clientId: session.userId,
-          scopes: session.scopes,
-          token,
-        },
-      });
+      const authInfo = {
+        clientId: session.userId,
+        extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
+        scopes: session.scopes,
+        token,
+      };
+      const legacyRequest = await isLegacyRequest(request);
+      const response = legacyRequest
+        ? await serveLegacyRequest({
+            authInfo,
+            clientIp,
+            mode,
+            request,
+            session,
+          })
+        : await handlerForMode(mode).fetch(request, { authInfo });
+
+      // `createMcpHandler` owns and catches modern exchange failures. Restore
+      // the public retry contract the outer catch provides on the legacy leg.
+      if (!legacyRequest && response.status >= 500) {
+        return retryableServerErrorResponse();
+      }
 
       return withMcpCors(response, session, mode);
     } catch (error) {
@@ -431,13 +604,9 @@ export const createMcpHttpRequestHandler = ({
       });
 
       return retryableServerErrorResponse();
-    } finally {
-      if (transport) {
-        await transport.close().catch(() => null);
-      }
-      if (server) {
-        await server.close().catch(() => null);
-      }
     }
+    // No teardown here on purpose. The handler owns instance lifetime and a
+    // response body may still be streaming when this returns; closing it here
+    // is what truncated the notification stream under the hand-wired transport.
   };
 };
