@@ -342,6 +342,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
@@ -573,6 +574,15 @@ export default defineConfig({
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-strict-route-read-in-chrome.fixture.tsx",
+      ],
+      rules: {
+        "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
       },
     },
     {
@@ -1389,6 +1399,27 @@ export default defineConfig({
       ],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
+      },
+    },
+    {
+      // Persistent chrome outlives the route it renders under: the inspector
+      // keeps the document editor mounted across navigation, and `/law/*` is a
+      // top-level tree, so a strict `from:` read throws there. See
+      // apps/web/src/lib/authenticated-user-context.tsx for the identity read
+      // that survives navigation.
+      files: [
+        "apps/web/src/components/docx/**/*.tsx",
+        "apps/web/src/components/docx/**/*.ts",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/components/ai-suggestions/**/*.tsx",
+        "apps/web/src/components/ai-suggestions/**/*.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/sidebar-user-menu.tsx",
+      ],
+      rules: {
+        "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
       },
     },
     {
