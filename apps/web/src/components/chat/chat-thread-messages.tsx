@@ -56,6 +56,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
 } from "@/components/chat/chat-ui-tools";
@@ -1273,7 +1274,8 @@ const toAssistantPartRenderEntries = (
 
 // "Process" parts are the low-emphasis progress rows of a turn: reasoning
 // trace disclosures and tool-step lines. Interactive tool cards (ask-user,
-// create-document) read as answer content, so they keep standard spacing.
+// create-document, approvals, subagent runs) read as answer content, so
+// they stay outside the folded process disclosure.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1285,8 +1287,56 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   return (
     part.type === "tool-call" &&
     part.name !== "ask-user" &&
-    part.name !== "create-document"
+    part.name !== "create-document" &&
+    part.name !== "spawn_subagents" &&
+    !isApprovalPart(part)
   );
+};
+
+// Mirrors `renderEntry`'s null branches for process parts, so a run whose
+// steps all render nothing (skill-lookup misses, completed searches that
+// fold into the sources row) does not produce an empty disclosure.
+const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
+  if (entry.type !== "standard") {
+    return true;
+  }
+  const { part } = entry;
+  if (part.type === "thinking") {
+    return part.content.trim().length > 0;
+  }
+  if (part.type !== "tool-call") {
+    return true;
+  }
+  if (
+    part.state === "error" &&
+    (part.name === "load-skill" || part.name === "read-skill-resource")
+  ) {
+    return false;
+  }
+  return !(
+    (part.name === "web_search" || part.name === "fetch_url") &&
+    part.state === "complete"
+  );
+};
+
+type ProcessStepTitleKey =
+  | ReturnType<typeof getChatToolTitleKey>
+  | "chat.reasoning";
+
+const getProcessStepTitleKey = (
+  entry: AssistantPartRenderEntry,
+): ProcessStepTitleKey | null => {
+  if (entry.type !== "standard") {
+    return null;
+  }
+  const { part } = entry;
+  if (part.type === "thinking") {
+    return "chat.reasoning";
+  }
+  if (part.type === "tool-call") {
+    return getChatToolTitleKey(part.name);
+  }
+  return null;
 };
 
 type AssistantPartRenderGroup =
@@ -1513,22 +1563,108 @@ const AssistantMessageParts = ({
         if (group.kind === "standard") {
           return renderEntry(group.entry, group.index);
         }
-        // Consecutive process rows sit in one gap-1 run; singleton runs are
-        // wrapped too, so a run that grows during streaming keeps its
-        // container (and the children keep their disclosure state).
+        const visibleEntries = group.entries.filter(isVisibleProcessEntry);
+        if (visibleEntries.length === 0) {
+          return null;
+        }
+        // A run that is still receiving parts at the end of a streaming
+        // message relays its current step in the collapsed summary.
+        const isLiveGroup =
+          isGenerating &&
+          isLatestAssistantMessage &&
+          group.startIndex + group.entries.length === renderEntries.length;
+        const lastVisibleEntry = visibleEntries.at(-1);
         return (
-          <div
-            className="flex flex-col gap-1"
+          <AssistantProcessGroup
+            defaultOpen={shouldShowToolCalls}
             key={`${message.id}-process-${group.startIndex}`}
+            liveStepKey={
+              isLiveGroup && lastVisibleEntry
+                ? getProcessStepTitleKey(lastVisibleEntry)
+                : null
+            }
+            stepCount={visibleEntries.length}
           >
             {group.entries.map((entry, offset) =>
               renderEntry(entry, group.startIndex + offset),
             )}
-          </div>
+          </AssistantProcessGroup>
         );
       })}
       <WebSearchSources parts={message.parts} />
     </>
+  );
+};
+
+type AssistantProcessGroupProps = {
+  children: ReactNode;
+  /** Open the step list initially on development surfaces. */
+  defaultOpen: boolean;
+  /** Title of the run's current step while it is still streaming. */
+  liveStepKey: ProcessStepTitleKey | null;
+  stepCount: number;
+};
+
+// Matches the loading-label treatment in `ToolCallCard` so the collapsed
+// summary reads as the same live-status affordance.
+const PROCESS_LIVE_LABEL_CLASS =
+  "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]";
+
+/**
+ * One run of consecutive process steps (reasoning traces and tool rows),
+ * folded into a single disclosure so the transcript reads as question and
+ * answer. The collapsed summary shows the step count; while the run is
+ * still streaming it relays the current step instead.
+ */
+const AssistantProcessGroup = ({
+  children,
+  defaultOpen,
+  liveStepKey,
+  stepCount,
+}: AssistantProcessGroupProps) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <details
+      className={cn(
+        "max-w-[min(44rem,100%)] rounded-md",
+        isOpen && "border-border/70 bg-muted/20 border",
+      )}
+      onToggle={(event) => {
+        setIsOpen(event.currentTarget.open);
+      }}
+      open={isOpen}
+    >
+      <summary
+        className={cn(
+          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
+          "rounded-md px-2.5 py-1.5 text-xs",
+          !isOpen &&
+            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
+          "text-muted-foreground",
+          "transition-colors",
+          "[&::-webkit-details-marker]:hidden",
+        )}
+      >
+        <ChevronRightIcon
+          className={cn(
+            "size-3.5 shrink-0 transition-transform",
+            isOpen && "rotate-90",
+          )}
+        />
+        <span
+          className={cn(
+            "text-xs font-medium",
+            liveStepKey !== null && PROCESS_LIVE_LABEL_CLASS,
+          )}
+        >
+          {liveStepKey !== null
+            ? t(liveStepKey)
+            : t("common.stepCount", { count: stepCount })}
+        </span>
+      </summary>
+      <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+    </details>
   );
 };
 

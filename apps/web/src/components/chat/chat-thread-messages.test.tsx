@@ -348,6 +348,54 @@ describe("chat thread messages", () => {
     expect(html).toContain("Searching chat history");
   });
 
+  test("folds a settled turn's process steps into one collapsed disclosure", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          { type: "thinking", content: "Considering the request." },
+          {
+            type: "tool-call",
+            id: "tool-call-failed",
+            // An external tool name keeps the output untyped, so the fixture
+            // can carry the runtime error shape the renderer inspects.
+            name: "mcp__external-lookup",
+            arguments: JSON.stringify({ query: "deadline" }),
+            state: "error",
+            input: { query: "deadline" },
+            output: {
+              error: { name: "runtime", message: "value is not iterable" },
+            },
+          },
+          { type: "text", content: "Here is the answer." },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    // The whole run sits behind one step-count summary, collapsed by
+    // default; a failed step reads as a short human line with the raw
+    // output tucked behind its own disclosure.
+    expect(html).toContain("2 steps");
+    expect(html).not.toContain("<details open");
+    expect(html).toContain("This step failed — stella will work around it.");
+    expect(html).toContain(">Show details<");
+    expect(html).toContain("Here is the answer.");
+  });
+
   test("keeps streaming reasoning visible and immediately collapsible", () => {
     const chatMessages: PersistedChatMessage[] = [
       {

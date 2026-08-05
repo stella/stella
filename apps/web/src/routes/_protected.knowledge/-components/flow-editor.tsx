@@ -927,7 +927,7 @@ const StepsSection = ({
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{t("flows.steps.title")}</h2>
         <span className="text-muted-foreground text-xs tabular-nums">
-          {t("flows.stepCount", { count: steps.length })}
+          {t("common.stepCount", { count: steps.length })}
         </span>
       </div>
 

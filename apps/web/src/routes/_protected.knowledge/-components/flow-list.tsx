@@ -197,7 +197,7 @@ const FlowRow = ({
           </p>
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <FlowTriggerBadge triggerType={flow.triggerType} />
-            <span>{t("flows.stepCount", { count: flow.stepCount })}</span>
+            <span>{t("common.stepCount", { count: flow.stepCount })}</span>
           </div>
         </div>
         <span className="sr-only">{t("common.edit")}</span>
