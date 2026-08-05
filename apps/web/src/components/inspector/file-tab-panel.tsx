@@ -824,6 +824,7 @@ export const FileTabPanel = ({
           propertyId={tab.propertyId}
           scaleOffset={scaleOffsets.get(tab.id) ?? 0}
           showActionBar={false}
+          surface="inspector"
           workspaceId={tab.workspaceId}
         />
       );

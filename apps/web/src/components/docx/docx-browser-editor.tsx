@@ -61,8 +61,10 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
+import { useDocxFind } from "@/components/docx/use-docx-find";
 import { useFolioCollaborationSession } from "@/components/docx/use-folio-collaboration-session";
 import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import {
@@ -122,6 +124,9 @@ const colorFromStableId = (value: string) => {
   return `#${color.toString(16).padStart(6, "0")}`;
 };
 
+/** The inspector docks the editor beside the page; full view owns the page. */
+export type DocxEditorSurface = "fullView" | "inspector";
+
 type DocxBrowserEditorBaseProps = {
   workspaceId: string;
   entityId: string;
@@ -146,6 +151,8 @@ type DocxBrowserEditorBaseProps = {
   actionsRef?: RefObject<DocxBrowserEditorActions | null> | undefined;
   actionBarControls?: ReactNode | undefined;
   showActionBar?: boolean | undefined;
+  /** Which chrome hosts the editor; selects the find-bar behavior. */
+  surface: DocxEditorSurface;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
 };
@@ -209,6 +216,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onScrollTopChange,
     scaleOffset = 0,
     showActionBar = true,
+    surface,
   } = props;
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -625,6 +633,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],
   );
+  // Full view leaves Cmd+F to Folio's own dialog, which has the whole
+  // viewport to sit in; only the docked inspector needs its own bar.
+  const find = useDocxFind({
+    containerRef,
+    editorRef,
+    enabled: surface === "inspector",
+  });
   const t = useTranslations();
   /* eslint-disable react/react-compiler -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
@@ -1582,6 +1597,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       ref={composedContainerRef}
       className="flex h-full w-full min-w-0 flex-col"
     >
+      {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div
         className="min-w-0 flex-1 overflow-hidden"
