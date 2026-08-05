@@ -2,7 +2,6 @@ import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 
 import { GuideTourPreview } from "@/features/guides/guide-tour-preview";
 import {
@@ -152,9 +151,7 @@ export const GuideChecklist = ({
           className="bg-border h-1.5 w-full overflow-hidden rounded-full"
         >
           <div
-            className={cn(
-              "bg-foreground h-full rounded-full transition-[width]",
-            )}
+            className="bg-foreground h-full rounded-full transition-[width]"
             style={{ width: `${Math.round(fraction * 100)}%` }}
           />
         </div>
