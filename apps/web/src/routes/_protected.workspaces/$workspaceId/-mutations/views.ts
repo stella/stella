@@ -13,6 +13,8 @@ import type {
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
 
+import { viewOrderCache } from "./views.logic";
+
 type CreateViewVars = {
   id: string;
   name: string;
@@ -155,7 +157,7 @@ type ReorderViewsVars = {
 export const useReorderViews = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const localizedKey = viewsKeys.localized(workspaceId);
+  const cache = viewOrderCache({ queryClient, workspaceId });
 
   return useMutation({
     mutationFn: async ({ viewIds }: ReorderViewsVars) => {
@@ -166,43 +168,12 @@ export const useReorderViews = (workspaceId: string) => {
         });
       return unwrapEden(response);
     },
-    onMutate: async ({ viewIds }) => {
-      await queryClient.cancelQueries({ queryKey: localizedKey });
-      const previousViews =
-        queryClient.getQueryData<WorkspaceView[]>(localizedKey);
-
-      queryClient.setQueryData<WorkspaceView[]>(
-        localizedKey,
-        (current): WorkspaceView[] | undefined => {
-          if (!current) {
-            return current;
-          }
-
-          const byId = new Map(current.map((view) => [view.id, view]));
-          const reordered = viewIds
-            .map((viewId) => byId.get(viewId))
-            .filter((view) => view !== undefined);
-
-          // The server only accepts the workspace's full view set. If the cache
-          // has drifted from what was dragged, leave it to the refetch rather
-          // than optimistically dropping a view off the strip.
-          return reordered.length === current.length ? reordered : current;
-        },
-      );
-
-      return { previousViews };
-    },
+    onMutate: async ({ viewIds }) => await cache.apply(viewIds),
     onError: (error, _variables, context) => {
-      if (context?.previousViews) {
-        queryClient.setQueryData(localizedKey, context.previousViews);
-      }
+      cache.restore(context);
       analytics.captureError(error);
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
-    },
+    onSettled: cache.settle,
   });
 };
 
