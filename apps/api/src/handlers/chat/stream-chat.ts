@@ -962,6 +962,7 @@ const runChatAttempt = async function* ({
           orgAIConfig,
           role,
           state,
+          tenantWorkspaceIds,
           threadId,
         }),
         sandboxMiddleware,
