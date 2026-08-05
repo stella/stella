@@ -65,14 +65,18 @@ describe("optimistic view order", () => {
     }
   });
 
-  test("leaves the strip alone when the ids no longer match the cache", async () => {
+  test("leaves the strip alone when the ids are not a permutation of it", async () => {
     const { reorderCachedViews } = await import("./views.logic");
 
     const drifted = [
-      // A view created elsewhere since the drag started.
+      // A view created or renamed elsewhere since the drag started.
       ["overview", "table", "files", "created-elsewhere"],
       // One deleted elsewhere, so the drag carried a short list.
       ["overview", "table", "files"],
+      // Longer than the cache: every cached view resolves, one id does not.
+      [...CACHED_IDS, "created-elsewhere"],
+      // Right length, but a repeat would drop `kanban` off the strip.
+      ["overview", "table", "files", "files"],
     ];
 
     for (const viewIds of drifted) {

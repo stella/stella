@@ -5,10 +5,12 @@ import { viewsKeys } from "@/lib/workspaces/queries/views";
 
 /**
  * Returns the cached view list in `viewIds` order, or `current` unchanged when
- * the cache has drifted from what was dragged.
+ * `viewIds` is not a permutation of what is cached.
  *
- * The server only accepts the workspace's full view set, so a partial write
- * would drop a view off the strip rather than leave it to the refetch.
+ * The endpoint takes the workspace's full view set, so a partial write would
+ * drop views off the strip until the refetch lands. Set equality, not just a
+ * length check: a repeated id fills the list to the right length while silently
+ * losing a view.
  */
 export const reorderCachedViews = (
   current: WorkspaceView[] | undefined,
@@ -23,7 +25,11 @@ export const reorderCachedViews = (
     .map((viewId) => byId.get(viewId))
     .filter((view) => view !== undefined);
 
-  return reordered.length === current.length ? reordered : current;
+  const isPermutation =
+    reordered.length === current.length &&
+    new Set(viewIds).size === current.length;
+
+  return isPermutation ? reordered : current;
 };
 
 /** What the optimistic write displaced, so a failed reorder can put it back. */
