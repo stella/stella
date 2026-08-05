@@ -126,6 +126,7 @@ import type {
   LazyExternalMcpToolsLoader,
   LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { hydrateRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -2505,10 +2506,33 @@ const hydrateAssistantMessageRefs = ({
   messages,
   refRegistry,
 }: HydrateAssistantMessageRefsProps): ChatMessage[] => {
+  // A persisted tool call carries its input refs already resolved to real ids,
+  // and `arguments` (the provider-visible copy) still carries the *previous*
+  // turn's ref numbering. Re-mint both from the declared input-ref map before
+  // the generic walk, so the replayed call reaches `dehydrateRefs` and the
+  // model as this turn's refs rather than a stale ref beside a raw id.
+  const hydrateToolCallInput = (
+    part: ChatMessage["parts"][number],
+  ): unknown => {
+    if (part.type !== "tool-call" || !("input" in part)) {
+      return part;
+    }
+    const input = hydrateRegistryToolInputRefs({
+      input: part.input,
+      refRegistry,
+      toolName: part.name,
+    });
+    return input === part.input
+      ? part
+      : { ...part, input, arguments: JSON.stringify(input) };
+  };
+
   const hydratePart = (
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
-    const hydrated = refRegistry.hydrateAssistantValueRefs(part);
+    const hydrated = refRegistry.hydrateAssistantValueRefs(
+      hydrateToolCallInput(part),
+    );
     if (!isChatPart(hydrated)) {
       panic("Hydrating assistant refs changed the message part shape");
     }

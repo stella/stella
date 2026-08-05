@@ -1764,14 +1764,11 @@ const createOutgoingChunkTransformer = ({
       buffers.delete(key);
       let input: unknown;
       if ("input" in chunk) {
-        input =
-          boundary.type === "anonymized"
-            ? deanonymizeUnknownStringsFromBoundary(
-                boundary,
-                chunk.input,
-                "lenient",
-              )
-            : chunk.input;
+        input = transformToolCallInput({
+          boundary,
+          input: chunk.input,
+          resolveAssistantValueRefs,
+        });
       }
       return [
         ...flushToolArguments({
@@ -1801,10 +1798,11 @@ const createOutgoingChunkTransformer = ({
     ) {
       const value = isRecord(chunk.value) ? chunk.value : {};
       const rawInput = value["input"];
-      const input =
-        boundary.type === "anonymized"
-          ? deanonymizeUnknownStringsFromBoundary(boundary, rawInput, "lenient")
-          : rawInput;
+      const input = transformToolCallInput({
+        boundary,
+        input: rawInput,
+        resolveAssistantValueRefs,
+      });
       return [
         ...emitRestorationDelta(
           collectUnknownStringPlaceholders(rawInput, lenientCollector),
@@ -2015,6 +2013,39 @@ const collectUnknownStringPlaceholders = (
   };
   walk(value);
   return placeholders;
+};
+
+type TransformToolCallInputOptions = {
+  boundary: ChatThirdPartyBoundary;
+  input: unknown;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+};
+
+/**
+ * The client-bound copy of a tool call's input, deanonymized and with this
+ * turn's chat refs resolved back to real ids.
+ *
+ * Ref resolution matters twice here. The approval card renders this input
+ * verbatim, and a per-turn `mat_3` is meaningless to the person deciding
+ * whether to allow the write; with the real id the client resolves the matter's
+ * own name and colour. It also keeps the client's copy of the call equal to the
+ * one `resolveAssistantMessageRefs` persists, which the approval continuation
+ * compares field by field (`validateContinuationToolCallIntegrity`) before
+ * replaying the call. `arguments` (the provider-visible copy) keeps its refs on
+ * both sides and is not touched.
+ */
+const transformToolCallInput = ({
+  boundary,
+  input,
+  resolveAssistantValueRefs,
+}: TransformToolCallInputOptions): unknown => {
+  const visibleInput =
+    boundary.type === "anonymized"
+      ? deanonymizeUnknownStringsFromBoundary(boundary, input, "lenient")
+      : input;
+  return resolveAssistantValueRefs
+    ? resolveAssistantValueRefs(visibleInput)
+    : visibleInput;
 };
 
 type ParsedToolResultContent =

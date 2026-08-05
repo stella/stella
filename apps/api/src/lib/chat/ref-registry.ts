@@ -141,6 +141,29 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
 
+/**
+ * The four tenant-content id kinds this registry mediates. Every other id a
+ * registry handler emits (user, task-link, invoice, time-entry, template,
+ * clause, playbook, audit-log, usage-plan, or public case-law/BOE corpus id) is
+ * a handle the model may pass back verbatim, not a tenant-content reference, so
+ * it stays outside this set. `projection-schema.ts` re-exports this as
+ * `RegistryRefKind`; the vocabulary lives here because the registry is the
+ * lowest module that has to know all four.
+ */
+export type ChatRefKind = "matter" | "entity" | "contact" | "property";
+
+/**
+ * One id to turn back into a chat ref. `workspaceId` applies only to
+ * `kind: "entity"`, whose ref key is the (workspace, entity) pair; when it is
+ * absent or not a UUID the registry falls back to the unique ref it already
+ * minted for that entity id this turn, and otherwise leaves the value alone.
+ */
+export type HydrateRefIdProps = {
+  kind: ChatRefKind;
+  value: unknown;
+  workspaceId?: unknown;
+};
+
 export type ChatRefRegistry = {
   /**
    * Deduped union of every workspace id any tool (including subagents)
@@ -154,6 +177,16 @@ export type ChatRefRegistry = {
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
   hydrateAssistantValueRefs: (value: unknown) => unknown;
+  /**
+   * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
+   * kind rather than by key name. `hydrateAssistantValueRefs` recognizes the
+   * *output* projection's key names (`matterRef`, `entityRef`, ...); a tool
+   * call's own input params are named per tool (`matter_id`, `task_id`), so
+   * their kinds come from the registry adapter's declared input-ref map and
+   * land here. A non-UUID value (already a ref, or not an id at all) is
+   * returned unchanged.
+   */
+  hydrateRefId: (props: HydrateRefIdProps) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
   resolveAssistantValueRefs: (value: unknown) => unknown;
   resolveContactRefs: (
@@ -470,6 +503,25 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     return Object.fromEntries(entries);
   };
 
+  const hydrateRefId = ({
+    kind,
+    value,
+    workspaceId,
+  }: HydrateRefIdProps): unknown => {
+    switch (kind) {
+      case "matter":
+        return toHydratedMatterRef(value);
+      case "entity":
+        return toHydratedEntityRef({ entityId: value, workspaceId });
+      case "contact":
+        return toHydratedContactRef(value);
+      case "property":
+        return toHydratedPropertyRef(value);
+      default:
+        return kind satisfies never;
+    }
+  };
+
   const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {
     const ids = new Set<SafeId<"workspace">>([
       ...matterState.refToTarget.values(),
@@ -484,6 +536,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     getRegisteredWorkspaceIds,
     hydrateAssistantTextRefs,
     hydrateAssistantValueRefs,
+    hydrateRefId,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,
     resolveEntityRefs: (refs: string[]) => {

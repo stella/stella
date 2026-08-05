@@ -40,15 +40,36 @@ type NormalizedSearchableChatMessageContent = {
   parts: SearchableChatTextPart[];
 };
 
+/** `[label](href)` and `![alt](src)`, with the label captured. Neither class
+ *  admits its own opening delimiter, which keeps the match linear in the
+ *  subject (`super-linear-regexes` is a ratcheted metric, and this runs over
+ *  whole persisted threads). The cost is that a label containing `[` or a
+ *  target containing `(` is left alone; a chat mention href never has either,
+ *  and an unstripped link is the safe direction to fail. */
+const MARKDOWN_LINK_REGEX = /!?\[([^[\]]*)\]\([^()]*\)/gu;
+
+/**
+ * Drop link targets from persisted chat markdown, keeping the link label.
+ *
+ * Assistant text cites matters and entities as `[Name](#stella-workspace=<uuid>)`
+ * (see `resolveAssistantTextRefs`), so the raw text carries an href for every
+ * citation. Indexing it verbatim made the href both matchable and visible: a
+ * search hit rendered its `ts_headline` inline, so the result row showed the
+ * mention URL and could even highlight a fragment of the workspace UUID. The
+ * label is the only part a reader searches for or wants to see.
+ */
+const stripMarkdownLinkTargets = (text: string): string =>
+  text.replaceAll(MARKDOWN_LINK_REGEX, (_match, label: string) => label);
+
 const toSearchableTextPart = (part: unknown): SearchableChatTextPart | null => {
   if (!isRecord(part) || part["type"] !== "text") {
     return null;
   }
   if (typeof part["content"] === "string") {
-    return { type: "text", content: part["content"] };
+    return { type: "text", content: stripMarkdownLinkTargets(part["content"]) };
   }
   if (typeof part["text"] === "string") {
-    return { type: "text", content: part["text"] };
+    return { type: "text", content: stripMarkdownLinkTargets(part["text"]) };
   }
   return null;
 };
