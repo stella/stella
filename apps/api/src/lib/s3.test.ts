@@ -272,16 +272,23 @@ describe("writeS3ObjectWithRetry", () => {
     // A permanently transient-looking failure must still terminate: the
     // caller needs to hear about it rather than have the write spin.
     const attempts = { code: "ConnectionClosed", count: 0 };
+    const failures: Error[] = [];
+    const write = async (): Promise<never> => {
+      attempts.count += 1;
+      const failure = Object.assign(
+        new Error(`write attempt ${attempts.count} failed`),
+        { code: attempts.code },
+      );
+      failures.push(failure);
+      throw failure;
+    };
 
-    const rejection = await writeS3ObjectWithRetry(
-      object,
-      failingWriter(attempts, Number.POSITIVE_INFINITY),
-    ).then(
+    const rejection = await writeS3ObjectWithRetry(object, write).then(
       () => null,
       (error: unknown) => error,
     );
 
-    expect(rejection).toBeInstanceOf(Error);
     expect(attempts.count).toBe(3);
+    expect(rejection).toBe(failures.at(2));
   });
 });
