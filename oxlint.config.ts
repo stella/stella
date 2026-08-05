@@ -342,6 +342,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
@@ -573,6 +574,15 @@ export default defineConfig({
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-strict-route-read-in-chrome.fixture.tsx",
+      ],
+      rules: {
+        "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
       },
     },
     {
@@ -1389,6 +1399,30 @@ export default defineConfig({
       ],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
+      },
+    },
+    {
+      // Chrome that outlives the route tree it reads from: the inspector keeps
+      // the document editor mounted across navigation, and `/law/*` is a
+      // top-level tree, so a strict `from: "/_protected"` read throws there.
+      // See apps/web/src/lib/authenticated-user-context.tsx for the identity
+      // read that survives navigation.
+      //
+      // The sidebar and user menu are deliberately NOT listed: they render
+      // only inside `_protected` (`routes/_protected.tsx`), so a strict read
+      // bound to that tree can never outlive its match. Add a component here
+      // when it can be mounted while a different top-level tree is active.
+      files: [
+        "apps/web/src/components/docx/**/*.tsx",
+        "apps/web/src/components/docx/**/*.ts",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/components/ai-suggestions/**/*.tsx",
+        "apps/web/src/components/ai-suggestions/**/*.ts",
+      ],
+      rules: {
+        "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
       },
     },
     {

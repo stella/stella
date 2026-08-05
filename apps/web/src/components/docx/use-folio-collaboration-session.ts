@@ -58,10 +58,16 @@ type UseFolioCollaborationSessionOptions = {
   entityId: string;
   fieldId: string;
   propertyId: string;
+  /**
+   * Collaborator identity for awareness. Null when no authenticated user is
+   * in scope (the editor is persistent chrome and also mounts on public law
+   * routes), which disables the session: a collaboration cannot be opened
+   * without an identity to publish.
+   */
   user: {
     color: string;
     name: string;
-  };
+  } | null;
   workspaceId: string;
 };
 
@@ -130,9 +136,19 @@ export const useFolioCollaborationSession = ({
   });
 
   const collabUrl = env.VITE_COLLAB_URL;
-  const canConnect = enabled && collabUrl !== undefined;
+  // Read the identity as primitives: callers build the `user` object inline,
+  // so depending on the object itself would reconnect on every render.
+  const userColor = user?.color ?? null;
+  const userName = user?.name ?? null;
+  const canConnect =
+    enabled &&
+    collabUrl !== undefined &&
+    userColor !== null &&
+    userName !== null;
 
   useExternalSyncEffect(() => {
+    // `canConnect` is a const boolean whose definition includes both null
+    // checks, so narrowing flows through it: the identity is non-null below.
     if (!canConnect) {
       setState({ status: "idle", collaboration: null });
       return undefined;
@@ -270,8 +286,8 @@ export const useFolioCollaborationSession = ({
         }
 
         awareness.setLocalStateField("user", {
-          color: user.color,
-          name: user.name,
+          color: userColor,
+          name: userName,
         });
 
         const invalidateSessionQueries = async () => {
@@ -427,8 +443,8 @@ export const useFolioCollaborationSession = ({
     propertyId,
     queryClient,
     t,
-    user.color,
-    user.name,
+    userColor,
+    userName,
     workspaceId,
   ]);
 

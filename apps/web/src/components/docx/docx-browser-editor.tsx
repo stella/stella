@@ -14,7 +14,6 @@ import {
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import {
   CheckCircle2Icon,
   EyeIcon,
@@ -80,6 +79,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
@@ -1735,14 +1735,13 @@ const useDocxBrowserCollaboration = ({
     requestState.targetKey === targetKey
       ? requestState.requested
       : initiallyRequested;
-  const currentUser = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ({
-      email: ctx.user.email,
-      id: ctx.user.id,
-      name: ctx.user.name,
-    }),
-  });
+  // Read the identity from the provider, not from route context. The editor
+  // is persistent chrome: the inspector keeps it mounted across navigation,
+  // so a strict `useRouteContext({ from: "/_protected" })` throws the moment
+  // the user opens a route outside that tree (`/law/*` is top level).
+  // `AuthenticatedUserProvider` wraps both trees, and the maybe- variant keeps
+  // the editor renderable on public law routes that have no user at all.
+  const currentUser = useMaybeAuthenticatedUser();
   const collaborationEnabled =
     env.VITE_FEATURE_FOLIO_COLLAB && env.VITE_COLLAB_URL !== undefined;
   const collaborationState = useFolioCollaborationSession({
@@ -1750,10 +1749,12 @@ const useDocxBrowserCollaboration = ({
     entityId,
     fieldId,
     propertyId,
-    user: {
-      color: colorFromStableId(currentUser.id),
-      name: currentUser.name ?? currentUser.email,
-    },
+    user: currentUser
+      ? {
+          color: colorFromStableId(currentUser.id),
+          name: currentUser.name ?? currentUser.email,
+        }
+      : null,
     workspaceId,
   });
   useExternalSyncEffect(() => {
