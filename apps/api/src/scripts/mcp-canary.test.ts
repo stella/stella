@@ -131,7 +131,8 @@ describe("evaluateUnauthenticated", () => {
     expect(
       evaluateUnauthenticated({
         status: 401,
-        wwwAuthenticate: 'Bearer resource_metadata="https://api.example/.well-known"',
+        wwwAuthenticate:
+          'Bearer resource_metadata="https://api.example/.well-known"',
       }).status,
     ).toBe("passed");
   });

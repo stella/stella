@@ -195,7 +195,9 @@ export const evaluateToolsList = ({
   return passed(name, `200 with ${String(result.tools.length)} tools`);
 };
 
-const readProbeResponse = async (response: Response): Promise<ProbeResponse> => {
+const readProbeResponse = async (
+  response: Response,
+): Promise<ProbeResponse> => {
   const text = await response.text();
   let body: unknown;
   try {
