@@ -33,11 +33,17 @@ import "./view-layout-preview.css";
 
 export type ViewLayoutPreviewKind = ViewLayoutType | "template";
 
+// Only the statuses shown in the mock preview UI (kanban/table columns)
+// carry a label; `in_review` and `cancelled` have no preview affordance.
+// A total record so a newly added status forces a decision here instead of
+// silently rendering blank.
 const STATUS_LABEL_KEYS = {
   open: "tasks.statusValues.open",
   in_progress: "tasks.statusValues.in_progress",
+  in_review: null,
   done: "tasks.statusValues.done",
-} as const satisfies Partial<Record<TaskStatus, TranslationKey>>;
+  cancelled: null,
+} as const satisfies Record<TaskStatus, TranslationKey | null>;
 
 // Mock content depicting user data, not interface text; deliberately
 // untranslated to keep the preview free of per-language i18n debt.
@@ -233,10 +239,7 @@ const PreviewTableRow = ({ icon, name, status }: PreviewTableRowProps) => (
 
 const PreviewStatusChip = ({ status }: { status: TaskStatus }) => {
   const t = useTranslations();
-  const labelKey =
-    status === "open" || status === "in_progress" || status === "done"
-      ? STATUS_LABEL_KEYS[status]
-      : null;
+  const labelKey = STATUS_LABEL_KEYS[status];
   if (!labelKey) {
     return null;
   }

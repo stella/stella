@@ -375,18 +375,27 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  * Chat tools whose approval card renders the shared registry-write summary
  * (readable key/value rows, refs shown as chat refs, long values truncated).
  * Covers the registry write projections plus `fill_template` (served by the
- * hand-written template tool). Validated against `keyof ChatUITools` so a
- * renamed tool fails typecheck here.
+ * hand-written template tool). A TOTAL record over every approval-required
+ * built-in tool, so a newly approval-gated tool must decide whether it
+ * renders the write summary before it typechecks.
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  add_comment: false,
+  boe_search_legislation: false,
+  "create-current-skill-resource": false,
+  create_workspace_document: false,
   delete_clause: true,
   delete_contact: true,
   delete_document: true,
   delete_matter: true,
   delete_time_entry: true,
+  edit_workspace_document: false,
+  fetch_url: false,
   fill_template: true,
   link_matter_contact: true,
   manage_organization: true,
+  reply_comment: false,
+  resolve_comment: false,
   run_playbook: true,
   save_clause: true,
   save_contact: true,
@@ -397,10 +406,24 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   save_time_entry: true,
   set_field_value: true,
   set_practice_jurisdictions: true,
-} as const satisfies Partial<Record<keyof ChatUITools, true>>;
+  spawn_subagents: false,
+  "update-current-skill-body": false,
+  "update-current-skill-resource": false,
+  "update-entity-fields": false,
+  web_search: false,
+} as const satisfies Record<
+  Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
+  boolean
+>;
+
+const isRegistryWriteSummaryEligibleToolName = (
+  toolName: string,
+): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_TOOL_NAMES =>
+  Object.hasOwn(REGISTRY_WRITE_SUMMARY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_TOOL_NAMES, toolName);
+  isRegistryWriteSummaryEligibleToolName(toolName) &&
+  REGISTRY_WRITE_SUMMARY_TOOL_NAMES[toolName];
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]

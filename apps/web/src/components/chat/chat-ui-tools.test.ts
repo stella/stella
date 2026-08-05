@@ -16,6 +16,7 @@ import {
   isExternalInputChatToolName,
   isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
+  isRegistryWriteSummaryToolName,
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
@@ -411,6 +412,11 @@ describe("tool approval grants", () => {
   test("keeps an ordinary mutation grantable", () => {
     expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
     expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  });
+
+  test("renders the registry-write summary only for tools opted into it", () => {
+    expect(isRegistryWriteSummaryToolName("save_clause")).toBe(true);
+    expect(isRegistryWriteSummaryToolName("web_search")).toBe(false);
   });
 
   test("identifies one representative public-official and external-input tool", () => {
