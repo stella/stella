@@ -238,6 +238,12 @@ const validateGithubSkillFolder = (
     if (isIgnoredOsMetadataFile(child.name)) {
       continue;
     }
+    if (GITHUB_SKILL_ALLOWED_FILES.has(child.name) && child.type !== "file") {
+      errors.push(
+        `${location.kind}/${location.slug}: github-sourced skill allowed child "${child.name}" must be a regular file`,
+      );
+      continue;
+    }
     if (!GITHUB_SKILL_ALLOWED_FILES.has(child.name)) {
       errors.push(
         `${location.kind}/${location.slug}: github-sourced skill must not include local content (found "${child.name}"); content lives upstream`,

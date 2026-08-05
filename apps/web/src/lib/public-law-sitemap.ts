@@ -387,7 +387,7 @@ Disallow: /
   // supported by Googlebot and Bing; crawlers that don't support `$` treat it
   // literally and simply fail to match, erring toward not crawling — the
   // failure direction we want.
-  const crawlPrefixes = publicLawCrawlAllowed
+  const crawlPrefixes: string[] = publicLawCrawlAllowed
     ? [...PUBLIC_CRAWL_PATH_PREFIXES]
     : [];
   if (publicToolsCrawlAllowed) {

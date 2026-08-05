@@ -112,6 +112,25 @@ Body.`);
     expect(parsed.metadata.description).toBe("First fragment second fragment.");
   });
 
+  test("preserves paragraphs and more-indented lines in folded scalars", () => {
+    const parsed = parseSkillFile(`---
+name: folded-structure
+description: >
+  First paragraph spans
+  two source lines.
+
+  Second paragraph introduces code:
+    const answer = 42;
+  Then prose resumes.
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe(
+      "First paragraph spans two source lines.\nSecond paragraph introduces code:\n  const answer = 42;\nThen prose resumes.\n",
+    );
+  });
+
   test("parses a literal (|) block scalar description preserving newlines", () => {
     const parsed = parseSkillFile(`---
 name: literal-skill

@@ -639,7 +639,7 @@ describe("public law sitemap", () => {
   test("public and protected workspace sidebars share the same primary nav model", async () => {
     const sources = await Promise.all([
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(WORKSPACE_PRIMARY_NAV_ITEMS.map((item) => item.id)).toEqual([
@@ -647,6 +647,7 @@ describe("public law sitemap", () => {
       "chat",
       "matters",
       "caseLaw",
+      "tools",
       "knowledge",
       "contacts",
     ]);
@@ -660,11 +661,12 @@ describe("public law sitemap", () => {
     const [navSource, appSidebarSource, publicShellSource] = await Promise.all([
       readSource("apps/web/src/components/workspace-primary-nav.ts"),
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
-    expect(navSource).toContain('item.id !== "caseLaw"');
+    expect(navSource).toContain('if (item.id === "caseLaw")');
+    expect(navSource).toContain("return includePublicLaw");
     expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
     // The server-rendered shell must use the isomorphic host/env gate;
     // the browser-only preview hook would mismatch hydration there.

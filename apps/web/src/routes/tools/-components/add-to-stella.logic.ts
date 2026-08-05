@@ -11,13 +11,14 @@ export type AddToStellaState =
   | { type: "checking" }
   | { type: "sign-in" }
   | { type: "forbidden" }
+  | { type: "role-error" }
   | { type: "installed" }
   | { type: "unavailable" }
   | { type: "install" };
 
 type ResolveAddToStellaStateOptions = {
   authStatus: "checking" | "anonymous" | "authenticated";
-  canInstall: boolean | undefined;
+  canInstall: boolean | "error" | undefined;
   entry: Pick<LoadedCatalogueEntry, "kind" | "slug">;
   organizationEntries: readonly OrganizationCatalogueEntry[] | undefined;
 };
@@ -33,6 +34,9 @@ export const resolveAddToStellaState = ({
   }
   if (authStatus === "anonymous") {
     return { type: "sign-in" };
+  }
+  if (canInstall === "error") {
+    return { type: "role-error" };
   }
   if (canInstall === undefined || organizationEntries === undefined) {
     return { type: "checking" };

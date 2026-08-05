@@ -247,29 +247,24 @@ export const fetchSkillPackageFromUrl = async (
  * This shares the URL importer's tree traversal and resource safeguards so
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
-export const fetchGithubCatalogueSkillPackage = async (
-  {
-    fetchFiles = async (skillTarget) =>
-      await fetchGithubSkillFiles(
-        skillTarget,
-        {
-          githubAccess: {
-            source: "catalogue",
-            ...(githubToken ? { githubToken } : {}),
-          },
-          githubTrees: new Map(),
-        },
-      ),
-    githubToken,
-    sourceUrl,
-    target,
-  }: {
-    fetchFiles?: (target: GithubSkillPath) => Promise<SkillFile[]>;
-    githubToken?: string;
-    sourceUrl: string;
-    target: GithubSkillPath;
-  },
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+export const fetchGithubCatalogueSkillPackage = async ({
+  fetchFiles = async (skillTarget) =>
+    await fetchGithubSkillFiles(skillTarget, {
+      githubAccess: {
+        source: "catalogue",
+        ...(githubToken ? { githubToken } : {}),
+      },
+      githubTrees: new Map(),
+    }),
+  githubToken,
+  sourceUrl,
+  target,
+}: {
+  fetchFiles?: (target: GithubSkillPath) => Promise<SkillFile[]>;
+  githubToken?: string;
+  sourceUrl: string;
+  target: GithubSkillPath;
+}): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const files = await fetchFiles(target);
@@ -911,9 +906,7 @@ const fetchGithubTreeRequest = async ({
     context,
     load: async () =>
       await fetchGithubTree({
-        ...(context.githubAccess
-          ? { access: context.githubAccess }
-          : {}),
+        ...(context.githubAccess ? { access: context.githubAccess } : {}),
         ...(context.requestBudget ? { budget: context.requestBudget } : {}),
         owner,
         recursive,

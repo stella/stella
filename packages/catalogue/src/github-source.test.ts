@@ -260,6 +260,16 @@ describe("validateCatalogue with github entries", () => {
     expect(entryCount).toBe(1);
   });
 
+  it("rejects an allowed icon name when it is a directory", () => {
+    const root = makeEntriesRoot();
+    writeSkill(root, "german-law", validGithubSkill);
+    mkdirSync(path.join(root, "skills", "german-law", "icon.svg"));
+
+    expect(validateCatalogue(root).errors).toContain(
+      'skill/german-law: github-sourced skill allowed child "icon.svg" must be a regular file',
+    );
+  });
+
   it("rejects local content files in a github skill folder", () => {
     const root = makeEntriesRoot();
     writeSkill(root, "german-law", validGithubSkill, {

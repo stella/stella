@@ -17,16 +17,17 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/components/catalogue/catalogue-queries";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient, type Role } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { roleOptions } from "@/routes/-queries";
+import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/lib/knowledge/queries/catalogue";
 import { resolveAddToStellaState } from "@/routes/tools/-components/add-to-stella.logic";
 
 const SignInDialog = lazy(async () => {
@@ -88,6 +89,8 @@ export function AddToStella({
   let buttonLabelKey: TranslationKey = "publicTools.addToStella";
   if (state.type === "forbidden") {
     buttonLabelKey = "errors.api.forbidden";
+  } else if (state.type === "role-error") {
+    buttonLabelKey = "common.retry";
   } else if (state.type === "installed") {
     buttonLabelKey = "catalogue.installedShort";
   } else if (state.type === "unavailable") {
@@ -126,6 +129,10 @@ export function AddToStella({
   };
 
   const handleClick = () => {
+    if (state.type === "role-error") {
+      detached(roleQuery.refetch(), "AddToStella");
+      return;
+    }
     if (state.type === "install") {
       runInstall();
       return;
@@ -148,7 +155,10 @@ export function AddToStella({
       <Button
         disabled={
           mutation.isPending ||
-          (state.type !== "install" && state.type !== "sign-in")
+          roleQuery.isFetching ||
+          (state.type !== "install" &&
+            state.type !== "sign-in" &&
+            state.type !== "role-error")
         }
         onClick={handleClick}
         type="button"
@@ -197,12 +207,12 @@ const resolveInstallPermission = ({
   authenticated,
   isError,
   role,
-}: ResolveInstallPermissionOptions): boolean | undefined => {
+}: ResolveInstallPermissionOptions): boolean | "error" | undefined => {
   if (!authenticated) {
     return undefined;
   }
   if (isError) {
-    return false;
+    return "error";
   }
   if (role === undefined) {
     return undefined;

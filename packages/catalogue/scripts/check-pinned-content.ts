@@ -38,10 +38,11 @@ import type { CatalogueLicense } from "../src/schema";
 /** Expected per-entry failure while fetching upstream content. */
 class PinnedContentError extends TaggedError("PinnedContentError")<{
   message: string;
-}>() {}
+}> {}
 
 const FETCH_TIMEOUT_MS = 10_000;
 const SKILL_FILE_NAME = "SKILL.md";
+const GITHUB_CONTENTS_LISTING_LIMIT = 1000;
 
 const RESOURCE_MAX_BYTES = SKILL_PACKAGE_LIMITS.resourceMaxChars * 4;
 const SKILL_RESOURCE_ROOTS: ReadonlySet<string> = new Set([
@@ -227,7 +228,26 @@ const fetchDirectoryContents = async (
       });
     }
   }
+  assertCompleteGithubContentsListing({
+    itemCount: items.length,
+    repoRelativePath,
+  });
   return parsed;
+};
+
+export const assertCompleteGithubContentsListing = ({
+  itemCount,
+  repoRelativePath,
+}: {
+  itemCount: number;
+  repoRelativePath: string;
+}): void => {
+  if (itemCount < GITHUB_CONTENTS_LISTING_LIMIT) {
+    return;
+  }
+  throw new PinnedContentError({
+    message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repoRelativePath || "<root>"}`,
+  });
 };
 
 /** Path of `repoRelativePath` relative to the skill directory, or null. */

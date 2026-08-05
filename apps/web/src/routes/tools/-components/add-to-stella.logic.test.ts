@@ -40,6 +40,17 @@ describe("public catalogue install affordance", () => {
     ).toEqual({ type: "forbidden" });
   });
 
+  test("preserves a retryable role lookup error instead of reporting forbidden", () => {
+    expect(
+      resolveAddToStellaState({
+        authStatus: "authenticated",
+        canInstall: "error",
+        entry,
+        organizationEntries: [availableEntry],
+      }),
+    ).toEqual({ type: "role-error" });
+  });
+
   test("suppresses duplicate and unavailable installs", () => {
     expect(
       resolveAddToStellaState({

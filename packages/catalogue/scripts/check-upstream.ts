@@ -22,7 +22,7 @@ import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
 /** Expected per-entry failure while querying the GitHub commits API. */
 class UpstreamFetchError extends TaggedError("UpstreamFetchError")<{
   message: string;
-}>() {}
+}> {}
 
 const COMMITS_API_TIMEOUT_MS = 10_000;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;

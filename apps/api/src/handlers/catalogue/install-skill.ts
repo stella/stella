@@ -5,10 +5,7 @@ import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import {
-  installSkill,
-  preflightSkillInstall,
-} from "@/api/lib/skills/install";
+import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
 
 import { resolveCatalogueSkillPackage } from "./catalogue-skill-package";
 

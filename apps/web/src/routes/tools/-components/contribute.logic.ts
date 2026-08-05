@@ -56,13 +56,26 @@ const MANIFEST_SCHEMA_REF = "../../../schema.json";
  * hyphens, and cap length to the schema's 64-char limit.
  */
 export const deriveSlug = (name: string): string => {
-  const kebab = name
-    .normalize("NFKD")
-    .replaceAll(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "");
-  return kebab.slice(0, MAX_SLUG_LENGTH).replaceAll(/-+$/gu, "");
+  const normalized = name.normalize("NFKD").toLowerCase();
+  let kebab = "";
+  for (const character of normalized) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && codePoint >= 768 && codePoint <= 879) {
+      continue;
+    }
+    const isAsciiLetter = character >= "a" && character <= "z";
+    const isDigit = character >= "0" && character <= "9";
+    if (isAsciiLetter || isDigit) {
+      kebab += character;
+    } else if (kebab.length > 0 && !kebab.endsWith("-")) {
+      kebab += "-";
+    }
+  }
+  kebab = kebab.slice(0, MAX_SLUG_LENGTH);
+  while (kebab.endsWith("-")) {
+    kebab = kebab.slice(0, -1);
+  }
+  return kebab;
 };
 
 /** A full 40-character lowercase hex commit SHA (abbreviated refs fail). */
@@ -81,12 +94,14 @@ export const isFullCommitSha = (value: string): boolean =>
  * `\.git$` anchor), yielding a `repo.git` identifier that 404s upstream.
  */
 export const normalizeGithubRepo = (input: string): string | null => {
-  const withoutHost = input
+  let withoutHost = input
     .trim()
     .replace(/^https?:\/\/(?:www\.)?github\.com\//u, "")
-    .replace(/^github\.com\//u, "")
-    .replace(/\/+$/u, "")
-    .replace(/\.git$/u, "");
+    .replace(/^github\.com\//u, "");
+  while (withoutHost.endsWith("/")) {
+    withoutHost = withoutHost.slice(0, -1);
+  }
+  withoutHost = withoutHost.replace(/\.git$/u, "");
   const groups = GITHUB_REPO_PATTERN.exec(withoutHost)?.groups;
   return groups ? `${groups["owner"]}/${groups["name"]}` : null;
 };

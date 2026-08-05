@@ -52,6 +52,7 @@ describe("resolveCatalogueSkillPackage", () => {
           compatibility: null,
           contentHash: "",
           description: "",
+          entrypointHash: "",
           license: null,
           metadata: {},
           name: "",
@@ -90,6 +91,7 @@ describe("resolveCatalogueSkillPackage", () => {
             compatibility: null,
             contentHash: "hash",
             description: "Upstream skill.",
+            entrypointHash: "entrypoint-hash",
             license: "cc-by-4.0",
             metadata: {},
             // Upstream frontmatter name deliberately differs from the slug.
@@ -227,6 +229,7 @@ const githubPackageOptions = () => ({
     ref: "a".repeat(40),
     repo: "legal",
     rootPath: "skills/review",
+    selectedSkillPath: null,
   },
 });
 
@@ -235,6 +238,7 @@ const parsedGithubPackage = ({ license = "CC-BY-4.0" } = {}) => ({
   compatibility: null,
   contentHash: "hash",
   description: "Review agreements.",
+  entrypointHash: "entrypoint-hash",
   license,
   metadata: { author: "Stella" },
   name: "review",

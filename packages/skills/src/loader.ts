@@ -283,9 +283,30 @@ const readBlockScalar = ({
     contentLines.pop();
   }
 
-  const joined = contentLines.join(indicator.style === "folded" ? " " : "\n");
+  const joined =
+    indicator.style === "folded"
+      ? foldBlockScalarLines(contentLines)
+      : contentLines.join("\n");
   const value = indicator.chomp === "strip" ? joined : `${joined}\n`;
   return { nextIndex: index, value };
+};
+
+const foldBlockScalarLines = (lines: readonly string[]): string => {
+  let value = "";
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      const previous = lines[index - 1] ?? "";
+      const previousMoreIndented = previous.length > 0 && /^\s/u.test(previous);
+      const currentMoreIndented = line.length > 0 && /^\s/u.test(line);
+      if (line.length === 0 || previousMoreIndented || currentMoreIndented) {
+        value += "\n";
+      } else if (previous.length > 0) {
+        value += " ";
+      }
+    }
+    value += line;
+  }
+  return value;
 };
 
 const stripLeadingSpaces = (line: string, max: number): string => {

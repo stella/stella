@@ -4,6 +4,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import {
   archiveSizeLimitError,
+  assertCompleteGithubContentsListing,
   checkFrontmatterLimits,
   pinnedLicenseMismatchError,
   registerResourcePath,
@@ -12,6 +13,20 @@ import {
 } from "../scripts/check-pinned-content";
 
 describe("pinned skill install-limit preflight", () => {
+  test("rejects GitHub Contents listings that may have hit the API ceiling", () => {
+    expect(() =>
+      assertCompleteGithubContentsListing({
+        itemCount: 1000,
+        repoRelativePath: "skills/review/references",
+      }),
+    ).toThrow(/listing may be truncated/u);
+    expect(() =>
+      assertCompleteGithubContentsListing({
+        itemCount: 999,
+        repoRelativePath: "skills/review/references",
+      }),
+    ).not.toThrow();
+  });
   test("reports frontmatter fields and metadata rejected at install time", () => {
     const errors = checkFrontmatterLimits("oversized", {
       compatibility: null,
