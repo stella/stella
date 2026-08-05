@@ -422,12 +422,19 @@ export const ToolCallCard = ({
         })
       : null;
   const hasOutput = part.output !== undefined;
-  // A tool-call rewritten to the terminal "error" state at hydration (its
-  // stream died mid call, so it never produced an `output.error`) still
-  // reads as failed via a generic interrupted label.
-  const errorMessage =
-    getToolOutputError(part.output) ??
-    (part.state === "error" ? t("chat.toolCall.interrupted") : undefined);
+  // Raw tool errors are written for the model (they drive its retry policy),
+  // not for people: render a short human line instead and keep the raw text
+  // behind a collapsed disclosure for debugging. A tool-call rewritten to the
+  // terminal "error" state at hydration (its stream died mid call, so it
+  // never produced an `output.error`) still reads as failed via a generic
+  // interrupted label.
+  const rawErrorDetails = getToolOutputError(part.output);
+  let errorMessage: string | undefined;
+  if (rawErrorDetails !== undefined) {
+    errorMessage = t("chat.toolCall.failed");
+  } else if (part.state === "error") {
+    errorMessage = t("chat.toolCall.interrupted");
+  }
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
@@ -630,9 +637,24 @@ export const ToolCallCard = ({
           </div>
         )}
       {hasError && errorMessage && (
-        <p className="text-destructive max-w-xl py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
-          {errorMessage}
-        </p>
+        <div className="max-w-xl py-1">
+          <p className="text-destructive text-[11px] leading-relaxed">
+            {errorMessage}
+          </p>
+          {rawErrorDetails !== undefined && (
+            <details className="group">
+              <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-[11px]">
+                <span className="group-open:hidden">
+                  {t("common.showDetails")}
+                </span>
+                <span className="hidden group-open:inline">
+                  {t("common.hideDetails")}
+                </span>
+              </summary>
+              <ToolCallCodeBlock code={rawErrorDetails} language="text" />
+            </details>
+          )}
+        </div>
       )}
     </div>
   );

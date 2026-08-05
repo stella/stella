@@ -786,7 +786,7 @@ const ExternalMcpInputSummary = ({
       )}
       <details className="group">
         <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-          {t("folio.showDetails")}
+          {t("common.showDetails")}
         </summary>
         <div className="bg-background/60 mt-2 rounded-md border p-2">
           <dl className="space-y-1.5">

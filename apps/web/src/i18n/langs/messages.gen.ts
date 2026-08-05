@@ -677,6 +677,7 @@ type Messages = {
       "characterCount": "{count, plural, one {# character} other {# characters}}";
       "consoleLogs": "Console output";
       "exactCall": "Exact call";
+      "failed": "This step failed — stella will work around it.";
       "field": "Field";
       "input": "Input";
       "interrupted": "Interrupted before finishing";
@@ -894,6 +895,7 @@ type Messages = {
     "filter": "Filter";
     "formula": "Formula";
     "goBack": "Go back";
+    "hideDetails": "Hide details";
     "hideSecretValue": "Hide secret value";
     "history": "History";
     "import": "Import";
@@ -993,6 +995,7 @@ type Messages = {
     "sessions": "Sessions";
     "settings": "Settings";
     "showAll": "Show all";
+    "showDetails": "Show details";
     "showLess": "Show less";
     "showMore": "Show more";
     "showSecretValue": "Show secret value";
@@ -1000,6 +1003,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
+    "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
     "timeBilling": "Time & Billing";
@@ -1495,7 +1499,6 @@ type Messages = {
       "running": "Running";
       "skipped": "Skipped";
     };
-    "stepCount": "{count, plural, one {# step} other {# steps}}";
     "steps": {
       "add": "Add step:";
       "ai": "AI step";
