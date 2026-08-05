@@ -104,6 +104,8 @@ const summarizeEmail = createSafeRootHandler(
             outputSchema: summarySchema,
             role: "fast",
             serviceTier: "standard",
+            // Root-scoped Outlook handler: the request carries no workspace id.
+            tenantWorkspaceIds: [],
             system: SYSTEM_PROMPT,
             messages: [
               {

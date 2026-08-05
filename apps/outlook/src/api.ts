@@ -21,11 +21,6 @@ const entitiesQueryKey = (workspaceId: SafeId<"workspace">) => [
   "entities",
   workspaceId,
 ];
-const propertiesQueryKey = (workspaceId: SafeId<"workspace">) => [
-  "properties",
-  workspaceId,
-];
-
 export const readWorkspaces = async (): Promise<WorkspaceSummary[]> => {
   const response = await api.workspaces.get(withTimeout());
   if (response.error) {
@@ -68,7 +63,6 @@ const ensureFileProperty = async (
     {
       contentType: "file",
       name: EMAIL_FILE_PROPERTY_NAME,
-      queryKey: propertiesQueryKey(workspaceId),
       toolType: "manual-input",
     },
     withTimeout(),

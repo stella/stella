@@ -124,6 +124,8 @@ const draftEmail = createSafeRootHandler(
             outputSchema: draftSchema,
             role: "chat",
             serviceTier: "standard",
+            // Root-scoped Outlook handler: the request carries no workspace id.
+            tenantWorkspaceIds: [],
             system: SYSTEM_PROMPT,
             messages: [
               {

@@ -26,7 +26,6 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
-import { finalizeEmailIngest } from "@/api/handlers/uploads/email-ingest";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   authorizeUploadPurpose,
@@ -43,6 +42,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { finalizeEmailIngest } from "@/api/lib/uploads/email-ingest";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
