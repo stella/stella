@@ -300,7 +300,7 @@ export const ChatThreadMessages = ({
             {message.parts.map((part, partIndex) =>
               part.type === "text" ? (
                 <UserMessageText
-                  // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
+                  // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                   key={`${message.id}-user-text-${partIndex}`}
                   restorationPairs={getFollowingAssistantRestorations(
                     messages,
@@ -589,7 +589,7 @@ const StickyUserTurn = ({
                 {headerMessage.parts.map((part, partIndex) =>
                   part.type === "text" ? (
                     <UserMessageText
-                      // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
+                      // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                       key={`${headerMessage.id}-user-text-${partIndex}`}
                       restorationPairs={restorationPairs}
                       text={normalizeUserMessageTextForDisplay(part.content)}
@@ -1271,6 +1271,54 @@ const toAssistantPartRenderEntries = (
   return entries;
 };
 
+// "Process" parts are the low-emphasis progress rows of a turn: reasoning
+// trace disclosures and tool-step lines. Interactive tool cards (ask-user,
+// create-document) read as answer content, so they keep standard spacing.
+const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
+  if (entry.type === "rich") {
+    return false;
+  }
+  const { part } = entry;
+  if (part.type === "thinking") {
+    return true;
+  }
+  return (
+    part.type === "tool-call" &&
+    part.name !== "ask-user" &&
+    part.name !== "create-document"
+  );
+};
+
+type AssistantPartRenderGroup =
+  | {
+      kind: "process";
+      startIndex: number;
+      entries: AssistantPartRenderEntry[];
+    }
+  | { kind: "standard"; index: number; entry: AssistantPartRenderEntry };
+
+// Chunks render entries into runs of consecutive process parts so a
+// multi-step turn packs its reasoning/tool rows tightly instead of
+// spreading them across the message's standard part gap.
+const toAssistantPartRenderGroups = (
+  entries: readonly AssistantPartRenderEntry[],
+): AssistantPartRenderGroup[] => {
+  const groups: AssistantPartRenderGroup[] = [];
+  for (const [index, entry] of entries.entries()) {
+    if (!isProcessRenderEntry(entry)) {
+      groups.push({ kind: "standard", index, entry });
+      continue;
+    }
+    const previous = groups.at(-1);
+    if (previous?.kind === "process") {
+      previous.entries.push(entry);
+      continue;
+    }
+    groups.push({ kind: "process", startIndex: index, entries: [entry] });
+  }
+  return groups;
+};
+
 /**
  * Renders the body of an assistant message. Splitting this out of
  * the parent `messages.map` lets React Compiler memoize the
@@ -1301,166 +1349,183 @@ const AssistantMessageParts = ({
   const reasoningTokenCount = getReasoningTokenCount(message);
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
+  const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
+    if (entry.type === "rich") {
+      return (
+        <ChatRichMessagePart
+          key={`${message.id}-${entry.key}`}
+          part={entry.part}
+        />
+      );
+    }
+
+    const { part } = entry;
+    if (part.type === "thinking") {
+      return (
+        <AssistantThinkingPart
+          components={streamdownComponents}
+          displayState={
+            // Start open while this message is actively streaming its
+            // reasoning (no answer text yet), but always render the same
+            // disclosure so the user can collapse it immediately. Once
+            // the stream settles it folds unless the user already did so.
+            !hasAnswerContent && isGenerating && isLatestAssistantMessage
+              ? "expanded"
+              : "folded"
+          }
+          key={`${message.id}-thinking-${index}`}
+          reasoningTokenCount={
+            index === firstThinkingPartIndex ? reasoningTokenCount : null
+          }
+          restorationPairs={restorationPairs}
+          text={part.content}
+        />
+      );
+    }
+
+    if (part.type === "text") {
+      return (
+        <AssistantTextPart
+          className={
+            assistantTextDensity === "compact"
+              ? cn(
+                  "text-[13px] leading-5",
+                  "[&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5",
+                  "[&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5",
+                  "[&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5",
+                  "[&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5",
+                  "[&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5",
+                  "[&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
+                )
+              : undefined
+          }
+          components={streamdownComponents}
+          key={`${message.id}-text-${index}`}
+          restorationPairs={restorationPairs}
+          text={part.content}
+        />
+      );
+    }
+
+    if (part.type === "tool-call" && part.name === "ask-user") {
+      return (
+        <AskUserCard
+          discardsDownstream={!isLatestAssistantMessage}
+          key={part.id}
+          {...(onAskUserEditAndRerun && {
+            onEditAndRerun: (toolCallId, output) => {
+              detached(
+                onAskUserEditAndRerun(toolCallId, output),
+                "onEditAndRerun",
+              );
+            },
+          })}
+          onEditingChange={onAskUserEditingChange}
+          onSubmit={(toolCallId, output) => {
+            detached(
+              onAskUserSubmit(toolCallId, output),
+              "AssistantMessageParts",
+            );
+          }}
+          part={part}
+          restorationPairs={restorationPairs}
+          workspaceId={workspaceId}
+        />
+      );
+    }
+
+    if (part.type === "tool-call" && part.name === "create-document") {
+      return (
+        <NeedsMatterCard
+          key={part.id}
+          onOpenCreated={onOpenCreatedDocument}
+          onOpenDraft={onOpenCreateDocumentDraft}
+          onResolve={onCreateDocumentResolve}
+          part={part}
+        />
+      );
+    }
+
+    if (
+      part.type === "tool-call" &&
+      part.state === "error" &&
+      (part.name === "load-skill" || part.name === "read-skill-resource")
+    ) {
+      // Skill lookup is internal routing. Once the agent has the error and
+      // can recover, showing the miss as a prominent transcript event adds
+      // implementation noise without giving the user an action to take.
+      return null;
+    }
+
+    if (
+      part.type === "tool-call" &&
+      (part.name === "web_search" || part.name === "fetch_url") &&
+      part.state === "complete"
+    ) {
+      // Completed searches are rendered as a single dedup'd row by
+      // <WebSearchSources> below; skipping here avoids the duplicate.
+      // Other states (approval-requested, input-*) still need to fall
+      // through to the approval/tool-call cards.
+      return null;
+    }
+
+    if (part.type === "tool-call" && part.name === "spawn_subagents") {
+      if (
+        isApprovalPart(part) &&
+        (part.state === "approval-requested" ||
+          part.state === "approval-responded")
+      ) {
+        return <ToolApprovalCard key={part.id} part={part} />;
+      }
+      return <SpawnSubagentsCard key={part.id} part={part} />;
+    }
+
+    if (part.type === "tool-call") {
+      if (isApprovalPart(part)) {
+        return (
+          <ToolApprovalCard
+            activeFileName={activeFileName}
+            key={part.id}
+            part={part}
+          />
+        );
+      }
+
+      return (
+        <ToolCallCard
+          activeOrganizationId={activeOrganizationId}
+          key={part.id}
+          part={part}
+          showDetails={shouldShowToolCalls}
+        />
+      );
+    }
+
+    return null;
+  };
   return (
     <>
       {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
         <AssistantReasoningTokenSummary count={reasoningTokenCount} />
       )}
-      {renderEntries.map((entry, index) => {
-        if (entry.type === "rich") {
-          return (
-            <ChatRichMessagePart
-              key={`${message.id}-${entry.key}`}
-              part={entry.part}
-            />
-          );
+      {renderGroups.map((group) => {
+        if (group.kind === "standard") {
+          return renderEntry(group.entry, group.index);
         }
-
-        const { part } = entry;
-        if (part.type === "thinking") {
-          return (
-            <AssistantThinkingPart
-              components={streamdownComponents}
-              displayState={
-                // Start open while this message is actively streaming its
-                // reasoning (no answer text yet), but always render the same
-                // disclosure so the user can collapse it immediately. Once
-                // the stream settles it folds unless the user already did so.
-                !hasAnswerContent && isGenerating && isLatestAssistantMessage
-                  ? "expanded"
-                  : "folded"
-              }
-              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
-              key={`${message.id}-thinking-${index}`}
-              reasoningTokenCount={
-                index === firstThinkingPartIndex ? reasoningTokenCount : null
-              }
-              restorationPairs={restorationPairs}
-              text={part.content}
-            />
-          );
-        }
-
-        if (part.type === "text") {
-          return (
-            <AssistantTextPart
-              className={
-                assistantTextDensity === "compact"
-                  ? cn(
-                      "text-[13px] leading-5",
-                      "[&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5",
-                      "[&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5",
-                      "[&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5",
-                      "[&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5",
-                      "[&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5",
-                      "[&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
-                    )
-                  : undefined
-              }
-              components={streamdownComponents}
-              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
-              key={`${message.id}-text-${index}`}
-              restorationPairs={restorationPairs}
-              text={part.content}
-            />
-          );
-        }
-
-        if (part.type === "tool-call" && part.name === "ask-user") {
-          return (
-            <AskUserCard
-              discardsDownstream={!isLatestAssistantMessage}
-              key={part.id}
-              {...(onAskUserEditAndRerun && {
-                onEditAndRerun: (toolCallId, output) => {
-                  detached(
-                    onAskUserEditAndRerun(toolCallId, output),
-                    "onEditAndRerun",
-                  );
-                },
-              })}
-              onEditingChange={onAskUserEditingChange}
-              onSubmit={(toolCallId, output) => {
-                detached(
-                  onAskUserSubmit(toolCallId, output),
-                  "AssistantMessageParts",
-                );
-              }}
-              part={part}
-              restorationPairs={restorationPairs}
-              workspaceId={workspaceId}
-            />
-          );
-        }
-
-        if (part.type === "tool-call" && part.name === "create-document") {
-          return (
-            <NeedsMatterCard
-              key={part.id}
-              onOpenCreated={onOpenCreatedDocument}
-              onOpenDraft={onOpenCreateDocumentDraft}
-              onResolve={onCreateDocumentResolve}
-              part={part}
-            />
-          );
-        }
-
-        if (
-          part.type === "tool-call" &&
-          part.state === "error" &&
-          (part.name === "load-skill" || part.name === "read-skill-resource")
-        ) {
-          // Skill lookup is internal routing. Once the agent has the error and
-          // can recover, showing the miss as a prominent transcript event adds
-          // implementation noise without giving the user an action to take.
-          return null;
-        }
-
-        if (
-          part.type === "tool-call" &&
-          (part.name === "web_search" || part.name === "fetch_url") &&
-          part.state === "complete"
-        ) {
-          // Completed searches are rendered as a single dedup'd row by
-          // <WebSearchSources> below; skipping here avoids the duplicate.
-          // Other states (approval-requested, input-*) still need to fall
-          // through to the approval/tool-call cards.
-          return null;
-        }
-
-        if (part.type === "tool-call" && part.name === "spawn_subagents") {
-          if (
-            isApprovalPart(part) &&
-            (part.state === "approval-requested" ||
-              part.state === "approval-responded")
-          ) {
-            return <ToolApprovalCard key={part.id} part={part} />;
-          }
-          return <SpawnSubagentsCard key={part.id} part={part} />;
-        }
-
-        if (part.type === "tool-call") {
-          if (isApprovalPart(part)) {
-            return (
-              <ToolApprovalCard
-                activeFileName={activeFileName}
-                key={part.id}
-                part={part}
-              />
-            );
-          }
-
-          return (
-            <ToolCallCard
-              activeOrganizationId={activeOrganizationId}
-              key={part.id}
-              part={part}
-              showDetails={shouldShowToolCalls}
-            />
-          );
-        }
-
-        return null;
+        // Consecutive process rows sit in one gap-1 run; singleton runs are
+        // wrapped too, so a run that grows during streaming keeps its
+        // container (and the children keep their disclosure state).
+        return (
+          <div
+            className="flex flex-col gap-1"
+            key={`${message.id}-process-${group.startIndex}`}
+          >
+            {group.entries.map((entry, offset) =>
+              renderEntry(entry, group.startIndex + offset),
+            )}
+          </div>
+        );
       })}
       <WebSearchSources parts={message.parts} />
     </>
