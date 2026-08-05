@@ -1,5 +1,4 @@
-import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
-
+import type { Tool as McpTool } from "@modelcontextprotocol/server";
 import { env } from "@/api/env";
 import {
   isExternalMcpToolName,

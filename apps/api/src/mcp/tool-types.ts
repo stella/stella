@@ -1,8 +1,4 @@
-import type {
-  CallToolResult,
-  Tool as McpTool,
-} from "@modelcontextprotocol/sdk/types.js";
-
+import type { CallToolResult, Tool as McpTool } from "@modelcontextprotocol/server";
 import type { env } from "@/api/env";
 import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";

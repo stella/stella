@@ -1,9 +1,4 @@
-import type {
-  CallToolResult,
-  Tool as McpTool,
-  ReadResourceResult,
-  Resource,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, Tool as McpTool, ReadResourceResult, Resource } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {

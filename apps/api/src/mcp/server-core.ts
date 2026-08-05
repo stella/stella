@@ -1,18 +1,5 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import type {
-  CallToolResult,
-  Tool as McpTool,
-  ReadResourceResult,
-  Resource,
-} from "@modelcontextprotocol/sdk/types.js";
-
+import { Server, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
+import type { CallToolResult, Tool as McpTool, ReadResourceResult, Resource } from "@modelcontextprotocol/server";
 import type { McpSession } from "@/api/mcp/auth";
 import {
   MCP_STATELESS_ALLOW_HEADER,
@@ -295,7 +282,7 @@ export const createMcpHttpRequestHandler = ({
       },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    server.setRequestHandler('tools/list', async () => ({
       tools: await listMcpTools(context, mode, session.scopes),
     }));
 
@@ -304,15 +291,15 @@ export const createMcpHttpRequestHandler = ({
     // per-tool scope gate. Every request already carries a valid session token.
     // The SDK accepts synchronous request handlers, and both resource reads are
     // synchronous, so neither needs an async wrapper.
-    server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    server.setRequestHandler('resources/list', () => ({
       resources: listMcpResources(mode),
     }));
 
-    server.setRequestHandler(ReadResourceRequestSchema, (resourceRequest) =>
+    server.setRequestHandler('resources/read', (resourceRequest) =>
       readMcpResource(resourceRequest.params.uri, mode),
     );
 
-    server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
+    server.setRequestHandler('tools/call', async (toolRequest) => {
       const toolName = toolRequest.params.name;
       const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
       const missingHintedScope = requiredScopesHint?.find(
@@ -438,6 +425,7 @@ export const createMcpHttpRequestHandler = ({
 
       await server.connect(transport);
 
+      /* @mcp-codemod-error This object looks like a v1 handler-context mock (authInfo). v2 nests the context — reshape it (authInfo → http.authInfo), e.g. { sendRequest: fn } → { mcpReq: { send: fn } }. Passed as-is to a migrated handler that reads ctx.mcpReq.*, the v1 shape throws "Cannot read properties of undefined". */
       const response = await transport.handleRequest(request, {
         authInfo: {
           clientId: session.userId,
