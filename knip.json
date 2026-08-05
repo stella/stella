@@ -51,7 +51,7 @@
         "e2e/**/*.spec.ts",
         "e2e/**/*.ts"
       ],
-      "ignore": ["public/dark-mode-init.js", "src/routeTree.gen.ts"],
+      "ignore": ["public/prepaint-init.js", "src/routeTree.gen.ts"],
       "ignoreDependencies": [
         "react-grab",
         "@libpdf/core",

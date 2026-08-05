@@ -55,9 +55,9 @@ const MAX_PORT_OFFSET = MAX_PORT - Math.max(...Object.values(DEFAULT_PORTS));
 const PORT_SEARCH_LIMIT = 2000;
 // The web app renders via TanStack Start SSR (root document from __root.tsx),
 // which mounts into <body> directly — there is no `<div id="app">` SPA mount.
-// Match the shell's stable dark-mode-init script, not the user-facing <title>
+// Match the shell's stable prepaint-init script, not the user-facing <title>
 // (which can change with branding), so readiness reflects a real rendered shell.
-const WEB_HTML_MARKER = 'src="/dark-mode-init.js"';
+const WEB_HTML_MARKER = 'src="/prepaint-init.js"';
 
 export type DevMode = (typeof DEV_MODES)[number];
 

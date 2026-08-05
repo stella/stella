@@ -104,6 +104,31 @@ test("every supported language resolves to a known writing direction", () => {
   }
 });
 
+test("prepaint-init.js RTL set matches LANG_DIR", async () => {
+  // public/prepaint-init.js runs before the bundle loads, so it cannot
+  // import LANG_DIR and duplicates the RTL locales instead. Adding an RTL
+  // language to LANG_DIR without updating the script would reintroduce the
+  // LTR flash on first paint, so pin the two together here.
+  const source = await Bun.file(
+    new URL("../../public/prepaint-init.js", import.meta.url),
+  ).text();
+
+  const declared = /const RTL = \[(.*?)\]/su.exec(source);
+  expect(declared).not.toBeNull();
+
+  // Locale tags are ASCII identifiers, not user-facing text, so order them
+  // by code point rather than with a locale-aware collator.
+  const byCodePoint = (a: string, b: string) => (a < b ? -1 : Number(a > b));
+  const scriptRtl = [...(declared?.[1] ?? "").matchAll(/"([^"]+)"/gu)]
+    .map((match) => match[1] ?? "")
+    .sort(byCodePoint);
+  const expectedRtl = supportedLanguages
+    .filter((lang) => getLangDir(lang) === "rtl")
+    .toSorted(byCodePoint);
+
+  expect(scriptRtl).toEqual(expectedRtl);
+});
+
 test("buildFormattingLocale never builds an invalid tag for any language + region", () => {
   // "pt-BR" already encodes a region; appending another (e.g. "BR") would
   // build "pt-BR-BR", which Intl.Locale rejects.

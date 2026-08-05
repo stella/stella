@@ -23,7 +23,7 @@ const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review"
 // of driving the org-picker UI, which the workspace routes below depend on.
 const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 // Duplicated from apps/web/src/consts.ts, exactly as
-// apps/web/public/dark-mode-init.js duplicates it: the e2e project has no
+// apps/web/public/prepaint-init.js duplicates it: the e2e project has no
 // `@/` path alias. Writing any other key silently leaves the app on its
 // system colour-scheme preference.
 const THEME_STORAGE_KEY = "stella-ui-theme";
@@ -148,7 +148,7 @@ test("capture landing product screenshots", async ({
     await page.emulateMedia({ colorScheme: theme });
     // Pin the stored theme as well as the media preference. localStorage is
     // origin-scoped, so this survives the navigations below; both inputs must
-    // agree because dark-mode-init.js reads the stored value first and only
+    // agree because prepaint-init.js reads the stored value first and only
     // falls back to the media query.
     // eslint-disable-next-line no-await-in-loop -- see above
     await page.evaluate(

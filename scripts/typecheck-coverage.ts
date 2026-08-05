@@ -589,7 +589,7 @@ const selfTest = (): void => {
     new Set([
       "apps/web/covered.js",
       "apps/web/missing.jsx",
-      "apps/web/public/dark-mode-init.js",
+      "apps/web/public/prepaint-init.js",
     ]),
     new Set(["apps/web/covered.js"]),
   );

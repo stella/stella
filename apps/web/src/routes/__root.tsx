@@ -71,15 +71,18 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    // dark-mode-init.js mutates the html element's class before React
-    // hydrates the document, so the attribute set never matches the
-    // server markup; suppress the per-element warning rather than
-    // letting every SSR page log a recovered hydration error.
+    // prepaint-init.js mutates the html element's class, and for RTL
+    // locales its lang/dir, before React hydrates the document, so the
+    // attribute set never matches the server markup; suppress the
+    // per-element warning rather than letting every SSR page log a
+    // recovered hydration error. lang/dir stay declared here so the
+    // server-rendered markup keeps a sane LTR default for clients that
+    // never run the script.
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
         <HeadContent />
 
-        <script src="/dark-mode-init.js" />
+        <script src="/prepaint-init.js" />
       </head>
       <body>
         {children}

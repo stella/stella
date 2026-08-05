@@ -5,7 +5,7 @@ const WEB_ROOT_PATH = fileURLToPath(WEB_ROOT_URL);
 
 const requiredFiles = [
   "dist/server/server.js",
-  "dist/client/dark-mode-init.js",
+  "dist/client/prepaint-init.js",
 ] as const;
 
 const requiredFileExistence = await Promise.all(
