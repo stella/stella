@@ -20,13 +20,20 @@ export type Analytics = {
 
 // Why a guide step could not be shown against the live app surface. Emitted so
 // divergence between a tour and the real UI is observed, not silent.
-export type GuideStepSkippedReason = "anchor-missing" | "tour-empty";
-
-export type GuideStepSkippedProperties = {
-  tourId: string;
-  anchorId: string;
-  reason: GuideStepSkippedReason;
-};
+//
+// Discriminated rather than a flat record with optional fields: `tour-empty`
+// describes the whole run and has no one anchor to name, and a placeholder
+// there would be a value no dashboard filter can match.
+export type GuideStepSkippedProperties =
+  // `anchor-missing` is real divergence: the anchor should have been on the
+  // page. `anchor-pending` is declared-unwired, so it is expected noise until
+  // the owning surface lands.
+  | {
+      reason: "anchor-missing" | "anchor-pending";
+      tourId: string;
+      anchorId: string;
+    }
+  | { reason: "tour-empty"; tourId: string };
 
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }

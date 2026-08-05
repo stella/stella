@@ -5,16 +5,19 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import type { GuideAnchorId } from "@/features/guides/guide-anchors";
+import { guideAnchorSelector } from "@/features/guides/guide-anchor";
+import {
+  type GuideAnchorId,
+  PENDING_GUIDE_ANCHOR_IDS,
+} from "@/features/guides/guide-anchors";
 import type { GuideEngine } from "@/features/guides/guide-engine";
 import type {
-  GuideInteraction,
   GuideSeed,
   GuideStep,
   GuideTour,
   GuideTourId,
 } from "@/features/guides/guide-types";
-import { guideAnchorSelector } from "@/features/guides/use-guide-anchor";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
@@ -22,6 +25,13 @@ import { detached } from "@/lib/detached";
 // tour: after the timeout the step is skipped and the run moves on.
 const STEP_POLL_TIMEOUT_MS = 2000;
 const STEP_POLL_INTERVAL_MS = 100;
+
+// Anchors the registry already declares unwired. Waiting the full deadline on
+// each of these would make a not-yet-wired tour sit on a frozen popover for
+// seconds before giving up, so they are skipped without navigating or polling
+// and the deadline is spent only on anchors that are supposed to be there.
+const isPendingAnchor = (anchorId: GuideAnchorId): boolean =>
+  PENDING_GUIDE_ANCHOR_IDS.includes(anchorId);
 
 const delay = async (ms: number): Promise<void> => {
   await new Promise<void>((resolve) => {
@@ -101,6 +111,19 @@ export const useGuideRunner = ({
   const analytics = useAnalytics();
   const [state, setState] = useState<GuideRunnerState>({ status: "idle" });
   const engineRef = useRef<GuideEngine | null>(null);
+  // Set synchronously in `runTour`, before its first await. The engine handle
+  // only exists once the dynamic import resolves, so guarding on that instead
+  // would let a second start slip through the import window and stack two
+  // overlays over the app.
+  const runActiveRef = useRef(false);
+
+  useMountEffect(() => () => {
+    // A run parks on a popover click that can no longer arrive once this
+    // unmounts, so its own teardown never reaches the overlay. Drop it here
+    // rather than leave a spotlight over the app.
+    engineRef.current?.destroy();
+    engineRef.current = null;
+  });
 
   const applySeed = (seed: GuideSeed | undefined) => {
     if (!seed) {
@@ -129,27 +152,23 @@ export const useGuideRunner = ({
   };
 
   const runTour = async (tour: GuideTour) => {
-    if (engineRef.current) {
+    if (runActiveRef.current) {
       return;
     }
+    runActiveRef.current = true;
     setState({ status: "running", tourId: tour.id });
 
-    const { createGuideEngine } =
-      await import("@/features/guides/guide-engine");
-    const engine = createGuideEngine();
-    engineRef.current = engine;
-
     const total = tour.steps.length;
-    // The disclosure trigger this run clicked open, while the tour is still
-    // teaching what that surface contains. Kept so the run can re-reveal a
-    // surface the spotlight's own click dismissed, and close it again on exit.
-    let revealedTrigger: HTMLElement | null = null;
+    // Whether this run currently has a disclosure surface open. Only tracks
+    // open/closed: which trigger to press is derived from the tour itself, so
+    // it cannot go stale as the run walks in either direction.
+    let surfaceOpen = false;
 
     const closeRevealedSurface = () => {
-      if (!revealedTrigger) {
+      if (!surfaceOpen) {
         return;
       }
-      revealedTrigger = null;
+      surfaceOpen = false;
       // Escape is the disclosure-agnostic close: a menu or popover honours it,
       // and one that is already closed ignores it. The tour itself no longer
       // reacts to Escape at all (`allowClose: false`), so this cannot end the
@@ -159,48 +178,62 @@ export const useGuideRunner = ({
       );
     };
 
-    // Resolves a step's anchor, re-opening the tour's surface first when the
-    // anchor is missing because that surface closed: the spotlight popover
+    // The trigger that reveals the surface a step at `index` lives in: the
+    // nearest earlier step marked `interaction: { kind: "open" }`. Derived from
+    // the tour on every resolve rather than remembered from the forward walk,
+    // so walking *back* into a menu re-opens it instead of spending the anchor
+    // deadline once per option it can no longer see.
+    const revealingAnchorFor = (index: number): GuideAnchorId | undefined => {
+      for (let earlier = index - 1; earlier >= 0; earlier -= 1) {
+        const candidate = tour.steps.at(earlier);
+        if (candidate?.interaction?.kind === "open") {
+          return candidate.anchor;
+        }
+      }
+      return undefined;
+    };
+
+    // Presses a disclosure trigger on the user's behalf. Safe by the contract
+    // on `GuideInteraction`: `open` may only ever mark a control whose click
+    // does nothing but show UI.
+    const revealSurface = (anchorId: GuideAnchorId): boolean => {
+      const trigger = document.querySelector(guideAnchorSelector(anchorId));
+      if (!(trigger instanceof HTMLElement)) {
+        return false;
+      }
+      trigger.click();
+      surfaceOpen = true;
+      return true;
+    };
+
+    // Resolves a step's anchor, re-opening the surface it lives in first when
+    // the anchor is missing because that surface closed: the spotlight popover
     // takes the pointer press that dismisses a menu, so an open menu does not
     // survive the user clicking a navigation button.
     const resolveStepElement = async (
+      index: number,
       anchorId: GuideAnchorId,
     ): Promise<Element | null> => {
       const mounted = document.querySelector(guideAnchorSelector(anchorId));
       if (mounted) {
         return mounted;
       }
-      revealedTrigger?.click();
-      return await waitForAnchor(anchorId);
-    };
-
-    const applyInteraction = (
-      interaction: GuideInteraction | undefined,
-      element: Element,
-    ) => {
-      if (!interaction) {
-        return;
+      const revealingAnchor = revealingAnchorFor(index);
+      const revealed =
+        revealingAnchor !== undefined && revealSurface(revealingAnchor);
+      const element = await waitForAnchor(anchorId);
+      if (!element && revealed) {
+        // The reveal did not produce this anchor after all, so put the surface
+        // back rather than leave a menu open that no step is explaining.
+        closeRevealedSurface();
       }
-      switch (interaction.kind) {
-        case "none":
-          return;
-        case "open":
-          // Recorded, not clicked: `resolveStepElement` opens the surface when
-          // a later step needs something inside it, so the user reads this
-          // step against the closed control they are about to click.
-          if (element instanceof HTMLElement) {
-            revealedTrigger = element;
-          }
-          return;
-        default:
-          interaction satisfies never;
-      }
+      return element;
     };
 
     // Walks from `from` in `direction` until a step's anchor resolves against
     // the live DOM. Forwards and backwards resolve a step identically:
-    // navigate to its route, re-open the surface the tour revealed if the
-    // anchor lives inside it, then poll for the anchor within the bounded
+    // navigate to its route, re-open the surface the step lives in if the
+    // anchor is not on the page, then poll for the anchor within the bounded
     // deadline. A step whose anchor never appears is logged and skipped, never
     // thrown, so one diverged step cannot wedge the run in either direction.
     //
@@ -218,21 +251,28 @@ export const useGuideRunner = ({
         if (!step) {
           continue;
         }
+        if (isPendingAnchor(step.anchor)) {
+          // Declared unwired in the registry: skipping it costs nothing, so
+          // there is no reason to navigate to its route or wait on its anchor.
+          analytics.captureGuideStepSkipped({
+            reason: "anchor-pending",
+            tourId: tour.id,
+            anchorId: step.anchor,
+          });
+          continue;
+        }
         if (step.route) {
           // eslint-disable-next-line no-await-in-loop -- sequential by design: each candidate navigates then waits before the next is tried
           await navigate({ to: step.route });
         }
         // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this candidate's anchor before trying the next
-        const element = await resolveStepElement(step.anchor);
+        const element = await resolveStepElement(index, step.anchor);
         if (!element) {
           analytics.captureGuideStepSkipped({
+            reason: "anchor-missing",
             tourId: tour.id,
             anchorId: step.anchor,
-            reason: "anchor-missing",
           });
-          // A menu that failed to open leaves the trigger recorded, so the
-          // next candidate inside it can still try: one missing option never
-          // wedges the rest of the tour.
           continue;
         }
         return { index, step, element };
@@ -241,6 +281,7 @@ export const useGuideRunner = ({
     };
 
     const showStep = async (
+      engine: GuideEngine,
       { index, step, element }: ResolvedGuideStep,
       firstIndex: number,
     ): Promise<GuideStepOutcome> => {
@@ -283,7 +324,7 @@ export const useGuideRunner = ({
       });
     };
 
-    const drive = async (): Promise<GuideRunExit> => {
+    const drive = async (engine: GuideEngine): Promise<GuideRunExit> => {
       const first = await resolveFrom(0, 1);
       if (!first) {
         return { type: "tour-empty" };
@@ -296,7 +337,7 @@ export const useGuideRunner = ({
       for (;;) {
         firstIndex = Math.min(firstIndex, current.index);
         // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user acting on this step before resolving the next
-        const outcome = await showStep(current, firstIndex);
+        const outcome = await showStep(engine, current, firstIndex);
 
         switch (outcome) {
           case "leave":
@@ -319,7 +360,6 @@ export const useGuideRunner = ({
             break;
           }
           case "next": {
-            applyInteraction(current.step.interaction, current.element);
             // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const next = await resolveFrom(current.index + 1, 1);
             if (!next) {
@@ -334,41 +374,54 @@ export const useGuideRunner = ({
       }
     };
 
-    let exit: GuideRunExit;
-    try {
-      exit = await drive();
-    } finally {
-      // Covers every exit: completion, leaving, and a run where no step could
-      // be resolved. The tour never leaves UI it opened behind.
-      closeRevealedSurface();
-      engine.destroy();
-      engineRef.current = null;
-      setState({ status: "idle" });
-    }
-
-    switch (exit.type) {
-      case "left":
-        return;
-      case "tour-empty": {
-        // Every step diverged from the live surface: end cleanly, surface it.
-        analytics.captureGuideStepSkipped({
-          tourId: tour.id,
-          anchorId: tour.steps.at(0)?.anchor ?? "",
-          reason: "tour-empty",
-        });
-        stellaToast.add({ title: t("guides.unavailable"), type: "info" });
-        return;
+    const reportExit = (exit: GuideRunExit) => {
+      switch (exit.type) {
+        case "left":
+          return;
+        case "tour-empty": {
+          // Every step diverged from the live surface: end cleanly, surface it.
+          analytics.captureGuideStepSkipped({
+            reason: "tour-empty",
+            tourId: tour.id,
+          });
+          stellaToast.add({ title: t("guides.unavailable"), type: "info" });
+          return;
+        }
+        case "exhausted":
+          // The surface moved under a run that had already started. Say so
+          // rather than ending silently, and do not mark the tour done.
+          stellaToast.add({ title: t("guides.unavailable"), type: "info" });
+          return;
+        case "completed":
+          onCompleted(tour.id);
+          return;
+        default:
+          exit satisfies never;
       }
-      case "exhausted":
-        // The surface moved under a run that had already started. Say so
-        // rather than ending silently, and do not mark the tour done.
-        stellaToast.add({ title: t("guides.unavailable"), type: "info" });
-        return;
-      case "completed":
-        onCompleted(tour.id);
-        return;
-      default:
-        exit satisfies never;
+    };
+
+    try {
+      const { createGuideEngine } =
+        await import("@/features/guides/guide-engine");
+      const engine = createGuideEngine();
+      engineRef.current = engine;
+
+      let exit: GuideRunExit;
+      try {
+        exit = await drive(engine);
+      } finally {
+        // Covers every exit: completion, leaving, and a run where no step could
+        // be resolved. The tour never leaves UI it opened behind.
+        closeRevealedSurface();
+        engine.destroy();
+        engineRef.current = null;
+      }
+      reportExit(exit);
+    } finally {
+      // Also covers a failed engine import, which would otherwise leave the
+      // checklist disabled with no way back.
+      runActiveRef.current = false;
+      setState({ status: "idle" });
     }
   };
 
