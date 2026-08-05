@@ -47,6 +47,7 @@
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "^0.7.0",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@opentelemetry/api-logs": "^0.221.0",
     "@react-email/render": "^2.1.0",
     "@sinclair/typebox": "^0.34.52",
