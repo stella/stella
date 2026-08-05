@@ -1,11 +1,23 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { BoeSearchResponse } from "@stll/boe";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
+import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
+import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { LIMITS } from "@/api/lib/limits";
+import type { SearchResult } from "@/api/lib/search/types";
+import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -299,19 +311,32 @@ const CONTRACT_CORPUS = {
       buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       setup: () => {
         readWorkspaceHandlerMock.mockResolvedValue({
-          id: WS,
+          id: toSafeId<"workspace">(WS),
+          organizationId: toSafeId<"organization">("org_1"),
           name: "Acme retainer",
           reference: "REF-1",
+          clientId: toSafeId<"contact">(uid(61)),
+          leadUserId: null,
+          billingReference: null,
+          color: null,
           status: "active",
-          client: { displayName: "Acme s.r.o." },
-        });
+          lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          client: {
+            id: toSafeId<"contact">(uid(61)),
+            type: "organization",
+            displayName: "Acme s.r.o.",
+            color: null,
+          },
+          limits: LIMITS,
+        } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
         readOverviewHandlerMock.mockResolvedValue({
           entityCount: 1,
           documentCount: 1,
           taskCount: 0,
           recentEntities: [
             {
-              entityId: uid(2),
+              entityId: toSafeId<"entity">(uid(2)),
               name: "NDA draft.docx",
               kind: "document",
               status: null,
@@ -335,17 +360,31 @@ const CONTRACT_CORPUS = {
               assignedToDeletedAt: null,
             },
           ],
-        });
+        } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
         readWorkspaceContactsHandlerMock.mockResolvedValue([
           {
-            id: uid(6),
-            role: "client",
-            contact: { id: uid(7), type: "person", displayName: "Jan Novák" },
+            id: toSafeId<"workspaceContact">(uid(6)),
+            organizationId: toSafeId<"organization">("org_1"),
+            workspaceId: toSafeId<"workspace">(WS),
+            contactId: toSafeId<"contact">(uid(7)),
+            // Not "client": that relationship lives on `workspaces.clientId`,
+            // not a `workspaceContacts` row; "client" is not one of this
+            // table's roles.
+            role: "co_counsel",
+            isPrimary: false,
+            notes: null,
+            createdAt: new Date("2026-01-01"),
+            contact: {
+              id: toSafeId<"contact">(uid(7)),
+              type: "person",
+              displayName: "Jan Novák",
+              color: null,
+            },
           },
-        ]);
+        ] satisfies Awaited<ReturnType<typeof readWorkspaceContactsHandler>>);
         readWorkspaceMembersHandlerMock.mockResolvedValue([
           {
-            id: uid(8),
+            id: toSafeId<"workspaceMember">(uid(8)),
             userId: uid(9),
             createdAt: new Date("2026-01-01"),
             user: {
@@ -355,7 +394,7 @@ const CONTRACT_CORPUS = {
               image: null,
             },
           },
-        ]);
+        ] satisfies Awaited<ReturnType<typeof readWorkspaceMembersHandler>>);
       },
       expectRefPaths: [
         "matter.id",
@@ -405,11 +444,13 @@ const CONTRACT_CORPUS = {
               headline: "…the <em>NDA</em>…",
               workspaceName: "Acme retainer",
               kind: "document",
+              updatedAt: "2026-01-01T00:00:00.000Z",
             },
           ],
+          facets: { kind: [], workspace: [] },
           nextCursor: null,
           totalCount: 1,
-        });
+        } satisfies SearchResult);
       },
       expectRefPaths: ["hits[].workspaceId", "hits[].entityId"],
     },
@@ -1034,10 +1075,12 @@ const CONTRACT_CORPUS = {
           facets: null,
           hits: [
             {
+              anchorId: null,
               caseNumber: "22 Cdo 1000/2020",
               citationCount: 3,
               country: "CZ",
               court: "Nejvyšší soud",
+              createdAt: "2020-05-01T00:00:00.000Z",
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
@@ -1045,13 +1088,14 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               languageAlternateCount: 0,
+              languageGroupKey: null,
               slug: "ns-22-cdo-1000-2020",
               sourceUrl: "https://example.test/decision",
             },
           ],
           nextCursor: null,
           totalCount: 1,
-        });
+        } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
     },
@@ -1062,44 +1106,53 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_id: uid(54) }),
       setup: () => {
         readDecisionWithDocumentHandlerMock.mockResolvedValue({
-          id: uid(54),
+          documentPending: false,
+          documentUnavailable: false,
+          id: toSafeId<"caseLawDecision">(uid(54)),
           caseNumber: "22 Cdo 1000/2020",
           citationsFrom: [
             {
-              id: uid(55),
+              id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
-              citedDecisionId: uid(56),
+              citedDecisionId: toSafeId<"caseLawDecision">(uid(56)),
               sectionIndex: 0,
             },
           ],
           citationsTo: [
             {
-              id: uid(57),
+              id: toSafeId<"caseLawCitation">(uid(57)),
               citationText: "23 Cdo 200/2021",
-              citingDecisionId: uid(58),
+              citingDecisionId: toSafeId<"caseLawDecision">(uid(58)),
               sectionIndex: 1,
             },
           ],
           country: "CZ",
           court: "Nejvyšší soud",
-          decisionDate: new Date("2020-05-01"),
+          // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
+          // string), not a `Date` object.
+          decisionDate: "2020-05-01",
           decisionType: "judgment",
           documentAst: null,
           documentUrl: null,
           ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
           fulltext: "Full decision text.",
           language: "cs",
+          languageGroupKey: null,
           languageAlternates: [],
           metadata: {},
           slug: "ns-22-cdo-1000-2020",
           source: {
-            id: uid(59),
+            id: toSafeId<"caseLawSource">(uid(59)),
             name: "NS ČR",
             adapterKey: "cz-ns",
             allowsDerivedAi: true,
           },
           sourceUrl: "https://example.test/decision",
-        });
+          createdAt: new Date("2020-05-01T00:00:00.000Z"),
+          updatedAt: new Date("2020-05-01T00:00:00.000Z"),
+        } satisfies Awaited<
+          ReturnType<typeof readDecisionWithDocumentHandler>
+        >);
       },
       expectRefPaths: [],
     },
@@ -1112,7 +1165,7 @@ const CONTRACT_CORPUS = {
         searchConsolidatedLegislationMock.mockResolvedValue({
           data: [{ identificador: "BOE-A-2020-1", titulo: "Ley 1/2020" }],
           status: { code: "200", text: "ok" },
-        });
+        } satisfies BoeSearchResponse);
       },
       expectRefPaths: [],
     },
@@ -1120,7 +1173,11 @@ const CONTRACT_CORPUS = {
       mode: "block",
       buildArgs: () => ({ law_id: "BOE-A-2020-1", block_id: "a1" }),
       setup: () => {
-        getLawTextBlockMock.mockResolvedValue("<bloque>Artículo 1</bloque>");
+        getLawTextBlockMock.mockResolvedValue(
+          "<bloque>Artículo 1</bloque>" satisfies Awaited<
+            ReturnType<typeof realBoe.getLawTextBlock>
+          >,
+        );
       },
       expectRefPaths: [],
     },
@@ -1148,10 +1205,20 @@ const CONTRACT_CORPUS = {
             id: "12345678",
             name: "Acme s.r.o.",
             legalForm: "s.r.o.",
-            address: "Praha 1",
+            // `address` is a structured `BusinessRegistryAddress`, not a
+            // free-form string.
+            address: {
+              line1: null,
+              line2: null,
+              postalCode: null,
+              city: null,
+              region: null,
+              country: null,
+              textAddress: "Praha 1",
+            },
             registryUrl: "https://ares.gov.cz/12345678",
           },
-        });
+        } satisfies RegistryLookupResponse);
       },
       expectRefPaths: [],
     },
@@ -1201,7 +1268,7 @@ const CONTRACT_CORPUS = {
           ],
           conditions: [],
           computed: [],
-        });
+        } satisfies DescribeTemplateResult);
       },
       expectRefPaths: [],
     },

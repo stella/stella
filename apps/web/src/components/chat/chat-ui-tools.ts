@@ -6,7 +6,13 @@
 import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
-import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
+import type {
+  ApprovalRequiredBuiltInChatToolName,
+  BuiltInChatToolPolicyKindByName,
+  ChatMessage,
+  ChatPart,
+  ChatUITools,
+} from "@stll/api/types";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -56,19 +62,23 @@ export type ActiveDocxEditApprovalPart = ApprovalToolPart & {
   name: "apply-active-docx-edits";
 };
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
+// Built-in tool names whose backend policy kind is `K`, derived from
+// `BuiltInChatToolPolicyKindByName` (the backend's single source of truth
+// for tool classification) instead of hand-listed, so a backend
+// reclassification (e.g. a tool moving off `public_official`) breaks
+// typecheck here rather than silently keeping stale frontend behavior.
+type ToolNameWithPolicyKind<K extends string> = {
+  [Name in keyof BuiltInChatToolPolicyKindByName]: BuiltInChatToolPolicyKindByName[Name] extends K
+    ? Name
+    : never;
+}[keyof BuiltInChatToolPolicyKindByName];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
-  | "boe_find_related_laws"
-  | "boe_get_law"
-  | "boe_get_law_block"
-  | "boe_get_law_structure"
-  | "borme_get_summary"
-  | "business_registry_lookup"
-  | "infosoud_lookup_case"
+  ToolNameWithPolicyKind<"public_official">
 >;
 type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
-  "boe_search_legislation" | "fetch_url" | "web_search"
+  ToolNameWithPolicyKind<"external">
 >;
 const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
@@ -261,10 +271,77 @@ export const isPublicOfficialChatToolName = (
 
 /** Prefix marking a destructive (irreversible delete) registry write tool. */
 const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
-const APPROVAL_ONCE_CHAT_TOOL_NAMES = {
-  edit_workspace_document: true,
-  manage_organization: true,
-} as const satisfies Partial<Record<ApprovalToolName, true>>;
+
+const CHAT_TOOL_GRANT_POLICY_KIND = {
+  /** May be covered by a stored "allow in conversation" or "always allow" grant. */
+  grantable: "grantable",
+  /** May only be approved once or denied per call — never a persistent grant. */
+  approveOnce: "approve-once",
+  /**
+   * May never be auto-approved by any mechanism, not just a stored grant —
+   * stronger than `approveOnce` (see {@link isNonPersistentGrantChatToolName}).
+   */
+  neverAuto: "never-auto",
+} as const;
+
+type ChatToolGrantPolicy =
+  (typeof CHAT_TOOL_GRANT_POLICY_KIND)[keyof typeof CHAT_TOOL_GRANT_POLICY_KIND];
+
+/**
+ * Grant policy for every built-in tool whose backend policy kind requires
+ * approval, keyed off {@link ApprovalRequiredBuiltInChatToolName} — a TOTAL
+ * record, not `Partial`, so a newly approval-gated backend tool must be
+ * classified here before it typechecks rather than silently defaulting to
+ * `grantable`. `delete_*` tools are also covered independently by
+ * {@link isDestructiveChatToolName}; they are listed here too so this record
+ * stays authoritative on its own.
+ */
+const CHAT_TOOL_GRANT_POLICY = {
+  add_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  boe_search_legislation: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  "create-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  create_workspace_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  delete_clause: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  delete_contact: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  delete_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  delete_matter: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  delete_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  edit_workspace_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  fetch_url: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  fill_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  link_matter_contact: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  manage_organization: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  run_playbook: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_clause: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_contact: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_matter: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_task: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  save_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  set_field_value: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  set_practice_jurisdictions: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  spawn_subagents: CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
+  "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+} as const satisfies Record<
+  Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
+  ChatToolGrantPolicy
+>;
+
+const isChatToolWithGrantPolicy = (
+  toolName: string,
+): toolName is keyof typeof CHAT_TOOL_GRANT_POLICY =>
+  Object.hasOwn(CHAT_TOOL_GRANT_POLICY, toolName);
+
+const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
+  isChatToolWithGrantPolicy(toolName)
+    ? CHAT_TOOL_GRANT_POLICY[toolName]
+    : CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
  * Whether a chat tool is destructive (an irreversible delete). Destructive
@@ -282,17 +359,17 @@ export const isDestructiveChatToolName = (toolName: string): boolean =>
 
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
   isDestructiveChatToolName(toolName) ||
-  toolName in APPROVAL_ONCE_CHAT_TOOL_NAMES;
+  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
- * Chat tools that may only ever be approved once or denied — never granted
- * "allow in conversation" or "always allow". Delegation (`spawn_subagents`)
- * kicks off a whole subagent write-loop per call, so unlike a single
- * mutation it must be reviewed every time rather than covered by a stored
- * grant.
+ * Chat tools that may never be auto-approved by any mechanism — not just a
+ * stored grant, but also the public-official and DOCX-batch auto-approve
+ * paths in `hasAutomaticApproval`. Delegation (`spawn_subagents`) kicks off
+ * a whole subagent write-loop per call, so unlike a single mutation it must
+ * be reviewed every time.
  */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
-  toolName === "spawn_subagents";
+  getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary

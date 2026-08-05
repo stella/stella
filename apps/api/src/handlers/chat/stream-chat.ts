@@ -85,11 +85,18 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   chatToolMapToArray,
+  type ChatTool,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
 import {
-  assertModelSurfaceFreeOfTenantIds,
-  redactTenantIdsDeep,
+  guardModelMessages,
+  guardModelSystemPrompt,
+  guardModelToolSchemas,
+} from "@/api/lib/chat/model-ingress-guard";
+import type {
+  GuardedModelMessages,
+  GuardedSystemPrompt,
+  GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -243,9 +250,8 @@ export const streamChat = async ({
   // The system prompt is entirely server-built; a tenant workspace id in it
   // is a Stella bug (matter scope, active-file, and connected-matter
   // sections must all speak in chat refs), so this fails closed.
-  assertModelSurfaceFreeOfTenantIds({
-    serialized: system,
-    surface: "system-prompt",
+  const guardedSystem = guardModelSystemPrompt({
+    system,
     workspaceIds: tenantWorkspaceIds,
   });
 
@@ -261,10 +267,10 @@ export const streamChat = async ({
   // are redacted rather than refused: old threads keep working, telemetry
   // records the path of every residual ingress leak, and the model loses
   // only an id it could not legitimately use.
-  const preparedMessageList = redactTenantIdsDeep({
-    value: rawPreparedMessages.value,
+  const preparedMessageList = guardModelMessages({
+    messages: rawPreparedMessages.value,
     workspaceIds: tenantWorkspaceIds,
-  }).value;
+  });
 
   const primaryModel = resolveTanStackTextModel({
     modelId: devModelId,
@@ -318,15 +324,13 @@ export const streamChat = async ({
       ? null
       : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
-  const modelTools = chatToolMapToArray(
-    prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
-  );
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
   // turn-killing panic (the guard only panics for the system prompt).
-  assertModelSurfaceFreeOfTenantIds({
-    serialized: JSON.stringify(modelTools),
-    surface: "tool-schemas",
+  const modelTools = guardModelToolSchemas({
+    tools: chatToolMapToArray(
+      prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
+    ),
     workspaceIds: tenantWorkspaceIds,
   });
   const restorationPairs: ChatAnonRestoration[] = [];
@@ -351,18 +355,20 @@ export const streamChat = async ({
   const stream = runChatAttempts({
     abortController,
     abortSignal,
-    baseSystem: system,
     devModelId,
     externalMcpToolSource,
     fallbackModel,
-    modelTools,
     organizationId,
     orgAIConfig,
-    preparedMessages: preparedMessageList,
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
     safeDb,
+    surfaces: {
+      messages: preparedMessageList,
+      system: guardedSystem,
+      tools: modelTools,
+    },
     thirdPartyBoundary,
     threadId,
     userId,
@@ -596,21 +602,31 @@ const createChatAttemptAnalytics = ({
 
 type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
 
+/**
+ * Every surface this request hands to the provider, each one minted by the
+ * model-ingress guard. The chat dispatch accepts only this bundle, so a
+ * surface that skipped the guard — or one rebuilt after it ran — cannot reach
+ * the model without failing typecheck.
+ */
+export type GuardedChatSurfaces = {
+  messages: GuardedModelMessages<ChatMessage[]>;
+  system: GuardedSystemPrompt;
+  tools: GuardedToolSchemas<ChatTool[]>;
+};
+
 type RunChatAttemptsProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
-  baseSystem: string;
   devModelId: string | undefined;
   externalMcpToolSource: StellaMcpToolSource | undefined;
   fallbackModel: ResolvedTanStackTextModel | null;
-  modelTools: ReturnType<typeof chatToolMapToArray>;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
-  preparedMessages: ChatMessage[];
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
+  surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -620,18 +636,16 @@ type RunChatAttemptsProps = {
 const runChatAttempts = async function* ({
   abortController,
   abortSignal,
-  baseSystem,
   devModelId,
   externalMcpToolSource,
   fallbackModel,
-  modelTools,
   organizationId,
   orgAIConfig,
-  preparedMessages,
   primaryModel,
   promptCacheKey,
   promptCachingEnabled,
   safeDb,
+  surfaces,
   thirdPartyBoundary,
   threadId,
   userId,
@@ -641,21 +655,19 @@ const runChatAttempts = async function* ({
   yield* runChatAttempt({
     abortController,
     abortSignal,
-    baseSystem,
     compactionFeature: "chat.step_compaction",
     externalMcpToolSource,
     feature: "chat.stream",
     model: primaryModel,
     modelId: devModelId,
-    modelTools,
     organizationId,
     orgAIConfig,
-    preparedMessages,
     promptCacheKey,
     promptCachingEnabled,
     role: "chat",
     safeDb,
     state: primaryState,
+    surfaces,
     thirdPartyBoundary,
     threadId,
     userId,
@@ -678,21 +690,19 @@ const runChatAttempts = async function* ({
   yield* runChatAttempt({
     abortController,
     abortSignal,
-    baseSystem,
     compactionFeature: "chat.step_compaction_fallback",
     externalMcpToolSource,
     feature: "chat.stream_fallback",
     model: fallbackModel,
     modelId: undefined,
-    modelTools,
     organizationId,
     orgAIConfig,
-    preparedMessages,
     promptCacheKey,
     promptCachingEnabled,
     role: "reasoning",
     safeDb,
     state: fallbackState,
+    surfaces,
     thirdPartyBoundary,
     threadId,
     userId,
@@ -708,21 +718,19 @@ const runChatAttempts = async function* ({
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
-  baseSystem: string;
   compactionFeature: string;
   externalMcpToolSource: StellaMcpToolSource | undefined;
   feature: string;
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
-  modelTools: ReturnType<typeof chatToolMapToArray>;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
-  preparedMessages: ChatMessage[];
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   role: ChatAttemptRole;
   safeDb: SafeDb;
   state: ChatAttemptState;
+  surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -732,26 +740,31 @@ type RunChatAttemptProps = {
 const runChatAttempt = async function* ({
   abortController,
   abortSignal,
-  baseSystem,
   compactionFeature,
   externalMcpToolSource,
   feature,
   model,
   modelId,
-  modelTools,
   organizationId,
   orgAIConfig,
-  preparedMessages,
   promptCacheKey,
   promptCachingEnabled,
   role,
   safeDb,
   state,
+  surfaces,
   thirdPartyBoundary,
   threadId,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<StreamChunk> {
+  // The one place the guard's brands are widened back to the plain types the
+  // provider SDK takes: everything below this line is dispatch.
+  const {
+    messages: preparedMessages,
+    system: baseSystem,
+    tools: modelTools,
+  } = surfaces;
   const caching = resolveCaching({
     promptCachingEnabled,
     role,

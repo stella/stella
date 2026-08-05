@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -162,3 +163,87 @@ export const redactTenantIdsDeep = <T extends object>({
   }
   return { value: redacted, redactedPaths: state.paths };
 };
+
+/**
+ * Branded provider-bound surfaces. The brands are mintable only by the
+ * `guardModel*` entry points below (their schemas stay module-private), and
+ * the chat dispatch in `streamChat` accepts nothing else, so a surface that
+ * skipped the guard — or was rebuilt after it ran — fails typecheck instead
+ * of silently reaching the model.
+ */
+const guardedSystemPromptSchema = v.pipe(
+  v.string(),
+  v.brand("GuardedSystemPrompt"),
+);
+
+export type GuardedSystemPrompt = v.InferOutput<
+  typeof guardedSystemPromptSchema
+>;
+
+export type GuardedToolSchemas<TTools extends readonly object[]> = TTools &
+  v.Brand<"GuardedToolSchemas">;
+
+export type GuardedModelMessages<TMessages extends readonly object[]> =
+  TMessages & v.Brand<"GuardedModelMessages">;
+
+const isList = (value: unknown): boolean => Array.isArray(value);
+
+const brandToolSchemas = <TTools extends readonly object[]>(
+  tools: TTools,
+): GuardedToolSchemas<TTools> =>
+  v.parse(
+    v.pipe(v.custom<TTools>(isList), v.brand("GuardedToolSchemas")),
+    tools,
+  );
+
+const brandModelMessages = <TMessages extends readonly object[]>(
+  messages: TMessages,
+): GuardedModelMessages<TMessages> =>
+  v.parse(
+    v.pipe(v.custom<TMessages>(isList), v.brand("GuardedModelMessages")),
+    messages,
+  );
+
+/** Guard the assembled system prompt (panics on a hit) and brand it. */
+export const guardModelSystemPrompt = ({
+  system,
+  workspaceIds,
+}: {
+  system: string;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedSystemPrompt => {
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: system,
+    surface: "system-prompt",
+    workspaceIds,
+  });
+  return v.parse(guardedSystemPromptSchema, system);
+};
+
+/** Guard the provider-bound tool schemas (telemetry on a hit) and brand them. */
+export const guardModelToolSchemas = <TTools extends readonly object[]>({
+  tools,
+  workspaceIds,
+}: {
+  tools: TTools;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedToolSchemas<TTools> => {
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: JSON.stringify(tools),
+    surface: "tool-schemas",
+    workspaceIds,
+  });
+  return brandToolSchemas(tools);
+};
+
+/** Redact tenant ids out of the provider-bound messages and brand the copy. */
+export const guardModelMessages = <TMessages extends readonly object[]>({
+  messages,
+  workspaceIds,
+}: {
+  messages: TMessages;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedModelMessages<TMessages> =>
+  brandModelMessages(
+    redactTenantIdsDeep({ value: messages, workspaceIds }).value,
+  );

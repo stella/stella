@@ -71,6 +71,7 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
+import type { NeedsApprovalPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
 import {
   COMPARE_VERSIONS_TOOL_NAME,
   createVersionCompareTools,
@@ -540,6 +541,24 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   BuiltInChatToolPolicyName,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
 >;
+
+/** Every built-in chat tool's policy kind, keyed by tool name. Single source
+ * of truth consumers (e.g. the web client) derive their own tool-name unions
+ * from, instead of hand-mirroring this classification. */
+export type BuiltInChatToolPolicyKindByName =
+  typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS;
+
+/**
+ * Built-in tool names whose policy kind requires approval, derived from
+ * {@link BuiltInChatToolPolicyKindByName} and {@link NeedsApprovalPolicyKind}
+ * rather than hand-listed, so a reclassified tool moves in or out of this
+ * union automatically.
+ */
+export type ApprovalRequiredBuiltInChatToolName = {
+  [K in keyof BuiltInChatToolPolicyKindByName]: BuiltInChatToolPolicyKindByName[K] extends NeedsApprovalPolicyKind
+    ? K
+    : never;
+}[keyof BuiltInChatToolPolicyKindByName];
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {

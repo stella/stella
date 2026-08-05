@@ -14,6 +14,7 @@ import {
   isApprovalPart,
   isChatTurnInFlight,
   isExternalInputChatToolName,
+  isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
   isRunningToolPart,
   isToolApprovedByGrant,
@@ -385,6 +386,36 @@ describe("tool approval grants", () => {
     expect(isApprovalOnceChatToolName("edit_workspace_document")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
     expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+  });
+
+  test("never auto-approves delegation, by either grant predicate", () => {
+    expect(isApprovalOnceChatToolName("spawn_subagents")).toBe(true);
+    expect(isNonPersistentGrantChatToolName("spawn_subagents")).toBe(true);
+  });
+
+  test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
+    for (const name of [
+      "delete_clause",
+      "delete_contact",
+      "delete_document",
+      "delete_matter",
+      "delete_time_entry",
+      "edit_workspace_document",
+      "manage_organization",
+    ] as const) {
+      expect(isApprovalOnceChatToolName(name)).toBe(true);
+      expect(isNonPersistentGrantChatToolName(name)).toBe(false);
+    }
+  });
+
+  test("keeps an ordinary mutation grantable", () => {
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+    expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  });
+
+  test("identifies one representative public-official and external-input tool", () => {
+    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
+    expect(isExternalInputChatToolName("web_search")).toBe(true);
   });
 
   test("treats external MCP approvals as connector-level grants", () => {

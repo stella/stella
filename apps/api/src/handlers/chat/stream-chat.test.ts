@@ -17,6 +17,12 @@ import type {
   ChatMessage,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
+import {
+  guardModelMessages,
+  guardModelSystemPrompt,
+  guardModelToolSchemas,
+} from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   ChatEmptyCompletionError,
@@ -27,6 +33,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
@@ -1400,6 +1407,55 @@ describe("streamed chat message conversion", () => {
     }
 
     expect(outcomes).toEqual(["interrupted"]);
+  });
+});
+
+describe("guarded model-ingress seam", () => {
+  // Behavioural coverage of the guard itself (redaction, telemetry, panic)
+  // lives in `lib/chat/model-ingress-guard.test.ts`, where the analytics
+  // capture is mocked. This pins the wiring: the surfaces the chat dispatch
+  // accepts are exactly the ones the guard mints.
+  const workspaceIds = [
+    toSafeId<"workspace">("0dc54d0c-10d7-501d-897e-e801dbd0998c"),
+  ];
+  const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
+
+  test("only guard-minted surfaces satisfy the dispatch bundle", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "user-1",
+        parts: [{ content: `Cite ${publicDecisionId}`, type: "text" }],
+        role: "user",
+      },
+    ];
+    const tools: ChatTool[] = [];
+    const system = "You are stella. Matter scope: mat_1.";
+
+    const surfaces: GuardedChatSurfaces = {
+      messages: guardModelMessages({ messages, workspaceIds }),
+      system: guardModelSystemPrompt({ system, workspaceIds }),
+      tools: guardModelToolSchemas({ tools, workspaceIds }),
+    };
+
+    // What `runChatAttempt` widens the brands back into for the provider SDK.
+    const dispatchedMessages: ChatMessage[] = surfaces.messages;
+    const dispatchedSystem: string = surfaces.system;
+
+    // The guard hands the model its own copy; the same reference reaching the
+    // dispatch would mean the messages skipped it.
+    expect(dispatchedMessages).not.toBe(messages);
+    expect(dispatchedMessages).toEqual(messages);
+    // Membership-exact: a public decision UUID is not a tenant id.
+    expect(dispatchedMessages[0]?.parts[0]).toEqual({
+      content: `Cite ${publicDecisionId}`,
+      type: "text",
+    });
+    expect(dispatchedSystem).toBe(system);
+
+    // @ts-expect-error surfaces that skipped the model-ingress guard must not
+    // reach the provider dispatch
+    const bypass: GuardedChatSurfaces = { messages, system, tools };
+    void bypass;
   });
 });
 
