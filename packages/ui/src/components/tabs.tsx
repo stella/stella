@@ -41,8 +41,8 @@ function TabsList({
   const [, setRemeasureToken] = useState(0);
 
   // Re-render once the new order is committed so Base UI's render-time
-  // measurement sees where the active tab actually is. See `hasTabOrderChanged`
-  // for why the library cannot correct this itself.
+  // measurement sees where the active tab actually is. `hasTabOrderChanged`
+  // explains which case the library misses.
   useIsoLayoutEffect(() => {
     const tabs = listRef.current ? [...listRef.current.children] : [];
     const previousTabs = tabOrderRef.current;

@@ -3,9 +3,8 @@ import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge
 import type { TextDirection } from "@/i18n/i18n-store";
 
 /**
- * Where a dragged view lands relative to the tab it was dropped on. Stated in
- * logical terms so the caller resolves the physical edge once, at the point
- * where the writing direction is known.
+ * Where a dragged view lands relative to the tab it was dropped on. Logical, so
+ * the caller resolves the physical edge once, where the direction is known.
  */
 export type ViewDropPosition = "before" | "after";
 
@@ -40,12 +39,8 @@ type ReorderViewIdsArgs = {
  * relative to the target rather than by its index, so the result depends only
  * on which edge was hit and never on the direction the tab was dragged from.
  *
- * Deliberately not `reorderWithEdge` from
- * `@atlaskit/pragmatic-drag-and-drop-hitbox/util/reorder-with-edge`, which is
- * already a dependency: it hardcodes `right` as "later in the order" and so
- * mirrors wrongly under an RTL UI, and it works in indexes, which is what made
- * the original drop ambiguous. Take a `ViewDropPosition` instead, resolved
- * against the writing direction by `toViewDropPosition`.
+ * Not `reorderWithEdge` from the hitbox package, already a dependency: it
+ * hardcodes `right` as later in the order, so it mirrors wrongly under RTL.
  */
 export const reorderViewIds = ({
   ids,

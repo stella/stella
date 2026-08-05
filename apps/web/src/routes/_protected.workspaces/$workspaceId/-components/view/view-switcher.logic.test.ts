@@ -16,8 +16,8 @@ describe("view tab reordering", () => {
             targetId,
             position,
           });
-          // A drop that changes nothing reports `null`; the resulting order is
-          // then the one already on screen, and must satisfy the same invariant.
+          // A drop that changes nothing reports `null`; the order on screen
+          // then stands, and must satisfy the same invariant.
           const order = reordered ?? [...IDS];
 
           expect([...order].sort()).toEqual([...IDS].sort());

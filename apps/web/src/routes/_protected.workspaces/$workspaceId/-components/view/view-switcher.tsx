@@ -86,9 +86,8 @@ type ViewDropTarget = {
   data: Record<string | symbol, unknown>;
 };
 
-// The strip mirrors under an RTL UI, so the physical edge the pointer is
-// nearest only names a position once it is read against the direction the tab
-// is laid out in.
+// The strip mirrors under RTL, so the nearest physical edge only names a
+// position once read against the writing direction.
 const resolveDropPosition = (
   { data }: ViewDropTarget,
   direction: TextDirection,
@@ -213,12 +212,11 @@ export const ViewSwitcher = ({
     null,
   );
 
-  // Bounds the tabs' stickiness. A sticky drop target survives the pointer
-  // leaving it only while its parent target is unchanged, so without a target
-  // around the strip the tabs stay sticky across the whole page: the insertion
-  // line would stay lit over unrelated chrome, and releasing there would
-  // reorder. This target is not sticky itself, so leaving the strip drops the
-  // tab out with it.
+  // Bounds the tabs' stickiness: a sticky target survives the pointer leaving
+  // it only while its parent target is unchanged. Without this the tabs stay
+  // sticky page-wide, keeping the insertion line lit over unrelated chrome and
+  // reordering on release there. Not sticky itself, so leaving the strip
+  // clears the tab with it.
   useExternalSyncEffect(() => {
     if (!stripContainer) {
       return undefined;
@@ -442,11 +440,10 @@ const ViewTab = ({
   // wrapper is replaced whenever the tab enters or leaves rename mode.
   const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
   const handleReorder = useLatestCallback(onReorder);
-  // Read at drag start so opening or closing a menu does not re-register the
-  // draggable. A press that lands on an open menu's dismiss layer still
-  // reaches the tab, and the drag it starts previews that layer instead of
-  // the tab; refuse the drag until the menu is gone. The layer spans the
-  // strip, so any open menu gates every tab.
+  // Read at drag start so opening a menu does not re-register the draggable.
+  // A press on the menu's dismiss layer still reaches the tab, and the drag it
+  // starts previews that layer instead of the tab. The layer spans the strip,
+  // so any open menu gates every tab.
   const canDragTab = useLatestCallback(() => !isAnyMenuOpen);
   const direction = useI18nStore((state) => getLangDir(state.lang));
 
@@ -486,9 +483,8 @@ const ViewTab = ({
             { viewId: id },
             { element, input, allowedEdges: ["left", "right"] },
           ),
-        // Keep this tab as the drop target while the pointer crosses the gap to
-        // the next one, so the insertion line does not flicker between tabs.
-        // The strip's own drop target bounds how far the stickiness carries.
+        // Hold the target while the pointer crosses the gap to the next tab so
+        // the insertion line does not flicker. The strip's target bounds it.
         getIsSticky: () => true,
         onDrag: ({ self }) =>
           setDropPosition(resolveDropPosition(self, direction)),
@@ -787,10 +783,9 @@ const useViewActionsMenu = ({
           render={
             <Button
               className="absolute inset-e-0 top-1/2 -translate-y-1/2"
-              // The tab around this button is a draggable; the button itself is
-              // not a drag affordance. This only covers presses that land on
-              // the button: once the menu is open its dismiss layer takes the
-              // press, which is why the tab also refuses to drag while open.
+              // The surrounding tab is a draggable; this button is not a drag
+              // affordance. Only covers presses on the button itself, which is
+              // why the tab separately refuses to drag while the menu is open.
               draggable={false}
               size="icon-xs"
               variant="ghost"
@@ -851,9 +846,8 @@ const useViewActionsMenu = ({
     </>
   );
 
-  // A drag started while a menu is open produces a native preview of the
-  // dismiss layer rather than the tab. The layer covers the whole strip, so
-  // this gates every tab, not just the one whose menu is open.
+  // The dismiss layer covers the whole strip, so an open menu anywhere gates
+  // dragging on every tab, not just its own.
   const isAnyMenuOpen = isActionsOpen || contextMenu.open;
 
   return { openFor, renderActions, overlays, isAnyMenuOpen };
