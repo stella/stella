@@ -35,6 +35,17 @@ import type { UpsertFieldContent } from "@/api/handlers/fields/upsert-by-id";
 import { upsertFieldHandler } from "@/api/handlers/fields/upsert-by-id";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  DELETED_TRUE_PROJECTION,
+  LIST_DOCUMENTS_PROJECTION,
+  LIST_PROPERTIES_PROJECTION,
+  READ_DOCUMENT_DEFAULT_PROJECTION,
+  READ_DOCUMENT_DIFF_PROJECTION,
+  READ_DOCUMENT_VERSION_PROJECTION,
+  SAVE_DOCUMENT_CREATE_PROJECTION,
+  SAVE_DOCUMENT_UPDATE_PROJECTION,
+  SET_FIELD_VALUE_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -939,7 +950,10 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
 
   const documents = page.items.map(({ createdAt: _createdAt, ...doc }) => doc);
 
-  const payload = { documents, nextCursor: page.nextCursor };
+  const payload = {
+    documents,
+    nextCursor: page.nextCursor,
+  } satisfies v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>;
   const textFields = runTextFieldSpecs(
     documentListTextFieldSpecs(workspaceId),
     payload,
@@ -1158,7 +1172,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       entityId,
       name: owner.name,
       diff: { baseVersionId, targetVersionId, segments },
-    };
+    } satisfies v.InferInput<typeof READ_DOCUMENT_DIFF_PROJECTION>;
 
     const textFields = runTextFieldSpecs(
       readDocumentDiffTextFieldSpecs(workspaceId),
@@ -1212,7 +1226,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
         createdAt: versionRow.createdAt.toISOString(),
         fields: versionFields,
       },
-    };
+    } satisfies v.InferInput<typeof READ_DOCUMENT_VERSION_PROJECTION>;
     const textFields = runTextFieldSpecs(
       readDocumentVersionDetailTextFieldSpecs(workspaceId),
       payload,
@@ -1254,7 +1268,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
           versionsNextCursor: versionHistory.nextCursor,
         }
       : {}),
-  };
+  } satisfies v.InferInput<typeof READ_DOCUMENT_DEFAULT_PROJECTION>;
 
   // Version history carries tenant-authored label/description; payload.versions
   // holds the same entry references runTextFieldSpecs reads from, so the
@@ -1437,7 +1451,9 @@ const createDocumentEntity = async ({
     return internalFailureResult(created.error);
   }
 
-  return textResult({ entityId: created.value.entityId });
+  return textResult({
+    entityId: created.value.entityId,
+  } satisfies v.InferInput<typeof SAVE_DOCUMENT_CREATE_PROJECTION>);
 };
 
 /**
@@ -1646,7 +1662,9 @@ const updateDocumentEntity = async ({
     }
   }
 
-  return textResult({ updated: true });
+  return textResult({
+    updated: true,
+  } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
 };
 
 const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
@@ -1719,7 +1737,9 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(deleted)) {
       return internalFailureResult(deleted.error);
     }
-    return textResult({ deleted: true });
+    return textResult({
+      deleted: true,
+    } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
   }
 
   if (!roles[context.memberRole].authorize({ entity: ["delete"] }).success) {
@@ -1737,7 +1757,9 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({ deleted: true });
+  return textResult({
+    deleted: true,
+  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
 
 const listPropertiesArgsSchema = v.strictObject({
@@ -1843,7 +1865,10 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
     status: property.status,
   }));
 
-  const payload = { properties: propertyList, nextCursor: page.nextCursor };
+  const payload = {
+    properties: propertyList,
+    nextCursor: page.nextCursor,
+  } satisfies v.InferInput<typeof LIST_PROPERTIES_PROJECTION>;
   const textFields = runTextFieldSpecs(
     propertyListTextFieldSpecs(workspaceId),
     payload,
@@ -1956,7 +1981,9 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
     return internalFailureResult(result.error);
   }
 
-  return textResult({});
+  return textResult(
+    {} satisfies v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>,
+  );
 };
 
 export const DOCUMENT_TOOL_HANDLERS = {

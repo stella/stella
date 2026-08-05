@@ -19,6 +19,13 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  DELETED_TRUE_PROJECTION,
+  LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  LIST_PLAYBOOKS_LIST_PROJECTION,
+  RUN_PLAYBOOK_PROJECTION,
+  SAVE_CLAUSE_PROJECTION,
+} from "@/api/lib/chat/projections";
 import type { ClauseBody, ClauseRun } from "@/api/lib/clauses/types";
 import { isClauseBody } from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -1067,6 +1074,12 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
       ? categoriesResult.value.categories
       : undefined;
 
+  // No compile-time tie against LIST_CLAUSES_LIST_PROJECTION here (nor on the
+  // detail/version branches below): the clause handlers return `Date` columns
+  // verbatim, and they only become the projection's `v.string()` after the JSON
+  // round-trip the chat adapter performs (`parsePayload`, run-registry-tool.ts).
+  // A `satisfies` tie would need the handler to pre-serialize those columns,
+  // which changes what every other transport returns.
   const payload = {
     clauses,
     ...(categories ? { categories } : {}),
@@ -1265,7 +1278,9 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({ clauseId: created.value.id });
+    return textResult({
+      clauseId: created.value.id,
+    } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
   }
 
   // Update branch. Bind clauseId in the narrowed scope: inside the closure below
@@ -1308,7 +1323,9 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({ clauseId: updated.value.id });
+  return textResult({
+    clauseId: updated.value.id,
+  } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
 };
 
 // --- delete_clause ------------------------------------------------------
@@ -1342,7 +1359,9 @@ const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({ deleted: true });
+  return textResult({
+    deleted: true,
+  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
 
 // --- list_playbooks -----------------------------------------------------
@@ -1395,7 +1414,13 @@ const readPlaybookDetail = async ({
     { playbook },
   );
 
-  return { egress: "structured", payload: { playbook }, textFields } as const;
+  return {
+    egress: "structured",
+    payload: { playbook } satisfies v.InferInput<
+      typeof LIST_PLAYBOOKS_DETAIL_PROJECTION
+    >,
+    textFields,
+  } as const;
 };
 
 const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
@@ -1438,7 +1463,10 @@ const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
   }
   const items = listed.value.items;
 
-  const payload = { items, nextCursor: listed.value.nextCursor };
+  const payload = {
+    items,
+    nextCursor: listed.value.nextCursor,
+  } satisfies v.InferInput<typeof LIST_PLAYBOOKS_LIST_PROJECTION>;
   const textFields = runTextFieldSpecs(
     playbookListTextFieldSpecs(organizationId),
     payload,
@@ -1521,7 +1549,9 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
-    return textResult({ runPropertyCount: 0 });
+    return textResult({ runPropertyCount: 0 } satisfies v.InferInput<
+      typeof RUN_PLAYBOOK_PROJECTION
+    >);
   }
 
   const started = await Result.tryPromise({
@@ -1542,7 +1572,7 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
 
   return textResult({
     runPropertyCount: outcome.materializedPropertyIds.length,
-  });
+  } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
 };
 
 export const KNOWLEDGE_TOOL_HANDLERS = {

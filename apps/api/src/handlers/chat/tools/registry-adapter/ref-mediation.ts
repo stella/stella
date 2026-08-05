@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 
+import type { DehydratedInput } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
-import type { DehydratedInput } from "./projection-schema";
 import type {
   InputRefParam,
   RefMediationEntry,

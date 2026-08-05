@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
@@ -17,7 +18,6 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import { projectForChat } from "./projection-schema";
 import type { RegistryWriteToolName } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";

@@ -1,9 +1,7 @@
-import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-
 import type {
   ChatProjectionSchema,
   RegistryRefKind,
-} from "./projection-schema";
+} from "@/api/lib/chat/projection-schema";
 import {
   DELETED_TRUE_PROJECTION,
   DELETE_TIME_ENTRY_PROJECTION,
@@ -39,7 +37,8 @@ import {
   SEARCH_LEGISLATION_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
-} from "./projections";
+} from "@/api/lib/chat/projections";
+import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
  * The read-only slice of the MCP registry, derived structurally from the single

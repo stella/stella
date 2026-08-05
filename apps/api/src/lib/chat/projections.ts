@@ -18,6 +18,12 @@ import {
  * nothing from `@/api/mcp/*` or other handler slices — only the annotation
  * vocabulary from `./projection-schema`.
  *
+ * Lives in `lib/` rather than the chat handler slice for the same reason the
+ * importers are handlers: handlers -> lib is the only correct direction. Were
+ * these schemas to stay under `handlers/chat/`, every MCP tool module and the
+ * shared MCP core would depend on the chat slice, and `lib-to-handler-imports`
+ * is a ratcheted metric.
+ *
  * The constants deliberately carry their precise inferred builder types (no
  * `ChatProjectionSchema` widening): the handlers' compile-time ties need
  * `v.InferInput` over the real entries. `ref-field-map.ts` still widens at its
@@ -81,7 +87,7 @@ export type AssertNoExtraFields<
  * list_matters, list branch. Source of truth: `handleListMattersTool`
  * (`stella-tools.ts`) — one row per matter plus the opaque page cursor.
  */
-const listMattersListProjection = v.strictObject({
+export const LIST_MATTERS_LIST_PROJECTION = v.strictObject({
   matters: v.array(
     v.strictObject({
       // A matter's id IS its workspace id: a matter chat ref.
@@ -103,7 +109,7 @@ const listMattersListProjection = v.strictObject({
  * `readOverviewHandler` (avatar URLs stripped at the handler), and the
  * contact/member card mappers.
  */
-const listMattersDetailProjection = v.strictObject({
+export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
   matter: v.strictObject({
     id: chatRef("matter"),
     name: v.string(),
@@ -167,8 +173,8 @@ const listMattersDetailProjection = v.strictObject({
 });
 
 export const LIST_MATTERS_PROJECTION = v.union([
-  listMattersListProjection,
-  listMattersDetailProjection,
+  LIST_MATTERS_LIST_PROJECTION,
+  LIST_MATTERS_DETAIL_PROJECTION,
 ]);
 
 /**
@@ -391,63 +397,73 @@ const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
 /**
+ * read_document, default branch: current version metadata + field values,
+ * plus the version-history page when `include_versions` was requested.
+ */
+export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
+  entityId: readDocumentEntityId(),
+  kind: v.string(),
+  name: v.string(),
+  fields: v.array(documentFieldProjection),
+  versions: v.optional(v.array(documentVersionEntryProjection)),
+  // Opaque `[versionNumber, entityVersionId]` cursor, not UUID-formatted.
+  versionsNextCursor: v.optional(v.nullable(passthroughId())),
+});
+
+/** read_document, `version_id` branch: one version's metadata + fields. */
+export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
+  entityId: readDocumentEntityId(),
+  name: v.string(),
+  version: v.strictObject({
+    id: passthroughId(),
+    versionNumber: v.number(),
+    stamp: v.nullable(v.string()),
+    label: v.nullable(v.string()),
+    description: v.nullable(v.string()),
+    createdAt: v.string(),
+    fields: v.array(documentFieldProjection),
+  }),
+});
+
+/**
+ * read_document, `compare_with_version_id` branch: plain-text line diff
+ * between two versions.
+ */
+export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
+  entityId: readDocumentEntityId(),
+  name: v.string(),
+  diff: v.strictObject({
+    // Entity-version handles, no chat ref kind.
+    baseVersionId: passthroughId(),
+    targetVersionId: passthroughId(),
+    segments: v.array(
+      v.variant("kind", [
+        v.strictObject({
+          kind: v.picklist(["added", "removed", "unchanged", "gap"]),
+          text: v.string(),
+        }),
+        v.strictObject({
+          kind: v.literal("changed"),
+          runs: v.array(
+            v.strictObject({
+              kind: v.picklist(["same", "del", "ins"]),
+              text: v.string(),
+            }),
+          ),
+        }),
+      ]),
+    ),
+  }),
+});
+
+/**
  * read_document, all three branches (`handleReadDocumentTool`,
- * `document-tools.ts`): default (current version, optionally with version
- * history), specific version, and version diff.
+ * `document-tools.ts`).
  */
 export const READ_DOCUMENT_PROJECTION = v.union([
-  // Default branch: current version metadata + field values, plus the
-  // version-history page when `include_versions` was requested.
-  v.strictObject({
-    entityId: readDocumentEntityId(),
-    kind: v.string(),
-    name: v.string(),
-    fields: v.array(documentFieldProjection),
-    versions: v.optional(v.array(documentVersionEntryProjection)),
-    // Opaque `[versionNumber, entityVersionId]` cursor, not UUID-formatted.
-    versionsNextCursor: v.optional(v.nullable(passthroughId())),
-  }),
-  // version_id branch: one version's metadata + field values.
-  v.strictObject({
-    entityId: readDocumentEntityId(),
-    name: v.string(),
-    version: v.strictObject({
-      id: passthroughId(),
-      versionNumber: v.number(),
-      stamp: v.nullable(v.string()),
-      label: v.nullable(v.string()),
-      description: v.nullable(v.string()),
-      createdAt: v.string(),
-      fields: v.array(documentFieldProjection),
-    }),
-  }),
-  // compare_with_version_id branch: plain-text line diff between two versions.
-  v.strictObject({
-    entityId: readDocumentEntityId(),
-    name: v.string(),
-    diff: v.strictObject({
-      // Entity-version handles, no chat ref kind.
-      baseVersionId: passthroughId(),
-      targetVersionId: passthroughId(),
-      segments: v.array(
-        v.variant("kind", [
-          v.strictObject({
-            kind: v.picklist(["added", "removed", "unchanged", "gap"]),
-            text: v.string(),
-          }),
-          v.strictObject({
-            kind: v.literal("changed"),
-            runs: v.array(
-              v.strictObject({
-                kind: v.picklist(["same", "del", "ins"]),
-                text: v.string(),
-              }),
-            ),
-          }),
-        ]),
-      ),
-    }),
-  }),
+  READ_DOCUMENT_DEFAULT_PROJECTION,
+  READ_DOCUMENT_VERSION_PROJECTION,
+  READ_DOCUMENT_DIFF_PROJECTION,
 ]);
 
 /**
@@ -472,7 +488,7 @@ export const LIST_PROPERTIES_PROJECTION = v.strictObject({
  * list_tasks, list branch. Source of truth: `handleListTasksTool`
  * (`matter-tools.ts`) — selected entity columns minus the cursor timestamp.
  */
-const listTasksListProjection = v.strictObject({
+export const LIST_TASKS_LIST_PROJECTION = v.strictObject({
   tasks: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
@@ -491,7 +507,7 @@ const listTasksListProjection = v.strictObject({
  * list_tasks, detail branch: one task's fields, assignees, and entity links
  * (`readTaskDetail` + the mappers in `handleListTasksTool`).
  */
-const listTasksDetailProjection = v.strictObject({
+export const LIST_TASKS_DETAIL_PROJECTION = v.strictObject({
   task: v.strictObject({
     taskId: chatEntityRef({ from: "inputEntity", param: "task_id" }),
     name: v.string(),
@@ -537,8 +553,8 @@ const listTasksDetailProjection = v.strictObject({
 });
 
 export const LIST_TASKS_PROJECTION = v.union([
-  listTasksListProjection,
-  listTasksDetailProjection,
+  LIST_TASKS_LIST_PROJECTION,
+  LIST_TASKS_DETAIL_PROJECTION,
 ]);
 
 /**
@@ -574,7 +590,7 @@ const clauseBodyProjection = v.array(clauseParagraphProjection);
  * optional `listCategoriesHandler` catalog. Clause, category, and
  * clause-version ids are org-scoped library handles, not tenant refs.
  */
-const listClausesListProjection = v.strictObject({
+export const LIST_CLAUSES_LIST_PROJECTION = v.strictObject({
   clauses: v.array(
     v.strictObject({
       id: passthroughId(),
@@ -611,7 +627,7 @@ const listClausesListProjection = v.strictObject({
  * not a uuid column, but licensed defensively in case a deployment's user
  * ids happen to be uuid-shaped).
  */
-const listClausesDetailProjection = v.strictObject({
+export const LIST_CLAUSES_DETAIL_PROJECTION = v.strictObject({
   clause: v.strictObject({
     id: passthroughId(),
     title: v.string(),
@@ -644,7 +660,7 @@ const listClausesDetailProjection = v.strictObject({
 });
 
 /** list_clauses, version branch (`getClauseVersionHandler`). */
-const listClausesVersionProjection = v.strictObject({
+export const LIST_CLAUSES_VERSION_PROJECTION = v.strictObject({
   version: v.strictObject({
     id: passthroughId(),
     version: v.number(),
@@ -654,9 +670,9 @@ const listClausesVersionProjection = v.strictObject({
 });
 
 export const LIST_CLAUSES_PROJECTION = v.union([
-  listClausesListProjection,
-  listClausesDetailProjection,
-  listClausesVersionProjection,
+  LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_DETAIL_PROJECTION,
+  LIST_CLAUSES_VERSION_PROJECTION,
 ]);
 
 /**
@@ -771,7 +787,7 @@ const playbookPositionProjection = v.variant("mode", [
  * `listPlaybookDefinitionsHandler` (`handlers/playbooks/read.ts`), forwarded
  * verbatim as `{ items, nextCursor }`.
  */
-const listPlaybooksListProjection = v.strictObject({
+export const LIST_PLAYBOOKS_LIST_PROJECTION = v.strictObject({
   items: v.array(
     v.strictObject({
       id: passthroughId(),
@@ -790,7 +806,7 @@ const listPlaybooksListProjection = v.strictObject({
  * list_playbooks, detail branch (`getPlaybookDefinitionHandler`): the full
  * definition including the versioned positions jsonb.
  */
-const listPlaybooksDetailProjection = v.strictObject({
+export const LIST_PLAYBOOKS_DETAIL_PROJECTION = v.strictObject({
   playbook: v.strictObject({
     id: passthroughId(),
     name: v.string(),
@@ -814,8 +830,8 @@ const listPlaybooksDetailProjection = v.strictObject({
 });
 
 export const LIST_PLAYBOOKS_PROJECTION = v.union([
-  listPlaybooksListProjection,
-  listPlaybooksDetailProjection,
+  LIST_PLAYBOOKS_LIST_PROJECTION,
+  LIST_PLAYBOOKS_DETAIL_PROJECTION,
 ]);
 
 /**
@@ -846,24 +862,33 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     userName: v.nullable(v.string()),
   }) as const;
 
+/**
+ * list_time_entries, list branch: matter_id is schema-required, so it is
+ * every row's workspace.
+ */
+export const LIST_TIME_ENTRIES_LIST_PROJECTION = v.strictObject({
+  entries: v.array(
+    v.strictObject(timeEntryFieldEntries({ from: "inputParam" })),
+  ),
+  // Opaque `[dateWorked, id]` cursor, not UUID-formatted.
+  nextCursor: v.nullable(passthroughId()),
+});
+
+/**
+ * list_time_entries, detail branch. Detail mode may be reached by
+ * time_entry_id alone, so the entry carries its resolved owning workspace: a
+ * matter ref, and the entity's workspace source.
+ */
+export const LIST_TIME_ENTRIES_DETAIL_PROJECTION = v.strictObject({
+  entry: v.strictObject({
+    ...timeEntryFieldEntries({ from: "sibling" }),
+    workspaceId: chatRef("matter"),
+  }),
+});
+
 export const LIST_TIME_ENTRIES_PROJECTION = v.union([
-  // List mode: matter_id is schema-required, so it is every row's workspace.
-  v.strictObject({
-    entries: v.array(
-      v.strictObject(timeEntryFieldEntries({ from: "inputParam" })),
-    ),
-    // Opaque `[dateWorked, id]` cursor, not UUID-formatted.
-    nextCursor: v.nullable(passthroughId()),
-  }),
-  // Detail mode may be reached by time_entry_id alone, so the entry carries
-  // its resolved owning workspace: a matter ref, and the entity's workspace
-  // source.
-  v.strictObject({
-    entry: v.strictObject({
-      ...timeEntryFieldEntries({ from: "sibling" }),
-      workspaceId: chatRef("matter"),
-    }),
-  }),
+  LIST_TIME_ENTRIES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
 ]);
 
 /**
@@ -890,28 +915,11 @@ const invoiceLineEntityProjection = () =>
  * `workspaceId` rather than from the (absent) input arg; list mode returns no
  * line items.
  */
-export const LIST_INVOICES_PROJECTION = v.union([
-  v.strictObject({
-    invoices: v.array(
-      v.strictObject({
-        id: passthroughId(),
-        invoiceNumber: v.string(),
-        reference: v.nullable(v.string()),
-        status: v.string(),
-        invoiceDate: v.string(),
-        dueDate: v.nullable(v.string()),
-        currency: v.string(),
-        totalAmount: v.number(),
-      }),
-    ),
-    // Opaque `[createdAt, id]` cursor, not UUID-formatted.
-    nextCursor: v.nullable(passthroughId()),
-  }),
-  v.strictObject({
-    invoice: v.strictObject({
+/** list_invoices, list branch: invoice cards, no line items. */
+export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
+  invoices: v.array(
+    v.strictObject({
       id: passthroughId(),
-      // The detail invoice's own owning workspace is a matter ref.
-      workspaceId: chatRef("matter"),
       invoiceNumber: v.string(),
       reference: v.nullable(v.string()),
       status: v.string(),
@@ -919,47 +927,70 @@ export const LIST_INVOICES_PROJECTION = v.union([
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
-      notes: v.nullable(v.string()),
-      paidAt: v.nullable(v.string()),
-      createdAt: v.string(),
-      updatedAt: v.string(),
-      timeEntries: v.array(
-        v.strictObject({
-          id: passthroughId(),
-          entityId: chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
-          }),
-          dateWorked: v.string(),
-          billedMinutes: v.number(),
-          rateAtEntry: v.number(),
-          currency: v.string(),
-          narrative: v.string(),
-          invoiceNarrative: v.nullable(v.string()),
-          status: v.string(),
-          entity: invoiceLineEntityProjection(),
-        }),
-      ),
-      expenses: v.array(
-        v.strictObject({
-          id: passthroughId(),
-          entityId: chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
-          }),
-          dateIncurred: v.string(),
-          amount: v.number(),
-          currency: v.string(),
-          category: v.string(),
-          description: v.string(),
-          invoiceDescription: v.nullable(v.string()),
-          billable: v.boolean(),
-          markup: v.number(),
-          entity: invoiceLineEntityProjection(),
-        }),
-      ),
     }),
+  ),
+  // Opaque `[createdAt, id]` cursor, not UUID-formatted.
+  nextCursor: v.nullable(passthroughId()),
+});
+
+/** list_invoices, detail branch: one invoice with its time entries and expenses. */
+export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
+  invoice: v.strictObject({
+    id: passthroughId(),
+    // The detail invoice's own owning workspace is a matter ref.
+    workspaceId: chatRef("matter"),
+    invoiceNumber: v.string(),
+    reference: v.nullable(v.string()),
+    status: v.string(),
+    invoiceDate: v.string(),
+    dueDate: v.nullable(v.string()),
+    currency: v.string(),
+    totalAmount: v.number(),
+    notes: v.nullable(v.string()),
+    paidAt: v.nullable(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    timeEntries: v.array(
+      v.strictObject({
+        id: passthroughId(),
+        entityId: chatEntityRef({
+          from: "outputPath",
+          path: "invoice.workspaceId",
+        }),
+        dateWorked: v.string(),
+        billedMinutes: v.number(),
+        rateAtEntry: v.number(),
+        currency: v.string(),
+        narrative: v.string(),
+        invoiceNarrative: v.nullable(v.string()),
+        status: v.string(),
+        entity: invoiceLineEntityProjection(),
+      }),
+    ),
+    expenses: v.array(
+      v.strictObject({
+        id: passthroughId(),
+        entityId: chatEntityRef({
+          from: "outputPath",
+          path: "invoice.workspaceId",
+        }),
+        dateIncurred: v.string(),
+        amount: v.number(),
+        currency: v.string(),
+        category: v.string(),
+        description: v.string(),
+        invoiceDescription: v.nullable(v.string()),
+        billable: v.boolean(),
+        markup: v.number(),
+        entity: invoiceLineEntityProjection(),
+      }),
+    ),
   }),
+});
+
+export const LIST_INVOICES_PROJECTION = v.union([
+  LIST_INVOICES_LIST_PROJECTION,
+  LIST_INVOICES_DETAIL_PROJECTION,
 ]);
 
 /**
@@ -968,26 +999,32 @@ export const LIST_INVOICES_PROJECTION = v.union([
  * organization has no active plan, otherwise the plan/seat/period shape.
  * Entitlement and policy ids are org billing-plan handles, not tenant refs.
  */
-export const GET_USAGE_PROJECTION = v.union([
-  v.strictObject({ entitlement: v.null() }),
-  v.strictObject({
-    entitlement: v.strictObject({
-      id: passthroughId(),
-      status: v.string(),
-      seats: v.number(),
-      source: v.string(),
-      currentPeriodStart: v.string(),
-      currentPeriodEnd: v.string(),
-      cancelAtPeriodEnd: v.boolean(),
-    }),
-    policy: v.strictObject({
-      id: passthroughId(),
-      key: v.string(),
-      displayName: v.string(),
-      monthlyUsageUnitsPerSeat: v.number(),
-    }),
-    remainingUsageUnits: v.number(),
+export const GET_USAGE_NO_PLAN_PROJECTION = v.strictObject({
+  entitlement: v.null(),
+});
+
+export const GET_USAGE_ENTITLED_PROJECTION = v.strictObject({
+  entitlement: v.strictObject({
+    id: passthroughId(),
+    status: v.string(),
+    seats: v.number(),
+    source: v.string(),
+    currentPeriodStart: v.string(),
+    currentPeriodEnd: v.string(),
+    cancelAtPeriodEnd: v.boolean(),
   }),
+  policy: v.strictObject({
+    id: passthroughId(),
+    key: v.string(),
+    displayName: v.string(),
+    monthlyUsageUnitsPerSeat: v.number(),
+  }),
+  remainingUsageUnits: v.number(),
+});
+
+export const GET_USAGE_PROJECTION = v.union([
+  GET_USAGE_NO_PLAN_PROJECTION,
+  GET_USAGE_ENTITLED_PROJECTION,
 ]);
 
 /** One facet bucket of the case-law search response. */
@@ -1014,7 +1051,11 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
   nextCursor: v.nullable(passthroughId()),
   results: v.array(
     v.strictObject({
-      appUrl: v.string(),
+      // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
+      // is disabled (`isPublicLawAppUrlEnabled`), so the projected shape is
+      // nullable; a non-nullable declaration would fail the strict parse and
+      // take the tool off the chat surface on any deployment with the flag off.
+      appUrl: v.nullable(v.string()),
       caseNumber: v.string(),
       citationCount: v.number(),
       country: v.string(),
@@ -1045,7 +1086,8 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
   // Opaque compound `[textOffset, fromOffset, toOffset]` cursor.
   nextCursor: v.nullable(passthroughId()),
   decision: v.strictObject({
-    appUrl: v.string(),
+    // Nullable for the same reason as search_case_law's `results[].appUrl`.
+    appUrl: v.nullable(v.string()),
     caseNumber: v.string(),
     citationsFrom: v.array(
       v.strictObject({
@@ -1219,7 +1261,7 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
  * types, options, and condition/formula expressions are structural
  * org-authored data; no ids anywhere.
  */
-const templateDescribeProjection = v.strictObject({
+export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   name: v.string(),
   fields: v.array(
     v.strictObject({
@@ -1266,22 +1308,24 @@ const templateDescribeProjection = v.strictObject({
  * template handles; detail mode's describe payload carries no id fields at
  * all.
  */
+export const LIST_TEMPLATES_LIST_PROJECTION = v.strictObject({
+  templates: v.array(
+    v.strictObject({
+      id: passthroughId(),
+      name: v.string(),
+      fieldCount: v.number(),
+      tags: v.nullable(v.array(v.string())),
+      whenToUse: v.nullable(v.string()),
+      whenNotToUse: v.nullable(v.string()),
+    }),
+  ),
+  // Opaque `[templateId]` cursor, base64url-encoded.
+  nextCursor: v.nullable(passthroughId()),
+});
+
 export const LIST_TEMPLATES_PROJECTION = v.union([
-  v.strictObject({
-    templates: v.array(
-      v.strictObject({
-        id: passthroughId(),
-        name: v.string(),
-        fieldCount: v.number(),
-        tags: v.nullable(v.array(v.string())),
-        whenToUse: v.nullable(v.string()),
-        whenNotToUse: v.nullable(v.string()),
-      }),
-    ),
-    // Opaque `[templateId]` cursor, base64url-encoded.
-    nextCursor: v.nullable(passthroughId()),
-  }),
-  templateDescribeProjection,
+  LIST_TEMPLATES_LIST_PROJECTION,
+  TEMPLATE_DESCRIBE_PROJECTION,
 ]);
 
 // --- Write-tool projections ---------------------------------------------------
@@ -1325,9 +1369,17 @@ export const SAVE_TASK_PROJECTION = v.strictObject({
  * link_matter_contact: link returns `{ workspaceContactId }` (a join-row
  * handle, not a tenant ref); unlink returns `{ unlinked: true }`.
  */
+export const LINK_MATTER_CONTACT_LINK_PROJECTION = v.strictObject({
+  workspaceContactId: passthroughId(),
+});
+
+export const LINK_MATTER_CONTACT_UNLINK_PROJECTION = v.strictObject({
+  unlinked: v.literal(true),
+});
+
 export const LINK_MATTER_CONTACT_PROJECTION = v.union([
-  v.strictObject({ workspaceContactId: passthroughId() }),
-  v.strictObject({ unlinked: v.literal(true) }),
+  LINK_MATTER_CONTACT_LINK_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
 ]);
 
 /**
@@ -1335,11 +1387,17 @@ export const LINK_MATTER_CONTACT_PROJECTION = v.union([
  * workspace is the resolved `matter_id`, required on create); update returns
  * `{ updated: true }`.
  */
+export const SAVE_DOCUMENT_CREATE_PROJECTION = v.strictObject({
+  entityId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
+});
+
+export const SAVE_DOCUMENT_UPDATE_PROJECTION = v.strictObject({
+  updated: v.literal(true),
+});
+
 export const SAVE_DOCUMENT_PROJECTION = v.union([
-  v.strictObject({
-    entityId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
-  }),
-  v.strictObject({ updated: v.literal(true) }),
+  SAVE_DOCUMENT_CREATE_PROJECTION,
+  SAVE_DOCUMENT_UPDATE_PROJECTION,
 ]);
 
 /** set_field_value returns `{}`. */
@@ -1374,15 +1432,26 @@ export const RUN_PLAYBOOK_PROJECTION = v.strictObject({
  * `{ removed: true, id }` (both membership-row handles, not tenant refs);
  * update_org_settings echoes only the scalar settings it changed.
  */
+export const MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION = v.strictObject({
+  memberId: passthroughId(),
+});
+
+export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
+  removed: v.literal(true),
+  id: passthroughId(),
+});
+
+export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  matterNumberPattern: v.optional(v.string()),
+  matterNumberPadding: v.optional(v.number()),
+  promptCachingEnabled: v.optional(v.boolean()),
+  documentProcessingMode: v.optional(v.string()),
+});
+
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([
-  v.strictObject({ memberId: passthroughId() }),
-  v.strictObject({ removed: v.literal(true), id: passthroughId() }),
-  v.strictObject({
-    matterNumberPattern: v.optional(v.string()),
-    matterNumberPadding: v.optional(v.number()),
-    promptCachingEnabled: v.optional(v.boolean()),
-    documentProcessingMode: v.optional(v.string()),
-  }),
+  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
 ]);
 
 /**
@@ -1400,11 +1469,13 @@ export const SET_PRACTICE_JURISDICTIONS_PROJECTION = v.strictObject({
  * handle); configure echoes the same describe shape list_templates' detail
  * mode serves, so the agent sees exactly what is now configured.
  */
+export const SAVE_TEMPLATE_CREATE_PROJECTION = v.strictObject({
+  templateId: passthroughId(),
+  name: v.string(),
+  fieldCount: v.number(),
+});
+
 export const SAVE_TEMPLATE_PROJECTION = v.union([
-  v.strictObject({
-    templateId: passthroughId(),
-    name: v.string(),
-    fieldCount: v.number(),
-  }),
-  templateDescribeProjection,
+  SAVE_TEMPLATE_CREATE_PROJECTION,
+  TEMPLATE_DESCRIBE_PROJECTION,
 ]);

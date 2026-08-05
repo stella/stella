@@ -18,7 +18,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { containsRawUuid, PROJECTION_SCHEMA_FAILURE_MESSAGE } =
-  await import("./projection-schema");
+  await import("@/api/lib/chat/projection-schema");
 const { dehydrateInputRefs } = await import("./ref-mediation");
 const { runRegistryReadTool } = await import("./run-registry-tool");
 

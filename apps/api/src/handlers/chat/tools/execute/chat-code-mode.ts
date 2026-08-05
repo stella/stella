@@ -17,11 +17,11 @@ import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
-import { renderProjectionShape } from "@/api/handlers/chat/tools/registry-adapter/projection-schema";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
