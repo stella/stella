@@ -293,7 +293,16 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "diff.targetVersionId",
       "versionsNextCursor",
     ],
-    stripPaths: [],
+    // File-type field content embeds storage plumbing UUIDs (`content.id`,
+    // `content.pdfFileId`) chat cannot act on; every uploaded document has a
+    // file field, so leaving them undeclared tripped the UUID backstop on
+    // real matters. `fileName`/`mimeType` stay for the model.
+    stripPaths: [
+      "fields[].content.id",
+      "fields[].content.pdfFileId",
+      "version.fields[].content.id",
+      "version.fields[].content.pdfFileId",
+    ],
   },
   list_properties: {
     chatProjectable: true,
