@@ -3726,7 +3726,6 @@
       },
       "portraitDescription": "Las tablas necesitan más ancho en móvil. Gira el dispositivo para continuar.",
       "portraitTitle": "Gira a horizontal",
-      "reorderReadOnly": "Las filas de la tabla siguen el orden actual",
       "tightContent": "Compacto",
       "wrapContent": "Ajustar texto"
     },

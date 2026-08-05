@@ -3726,7 +3726,6 @@
       },
       "portraitDescription": "Tabellen benötigen auf Mobilgeräten mehr Breite. Drehen Sie das Gerät ins Querformat, um fortzufahren.",
       "portraitTitle": "Ins Querformat drehen",
-      "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung",
       "tightContent": "Kompakt",
       "wrapContent": "Text umbrechen"
     },

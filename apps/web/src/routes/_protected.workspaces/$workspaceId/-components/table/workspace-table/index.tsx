@@ -10,21 +10,15 @@ import {
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import {
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { countDescendants } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
@@ -128,7 +122,6 @@ export const WorkspaceTable = ({
   viewId,
 }: WorkspaceTableProps) => {
   const inlineFlow = outerScrollRef !== undefined;
-  const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
@@ -479,19 +472,6 @@ export const WorkspaceTable = ({
             }),
           ]
         : []),
-      dropTargetForElements({
-        element,
-        canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
-        onDrop: ({ source }) => {
-          if (source.data["type"] !== ENTITY_DRAG_TYPE) {
-            return;
-          }
-          stellaToast.add({
-            title: t("workspaces.table.reorderReadOnly"),
-            type: "info",
-          });
-        },
-      }),
       monitorForElements({
         canMonitor: ({ source }) =>
           source.data["type"] === TABLE_COLUMN_DRAG_TYPE,
@@ -534,7 +514,7 @@ export const WorkspaceTable = ({
         },
       }),
     );
-  }, [handleColumnReorder, t, fillHeight]);
+  }, [handleColumnReorder, fillHeight]);
 
   useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;
