@@ -84,6 +84,29 @@ describe("buildChatCodeMode", () => {
     expect(codeMode.systemPrompt).toContain("external_search_case_law");
   });
 
+  test("a converted tool's description carries its schema-derived Returns shape", async () => {
+    const codeMode = buildChatCodeMode(buildProps(selectScopedDb([])));
+
+    // Eager path: list_matters' Returns line lands in the system prompt stub.
+    expect(codeMode.systemPrompt).toContain("Returns: {");
+
+    // Lazy path: read_document's full description is served by discover_tools.
+    const discover = codeMode.discoveryTool?.execute ?? undefined;
+    if (discover === undefined) {
+      throw new Error("discover_tools has no server execute");
+    }
+    const discovered = JSON.stringify(
+      await discover({ toolNames: ["read_document"] }),
+    );
+    expect(discovered).toContain("Returns:");
+    expect(discovered).toContain("entityId");
+    expect(discovered).toContain("propertyId");
+    expect(discovered).toContain("versions?");
+    expect(discovered).toContain("diff");
+    // Stripped file plumbing is not advertised to the model.
+    expect(discovered).not.toContain("sha256Hex");
+  });
+
   test("runs a projected read tool end-to-end through the sandbox with refs, no raw UUIDs", async () => {
     const rows = [
       {

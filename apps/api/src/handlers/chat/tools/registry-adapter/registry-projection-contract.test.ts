@@ -12,6 +12,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+import { resolveMediationLists } from "./ref-mediation";
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -1261,8 +1262,9 @@ describe("registry projection contract", () => {
 
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
-      const entry = READ_TOOL_REF_FIELD_MAP[toolName];
-      const declared = entry.outputRefs.map((field) => field.path).sort();
+      // Hand-written or schema-derived, whichever artifact the entry carries.
+      const lists = resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName]);
+      const declared = lists.outputRefs.map((field) => field.path).sort();
       const exercised = [
         ...new Set(calls.flatMap((call) => call.expectRefPaths)),
       ].sort();
@@ -1325,7 +1327,9 @@ describe("registry projection contract", () => {
         // merely tolerated by the backstop. This stays meaningful even if a
         // path were ever declared as both strip and passthrough, where a
         // broken strip would otherwise survive the ok result.
-        for (const path of READ_TOOL_REF_FIELD_MAP[toolName].stripPaths) {
+        for (const path of resolveMediationLists(
+          READ_TOOL_REF_FIELD_MAP[toolName],
+        ).stripPaths) {
           expect(
             readPathValues(payload, path).length,
             `${toolName} (${call.mode}): declared stripPath "${path}" must ` +

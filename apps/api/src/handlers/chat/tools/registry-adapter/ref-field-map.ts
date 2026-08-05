@@ -1,4 +1,18 @@
+import * as v from "valibot";
+
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+
+import type {
+  ChatProjectionSchema,
+  RefMediationLists,
+  RegistryRefKind,
+} from "./projection-schema";
+import {
+  chatEntityRef,
+  chatRef,
+  passthroughId,
+  strippedField,
+} from "./projection-schema";
 
 /**
  * The read-only slice of the MCP registry, derived structurally from the single
@@ -32,86 +46,39 @@ type WriteToolDefinition = Extract<
 
 export type RegistryWriteToolName = WriteToolDefinition["name"];
 
-/**
- * The four tenant-content id kinds the chat ref registry mediates
- * (`createChatRefRegistry`). Every other id a registry handler emits (user,
- * task-link, invoice, time-entry, template, clause, playbook, audit-log,
- * usage-plan, or public case-law/BOE corpus id) is a handle the model may pass
- * back verbatim, not a tenant-content reference, so it stays outside this set.
- */
-export type RegistryRefKind = "matter" | "entity" | "contact" | "property";
-
-type SimpleRefKind = Exclude<RegistryRefKind, "entity">;
-
-/**
- * How an entity output ref recovers its owning workspace id, which
- * `toEntityRef` needs alongside the entity id. MCP handlers name these fields
- * differently per tool (a sibling `workspaceId`, a fixed `matter.id`, or the
- * tool's resolved `matter_id` input), so the source is declared per field
- * rather than guessed from key names.
- */
-export type EntityWorkspaceSource =
-  | { from: "sibling"; key: string }
-  | { from: "outputPath"; path: string }
-  | { from: "inputParam"; param: string }
-  // The output entity is a *different* entity than the request's own entity
-  // input named by `param`, but is validated (at write time, outside this
-  // orchestrator) to share its workspace, e.g. a task's linked entities. The
-  // workspace is the one already resolved when `param`'s ref was dehydrated,
-  // not a fresh lookup.
-  | { from: "inputEntityWorkspace"; param: string }
-  // The output entity IS the request's own entity input; the orchestrator
-  // reuses the ref it dehydrated on the way in, so no workspace lookup runs.
-  | { from: "inputEntity"; param: string };
-
-/**
- * One UUID-bearing output path and the tenant ref kind it carries. `path` uses
- * the same `a.b` / `a[].b` grammar as the egress text-field specs. Entity
- * fields additionally declare where their owning workspace id lives.
- */
-export type OutputRefField =
-  | { kind: SimpleRefKind; path: string }
-  | { kind: "entity"; path: string; workspace: EntityWorkspaceSource };
-
 /** One input parameter that accepts a chat ref, and the id kind it resolves to. */
 export type InputRefParam = { kind: RegistryRefKind; param: string };
 
 /**
  * The ref-mediation contract shared by the read and write ref-field maps: the
- * input refs to dehydrate, the output paths to hydrate into chat refs, and the
- * UUID-bearing output paths intentionally left un-refed. The generic mediation
- * cores (`dehydrateRefs`/`hydrateRefs`/`findUndeclaredUuidPathIn`) read exactly
- * these three lists, so a read entry and a write entry drive the same code.
+ * input refs to dehydrate, plus the output-side decision. The output side is
+ * one of two mutually exclusive artifacts:
+ *
+ * - a chat projection schema (`projection`), from which the three mediation
+ *   lists are derived mechanically (`deriveRefMediationEntry`) and whose
+ *   strict parse makes an undeclared handler field structurally unable to
+ *   reach the model; or
+ * - the hand-written lists (unconverted tools), where the runtime UUID
+ *   backstop alone guards undeclared fields.
+ *
+ * The `never`-typed exclusions make an entry that carries both a projection
+ * and hand lists fail typecheck, so a converted tool cannot keep a stale hand
+ * copy of what the schema now owns. Resolve the lists for either shape with
+ * `resolveMediationLists` (`ref-mediation.ts`); the generic mediation cores
+ * (`dehydrateRefs`/`hydrateRefs`/`findUndeclaredUuidPathIn`) read exactly
+ * those three lists, so a read entry and a write entry drive the same code.
  */
 export type RefMediationEntry = {
   inputRefs: readonly InputRefParam[];
-  outputRefs: readonly OutputRefField[];
-  /**
-   * UUID-bearing output paths intentionally left un-refed. Each path uses the
-   * same `a.b` / `a[].b` grammar as `outputRefs`. Forces an explicit decision
-   * per tool: an id here is either a non-tenant handle (user/invoice/
-   * template/audit/public-corpus id) or an entity id whose owning workspace is
-   * not statically recoverable and is deferred to the manifest-swap step.
-   *
-   * Load-bearing, not documentation: `findUndeclaredUuidPathIn`
-   * (`ref-mediation.ts`) walks the hydrated payload and allows a surviving
-   * raw uuid only at one of these exact paths. An `outputRefs` path is
-   * deliberately NOT part of this allowlist — hydration must have already
-   * rewritten it to a chat ref, so a uuid still there means hydration missed
-   * it, which fails closed the same as an undeclared path.
-   */
-  passthroughIdPaths: readonly string[];
-  /**
-   * Output paths deleted from the chat projection before hydration and the
-   * UUID backstop run. For fields other surfaces need (web-UI field/file
-   * plumbing handles) that chat cannot act on: stripping keeps them out of
-   * the model context entirely instead of leaking them as passthrough noise.
-   * Same `a.b` / `a[].b` grammar as `outputRefs`. Required so every tool
-   * records an explicit decision, like `passthroughIdPaths`; the backstop
-   * still fails closed on any undeclared survivor.
-   */
-  stripPaths: readonly string[];
-};
+} & (
+  | ({ projection?: never } & RefMediationLists)
+  | {
+      projection: ChatProjectionSchema;
+      outputRefs?: never;
+      passthroughIdPaths?: never;
+      stripPaths?: never;
+    }
+);
 
 export type RegistryRefFieldMapEntry = RefMediationEntry & {
   /**
@@ -123,6 +90,261 @@ export type RegistryRefFieldMapEntry = RefMediationEntry & {
    */
   chatProjectable: boolean;
 };
+
+// --- Chat projection schemas (converted tools) ------------------------------------
+// One artifact per converted tool: the exact shape the chat surface forwards,
+// with per-field chat semantics attached (`chatRef`/`chatEntityRef`/
+// `passthroughId`/`strippedField`). The strict parse in the orchestrator makes
+// an undeclared handler field fail closed BEFORE it can reach the model, and
+// `deriveRefMediationEntry` derives the entry's outputRefs/passthrough/strip
+// lists from the same annotations, so shape and ref decisions cannot drift.
+
+/**
+ * list_matters, list branch. Source of truth: `handleListMattersTool`
+ * (`stella-tools.ts`) — one row per matter plus the opaque page cursor.
+ */
+const listMattersListProjection = v.strictObject({
+  matters: v.array(
+    v.strictObject({
+      // A matter's id IS its workspace id: a matter chat ref.
+      id: chatRef("matter"),
+      name: v.string(),
+      reference: v.string(),
+      status: v.string(),
+      lastActivityAt: v.string(),
+      createdAt: v.string(),
+    }),
+  ),
+  // Opaque base64 cursor (boundary matter id), not UUID-formatted.
+  nextCursor: v.nullable(passthroughId()),
+});
+
+/**
+ * list_matters, detail branch (one matter's overview). Source of truth:
+ * `readMatterOverview` (`stella-tools.ts`) composing `readWorkspaceHandler`,
+ * `readOverviewHandler` (avatar URLs stripped at the handler), and the
+ * contact/member card mappers.
+ */
+const listMattersDetailProjection = v.strictObject({
+  matter: v.strictObject({
+    id: chatRef("matter"),
+    name: v.string(),
+    reference: v.string(),
+    status: v.string(),
+    clientName: v.nullable(v.string()),
+  }),
+  overview: v.strictObject({
+    entityCount: v.number(),
+    documentCount: v.number(),
+    taskCount: v.number(),
+    recentEntities: v.array(
+      v.strictObject({
+        // The overview handler's item field is `entityId`, not `id`
+        // (`readOverviewHandler` returns `{ entityId: e.id, ... }`). Every
+        // recent entity belongs to the one matter this response describes,
+        // so its workspace is the payload's `matter.id`.
+        entityId: chatEntityRef({ from: "outputPath", path: "matter.id" }),
+        name: v.string(),
+        kind: v.string(),
+        status: v.nullable(v.string()),
+        priority: v.nullable(v.string()),
+        dueDate: v.nullable(v.string()),
+        mimeType: v.nullable(v.string()),
+        // The primary-field plumbing ids exist for the web UI (mime icon,
+        // click-to-open); chat cannot act on them and they carry raw UUIDs
+        // whenever a recent entity has a primary field, which tripped the
+        // UUID backstop on every non-empty matter until they were stripped.
+        fieldId: strippedField(),
+        propertyId: strippedField(),
+        pdfFileId: strippedField(),
+        encrypted: v.boolean(),
+        createdAt: v.string(),
+        updatedAt: v.nullable(v.string()),
+        createdBy: v.nullable(v.string()),
+        createdByDeletedAt: v.nullable(v.string()),
+        assignedTo: v.nullable(v.string()),
+        assignedToDeletedAt: v.nullable(v.string()),
+      }),
+    ),
+  }),
+  contacts: v.array(
+    v.strictObject({
+      // The matter-contact link id, so link_matter_contact can unlink a
+      // precise role even when the contact holds several: a handle, no chat
+      // ref kind.
+      workspaceContactId: passthroughId(),
+      contactId: chatRef("contact"),
+      displayName: v.string(),
+      role: v.string(),
+      type: v.string(),
+    }),
+  ),
+  members: v.array(
+    v.strictObject({
+      // Workspace member (user) id: a handle save_task assignees accept.
+      userId: passthroughId(),
+      name: v.string(),
+    }),
+  ),
+});
+
+const LIST_MATTERS_PROJECTION: ChatProjectionSchema = v.union([
+  listMattersListProjection,
+  listMattersDetailProjection,
+]);
+
+/**
+ * The `FieldContent` union (`schema-validators.ts`), modeled variant by
+ * variant so a new file-plumbing field cannot slip past the strict parse. The
+ * file variant's storage/derivative plumbing (file ids, integrity hash,
+ * derivative statuses, thumbnail placeholder) is web-UI/file-pipeline
+ * machinery chat cannot act on: stripped, which is what keeps the raw
+ * `content.id`/`content.pdfFileId` file UUIDs (the second prod backstop trip)
+ * out of the model context entirely.
+ */
+const documentFieldContentProjection: ChatProjectionSchema = v.variant("type", [
+  v.strictObject({ version: v.literal(1), type: v.literal("error") }),
+  v.strictObject({ version: v.literal(1), type: v.literal("pending") }),
+  v.strictObject({ version: v.literal(1), type: v.literal("unsupported") }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("file"),
+    id: strippedField(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    sizeBytes: v.number(),
+    encrypted: v.boolean(),
+    sha256Hex: strippedField(),
+    pdfFileId: strippedField(),
+    pdfDerivative: v.optional(strippedField()),
+    thumbnailFileId: v.optional(strippedField()),
+    placeholder: v.optional(strippedField()),
+    thumbnailDerivative: v.optional(strippedField()),
+    scanWarnings: v.optional(v.array(v.string())),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("text"),
+    value: v.string(),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("single-select"),
+    value: v.nullable(v.string()),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("multi-select"),
+    value: v.array(v.string()),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("date"),
+    value: v.nullable(v.string()),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("int"),
+    value: v.number(),
+    currency: v.nullable(v.string()),
+  }),
+  v.strictObject({
+    version: v.literal(1),
+    type: v.literal("clip"),
+    url: v.string(),
+    snippet: v.optional(v.string()),
+    citation: v.optional(v.string()),
+    jurisdiction: v.optional(v.string()),
+    sourceType: v.optional(v.string()),
+  }),
+]);
+
+/**
+ * One field row of a document version, shared by read_document's default and
+ * specific-version branches (both select `{ id, propertyId, content }`).
+ */
+const documentFieldProjection = v.strictObject({
+  // Field-row handle, no chat ref kind.
+  id: passthroughId(),
+  propertyId: chatRef("property"),
+  content: documentFieldContentProjection,
+});
+
+/** One version-history entry (`loadVersionHistory`, `document-tools.ts`). */
+const documentVersionEntryProjection = v.strictObject({
+  // Entity-version handle, no chat ref kind.
+  id: passthroughId(),
+  versionNumber: v.number(),
+  stamp: v.nullable(v.string()),
+  label: v.nullable(v.string()),
+  description: v.nullable(v.string()),
+  createdAt: v.string(),
+});
+
+// The output entity IS the request's own `entity_id` input in every branch;
+// hydration reuses the ref dehydrated on the way in.
+const readDocumentEntityId = () =>
+  chatEntityRef({ from: "inputEntity", param: "entity_id" });
+
+/**
+ * read_document, all three branches (`handleReadDocumentTool`,
+ * `document-tools.ts`): default (current version, optionally with version
+ * history), specific version, and version diff.
+ */
+const READ_DOCUMENT_PROJECTION: ChatProjectionSchema = v.union([
+  // Default branch: current version metadata + field values, plus the
+  // version-history page when `include_versions` was requested.
+  v.strictObject({
+    entityId: readDocumentEntityId(),
+    kind: v.string(),
+    name: v.string(),
+    fields: v.array(documentFieldProjection),
+    versions: v.optional(v.array(documentVersionEntryProjection)),
+    // Opaque `[versionNumber, entityVersionId]` cursor, not UUID-formatted.
+    versionsNextCursor: v.optional(v.nullable(passthroughId())),
+  }),
+  // version_id branch: one version's metadata + field values.
+  v.strictObject({
+    entityId: readDocumentEntityId(),
+    name: v.string(),
+    version: v.strictObject({
+      id: passthroughId(),
+      versionNumber: v.number(),
+      stamp: v.nullable(v.string()),
+      label: v.nullable(v.string()),
+      description: v.nullable(v.string()),
+      createdAt: v.string(),
+      fields: v.array(documentFieldProjection),
+    }),
+  }),
+  // compare_with_version_id branch: plain-text line diff between two versions.
+  v.strictObject({
+    entityId: readDocumentEntityId(),
+    name: v.string(),
+    diff: v.strictObject({
+      // Entity-version handles, no chat ref kind.
+      baseVersionId: passthroughId(),
+      targetVersionId: passthroughId(),
+      segments: v.array(
+        v.variant("kind", [
+          v.strictObject({
+            kind: v.picklist(["added", "removed", "unchanged", "gap"]),
+            text: v.string(),
+          }),
+          v.strictObject({
+            kind: v.literal("changed"),
+            runs: v.array(
+              v.strictObject({
+                kind: v.picklist(["same", "del", "ins"]),
+                text: v.string(),
+              }),
+            ),
+          }),
+        ]),
+      ),
+    }),
+  }),
+]);
 
 /**
  * Per-tool ref decision for every read tool in the MCP registry. Keyed by the
@@ -159,42 +381,13 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Matters / contacts / content -----------------------------------------
+  // Converted: the projection schema above is the single output-side artifact;
+  // its strict parse fails closed on any handler field the schema does not
+  // declare, and the mediation lists are derived from its annotations.
   list_matters: {
     chatProjectable: true,
     inputRefs: [{ kind: "matter", param: "matter_id" }],
-    outputRefs: [
-      { kind: "matter", path: "matters[].id" },
-      { kind: "matter", path: "matter.id" },
-      { kind: "contact", path: "contacts[].contactId" },
-      {
-        kind: "entity",
-        // The overview handler's item field is `entityId`, not `id`
-        // (`readOverviewHandler` returns `{ entityId: e.id, ... }`); the path
-        // must match the actual key or the walker silently skips every slot
-        // and the raw entity uuid reaches the model.
-        path: "overview.recentEntities[].entityId",
-        // Detail mode: every recent entity belongs to the one matter this
-        // response describes, so its workspace is the payload's `matter.id`.
-        workspace: { from: "outputPath", path: "matter.id" },
-      },
-    ],
-    // Matter-contact link ids and workspace member (user) ids are handles
-    // with no chat ref kind; `nextCursor` is an opaque base64 cursor (not
-    // UUID-formatted).
-    passthroughIdPaths: [
-      "contacts[].workspaceContactId",
-      "members[].userId",
-      "nextCursor",
-    ],
-    // The overview feed's field/file plumbing ids exist for the web UI (mime
-    // icon, click-to-open); chat cannot act on them and they carry raw UUIDs
-    // whenever a recent entity has a primary field, which tripped the UUID
-    // backstop on every non-empty matter until they were stripped here.
-    stripPaths: [
-      "overview.recentEntities[].fieldId",
-      "overview.recentEntities[].propertyId",
-      "overview.recentEntities[].pdfFileId",
-    ],
+    projection: LIST_MATTERS_PROJECTION,
   },
   list_contacts: {
     chatProjectable: true,
@@ -263,46 +456,15 @@ export const READ_TOOL_REF_FIELD_MAP = {
     passthroughIdPaths: ["nextCursor"],
     stripPaths: [],
   },
+  // Converted: see READ_DOCUMENT_PROJECTION above. Beyond reproducing the
+  // previous hand lists, the schema strips the file-content plumbing UUIDs
+  // (`fields[].content.id`/`.pdfFileId` and the version-branch twins) that
+  // the hand entry never declared and that tripped the prod backstop on any
+  // document whose field held a file.
   read_document: {
     chatProjectable: true,
     inputRefs: [{ kind: "entity", param: "entity_id" }],
-    outputRefs: [
-      {
-        kind: "entity",
-        path: "entityId",
-        workspace: { from: "inputEntity", param: "entity_id" },
-      },
-      // Both field branches select `{ id, propertyId, content }`: the default
-      // branch via `readEntityByIdHandler` (`fields`), the specific-version
-      // branch via the `version_id` field query (`version.fields`). So
-      // `propertyId` is the property id at both paths, pinned by test.
-      { kind: "property", path: "fields[].propertyId" },
-      { kind: "property", path: "version.fields[].propertyId" },
-    ],
-    // Entity-version handles (`version.id`/`versions[].id`, the specific-
-    // version branch's own `version.fields[].id`, and the diff branch's
-    // `diff.baseVersionId`/`diff.targetVersionId`), field-row handles
-    // (`fields[].id`), and `versionsNextCursor`, an opaque
-    // `[versionNumber, entityVersionId]` cursor — none carry a chat ref kind.
-    passthroughIdPaths: [
-      "version.id",
-      "versions[].id",
-      "version.fields[].id",
-      "fields[].id",
-      "diff.baseVersionId",
-      "diff.targetVersionId",
-      "versionsNextCursor",
-    ],
-    // File-type field content embeds storage plumbing UUIDs (`content.id`,
-    // `content.pdfFileId`) chat cannot act on; every uploaded document has a
-    // file field, so leaving them undeclared tripped the UUID backstop on
-    // real matters. `fileName`/`mimeType` stay for the model.
-    stripPaths: [
-      "fields[].content.id",
-      "fields[].content.pdfFileId",
-      "version.fields[].content.id",
-      "version.fields[].content.pdfFileId",
-    ],
+    projection: READ_DOCUMENT_PROJECTION,
   },
   list_properties: {
     chatProjectable: true,

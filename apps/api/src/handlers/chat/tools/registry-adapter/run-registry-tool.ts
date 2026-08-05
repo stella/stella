@@ -22,12 +22,17 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import type { RegistryReadToolName } from "./ref-field-map";
+import { applyProjectionSchema } from "./projection-schema";
+import type {
+  RegistryReadToolName,
+  RegistryRefFieldMapEntry,
+} from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import {
   dehydrateInputRefs,
-  findUndeclaredUuidPath,
-  hydrateOutputRefs,
+  findUndeclaredUuidPathIn,
+  hydrateRefs,
+  resolveMediationLists,
   stripDeclaredPaths,
 } from "./ref-mediation";
 
@@ -89,6 +94,57 @@ export const REF_PROJECTION_FAILURE_MESSAGE =
   "The tool result contained an internal identifier the chat projection " +
   "could not map to a reference. This is a server-side defect, not a " +
   "problem with your input; do not retry this call.";
+
+/**
+ * Surfaced to the model when a converted tool's payload fails its projection
+ * schema's strict parse: a handler emitted a field nobody classified (or a
+ * declared field changed shape). Same fail-closed semantics as
+ * `REF_PROJECTION_FAILURE_MESSAGE`; the parse fires before strip/hydrate, so
+ * the undeclared field never reaches the model by construction.
+ */
+export const PROJECTION_SCHEMA_FAILURE_MESSAGE =
+  "The tool result did not match the shape the chat projection declares " +
+  "for this tool. This is a server-side defect, not a problem with your " +
+  "input; do not retry this call.";
+
+/**
+ * Strict-parse a converted tool's payload against its projection schema; an
+ * unconverted entry passes through untouched. Shared by the read and write
+ * orchestrators. The failure carries only issue paths (never values) to
+ * telemetry, mirroring the UUID backstop's no-leak discipline.
+ */
+export const applyEntryProjection = ({
+  entry,
+  payload,
+  source,
+  toolName,
+}: {
+  entry: RegistryRefFieldMapEntry;
+  payload: unknown;
+  source: "run-registry-tool" | "run-registry-write-tool";
+  toolName: string;
+}): Result<unknown, ChatToolError> => {
+  if (entry.projection === undefined) {
+    return Result.ok(payload);
+  }
+  const projected = applyProjectionSchema({
+    payload,
+    schema: entry.projection,
+  });
+  if (Result.isError(projected)) {
+    const error = new ChatToolError({
+      kind: "server-defect",
+      message: PROJECTION_SCHEMA_FAILURE_MESSAGE,
+    });
+    captureError(error, {
+      source,
+      toolName,
+      paths: projected.error.issuePaths.join(", "),
+    });
+    return Result.err(error);
+  }
+  return Result.ok(projected.value);
+};
 
 const MCP_CODE_TO_CHAT_KIND = {
   validation_error: "invalid-input",
@@ -189,7 +245,8 @@ export const runRegistryReadTool = async ({
   context,
   refRegistry,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
-  if (!READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable) {
+  const entry = READ_TOOL_REF_FIELD_MAP[toolName];
+  if (!entry.chatProjectable) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
@@ -237,15 +294,30 @@ export const runRegistryReadTool = async ({
     return Result.err(payload.error);
   }
 
-  const stripped = stripDeclaredPaths({
-    output: payload.value,
-    stripPaths: READ_TOOL_REF_FIELD_MAP[toolName].stripPaths,
+  // Converted tools: strict-parse the payload against the projection schema
+  // BEFORE strip/hydrate. An unknown key — a field nobody classified — fails
+  // closed here, so an undeclared field is structurally unable to reach the
+  // model; the error carries only issue paths (never values) to telemetry.
+  const projected = applyEntryProjection({
+    entry,
+    payload: payload.value,
+    source: "run-registry-tool",
+    toolName,
   });
-  const hydrated = hydrateOutputRefs({
+  if (Result.isError(projected)) {
+    return Result.err(projected.error);
+  }
+
+  const mediation = resolveMediationLists(entry);
+  const stripped = stripDeclaredPaths({
+    output: projected.value,
+    stripPaths: mediation.stripPaths,
+  });
+  const hydrated = hydrateRefs({
     dehydration: dehydrated.value,
     output: stripped,
+    outputRefs: mediation.outputRefs,
     refRegistry,
-    toolName,
   });
 
   // Runtime backstop for the "no tenant UUID reaches the model" invariant: the
@@ -256,7 +328,10 @@ export const runRegistryReadTool = async ({
   // fails closed instead of leaking; the error message never repeats the
   // payload or the path, so it cannot itself leak the value it is refusing,
   // while the offending path (never the value) still reaches telemetry.
-  const offendingPath = findUndeclaredUuidPath({ toolName, payload: hydrated });
+  const offendingPath = findUndeclaredUuidPathIn({
+    passthroughIdPaths: mediation.passthroughIdPaths,
+    payload: hydrated,
+  });
   if (offendingPath !== undefined) {
     const error = new ChatToolError({
       kind: "server-defect",

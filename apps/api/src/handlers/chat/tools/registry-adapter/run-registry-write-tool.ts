@@ -24,9 +24,11 @@ import {
   dehydrateRefs,
   findUndeclaredUuidPathIn,
   hydrateRefs,
+  resolveMediationLists,
   stripDeclaredPaths,
 } from "./ref-mediation";
 import {
+  applyEntryProjection,
   classifyRegistryErrorKind,
   DEFAULT_TOOL_ERROR_MESSAGE,
   firstTextContent,
@@ -179,14 +181,29 @@ export const runRegistryWriteTool = async ({
     return Result.err(payload.error);
   }
 
+  // Same strict-parse gate as the read path: a converted write tool's payload
+  // must match its projection schema before strip/hydrate, so an undeclared
+  // field fails closed by construction. No write tool is converted yet; the
+  // gate is a pass-through until a write entry gains a `projection`.
+  const projected = applyEntryProjection({
+    entry,
+    payload: payload.value,
+    source: "run-registry-write-tool",
+    toolName,
+  });
+  if (Result.isError(projected)) {
+    return Result.err(projected.error);
+  }
+
+  const mediation = resolveMediationLists(entry);
   const stripped = stripDeclaredPaths({
-    output: payload.value,
-    stripPaths: entry.stripPaths,
+    output: projected.value,
+    stripPaths: mediation.stripPaths,
   });
   const hydrated = hydrateRefs({
     dehydration: dehydrated.value,
     output: stripped,
-    outputRefs: entry.outputRefs,
+    outputRefs: mediation.outputRefs,
     refRegistry,
   });
 
@@ -195,7 +212,7 @@ export const runRegistryWriteTool = async ({
   // leaked. The message never repeats the payload or path, so it cannot itself
   // leak the value; the offending path (never the value) reaches telemetry.
   const offendingPath = findUndeclaredUuidPathIn({
-    passthroughIdPaths: entry.passthroughIdPaths,
+    passthroughIdPaths: mediation.passthroughIdPaths,
     payload: hydrated,
   });
   if (offendingPath !== undefined) {

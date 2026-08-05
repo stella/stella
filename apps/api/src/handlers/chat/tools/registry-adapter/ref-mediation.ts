@@ -12,11 +12,33 @@ import {
 
 import type {
   EntityWorkspaceSource,
-  InputRefParam,
   OutputRefField,
+  RefMediationLists,
+} from "./projection-schema";
+import { deriveRefMediationEntry } from "./projection-schema";
+import type {
+  InputRefParam,
+  RefMediationEntry,
   RegistryReadToolName,
 } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+/**
+ * The three output-side mediation lists for a map entry, whichever artifact
+ * carries them: derived from the entry's projection schema when the tool is
+ * converted (memoized in `deriveRefMediationEntry`), or the entry's own
+ * hand-written lists otherwise.
+ */
+export const resolveMediationLists = (
+  entry: RefMediationEntry,
+): RefMediationLists =>
+  entry.projection === undefined
+    ? {
+        outputRefs: entry.outputRefs,
+        passthroughIdPaths: entry.passthroughIdPaths,
+        stripPaths: entry.stripPaths,
+      }
+    : deriveRefMediationEntry(entry.projection);
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -114,7 +136,8 @@ export const findUndeclaredUuidPath = ({
   payload: unknown;
 }): string | undefined =>
   findUndeclaredUuidPathIn({
-    passthroughIdPaths: READ_TOOL_REF_FIELD_MAP[toolName].passthroughIdPaths,
+    passthroughIdPaths: resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName])
+      .passthroughIdPaths,
     payload,
   });
 
@@ -492,7 +515,8 @@ export const hydrateOutputRefs = ({
   dehydration: DehydratedInput;
 }): unknown =>
   hydrateRefs({
-    outputRefs: READ_TOOL_REF_FIELD_MAP[toolName].outputRefs,
+    outputRefs: resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName])
+      .outputRefs,
     output,
     refRegistry,
     dehydration,

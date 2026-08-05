@@ -17,7 +17,11 @@ import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
-import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { renderProjectionShape } from "@/api/handlers/chat/tools/registry-adapter/projection-schema";
+import type {
+  RegistryReadToolName,
+  RegistryRefFieldMapEntry,
+} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
@@ -104,6 +108,25 @@ const CODE_MODE_RUNTIME_CONFIG = {
  * lazy flags) back both the runtime tools (real registry runner) and the static
  * system-prompt constant (no-op runner, never invoked for prompt generation).
  */
+/**
+ * The registry description, plus — for a tool with a projection schema — a
+ * compact `Returns:` shape derived from that same schema. The runtime
+ * strict-parses payloads against the schema, so the shape the model plans
+ * against here is exactly the shape it will receive: this closes the
+ * "model guesses output keys and iterates a field that isn't there" failure
+ * class for converted tools.
+ */
+const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
+  const definition =
+    getStaticMcpToolDefinition(toolName) ??
+    panic(`Chat read tool ${toolName} is missing from the static registry`);
+  const entry: RegistryRefFieldMapEntry = READ_TOOL_REF_FIELD_MAP[toolName];
+  if (entry.projection === undefined) {
+    return definition.description;
+  }
+  return `${definition.description}\nReturns: ${renderProjectionShape(entry.projection)}`;
+};
+
 const buildChatReadTools = (
   runReadTool: (toolName: RegistryReadToolName, args: unknown) => unknown,
 ): CodeModeTool[] =>
@@ -114,7 +137,7 @@ const buildChatReadTools = (
 
     return toolDefinition({
       name: toolName,
-      description: definition.description,
+      description: chatReadToolDescription(toolName),
       inputSchema: toToolInputSchema(definition.inputSchema),
       lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
     }).server(async (args: unknown) => await runReadTool(toolName, args));
