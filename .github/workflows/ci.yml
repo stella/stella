@@ -738,7 +738,7 @@ jobs:
           done
 
       - name: Catalogue pinned-content check
-        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         timeout-minutes: 5
         env:
           GITHUB_TOKEN: ${{ github.token }}
