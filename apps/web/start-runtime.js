@@ -129,6 +129,12 @@ const serveClientAsset = async (request) => {
 serve({
   hostname,
   port,
+  // Longer than the load balancer's 60 s idle timeout (Bun defaults to
+  // 10 s). The balancer may reuse an idle backend connection any time
+  // before its own timeout expires, so the server must never close first:
+  // a request written onto a closing connection is lost in flight and the
+  // client hangs with no response.
+  idleTimeout: 75,
   async fetch(request) {
     const requestUrl = new URL(request.url);
 
