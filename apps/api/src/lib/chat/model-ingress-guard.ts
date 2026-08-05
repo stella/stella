@@ -10,7 +10,7 @@ import { TelemetryError } from "@/api/lib/errors/tagged-errors";
  * Last-line guard for the "tenant workspace ids reach the model only as chat
  * refs" invariant, applied where every provider-bound surface converges in
  * `streamChat`. The tool-egress side already fails closed per tool
- * (`findUndeclaredUuidPath`); this covers the ingress side, where the exact
+ * (`projectForChat`'s UUID invariant); this covers the ingress side, where the exact
  * tenant set is known per request (the accessible-workspace ids are already
  * loaded on every send), so membership checks are precise: no pattern
  * heuristics, no false positives on public UUIDs (case-law decision ids,

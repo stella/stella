@@ -52,13 +52,11 @@ export type InputRefParam = { kind: RegistryRefKind; param: string };
 /**
  * The ref-mediation contract of one chat-projected tool: the input refs to
  * dehydrate, plus the projection schema that is the single output-side
- * artifact. The three mediation lists (`outputRefs`/`passthroughIdPaths`/
- * `stripPaths`) are derived mechanically from the schema's annotations
- * (`deriveRefMediationEntry`), and its strict parse makes an undeclared
- * handler field structurally unable to reach the model. Hand-written path
- * lists are deliberately unrepresentable here: there is no field to put them
- * in, so a new tool cannot reintroduce the hand-maintained mirror this map
- * used to be.
+ * artifact. `projectForChat` applies the schema in one pass (strict parse,
+ * strip, ref hydration, UUID invariant), so an undeclared handler field is
+ * structurally unable to reach the model. Hand-written path lists are
+ * deliberately unrepresentable here: there is no field to put them in, so a
+ * new tool cannot reintroduce the hand-maintained mirror this map used to be.
  */
 export type RefMediationEntry = {
   inputRefs: readonly InputRefParam[];
@@ -79,14 +77,13 @@ export type RegistryRefFieldMapEntry =
 // --- Chat projection schemas -------------------------------------------------
 // One artifact per projected tool: the exact shape the chat surface forwards,
 // with per-field chat semantics attached (`chatRef`/`chatEntityRef`/
-// `passthroughId`/`strippedField`). The strict parse in the orchestrator makes
-// an undeclared handler field fail closed BEFORE it can reach the model, and
-// `deriveRefMediationEntry` derives the entry's outputRefs/passthrough/strip
-// lists from the same annotations, so shape and ref decisions cannot drift.
-// Every schema is written from the handler's own payload construction
-// (`apps/api/src/mcp/*-tools.ts`), branch by branch; per-tool derivation tests
-// in `projection-schema.test.ts` pin each schema's derived lists to the hand
-// lists it replaced.
+// `passthroughId`/`strippedField`). `projectForChat` strict-parses each
+// payload against its schema (an undeclared handler field fails closed BEFORE
+// it can reach the model) and applies the annotations in the same walk, so
+// shape and ref decisions cannot drift. Every schema is written from the
+// handler's own payload construction (`apps/api/src/mcp/*-tools.ts`), branch
+// by branch; per-tool derivation tests in `projection-schema.test.ts` pin
+// each schema's derived lists to the hand lists they replaced.
 
 /**
  * list_matters, list branch. Source of truth: `handleListMattersTool`

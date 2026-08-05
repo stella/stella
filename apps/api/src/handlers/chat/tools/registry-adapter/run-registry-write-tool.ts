@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
@@ -18,22 +17,15 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import { deriveRefMediationEntry } from "./projection-schema";
+import { projectForChat } from "./projection-schema";
 import type { RegistryWriteToolName } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+import { dehydrateRefs } from "./ref-mediation";
 import {
-  dehydrateRefs,
-  findUndeclaredUuidPathIn,
-  hydrateRefs,
-  stripDeclaredPaths,
-} from "./ref-mediation";
-import {
-  applyEntryProjection,
   classifyRegistryErrorKind,
   DEFAULT_TOOL_ERROR_MESSAGE,
   firstTextContent,
   parsePayload,
-  REF_PROJECTION_FAILURE_MESSAGE,
 } from "./run-registry-tool";
 
 /**
@@ -181,51 +173,16 @@ export const runRegistryWriteTool = async ({
     return Result.err(payload.error);
   }
 
-  // Same strict-parse gate as the read path: the write tool's payload must
-  // match its projection schema before strip/hydrate, so an undeclared field
-  // fails closed by construction.
-  const projected = applyEntryProjection({
+  // Same single schema-driven pass as the read path: strict parse (an
+  // undeclared field fails closed by construction), then strip, ref
+  // hydration, and the fail-closed UUID invariant in one walk. Failures
+  // carry only paths to telemetry, never values.
+  return projectForChat({
+    dehydration: dehydrated.value,
     payload: payload.value,
-    projection: entry.projection,
+    refRegistry,
+    schema: entry.projection,
     source: "run-registry-write-tool",
     toolName,
   });
-  if (Result.isError(projected)) {
-    return Result.err(projected.error);
-  }
-
-  const mediation = deriveRefMediationEntry(entry.projection);
-  const stripped = stripDeclaredPaths({
-    output: projected.value,
-    stripPaths: mediation.stripPaths,
-  });
-  const hydrated = hydrateRefs({
-    dehydration: dehydrated.value,
-    output: stripped,
-    outputRefs: mediation.outputRefs,
-    refRegistry,
-  });
-
-  // Same fail-closed backstop the read path runs: a raw uuid surviving anywhere
-  // the tool's `passthroughIdPaths` does not license is refused rather than
-  // leaked. The message never repeats the payload or path, so it cannot itself
-  // leak the value; the offending path (never the value) reaches telemetry.
-  const offendingPath = findUndeclaredUuidPathIn({
-    passthroughIdPaths: mediation.passthroughIdPaths,
-    payload: hydrated,
-  });
-  if (offendingPath !== undefined) {
-    const error = new ChatToolError({
-      kind: "server-defect",
-      message: REF_PROJECTION_FAILURE_MESSAGE,
-    });
-    captureError(error, {
-      source: "run-registry-write-tool",
-      toolName,
-      path: offendingPath,
-    });
-    return Result.err(error);
-  }
-
-  return Result.ok(hydrated);
 };

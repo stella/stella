@@ -27,13 +27,9 @@ void mock.module("@/api/mcp/gateway/list-tools", () => ({
 }));
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
-const {
-  containsRawUuid,
-  dehydrateRefs,
-  findUndeclaredUuidPathIn,
-  hydrateRefs,
-} = await import("./ref-mediation");
-const { deriveRefMediationEntry } = await import("./projection-schema");
+const { dehydrateRefs } = await import("./ref-mediation");
+const { containsRawUuid, projectForChat, REF_PROJECTION_FAILURE_MESSAGE } =
+  await import("./projection-schema");
 const { WRITE_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
 const { applyChatApprovalConfirmation, runRegistryWriteTool } =
   await import("./run-registry-write-tool");
@@ -128,9 +124,9 @@ describe("runRegistryWriteTool (orchestration)", () => {
 });
 
 describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
-  // These drive the exact map entries runRegistryWriteTool feeds into the
-  // shared mediation cores, so they cover input dehydration and output
-  // hydration/backstop for writes without depending on a live MCP handler.
+  // These drive the exact map entries runRegistryWriteTool feeds into
+  // dehydration and `projectForChat`, so they cover input dehydration and
+  // output projection for writes without depending on a live MCP handler.
 
   test("save_matter: input refs dehydrate, the returned matter id hydrates", () => {
     const registry = createChatRefRegistry();
@@ -146,24 +142,16 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     expect(dehydrated.args["client_id"]).toBe(CONTACT_UUID);
     expect(dehydrated.args["name"]).toBe("Acme");
 
-    const hydrated = hydrateRefs({
+    const projected = projectForChat({
       dehydration: dehydrated,
-      output: { matterId: WS_UUID, updated: true },
-      outputRefs: deriveRefMediationEntry(
-        WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
-      ).outputRefs,
+      payload: { matterId: WS_UUID, updated: true },
       refRegistry: registry,
-    });
-    expect(hydrated).toEqual({ matterId: matterRef, updated: true });
-    expect(containsRawUuid(hydrated)).toBe(false);
-    expect(
-      findUndeclaredUuidPathIn({
-        passthroughIdPaths: deriveRefMediationEntry(
-          WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
-        ).passthroughIdPaths,
-        payload: hydrated,
-      }),
-    ).toBeUndefined();
+      schema: WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
+      source: "run-registry-write-tool",
+      toolName: "save_matter",
+    }).unwrap();
+    expect(projected).toEqual({ matterId: matterRef, updated: true });
+    expect(containsRawUuid(projected)).toBe(false);
   });
 
   test("set_field_value dehydrates its entity and property refs", () => {
@@ -189,16 +177,41 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     );
   });
 
-  test("the backstop fails closed on a raw uuid at a path the write map does not license", () => {
-    // save_matter declares only `matterId` as an output ref and no passthrough
-    // paths, so a raw uuid anywhere else is refused rather than leaked.
-    const offending = findUndeclaredUuidPathIn({
-      passthroughIdPaths: deriveRefMediationEntry(
-        WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
-      ).passthroughIdPaths,
-      payload: { matterId: "mat_1", leaked: OTHER_WS_UUID },
+  test("the UUID invariant fails closed on a raw uuid in a declared plain field", () => {
+    // manage_organization's settings echo declares `matterNumberPattern` as an
+    // ordinary string, which no annotation licenses to carry a UUID: a raw
+    // uuid there is refused rather than leaked, with only the path (never the
+    // value) reaching telemetry.
+    captureErrorMock.mockClear();
+    const result = projectForChat({
+      dehydration: {
+        args: {},
+        dehydratedEntityRefs: new Map(),
+        resolvedEntityParams: {},
+        resolvedMatterParams: {},
+      },
+      payload: { matterNumberPattern: OTHER_WS_UUID },
+      refRegistry: createChatRefRegistry(),
+      schema: WRITE_TOOL_REF_FIELD_MAP.manage_organization.projection,
+      source: "run-registry-write-tool",
+      toolName: "manage_organization",
     });
-    expect(offending).toBe("leaked");
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.kind).toBe("server-defect");
+      expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
+    }
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: REF_PROJECTION_FAILURE_MESSAGE }),
+      {
+        path: "matterNumberPattern",
+        source: "run-registry-write-tool",
+        toolName: "manage_organization",
+      },
+    );
+    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
   });
 });
 

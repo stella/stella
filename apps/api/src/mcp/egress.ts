@@ -40,9 +40,9 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * not here. The chat registry adapter (`run-registry-tool.ts`) is the one
  * caller that also crosses into third-party model context: it runs this same
  * pipeline, then separately rewrites ids into opaque chat refs and fails
- * closed on any raw uuid that slips through (`findUndeclaredUuidPath` in
- * `ref-mediation.ts`). That backstop belongs there, not here, because this
- * pipeline itself never hands output to a model.
+ * closed on any raw uuid that slips through (`projectForChat` in
+ * `projection-schema.ts`). That backstop belongs there, not here, because
+ * this pipeline itself never hands output to a model.
  */
 export const finalizeMcpEgress = async ({
   context,
