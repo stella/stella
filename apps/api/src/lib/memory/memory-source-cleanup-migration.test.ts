@@ -8,7 +8,7 @@ const migration = await Bun.file(
 ).text();
 const schemaMigration = await Bun.file(
   new URL(
-    "../../../drizzle/20260717100000_ai_memory/migration.sql",
+    "../../../drizzle/20260805111500_ai_memory/migration.sql",
     import.meta.url,
   ),
 ).text();
