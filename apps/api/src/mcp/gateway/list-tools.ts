@@ -1,4 +1,5 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
+
 import { env } from "@/api/env";
 import {
   isExternalMcpToolName,
@@ -19,6 +20,7 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type {
+  JsonSchema,
   McpAnonymizedPolicy,
   McpToolAccess,
   McpToolDefinition,
@@ -259,17 +261,31 @@ export const getGatewayMcpToolDefinition = async ({
   };
 };
 
+/**
+ * A definition authors its schema as the SDK's JSON Schema *interface*; the
+ * wire type is the same data carrying an index signature. Re-reading through a
+ * mapped type supplies the index signature TypeScript never infers for an
+ * interface, and `type` is pinned to the value every tool input already has.
+ *
+ * SAFETY: every schema-valued keyword (`properties`, `$defs`, `items`, ...)
+ * still needs the assertion. Each is declared as the SDK's recursive schema
+ * union, which includes the bare `true`/`false` schema JSON Schema permits,
+ * while the wire type admits only JSON values. The one structural alternative
+ * is deep-copying the whole schema on every `tools/list` to arrive at identical
+ * bytes: this value is plain JSON, serialized unchanged.
+ */
+const toWireInputSchema = (schema: JsonSchema): McpTool["inputSchema"] => {
+  const fields: { [K in keyof JsonSchema]: JsonSchema[K] } = schema;
+  return { ...fields, type: "object" } as McpTool["inputSchema"];
+};
+
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
   definitions.map(({ annotations, description, inputSchema, name }) => ({
     annotations,
     description,
-    // SAFETY: a definition authors its schema as the SDK's JSON Schema
-    // interface; the wire type is that same data typed with an index
-    // signature, which TypeScript never infers for an interface. The value is
-    // plain JSON that goes straight out over `tools/list` unmodified.
-    inputSchema: inputSchema as McpTool["inputSchema"],
+    inputSchema: toWireInputSchema(inputSchema),
     name,
   }));
 

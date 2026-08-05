@@ -29,12 +29,15 @@ const toPropertySchema = (property: JsonSchemaProperty): JSONSchema => {
   // target's exact optionals reject.
   const converted: JSONSchema = {};
   if (property.type !== undefined) {
-    // SAFETY: the SDK models JSON Schema type names as an enum whose `ValueOf`
-    // widens to String prototype members, so the value has no structural
-    // narrowing to `string | string[]`. JSON Schema fixes these names to
-    // strings ("object", "string", ...), and the projection is read only to
-    // render prompt stubs.
-    converted.type = property.type as string | string[];
+    // The SDK models type names as an enum union that also admits readonly
+    // arrays, and it does not narrow structurally to the plain string form the
+    // target wants. JSON Schema fixes these names to strings ("object",
+    // "string", ...), so normalize both shapes through `String` rather than
+    // asserting the type across.
+    const declared: unknown = property.type;
+    converted.type = Array.isArray(declared)
+      ? declared.map(String)
+      : String(declared);
   }
   if (property.description !== undefined) {
     converted.description = property.description;

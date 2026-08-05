@@ -1,5 +1,11 @@
-import { createMcpHandler, Server } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  isLegacyRequest,
+  Server,
+  WebStandardStreamableHTTPServerTransport,
+} from "@modelcontextprotocol/server";
 import type {
+  AuthInfo,
   CallToolResult,
   McpHttpHandler,
   Tool as McpTool,
@@ -236,14 +242,19 @@ const isMcpFactoryState = (value: unknown): value is McpFactoryState => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const { clientIp, session } = value as Partial<McpFactoryState>;
+  const { clientIp, session }: Record<string, unknown> = { ...value };
+  if (typeof session !== "object" || session === null) {
+    return false;
+  }
+
+  const { organizationId, scopes, userId }: Record<string, unknown> = {
+    ...session,
+  };
   return (
     (clientIp === null || typeof clientIp === "string") &&
-    typeof session === "object" &&
-    session !== null &&
-    typeof session.organizationId === "string" &&
-    Array.isArray(session.scopes) &&
-    typeof session.userId === "string"
+    typeof organizationId === "string" &&
+    Array.isArray(scopes) &&
+    typeof userId === "string"
   );
 };
 
@@ -329,7 +340,7 @@ export const createMcpHttpRequestHandler = ({
       },
     );
 
-    server.setRequestHandler('tools/list', async () => ({
+    server.setRequestHandler("tools/list", async () => ({
       tools: await listMcpTools(context, mode, session.scopes),
     }));
 
@@ -338,15 +349,15 @@ export const createMcpHttpRequestHandler = ({
     // per-tool scope gate. Every request already carries a valid session token.
     // The SDK accepts synchronous request handlers, and both resource reads are
     // synchronous, so neither needs an async wrapper.
-    server.setRequestHandler('resources/list', () => ({
+    server.setRequestHandler("resources/list", () => ({
       resources: listMcpResources(mode),
     }));
 
-    server.setRequestHandler('resources/read', (resourceRequest) =>
+    server.setRequestHandler("resources/read", (resourceRequest) =>
       readMcpResource(resourceRequest.params.uri, mode),
     );
 
-    server.setRequestHandler('tools/call', async (toolRequest) => {
+    server.setRequestHandler("tools/call", async (toolRequest) => {
       const toolName = toolRequest.params.name;
       const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
       const missingHintedScope = requiredScopesHint?.find(
@@ -428,6 +439,12 @@ export const createMcpHttpRequestHandler = ({
   // One handler per mode, built once. The handler owns per-request instance
   // lifetime; building one per request would put teardown back on our side of
   // the boundary, which is the mistake this replaces.
+  //
+  // `legacy: "reject"` because the built-in fallback answers 2025-era requests
+  // with an SSE stream, and this endpoint has always answered them with a
+  // single JSON body. Published CLI releases parse that body as JSON, so the
+  // shape is a compatibility promise, not an implementation detail; legacy
+  // traffic is served below instead.
   const handlers = new Map<McpMode, McpHttpHandler>();
   const handlerForMode = (mode: McpMode): McpHttpHandler => {
     const existing = handlers.get(mode);
@@ -435,15 +452,56 @@ export const createMcpHttpRequestHandler = ({
       return existing;
     }
 
-    const handler = createMcpHandler(({ authInfo, requestInfo }) => {
-      const { clientIp, session } = readFactoryState(authInfo?.extra);
-      if (!requestInfo) {
-        panic("The MCP handler factory ran without its HTTP request");
-      }
-      return createMcpServer({ clientIp, mode, request: requestInfo, session });
-    });
+    const handler = createMcpHandler(
+      async ({ authInfo, requestInfo }) => {
+        const { clientIp, session } = readFactoryState(authInfo?.extra);
+        if (!requestInfo) {
+          panic("The MCP handler factory ran without its HTTP request");
+        }
+        return createMcpServer({
+          clientIp,
+          mode,
+          request: requestInfo,
+          session,
+        });
+      },
+      { legacy: "reject" },
+    );
     handlers.set(mode, handler);
     return handler;
+  };
+
+  /**
+   * The 2025-era leg, wired exactly as it was before the modern handler landed:
+   * a per-request server over the streamable transport in JSON mode. Closing
+   * both afterwards is safe here and only here, because the response is fully
+   * buffered by construction and the streaming methods never reach this path.
+   */
+  const serveLegacyRequest = async ({
+    authInfo,
+    clientIp,
+    mode,
+    request,
+    session,
+  }: {
+    authInfo: AuthInfo;
+    clientIp: string | null;
+    mode: McpMode;
+    request: Request;
+    session: McpSession;
+  }): Promise<Response> => {
+    const server = await createMcpServer({ clientIp, mode, request, session });
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      enableJsonResponse: true,
+    });
+
+    try {
+      await server.connect(transport);
+      return await transport.handleRequest(request, { authInfo });
+    } finally {
+      await transport.close().catch(() => null);
+      await server.close().catch(() => null);
+    }
   };
 
   return async (
@@ -483,14 +541,21 @@ export const createMcpHttpRequestHandler = ({
         );
       }
 
-      const response = await handlerForMode(mode).fetch(request, {
-        authInfo: {
-          clientId: session.userId,
-          extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
-          scopes: session.scopes,
-          token,
-        },
-      });
+      const authInfo = {
+        clientId: session.userId,
+        extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
+        scopes: session.scopes,
+        token,
+      };
+      const response = (await isLegacyRequest(request))
+        ? await serveLegacyRequest({
+            authInfo,
+            clientIp,
+            mode,
+            request,
+            session,
+          })
+        : await handlerForMode(mode).fetch(request, { authInfo });
 
       return withMcpCors(response, session, mode);
     } catch (error) {
