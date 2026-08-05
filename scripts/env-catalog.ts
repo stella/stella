@@ -55,6 +55,13 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "AGENT_SANDBOX_DOCKER_NETWORK",
+  "AGENT_SANDBOX_DOCKER_SOCKET",
+  "AGENT_SANDBOX_HARNESS_BASE_URL",
+  "AGENT_SANDBOX_HARNESS_MODEL",
+  "AGENT_SANDBOX_IMAGE",
+  "AGENT_SANDBOX_MCP_URL",
+  "AGENT_SANDBOX_RUNS_ENABLED",
   "AI_MODEL_CHAT",
   "AI_MODEL_FAST",
   "AI_MODEL_PDF",
@@ -197,6 +204,21 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  AGENT_SANDBOX_DOCKER_NETWORK:
+    "Locked-down Docker network used by agent sandboxes. It must deny arbitrary egress.",
+  AGENT_SANDBOX_DOCKER_SOCKET:
+    "Docker daemon socket used to create agent sandboxes. Defaults to the platform Docker socket.",
+  AGENT_SANDBOX_HARNESS_API_KEY:
+    "Model-provider credential delegated only to the isolated agent harness.",
+  AGENT_SANDBOX_HARNESS_BASE_URL:
+    "OpenAI-compatible endpoint used by the isolated agent harness.",
+  AGENT_SANDBOX_HARNESS_MODEL:
+    "Model identifier used by the isolated agent harness.",
+  AGENT_SANDBOX_IMAGE: "Container image used for isolated agent runs.",
+  AGENT_SANDBOX_MCP_URL:
+    "Container-reachable MCP endpoint used by isolated agent runs.",
+  AGENT_SANDBOX_RUNS_ENABLED:
+    "Enable explicit agent-mode chat requests for this deployment.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -328,6 +350,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
 };
 
 const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
+  AGENT_SANDBOX_DOCKER_NETWORK: "AGENT_SANDBOX_RUNS_ENABLED is true",
+  AGENT_SANDBOX_HARNESS_API_KEY: "AGENT_SANDBOX_RUNS_ENABLED is true",
+  AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",
+  AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
+  AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
   CORPUS_INDEX_ENDPOINT: "LEGAL_SEARCH_PROVIDER is corpus-index",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
@@ -598,6 +625,13 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  "AGENT_ENGINE_DOCKER_CANARY_URL",
+  "AGENT_ENGINE_DOCKER_IMAGE",
+  "AGENT_ENGINE_DOCKER_NETWORK",
+  "AGENT_ENGINE_DOCKER_TEST",
+  "AGENT_HARNESS_BASE_URL",
+  "AGENT_SANDBOX_MODEL",
+  "AGENT_SANDBOX_NETWORK",
   "AI_BENCH_JSON",
   "AI_BENCH_MODEL",
   "AI_BENCH_REPEATS",
@@ -612,6 +646,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_URL",
   "APP_VERSION",
   "BASE_REF",
+  "CANARY_PORT",
+  "CANARY_PROBE_TOKEN",
+  "CANARY_SERVER_URL",
+  "CANARY_SIGNING_SECRET",
+  "CANARY_STATE_PATH",
+  "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
   "E2E_API_URL",
@@ -629,6 +669,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
   "MCP_CANARY_TOKEN",
+  "NETWORK_CANARY_URL",
   "PGLITE_TEST_SNAPSHOT",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",

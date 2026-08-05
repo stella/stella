@@ -378,7 +378,9 @@ jobs:
           exit 1
 
       - name: Exercise Docker provider isolation and cleanup
-        run: bun --filter @stll/agent-engine test:docker
+        env:
+          AGENT_ENGINE_DOCKER_TEST: "1"
+        run: bun test packages/agent-engine/src/bun-docker/provider.integration.test.ts
 
       - name: Assert provider left no sandbox containers
         run: |

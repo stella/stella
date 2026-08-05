@@ -64,7 +64,6 @@ const astMetadata = {
 };
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
-
 const testSourceLease = (
   source: typeof caseLawSources.$inferSelect,
 ): CaseLawSourceIngestionLease => ({

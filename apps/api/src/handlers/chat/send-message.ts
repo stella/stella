@@ -1000,6 +1000,41 @@ const sendMessage = createSafeRootHandler(
         mentions: parsedMessage.mentions,
         message: parsedMessage.message,
       }).filter((id) => accessibleSet.has(id));
+
+      // Resolve the opaque sandbox boundary before persisting or claiming the
+      // turn. A disabled or incomplete deployment must reject the explicit
+      // agent request without leaving a durable incoming message behind.
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
+      const sandboxRunResult =
+        body.runMode === CHAT_RUN_MODE.agent
+          ? await Result.tryPromise({
+              try: async () =>
+                await resolveChatSandboxPlan({
+                  organizationId: session.activeOrganizationId,
+                  runId: Bun.randomUUIDv7(),
+                  userId: user.id,
+                  workspaceIds: toolWorkspaceIds,
+                }),
+              catch: (cause) =>
+                cause instanceof HandlerError
+                  ? cause
+                  : new HandlerError({
+                      cause,
+                      message: "Failed to prepare agent sandbox run",
+                      status: 500,
+                    }),
+            })
+          : Result.ok(undefined);
+      if (Result.isError(sandboxRunResult)) {
+        // The enclosing finally owns rollback of the created thread and any
+        // uploaded files, preserving the original sandbox preflight error.
+        return yield* Result.err(sandboxRunResult.error);
+      }
+      const sandboxRun = sandboxRunResult.value;
+
       const turnAcceptance =
         parsedMessage.message.role === "user" &&
         latestMessagePlan.persistencePlan.type !== "none"
@@ -1228,46 +1263,6 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const toolWorkspaceIds = resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      });
-      const sandboxRunResult =
-        body.runMode === CHAT_RUN_MODE.agent
-          ? await Result.tryPromise({
-              try: async () =>
-                await resolveChatSandboxPlan({
-                  organizationId: session.activeOrganizationId,
-                  runId: Bun.randomUUIDv7(),
-                  userId: user.id,
-                  workspaceIds: toolWorkspaceIds,
-                }),
-              catch: (cause) =>
-                cause instanceof HandlerError
-                  ? cause
-                  : new HandlerError({
-                      cause,
-                      message: "Failed to prepare agent sandbox run",
-                      status: 500,
-                    }),
-            })
-          : Result.ok(undefined);
-      if (Result.isError(sandboxRunResult)) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: thread,
-          uploadedFiles: uploadResult.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          captureError(sandboxRunResult.error, { threadId: body.threadId });
-          return yield* Result.err(rollbackResult.error);
-        }
-        return yield* Result.err(sandboxRunResult.error);
-      }
-      const sandboxRun = sandboxRunResult.value;
       const registeredDocxEditMode = resolveRegisteredDocxEditMode({
         activeFile: activeFileForTools,
         editApplyMode,
@@ -1339,8 +1334,7 @@ const sendMessage = createSafeRootHandler(
         body.runMode,
       )
         ? await Result.tryPromise({
-            try: async () =>
-              await externalMcpToolsLoader.getExternalMcpTools(),
+            try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
             catch: (cause) =>
               new HandlerError({
                 status: 500,
