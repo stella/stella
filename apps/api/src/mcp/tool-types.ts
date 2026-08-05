@@ -16,6 +16,9 @@ import type { TextWindowResult } from "@/api/mcp/tool-utils";
  */
 export type JsonSchema = JsonSchemaType;
 
+/** Every MCP tool accepts one named-argument object, never a scalar root. */
+export type McpToolInputSchema = JsonSchema & { type: "object" };
+
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
 /**
@@ -121,7 +124,7 @@ export type McpToolDefinition = {
    * (or the deployment runs in dev). Omitted for always-available tools.
    */
   feature?: McpToolFeatureFlag;
-  inputSchema: JsonSchema;
+  inputSchema: McpToolInputSchema;
   name: string;
   scope: ToolScope;
 };

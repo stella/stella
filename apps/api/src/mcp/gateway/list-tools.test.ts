@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { McpRequestContext } from "@/api/mcp/context";
-import { listGatewayMcpToolDefinitions } from "@/api/mcp/gateway/list-tools";
+import {
+  listGatewayMcpToolDefinitions,
+  toMcpTools,
+} from "@/api/mcp/gateway/list-tools";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -39,6 +42,18 @@ const hasLookupTool = (definitions: readonly McpToolDefinition[]): boolean =>
   definitions.some(
     (definition) => definition.name === "lookup_business_registry",
   );
+
+const definitionWithSchema = (
+  inputSchema: McpToolDefinition["inputSchema"],
+): McpToolDefinition => ({
+  access: "read",
+  annotations: { title: "Test tool" },
+  anonymized: { exposure: "passthrough" },
+  description: "Test schema conversion",
+  inputSchema,
+  name: "test_schema_conversion",
+  scope: "stella:read",
+});
 
 describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
   test("narrows the default-surface enum to the org's enabled registries", async () => {
@@ -121,5 +136,43 @@ describe("listGatewayMcpToolDefinitions compound scope discovery", () => {
         (definition) => definition.name === "save_filled_template",
       ),
     ).toBe(true);
+  });
+});
+
+describe("toMcpTools input schema conversion", () => {
+  const unsupportedValues = [
+    ["undefined", undefined],
+    ["function", () => null],
+    ["symbol", Symbol("schema")],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ] as const;
+
+  for (const [label, value] of unsupportedValues) {
+    test(`rejects ${label} instead of changing it to null`, () => {
+      const inputSchema = asTestRaw<McpToolDefinition["inputSchema"]>({
+        properties: {
+          value: { description: value, type: "string" },
+        },
+        type: "object",
+      });
+
+      expect(() => toMcpTools([definitionWithSchema(inputSchema)])).toThrow(
+        "MCP tool input schema contains a non-JSON value",
+      );
+    });
+  }
+
+  test("preserves valid null and boolean schema literals", () => {
+    const inputSchema = {
+      properties: {
+        value: { anyOf: [false, { const: null }, { type: "string" }] },
+      },
+      type: "object",
+    } as const satisfies McpToolDefinition["inputSchema"];
+
+    expect(
+      toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
+    ).toEqual(inputSchema);
   });
 });

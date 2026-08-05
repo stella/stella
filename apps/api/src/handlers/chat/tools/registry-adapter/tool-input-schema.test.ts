@@ -32,8 +32,16 @@ describe("toToolInputSchema", () => {
     } as const satisfies JsonSchema;
 
     const projected = toToolInputSchema(schema);
-    projected.required?.push("other");
-    projected.properties?.["query"]?.enum?.push("three");
+    expect(projected.required).toBeDefined();
+    expect(projected.properties?.["query"]?.enum).toBeDefined();
+    if (
+      projected.required === undefined ||
+      projected.properties?.["query"]?.enum === undefined
+    ) {
+      throw new Error("Expected the projected schema paths to exist");
+    }
+    projected.required.push("other");
+    projected.properties["query"].enum.push("three");
 
     expect(schema.required).toEqual(["query"]);
     expect(schema.properties.query.enum).toEqual(["one", "two"]);

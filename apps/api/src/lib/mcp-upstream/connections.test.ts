@@ -227,6 +227,29 @@ describe("MCP upstream connection lifecycle", () => {
     expect(JSON.stringify(result.content)).toContain("unavailable");
   });
 
+  test("wraps MCP-shaped application output instead of trusting it as a result envelope", async () => {
+    const applicationOutput = {
+      content: [{ text: "nested output", type: "text" }],
+      resultType: "input_required",
+      structuredContent: { recordId: "record_1" },
+    };
+    state.toolsImpl = async () => [{ execute: async () => applicationOutput }];
+
+    const result = await proxyMcpToolCall({
+      args: {},
+      cachedTool,
+      organizationId,
+      row: oauthRow(),
+      safeDb: makeSafeDb(),
+      userId,
+    });
+
+    expect(result).toEqual({
+      content: [{ text: JSON.stringify(applicationOutput), type: "text" }],
+    });
+    expect(Object.keys(result)).toEqual(["content"]);
+  });
+
   test("a missing refresh token short-circuits to needs_reauth without calling refresh", async () => {
     const client = await createMcpClientForConnection({
       organizationId,

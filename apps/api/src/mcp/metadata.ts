@@ -7,6 +7,7 @@ import {
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
+  MCP_STATELESS_ALLOW_HEADER,
   STELLA_CLI_LATEST_HEADER,
   STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MAXIMUM_VERSION,
@@ -31,7 +32,7 @@ export const createMcpMetadataHeaders = () =>
 export const createMcpCorsHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": MCP_STATELESS_ALLOW_HEADER,
     "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
     "Access-Control-Max-Age": "86400",

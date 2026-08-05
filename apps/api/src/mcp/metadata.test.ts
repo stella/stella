@@ -5,6 +5,7 @@ import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_STATELESS_ALLOW_HEADER,
   getMcpProtectedResourceMetadataUrl,
   getMcpResourceUrl,
   STELLA_CLI_LATEST_VERSION,
@@ -85,7 +86,7 @@ describe("MCP protected resource metadata", () => {
 
     expect(headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(headers.get("Access-Control-Allow-Methods")).toBe(
-      "GET, POST, DELETE, OPTIONS",
+      MCP_STATELESS_ALLOW_HEADER,
     );
     expect(headers.get("x-stella-api-contract-version")).toBe("1");
     expect(headers.get("x-stella-cli-minimum")).toBe(

@@ -35,7 +35,13 @@ const getMcpToolRequiredScopesHintMock = mock(
   (_toolName: string): readonly ToolScope[] | undefined => undefined,
 );
 const handleMcpToolCallMock = mock();
-const listMcpToolsMock = mock(async (): Promise<McpTool[]> => []);
+const listMcpToolsMock = mock(
+  async (
+    _context?: unknown,
+    _mode?: unknown,
+    _scopes?: unknown,
+  ): Promise<McpTool[]> => [],
+);
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
@@ -70,10 +76,12 @@ const createModernMcpRequest = ({
   id,
   method,
   params = {},
+  token = "token",
 }: {
   id: number;
   method: string;
   params?: Record<string, unknown>;
+  token?: string;
 }) =>
   new Request("http://localhost/mcp", {
     body: JSON.stringify({
@@ -91,7 +99,7 @@ const createModernMcpRequest = ({
     }),
     headers: {
       accept: "application/json, text/event-stream",
-      authorization: "Bearer token",
+      authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "mcp-method": method,
       "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
@@ -258,6 +266,66 @@ describe("handleMcpHttpRequest", () => {
       phase: "transport",
       source: "mcp",
     });
+  });
+
+  test("builds a fresh modern server for each authenticated session", async () => {
+    authenticateMcpRequestMock.mockImplementation((token: string) => ({
+      organizationId: token === "first" ? "org_1" : "org_2",
+      scopes: ["stella:read"],
+      userId: token === "first" ? "user_1" : "user_2",
+    }));
+    resolveMcpSessionContextMock.mockImplementation(
+      (session: { organizationId: string }) => ({
+        organizationId: session.organizationId,
+      }),
+    );
+    listMcpToolsMock.mockImplementation(async (context?: unknown) => {
+      if (!isRecord(context) || typeof context["organizationId"] !== "string") {
+        throw new Error("Expected an organization-scoped MCP context");
+      }
+      return [
+        {
+          description: "Tenant-specific tool",
+          inputSchema: { properties: {}, type: "object" },
+          name: `tool_for_${context["organizationId"]}`,
+        },
+      ];
+    });
+
+    const responses = await Promise.all([
+      handleMcpHttpRequest(
+        createModernMcpRequest({ id: 1, method: "tools/list", token: "first" }),
+      ),
+      handleMcpHttpRequest(
+        createModernMcpRequest({
+          id: 2,
+          method: "tools/list",
+          token: "second",
+        }),
+      ),
+    ]);
+    const bodies = await Promise.all(
+      responses.map(
+        async (response) =>
+          await readTestJson<McpJsonResponse<{ tools: McpTool[] }>>(response),
+      ),
+    );
+
+    expect(resolveMcpSessionContextMock).toHaveBeenCalledTimes(2);
+    expect(bodies.map((body) => body.result.tools.at(0)?.name)).toEqual([
+      "tool_for_org_1",
+      "tool_for_org_2",
+    ]);
+    expect(listMcpToolsMock).toHaveBeenCalledWith(
+      { organizationId: "org_1" },
+      "default",
+      ["stella:read"],
+    );
+    expect(listMcpToolsMock).toHaveBeenCalledWith(
+      { organizationId: "org_2" },
+      "default",
+      ["stella:read"],
+    );
   });
 
   test("captures a token-verification infrastructure outage as a retryable 5xx, not a 401", async () => {

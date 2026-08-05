@@ -20,11 +20,11 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type {
-  JsonSchema,
   McpAnonymizedPolicy,
   McpToolAccess,
   McpToolDefinition,
   McpToolFeatureFlag,
+  McpToolInputSchema,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
@@ -275,9 +275,14 @@ const toWireValue = (value: unknown): WireValue => {
   if (
     value === null ||
     typeof value === "boolean" ||
-    typeof value === "number" ||
     typeof value === "string"
   ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError("MCP tool input schema contains a non-JSON value");
+    }
     return value;
   }
   if (Array.isArray(value)) {
@@ -291,13 +296,16 @@ const toWireValue = (value: unknown): WireValue => {
       ]),
     );
   }
-  // A schema literal holds only JSON. Anything else (a function, a symbol)
-  // would not survive serialization either, so drop it rather than invent one.
-  return null;
+  // Reject instead of silently changing the schema contract. In particular,
+  // replacing an unsupported member with null can turn `description`,
+  // `properties`, `$defs`, or `items` into an invalid keyword value.
+  throw new TypeError("MCP tool input schema contains a non-JSON value");
 };
 
-const convertInputSchema = (schema: JsonSchema): WireInputSchema => {
-  const fields: { [K in keyof JsonSchema]: JsonSchema[K] } = schema;
+const convertInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
+  const fields: {
+    [K in keyof McpToolInputSchema]: McpToolInputSchema[K];
+  } = schema;
   const converted = Object.fromEntries(
     Object.entries(fields).map(([key, value]: [string, unknown]) => [
       key,
@@ -316,9 +324,9 @@ const convertInputSchema = (schema: JsonSchema): WireInputSchema => {
  * rather than once per request. Dynamic gateway tools build a fresh schema each
  * time and simply miss, which costs no more than converting inline.
  */
-const wireInputSchemas = new WeakMap<JsonSchema, WireInputSchema>();
+const wireInputSchemas = new WeakMap<McpToolInputSchema, WireInputSchema>();
 
-const toWireInputSchema = (schema: JsonSchema): WireInputSchema => {
+const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
   const cached = wireInputSchemas.get(schema);
   if (cached) {
     return cached;
