@@ -5,7 +5,7 @@ import { clearAuthToken } from "@/lib/auth";
 export class APIError extends TaggedError("ApiError")<{
   status: number;
   message: string;
-}>() {}
+}> {}
 
 type ToAPIErrorProps = {
   status: number;

@@ -35,19 +35,6 @@ import {
   pendingUploads,
   workspaces,
 } from "@/api/db/schema";
-import {
-  parseEmail,
-  type EmailAttachment,
-} from "@/api/handlers/files/email-to-html";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-  type MintedFileId,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
-import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -59,19 +46,35 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import {
+  parseEmail,
+  type EmailAttachment,
+} from "@/api/lib/files/email-to-html";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+  type MintedFileId,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
-
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
   entityCreateWriteErrorMessage,
   resolveEntityCreateFileName,
   type EntityCreateWriteFailureStatus,
-} from "./entity-create";
-import { finalizeErr, finalizeOk, UploadFinalizeError } from "./lib";
+} from "@/api/lib/uploads/entity-create";
+import {
+  finalizeErr,
+  finalizeOk,
+  UploadFinalizeError,
+} from "@/api/lib/uploads/runtime";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** Upper bound on attachments materialized per email; protects against
  * pathological messages and bounds the work done in the finalize tx. */
