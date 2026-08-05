@@ -27,6 +27,8 @@ import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
+import { composeRefs } from "@stll/ui/lib/utils";
+
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
   useDocxFitZoom,
@@ -56,7 +58,6 @@ import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import { searchTextQueryKey } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
-import { composeRefs } from "@/lib/utils";
 
 const DocxEditor = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");

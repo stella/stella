@@ -10,6 +10,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Button } from "@stll/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { composeRefs } from "@stll/ui/lib/utils";
 
 import { SecretInput } from "@/components/secret-input";
 import { useTheme } from "@/components/theme-provider";
@@ -31,7 +32,6 @@ import {
 } from "@/lib/search-match-navigation";
 import { getSearchTextCandidates } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
-import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
 
