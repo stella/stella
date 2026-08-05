@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
-import * as schema from "@/api/db/schema";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -15,10 +11,7 @@ import {
 import { resolveCitationBatch } from "@/api/handlers/case-law/citation-resolution";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
  * Resolution runs entirely in SQL, so the rules that keep a link honest are
@@ -28,9 +21,7 @@ import {
  * it, a link chosen arbitrarily from an ambiguous pair, and a self-link.
  */
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
-
-let client: Awaited<ReturnType<typeof createSchemaPglite>>;
+let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -61,16 +52,8 @@ const scopedDb = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
 
 beforeAll(
   async () => {
-    client = await createSchemaPglite();
+    client = await createTestPglite();
     db = drizzle({ client });
-    await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-    await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-    await installPgliteSchemaPrerequisites(db);
-    const { sqlStatements } = await pushSchema(allSchema, db);
-    for (const statement of sqlStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order
-      await db.execute(sql.raw(statement));
-    }
 
     await db.insert(caseLawSources).values([
       { id: sourceId, adapterKey: "cz-ns", name: "test source" },

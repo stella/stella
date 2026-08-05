@@ -7,15 +7,11 @@ import {
   expect,
   test,
 } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
 import { authRelationsPart } from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
-import * as schema from "@/api/db/schema";
 import {
   caseLawDecisions,
   caseLawSources,
@@ -33,14 +29,9 @@ import {
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
-
-let client: Awaited<ReturnType<typeof createSchemaPglite>> | undefined;
+let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 
@@ -51,19 +42,11 @@ const ingestionLeaseToken = createSafeId<"caseLawSourceIngestionLease">();
 
 beforeAll(
   async () => {
-    client = await createSchemaPglite();
+    client = await createTestPglite();
     db = drizzle({
       client,
       relations: { ...relations, ...authRelationsPart },
     });
-    await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-    await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-    await installPgliteSchemaPrerequisites(db);
-    const { sqlStatements } = await pushSchema(allSchema, db);
-    for (const statement of sqlStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential DDL: schema statements must apply in emitted order
-      await db.execute(sql.raw(statement));
-    }
 
     await db.insert(caseLawSources).values({
       id: caseLawSourceId,

@@ -1,0 +1,222 @@
+import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
+
+import * as agentAuthSchema from "@/api/db/agent-auth-schema";
+import * as authSchema from "@/api/db/auth-schema";
+import * as rlsExports from "@/api/db/rls";
+import * as schema from "@/api/db/schema";
+import {
+  createSchemaPglite,
+  installPgliteSchemaPrerequisites,
+  installPgliteWorkspaceAccessObjects,
+} from "@/api/tests/pglite-schema";
+
+// Test processes boot from a prebuilt data-dir snapshot when the batching
+// runner provides one (scripts/run-tests.ts). Building the schema in-process
+// costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
+// loading a snapshot skips drizzle-kit entirely and keeps the process near
+// PGlite's runtime floor.
+export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+
+const allSchema = {
+  ...schema,
+  ...authSchema,
+  ...agentAuthSchema,
+  ...rlsExports,
+};
+
+const quoteSqlIdentifier = (identifier: string) =>
+  `"${identifier.replaceAll('"', '""')}"`;
+
+const AUTH_TABLES_SQL = [
+  "user",
+  "organization",
+  "member",
+  "session",
+  "account",
+  "verification",
+  "invitation",
+  "jwks",
+  "oauth_client",
+  "oauth_refresh_token",
+  "oauth_access_token",
+  "oauth_consent",
+  "two_factor",
+  "agent_registration",
+  "agent_trusted_issuer",
+  "agent_delegation",
+  "agent_assertion_replay",
+]
+  .map(quoteSqlIdentifier)
+  .join(", ");
+
+const AUTH_USER_STELLA_SELECT_COLUMNS_SQL =
+  authSchema.AUTH_USER_STELLA_SELECT_COLUMN_NAMES.map(quoteSqlIdentifier).join(
+    ", ",
+  );
+
+// The snapshot bakes in the superset every suite needs: RLS roles, schema,
+// workspace-access objects, and the role grants. Suites that never SET ROLE
+// simply ignore the grants.
+const ROLE_GRANT_STATEMENTS = [
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE
+      ON ALL TABLES IN SCHEMA public TO stella
+  `,
+  `
+    REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
+  `,
+  `
+    GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
+      ON TABLE "user" TO stella
+  `,
+  `
+    GRANT SELECT ON TABLE "organization" TO stella
+  `,
+  `
+    GRANT SELECT ON TABLE "member" TO stella
+  `,
+  `
+    GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
+  `,
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "case_law_sources",
+      "case_law_decisions",
+      "case_law_citations",
+      "case_law_polarity_rules",
+      "case_law_court_weights",
+      "case_law_fts_configs",
+      "case_law_search_documents",
+      "case_law_ingestion_events",
+      "case_law_ingestion_failures",
+      "case_law_index_jobs"
+    FROM stella
+  `,
+  `
+    GRANT SELECT ON TABLE
+      "case_law_sources",
+      "case_law_decisions",
+      "case_law_citations",
+      "case_law_polarity_rules",
+      "case_law_court_weights",
+      "case_law_fts_configs",
+      "case_law_search_documents",
+      "case_law_ingestion_events",
+      "case_law_ingestion_failures",
+      "case_law_index_jobs"
+    TO stella_ingestion
+  `,
+  `
+    GRANT INSERT, UPDATE, DELETE ON TABLE
+      "case_law_decisions",
+      "case_law_citations",
+      "case_law_polarity_rules",
+      "case_law_court_weights",
+      "case_law_fts_configs",
+      "case_law_search_documents",
+      "case_law_ingestion_events",
+      "case_law_ingestion_failures"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (
+      sync_cursor,
+      last_sync_at,
+      updated_at,
+      observation_order,
+      checkpoint_observation_order
+    )
+      ON TABLE "case_law_sources"
+      TO stella_ingestion
+  `,
+  // case_law_index_jobs is append-only: ingestion appends audit rows
+  // but never updates or deletes them.
+  `
+    GRANT INSERT ON TABLE "case_law_index_jobs" TO stella_ingestion
+  `,
+  // Legislation corpus — same global model as case law.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "legislation_sources",
+      "legislation_documents",
+      "legislation_search_documents",
+      "legislation_index_jobs"
+    FROM stella
+  `,
+  `
+    GRANT SELECT ON TABLE
+      "legislation_sources",
+      "legislation_documents",
+      "legislation_search_documents",
+      "legislation_index_jobs"
+    TO stella_ingestion
+  `,
+  `
+    GRANT INSERT, UPDATE, DELETE ON TABLE
+      "legislation_documents",
+      "legislation_search_documents"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
+      ON TABLE "legislation_sources"
+      TO stella_ingestion
+  `,
+  `
+    GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
+  `,
+] as const;
+
+/**
+ * Build a fully provisioned test PGlite from scratch: RLS roles, schema
+ * prerequisites, the drizzle schema push, workspace-access objects, and
+ * role grants. This is the expensive path (drizzle-kit peaks ~2.2 GB);
+ * batched runs pay it once in the snapshot builder, solo `bun test` runs
+ * pay it per process.
+ */
+export const buildFullTestPglite = async (): Promise<PGlite> => {
+  const client = await createSchemaPglite();
+  const db = drizzle({ client });
+  const pushSchemaDb = drizzle({ client });
+
+  await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
+  await installPgliteSchemaPrerequisites(db);
+
+  // drizzle-kit is a heavyweight dev dependency; import it only on this
+  // build path so snapshot-booted test processes never load it.
+  const { pushSchema } = await import("drizzle-kit/api-postgres");
+  const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
+  for (const statement of sqlStatements) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
+    await db.execute(sql.raw(statement));
+  }
+  await installPgliteWorkspaceAccessObjects(db);
+
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    // oxlint-disable-next-line no-await-in-loop -- grants run sequentially on one test DB connection
+    await db.execute(sql.raw(statement));
+  }
+
+  return client;
+};
+
+/**
+ * Create a test PGlite: from the batching runner's snapshot when
+ * PGLITE_TEST_SNAPSHOT is set, otherwise via the full in-process build so
+ * solo `bun test <file>` runs keep working without the runner.
+ */
+export const createTestPglite = async (): Promise<PGlite> => {
+  const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
+  if (snapshotPath === undefined || snapshotPath.length === 0) {
+    return await buildFullTestPglite();
+  }
+  const snapshotBytes = await Bun.file(snapshotPath).arrayBuffer();
+  return await PGlite.create({
+    extensions: { pg_trgm },
+    loadDataDir: new Blob([snapshotBytes]),
+  });
+};

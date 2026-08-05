@@ -1,229 +1,34 @@
-import { pushSchema } from "drizzle-kit/api-postgres";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabaseMarker, TransactionOf } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-  installPgliteWorkspaceAccessObjects,
-} from "@/api/tests/pglite-schema";
-
-const allSchema = {
-  ...schema,
-  ...authSchema,
-  ...agentAuthSchema,
-  ...rlsExports,
-};
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const allRelations = {
   ...schema.relations,
   ...authSchema.authRelationsPart,
 };
 
-const quoteSqlIdentifier = (identifier: string) =>
-  `"${identifier.replaceAll('"', '""')}"`;
-
-const AUTH_TABLES_SQL = [
-  "user",
-  "organization",
-  "member",
-  "session",
-  "account",
-  "verification",
-  "invitation",
-  "jwks",
-  "oauth_client",
-  "oauth_refresh_token",
-  "oauth_access_token",
-  "oauth_consent",
-  "two_factor",
-  "agent_registration",
-  "agent_trusted_issuer",
-  "agent_delegation",
-  "agent_assertion_replay",
-]
-  .map(quoteSqlIdentifier)
-  .join(", ");
-
-const AUTH_USER_STELLA_SELECT_COLUMNS_SQL =
-  authSchema.AUTH_USER_STELLA_SELECT_COLUMN_NAMES.map(quoteSqlIdentifier).join(
-    ", ",
-  );
-
 type RawTestDatabase = ReturnType<typeof drizzle<typeof allRelations>>;
 export type TestDatabase = RawTestDatabase & RlsDatabaseMarker;
 export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 
+// Roles, schema, workspace-access objects, and grants all arrive with the
+// client (snapshot-booted or fully built in pglite-test-db); this wrapper
+// only adds the relations-aware drizzle instance and the RLS marker.
 const createTestDb = async (): Promise<TestDatabase> => {
-  const client = await createSchemaPglite();
-  const testDb = markRlsDatabase(
+  const client = await createTestPglite();
+  return markRlsDatabase(
     drizzle({
       client,
       relations: allRelations,
     }),
   );
-  const pushSchemaDb = drizzle({ client });
-
-  await testDb.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-  await testDb.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-  await installPgliteSchemaPrerequisites(testDb);
-
-  const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
-  for (const statement of sqlStatements) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
-    await testDb.execute(sql.raw(statement));
-  }
-  await installPgliteWorkspaceAccessObjects(testDb);
-
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT, INSERT, UPDATE, DELETE
-        ON ALL TABLES IN SCHEMA public TO stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
-        ON TABLE "user" TO stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT ON TABLE "organization" TO stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT ON TABLE "member" TO stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      REVOKE INSERT, UPDATE, DELETE ON TABLE
-        "case_law_sources",
-        "case_law_decisions",
-        "case_law_citations",
-        "case_law_polarity_rules",
-        "case_law_court_weights",
-        "case_law_fts_configs",
-        "case_law_search_documents",
-        "case_law_ingestion_events",
-        "case_law_ingestion_failures",
-        "case_law_index_jobs"
-      FROM stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT ON TABLE
-        "case_law_sources",
-        "case_law_decisions",
-        "case_law_citations",
-        "case_law_polarity_rules",
-        "case_law_court_weights",
-        "case_law_fts_configs",
-        "case_law_search_documents",
-        "case_law_ingestion_events",
-        "case_law_ingestion_failures",
-        "case_law_index_jobs"
-      TO stella_ingestion
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT INSERT, UPDATE, DELETE ON TABLE
-        "case_law_decisions",
-        "case_law_citations",
-        "case_law_polarity_rules",
-        "case_law_court_weights",
-        "case_law_fts_configs",
-        "case_law_search_documents",
-        "case_law_ingestion_events",
-        "case_law_ingestion_failures"
-      TO stella_ingestion
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT UPDATE (
-        sync_cursor,
-        last_sync_at,
-        updated_at,
-        observation_order,
-        checkpoint_observation_order
-      )
-        ON TABLE "case_law_sources"
-        TO stella_ingestion
-    `),
-  );
-  // case_law_index_jobs is append-only: ingestion appends audit rows
-  // but never updates or deletes them.
-  await testDb.execute(
-    sql.raw(`
-      GRANT INSERT ON TABLE "case_law_index_jobs" TO stella_ingestion
-    `),
-  );
-  // Legislation corpus — same global model as case law.
-  await testDb.execute(
-    sql.raw(`
-      REVOKE INSERT, UPDATE, DELETE ON TABLE
-        "legislation_sources",
-        "legislation_documents",
-        "legislation_search_documents",
-        "legislation_index_jobs"
-      FROM stella
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT SELECT ON TABLE
-        "legislation_sources",
-        "legislation_documents",
-        "legislation_search_documents",
-        "legislation_index_jobs"
-      TO stella_ingestion
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT INSERT, UPDATE, DELETE ON TABLE
-        "legislation_documents",
-        "legislation_search_documents"
-      TO stella_ingestion
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
-        ON TABLE "legislation_sources"
-        TO stella_ingestion
-    `),
-  );
-  await testDb.execute(
-    sql.raw(`
-      GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
-    `),
-  );
-
-  return testDb;
 };
 
 const DEFAULT_TEST_USER_ID = toSafeId<"user">("user_test");

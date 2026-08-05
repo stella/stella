@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
-import * as schema from "@/api/db/schema";
 import {
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexProjections,
@@ -33,12 +29,8 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
@@ -80,21 +72,13 @@ const publicLastId = toSafeId<"caseLawDecision">(
   "00000000-0000-4000-8000-000000000014",
 );
 
-let client: Awaited<ReturnType<typeof createSchemaPglite>> | undefined;
+let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
 
 beforeAll(
   async () => {
-    client = await createSchemaPglite();
+    client = await createTestPglite();
     db = drizzle({ client });
-    await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-    await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-    await installPgliteSchemaPrerequisites(db);
-    const { sqlStatements } = await pushSchema(allSchema, db);
-    for (const statement of sqlStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
-      await db.execute(sql.raw(statement));
-    }
 
     await db.insert(caseLawSources).values([
       { adapterKey: "public", id: publicSourceId, name: "public" },
