@@ -15,6 +15,7 @@ import type {
 
 import type { McpSession } from "@/api/mcp/auth";
 import {
+  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
@@ -188,9 +189,6 @@ const accessDeniedResponse = ({
     status,
   });
 };
-
-/** Methods this endpoint serves once the standalone SSE stream is refused. */
-const MCP_SSE_UNSUPPORTED_ALLOW_HEADER = "OPTIONS, POST, DELETE";
 
 /**
  * The transport is stateless: every request gets its own server and transport,

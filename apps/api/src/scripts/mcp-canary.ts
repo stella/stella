@@ -22,11 +22,27 @@ import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "@/api/mcp/constants";
+import {
+  MCP_DISCOVERY_PATH,
+  MCP_HTTP_PATH,
+  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+} from "@/api/mcp/constants";
 
 const PROBE_TIMEOUT_MS = 20_000;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
+
+/** Order and spacing are the server's business; the method set is not. */
+const parseAllowedMethods = (allow: string | null): string[] =>
+  (allow ?? "")
+    .split(",")
+    .map((method) => method.trim().toUpperCase())
+    .filter((method) => method.length > 0)
+    .toSorted();
+
+const EXPECTED_ALLOWED_METHODS = parseAllowedMethods(
+  MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+);
 
 const PROBE_STATUS = {
   failed: "failed",
@@ -87,11 +103,21 @@ const toolsListResultSchema = v.object({
 });
 
 type ProbeResponse = {
+  allow: string | null;
   body: unknown;
   contentType: string | null;
   status: number;
   wwwAuthenticate: string | null;
 };
+
+/** One name per probe, so a skip report cannot drift from what runs. */
+const PROBE_NAMES = {
+  discovery: `GET ${MCP_DISCOVERY_PATH}`,
+  initialize: `POST ${MCP_HTTP_PATH} (initialize)`,
+  stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
+  toolsList: `POST ${MCP_HTTP_PATH} (tools/list)`,
+  unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
+} as const;
 
 /**
  * The endpoint advertises its authorization server here. A client that cannot
@@ -102,7 +128,7 @@ export const evaluateDiscovery = ({
   body,
   status,
 }: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
-  const name = `GET ${MCP_DISCOVERY_PATH}`;
+  const name = PROBE_NAMES.discovery;
   if (status !== 200) {
     return failed(name, `${String(status)} (expected 200)`);
   }
@@ -121,7 +147,7 @@ export const evaluateUnauthenticated = ({
   status,
   wwwAuthenticate,
 }: Pick<ProbeResponse, "status" | "wwwAuthenticate">): ProbeResult => {
-  const name = `POST ${MCP_HTTP_PATH} (no credential)`;
+  const name = PROBE_NAMES.unauthenticated;
   if (status !== 401) {
     return failed(name, `${String(status)} (expected 401)`);
   }
@@ -138,15 +164,25 @@ export const evaluateUnauthenticated = ({
  * the stream die on open and reconnects forever instead of calling tools.
  */
 export const evaluateStreamRefusal = ({
+  allow,
   contentType,
   status,
-}: Pick<ProbeResponse, "contentType" | "status">): ProbeResult => {
-  const name = `GET ${MCP_HTTP_PATH} (notification stream)`;
+}: Pick<ProbeResponse, "allow" | "contentType" | "status">): ProbeResult => {
+  const name = PROBE_NAMES.stream;
   if (mediaType(contentType) === SSE_CONTENT_TYPE) {
     return failed(name, `${String(status)} ${SSE_CONTENT_TYPE} (expected 405)`);
   }
   if (status !== 405) {
     return failed(name, `${String(status)} (expected 405)`);
+  }
+  // The refusal is only actionable if it also tells the client what the
+  // endpoint does serve; a 405 with a wrong or missing Allow is a dead end.
+  const allowed = parseAllowedMethods(allow);
+  if (allowed.join(",") !== EXPECTED_ALLOWED_METHODS.join(",")) {
+    return failed(
+      name,
+      `405 allowing ${allowed.join(", ") || "nothing"} (expected ${MCP_SSE_UNSUPPORTED_ALLOW_HEADER})`,
+    );
   }
   return passed(name, "405, so clients stay on request/response");
 };
@@ -159,7 +195,7 @@ export const evaluateInitialize = ({
   body,
   status,
 }: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
-  const name = `POST ${MCP_HTTP_PATH} (initialize)`;
+  const name = PROBE_NAMES.initialize;
   if (status !== 200) {
     return failed(name, `${String(status)} (expected 200)`);
   }
@@ -181,7 +217,7 @@ export const evaluateToolsList = ({
   body,
   status,
 }: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
-  const name = `POST ${MCP_HTTP_PATH} (tools/list)`;
+  const name = PROBE_NAMES.toolsList;
   if (status !== 200) {
     return failed(name, `${String(status)} (expected 200)`);
   }
@@ -207,6 +243,7 @@ const readProbeResponse = async (
   }
 
   return {
+    allow: response.headers.get("Allow"),
     body,
     contentType: response.headers.get("content-type"),
     status: response.status,
@@ -269,54 +306,75 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> => {
   ];
 };
 
-/** Named so a credential-less run reports exactly what it did not exercise. */
-export const AUTHENTICATED_PROBE_NAMES = [
-  `GET ${MCP_HTTP_PATH} (notification stream)`,
-  `POST ${MCP_HTTP_PATH} (initialize)`,
-  `POST ${MCP_HTTP_PATH} (tools/list)`,
-] as const;
+type CanaryTarget = { baseUrl: string; token: string };
 
-const runAuthenticatedProbes = async ({
-  baseUrl,
-  token,
-}: {
-  baseUrl: string;
-  token: string;
-}): Promise<ProbeResult[]> => {
-  const stream = await readProbeResponse(
-    await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-      headers: {
-        accept: SSE_CONTENT_TYPE,
-        authorization: `Bearer ${token}`,
-      },
-      method: "GET",
-      timeoutMs: PROBE_TIMEOUT_MS,
-    }),
-  );
-  const initialize = await postJsonRpc({
-    baseUrl,
-    id: 1,
-    method: "initialize",
-    params: {
-      capabilities: {},
-      clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
-      protocolVersion: LATEST_PROTOCOL_VERSION,
-    },
-    token,
-  });
-  const toolsList = await postJsonRpc({
-    baseUrl,
-    id: 2,
-    method: "tools/list",
-    params: {},
-    token,
-  });
+type AuthenticatedProbe = {
+  name: string;
+  run: (target: CanaryTarget) => Promise<ProbeResult>;
+};
 
-  return [
-    evaluateStreamRefusal(stream),
-    evaluateInitialize(initialize),
-    evaluateToolsList(toolsList),
-  ];
+/**
+ * The single declaration of what a credentialed run does. Execution and the
+ * skip report both read it, so neither can describe a probe the other lacks.
+ */
+export const AUTHENTICATED_PROBES = [
+  {
+    name: PROBE_NAMES.stream,
+    run: async ({ baseUrl, token }) =>
+      evaluateStreamRefusal(
+        await readProbeResponse(
+          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
+            headers: {
+              accept: SSE_CONTENT_TYPE,
+              authorization: `Bearer ${token}`,
+            },
+            method: "GET",
+            timeoutMs: PROBE_TIMEOUT_MS,
+          }),
+        ),
+      ),
+  },
+  {
+    name: PROBE_NAMES.initialize,
+    run: async ({ baseUrl, token }) =>
+      evaluateInitialize(
+        await postJsonRpc({
+          baseUrl,
+          id: 1,
+          method: "initialize",
+          params: {
+            capabilities: {},
+            clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
+            protocolVersion: LATEST_PROTOCOL_VERSION,
+          },
+          token,
+        }),
+      ),
+  },
+  {
+    name: PROBE_NAMES.toolsList,
+    run: async ({ baseUrl, token }) =>
+      evaluateToolsList(
+        await postJsonRpc({
+          baseUrl,
+          id: 2,
+          method: "tools/list",
+          params: {},
+          token,
+        }),
+      ),
+  },
+] as const satisfies readonly AuthenticatedProbe[];
+
+const runAuthenticatedProbes = async (
+  target: CanaryTarget,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  for (const probe of AUTHENTICATED_PROBES) {
+    // oxlint-disable-next-line no-await-in-loop -- the probes mirror a client's sequential handshake.
+    results.push(await probe.run(target));
+  }
+  return results;
 };
 
 export const summarize = (results: readonly ProbeResult[]) => ({
@@ -345,7 +403,7 @@ const run = async () => {
     ...(await runPublicProbes(baseUrl)),
     ...(token
       ? await runAuthenticatedProbes({ baseUrl, token })
-      : AUTHENTICATED_PROBE_NAMES.map((name) =>
+      : AUTHENTICATED_PROBES.map(({ name }) =>
           skipped(name, "no MCP_CANARY_TOKEN configured"),
         )),
   ];

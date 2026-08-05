@@ -54,6 +54,12 @@ export type McpOAuthScope = (typeof MCP_OAUTH_SCOPES)[number];
 export const MCP_HTTP_PATH = "/mcp";
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
 
+/**
+ * What the transport serves once it refuses the standalone SSE stream. Shared
+ * so the endpoint and anything probing it cannot drift apart on the contract.
+ */
+export const MCP_SSE_UNSUPPORTED_ALLOW_HEADER = "OPTIONS, POST, DELETE";
+
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 

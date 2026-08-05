@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { MCP_SSE_UNSUPPORTED_ALLOW_HEADER } from "@/api/mcp/constants";
+
 import {
-  AUTHENTICATED_PROBE_NAMES,
+  AUTHENTICATED_PROBES,
   evaluateDiscovery,
   evaluateInitialize,
   evaluateStreamRefusal,
@@ -10,12 +12,19 @@ import {
   summarize,
 } from "./mcp-canary";
 
+const REFUSAL = {
+  allow: MCP_SSE_UNSUPPORTED_ALLOW_HEADER,
+  contentType: "application/json",
+  status: 405,
+};
+
 describe("evaluateStreamRefusal", () => {
   test("fails a stream answer, which per-request teardown truncates", () => {
     // The whole point of the probe: a 2xx that hands the client a body already
     // ended by teardown. Status alone reads as healthy, so the media type has
     // to decide.
     const result = evaluateStreamRefusal({
+      ...REFUSAL,
       contentType: "text/event-stream",
       status: 200,
     });
@@ -26,6 +35,7 @@ describe("evaluateStreamRefusal", () => {
 
   test("fails a stream answer regardless of charset parameters", () => {
     const result = evaluateStreamRefusal({
+      ...REFUSAL,
       contentType: "text/event-stream; charset=utf-8",
       status: 200,
     });
@@ -34,14 +44,29 @@ describe("evaluateStreamRefusal", () => {
   });
 
   test("passes only on the 405 that keeps clients on request/response", () => {
+    expect(evaluateStreamRefusal(REFUSAL).status).toBe("passed");
+    expect(evaluateStreamRefusal({ ...REFUSAL, status: 200 }).status).toBe(
+      "failed",
+    );
+  });
+
+  test("fails a 405 that never says what the endpoint does serve", () => {
+    // A refusal without Allow leaves the client guessing which method to use.
+    expect(evaluateStreamRefusal({ ...REFUSAL, allow: null }).status).toBe(
+      "failed",
+    );
     expect(
-      evaluateStreamRefusal({ contentType: "application/json", status: 405 })
-        .status,
-    ).toBe("passed");
-    expect(
-      evaluateStreamRefusal({ contentType: "application/json", status: 200 })
+      evaluateStreamRefusal({ ...REFUSAL, allow: "OPTIONS, GET, POST, DELETE" })
         .status,
     ).toBe("failed");
+  });
+
+  test("accepts any ordering and spacing of the advertised methods", () => {
+    // Order is the server's business; the method set is the contract.
+    expect(
+      evaluateStreamRefusal({ ...REFUSAL, allow: "post,DELETE ,  options" })
+        .status,
+    ).toBe("passed");
   });
 });
 
@@ -162,18 +187,13 @@ describe("evaluateDiscovery", () => {
 });
 
 describe("skip reporting", () => {
-  test("names exactly the probes a credential-less run cannot exercise", () => {
-    // The skip list is a hand-written mirror of the authenticated probes; if
-    // one drifts, a credential-less run reports coverage it never had.
-    const authenticatedProbeNames = [
-      evaluateStreamRefusal({ contentType: "application/json", status: 405 }),
-      evaluateInitialize({ body: undefined, status: 500 }),
-      evaluateToolsList({ body: undefined, status: 500 }),
-    ].map((result) => result.name);
+  test("labels every declared probe distinctly", () => {
+    // Execution and the skip report both read AUTHENTICATED_PROBES, so they
+    // cannot drift. What a shared list cannot prevent is two probes sharing a
+    // label, which would make a skip line ambiguous about what ran.
+    const names = AUTHENTICATED_PROBES.map(({ name }) => name);
 
-    expect(authenticatedProbeNames.toSorted()).toEqual(
-      [...AUTHENTICATED_PROBE_NAMES].toSorted(),
-    );
+    expect(new Set(names).size).toBe(names.length);
   });
 
   test("keeps a skipped probe out of the failure count but visible", () => {
