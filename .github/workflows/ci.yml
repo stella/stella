@@ -867,6 +867,7 @@ jobs:
           # These flags preserve the committed bundle baseline.
           VITE_FEATURE_TIME_BILLING: "true"
           VITE_PLAYBOOKS_ENABLED: "true"
+          VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_WORKFLOWS_ENABLED: "true"
         run: bun --filter @stll/web build
 

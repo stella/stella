@@ -100,6 +100,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -138,9 +139,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
   });
-  const user = routeApi.useRouteContext({
-    select: (ctx) => ctx.user,
-  });
+  const user = useAuthenticatedUser();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [pendingEntityDrop, setPendingEntityDrop] =
