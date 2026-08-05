@@ -112,6 +112,18 @@ describe("onboarding progress persistence", () => {
     expect(parseGuideProgress('{"chat":"bogus"}')).toEqual({});
   });
 
+  test("an entry it cannot read never costs the entries it can", () => {
+    // The blob is written by whichever build ran last, so a status or tour id
+    // from a newer release must cost that one entry and nothing else. Reading
+    // the map as empty would not be caution: the next write persists whatever
+    // was read, so a strict parse here is silent, permanent data loss.
+    expect(
+      parseGuideProgress(
+        '{"chat":"completed","documents":"dismissed","time-travel":"skipped","playbooks":"skipped"}',
+      ),
+    ).toEqual({ chat: "completed", playbooks: "skipped" });
+  });
+
   test("counts only resolved tours", () => {
     expect(countResolvedTours(GUIDE_TOURS, {})).toBe(0);
     expect(
