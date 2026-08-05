@@ -56,10 +56,9 @@ const valuesMock = mock(() => ({
   onConflictDoNothing: onConflictDoNothingMock,
 }));
 const insertMock = mock(() => ({ values: valuesMock }));
-const arrayBufferMock = mock(async () => new ArrayBuffer(8));
-const getS3Mock = mock(() => ({
-  file: () => ({ arrayBuffer: arrayBufferMock }),
-}));
+const getS3ObjectWithSignalMock = mock(
+  async (_key: string, _signal: AbortSignal) => new ArrayBuffer(8),
+);
 const s3DeleteMock = mock(async () => undefined);
 const s3WriteMock = mock(async () => undefined);
 const extractFileTextResultMock = mock(
@@ -93,7 +92,7 @@ void mock.module("@/api/lib/document-processing-enqueue", () => ({
 }));
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: getS3Mock,
+  getS3ObjectWithSignal: getS3ObjectWithSignalMock,
   putS3ObjectWithSignal: s3WriteMock,
 }));
 void mock.module("@/api/lib/search/extract-content", () => ({
@@ -123,8 +122,7 @@ beforeEach(() => {
   onConflictDoNothingMock.mockClear();
   returningMock.mockReset();
   returningMock.mockImplementation(async () => [{ id: runId }]);
-  arrayBufferMock.mockClear();
-  getS3Mock.mockClear();
+  getS3ObjectWithSignalMock.mockClear();
   extractFileTextResultMock.mockReset();
   extractFileTextResultMock.mockImplementation(async () =>
     Result.ok("native text"),
@@ -140,7 +138,9 @@ beforeEach(() => {
 });
 
 describe("processExtraction", () => {
-  test("hands pending derivatives to their queue and durably extracts them once ready", () => {
+  // Files with a pending PDF derivative wait for it so extraction reads the
+  // rendered PDF rather than the original bytes.
+  test("requires durable extraction only after any pending PDF derivative exists", () => {
     expect(requiresDurableNativeExtraction(fileContent)).toBe(true);
     expect(
       requiresDurableNativeExtraction({
@@ -254,7 +254,7 @@ describe("processExtraction", () => {
       Result.ok(null),
     );
 
-    await executeNativeExtraction({
+    const outcome = await executeNativeExtraction({
       fileField: docxContent,
       lifecycleSignal: new AbortController().signal,
       run: {
@@ -268,6 +268,7 @@ describe("processExtraction", () => {
       },
     });
 
+    expect(outcome).toBe("persisted");
     expect(encryptContentMock).toHaveBeenCalledWith(organizationId, "");
     expect(executeMock).toHaveBeenCalledTimes(2);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
@@ -296,7 +297,7 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(true);
+    expect(persisted).toBe("persisted");
     const lockQuery = executeMock.mock.calls.at(0)?.[0];
     const writeQuery = executeMock.mock.calls.at(1)?.[0];
     expect(lockQuery).toBeDefined();
@@ -361,7 +362,7 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(false);
+    expect(persisted).toBe("source_cancelled");
     expect(executeMock).toHaveBeenCalledTimes(1);
   });
 
@@ -383,7 +384,31 @@ describe("processExtraction", () => {
       workspaceId: toSafeId<"workspace">("workspace_1"),
     });
 
-    expect(persisted).toBe(false);
+    expect(persisted).toBe("preserved");
     expect(executeMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("surfaces preserved manual OCR ownership and skips automatic fallback", async () => {
+    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.ok(null),
+    );
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("preserved");
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 });

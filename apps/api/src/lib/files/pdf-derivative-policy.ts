@@ -26,7 +26,7 @@ const CONVERTIBLE_MIME_TYPES = {
 } as const satisfies Record<string, null>;
 
 export const isConvertibleMimeType = (mimeType: string): boolean =>
-  mimeType in CONVERTIBLE_MIME_TYPES;
+  Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
 /** DOCX is rendered by Folio and therefore has no derivative queue. */
 const NATIVELY_RENDERABLE_MIME_TYPES = {
@@ -35,7 +35,7 @@ const NATIVELY_RENDERABLE_MIME_TYPES = {
 } as const satisfies Record<string, null>;
 
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
-  mimeType in NATIVELY_RENDERABLE_MIME_TYPES;
+  Object.hasOwn(NATIVELY_RENDERABLE_MIME_TYPES, mimeType);
 
 type ShouldGeneratePdfDerivativeOptions = {
   encrypted?: boolean;

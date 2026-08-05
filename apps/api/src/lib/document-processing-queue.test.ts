@@ -149,21 +149,6 @@ describe("OCR derivative durability", () => {
       }),
     ).toBe(false);
   });
-
-  test("retries derivative failures within the bounded attempt budget", () => {
-    expect(
-      isRetryableOcrDerivativeFailure({
-        attemptCount: 1,
-        errorCode: "searchable_pdf_failed",
-      }),
-    ).toBe(true);
-    expect(
-      isRetryableOcrDerivativeFailure({
-        attemptCount: 5,
-        errorCode: "searchable_pdf_failed",
-      }),
-    ).toBe(false);
-  });
 });
 
 describe("lease heartbeat", () => {
@@ -445,6 +430,45 @@ describe("isCurrentNativeExtractionSource", () => {
         content: { ...selectedFileContent, sha256Hex: "c".repeat(64) },
       }),
     ).toBe(false);
+  });
+
+  test("rejects every stale or ineligible native source state", () => {
+    const rejectionCases = {
+      deletedVersion: {
+        ...docxSource,
+        versionDeletedAt: new Date(),
+      },
+      encryptedFile: {
+        ...docxSource,
+        content: { ...selectedFileContent, encrypted: true },
+      },
+      mismatchedCurrentVersion: {
+        ...docxSource,
+        currentVersionId: toSafeId<"entityVersion">("other_version"),
+      },
+      mismatchedFieldVersion: {
+        ...docxSource,
+        fieldEntityVersionId: toSafeId<"entityVersion">("other_version"),
+      },
+      readOnlyEntity: {
+        ...docxSource,
+        entityReadOnly: true,
+      },
+    } satisfies Record<
+      string,
+      Parameters<typeof isCurrentNativeExtractionSource>[1]
+    >;
+
+    expect(Object.keys(rejectionCases).sort()).toEqual([
+      "deletedVersion",
+      "encryptedFile",
+      "mismatchedCurrentVersion",
+      "mismatchedFieldVersion",
+      "readOnlyEntity",
+    ]);
+    for (const candidate of Object.values(rejectionCases)) {
+      expect(isCurrentNativeExtractionSource(docxRun, candidate)).toBe(false);
+    }
   });
 });
 

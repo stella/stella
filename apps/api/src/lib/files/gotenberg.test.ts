@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  isConvertibleMimeType,
+  isNativelyRenderableMimeType,
   pdfDerivativeStateForFile,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
@@ -63,5 +65,12 @@ describe("PDF derivative policy", () => {
         mimeType: "application/vnd.ms-outlook",
       }),
     ).toBe(false);
+  });
+
+  test("does not treat inherited object properties as MIME types", () => {
+    for (const inheritedProperty of ["constructor", "toString"]) {
+      expect(isConvertibleMimeType(inheritedProperty)).toBe(false);
+      expect(isNativelyRenderableMimeType(inheritedProperty)).toBe(false);
+    }
   });
 });

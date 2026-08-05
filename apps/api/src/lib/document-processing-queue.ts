@@ -972,35 +972,38 @@ export const processDocumentProcessingRun = async (
     // automatic jobs. Either it wins and a later worker observes `off` before
     // claiming, or the worker wins and opt-out refuses until this dispatch is
     // terminal; neither path can acknowledge opt-out while it sends a file.
-    const settingsRows = await tx
-      .select({
-        documentProcessingMode: organizationSettings.documentProcessingMode,
-      })
-      .from(organizationSettings)
-      .where(eq(organizationSettings.organizationId, runContext.organizationId))
-      .limit(1)
-      .for("update");
-    if (
-      runContext.kind === "ocr" &&
-      requiresOcrPolicy(runContext.requestSource) &&
-      settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
-    ) {
-      await tx
-        .update(documentProcessingRuns)
-        .set({
-          errorAt: new Date(),
-          errorCode: "policy_disabled",
-          finishedAt: new Date(),
-          status: "cancelled",
-          updatedAt: new Date(),
+    if (runContext.kind === "ocr") {
+      const settingsRows = await tx
+        .select({
+          documentProcessingMode: organizationSettings.documentProcessingMode,
         })
+        .from(organizationSettings)
         .where(
-          and(
-            eq(documentProcessingRuns.id, runId),
-            inArray(documentProcessingRuns.status, ["queued", "failed"]),
-          ),
-        );
-      return null;
+          eq(organizationSettings.organizationId, runContext.organizationId),
+        )
+        .limit(1)
+        .for("update");
+      if (
+        requiresOcrPolicy(runContext.requestSource) &&
+        settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
+      ) {
+        await tx
+          .update(documentProcessingRuns)
+          .set({
+            errorAt: new Date(),
+            errorCode: "policy_disabled",
+            finishedAt: new Date(),
+            status: "cancelled",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(documentProcessingRuns.id, runId),
+              inArray(documentProcessingRuns.status, ["queued", "failed"]),
+            ),
+          );
+        return null;
+      }
     }
 
     lifecycleSignal.throwIfAborted();
@@ -1040,47 +1043,48 @@ export const processDocumentProcessingRun = async (
   const processingResult = await Result.tryPromise({
     try: async () => {
       lifecycleSignal.throwIfAborted();
-      const settings = await rootDb.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: run.organizationId } },
-        columns: { documentProcessingMode: true },
-      });
-      const currentRuns = await rootDb
-        .select({ requestSource: documentProcessingRuns.requestSource })
-        .from(documentProcessingRuns)
-        .where(eq(documentProcessingRuns.id, run.id))
-        .limit(1);
-      if (
-        run.kind === "ocr" &&
-        requiresOcrPolicy(
-          currentRuns.at(0)?.requestSource ?? run.requestSource,
-        ) &&
-        settings?.documentProcessingMode !== "searchable-text"
-      ) {
-        const cancelled = await markRunCancelled(
-          run.id,
-          claimToken,
-          "policy_disabled",
-        );
-        if (cancelled) {
-          return;
-        }
-
-        const promotedRuns = await rootDb
-          .select({
-            claimedBy: documentProcessingRuns.claimedBy,
-            requestSource: documentProcessingRuns.requestSource,
-            status: documentProcessingRuns.status,
-          })
+      if (run.kind === "ocr") {
+        const settings = await rootDb.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: run.organizationId } },
+          columns: { documentProcessingMode: true },
+        });
+        const currentRuns = await rootDb
+          .select({ requestSource: documentProcessingRuns.requestSource })
           .from(documentProcessingRuns)
           .where(eq(documentProcessingRuns.id, run.id))
           .limit(1);
         if (
-          !ownsPromotedManualOcrClaim({
-            claimToken,
-            run: promotedRuns.at(0),
-          })
+          requiresOcrPolicy(
+            currentRuns.at(0)?.requestSource ?? run.requestSource,
+          ) &&
+          settings?.documentProcessingMode !== "searchable-text"
         ) {
-          return;
+          const cancelled = await markRunCancelled(
+            run.id,
+            claimToken,
+            "policy_disabled",
+          );
+          if (cancelled) {
+            return;
+          }
+
+          const promotedRuns = await rootDb
+            .select({
+              claimedBy: documentProcessingRuns.claimedBy,
+              requestSource: documentProcessingRuns.requestSource,
+              status: documentProcessingRuns.status,
+            })
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, run.id))
+            .limit(1);
+          if (
+            !ownsPromotedManualOcrClaim({
+              claimToken,
+              run: promotedRuns.at(0),
+            })
+          ) {
+            return;
+          }
         }
       }
 
@@ -1096,11 +1100,21 @@ export const processDocumentProcessingRun = async (
             await markRunCancelled(run.id, claimToken, "source_superseded");
             return;
           }
-          await executeNativeExtraction({
+          const extractionOutcome = await executeNativeExtraction({
             fileField: source.content,
             lifecycleSignal,
             run,
           });
+          switch (extractionOutcome) {
+            case "persisted":
+            case "preserved":
+              break;
+            case "source_cancelled":
+              await markRunCancelled(run.id, claimToken, "source_superseded");
+              return;
+            default:
+              extractionOutcome satisfies never;
+          }
           lifecycleSignal.throwIfAborted();
           const persistedSource = await readCurrentDocumentSource({
             entityId: run.entityId,
@@ -1611,17 +1625,17 @@ const persistMissingNativeExtractionRuns = async (
       return [];
     }
 
-    const repairableConflict = and(
-      eq(documentProcessingRuns.status, "cancelled"),
-      inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-      inArray(documentProcessingRuns.errorCode, [
-        SOURCE_SUPERSEDED_CANCELLATION_CODE,
-        "workspace_unavailable",
-      ]),
+    const repairableConflict = sql.join(
+      [
+        eq(documentProcessingRuns.status, "cancelled"),
+        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+        inArray(documentProcessingRuns.errorCode, [
+          SOURCE_SUPERSEDED_CANCELLATION_CODE,
+          "workspace_unavailable",
+        ]),
+      ],
+      sql` AND `,
     );
-    if (!repairableConflict) {
-      return [];
-    }
     const queuedAt = new Date();
     const queued = await tx
       .insert(documentProcessingRuns)

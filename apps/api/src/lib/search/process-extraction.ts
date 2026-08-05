@@ -15,7 +15,7 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { getS3ObjectWithSignal } from "@/api/lib/s3";
 import {
   canExtractMimeType,
   extractFileTextResult,
@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { findExtractionFileField } from "@/api/lib/search/types";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -86,6 +87,11 @@ type PersistedNativeExtractionProjection = {
   entityId: SafeId<"entity">;
 };
 
+export type NativeExtractionProjectionOutcome =
+  | "persisted"
+  | "preserved"
+  | "source_cancelled";
+
 export const persistNativeExtractionProjection = async ({
   charCount,
   ciphertext,
@@ -97,7 +103,7 @@ export const persistNativeExtractionProjection = async ({
   sourceFileId,
   sourceSha256Hex,
   workspaceId,
-}: NativeExtractionProjectionOptions): Promise<boolean> =>
+}: NativeExtractionProjectionOptions): Promise<NativeExtractionProjectionOutcome> =>
   await rootDb.transaction(async (tx) => {
     // Manual OCR request and projection transactions take this same lock first.
     // Keeping the conditional write in the next statement gives it a fresh
@@ -119,7 +125,7 @@ export const persistNativeExtractionProjection = async ({
         FOR UPDATE OF e
       `);
     if (!lockedSources.at(0)) {
-      return false;
+      return "source_cancelled";
     }
 
     const persisted = await tx.execute<PersistedNativeExtractionProjection>(sql`
@@ -199,7 +205,7 @@ export const persistNativeExtractionProjection = async ({
         WHERE NOT EXISTS (SELECT 1 FROM manual_projection_ownership)
         RETURNING entity_id AS "entityId"
       `);
-    return persisted.at(0) !== undefined;
+    return persisted.at(0) === undefined ? "preserved" : "persisted";
   });
 
 type NativeExtractionRun = Pick<
@@ -221,7 +227,7 @@ export const executeNativeExtraction = async ({
   fileField: Extract<FieldContent, { type: "file" }>;
   lifecycleSignal: AbortSignal;
   run: NativeExtractionRun;
-}): Promise<void> => {
+}): Promise<NativeExtractionProjectionOutcome> => {
   const source = pickExtractionSource(fileField);
   const key = createFileKey({
     organizationId: run.organizationId,
@@ -229,7 +235,14 @@ export const executeNativeExtraction = async ({
     fileId: source.fileId,
     mimeType: source.storageMimeType,
   });
-  const buffer = await getS3().file(key).arrayBuffer();
+  const buffer = await withTimeout(
+    async (signal) => await getS3ObjectWithSignal(key, signal),
+    {
+      label: "native extraction source read",
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
+    },
+  );
   lifecycleSignal.throwIfAborted();
   const extraction = await extractFileTextResult(
     buffer,
@@ -244,7 +257,7 @@ export const executeNativeExtraction = async ({
   const persistedText = text ?? "";
   const encrypted = await encryptContent(run.organizationId, persistedText);
   lifecycleSignal.throwIfAborted();
-  await persistNativeExtractionProjection({
+  const persistenceOutcome = await persistNativeExtractionProjection({
     charCount: persistedText.length,
     ciphertext: encrypted.ciphertext,
     entityId: run.entityId,
@@ -256,6 +269,9 @@ export const executeNativeExtraction = async ({
     sourceSha256Hex: run.sourceSha256Hex,
     workspaceId: run.workspaceId,
   });
+  if (persistenceOutcome !== "persisted") {
+    return persistenceOutcome;
+  }
 
   if (text === null && fileField.mimeType === PDF_MIME_TYPE) {
     await requestAutomaticDocumentOcr({
@@ -269,6 +285,7 @@ export const executeNativeExtraction = async ({
       workspaceId: run.workspaceId,
     });
   }
+  return persistenceOutcome;
 };
 
 /**
