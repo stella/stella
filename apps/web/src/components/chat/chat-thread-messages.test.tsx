@@ -348,7 +348,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Searching chat history");
   });
 
-  test("folds a settled turn's process steps into one collapsed disclosure", () => {
+  test("folds process steps across invisible tool results into one disclosure", () => {
     const chatMessages: PersistedChatMessage[] = [
       {
         id: "message-A",
@@ -366,6 +366,28 @@ describe("chat thread messages", () => {
             output: {
               error: { name: "runtime", message: "value is not iterable" },
             },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-failed",
+            content: "value is not iterable",
+            state: "error",
+            error: "value is not iterable",
+          },
+          {
+            type: "tool-call",
+            id: "tool-call-complete",
+            name: "mcp__external-lookup",
+            arguments: JSON.stringify({ query: "governing law" }),
+            state: "complete",
+            input: { query: "governing law" },
+            output: { result: "Delaware" },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-complete",
+            content: "Delaware",
+            state: "complete",
           },
           { type: "text", content: "Here is the answer." },
         ],
@@ -389,7 +411,8 @@ describe("chat thread messages", () => {
     // The whole run sits behind one step-count summary, collapsed by
     // default; a failed step reads as a short human line with the raw
     // output tucked behind its own disclosure.
-    expect(html).toContain("2 steps");
+    expect(html).toContain("3 steps");
+    expect(html).not.toContain(">1 step<");
     expect(html).not.toContain("<details open");
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");
