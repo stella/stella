@@ -26,7 +26,7 @@ test("anonymous visitors can search and browse by legal task", async ({
   await context.clearCookies();
   await page.goto("/tools", {
     timeout: PUBLIC_SSR_TIMEOUT_MS,
-    waitUntil: "networkidle",
+    waitUntil: "domcontentloaded",
   });
 
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
