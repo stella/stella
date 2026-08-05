@@ -1402,11 +1402,16 @@ export default defineConfig({
       },
     },
     {
-      // Persistent chrome outlives the route it renders under: the inspector
-      // keeps the document editor mounted across navigation, and `/law/*` is a
-      // top-level tree, so a strict `from:` read throws there. See
-      // apps/web/src/lib/authenticated-user-context.tsx for the identity read
-      // that survives navigation.
+      // Chrome that outlives the route tree it reads from: the inspector keeps
+      // the document editor mounted across navigation, and `/law/*` is a
+      // top-level tree, so a strict `from: "/_protected"` read throws there.
+      // See apps/web/src/lib/authenticated-user-context.tsx for the identity
+      // read that survives navigation.
+      //
+      // The sidebar and user menu are deliberately NOT listed: they render
+      // only inside `_protected` (`routes/_protected.tsx`), so a strict read
+      // bound to that tree can never outlive its match. Add a component here
+      // when it can be mounted while a different top-level tree is active.
       files: [
         "apps/web/src/components/docx/**/*.tsx",
         "apps/web/src/components/docx/**/*.ts",
@@ -1414,8 +1419,6 @@ export default defineConfig({
         "apps/web/src/components/inspector/**/*.ts",
         "apps/web/src/components/ai-suggestions/**/*.tsx",
         "apps/web/src/components/ai-suggestions/**/*.ts",
-        "apps/web/src/components/app-sidebar.tsx",
-        "apps/web/src/components/sidebar-user-menu.tsx",
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":

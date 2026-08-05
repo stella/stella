@@ -147,9 +147,9 @@ export const useFolioCollaborationSession = ({
     userName !== null;
 
   useExternalSyncEffect(() => {
-    // The null checks are already folded into `canConnect`; repeating them
-    // here is what narrows the identity for the rest of the effect.
-    if (!canConnect || userColor === null || userName === null) {
+    // `canConnect` is a const boolean whose definition includes both null
+    // checks, so narrowing flows through it: the identity is non-null below.
+    if (!canConnect) {
       setState({ status: "idle", collaboration: null });
       return undefined;
     }
