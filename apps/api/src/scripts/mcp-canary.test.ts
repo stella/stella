@@ -171,8 +171,8 @@ describe("skip reporting", () => {
       evaluateToolsList({ body: undefined, status: 500 }),
     ].map((result) => result.name);
 
-    expect([...AUTHENTICATED_PROBE_NAMES].toSorted()).toEqual(
-      authenticatedProbeNames.toSorted(),
+    expect(authenticatedProbeNames.toSorted()).toEqual(
+      [...AUTHENTICATED_PROBE_NAMES].toSorted(),
     );
   });
 
