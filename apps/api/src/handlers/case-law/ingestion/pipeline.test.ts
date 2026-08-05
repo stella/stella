@@ -598,4 +598,67 @@ describe("processDecision — source raw upload failure", () => {
     // only the status would pass on the corpus-write reason too.
     expect(outcome.reason).toBe("source-raw-write");
   });
+
+  test("logs the failure's system fields, not just its message", async () => {
+    // Bun's S3 client collapses every write failure to the same
+    // message, so `error.detail` alone cannot tell an access denial
+    // from a timeout. `errorSystemFields` carries the discriminating
+    // `code`/`errno`/`syscall`, which is what makes a held cursor
+    // diagnosable from the log.
+    const logged: Record<string, unknown>[] = [];
+    await mock.module("@/api/lib/observability/logger", () => ({
+      logger: {
+        error: (_event: string, attributes: Record<string, unknown>) => {
+          logged.push(attributes);
+        },
+        warn: () => undefined,
+        info: () => undefined,
+      },
+    }));
+    await mock.module("@/api/lib/s3", () => ({
+      getS3: () => ({
+        write: () => {
+          throw Object.assign(new Error("an unexpected error has occurred"), {
+            code: "AccessDenied",
+          });
+        },
+      }),
+    }));
+
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => await Promise.resolve(undefined),
+          },
+        },
+      };
+
+      // SAFETY: the raw upload runs before any decision write, so the
+      // dedup lookup is the only chain this path reaches.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    await processDecision({
+      input: {
+        caseNumber: "X/3/2026",
+        court: "Test Court",
+        country: "SVK",
+        language: "sk",
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        rawHash: "new-hash",
+        documentAst: EMPTY_AST,
+        sourceRaw: "<html></html>",
+      },
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-08-05T00:00:00.000Z"),
+    });
+
+    const failure = logged.at(0);
+    expect(failure?.["error.code"]).toBe("AccessDenied");
+  });
 });

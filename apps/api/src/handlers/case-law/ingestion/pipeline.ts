@@ -52,7 +52,7 @@ import {
   ConcurrentModificationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   reserveCaseLawCorpusUploadIntent,
   writeReservedCaseLawCorpusUpload,
@@ -696,7 +696,7 @@ const processDecisionAttempt = async ({
         logger.error("case_law.ingestion.source_raw_write_failed", {
           sourceId,
           caseNumber: result.caseNumber,
-          "error.type": errorTag(error),
+          ...errorSystemFields(error),
           "error.detail": corpusWriteErrorDetail(error),
         });
         captureError(error, { sourceId, step: "uploadSourceRaw" });
@@ -1316,7 +1316,7 @@ const processDecisionAttempt = async ({
         decisionId,
         caseNumber: result.caseNumber,
         country: result.country,
-        "error.type": errorTag(error),
+        ...errorSystemFields(error),
         "error.detail": corpusWriteErrorDetail(error),
       });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
