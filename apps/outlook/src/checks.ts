@@ -17,7 +17,7 @@ const sentenceSplitPattern = /(?<=[.!?])\s+/u;
 
 const normalizeDomain = (email: string): string | null => {
   const domain = email.split("@").at(1)?.toLowerCase();
-  return domain && domain.includes(".") ? domain : null;
+  return domain?.includes(".") ? domain : null;
 };
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
