@@ -8,6 +8,7 @@ import {
 } from "./evaluate";
 import {
   type CompareOp,
+  COMPARE_OPS,
   type ConditionNode,
   conditionNodeSchema,
   emptyCondition,
@@ -143,6 +144,19 @@ describe("compare operators", () => {
       }),
     ).toBeNull();
   });
+
+  // Blankness is `is_empty`, so no operator turns `""` into a real constraint.
+  // An invariant over the whole operator union: a per-operator exception like
+  // the `eq`/`neq` one this replaced cannot be reintroduced silently, and a new
+  // `CompareOp` is covered the moment it is added.
+  test.each([...COMPARE_OPS])(
+    "pruneIncomplete drops a blank `%s` comparison",
+    (op) => {
+      expect(
+        pruneIncomplete(compare({ type: "property", propertyId: "x" }, op, "")),
+      ).toBeNull();
+    },
+  );
 });
 
 describe("predicate operators", () => {
