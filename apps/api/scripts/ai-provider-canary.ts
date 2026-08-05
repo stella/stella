@@ -466,6 +466,9 @@ const CANARY_CACHING = {
   scopeKey: "stella-synthetic-provider-canary",
 } as const satisfies CachingDecision;
 
+// Synthetic provider-contract probes: no tenant workspace scope to guard.
+const NO_TENANT_SCOPE = [] as const;
+
 const structuredOutputSchema = v.strictObject({ ok: v.literal(true) });
 
 // Exercises the nested shape and the value constraints (array bounds, string
@@ -651,6 +654,7 @@ const capabilityProbes = [
         prompt: "Return an object whose ok field is true.",
         role: CAPABILITY_ROLE,
         serviceTier: "standard",
+        tenantWorkspaceIds: NO_TENANT_SCOPE,
       });
     },
   },
@@ -709,6 +713,8 @@ const capabilityProbes = [
         role: CAPABILITY_ROLE,
         serviceTier: "standard",
         system: "This is a synthetic provider-contract canary.",
+        systemPromptOrigin: "server-built",
+        tenantWorkspaceIds: NO_TENANT_SCOPE,
       });
       requireNonEmptyText(output);
     },
@@ -772,6 +778,7 @@ const runModelRoleProbe = async ({
     orgAIConfig: probeConfig,
     role: selection.role,
     serviceTier: "standard",
+    tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
   requireExpectedRoleOutput(output, role);
 };
@@ -791,6 +798,7 @@ const runStructuredOutputModelRoleProbe = async ({
     prompt: "Return an object with an empty entries array.",
     role,
     serviceTier: "standard",
+    tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
 };
 
@@ -825,6 +833,7 @@ const runWeeklyModelRoleProbe = async ({
     orgAIConfig: rotatedConfig,
     role,
     serviceTier: "standard",
+    tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
   requireExpectedRoleOutput(output, role);
 };
@@ -844,6 +853,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
     prompt: "Return an object with an empty entries array.",
     role,
     serviceTier: "standard",
+    tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
 };
 
