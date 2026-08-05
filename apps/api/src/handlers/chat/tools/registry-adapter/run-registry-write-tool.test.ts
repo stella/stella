@@ -33,6 +33,7 @@ const {
   findUndeclaredUuidPathIn,
   hydrateRefs,
 } = await import("./ref-mediation");
+const { deriveRefMediationEntry } = await import("./projection-schema");
 const { WRITE_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
 const { applyChatApprovalConfirmation, runRegistryWriteTool } =
   await import("./run-registry-write-tool");
@@ -148,15 +149,18 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     const hydrated = hydrateRefs({
       dehydration: dehydrated,
       output: { matterId: WS_UUID, updated: true },
-      outputRefs: WRITE_TOOL_REF_FIELD_MAP.save_matter.outputRefs,
+      outputRefs: deriveRefMediationEntry(
+        WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
+      ).outputRefs,
       refRegistry: registry,
     });
     expect(hydrated).toEqual({ matterId: matterRef, updated: true });
     expect(containsRawUuid(hydrated)).toBe(false);
     expect(
       findUndeclaredUuidPathIn({
-        passthroughIdPaths:
-          WRITE_TOOL_REF_FIELD_MAP.save_matter.passthroughIdPaths,
+        passthroughIdPaths: deriveRefMediationEntry(
+          WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
+        ).passthroughIdPaths,
         payload: hydrated,
       }),
     ).toBeUndefined();
@@ -189,8 +193,9 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     // save_matter declares only `matterId` as an output ref and no passthrough
     // paths, so a raw uuid anywhere else is refused rather than leaked.
     const offending = findUndeclaredUuidPathIn({
-      passthroughIdPaths:
-        WRITE_TOOL_REF_FIELD_MAP.save_matter.passthroughIdPaths,
+      passthroughIdPaths: deriveRefMediationEntry(
+        WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
+      ).passthroughIdPaths,
       payload: { matterId: "mat_1", leaked: OTHER_WS_UUID },
     });
     expect(offending).toBe("leaked");

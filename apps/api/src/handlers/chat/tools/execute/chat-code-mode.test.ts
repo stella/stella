@@ -105,6 +105,16 @@ describe("buildChatCodeMode", () => {
     expect(discovered).toContain("diff");
     // Stripped file plumbing is not advertised to the model.
     expect(discovered).not.toContain("sha256Hex");
+
+    // Every projectable read tool carries a schema now, so the Returns line
+    // applies across the catalog, not only to the first-wave conversions;
+    // list_documents stands in for the rest.
+    const discoveredDocuments = JSON.stringify(
+      await discover({ toolNames: ["list_documents"] }),
+    );
+    expect(discoveredDocuments).toContain("Returns:");
+    expect(discoveredDocuments).toContain("documents");
+    expect(discoveredDocuments).toContain("parentId");
   });
 
   test("runs a projected read tool end-to-end through the sandbox with refs, no raw UUIDs", async () => {

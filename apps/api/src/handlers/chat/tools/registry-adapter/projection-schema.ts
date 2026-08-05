@@ -60,9 +60,9 @@ export type OutputRefField =
 
 /**
  * The three output-side path lists the generic mediation cores
- * (`hydrateRefs`/`findUndeclaredUuidPathIn`/`stripDeclaredPaths`) consume:
- * hand-written on unconverted map entries, derived from the projection schema
- * on converted ones.
+ * (`hydrateRefs`/`findUndeclaredUuidPathIn`/`stripDeclaredPaths`) consume,
+ * derived from each map entry's projection schema. Hand-written lists no
+ * longer exist: the schema is the only artifact these can come from.
  */
 export type RefMediationLists = {
   outputRefs: readonly OutputRefField[];
@@ -173,6 +173,20 @@ export const strippedField = (): AnnotatedFieldSchema =>
     v.unknown(),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "strip" } }),
   );
+
+/**
+ * A free-form JSON subtree the schema cannot enumerate by path: public-source
+ * jsonb (`decision.metadata`), an external API envelope (BOE sections,
+ * registry `details`), or a structural config with no stable leaf grammar
+ * (playbook ask content, condition ASTs). Deliberately NOT an annotation:
+ * the strict parse admits any value at the declared key, the walker records
+ * nothing beneath it (an unannotated `unknown` leaf contributes no mediation
+ * paths), and therefore the runtime UUID backstop still applies, unlicensed,
+ * to every string inside — a UUID-shaped value in the subtree fails closed
+ * exactly as it did under the hand-written entries, which never enumerated
+ * these subtrees either.
+ */
+export const unenumeratedJson = (): AnnotatedFieldSchema => v.unknown();
 
 // --- Schema AST walking ---------------------------------------------------------
 // Valibot schemas are plain objects: `v.pipe` spreads its base schema and adds

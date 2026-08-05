@@ -24,21 +24,29 @@ import type {
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 
 /**
- * The three output-side mediation lists for a map entry, whichever artifact
- * carries them: derived from the entry's projection schema when the tool is
- * converted (memoized in `deriveRefMediationEntry`), or the entry's own
- * hand-written lists otherwise.
+ * The chat-projected read entry for a tool name, for the read-tool
+ * convenience wrappers below. The orchestrator refuses a non-projectable
+ * tool before any mediation runs, so reaching this with one is programmer
+ * misuse, not a data case: it panics rather than falling back.
  */
-export const resolveMediationLists = (
-  entry: RefMediationEntry,
+const requireProjectableReadEntry = (
+  toolName: RegistryReadToolName,
+): RefMediationEntry => {
+  const entry = READ_TOOL_REF_FIELD_MAP[toolName];
+  if (!entry.chatProjectable) {
+    panic(`Read tool ${toolName} is not chat-projectable`);
+  }
+  return entry;
+};
+
+/**
+ * The three output-side mediation lists for a projected read tool, derived
+ * from its projection schema (memoized in `deriveRefMediationEntry`).
+ */
+const readToolMediationLists = (
+  toolName: RegistryReadToolName,
 ): RefMediationLists =>
-  entry.projection === undefined
-    ? {
-        outputRefs: entry.outputRefs,
-        passthroughIdPaths: entry.passthroughIdPaths,
-        stripPaths: entry.stripPaths,
-      }
-    : deriveRefMediationEntry(entry.projection);
+  deriveRefMediationEntry(requireProjectableReadEntry(toolName).projection);
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -136,8 +144,7 @@ export const findUndeclaredUuidPath = ({
   payload: unknown;
 }): string | undefined =>
   findUndeclaredUuidPathIn({
-    passthroughIdPaths: resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName])
-      .passthroughIdPaths,
+    passthroughIdPaths: readToolMediationLists(toolName).passthroughIdPaths,
     payload,
   });
 
@@ -340,7 +347,7 @@ export const dehydrateInputRefs = ({
   refRegistry: ChatRefRegistry;
 }): Result<DehydratedInput, ChatToolError> =>
   dehydrateRefs({
-    inputRefs: READ_TOOL_REF_FIELD_MAP[toolName].inputRefs,
+    inputRefs: requireProjectableReadEntry(toolName).inputRefs,
     args,
     refRegistry,
   });
@@ -515,8 +522,7 @@ export const hydrateOutputRefs = ({
   dehydration: DehydratedInput;
 }): unknown =>
   hydrateRefs({
-    outputRefs: resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName])
-      .outputRefs,
+    outputRefs: readToolMediationLists(toolName).outputRefs,
     output,
     refRegistry,
     dehydration,

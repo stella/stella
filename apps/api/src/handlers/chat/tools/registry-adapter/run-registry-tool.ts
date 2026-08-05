@@ -22,17 +22,17 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import { applyProjectionSchema } from "./projection-schema";
-import type {
-  RegistryReadToolName,
-  RegistryRefFieldMapEntry,
-} from "./ref-field-map";
+import type { ChatProjectionSchema } from "./projection-schema";
+import {
+  applyProjectionSchema,
+  deriveRefMediationEntry,
+} from "./projection-schema";
+import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import {
   dehydrateInputRefs,
   findUndeclaredUuidPathIn,
   hydrateRefs,
-  resolveMediationLists,
   stripDeclaredPaths,
 } from "./ref-mediation";
 
@@ -108,28 +108,25 @@ export const PROJECTION_SCHEMA_FAILURE_MESSAGE =
   "input; do not retry this call.";
 
 /**
- * Strict-parse a converted tool's payload against its projection schema; an
- * unconverted entry passes through untouched. Shared by the read and write
- * orchestrators. The failure carries only issue paths (never values) to
- * telemetry, mirroring the UUID backstop's no-leak discipline.
+ * Strict-parse a projected tool's payload against its projection schema.
+ * Shared by the read and write orchestrators. The failure carries only issue
+ * paths (never values) to telemetry, mirroring the UUID backstop's no-leak
+ * discipline.
  */
 export const applyEntryProjection = ({
-  entry,
   payload,
+  projection,
   source,
   toolName,
 }: {
-  entry: RegistryRefFieldMapEntry;
   payload: unknown;
+  projection: ChatProjectionSchema;
   source: "run-registry-tool" | "run-registry-write-tool";
   toolName: string;
 }): Result<unknown, ChatToolError> => {
-  if (entry.projection === undefined) {
-    return Result.ok(payload);
-  }
   const projected = applyProjectionSchema({
     payload,
-    schema: entry.projection,
+    schema: projection,
   });
   if (Result.isError(projected)) {
     const error = new ChatToolError({
@@ -294,13 +291,13 @@ export const runRegistryReadTool = async ({
     return Result.err(payload.error);
   }
 
-  // Converted tools: strict-parse the payload against the projection schema
-  // BEFORE strip/hydrate. An unknown key — a field nobody classified — fails
-  // closed here, so an undeclared field is structurally unable to reach the
-  // model; the error carries only issue paths (never values) to telemetry.
+  // Strict-parse the payload against the projection schema BEFORE
+  // strip/hydrate. An unknown key — a field nobody classified — fails closed
+  // here, so an undeclared field is structurally unable to reach the model;
+  // the error carries only issue paths (never values) to telemetry.
   const projected = applyEntryProjection({
-    entry,
     payload: payload.value,
+    projection: entry.projection,
     source: "run-registry-tool",
     toolName,
   });
@@ -308,7 +305,7 @@ export const runRegistryReadTool = async ({
     return Result.err(projected.error);
   }
 
-  const mediation = resolveMediationLists(entry);
+  const mediation = deriveRefMediationEntry(entry.projection);
   const stripped = stripDeclaredPaths({
     output: projected.value,
     stripPaths: mediation.stripPaths,
