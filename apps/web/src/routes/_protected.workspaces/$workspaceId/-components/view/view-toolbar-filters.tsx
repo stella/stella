@@ -85,8 +85,8 @@ export const FilterChips = ({
   const t = useTranslations();
   const fields = useFilterFields(properties);
   // Which filter chip's editor popover is open (simple or advanced; only one
-  // can be open at a time). Set when an advanced chip is created so it opens
-  // immediately (an unopened "1 rule" chip is otherwise a dead end).
+  // can be open at a time). Set on creation, since a new chip carries no value
+  // yet and is a dead end unopened.
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const replaceAt = (index: number, node: ConditionNode) => {
@@ -123,12 +123,17 @@ export const FilterChips = ({
     append(seededAdvancedGroup(pickerFields));
   };
 
+  const addField = (field: FieldOption) => {
+    setOpenIndex(filters.length);
+    append(leafFromField(field));
+  };
+
   if (filters.length === 0) {
     return (
       <AddFilterPicker
         fields={pickerFields}
         onAddAdvanced={addAdvanced}
-        onAddField={(field) => append(leafFromField(field))}
+        onAddField={addField}
         trigger={
           <Button
             aria-label={t("workspaces.views.filter")}
@@ -182,7 +187,7 @@ export const FilterChips = ({
       <AddFilterPicker
         fields={pickerFields}
         onAddAdvanced={addAdvanced}
-        onAddField={(field) => append(leafFromField(field))}
+        onAddField={addField}
         trigger={
           <Button
             aria-label={t("workspaces.views.filter")}

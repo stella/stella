@@ -117,11 +117,12 @@ describe("compare operators", () => {
       op: "is_empty",
     };
 
-    // Incomplete leaves prune away; complete ones (incl. `eq ""`, `is_empty`) stay.
+    // Incomplete leaves prune away, including `eq ""` — a seeded row whose
+    // value was never entered. Complete ones (incl. `is_empty`) stay.
     expect(pruneIncomplete(incompleteGt)).toBeNull();
     expect(pruneIncomplete(incompleteContains)).toBeNull();
+    expect(pruneIncomplete(eqEmpty)).toBeNull();
     expect(pruneIncomplete(real)).toEqual(real);
-    expect(pruneIncomplete(eqEmpty)).toEqual(eqEmpty);
     expect(pruneIncomplete(isEmpty)).toEqual(isEmpty);
 
     // A group keeps real children and drops incomplete ones...
