@@ -516,6 +516,8 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  /** Tenant set for the model-ingress guard on the summarizer request. */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 type CompactModelMessagesForModelOptions = {
@@ -529,6 +531,8 @@ type CompactModelMessagesForModelOptions = {
   preserveTokens?: number | undefined;
   role: ModelRole;
   summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
+  /** Tenant set for the model-ingress guard on the summarizer request. */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   triggerTokens?: number | undefined;
 };
 
@@ -542,6 +546,7 @@ export const compactChatMessagesForModel = async ({
   organizationId,
   orgAIConfig,
   preserveTokens,
+  tenantWorkspaceIds,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
   Result<ChatMessage[], HandlerError<422 | 500>>
@@ -577,7 +582,9 @@ export const compactChatMessagesForModel = async ({
             role: "chat",
             serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
+            systemPromptOrigin: "server-built",
             temperature: 0,
+            tenantWorkspaceIds,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);
@@ -602,6 +609,7 @@ export const summarizeChatCompactionForModel = async ({
   organizationId,
   orgAIConfig,
   preserveTokens,
+  tenantWorkspaceIds,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
   Result<ChatCompactionCheckpoint | null, HandlerError<422 | 500>>
@@ -637,7 +645,9 @@ export const summarizeChatCompactionForModel = async ({
             role: "chat",
             serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
+            systemPromptOrigin: "server-built",
             temperature: 0,
+            tenantWorkspaceIds,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);
@@ -663,6 +673,7 @@ export const compactModelMessagesForModel = async ({
   preserveTokens,
   role,
   summarizeWithModel,
+  tenantWorkspaceIds,
   triggerTokens,
 }: CompactModelMessagesForModelOptions): Promise<
   Result<ModelMessage[], HandlerError<500>>
@@ -697,9 +708,11 @@ export const compactModelMessagesForModel = async ({
               transcript,
             ].join("\n"),
             system: COMPACTION_SYSTEM_PROMPT,
+            systemPromptOrigin: "server-built",
             role,
             serviceTier: "standard",
             temperature: 0,
+            tenantWorkspaceIds,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);

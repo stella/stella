@@ -149,6 +149,8 @@ const rewriteSkillResource = createSafeRootHandler(
           serviceTier: "standard",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
+          // Root-scoped handler: no workspace id is available here.
+          tenantWorkspaceIds: [],
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,

@@ -26,6 +26,23 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * the plan's declared text fields on the whole payload, THEN windows, THEN
  * serializes, so an entity name can never be split across a window edge and
  * placeholders stay stable across consecutive windows of one document.
+ *
+ * Deliberately out of scope: tenant/entity ids. This pipeline (and the
+ * `textFields` a tool declares) anonymizes authored PII/tenant *text*, never
+ * identifiers — an id is never a declared text field and this function never
+ * touches one. MCP is a programmatic API surface for authenticated,
+ * tenant-scoped callers (OAuth/machine-API-key external clients, and the chat
+ * registry adapter in default mode) that need real ids back to make follow-up
+ * calls (e.g. `read_document({ entity_id })`); redacting them would break the
+ * surface's basic usability. Which ids a caller can even see is enforced
+ * upstream, by each handler's own workspace-scoped query and
+ * `McpRequestContext.accessibleWorkspaceIdSet` (`workspace-access-boundary.ts`),
+ * not here. The chat registry adapter (`run-registry-tool.ts`) is the one
+ * caller that also crosses into third-party model context: it runs this same
+ * pipeline, then separately rewrites ids into opaque chat refs and fails
+ * closed on any raw uuid that slips through (`findUndeclaredUuidPath` in
+ * `ref-mediation.ts`). That backstop belongs there, not here, because this
+ * pipeline itself never hands output to a model.
  */
 export const finalizeMcpEgress = async ({
   context,

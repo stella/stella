@@ -14,6 +14,8 @@ import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
 import type { ModelRate } from "@stll/ai-catalog";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import {
   ACTION_WEIGHTS,
   computeUsageUnitCost,
@@ -39,6 +41,35 @@ const FALLBACK_RATE: ModelRate = {
 
 const ONE_MILLION_BIGINT = 1_000_000n;
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+// Model ids already reported for a catalog miss this process, so a hot
+// billing path can't spam telemetry.
+const reportedRateMissModelIds = new Set<string>();
+
+/**
+ * A miss means `modelId` isn't in the published rate table (a new or
+ * mistyped model id). Billing at `FALLBACK_RATE` is a deliberate fail-open
+ * so usage metering never blocks a chat turn; report the miss so an
+ * unrecognized model doesn't silently under- or over-bill indefinitely.
+ */
+const getModelRateOrFallback = (modelId: string): ModelRate => {
+  const rate = getModelRate(modelId);
+  if (rate) {
+    return rate;
+  }
+
+  if (!reportedRateMissModelIds.has(modelId)) {
+    reportedRateMissModelIds.add(modelId);
+    captureError(
+      new TelemetryError({
+        message: "Usage rate lookup missed catalog; billing at fallback rate",
+      }),
+      { source: "usage-unit-model", modelId },
+    );
+  }
+
+  return FALLBACK_RATE;
+};
 
 const isNonNegativeSafeInteger = (value: number): boolean =>
   Number.isSafeInteger(value) && value >= 0;
@@ -90,10 +121,7 @@ export const computeRawUsageMicroUnits = ({
   if (cacheReadTokens > inputTokens) {
     panic("cached input tokens cannot exceed total input tokens");
   }
-  const rate = resolveModelRate(
-    getModelRate(modelId) ?? FALLBACK_RATE,
-    inputTokens,
-  );
+  const rate = resolveModelRate(getModelRateOrFallback(modelId), inputTokens);
   const billedInputTokens = inputTokens - cacheReadTokens;
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
   const inputCost = scaleTokenCost(billedInputTokens, rate.inputPerMTok);

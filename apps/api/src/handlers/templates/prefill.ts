@@ -137,6 +137,9 @@ const extractFieldValues = async ({
     role: "fast",
     orgAIConfig,
     organizationId,
+    // Root-scoped handler: sources may span multiple accessible workspaces,
+    // no single workspace id to scope to.
+    tenantWorkspaceIds: [],
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,

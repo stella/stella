@@ -30,6 +30,47 @@ describe("chat anonymization pipeline contract", () => {
     ]);
   });
 
+  test("pins the wasm default label set against an independent oracle", () => {
+    // Hand-copied from @stll/anonymize-wasm's `ENTITY_CAPABILITIES`
+    // (constants.ts) `selection: "default"` entries, current as of writing.
+    // Deliberately NOT derived from the wasm export: the test above only
+    // proves this package's re-export matches whatever the wasm package
+    // currently returns, so an upstream regression that silently drops a
+    // sensitive label (e.g. "iban") would pass both sides of that check.
+    // This literal is the independent oracle that catches it. Updating it
+    // is a deliberate product decision, not a mechanical sync to make the
+    // test pass.
+    const EXPECTED_WASM_DEFAULT_ENTITY_LABELS = [
+      "address",
+      "bank account number",
+      "birth number",
+      "case number",
+      "country",
+      "credit card number",
+      "crypto",
+      "date",
+      "date of birth",
+      "email address",
+      "iban",
+      "identity card number",
+      "land parcel",
+      "misc",
+      "monetary amount",
+      "national identification number",
+      "organization",
+      "passport number",
+      "person",
+      "phone number",
+      "registration number",
+      "social security number",
+      "tax identification number",
+    ] as const;
+
+    expect([...WASM_DEFAULT_ENTITY_LABELS].sort()).toEqual([
+      ...EXPECTED_WASM_DEFAULT_ENTITY_LABELS,
+    ]);
+  });
+
   test("builds the shared client/server chat pipeline shape", () => {
     expect(
       buildChatAnonPipelineConfig({

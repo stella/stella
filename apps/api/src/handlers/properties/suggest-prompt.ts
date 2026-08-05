@@ -128,6 +128,7 @@ const suggestPrompt = createSafeHandler(
           serviceTier: "standard",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
+          tenantWorkspaceIds: [workspaceId],
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,

@@ -1,10 +1,28 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import {
+const captureErrorMock = mock();
+
+void mock.module("@/api/lib/analytics/capture", () => ({
+  captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
+}));
+
+const {
   computeRawUsageMicroUnits,
   usageUnitsFromTokens,
   MICRO_UNITS_PER_USAGE_UNIT,
-} from "@/api/lib/usage/unit-model";
+} = await import("@/api/lib/usage/unit-model");
+
+beforeEach(() => {
+  captureErrorMock.mockReset();
+});
+
+// Bun runs every test file in one process, and `mock.module` mutates a
+// shared registry: without restoring here, this call would leak into
+// whichever other test file runs next in the same process.
+afterAll(() => {
+  mock.restore();
+});
 
 describe("computeRawUsageMicroUnits", () => {
   test("scales linearly in input + output tokens", () => {
@@ -248,5 +266,32 @@ describe("usageUnitsFromTokens", () => {
     expect(result.unitsConsumed).toBeGreaterThanOrEqual(
       Math.ceil(result.rawUsageMicroUnits / MICRO_UNITS_PER_USAGE_UNIT),
     );
+  });
+});
+
+describe("catalog-miss telemetry", () => {
+  test("reports a telemetry error once per unknown model id", () => {
+    const modelId = "unit-model-test-unknown-model-once";
+
+    computeRawUsageMicroUnits({ modelId, inputTokens: 100, outputTokens: 100 });
+    computeRawUsageMicroUnits({ modelId, inputTokens: 200, outputTokens: 200 });
+
+    // Deduped per process by model id: the second miss for the same id
+    // must not capture again.
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ source: "usage-unit-model", modelId }),
+    );
+  });
+
+  test("does not report telemetry for a model already in the rate catalog", () => {
+    computeRawUsageMicroUnits({
+      modelId: "gemini-2.5-flash",
+      inputTokens: 100,
+      outputTokens: 100,
+    });
+
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 });

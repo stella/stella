@@ -1,4 +1,6 @@
+import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 
 export const CHAT_TOOL_POLICY_KIND = {
   external: "external",
@@ -57,10 +59,50 @@ const CHAT_TOOL_POLICIES = {
   },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;
 
+/**
+ * Policy kinds that gate a tool call on user approval, derived from
+ * `CHAT_TOOL_POLICIES["needsApproval"]` rather than hand-listed — a kind
+ * whose `needsApproval` flips silently carries every tool mapped to it
+ * along with it.
+ */
+export type NeedsApprovalPolicyKind = {
+  [K in ChatToolPolicyKind]: (typeof CHAT_TOOL_POLICIES)[K]["needsApproval"] extends true
+    ? K
+    : never;
+}[ChatToolPolicyKind];
+
 const chatToolPolicies = new WeakMap<ChatTool, ChatToolPolicy>();
 
-export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy =>
-  chatToolPolicies.get(toolDefinition) ?? CHAT_TOOL_POLICIES.internal;
+// Tool names already reported for a policy-map miss this process, so a hot
+// loop (e.g. a tool re-checked on every turn) can't spam telemetry.
+const reportedPolicyMissToolNames = new Set<string>();
+
+/**
+ * A miss means `toolDefinition` reached this call without ever passing
+ * through `applyChatToolPolicy` (or `copyChatToolPolicy` from a tool that
+ * did). Falling back to `internal` is a deliberate fail-open: org-configured
+ * external MCP tools must never brick chat over a policy-registration bug.
+ * Tighten this to fail-closed once telemetry confirms misses don't happen.
+ */
+export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy => {
+  const policy = chatToolPolicies.get(toolDefinition);
+  if (policy) {
+    return policy;
+  }
+
+  if (!reportedPolicyMissToolNames.has(toolDefinition.name)) {
+    reportedPolicyMissToolNames.add(toolDefinition.name);
+    captureError(
+      new TelemetryError({
+        message:
+          "Chat tool policy lookup missed; falling back to internal policy",
+      }),
+      { source: "chat-tool-policy", toolName: toolDefinition.name },
+    );
+  }
+
+  return CHAT_TOOL_POLICIES.internal;
+};
 
 /**
  * Copy `from`'s recorded policy onto `to`. The policy WeakMap is keyed by tool

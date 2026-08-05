@@ -846,7 +846,12 @@ const runBenchTask = async ({
     missingExpected.length === 0 &&
     score.toolErrors === 0 &&
     score.toolCalls <= task.maxToolCalls &&
-    score.forbiddenToolUses.length === 0;
+    score.forbiddenToolUses.length === 0 &&
+    // A redaction marker or unresolved ref sentinel reaching the persisted
+    // assistant text is always a production defect (leaked placeholder or a
+    // hallucinated ref), never a legitimate answer, so either fails the task.
+    score.unresolvedRefSentinels === 0 &&
+    score.redactionMarkers === 0;
 
   return {
     taskIndex: task.index,

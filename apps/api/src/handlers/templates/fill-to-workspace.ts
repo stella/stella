@@ -192,18 +192,21 @@ const fillTemplateToWorkspace = createSafeHandler(
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
               aiAnalytics,
+              tenantWorkspaceIds: [workspaceId],
             }),
             decideAiCondition: buildAiConditionDecider({
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
               aiAnalytics,
+              tenantWorkspaceIds: [workspaceId],
             }),
             adaptAiValue: buildAiOccurrenceAdapter({
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
               aiAnalytics,
+              tenantWorkspaceIds: [workspaceId],
             }),
           }),
         catch: (cause) =>

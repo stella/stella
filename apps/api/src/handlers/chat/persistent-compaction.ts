@@ -196,6 +196,9 @@ export const persistChatCompactionCheckpoint = async ({
     organizationId,
     orgAIConfig,
     preserveTokens,
+    // The thread's own data workspaces: the checkpoint summarizer must not
+    // see their raw ids, and no wider set is in scope for a persisted turn.
+    tenantWorkspaceIds: dataWorkspaceIds,
     triggerTokens,
   });
   if (Result.isError(checkpointResult)) {

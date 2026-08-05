@@ -1,4 +1,6 @@
+import type { MCPToolSource } from "@tanstack/ai";
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -161,4 +163,154 @@ export const redactTenantIdsDeep = <T extends object>({
     );
   }
   return { value: redacted, redactedPaths: state.paths };
+};
+
+/**
+ * Branded provider-bound surfaces. The brands are mintable only by the
+ * `guardModel*` entry points below (their schemas stay module-private), and
+ * the chat dispatch in `streamChat` accepts nothing else, so a surface that
+ * skipped the guard — or was rebuilt after it ran — fails typecheck instead
+ * of silently reaching the model.
+ */
+const guardedSystemPromptSchema = v.pipe(
+  v.string(),
+  v.brand("GuardedSystemPrompt"),
+);
+
+export type GuardedSystemPrompt = v.InferOutput<
+  typeof guardedSystemPromptSchema
+>;
+
+export type GuardedToolSchemas<TTools extends readonly object[]> = TTools &
+  v.Brand<"GuardedToolSchemas">;
+
+export type GuardedModelMessages<TMessages extends readonly object[]> =
+  TMessages & v.Brand<"GuardedModelMessages">;
+
+const isList = (value: unknown): boolean => Array.isArray(value);
+
+const brandToolSchemas = <TTools extends readonly object[]>(
+  tools: TTools,
+): GuardedToolSchemas<TTools> =>
+  v.parse(
+    v.pipe(v.custom<TTools>(isList), v.brand("GuardedToolSchemas")),
+    tools,
+  );
+
+const brandModelMessages = <TMessages extends readonly object[]>(
+  messages: TMessages,
+): GuardedModelMessages<TMessages> =>
+  v.parse(
+    v.pipe(v.custom<TMessages>(isList), v.brand("GuardedModelMessages")),
+    messages,
+  );
+
+/** Guard the assembled system prompt (panics on a hit) and brand it. */
+export const guardModelSystemPrompt = ({
+  system,
+  workspaceIds,
+}: {
+  system: string;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedSystemPrompt => {
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: system,
+    surface: "system-prompt",
+    workspaceIds,
+  });
+  return v.parse(guardedSystemPromptSchema, system);
+};
+
+/** Guard the provider-bound tool schemas (telemetry on a hit) and brand them. */
+export const guardModelToolSchemas = <TTools extends readonly object[]>({
+  tools,
+  workspaceIds,
+}: {
+  tools: TTools;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedToolSchemas<TTools> => {
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: JSON.stringify(tools),
+    surface: "tool-schemas",
+    workspaceIds,
+  });
+  return brandToolSchemas(tools);
+};
+
+/** Redact tenant ids out of the provider-bound messages and brand the copy. */
+export const guardModelMessages = <TMessages extends readonly object[]>({
+  messages,
+  workspaceIds,
+}: {
+  messages: TMessages;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedModelMessages<TMessages> =>
+  brandModelMessages(
+    redactTenantIdsDeep({ value: messages, workspaceIds }).value,
+  );
+
+/**
+ * Brand a system prompt that is not fully server-built — it interpolates model
+ * output, tool names from org-configured connectors, or user text — so a hit
+ * is redacted and reported instead of taking the turn down. Prompts Stella
+ * assembles end to end keep the fail-closed treatment of
+ * `guardModelSystemPrompt`; this is for the mixed-provenance ones.
+ */
+export const redactModelSystemPrompt = ({
+  system,
+  workspaceIds,
+}: {
+  system: string;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedSystemPrompt => {
+  const state: RedactionState = { paths: [] };
+  const redacted = redactString(system, workspaceIds, "$", state);
+  if (state.paths.length > 0) {
+    captureError(
+      new TelemetryError({
+        message: "Model-bound system prompt embedded tenant workspace ids",
+      }),
+      { source: "model-ingress-guard", surface: "system-prompt" },
+    );
+  }
+  return v.parse(guardedSystemPromptSchema, redacted);
+};
+
+/**
+ * An MCP tool source whose fetched schemas have passed the guard. Org
+ * connectors serve their tool list lazily, mid-run, so the fetch itself has to
+ * be wrapped: guarding the source object once at assembly would only cover the
+ * empty shell the provider SDK later calls `tools()` on.
+ */
+export type GuardedMcpToolSource = MCPToolSource &
+  v.Brand<"GuardedMcpToolSource">;
+
+const guardedMcpToolSourceSchema = v.pipe(
+  v.custom<MCPToolSource>(
+    (value) => typeof value === "object" && value !== null,
+  ),
+  v.brand("GuardedMcpToolSource"),
+);
+
+/**
+ * Wrap an MCP tool source so every lazily fetched schema batch passes the
+ * tool-schema guard (telemetry, never a panic: the descriptions belong to the
+ * org's connectors, and a hit must not brick chat).
+ */
+export const guardMcpToolSource = ({
+  source,
+  workspaceIds,
+}: {
+  source: MCPToolSource;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedMcpToolSource => {
+  const guarded: MCPToolSource = {
+    ...source,
+    tools: async (options) =>
+      guardModelToolSchemas({
+        tools: await source.tools(options),
+        workspaceIds,
+      }),
+  };
+  return v.parse(guardedMcpToolSourceSchema, guarded);
 };

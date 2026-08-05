@@ -292,6 +292,8 @@ const generateRefinedSearchQuery = async ({
         serviceTier: "standard",
         orgAIConfig,
         organizationId,
+        // No workspace id is threaded through SearchAIContext at this call site.
+        tenantWorkspaceIds: [],
         analytics,
         caching,
         system: SEARCH_REFINE_SYSTEM,
@@ -472,6 +474,7 @@ export const summarizeSearchResults = async ({
         serviceTier: "standard",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: resolved.ids,
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,

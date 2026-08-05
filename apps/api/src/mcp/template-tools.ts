@@ -783,20 +783,25 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     properties: { organization_id: context.organizationId },
     traceId: Bun.randomUUIDv7(),
   });
+  // fill_template is org-scoped (no matter binding), so there is no
+  // workspace id to redact tenant ids against.
   const generateAiValue = buildAiFieldGenerator({
     orgAIConfig,
     organizationId: context.organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
   const decideAiCondition = buildAiConditionDecider({
     orgAIConfig,
     organizationId: context.organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
   const adaptAiValue = buildAiOccurrenceAdapter({
     orgAIConfig,
     organizationId: context.organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
 
   // Gate AI quota the same way the web/chat fill paths do: the service runs
@@ -1227,6 +1232,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
               skillContext,
               aiAnalytics,
               operationSignal,
+              tenantWorkspaceIds: [workspaceId],
             }),
             decideAiCondition: buildAiConditionDecider({
               orgAIConfig,
@@ -1234,6 +1240,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
               skillContext,
               aiAnalytics,
               operationSignal,
+              tenantWorkspaceIds: [workspaceId],
             }),
             adaptAiValue: buildAiOccurrenceAdapter({
               orgAIConfig,
@@ -1241,6 +1248,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
               skillContext,
               aiAnalytics,
               operationSignal,
+              tenantWorkspaceIds: [workspaceId],
             }),
           }),
         {

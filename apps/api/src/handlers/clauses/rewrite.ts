@@ -133,6 +133,8 @@ const rewriteClause = createSafeRootHandler(
             role: "fast",
             orgAIConfig,
             organizationId,
+            // Root-scoped handler: no workspace id is available here.
+            tenantWorkspaceIds: [],
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,

@@ -21,6 +21,11 @@ import {
   chatToolMapToArray,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import {
+  guardModelMessages,
+  guardModelToolSchemas,
+  redactModelSystemPrompt,
+} from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { ChatEmptyCompletionError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -47,6 +52,12 @@ export type RunSubagentOptions = {
   modelId?: string | undefined;
   system: string;
   messages: ChatMessage[];
+  /**
+   * Tenant set for the model-ingress guard. A subagent runs the parent turn's
+   * tools against the same tenant, so the parent passes the same ids it
+   * guarded its own dispatch with.
+   */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   tools: ChatToolMap;
   abortSignal: AbortSignal;
   maxSteps: number;
@@ -125,7 +136,10 @@ export const runSubagent = async (
     tools: options.tools,
   });
   const projectedTools = projectChatToolSchemasForProvider({
-    modelTools: chatToolMapToArray(boundaryTools),
+    modelTools: guardModelToolSchemas({
+      tools: chatToolMapToArray(boundaryTools),
+      workspaceIds: options.tenantWorkspaceIds,
+    }),
     provider: model.provider,
   });
 
@@ -166,16 +180,29 @@ export const runSubagent = async (
     },
   });
 
+  // Same seam as `streamChat`: nothing reaches the provider that has not been
+  // through the guard. The subagent's system prompt interpolates the parent
+  // model's own tool input (the expected-output brief), so it is redacted and
+  // reported rather than fail-closed.
+  const guardedSystem = redactModelSystemPrompt({
+    system: preparedSystem.value,
+    workspaceIds: options.tenantWorkspaceIds,
+  });
+  const guardedMessages = guardModelMessages({
+    messages: preparedMessages.value,
+    workspaceIds: options.tenantWorkspaceIds,
+  });
+
   const stream = chat({
     adapter: model.adapter,
-    messages: preparedMessages.value,
+    messages: guardedMessages,
     tools: projectedTools,
     agentLoopStrategy: maxIterations(options.maxSteps),
     abortController,
     ...systemPromptsPatch({
       caching,
       model,
-      system: preparedSystem.value,
+      system: guardedSystem,
     }),
     modelOptions: mergeGenerationOptions({
       caching,

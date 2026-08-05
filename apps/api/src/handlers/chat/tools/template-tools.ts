@@ -106,10 +106,13 @@ export const createTemplateTools = ({
   // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt); shared
   // with the web fill routes so AI placeholders behave identically. A failed or
   // unavailable model just leaves the field unfilled rather than erroring.
+  // tenantWorkspaceIds is empty: a chat-driven template action is org-scoped,
+  // not bound to a matter (see buildTemplateAiAnalytics above).
   const generateAiValue = buildAiFieldGenerator({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
   // Decider for AI-decided boolean conditions (a boolean field with an
   // aiPrompt); same fallback semantics as generateAiValue.
@@ -117,6 +120,7 @@ export const createTemplateTools = ({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
   // Per-occurrence adapter for aiAdapt fields (stub rewritten to fit each
   // marker's surrounding text); same fallback semantics as generateAiValue.
@@ -124,6 +128,7 @@ export const createTemplateTools = ({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
     aiAnalytics,
+    tenantWorkspaceIds: [],
   });
 
   return {

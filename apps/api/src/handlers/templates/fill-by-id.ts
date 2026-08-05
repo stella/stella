@@ -256,11 +256,14 @@ const fillByIdHandler = async function* ({
         values: parsed,
         fields: manifest.fields,
         documentText,
+        // Root-scoped route (template selected by id, no matter binding), so
+        // there is no workspace scope to redact tenant ids against.
         generate: buildAiFieldGenerator({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
@@ -273,6 +276,7 @@ const fillByIdHandler = async function* ({
           organizationId,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       for (const [key, value] of Object.entries(aiDecided)) {
@@ -293,6 +297,7 @@ const fillByIdHandler = async function* ({
           documentLanguages: template.languages,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       fillBuffer = adapted.buffer;

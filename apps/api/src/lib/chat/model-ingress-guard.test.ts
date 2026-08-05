@@ -1,6 +1,12 @@
+import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type {
+  GuardedModelMessages,
+  GuardedSystemPrompt,
+  GuardedToolSchemas,
+} from "@/api/lib/chat/model-ingress-guard";
 
 const captureErrorMock = mock();
 void mock.module("@/api/lib/analytics/capture", () => ({
@@ -11,6 +17,11 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 const {
   assertModelSurfaceFreeOfTenantIds,
+  guardMcpToolSource,
+  guardModelMessages,
+  guardModelSystemPrompt,
+  guardModelToolSchemas,
+  redactModelSystemPrompt,
   redactTenantIdsDeep,
   TENANT_ID_REDACTION_PLACEHOLDER,
 } = await import("./model-ingress-guard");
@@ -100,5 +111,185 @@ describe("assertModelSurfaceFreeOfTenantIds", () => {
       workspaceIds: [WS_A, WS_B],
     });
     expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+// The brands are the seam `streamChat`'s provider dispatch accepts: only the
+// entry points below mint them, so these tests pin that minting a brand and
+// running the guard are the same act.
+describe("guarded model surfaces", () => {
+  const acceptsGuardedMessages = <TMessages extends readonly object[]>(
+    value: GuardedModelMessages<TMessages>,
+  ) => value;
+  const acceptsGuardedSystemPrompt = (value: GuardedSystemPrompt) => value;
+  const acceptsGuardedToolSchemas = <TTools extends readonly object[]>(
+    value: GuardedToolSchemas<TTools>,
+  ) => value;
+
+  test("branding messages redacts tenant ids and reports the path", () => {
+    captureErrorMock.mockClear();
+    const messages = [
+      {
+        id: "user-1",
+        parts: [
+          {
+            content: `Check https://my.stll.app/workspaces/${WS_A}/matters`,
+            type: "text",
+          },
+        ],
+        role: "user",
+      },
+      {
+        id: "assistant-1",
+        parts: [{ content: `Public ${PUBLIC_UUID} stays`, type: "text" }],
+        role: "assistant",
+      },
+    ];
+
+    const guarded = guardModelMessages({
+      messages,
+      workspaceIds: [WS_A, WS_B],
+    });
+
+    expect(acceptsGuardedMessages(guarded)).toBe(guarded);
+    expect(guarded[0]?.parts[0]?.content).toBe(
+      `Check https://my.stll.app/workspaces/${TENANT_ID_REDACTION_PLACEHOLDER}/matters`,
+    );
+    expect(guarded[1]?.parts[0]?.content).toBe(`Public ${PUBLIC_UUID} stays`);
+    // The caller's array is left untouched: the model gets the redacted copy.
+    expect(messages[0]?.parts[0]?.content).toContain(WS_A);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(context)).toContain("$[0].parts[0].content");
+    expect(JSON.stringify(context)).not.toContain(WS_A);
+
+    // @ts-expect-error unguarded messages must not reach the model dispatch
+    acceptsGuardedMessages(messages);
+  });
+
+  test("branding tool schemas captures telemetry without killing the turn", () => {
+    captureErrorMock.mockClear();
+    const tools = [
+      {
+        description: `Search matters. Known ids: ${WS_A}`,
+        name: "external_search_across_matters",
+      },
+      { description: `Public ${PUBLIC_UUID}`, name: "search_case_law" },
+    ];
+
+    const guarded = guardModelToolSchemas({ tools, workspaceIds: [WS_A] });
+
+    expect(acceptsGuardedToolSchemas(guarded)).toBe(guarded);
+    // Tool schemas are passed through untouched; only the system prompt fails
+    // closed and only messages are rewritten.
+    const dispatchedTools: readonly object[] = guarded;
+    expect(dispatchedTools).toBe(tools);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(context)).toContain("tool-schemas");
+    expect(JSON.stringify(context)).not.toContain(WS_A);
+
+    // @ts-expect-error unguarded tool schemas must not reach the model dispatch
+    acceptsGuardedToolSchemas(tools);
+  });
+
+  const mcpToolSource = (
+    description: string,
+  ): [MCPToolSource, () => number] => {
+    let fetches = 0;
+    const tool: ServerTool = {
+      __toolSide: "server",
+      description,
+      name: "mcp__crm__search",
+    };
+    return [
+      {
+        close: async () => undefined,
+        tools: async () => {
+          fetches += 1;
+          return [tool];
+        },
+      },
+      () => fetches,
+    ];
+  };
+
+  test("lazily fetched MCP schemas are guarded at fetch time", async () => {
+    captureErrorMock.mockClear();
+    const [source, fetches] = mcpToolSource(`Search the CRM. Matter: ${WS_A}`);
+    const guarded = guardMcpToolSource({ source, workspaceIds: [WS_A] });
+
+    // Wrapping alone must not fetch, and must not report: the connector's
+    // schemas do not exist yet when the source is assembled.
+    expect(fetches()).toBe(0);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+
+    const fetched = await guarded.tools({ lazy: true });
+
+    expect(fetches()).toBe(1);
+    expect(fetched.at(0)?.name).toBe("mcp__crm__search");
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(context)).toContain("tool-schemas");
+    expect(JSON.stringify(context)).not.toContain(WS_A);
+  });
+
+  test("clean MCP schemas fetch without telemetry", async () => {
+    captureErrorMock.mockClear();
+    const [source] = mcpToolSource("Search the CRM.");
+    const guarded = guardMcpToolSource({ source, workspaceIds: [WS_A, WS_B] });
+
+    expect((await guarded.tools({ lazy: true })).at(0)?.name).toBe(
+      "mcp__crm__search",
+    );
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("redact mode keeps a mixed-provenance system prompt alive", () => {
+    captureErrorMock.mockClear();
+    const redacted = redactModelSystemPrompt({
+      system: `Loop detected in tool mcp__crm__${WS_A}. Public: ${PUBLIC_UUID}`,
+      workspaceIds: [WS_A, WS_B],
+    });
+
+    const dispatchedSystem: string = redacted;
+    expect(dispatchedSystem).toBe(
+      `Loop detected in tool mcp__crm__${TENANT_ID_REDACTION_PLACEHOLDER}. Public: ${PUBLIC_UUID}`,
+    );
+    expect(acceptsGuardedSystemPrompt(redacted)).toBe(redacted);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(context)).not.toContain(WS_A);
+  });
+
+  test("redact mode leaves a clean system prompt untouched and silent", () => {
+    captureErrorMock.mockClear();
+    const system = "Loop detected in tool search_case_law.";
+    const dispatchedSystem: string = redactModelSystemPrompt({
+      system,
+      workspaceIds: [WS_A],
+    });
+    expect(dispatchedSystem).toBe(system);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("branding the system prompt fails closed on a tenant id", () => {
+    captureErrorMock.mockClear();
+    expect(() =>
+      guardModelSystemPrompt({
+        system: `Connected matter: ${WS_A}`,
+        workspaceIds: [WS_A],
+      }),
+    ).toThrow();
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+
+    const clean = guardModelSystemPrompt({
+      system: `Connected matter: mat_1 (public decision ${PUBLIC_UUID})`,
+      workspaceIds: [WS_A, WS_B],
+    });
+    expect(acceptsGuardedSystemPrompt(clean)).toBe(clean);
+
+    // @ts-expect-error an unguarded prompt string must not reach the dispatch
+    acceptsGuardedSystemPrompt(`Connected matter: mat_1`);
   });
 });

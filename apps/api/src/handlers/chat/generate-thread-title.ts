@@ -78,6 +78,7 @@ export const generateThreadTitle = async ({
         role: "fast",
         scopeKey: threadId,
       }),
+      tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
       prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
 
 User: ${userText}

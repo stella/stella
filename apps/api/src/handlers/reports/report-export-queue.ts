@@ -623,18 +623,21 @@ const buildReportAiGenerators = ({
       organizationId: actor.organizationId,
       skillContext,
       aiAnalytics,
+      tenantWorkspaceIds: [actor.workspaceId],
     }),
     decideAiCondition: buildAiConditionDecider({
       orgAIConfig,
       organizationId: actor.organizationId,
       skillContext,
       aiAnalytics,
+      tenantWorkspaceIds: [actor.workspaceId],
     }),
     adaptAiValue: buildAiOccurrenceAdapter({
       orgAIConfig,
       organizationId: actor.organizationId,
       skillContext,
       aiAnalytics,
+      tenantWorkspaceIds: [actor.workspaceId],
     }),
     assertUsageAvailable,
   };

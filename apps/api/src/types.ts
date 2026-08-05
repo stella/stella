@@ -88,5 +88,9 @@ export type { ConditionNode } from "@stll/conditions";
 export type { ChatMentionsData } from "@/api/handlers/chat/types";
 export type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+export type {
+  ApprovalRequiredBuiltInChatToolName,
+  BuiltInChatToolPolicyKindByName,
+} from "@/api/handlers/chat/tools/chat-tools";
 export type { UserFileUrl } from "@/api/lib/user-files/types";
 export type { McpOAuthScope } from "@/api/mcp/constants";

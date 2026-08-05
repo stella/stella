@@ -314,6 +314,7 @@ const runAiStep = async ({
   const markdown = await generateTanStackTextForRole({
     role: "chat",
     organizationId,
+    tenantWorkspaceIds: [run.workspaceId],
     orgAIConfig,
     system: FLOW_AI_SYSTEM_PROMPT,
     prompt,

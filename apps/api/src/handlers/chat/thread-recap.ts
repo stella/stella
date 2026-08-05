@@ -122,8 +122,10 @@ export const generateThreadRecapText = async ({
         role: "fast",
         scopeKey: threadId,
       }),
+      tenantWorkspaceIds: workspaceId ? [workspaceId] : [],
       prompt: `Conversation transcript:\n\n${transcript}\n\nRecap:`,
       system: RECAP_SYSTEM_PROMPT,
+      systemPromptOrigin: "server-built",
     });
 
     return cleanRecapText(text);

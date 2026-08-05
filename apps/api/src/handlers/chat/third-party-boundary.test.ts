@@ -28,7 +28,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: { fields: string[] }) => {
+  async ({ fields }: { fields: string[]; workspaceId: string }) => {
     const swaps: [string, string][] = [
       ["[PERSON_1]", "Jan Novák"],
       ["[CUSTOM_1]", "Secret"],
@@ -95,6 +95,33 @@ const createRawBoundary = () => {
 describe("chat third-party anonymization boundary", () => {
   beforeEach(() => {
     anonymizeTextFieldsMock.mockClear();
+  });
+
+  test("forwards a UUID-shaped anonymizationScopeId verbatim into the anonymize call", async () => {
+    const scopeId = "22222222-2222-4222-8222-222222222222";
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizeTextFieldsMock,
+      anonymizationScopeId: scopeId,
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Some text to anonymize.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    // Exact equality: a scope-id plumbing regression (truncation,
+    // re-wrapping, falling back to a different id) must fail here, not
+    // just "receives some string".
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0].workspaceId).toBe(
+      scopeId,
+    );
   });
 
   test("omits UI-only rich output before every provider boundary", async () => {
