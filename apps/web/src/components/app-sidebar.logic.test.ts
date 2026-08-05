@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
@@ -120,6 +121,28 @@ describe("sidebar matter context", () => {
         activeWorkspaceId: undefined,
       }),
     ).toBeNull();
+  });
+});
+
+describe("sidebar matter activity disclosure", () => {
+  test("keeps the disclosure while the activity result is unknown", () => {
+    // Never fetched, and a page-less result: neither proves the matter is empty,
+    // so the toggle stays rather than flickering out under the pointer.
+    expect(matterActivityIsKnownEmpty(undefined)).toBe(false);
+    expect(matterActivityIsKnownEmpty([])).toBe(false);
+  });
+
+  test("keeps the disclosure when any page carries an item", () => {
+    expect(
+      matterActivityIsKnownEmpty([{ items: [] }, { items: [{ id: "a" }] }]),
+    ).toBe(false);
+  });
+
+  test("drops the disclosure once every resolved page is empty", () => {
+    expect(matterActivityIsKnownEmpty([{ items: [] }])).toBe(true);
+    expect(matterActivityIsKnownEmpty([{ items: [] }, { items: [] }])).toBe(
+      true,
+    );
   });
 });
 

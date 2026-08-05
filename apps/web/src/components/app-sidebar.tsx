@@ -44,6 +44,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
@@ -967,6 +968,21 @@ const MatterItem = ({
     },
   });
 
+  // Read whatever the activity query has already cached for this matter without
+  // ever issuing a request: the expanded row owns the fetch, so `enabled: false`
+  // keeps the sidebar at its current request count while still re-rendering the
+  // disclosure once that fetch resolves.
+  const { data: cachedActivity } = useInfiniteQuery({
+    ...workspaceActivityOptions({
+      activeOrganizationId,
+      key: { workspaceId: ws.id },
+    }),
+    enabled: false,
+  });
+  const activityIsKnownEmpty = matterActivityIsKnownEmpty(
+    cachedActivity?.pages,
+  );
+
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
 
@@ -1135,32 +1151,34 @@ const MatterItem = ({
         }}
         ref={dropRef}
       >
-        <Tooltip
-          content={isExpanded ? t("common.showLess") : t("common.showMore")}
-          render={
-            <Button
-              aria-controls={`matter-activity-${ws.id}`}
-              aria-expanded={isExpanded}
-              aria-label={
-                isExpanded ? t("common.showLess") : t("common.showMore")
-              }
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
-              onClick={onExpandedChange}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
+        {activityIsKnownEmpty ? null : (
+          <Tooltip
+            content={isExpanded ? t("common.showLess") : t("common.showMore")}
+            render={
+              <Button
+                aria-controls={`matter-activity-${ws.id}`}
+                aria-expanded={isExpanded}
+                aria-label={
+                  isExpanded ? t("common.showLess") : t("common.showMore")
+                }
+                className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
+                onClick={onExpandedChange}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 transition-transform duration-150",
+                isExpanded && "rotate-90",
+              )}
+              flip={!isExpanded}
+              icon={ChevronRightIcon}
             />
-          }
-        >
-          <DirectionalIcon
-            className={cn(
-              "size-3.5 transition-transform duration-150",
-              isExpanded && "rotate-90",
-            )}
-            flip={!isExpanded}
-            icon={ChevronRightIcon}
-          />
-        </Tooltip>
+          </Tooltip>
+        )}
         <SidebarMenuButton
           asChild
           className="ps-8 pe-12 group-data-[collapsible=icon]:ps-2"
@@ -1377,8 +1395,11 @@ const MatterActivityList = ({
     );
   }
 
+  // Nothing to disclose: render no list at all rather than an empty one, so the
+  // matter row never opens onto a dead end. The row drops its disclosure toggle
+  // on the same resolved-empty result.
   if (items.length === 0) {
-    return <SidebarMenuSub className="border-0" id={id} />;
+    return null;
   }
 
   return (
