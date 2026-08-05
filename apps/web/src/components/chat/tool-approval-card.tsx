@@ -44,12 +44,14 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterIcon } from "@/components/matter-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
@@ -722,6 +724,68 @@ export const ToolApprovalCard = ({
   );
 };
 
+type SummaryMatter = { color: string | null; id: string; name: string };
+
+/**
+ * The org's matters keyed by id, for turning a matter id in a write tool's
+ * input into the matter itself. The navigation list is already in flight on
+ * every chat surface (`chat-mention-providers`, the sidebar), so this is a
+ * cache read rather than a fetch; a miss (matter deleted, or outside the
+ * user's access) simply leaves the row's value as it came.
+ */
+const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
+  const { activeOrganizationId } = useChatApproval();
+  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const byId = new Map<string, SummaryMatter>();
+  for (const workspace of data?.workspaces ?? []) {
+    byId.set(workspace.id, {
+      color: workspace.color,
+      id: workspace.id,
+      name: workspace.name,
+    });
+  }
+  return byId;
+};
+
+/**
+ * One approval-summary row. A value that is a matter id renders as the matter:
+ * its name beside the layers glyph in the matter's own colour, the same way it
+ * reads everywhere else in the app. The id itself is what the user least needs
+ * to see when deciding whether to allow a write.
+ */
+const RegistryWriteSummaryRow = ({
+  label,
+  matter,
+  value,
+}: {
+  label: string;
+  matter: SummaryMatter | undefined;
+  value: string;
+}) => (
+  <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+    <dt className="text-muted-foreground text-xs">
+      {matter ? stripIdSuffix(label) : label}
+    </dt>
+    <dd className="text-xs break-words">
+      {matter ? (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <MatterIcon
+            className="size-3.5 shrink-0"
+            matter={{ color: matter.color, id: matter.id }}
+          />
+          <span className="truncate">{matter.name}</span>
+        </span>
+      ) : (
+        value
+      )}
+    </dd>
+  </div>
+);
+
+/** "Matter id" -> "Matter": the id is no longer what the row shows. */
+const stripIdSuffix = (label: string): string =>
+  label.replace(/\s+id$/iu, "").trim() || label;
+
 const RegistryWriteSummary = ({
   input,
   toolName,
@@ -730,6 +794,7 @@ const RegistryWriteSummary = ({
   toolName: string;
 }) => {
   const t = useTranslations();
+  const mattersById = useMattersById();
   const rows = buildRegistryWriteSummaryRows({
     documentLabel: t("common.document"),
     emptyLabel: t("common.empty"),
@@ -746,10 +811,12 @@ const RegistryWriteSummary = ({
     <div className="border-border/50 border-t px-3 py-2">
       <dl className="space-y-1.5">
         {rows.map((row) => (
-          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.key}>
-            <dt className="text-muted-foreground text-xs">{row.label}</dt>
-            <dd className="text-xs break-words">{row.value}</dd>
-          </div>
+          <RegistryWriteSummaryRow
+            key={row.key}
+            label={row.label}
+            matter={mattersById.get(row.value)}
+            value={row.value}
+          />
         ))}
       </dl>
     </div>

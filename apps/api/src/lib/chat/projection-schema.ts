@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatRefKind, ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
@@ -37,13 +37,13 @@ import {
 // module graph stays cycle-free; the map imports the vocabulary from here.
 
 /**
- * The four tenant-content id kinds the chat ref registry mediates
- * (`createChatRefRegistry`). Every other id a registry handler emits (user,
- * task-link, invoice, time-entry, template, clause, playbook, audit-log,
- * usage-plan, or public case-law/BOE corpus id) is a handle the model may pass
- * back verbatim, not a tenant-content reference, so it stays outside this set.
+ * The four tenant-content id kinds the chat ref registry mediates. Re-exported
+ * from `ref-registry.ts` rather than restated: the registry is the lowest
+ * module that must know all four (it keys one ref state per kind), and a second
+ * declaration here would be a hand-maintained mirror of that set.
  */
-export type RegistryRefKind = "matter" | "entity" | "contact" | "property";
+export type { ChatRefKind as RegistryRefKind } from "@/api/lib/chat/ref-registry";
+type RegistryRefKind = ChatRefKind;
 
 export type SimpleRefKind = Exclude<RegistryRefKind, "entity">;
 
