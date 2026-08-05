@@ -76,7 +76,7 @@ import type {
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
-import { classifyAIError } from "@/api/lib/ai-error";
+import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -1093,27 +1093,36 @@ const providerErrorBody = (
   return isErrorBodyRecord(parsed.value) ? parsed.value : undefined;
 };
 
-const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
-  classifyAIError(
-    chunk.rawEvent ??
-      providerErrorBody(runErrorMessage(chunk)) ??
-      errorFromRunErrorChunk(chunk),
+const errorForRunErrorChunk = (chunk: RunErrorChunk): unknown => {
+  const rawEvent: unknown = chunk.rawEvent;
+  return (
+    rawEvent ??
+    providerErrorBody(runErrorMessage(chunk)) ??
+    errorFromRunErrorChunk(chunk)
   );
+};
+
+const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
+  const error = errorForRunErrorChunk(chunk);
+  return classifyAIError(error);
+};
 
 // Classified kinds (quota, billing, retired model, provider outage) are
-// expected operational states; `unknown` means a failure shape this code
-// does not anticipate, so it is the only kind logged at ERROR severity.
+// expected operational states, and so is a sub-500 `HandlerError` this
+// service raised for a configuration state the caller can act on; only an
+// unanticipated shape is logged at ERROR severity.
 // Fingerprint only — provider error messages can echo request content.
 const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
   captureError(error, { kind });
-  if (kind === "unknown") {
+  if (!isAnticipatedAIFailure(error, kind)) {
     logger.error("chat.stream_failed", { kind, ...errorFingerprint(error) });
   }
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
-  const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(errorFromRunErrorChunk(chunk), kind);
+  const error = errorForRunErrorChunk(chunk);
+  const kind = classifyAIError(error);
+  reportStreamFailure(error, kind);
   return {
     ...chunk,
     message: kind,

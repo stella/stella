@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyAIError } from "@/api/lib/ai-error";
-import { ChatLoopDetectedError } from "@/api/lib/errors/tagged-errors";
+import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  ChatLoopDetectedError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
 const apiCallError = (statusCode: number) =>
   ({
@@ -110,5 +114,64 @@ describe("classifyAIError", () => {
     expect(
       classifyAIError({ error: { code: 14, message: "unavailable" } }),
     ).toBe("unknown");
+  });
+});
+
+// Split so the exhaustiveness alias below fails to compile when a status is
+// added to `HandlerErrorStatusCode` without deciding which side it falls on.
+const CLIENT_STATUS_CODES = [
+  400, 401, 402, 403, 404, 409, 413, 422, 429,
+] as const satisfies readonly HandlerErrorStatusCode[];
+
+const SERVER_STATUS_CODES = [
+  500, 502,
+] as const satisfies readonly HandlerErrorStatusCode[];
+
+type UncoveredStatusCode = Exclude<
+  HandlerErrorStatusCode,
+  (typeof CLIENT_STATUS_CODES)[number] | (typeof SERVER_STATUS_CODES)[number]
+>;
+
+describe("isAnticipatedAIFailure", () => {
+  test("exercises every HandlerError status", () => {
+    // The guard is the annotation, which stops compiling while a status is
+    // unaccounted for; the assertion just gives it a home.
+    const everyStatusCovered: [UncoveredStatusCode] extends [never]
+      ? true
+      : false = true;
+
+    expect(everyStatusCovered).toBe(true);
+  });
+
+  test("anticipates every client-actionable HandlerError", () => {
+    // These are raised by the AI stack itself for a configuration state, so
+    // none of them is a defect, including the ones the classifier cannot
+    // name (such as the 403 for a role with no key configured).
+    for (const status of CLIENT_STATUS_CODES) {
+      const error = new HandlerError({
+        status,
+        message: `refused with ${status}`,
+      });
+
+      expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(true);
+    }
+  });
+
+  test("leaves a server-side HandlerError to the classifier", () => {
+    for (const status of SERVER_STATUS_CODES) {
+      const error = new HandlerError({
+        status,
+        message: `failed with ${status}`,
+      });
+      const kind = classifyAIError(error);
+
+      expect(isAnticipatedAIFailure(error, kind)).toBe(kind !== "unknown");
+    }
+  });
+
+  test("does not anticipate a shape the classifier cannot name", () => {
+    const error = new Error("stream ended before completion");
+
+    expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(false);
   });
 });

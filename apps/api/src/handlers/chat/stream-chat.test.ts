@@ -1,7 +1,7 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { ModelMessage, StreamChunk, ToolCallPart } from "@tanstack/ai";
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
@@ -27,7 +27,9 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -970,6 +972,46 @@ describe("outgoing chat stream message ids", () => {
       },
     ]);
     expect(outcomes).toEqual(["failed"]);
+  });
+
+  test("does not report an in-band configuration refusal as a defect", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const errorSpy = spyOn(logger, "error");
+    try {
+      const stream = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        getResponseMessage: () => null,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => undefined,
+        processor: new StreamProcessor(),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_ERROR,
+            message: "AI is not configured for this role",
+            rawEvent: new HandlerError({
+              status: 403,
+              message: "AI is not configured for this role",
+            }),
+          },
+        ]),
+      });
+
+      expect(stripTimestamps(await collectChunks(stream)).at(-1)).toEqual({
+        type: EventType.RUN_ERROR,
+        message: "unknown",
+        code: "unknown",
+        rawEvent: expect.any(HandlerError),
+      });
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "chat.stream_failed",
+        expect.anything(),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   test("classifies a run error whose body arrives in the message", async () => {
