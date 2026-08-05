@@ -18,13 +18,13 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
+import { deriveRefMediationEntry } from "./projection-schema";
 import type { RegistryWriteToolName } from "./ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import {
   dehydrateRefs,
   findUndeclaredUuidPathIn,
   hydrateRefs,
-  resolveMediationLists,
   stripDeclaredPaths,
 } from "./ref-mediation";
 import {
@@ -181,13 +181,12 @@ export const runRegistryWriteTool = async ({
     return Result.err(payload.error);
   }
 
-  // Same strict-parse gate as the read path: a converted write tool's payload
-  // must match its projection schema before strip/hydrate, so an undeclared
-  // field fails closed by construction. No write tool is converted yet; the
-  // gate is a pass-through until a write entry gains a `projection`.
+  // Same strict-parse gate as the read path: the write tool's payload must
+  // match its projection schema before strip/hydrate, so an undeclared field
+  // fails closed by construction.
   const projected = applyEntryProjection({
-    entry,
     payload: payload.value,
+    projection: entry.projection,
     source: "run-registry-write-tool",
     toolName,
   });
@@ -195,7 +194,7 @@ export const runRegistryWriteTool = async ({
     return Result.err(projected.error);
   }
 
-  const mediation = resolveMediationLists(entry);
+  const mediation = deriveRefMediationEntry(entry.projection);
   const stripped = stripDeclaredPaths({
     output: projected.value,
     stripPaths: mediation.stripPaths,

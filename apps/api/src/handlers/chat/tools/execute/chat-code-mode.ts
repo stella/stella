@@ -18,10 +18,7 @@ import {
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { renderProjectionShape } from "@/api/handlers/chat/tools/registry-adapter/projection-schema";
-import type {
-  RegistryReadToolName,
-  RegistryRefFieldMapEntry,
-} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
@@ -109,19 +106,22 @@ const CODE_MODE_RUNTIME_CONFIG = {
  * system-prompt constant (no-op runner, never invoked for prompt generation).
  */
 /**
- * The registry description, plus — for a tool with a projection schema — a
- * compact `Returns:` shape derived from that same schema. The runtime
- * strict-parses payloads against the schema, so the shape the model plans
- * against here is exactly the shape it will receive: this closes the
- * "model guesses output keys and iterates a field that isn't there" failure
- * class for converted tools.
+ * The registry description, plus a compact `Returns:` shape derived from the
+ * tool's projection schema. Every chat-projectable tool carries a schema, so
+ * every advertised read tool gets the line. The runtime strict-parses
+ * payloads against the same schema, so the shape the model plans against
+ * here is exactly the shape it will receive: this closes the "model guesses
+ * output keys and iterates a field that isn't there" failure class.
  */
 const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
   const definition =
     getStaticMcpToolDefinition(toolName) ??
     panic(`Chat read tool ${toolName} is missing from the static registry`);
-  const entry: RegistryRefFieldMapEntry = READ_TOOL_REF_FIELD_MAP[toolName];
-  if (entry.projection === undefined) {
+  const entry = READ_TOOL_REF_FIELD_MAP[toolName];
+  if (!entry.chatProjectable) {
+    // Non-projectable tools never enter the chat catalog
+    // (`chatProjectableReadToolNames` filters them out); the plain
+    // description satisfies the type without inventing a shape.
     return definition.description;
   }
   return `${definition.description}\nReturns: ${renderProjectionShape(entry.projection)}`;

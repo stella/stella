@@ -1,20 +1,29 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { OutputRefField } from "./projection-schema";
+import type {
+  ChatProjectionSchema,
+  OutputRefField,
+  RefMediationLists,
+} from "./projection-schema";
 import {
   applyProjectionSchema,
   deriveRefMediationEntry,
   renderProjectionShape,
 } from "./projection-schema";
-import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+import {
+  READ_TOOL_REF_FIELD_MAP,
+  WRITE_TOOL_REF_FIELD_MAP,
+} from "./ref-field-map";
 
 /**
  * The derivation contract: the mediation lists mechanically derived from a
  * converted tool's projection schema must reproduce the hand-written lists
  * they replaced (copied below as literals from the pre-conversion map), so
  * the conversion is provably behavior-preserving. The lists are allowlists,
- * so order is irrelevant: both sides are compared sorted.
+ * so order is irrelevant: both sides are compared sorted. Where a schema
+ * deliberately departs from its hand list (drift the hand list could never
+ * surface), the departure is asserted explicitly with its reason.
  */
 
 const sortedPaths = (paths: readonly string[]): readonly string[] =>
@@ -30,6 +39,22 @@ const sortedRefs = (
 const LIST_MATTERS_PROJECTION = READ_TOOL_REF_FIELD_MAP.list_matters.projection;
 const READ_DOCUMENT_PROJECTION =
   READ_TOOL_REF_FIELD_MAP.read_document.projection;
+
+const expectDerivedEquals = (
+  projection: ChatProjectionSchema,
+  expected: RefMediationLists,
+): void => {
+  const derived = deriveRefMediationEntry(projection);
+  expect(sortedRefs(derived.outputRefs)).toEqual(
+    sortedRefs(expected.outputRefs),
+  );
+  expect(sortedPaths(derived.passthroughIdPaths)).toEqual(
+    sortedPaths(expected.passthroughIdPaths),
+  );
+  expect(sortedPaths(derived.stripPaths)).toEqual(
+    sortedPaths(expected.stripPaths),
+  );
+};
 
 // The hand-written list_matters entry the projection schema replaced.
 const LIST_MATTERS_HAND_LISTS = {
@@ -53,11 +78,7 @@ const LIST_MATTERS_HAND_LISTS = {
     "overview.recentEntities[].propertyId",
     "overview.recentEntities[].pdfFileId",
   ],
-} as const satisfies {
-  outputRefs: readonly OutputRefField[];
-  passthroughIdPaths: readonly string[];
-  stripPaths: readonly string[];
-};
+} as const satisfies RefMediationLists;
 
 // The hand-written read_document entry the projection schema replaced.
 const READ_DOCUMENT_HAND_LISTS = {
@@ -80,11 +101,7 @@ const READ_DOCUMENT_HAND_LISTS = {
     "versionsNextCursor",
   ],
   stripPaths: [],
-} as const satisfies {
-  outputRefs: readonly OutputRefField[];
-  passthroughIdPaths: readonly string[];
-  stripPaths: readonly string[];
-};
+} as const satisfies RefMediationLists;
 
 /**
  * The one deliberate delta over the hand entry: the `FieldContent` file
@@ -108,36 +125,479 @@ const READ_DOCUMENT_CONTENT_STRIPS = [
   "version.fields[].content",
 ].flatMap((base) => FILE_CONTENT_PLUMBING_KEYS.map((key) => `${base}.${key}`));
 
+/**
+ * The remaining pre-conversion hand lists, one per tool, copied verbatim from
+ * the map they were deleted from. Each case's `expected` is those lists plus
+ * any documented departure. Empty lists are stated explicitly: a tool whose
+ * payload carries no ids at all (resolve_rate, lookup_business_registry) is
+ * an assertion too.
+ */
+type DerivationCase = {
+  tool: string;
+  projection: ChatProjectionSchema;
+  expected: RefMediationLists;
+};
+
+const DERIVATION_CASES: readonly DerivationCase[] = [
+  {
+    tool: "list_contacts",
+    projection: READ_TOOL_REF_FIELD_MAP.list_contacts.projection,
+    expected: {
+      outputRefs: [{ kind: "contact", path: "items[].id" }],
+      passthroughIdPaths: ["nextCursor"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "search_across_matters",
+    projection: READ_TOOL_REF_FIELD_MAP.search_across_matters.projection,
+    expected: {
+      outputRefs: [
+        { kind: "matter", path: "hits[].workspaceId" },
+        {
+          kind: "entity",
+          path: "hits[].entityId",
+          workspace: { from: "sibling", key: "workspaceId" },
+        },
+      ],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "read_content_across_matters",
+    projection: READ_TOOL_REF_FIELD_MAP.read_content_across_matters.projection,
+    expected: {
+      outputRefs: [
+        { kind: "matter", path: "workspaceId" },
+        {
+          kind: "entity",
+          path: "entityId",
+          workspace: { from: "sibling", key: "workspaceId" },
+        },
+      ],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "read_contact",
+    projection: READ_TOOL_REF_FIELD_MAP.read_contact.projection,
+    expected: {
+      outputRefs: [{ kind: "contact", path: "contactId" }],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "list_documents",
+    projection: READ_TOOL_REF_FIELD_MAP.list_documents.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "documents[].id",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+        {
+          kind: "entity",
+          path: "documents[].parentId",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+      ],
+      passthroughIdPaths: ["nextCursor"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "list_properties",
+    projection: READ_TOOL_REF_FIELD_MAP.list_properties.projection,
+    expected: {
+      outputRefs: [{ kind: "property", path: "properties[].id" }],
+      passthroughIdPaths: ["nextCursor"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "list_tasks",
+    projection: READ_TOOL_REF_FIELD_MAP.list_tasks.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "tasks[].id",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+        {
+          kind: "entity",
+          path: "task.taskId",
+          workspace: { from: "inputEntity", param: "task_id" },
+        },
+        {
+          kind: "entity",
+          path: "task.links[].entity.id",
+          workspace: { from: "inputEntityWorkspace", param: "task_id" },
+        },
+      ],
+      passthroughIdPaths: [
+        "task.assignees[].userId",
+        "task.links[].linkId",
+        "nextCursor",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "list_clauses",
+    projection: READ_TOOL_REF_FIELD_MAP.list_clauses.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: [
+        "clauses[].id",
+        "clauses[].categoryId",
+        "clause.id",
+        "clause.categoryId",
+        "clause.variants[].id",
+        "clause.versions[].id",
+        "clause.createdBy",
+        "categories[].id",
+        "categories[].parentId",
+        "version.id",
+        "nextCursor",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "list_playbooks",
+    projection: READ_TOOL_REF_FIELD_MAP.list_playbooks.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: [
+        "items[].id",
+        "playbook.id",
+        "playbook.positions.items[].sourceId",
+        // Departure from the hand list, which licensed
+        // `playbook.positions.items[].standard.clauseId`: `standard` was the
+        // pre-v2 positions shape and no handler emits it, so the license was
+        // stale documentation. The positions-v2 clause link lives at the
+        // acceptable tier's ideal language, and it is the same org-scoped
+        // clause-library handle list_clauses licenses.
+        "playbook.positions.items[].tiers.acceptable.ideal.clauseId",
+        "nextCursor",
+      ],
+      stripPaths: [
+        "playbook.positions.items[].tiers.acceptable.rules[].id",
+        "playbook.positions.items[].tiers.fallback.entries[].id",
+        "playbook.positions.items[].tiers.notAcceptable.rules[].id",
+      ],
+    },
+  },
+  {
+    tool: "list_time_entries",
+    projection: READ_TOOL_REF_FIELD_MAP.list_time_entries.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "entries[].entityId",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+        {
+          kind: "entity",
+          path: "entry.entityId",
+          workspace: { from: "sibling", key: "workspaceId" },
+        },
+        { kind: "matter", path: "entry.workspaceId" },
+      ],
+      passthroughIdPaths: [
+        "entries[].id",
+        "entry.id",
+        "entries[].userId",
+        "entry.userId",
+        "nextCursor",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "resolve_rate",
+    projection: READ_TOOL_REF_FIELD_MAP.resolve_rate.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "list_invoices",
+    projection: READ_TOOL_REF_FIELD_MAP.list_invoices.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "invoice.timeEntries[].entityId",
+          workspace: { from: "outputPath", path: "invoice.workspaceId" },
+        },
+        {
+          kind: "entity",
+          path: "invoice.timeEntries[].entity.id",
+          workspace: { from: "outputPath", path: "invoice.workspaceId" },
+        },
+        {
+          kind: "entity",
+          path: "invoice.expenses[].entityId",
+          workspace: { from: "outputPath", path: "invoice.workspaceId" },
+        },
+        {
+          kind: "entity",
+          path: "invoice.expenses[].entity.id",
+          workspace: { from: "outputPath", path: "invoice.workspaceId" },
+        },
+        { kind: "matter", path: "invoice.workspaceId" },
+      ],
+      passthroughIdPaths: [
+        "invoices[].id",
+        "invoice.id",
+        "invoice.timeEntries[].id",
+        "invoice.expenses[].id",
+        "nextCursor",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "get_usage",
+    projection: READ_TOOL_REF_FIELD_MAP.get_usage.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["entitlement.id", "policy.id"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "search_case_law",
+    projection: READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["results[].decisionId", "nextCursor"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "read_case_law_decision",
+    projection: READ_TOOL_REF_FIELD_MAP.read_case_law_decision.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: [
+        "decision.decisionId",
+        "decision.citationsFrom[].id",
+        "decision.citationsFrom[].citedDecisionId",
+        "decision.citationsTo[].id",
+        "decision.citationsTo[].citingDecisionId",
+        "decision.source.id",
+        "nextCursor",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "search_legislation",
+    projection: READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: [
+        "lawId",
+        "blockId",
+        "law.lawId",
+        "data[].identificador",
+      ],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "lookup_business_registry",
+    projection: READ_TOOL_REF_FIELD_MAP.lookup_business_registry.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "list_templates",
+    projection: READ_TOOL_REF_FIELD_MAP.list_templates.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["templates[].id", "nextCursor"],
+      stripPaths: [],
+    },
+  },
+
+  // --- Write tools ------------------------------------------------------
+  {
+    tool: "save_matter",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_matter.projection,
+    expected: {
+      outputRefs: [{ kind: "matter", path: "matterId" }],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "delete_matter",
+    projection: WRITE_TOOL_REF_FIELD_MAP.delete_matter.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "save_contact",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_contact.projection,
+    expected: {
+      outputRefs: [{ kind: "contact", path: "contactId" }],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "delete_contact",
+    projection: WRITE_TOOL_REF_FIELD_MAP.delete_contact.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "save_task",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_task.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "taskId",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+      ],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "link_matter_contact",
+    projection: WRITE_TOOL_REF_FIELD_MAP.link_matter_contact.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["workspaceContactId"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "save_document",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_document.projection,
+    expected: {
+      outputRefs: [
+        {
+          kind: "entity",
+          path: "entityId",
+          workspace: { from: "inputParam", param: "matter_id" },
+        },
+      ],
+      passthroughIdPaths: [],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "delete_document",
+    projection: WRITE_TOOL_REF_FIELD_MAP.delete_document.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "set_field_value",
+    projection: WRITE_TOOL_REF_FIELD_MAP.set_field_value.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "save_time_entry",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_time_entry.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["timeEntryId"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "delete_time_entry",
+    projection: WRITE_TOOL_REF_FIELD_MAP.delete_time_entry.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "save_clause",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_clause.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["clauseId"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "delete_clause",
+    projection: WRITE_TOOL_REF_FIELD_MAP.delete_clause.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "run_playbook",
+    projection: WRITE_TOOL_REF_FIELD_MAP.run_playbook.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "manage_organization",
+    projection: WRITE_TOOL_REF_FIELD_MAP.manage_organization.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["memberId", "id"],
+      stripPaths: [],
+    },
+  },
+  {
+    tool: "set_practice_jurisdictions",
+    projection: WRITE_TOOL_REF_FIELD_MAP.set_practice_jurisdictions.projection,
+    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
+  },
+  {
+    tool: "save_template",
+    projection: WRITE_TOOL_REF_FIELD_MAP.save_template.projection,
+    expected: {
+      outputRefs: [],
+      passthroughIdPaths: ["templateId"],
+      stripPaths: [],
+    },
+  },
+];
+
 describe("deriveRefMediationEntry", () => {
   test("list_matters: derived lists equal the previous hand-written entry", () => {
-    const derived = deriveRefMediationEntry(LIST_MATTERS_PROJECTION);
-
-    expect(sortedRefs(derived.outputRefs)).toEqual(
-      sortedRefs(LIST_MATTERS_HAND_LISTS.outputRefs),
-    );
-    expect(sortedPaths(derived.passthroughIdPaths)).toEqual(
-      sortedPaths(LIST_MATTERS_HAND_LISTS.passthroughIdPaths),
-    );
-    expect(sortedPaths(derived.stripPaths)).toEqual(
-      sortedPaths(LIST_MATTERS_HAND_LISTS.stripPaths),
-    );
+    expectDerivedEquals(LIST_MATTERS_PROJECTION, LIST_MATTERS_HAND_LISTS);
   });
 
   test("read_document: derived lists equal the previous hand-written entry plus the file-content strips", () => {
-    const derived = deriveRefMediationEntry(READ_DOCUMENT_PROJECTION);
-
-    expect(sortedRefs(derived.outputRefs)).toEqual(
-      sortedRefs(READ_DOCUMENT_HAND_LISTS.outputRefs),
-    );
-    expect(sortedPaths(derived.passthroughIdPaths)).toEqual(
-      sortedPaths(READ_DOCUMENT_HAND_LISTS.passthroughIdPaths),
-    );
-    expect(sortedPaths(derived.stripPaths)).toEqual(
-      sortedPaths([
+    expectDerivedEquals(READ_DOCUMENT_PROJECTION, {
+      outputRefs: READ_DOCUMENT_HAND_LISTS.outputRefs,
+      passthroughIdPaths: READ_DOCUMENT_HAND_LISTS.passthroughIdPaths,
+      stripPaths: [
         ...READ_DOCUMENT_HAND_LISTS.stripPaths,
         ...READ_DOCUMENT_CONTENT_STRIPS,
-      ]),
-    );
+      ],
+    });
+  });
+
+  for (const { tool, projection, expected } of DERIVATION_CASES) {
+    test(`${tool}: derived lists equal the previous hand-written entry`, () => {
+      expectDerivedEquals(projection, expected);
+    });
+  }
+
+  test("every chat-projectable entry in both maps has a derivation test", () => {
+    const projectable = [
+      ...Object.entries(READ_TOOL_REF_FIELD_MAP),
+      ...Object.entries(WRITE_TOOL_REF_FIELD_MAP),
+    ]
+      .filter(([, entry]) => entry.chatProjectable)
+      .map(([name]) => name)
+      .sort();
+    const covered = [
+      "list_matters",
+      "read_document",
+      ...DERIVATION_CASES.map(({ tool }) => tool),
+    ].sort();
+    expect(covered).toEqual(projectable);
   });
 
   test("is memoized per schema", () => {

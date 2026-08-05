@@ -22,9 +22,9 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+import { deriveRefMediationEntry } from "./projection-schema";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
-import { resolveMediationLists } from "./ref-mediation";
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -418,7 +418,11 @@ const CONTRACT_CORPUS = {
               firstName: "Jan",
               lastName: "Novák",
               organizationName: null,
-              emails: [{ label: "work", address: "jan@example.test" }],
+              // Production-shaped jsonb (`contactEmailSchema`): the strict
+              // projection parse refuses a thinned stand-in.
+              emails: [
+                { type: "work", address: "jan@example.test", isPrimary: true },
+              ],
               phones: [],
               tags: [],
               color: null,
@@ -493,8 +497,15 @@ const CONTRACT_CORPUS = {
               firstName: "Jan",
               lastName: "Novák",
               organizationName: null,
-              emails: [{ label: "work", address: "jan@example.test" }],
-              phones: [{ label: "mobile", number: "+420123456789" }],
+              // Production-shaped jsonb (`contactEmailSchema`/
+              // `contactPhoneSchema`): the strict projection parse refuses a
+              // thinned stand-in.
+              emails: [
+                { type: "work", address: "jan@example.test", isPrimary: true },
+              ],
+              phones: [
+                { type: "mobile", number: "+420123456789", isPrimary: true },
+              ],
             }),
           },
         },
@@ -817,6 +828,9 @@ const CONTRACT_CORPUS = {
               id: uid(35),
               name: "NDA review",
               description: "Mutual NDA playbook",
+              // Selected by the list handler; drift the hand list never
+              // surfaced (the strict parse requires every declared field).
+              status: "draft",
               createdAt: new Date("2026-01-01"),
               updatedAt: new Date("2026-01-01"),
             },
@@ -835,7 +849,13 @@ const CONTRACT_CORPUS = {
               id: uid(35),
               name: "NDA review",
               description: "Mutual NDA playbook",
-              scope: "organization",
+              // `scope` is a nullable `PlaybookScope` jsonb object
+              // (`playbookScopeSchema`), not a string; the previous
+              // string stand-in could never occur in production.
+              scope: { perspective: "buyer" },
+              // Selected by the detail handler; drift the hand list never
+              // surfaced (the strict parse requires every declared field).
+              status: "draft",
               positions: {
                 version: 2,
                 items: [
@@ -849,11 +869,16 @@ const CONTRACT_CORPUS = {
                     ask: {
                       mode: "manual",
                       question: "How long is the term?",
-                      content: { type: "text" },
+                      content: { version: 1, type: "text" },
                     },
                     tiers: {
                       acceptable: {
                         rules: [{ id: uid(37), text: "Max 3 years" }],
+                        // Exercises the ideal clause link the hand list
+                        // never declared (it licensed a stale pre-v2
+                        // `standard.clauseId` path instead); the backstop
+                        // verifies the schema licenses this handle.
+                        ideal: { source: "clause", clauseId: uid(70) },
                       },
                       fallback: {
                         entries: [
@@ -1329,8 +1354,10 @@ describe("registry projection contract", () => {
 
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
-      // Hand-written or schema-derived, whichever artifact the entry carries.
-      const lists = resolveMediationLists(READ_TOOL_REF_FIELD_MAP[toolName]);
+      // Derived from the entry's projection schema, the only artifact.
+      const lists = deriveRefMediationEntry(
+        READ_TOOL_REF_FIELD_MAP[toolName].projection,
+      );
       const declared = lists.outputRefs.map((field) => field.path).sort();
       const exercised = [
         ...new Set(calls.flatMap((call) => call.expectRefPaths)),
@@ -1394,8 +1421,8 @@ describe("registry projection contract", () => {
         // merely tolerated by the backstop. This stays meaningful even if a
         // path were ever declared as both strip and passthrough, where a
         // broken strip would otherwise survive the ok result.
-        for (const path of resolveMediationLists(
-          READ_TOOL_REF_FIELD_MAP[toolName],
+        for (const path of deriveRefMediationEntry(
+          READ_TOOL_REF_FIELD_MAP[toolName].projection,
         ).stripPaths) {
           expect(
             readPathValues(payload, path).length,
