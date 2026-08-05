@@ -261,22 +261,72 @@ export const getGatewayMcpToolDefinition = async ({
   };
 };
 
+type WireInputSchema = McpTool["inputSchema"];
+type WireValue = NonNullable<WireInputSchema["properties"]>[string];
+
 /**
- * A definition authors its schema as the SDK's JSON Schema *interface*; the
- * wire type is the same data carrying an index signature. Re-reading through a
- * mapped type supplies the index signature TypeScript never infers for an
- * interface, and `type` is pinned to the value every tool input already has.
- *
- * SAFETY: every schema-valued keyword (`properties`, `$defs`, `items`, ...)
- * still needs the assertion. Each is declared as the SDK's recursive schema
- * union, which includes the bare `true`/`false` schema JSON Schema permits,
- * while the wire type admits only JSON values. The one structural alternative
- * is deep-copying the whole schema on every `tools/list` to arrive at identical
- * bytes: this value is plain JSON, serialized unchanged.
+ * A definition authors its schema as the SDK's JSON Schema *interface*, whose
+ * schema-valued keywords (`properties`, `$defs`, `items`, ...) are a recursive
+ * union that includes the bare `true`/`false` schema JSON Schema permits. The
+ * wire type is the same data as plain JSON. Rebuilding the value is what makes
+ * the two line up without asserting one onto the other.
  */
-const toWireInputSchema = (schema: JsonSchema): McpTool["inputSchema"] => {
+const toWireValue = (value: unknown): WireValue => {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => toWireValue(item));
+  }
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]: [string, unknown]) => [
+        key,
+        toWireValue(nested),
+      ]),
+    );
+  }
+  // A schema literal holds only JSON. Anything else (a function, a symbol)
+  // would not survive serialization either, so drop it rather than invent one.
+  return null;
+};
+
+const convertInputSchema = (schema: JsonSchema): WireInputSchema => {
   const fields: { [K in keyof JsonSchema]: JsonSchema[K] } = schema;
-  return { ...fields, type: "object" } as McpTool["inputSchema"];
+  const converted = Object.fromEntries(
+    Object.entries(fields).map(([key, value]: [string, unknown]) => [
+      key,
+      toWireValue(value),
+    ]),
+  );
+
+  // Pinned rather than carried over: the wire type requires the literal, and
+  // every tool input is an object schema by construction.
+  return { ...converted, type: "object" };
+};
+
+/**
+ * Tool definitions are static values, so the rebuilt schema is memoized on the
+ * definition's own schema object: `tools/list` pays the walk once per tool
+ * rather than once per request. Dynamic gateway tools build a fresh schema each
+ * time and simply miss, which costs no more than converting inline.
+ */
+const wireInputSchemas = new WeakMap<JsonSchema, WireInputSchema>();
+
+const toWireInputSchema = (schema: JsonSchema): WireInputSchema => {
+  const cached = wireInputSchemas.get(schema);
+  if (cached) {
+    return cached;
+  }
+
+  const converted = convertInputSchema(schema);
+  wireInputSchemas.set(schema, converted);
+  return converted;
 };
 
 export const toMcpTools = (
