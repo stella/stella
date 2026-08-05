@@ -40,11 +40,13 @@ type NormalizedSearchableChatMessageContent = {
   parts: SearchableChatTextPart[];
 };
 
-/** `[label](href)` and `![alt](src)`, with the target captured. Balanced
- *  parentheses inside the target (a URL ending in `(1)`) are out of scope:
- *  chat mention hrefs and ordinary links never carry them. */
-const MARKDOWN_LINK_REGEX =
-  /!?\[([^\]]*)\]\([^)\s]*(?:\s+(?:"[^"]*"|'[^']*'))?\)/gu;
+/** `[label](href)` and `![alt](src)`, with the label captured. Neither class
+ *  admits its own opening delimiter, which keeps the match linear in the
+ *  subject (`super-linear-regexes` is a ratcheted metric, and this runs over
+ *  whole persisted threads). The cost is that a label containing `[` or a
+ *  target containing `(` is left alone; a chat mention href never has either,
+ *  and an unstripped link is the safe direction to fail. */
+const MARKDOWN_LINK_REGEX = /!?\[([^[\]]*)\]\([^()]*\)/gu;
 
 /**
  * Drop link targets from persisted chat markdown, keeping the link label.

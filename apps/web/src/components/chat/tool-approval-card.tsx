@@ -737,7 +737,10 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
   const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
   const byId = new Map<string, SummaryMatter>();
-  for (const workspace of data?.workspaces ?? []) {
+  if (!data) {
+    return byId;
+  }
+  for (const workspace of data.workspaces) {
     byId.set(workspace.id, {
       color: workspace.color,
       id: workspace.id,
@@ -782,9 +785,10 @@ const RegistryWriteSummaryRow = ({
   </div>
 );
 
-/** "Matter id" -> "Matter": the id is no longer what the row shows. */
+/** "Matter id" -> "Matter": the id is no longer what the row shows. A single
+ *  space suffices because `humanizeIdentifier` has already collapsed runs. */
 const stripIdSuffix = (label: string): string =>
-  label.replace(/\s+id$/iu, "").trim() || label;
+  label.replace(/ id$/iu, "") || label;
 
 const RegistryWriteSummary = ({
   input,
