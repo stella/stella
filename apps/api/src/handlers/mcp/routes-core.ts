@@ -90,6 +90,10 @@ export const createMcpRoute = ({
         await handleMcpTransportRoute(request, {
           clientIp: resolveClientIp(request, server ?? null),
         }),
+      // The MCP transports own JSON parsing. If Elysia parses first, the
+      // web-standard Request reaches them with an already-consumed body and
+      // every valid JSON-RPC POST is rejected as a parse error.
+      { parse: "none" },
     )
     .all(
       MCP_ANONYMIZED_HTTP_PATH,
@@ -98,5 +102,6 @@ export const createMcpRoute = ({
           clientIp: resolveClientIp(request, server ?? null),
           mode: "anonymized",
         }),
+      { parse: "none" },
     );
 };
