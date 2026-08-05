@@ -502,6 +502,25 @@ const CONTRACT_CORPUS = {
                     propertyId: uid(19),
                     content: { version: 1, type: "text", value: "Body text" },
                   },
+                  {
+                    // Every uploaded document carries a file field whose
+                    // content embeds storage UUIDs; a text-only fixture let
+                    // exactly that slip past this corpus into prod.
+                    id: uid(61),
+                    propertyId: uid(62),
+                    content: {
+                      version: 1,
+                      type: "file",
+                      id: uid(63),
+                      fileName: "NDA draft.docx",
+                      mimeType:
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      sizeBytes: 12_345,
+                      encrypted: false,
+                      sha256Hex: "a".repeat(64),
+                      pdfFileId: uid(64),
+                    },
+                  },
                 ],
               },
             }),
@@ -550,6 +569,22 @@ const CONTRACT_CORPUS = {
                   id: uid(22),
                   propertyId: uid(23),
                   content: { version: 1, type: "text", value: "Old body" },
+                },
+                {
+                  id: uid(65),
+                  propertyId: uid(66),
+                  content: {
+                    version: 1,
+                    type: "file",
+                    id: uid(67),
+                    fileName: "Old draft.docx",
+                    mimeType:
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    sizeBytes: 9876,
+                    encrypted: false,
+                    sha256Hex: "b".repeat(64),
+                    pdfFileId: uid(68),
+                  },
                 },
               ],
             }),
