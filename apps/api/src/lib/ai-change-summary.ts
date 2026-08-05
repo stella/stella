@@ -45,6 +45,9 @@ export const summarizeVersionDiff = async ({
     role: "fast",
     orgAIConfig,
     organizationId,
+    // Shared by root-scoped and workspace-scoped callers; no workspace id is
+    // threaded through this helper's options.
+    tenantWorkspaceIds: [],
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,

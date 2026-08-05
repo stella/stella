@@ -1,3 +1,4 @@
+import type { MCPToolSource } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -247,3 +248,69 @@ export const guardModelMessages = <TMessages extends readonly object[]>({
   brandModelMessages(
     redactTenantIdsDeep({ value: messages, workspaceIds }).value,
   );
+
+/**
+ * Brand a system prompt that is not fully server-built — it interpolates model
+ * output, tool names from org-configured connectors, or user text — so a hit
+ * is redacted and reported instead of taking the turn down. Prompts Stella
+ * assembles end to end keep the fail-closed treatment of
+ * `guardModelSystemPrompt`; this is for the mixed-provenance ones.
+ */
+export const redactModelSystemPrompt = ({
+  system,
+  workspaceIds,
+}: {
+  system: string;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedSystemPrompt => {
+  const state: RedactionState = { paths: [] };
+  const redacted = redactString(system, workspaceIds, "$", state);
+  if (state.paths.length > 0) {
+    captureError(
+      new TelemetryError({
+        message: "Model-bound system prompt embedded tenant workspace ids",
+      }),
+      { source: "model-ingress-guard", surface: "system-prompt" },
+    );
+  }
+  return v.parse(guardedSystemPromptSchema, redacted);
+};
+
+/**
+ * An MCP tool source whose fetched schemas have passed the guard. Org
+ * connectors serve their tool list lazily, mid-run, so the fetch itself has to
+ * be wrapped: guarding the source object once at assembly would only cover the
+ * empty shell the provider SDK later calls `tools()` on.
+ */
+export type GuardedMcpToolSource = MCPToolSource &
+  v.Brand<"GuardedMcpToolSource">;
+
+const guardedMcpToolSourceSchema = v.pipe(
+  v.custom<MCPToolSource>(
+    (value) => typeof value === "object" && value !== null,
+  ),
+  v.brand("GuardedMcpToolSource"),
+);
+
+/**
+ * Wrap an MCP tool source so every lazily fetched schema batch passes the
+ * tool-schema guard (telemetry, never a panic: the descriptions belong to the
+ * org's connectors, and a hit must not brick chat).
+ */
+export const guardMcpToolSource = ({
+  source,
+  workspaceIds,
+}: {
+  source: MCPToolSource;
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedMcpToolSource => {
+  const guarded: MCPToolSource = {
+    ...source,
+    tools: async (options) =>
+      guardModelToolSchemas({
+        tools: await source.tools(options),
+        workspaceIds,
+      }),
+  };
+  return v.parse(guardedMcpToolSourceSchema, guarded);
+};

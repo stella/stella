@@ -102,6 +102,12 @@ const improvePrompt = createSafeRootHandler(
             role: "fast",
             serviceTier: "standard",
             system: IMPROVE_PROMPT_SYSTEM,
+            systemPromptOrigin: "server-built",
+            // Prompt improvement is thread-less and workspace-less: the
+            // handler holds no workspace scope, so there is no tenant set to
+            // guard against without an extra accessible-workspaces query on
+            // an interactive path.
+            tenantWorkspaceIds: [],
           }),
         catch: (error) => {
           aiAnalytics.captureError(error);

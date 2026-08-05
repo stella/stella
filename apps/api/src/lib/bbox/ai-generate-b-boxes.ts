@@ -79,6 +79,7 @@ export const generateBBoxData = async ({
         serviceTier: "standard",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching,
         system: BBOX_SYSTEM_PROMPT,

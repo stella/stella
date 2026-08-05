@@ -94,6 +94,8 @@ export const classifyWithLLM = async ({
         serviceTier: "flex",
         orgAIConfig: null,
         organizationId: null,
+        // Public case-law corpus: no tenant workspace scope to guard against.
+        tenantWorkspaceIds: [],
         analytics: aiAnalytics,
         caching: resolvePolarityClassifierCaching(language),
         system: SYSTEM_PROMPT,

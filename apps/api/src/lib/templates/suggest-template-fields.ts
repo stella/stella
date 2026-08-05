@@ -115,6 +115,8 @@ export const suggestTemplateFields = async ({
     role: "fast",
     orgAIConfig,
     organizationId,
+    // No workspace id is threaded through this helper's options.
+    tenantWorkspaceIds: [],
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,

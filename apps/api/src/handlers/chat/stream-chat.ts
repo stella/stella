@@ -89,11 +89,14 @@ import {
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
 import {
+  guardMcpToolSource,
   guardModelMessages,
   guardModelSystemPrompt,
   guardModelToolSchemas,
+  redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import type {
+  GuardedMcpToolSource,
   GuardedModelMessages,
   GuardedSystemPrompt,
   GuardedToolSchemas,
@@ -367,6 +370,7 @@ export const streamChat = async ({
     surfaces: {
       messages: preparedMessageList,
       system: guardedSystem,
+      tenantWorkspaceIds,
       tools: modelTools,
     },
     thirdPartyBoundary,
@@ -509,6 +513,33 @@ const projectServerToolsForProvider = ({
   return projectedTools;
 };
 
+/**
+ * The org's MCP connectors serve their tool schemas lazily, so the guard has
+ * to sit outside every other wrapper: provider projection and the anonymizer
+ * both rewrite what `tools()` returns, and the guard must see what the model
+ * finally gets. Returning the branded type keeps an unwrapped source from
+ * reaching `chat({ mcp: { clients } })`.
+ */
+export const guardedMcpClients = ({
+  boundary,
+  provider,
+  source,
+  tenantWorkspaceIds,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  provider: string;
+  source: StellaMcpToolSource;
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
+}): GuardedMcpToolSource[] => [
+  guardMcpToolSource({
+    source: prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: projectMcpToolSourceSchemasForProvider({ provider, source }),
+    }),
+    workspaceIds: tenantWorkspaceIds,
+  }),
+];
+
 const projectMcpToolSourceSchemasForProvider = ({
   provider,
   source,
@@ -611,6 +642,13 @@ type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
 export type GuardedChatSurfaces = {
   messages: GuardedModelMessages<ChatMessage[]>;
   system: GuardedSystemPrompt;
+  /**
+   * The guard's own input, carried alongside its output because the surfaces
+   * are not final: the runtime middleware rewrites messages and system prompt
+   * mid-loop (compaction, loop recovery) and has to re-enter the guard with
+   * the same tenant set, and the org's MCP source fetches schemas lazily.
+   */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   tools: GuardedToolSchemas<ChatTool[]>;
 };
 
@@ -763,6 +801,7 @@ const runChatAttempt = async function* ({
   const {
     messages: preparedMessages,
     system: baseSystem,
+    tenantWorkspaceIds,
     tools: modelTools,
   } = surfaces;
   const caching = resolveCaching({
@@ -801,15 +840,12 @@ const runChatAttempt = async function* ({
     ...(externalMcpToolSource
       ? {
           mcp: {
-            clients: [
-              prepareMcpToolSourceForThirdParty({
-                boundary: thirdPartyBoundary,
-                source: projectMcpToolSourceSchemasForProvider({
-                  provider: model.provider,
-                  source: externalMcpToolSource,
-                }),
-              }),
-            ],
+            clients: guardedMcpClients({
+              boundary: thirdPartyBoundary,
+              provider: model.provider,
+              source: externalMcpToolSource,
+              tenantWorkspaceIds,
+            }),
             connection: "close",
             lazyTools: true,
           },
@@ -839,6 +875,7 @@ const runChatAttempt = async function* ({
         orgAIConfig,
         role,
         state,
+        tenantWorkspaceIds,
         threadId,
       }),
     ],
@@ -847,9 +884,55 @@ const runChatAttempt = async function* ({
   yield* stream;
 };
 
+/**
+ * The runtime middleware rewrites the two surfaces the guard already cleared,
+ * mid-loop and after dispatch, so both rewrites re-enter it here.
+ *
+ * The loop-recovery prompt is rebuilt from the already-guarded base prompt
+ * plus a signal line naming the looping tool. For an org MCP connector that
+ * name is org-authored text — the tool-schema trust class — so a hit is
+ * redacted and reported instead of killing the turn.
+ */
+export const guardedLoopRecoveryPrompts = ({
+  baseSystem,
+  detection,
+  tenantWorkspaceIds,
+}: {
+  baseSystem: GuardedSystemPrompt;
+  detection: Parameters<typeof createLoopRecoverySystemPrompt>[0]["detection"];
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
+}): GuardedSystemPrompt[] => [
+  redactModelSystemPrompt({
+    system: createLoopRecoverySystemPrompt({ baseSystem, detection }),
+    workspaceIds: tenantWorkspaceIds,
+  }),
+];
+
+/**
+ * Compaction replaces history with a model-written summary, text that never
+ * passed the ingress guard, so the replacement is re-guarded (redact mode, as
+ * for any model-authored surface). Returns undefined when compaction left the
+ * history alone: an unchanged array is already the guarded one.
+ */
+export const guardedCompactedMessages = ({
+  compacted,
+  previous,
+  tenantWorkspaceIds,
+}: {
+  compacted: ModelMessage[];
+  previous: readonly ModelMessage[];
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
+}): GuardedModelMessages<ModelMessage[]> | undefined =>
+  compacted === previous
+    ? undefined
+    : guardModelMessages({
+        messages: compacted,
+        workspaceIds: tenantWorkspaceIds,
+      });
+
 type ChatRuntimeMiddlewareProps = {
   abortSignal: AbortSignal;
-  baseSystem: string;
+  baseSystem: GuardedSystemPrompt;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
   compactionFeature: string;
   model: ResolvedTanStackTextModel;
@@ -858,6 +941,7 @@ type ChatRuntimeMiddlewareProps = {
   orgAIConfig: OrgAIConfig | null;
   role: ChatAttemptRole;
   state: ChatAttemptState;
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
 };
 
@@ -872,6 +956,7 @@ const createChatRuntimeMiddleware = ({
   orgAIConfig,
   role,
   state,
+  tenantWorkspaceIds,
   threadId,
 }: ChatRuntimeMiddlewareProps): ChatMiddleware => {
   let lastLoopRecoveryKey: string | null = null;
@@ -915,12 +1000,11 @@ const createChatRuntimeMiddleware = ({
         const recoveryKey = getLoopRecoveryKey(loopDetection);
         if (recoveryKey !== lastLoopRecoveryKey) {
           lastLoopRecoveryKey = recoveryKey;
-          patch.systemPrompts = [
-            createLoopRecoverySystemPrompt({
-              baseSystem,
-              detection: loopDetection,
-            }),
-          ];
+          patch.systemPrompts = guardedLoopRecoveryPrompts({
+            baseSystem,
+            detection: loopDetection,
+            tenantWorkspaceIds,
+          });
         }
       }
 
@@ -932,6 +1016,7 @@ const createChatRuntimeMiddleware = ({
         organizationId,
         orgAIConfig,
         role,
+        tenantWorkspaceIds,
         onSummaryError: (error) => {
           captureError(error, {
             feature: compactionFeature,
@@ -945,8 +1030,13 @@ const createChatRuntimeMiddleware = ({
         throw compactedMessages.error;
       }
 
-      if (compactedMessages.value !== config.messages) {
-        patch.messages = compactedMessages.value;
+      const guardedCompaction = guardedCompactedMessages({
+        compacted: compactedMessages.value,
+        previous: config.messages,
+        tenantWorkspaceIds,
+      });
+      if (guardedCompaction !== undefined) {
+        patch.messages = guardedCompaction;
       }
 
       return Object.keys(patch).length === 0 ? undefined : patch;

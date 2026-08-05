@@ -502,6 +502,7 @@ Answer the latest question.
       orgAIConfig: null,
       preserveTokens: 20,
       role: "chat",
+      tenantWorkspaceIds: [],
       summarizeWithModel: async (transcript) => {
         transcriptSeenBySummarizer = transcript;
         return "tanstack summary";

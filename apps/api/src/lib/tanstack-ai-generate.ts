@@ -18,6 +18,15 @@ import type {
 } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  guardModelMessages,
+  guardModelSystemPrompt,
+  redactModelSystemPrompt,
+} from "@/api/lib/chat/model-ingress-guard";
+import type {
+  GuardedModelMessages,
+  GuardedSystemPrompt,
+} from "@/api/lib/chat/model-ingress-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -46,6 +55,15 @@ type GenerateTanStackInputOptions =
       prompt: string;
     };
 
+/**
+ * How much of the system prompt this caller authored. Fully server-built
+ * prompts fail closed on a tenant id (a hit is a Stella bug); prompts that
+ * interpolate document text, model output, or other untrusted content are
+ * redacted and reported, because a hit there is a user pasting a workspace
+ * URL, not a bug worth a 500.
+ */
+type SystemPromptOrigin = "server-built" | "embeds-untrusted";
+
 type GenerateTanStackBaseOptions = {
   abortSignal?: AbortSignal | undefined;
   analytics?: TanStackAIAnalyticsCallbacks | undefined;
@@ -57,6 +75,14 @@ type GenerateTanStackBaseOptions = {
   role: ModelRole;
   serviceTier: AIRequestServiceTier;
   system?: string | undefined;
+  systemPromptOrigin?: SystemPromptOrigin | undefined;
+  /**
+   * The tenant workspace ids whose raw form must not reach the provider. Every
+   * caller states its set (`[]` where the call carries no tenant scope at all,
+   * e.g. public-corpus jobs) so the model-ingress guard runs on every request
+   * this module dispatches, not only the ones someone remembered to guard.
+   */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   temperature?: number | undefined;
 };
 
@@ -99,7 +125,7 @@ export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
   const model = resolveTanStackTextModel(options);
-  const requestMessages = messagesFromInput(options);
+  const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
@@ -113,7 +139,7 @@ export const generateTanStackTextForRole = async (
     messages: requestMessages,
     model,
     serviceTier: options.serviceTier,
-    system: options.system,
+    system: guardedSystemPrompt(options),
     temperature: options.temperature,
   })) {
     output += delta;
@@ -126,7 +152,7 @@ export const streamTanStackTextForRole = (
   options: GenerateTanStackTextForRoleOptions,
 ): AsyncIterable<string> => {
   const model = resolveTanStackTextModel(options);
-  const requestMessages = messagesFromInput(options);
+  const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
@@ -139,7 +165,7 @@ export const streamTanStackTextForRole = (
     messages: requestMessages,
     model,
     serviceTier: options.serviceTier,
-    system: options.system,
+    system: guardedSystemPrompt(options),
     temperature: options.temperature,
   });
 };
@@ -159,10 +185,10 @@ const streamTanStackTextDeltas = async function* ({
   analytics: TanStackAIAnalyticsCallbacks | undefined;
   caching: CachingDecision;
   maxOutputTokens: number | undefined;
-  messages: ModelMessage[];
+  messages: GuardedModelMessages<ModelMessage[]>;
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
-  system: string | undefined;
+  system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
@@ -354,7 +380,7 @@ export const generateTanStackObjectForRole = async <
   v.InferOutput<TSchema>
 > => {
   const model = resolveTanStackTextModel(options);
-  const requestMessages = messagesFromInput(options);
+  const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
@@ -374,7 +400,7 @@ export const generateTanStackObjectForRole = async <
         ...systemPromptsPatch({
           caching: options.caching,
           model,
-          system: options.system,
+          system: guardedSystemPrompt(options),
         }),
         modelOptions: mergeGenerationOptions({
           caching: options.caching,
@@ -400,7 +426,7 @@ export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > => {
   const model = resolveTanStackTextModel(options);
-  const requestMessages = messagesFromInput(options);
+  const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
@@ -414,7 +440,7 @@ export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
     model,
     outputSchema,
     serviceTier: options.serviceTier,
-    system: options.system,
+    system: guardedSystemPrompt(options),
     temperature: options.temperature,
   });
 };
@@ -437,11 +463,11 @@ const streamTanStackStructuredOutput = async function* <
   analytics: TanStackAIAnalyticsCallbacks | undefined;
   caching: CachingDecision;
   maxOutputTokens: number | undefined;
-  messages: ModelMessage[];
+  messages: GuardedModelMessages<ModelMessage[]>;
   model: ResolvedTanStackTextModel;
   outputSchema: TSchema;
   serviceTier: AIRequestServiceTier;
-  system: string | undefined;
+  system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
   let completed = false;
@@ -571,6 +597,35 @@ const messagesFromInput = (
     return input.messages;
   }
   return [{ role: "user", content: input.prompt }];
+};
+
+/**
+ * The model-ingress seam for every non-chat model call: the dispatch helpers
+ * below accept only guarded surfaces, so a new generation path cannot reach a
+ * provider with unredacted tenant ids in its messages or system prompt.
+ */
+const guardedMessagesFromInput = (
+  options: GenerateTanStackTextForRoleOptions,
+): GuardedModelMessages<ModelMessage[]> =>
+  guardModelMessages({
+    messages: messagesFromInput(options),
+    workspaceIds: options.tenantWorkspaceIds,
+  });
+
+const guardedSystemPrompt = ({
+  system,
+  systemPromptOrigin = "embeds-untrusted",
+  tenantWorkspaceIds,
+}: Pick<
+  GenerateTanStackBaseOptions,
+  "system" | "systemPromptOrigin" | "tenantWorkspaceIds"
+>): GuardedSystemPrompt | undefined => {
+  if (system === undefined) {
+    return undefined;
+  }
+  return systemPromptOrigin === "server-built"
+    ? guardModelSystemPrompt({ system, workspaceIds: tenantWorkspaceIds })
+    : redactModelSystemPrompt({ system, workspaceIds: tenantWorkspaceIds });
 };
 
 export const abortControllerFromSignal = (

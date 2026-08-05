@@ -339,6 +339,7 @@ export const gradeTierMatch = async ({
         role: "pdf",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,

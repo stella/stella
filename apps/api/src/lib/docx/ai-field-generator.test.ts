@@ -87,6 +87,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       orgAIConfig,
       organizationId,
       skillContext,
+      tenantWorkspaceIds: [],
     });
     expect(generate).toBeDefined();
     await generate?.({
@@ -104,6 +105,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       orgAIConfig,
       organizationId,
       skillContext,
+      tenantWorkspaceIds: [],
     });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
@@ -111,7 +113,11 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   });
 
   test("passes no tools without a skill context, even with a ref", async () => {
-    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    const generate = buildAiFieldGenerator({
+      orgAIConfig,
+      organizationId,
+      tenantWorkspaceIds: [],
+    });
     await generate?.({
       prompt: SKILL_REF_PROMPT,
       fieldPath: "scope",
@@ -124,7 +130,11 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
 
 describe("buildAiFieldGenerator document-text injection", () => {
   test("injects a Document section when documentText is supplied", async () => {
-    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    const generate = buildAiFieldGenerator({
+      orgAIConfig,
+      organizationId,
+      tenantWorkspaceIds: [],
+    });
     await generate?.({
       prompt: PLAIN_PROMPT,
       fieldPath: "scope",
@@ -137,14 +147,22 @@ describe("buildAiFieldGenerator document-text injection", () => {
   });
 
   test("omits the Document section when no documentText is supplied", async () => {
-    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    const generate = buildAiFieldGenerator({
+      orgAIConfig,
+      organizationId,
+      tenantWorkspaceIds: [],
+    });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
     expect(lastChat()?.prompt ?? "").not.toContain("Document:");
   });
 
   test("omits the Document section for blank documentText", async () => {
-    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    const generate = buildAiFieldGenerator({
+      orgAIConfig,
+      organizationId,
+      tenantWorkspaceIds: [],
+    });
     await generate?.({
       prompt: PLAIN_PROMPT,
       fieldPath: "scope",
@@ -164,6 +182,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       orgAIConfig,
       organizationId,
       skillContext,
+      tenantWorkspaceIds: [],
     });
     expect(adapt).toBeDefined();
     await adapt?.({
@@ -183,6 +202,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       orgAIConfig,
       organizationId,
       skillContext,
+      tenantWorkspaceIds: [],
     });
     await adapt?.({
       stub: "the scope",

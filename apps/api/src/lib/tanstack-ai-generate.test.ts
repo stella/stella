@@ -3,6 +3,7 @@ import { afterAll, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
 import {
@@ -11,9 +12,11 @@ import {
 } from "@/api/lib/tanstack-ai-schema";
 
 type CapturedChatOptions = {
+  messages?: unknown;
   modelOptions?: unknown;
   outputSchema?: unknown;
   stream?: unknown;
+  systemPrompts?: unknown;
 };
 
 const capturedChatOptions: CapturedChatOptions[] = [];
@@ -42,6 +45,13 @@ const rejectChat = async (error: Error): Promise<never> => {
 void mock.module("@tanstack/ai", () => ({
   ...realTanStackAI,
   chat,
+}));
+
+const captureErrorMock = mock();
+void mock.module("@/api/lib/analytics/capture", () => ({
+  captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
+  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
 
 void mock.module("@/api/lib/tanstack-ai-models", () => ({
@@ -124,6 +134,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "pdf",
       serviceTier: "standard",
+      tenantWorkspaceIds: [],
     });
 
     expect(result).toEqual({ answer: "ok" });
@@ -150,6 +161,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "pdf",
       serviceTier: "standard",
+      tenantWorkspaceIds: [],
     })) {
       events.push(event);
     }
@@ -185,6 +197,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "pdf",
       serviceTier: "standard",
+      tenantWorkspaceIds: [],
     }).then(
       () => undefined,
       (error: unknown) => error,
@@ -362,6 +375,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "chat",
       serviceTier: "flex",
+      tenantWorkspaceIds: [],
     });
 
     expect(result).toEqual({ answer: "ok" });
@@ -391,6 +405,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "chat",
       serviceTier: "flex",
+      tenantWorkspaceIds: [],
     }).then(
       () => undefined,
       (error: unknown) => error,
@@ -425,6 +440,7 @@ describe("TanStack AI structured output generation", () => {
       prompt: "Extract the answer.",
       role: "pdf",
       serviceTier: "flex",
+      tenantWorkspaceIds: [],
     })) {
       events.push(event);
     }
@@ -452,6 +468,108 @@ describe("TanStack AI structured output generation", () => {
   });
 });
 
+// Every non-chat model call in the API dispatches through this module, so the
+// guard has to run here rather than at each of the ~25 call sites. These pin
+// the wiring against the real guard: the provider stub records exactly what a
+// provider would have received.
+describe("TanStack AI model-ingress guard", () => {
+  const tenantWorkspaceId = toSafeId<"workspace">(
+    "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+  );
+  const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
+
+  test("redacts tenant ids out of the dispatched messages", async () => {
+    capturedChatOptions.length = 0;
+    captureErrorMock.mockClear();
+    nextChatResult = createTextStream(["ok"]);
+
+    await generateTanStackTextForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: `Summarize https://my.stll.app/workspaces/${tenantWorkspaceId}/matters and decision ${publicDecisionId}`,
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [tenantWorkspaceId],
+    });
+
+    const dispatched = JSON.stringify(getOnlyCapturedChatOptions().messages);
+    expect(dispatched).not.toContain(tenantWorkspaceId);
+    expect(dispatched).toContain("[internal-id-removed]");
+    // Membership-exact: a public decision id is not a tenant id.
+    expect(dispatched).toContain(publicDecisionId);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("leaves a request without tenant ids untouched and silent", async () => {
+    capturedChatOptions.length = 0;
+    captureErrorMock.mockClear();
+    nextChatResult = createTextStream(["ok"]);
+
+    await generateTanStackTextForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: `Summarize decision ${publicDecisionId}`,
+      role: "chat",
+      serviceTier: "standard",
+      system: "You are stella.",
+      tenantWorkspaceIds: [tenantWorkspaceId],
+    });
+
+    const captured = getOnlyCapturedChatOptions();
+    expect(JSON.stringify(captured.messages)).toContain(publicDecisionId);
+    expect(JSON.stringify(captured.messages)).not.toContain(
+      "[internal-id-removed]",
+    );
+    expect(captured.systemPrompts).toEqual(["You are stella."]);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
+    capturedChatOptions.length = 0;
+    captureErrorMock.mockClear();
+    nextChatResult = createTextStream(["ok"]);
+
+    await generateTanStackTextForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Draft it.",
+      role: "chat",
+      serviceTier: "standard",
+      system: `Document context: workspace ${tenantWorkspaceId}`,
+      tenantWorkspaceIds: [tenantWorkspaceId],
+    });
+
+    expect(getOnlyCapturedChatOptions().systemPrompts).toEqual([
+      "Document context: workspace [internal-id-removed]",
+    ]);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+
+    capturedChatOptions.length = 0;
+    nextChatResult = createTextStream(["ok"]);
+    const serverBuiltFailure = await generateTanStackTextForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Draft it.",
+      role: "chat",
+      serviceTier: "standard",
+      system: `Server scaffold naming ${tenantWorkspaceId}`,
+      systemPromptOrigin: "server-built",
+      tenantWorkspaceIds: [tenantWorkspaceId],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // Fail closed: the request never reached the provider.
+    expect(serverBuiltFailure).toBeDefined();
+    expect(capturedChatOptions).toHaveLength(0);
+  });
+});
+
 describe("TanStack AI text generation", () => {
   test("collects text through the error-aware streaming boundary", async () => {
     capturedChatOptions.length = 0;
@@ -464,6 +582,7 @@ describe("TanStack AI text generation", () => {
       prompt: "Say hello.",
       role: "chat",
       serviceTier: "standard",
+      tenantWorkspaceIds: [],
     });
 
     expect(output).toBe("hello world");
@@ -484,6 +603,7 @@ describe("TanStack AI text generation", () => {
       prompt: "Say hello.",
       role: "chat",
       serviceTier: "standard",
+      tenantWorkspaceIds: [],
     }).then(
       () => undefined,
       (error: unknown) => error,
@@ -511,6 +631,7 @@ describe("TanStack AI text generation", () => {
         prompt: "Say hello.",
         role: "chat",
         serviceTier: "standard",
+        tenantWorkspaceIds: [],
       })) {
         // Consume the full stream so terminal provider events are observed.
       }
@@ -534,9 +655,11 @@ const captureChatOptions = (options: unknown): CapturedChatOptions => {
   }
 
   return {
+    messages: options["messages"],
     modelOptions: options["modelOptions"],
     outputSchema: options["outputSchema"],
     stream: options["stream"],
+    systemPrompts: options["systemPrompts"],
   };
 };
 

@@ -473,6 +473,23 @@ describe("MCP anonymization canary corpus", () => {
 
     expectNoSeedLeak(result, [nameSeed]);
     expectSeedsQueuedForAnonymization([nameSeed]);
+    // The id is the surface's intentional output (callers need the matter id
+    // for follow-up tool calls), not a declared text field, so anonymized
+    // mode must return it byte-for-byte — unlike `name`/`reference`, which
+    // are declared text fields and come back redacted.
+    expect(JSON.parse(parseResultText(result))).toEqual({
+      matters: [
+        {
+          id: "ws_1",
+          name: "[ANON_0]",
+          reference: "[ANON_1]",
+          status: "active",
+          lastActivityAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      nextCursor: null,
+    });
   });
 
   test("list_matters (detail mode) anonymizes matter, overview, contacts, and members", async () => {

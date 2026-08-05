@@ -258,11 +258,14 @@ export const fillHandler = async ({
         values: parsed,
         fields: manifest.fields,
         documentText,
+        // This route fills a raw uploaded DOCX via a root handler, so there is
+        // no workspace/matter scope to redact tenant ids against.
         generate: buildAiFieldGenerator({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
@@ -275,6 +278,7 @@ export const fillHandler = async ({
           organizationId,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       if (isTemplateData(decided)) {
@@ -294,6 +298,7 @@ export const fillHandler = async ({
           organizationId,
           skillContext: { organizationId, safeDb, userId },
           aiAnalytics,
+          tenantWorkspaceIds: [],
         }),
       });
       fillBuffer = adapted.buffer;

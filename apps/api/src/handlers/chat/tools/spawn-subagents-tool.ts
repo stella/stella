@@ -383,6 +383,7 @@ export const createSpawnSubagentsTool = (
             modelInfo: fastModelInfo,
           }),
           system: buildSubagentSystemPrompt(sub.expectedOutput),
+          tenantWorkspaceIds: props.workspaceId ? [props.workspaceId] : [],
           messages: [
             buildSubagentUserMessage({ task: sub.task, context: sub.context }),
           ],

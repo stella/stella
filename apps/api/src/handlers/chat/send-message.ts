@@ -1201,6 +1201,7 @@ const sendMessage = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         orgAIConfig,
         safeDb,
+        tenantWorkspaceIds: accessibleWorkspaceIds,
         threadId: body.threadId,
         userId: user.id,
         workspaceId,
@@ -1704,6 +1705,7 @@ type CompactMessagesForContextProps = ChatCompactionModelProps & {
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
   messages: ChatMessage[];
   safeDb: SafeDb;
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -1758,6 +1760,7 @@ const compactMessagesForContext = async ({
   organizationId,
   orgAIConfig,
   safeDb,
+  tenantWorkspaceIds,
   threadId,
   userId,
   workspaceId,
@@ -1796,6 +1799,7 @@ const compactMessagesForContext = async ({
     boundary,
     messages,
     modelId: chatModelOverride,
+    tenantWorkspaceIds,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,

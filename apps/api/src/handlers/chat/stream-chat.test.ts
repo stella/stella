@@ -1434,6 +1434,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardModelMessages({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };
 
@@ -1452,9 +1453,15 @@ describe("guarded model-ingress seam", () => {
     });
     expect(dispatchedSystem).toBe(system);
 
+    const unguarded = {
+      messages,
+      system,
+      tenantWorkspaceIds: workspaceIds,
+      tools,
+    };
     // @ts-expect-error surfaces that skipped the model-ingress guard must not
     // reach the provider dispatch
-    const bypass: GuardedChatSurfaces = { messages, system, tools };
+    const bypass: GuardedChatSurfaces = unguarded;
     void bypass;
   });
 });

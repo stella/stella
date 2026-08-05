@@ -265,6 +265,7 @@ const organizeSuggestionsHandler = async function* ({
         serviceTier: "flex",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
@@ -731,6 +732,7 @@ const generateMissingSummaries = async ({
         serviceTier: "flex",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,

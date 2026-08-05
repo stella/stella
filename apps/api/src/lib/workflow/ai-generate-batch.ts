@@ -185,6 +185,7 @@ export const generateWorkflowData = async ({
         role: "pdf",
         orgAIConfig,
         organizationId,
+        tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: cachingDecision,
         serviceTier,

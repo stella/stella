@@ -118,6 +118,9 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       role: DERIVE_ASK_ROLE,
       orgAIConfig,
       organizationId,
+      // DeriveAskGenerate carries no workspace id; playbook grading runs at
+      // organization scope.
+      tenantWorkspaceIds: [],
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,

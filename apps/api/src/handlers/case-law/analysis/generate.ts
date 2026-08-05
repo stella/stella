@@ -139,6 +139,8 @@ ${decisionText}`;
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
+      // Case-law analysis is global, not workspace-scoped (see rootDb use below).
+      tenantWorkspaceIds: [],
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,

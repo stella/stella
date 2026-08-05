@@ -21,6 +21,14 @@ import {
   chatToolMapToArray,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import {
+  guardModelMessages,
+  redactModelSystemPrompt,
+} from "@/api/lib/chat/model-ingress-guard";
+import type {
+  GuardedModelMessages,
+  GuardedSystemPrompt,
+} from "@/api/lib/chat/model-ingress-guard";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   maybeSkillTools,
@@ -79,13 +87,19 @@ type FieldChatInput = {
   prompt: string;
   skillTools: ChatToolMap | undefined;
   system: string | undefined;
+  /**
+   * Tenant set for the model-ingress guard. Field prompts carry document text
+   * and stored values, so a hit is redacted and reported, never fatal.
+   */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 type ResolvedFieldChat = {
   abortController: AbortController;
   caching: ReturnType<typeof resolveCaching>;
-  messages: ModelMessage[];
+  messages: GuardedModelMessages<ModelMessage[]>;
   model: ReturnType<typeof resolveTanStackTextModel>;
+  system: GuardedSystemPrompt | undefined;
 };
 
 const resolveFieldChat = ({
@@ -93,6 +107,8 @@ const resolveFieldChat = ({
   orgAIConfig,
   organizationId,
   prompt,
+  system,
+  tenantWorkspaceIds,
 }: FieldChatInput): ResolvedFieldChat => ({
   abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
@@ -100,22 +116,30 @@ const resolveFieldChat = ({
     role: "fast",
     scopeKey: organizationId,
   }),
-  messages: [{ role: "user", content: prompt }],
+  messages: guardModelMessages({
+    messages: [{ role: "user", content: prompt }],
+    workspaceIds: tenantWorkspaceIds,
+  }),
   model: resolveTanStackTextModel({
     role: "fast",
     orgAIConfig,
     organizationId,
   }),
+  system:
+    system === undefined
+      ? undefined
+      : redactModelSystemPrompt({ system, workspaceIds: tenantWorkspaceIds }),
 });
 
 const generateFieldText = async (input: FieldChatInput): Promise<string> => {
-  const { abortController, caching, messages, model } = resolveFieldChat(input);
+  const { abortController, caching, messages, model, system } =
+    resolveFieldChat(input);
   return await chat({
     adapter: model.adapter,
     messages,
     stream: false,
     abortController,
-    ...systemPromptsPatch({ caching, model, system: input.system }),
+    ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
       caching,
       model,
@@ -138,13 +162,14 @@ const generateFieldText = async (input: FieldChatInput): Promise<string> => {
 const generateFieldObject = async <TSchema extends v.GenericSchema>(
   input: FieldChatInput & { outputSchema: TSchema },
 ): Promise<v.InferOutput<TSchema>> => {
-  const { abortController, caching, messages, model } = resolveFieldChat(input);
+  const { abortController, caching, messages, model, system } =
+    resolveFieldChat(input);
   const output = await chat({
     adapter: model.adapter,
     messages,
     outputSchema: toTanStackValibotSchema(input.outputSchema),
     abortController,
-    ...systemPromptsPatch({ caching, model, system: input.system }),
+    ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
       caching,
       model,
@@ -168,12 +193,15 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
 export const buildAiFieldGenerator = ({
   orgAIConfig,
   organizationId,
+  tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
   operationSignal,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  /** Tenant set for the model-ingress guard on every field generation. */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
   skillContext?: SkillToolsContext | undefined;
   /** When present, model usage is metered and failures are captured. */
@@ -215,6 +243,7 @@ ${JSON.stringify(values)}
 Reply with only the text for this field — no preamble, no quotes, no markdown.`,
         skillTools,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
+        tenantWorkspaceIds,
       });
       const trimmed = text.trim();
       return trimmed.length > 0 ? trimmed : undefined;
@@ -243,12 +272,15 @@ const conditionDecisionSchema = v.strictObject({
 export const buildAiConditionDecider = ({
   orgAIConfig,
   organizationId,
+  tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
   operationSignal,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  /** Tenant set for the model-ingress guard on every field generation. */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
   skillContext?: SkillToolsContext | undefined;
   /** When present, model usage is metered and failures are captured. */
@@ -279,6 +311,7 @@ ${JSON.stringify(values)}
 Decide true (yes) or false (no) for this condition.`,
         skillTools,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
+        tenantWorkspaceIds,
       });
       return decision;
     } catch (error) {
@@ -342,6 +375,7 @@ ${contexts}`;
 export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
   organizationId,
+  tenantWorkspaceIds,
   documentLanguages = [],
   skillContext,
   aiAnalytics,
@@ -349,6 +383,8 @@ export const buildAiOccurrenceAdapter = ({
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  /** Tenant set for the model-ingress guard on every field generation. */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** Template-level BCP-47 tags (primary first); when present the model
    *  is told which languages the document uses, which improves
    *  inflection in bilingual templates. */
@@ -380,6 +416,7 @@ export const buildAiOccurrenceAdapter = ({
         system: skillTools
           ? `${ADAPT_SYSTEM_PROMPT} ${SKILL_REF_GENERATOR_GUIDANCE}`
           : ADAPT_SYSTEM_PROMPT,
+        tenantWorkspaceIds,
       });
       if (renderings.length !== input.occurrences.length) {
         return undefined;
