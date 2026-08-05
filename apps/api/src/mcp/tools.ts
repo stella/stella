@@ -1,4 +1,8 @@
-import type { CallToolResult, Tool as McpTool } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  Tool as McpTool,
+} from "@modelcontextprotocol/server";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   isExternalMcpToolName,

@@ -465,7 +465,16 @@ export const createMcpHttpRequestHandler = ({
           session,
         });
       },
-      { legacy: "reject" },
+      {
+        legacy: "reject",
+        // The v2 handler converts factory/dispatch exceptions into responses
+        // internally, so they never reach the outer transport catch. Preserve
+        // the endpoint's observability contract through the handler's reporting
+        // hook; the response is normalized to the retryable contract below.
+        onerror: (error) => {
+          captureError(error, { phase: "transport", mode, source: "mcp" });
+        },
+      },
     );
     handlers.set(mode, handler);
     return handler;
@@ -547,7 +556,8 @@ export const createMcpHttpRequestHandler = ({
         scopes: session.scopes,
         token,
       };
-      const response = (await isLegacyRequest(request))
+      const legacyRequest = await isLegacyRequest(request);
+      const response = legacyRequest
         ? await serveLegacyRequest({
             authInfo,
             clientIp,
@@ -556,6 +566,12 @@ export const createMcpHttpRequestHandler = ({
             session,
           })
         : await handlerForMode(mode).fetch(request, { authInfo });
+
+      // `createMcpHandler` owns and catches modern exchange failures. Restore
+      // the public retry contract the outer catch provides on the legacy leg.
+      if (!legacyRequest && response.status >= 500) {
+        return retryableServerErrorResponse();
+      }
 
       return withMcpCors(response, session, mode);
     } catch (error) {

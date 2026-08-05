@@ -1,4 +1,14 @@
-import type { CallToolResult, Tool as McpTool, ReadResourceResult, Resource } from "@modelcontextprotocol/server";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  Tool as McpTool,
+  ReadResourceResult,
+  Resource,
+} from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -50,6 +60,41 @@ const createMcpRequest = (body: unknown) =>
       accept: "application/json, text/event-stream",
       authorization: "Bearer token",
       "content-type": "application/json",
+    },
+    method: "POST",
+  });
+
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
+
+const createModernMcpRequest = ({
+  id,
+  method,
+  params = {},
+}: {
+  id: number;
+  method: string;
+  params?: Record<string, unknown>;
+}) =>
+  new Request("http://localhost/mcp", {
+    body: JSON.stringify({
+      id,
+      jsonrpc: "2.0",
+      method,
+      params: {
+        ...params,
+        _meta: {
+          [CLIENT_CAPABILITIES_META_KEY]: {},
+          [CLIENT_INFO_META_KEY]: { name: "stella-test", version: "1.0.0" },
+          [PROTOCOL_VERSION_META_KEY]: MODERN_PROTOCOL_VERSION,
+        },
+      },
+    }),
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: "Bearer token",
+      "content-type": "application/json",
+      "mcp-method": method,
+      "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
     },
     method: "POST",
   });
@@ -185,6 +230,29 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
     expect(response.headers.get("Retry-After")).toBe("2");
+    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+      mode: "default",
+      phase: "transport",
+      source: "mcp",
+    });
+  });
+
+  test("captures modern handler failures and preserves the retryable transport contract", async () => {
+    const error = new Error("database connection refused");
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockRejectedValue(error);
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("2");
+    expect(response.headers.get("WWW-Authenticate")).toBeNull();
     expect(captureErrorMock).toHaveBeenCalledWith(error, {
       mode: "default",
       phase: "transport",

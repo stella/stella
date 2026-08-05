@@ -18,7 +18,12 @@
  * skips are always named so a credential-less run never reads as full coverage.
  */
 
-import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  LATEST_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -31,6 +36,7 @@ import {
 const PROBE_TIMEOUT_MS = 20_000;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
 
 /** Order and spacing are the server's business; the method set is not. */
 const parseAllowedMethods = (allow: string | null): string[] =>
@@ -113,9 +119,9 @@ type ProbeResponse = {
 /** One name per probe, so a skip report cannot drift from what runs. */
 const PROBE_NAMES = {
   discovery: `GET ${MCP_DISCOVERY_PATH}`,
-  initialize: `POST ${MCP_HTTP_PATH} (initialize)`,
+  initialize: `POST ${MCP_HTTP_PATH} (legacy initialize)`,
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
-  toolsList: `POST ${MCP_HTTP_PATH} (tools/list)`,
+  toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -253,29 +259,59 @@ const readProbeResponse = async (
 
 type JsonRpcCall = {
   baseUrl: string;
+  era: "legacy" | "modern";
   id: number;
   method: string;
   params: Record<string, unknown>;
   token: string;
 };
 
-const postJsonRpc = async ({
+export const createJsonRpcRequest = ({
   baseUrl,
+  era,
   id,
   method,
   params,
   token,
-}: JsonRpcCall): Promise<ProbeResponse> =>
+}: JsonRpcCall): Request => {
+  const protocolVersion =
+    era === "modern" ? MODERN_PROTOCOL_VERSION : LATEST_PROTOCOL_VERSION;
+  const requestParams =
+    era === "modern"
+      ? {
+          ...params,
+          _meta: {
+            [CLIENT_CAPABILITIES_META_KEY]: {},
+            [CLIENT_INFO_META_KEY]: {
+              name: CANARY_CLIENT_NAME,
+              version: "1.0.0",
+            },
+            [PROTOCOL_VERSION_META_KEY]: protocolVersion,
+          },
+        }
+      : params;
+
+  return new Request(new URL(MCP_HTTP_PATH, baseUrl).toString(), {
+    body: JSON.stringify({
+      id,
+      jsonrpc: "2.0",
+      method,
+      params: requestParams,
+    }),
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      ...(era === "modern" ? { "mcp-method": method } : {}),
+      "mcp-protocol-version": protocolVersion,
+    },
+    method: "POST",
+  });
+};
+
+const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
   await readProbeResponse(
-    await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-      body: JSON.stringify({ id, jsonrpc: "2.0", method, params }),
-      headers: {
-        accept: "application/json, text/event-stream",
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-        "mcp-protocol-version": LATEST_PROTOCOL_VERSION,
-      },
-      method: "POST",
+    await fetchWithTimeout(createJsonRpcRequest(call), {
       timeoutMs: PROBE_TIMEOUT_MS,
     }),
   );
@@ -340,6 +376,7 @@ export const AUTHENTICATED_PROBES = [
       evaluateInitialize(
         await postJsonRpc({
           baseUrl,
+          era: "legacy",
           id: 1,
           method: "initialize",
           params: {
@@ -357,6 +394,7 @@ export const AUTHENTICATED_PROBES = [
       evaluateToolsList(
         await postJsonRpc({
           baseUrl,
+          era: "modern",
           id: 2,
           method: "tools/list",
           params: {},
@@ -366,8 +404,8 @@ export const AUTHENTICATED_PROBES = [
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
-// Concurrent because the endpoint is stateless: no probe depends on another
-// having run, so ordering them would only lengthen the run.
+// Concurrent because both eras are stateless: neither the legacy initialize
+// nor the modern per-request envelope establishes state for another probe.
 const runAuthenticatedProbes = async (
   target: CanaryTarget,
 ): Promise<ProbeResult[]> =>

@@ -1,5 +1,9 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import type { ReadResourceResult, Resource } from "@modelcontextprotocol/server";
+import type {
+  ReadResourceResult,
+  Resource,
+} from "@modelcontextprotocol/server";
+
 import type { McpMode } from "@/api/mcp/constants";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
@@ -58,7 +62,10 @@ export const readMcpResource = (
 ): ReadResourceResult => {
   const resource = STATIC_RESOURCES.find((entry) => entry.uri === uri);
   if (!resource) {
-    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Unknown resource: ${uri}`);
+    throw new ProtocolError(
+      ProtocolErrorCode.InvalidParams,
+      `Unknown resource: ${uri}`,
+    );
   }
   return {
     contents: [

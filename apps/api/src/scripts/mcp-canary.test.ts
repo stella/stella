@@ -1,9 +1,11 @@
+import { isLegacyRequest } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
 import { MCP_STATELESS_ALLOW_HEADER } from "@/api/mcp/constants";
 
 import {
   AUTHENTICATED_PROBES,
+  createJsonRpcRequest,
   evaluateDiscovery,
   evaluateInitialize,
   evaluateStreamRefusal,
@@ -17,6 +19,34 @@ const REFUSAL = {
   contentType: "application/json",
   status: 405,
 };
+
+describe("canary protocol routing", () => {
+  test("keeps the compatibility handshake legacy and sends tools/list through the modern handler", async () => {
+    const legacyInitialize = createJsonRpcRequest({
+      baseUrl: "https://api.example",
+      era: "legacy",
+      id: 1,
+      method: "initialize",
+      params: {
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0.0" },
+        protocolVersion: "2025-11-25",
+      },
+      token: "token",
+    });
+    const modernToolsList = createJsonRpcRequest({
+      baseUrl: "https://api.example",
+      era: "modern",
+      id: 2,
+      method: "tools/list",
+      params: {},
+      token: "token",
+    });
+
+    expect(await isLegacyRequest(legacyInitialize)).toBe(true);
+    expect(await isLegacyRequest(modernToolsList)).toBe(false);
+  });
+});
 
 describe("evaluateStreamRefusal", () => {
   test("fails a stream answer, which per-request teardown truncates", () => {
