@@ -3,10 +3,13 @@ import {
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
+import { Result } from "better-result";
 import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { safeErrorCode } from "@/api/lib/errors/utils";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 type S3Credentials = {
   accessKeyId: string;
@@ -390,6 +393,105 @@ let _clientCreatedAt = 0;
 export const getS3 = (): S3Client => {
   _client ??= buildS3Client(envBase.S3_BUCKET, staticCredentialsFromEnv());
   return _client;
+};
+
+const S3_WRITE_TIMEOUT_MS = 15_000;
+const S3_WRITE_MAX_ATTEMPTS = 3;
+const S3_WRITE_RETRY_BASE_DELAY_MS = 100;
+
+/**
+ * Write failures the service decided on: it received the request, applied a
+ * rule, and rejected it. Replaying the same bytes reproduces the same
+ * rejection, so a retry only makes the failure arrive later.
+ */
+const TERMINAL_S3_WRITE_CODES: ReadonlySet<string> = new Set([
+  "AccessDenied",
+  "EntityTooLarge",
+  "InvalidAccessKeyId",
+  "InvalidArgument",
+  "InvalidRequest",
+  "NoSuchBucket",
+  "SignatureDoesNotMatch",
+]);
+
+/**
+ * Everything outside `TERMINAL_S3_WRITE_CODES` retries, including codes we do
+ * not recognise. The direction is deliberate: an allowlist of known-transient
+ * codes lets the next unrecognised transport failure wedge its caller, which
+ * is the bug this helper exists to prevent, while over-retrying costs only the
+ * bounded backoff below.
+ */
+const isTerminalS3WriteError = (error: unknown): boolean =>
+  error instanceof Error &&
+  TERMINAL_S3_WRITE_CODES.has(safeErrorCode(error) ?? "");
+
+/** Full jitter: spreads concurrent writers instead of resynchronising them. */
+const s3WriteRetryDelayMs = (attempt: number): number =>
+  Math.random() * S3_WRITE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+
+type S3ObjectWrite = {
+  contentType?: string | undefined;
+  data: Uint8Array | string;
+  /**
+   * Must be deterministic for the bytes written — a content-addressed key, or
+   * one derived from the record's stable identity. A timed-out attempt cannot
+   * be cancelled (Bun's S3 client takes no abort signal), so it may still land
+   * server-side after this helper has moved on to the next attempt. With a
+   * deterministic key that duplicate is a no-op; with a generated key it would
+   * leave an orphan object per attempt.
+   */
+  key: string;
+};
+
+type S3ObjectWriter = (write: S3ObjectWrite) => Promise<unknown>;
+
+const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
+  await getS3().write(
+    key,
+    data,
+    contentType === undefined ? undefined : { type: contentType },
+  );
+
+/**
+ * Write one object with a per-attempt deadline and a bounded, jittered retry.
+ *
+ * A bare `getS3().write` has neither. Bun's S3 client holds long-lived
+ * connections, so a peer that drops an idle socket surfaces the next write as
+ * a transport failure (`ConnectionClosed`) rather than a rejection by the
+ * service — transient, and cleared by retrying. Without a retry that failure
+ * propagates to the caller, and a caller that holds an ingestion cursor on
+ * failure cannot make progress past it.
+ *
+ * `write` is injected only by tests; production always uses the shared client.
+ */
+export const writeS3ObjectWithRetry = async (
+  object: S3ObjectWrite,
+  write: S3ObjectWriter = writeViaClient,
+): Promise<void> => {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential by construction: each attempt must observe the previous one's failure
+    const written = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(async () => await write(object), {
+          label: "s3 object write",
+          timeoutMs: S3_WRITE_TIMEOUT_MS,
+        }),
+      catch: (cause) => cause,
+    });
+    if (!Result.isError(written)) {
+      return;
+    }
+    lastError = written.error;
+    if (isTerminalS3WriteError(written.error)) {
+      break;
+    }
+    if (attempt < S3_WRITE_MAX_ATTEMPTS) {
+      // oxlint-disable-next-line no-await-in-loop -- backoff between attempts is the point of the loop
+      await Bun.sleep(s3WriteRetryDelayMs(attempt));
+    }
+  }
+  throw lastError;
 };
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */

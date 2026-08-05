@@ -72,7 +72,7 @@ import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 export { sanitizeResult };
 
@@ -240,6 +240,11 @@ const allocateSourceObservationOrder = async ({
 /**
  * Upload sourceRaw to S3 under a content-addressable key.
  * Returns the S3 object key.
+ *
+ * The write is retried: failing here holds the page cursor (see the caller),
+ * so letting one transient transport failure through stalls the whole source
+ * until the next attempt happens to succeed. The key is the payload's own
+ * hash, so a retry that duplicates an attempt which landed late is a no-op.
  */
 const uploadSourceRaw = async (
   sourceId: SafeId<"caseLawSource">,
@@ -250,7 +255,7 @@ const uploadSourceRaw = async (
   hasher.update(data);
   const blobHash = hasher.digest("hex");
   const key = `case-law/raw/${sourceId}/${blobHash}`;
-  await getS3().write(key, data, { type: contentType });
+  await writeS3ObjectWithRetry({ contentType, data, key });
   return key;
 };
 
