@@ -2,6 +2,7 @@
 -- Erase every such row when any source matter is permanently deleted; the
 -- security-definer trigger is the narrow database boundary that can perform
 -- this referential cleanup despite the table's archive-only RLS policy.
+-- stella-migration-safety: reviewed destructive-change - deletes only memories whose provenance names the workspace being permanently deleted; rollback removes the trigger but cannot and must not restore erased personal data.
 SET lock_timeout = '1s';
 --> statement-breakpoint
 SET statement_timeout = '5s';
