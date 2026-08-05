@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
 
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -61,6 +65,11 @@ import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceI
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
+import type { ViewDropPosition } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
+import {
+  reorderViewIds,
+  toViewDropPosition,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
 import {
   useConvertView,
   useCreateView,
@@ -70,6 +79,20 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const VIEW_DRAG_TYPE = "stella/view-id";
+
+type ViewDropTarget = {
+  element: Element;
+  data: Record<string | symbol, unknown>;
+};
+
+// The strip mirrors under an RTL UI, so the physical edge the pointer is
+// nearest only names a position once it is read against the direction the tab
+// is laid out in.
+const resolveDropPosition = ({ element, data }: ViewDropTarget) =>
+  toViewDropPosition(
+    extractClosestEdge(data),
+    getComputedStyle(element).direction === "rtl" ? "rtl" : "ltr",
+  );
 
 const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = Object.freeze([
   "overview",
@@ -187,17 +210,21 @@ export const ViewSwitcher = ({
     hasOverviewView ? ["overview"] : [],
   );
 
-  const handleReorder = (draggedId: string, targetId: string) => {
-    const ids = views.map((v) => v.id);
-    const fromIdx = ids.indexOf(draggedId);
-    const toIdx = ids.indexOf(targetId);
+  const handleReorder = (
+    draggedId: string,
+    targetId: string,
+    position: ViewDropPosition,
+  ) => {
+    const reordered = reorderViewIds({
+      ids: views.map((view) => view.id),
+      draggedId,
+      targetId,
+      position,
+    });
 
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) {
+    if (!reordered) {
       return;
     }
-
-    const reordered = ids.toSpliced(fromIdx, 1);
-    reordered.splice(toIdx, 0, draggedId);
 
     reorderViews.mutate(
       { viewIds: reordered },
@@ -356,7 +383,11 @@ type ViewTabProps = {
   isRenaming: boolean;
   actions: React.ReactNode;
   onSelect: () => void;
-  onReorder: (draggedId: string, targetId: string) => void;
+  onReorder: (
+    draggedId: string,
+    targetId: string,
+    position: ViewDropPosition,
+  ) => void;
   onStartRename: () => void;
   onStopRename: () => void;
   onOpenContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
@@ -378,7 +409,9 @@ const ViewTab = ({
   const canUpdateView = usePermissions({ view: ["update"] });
   const [renameValue, setRenameValue] = useState(name);
   const [wasRenaming, setWasRenaming] = useState(isRenaming);
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [dropPosition, setDropPosition] = useState<ViewDropPosition | null>(
+    null,
+  );
   const updateView = useUpdateView(workspaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const handleReorder = useLatestCallback(onReorder);
@@ -414,15 +447,24 @@ const ViewTab = ({
         canDrop: ({ source }) =>
           source.data["type"] === VIEW_DRAG_TYPE &&
           source.data["viewId"] !== id,
-        onDragEnter: () => setIsDropTarget(true),
-        onDragLeave: () => setIsDropTarget(false),
-        onDrop: ({ source }) => {
-          setIsDropTarget(false);
+        getData: ({ input, element }) =>
+          attachClosestEdge(
+            { viewId: id },
+            { element, input, allowedEdges: ["left", "right"] },
+          ),
+        // Keep this tab as the drop target while the pointer crosses the gap to
+        // the next one, so the insertion line does not flicker between tabs.
+        getIsSticky: () => true,
+        onDrag: ({ self }) => setDropPosition(resolveDropPosition(self)),
+        onDragLeave: () => setDropPosition(null),
+        onDrop: ({ source, self }) => {
+          setDropPosition(null);
           const draggedViewId = source.data["viewId"];
-          if (typeof draggedViewId !== "string") {
+          const position = resolveDropPosition(self);
+          if (typeof draggedViewId !== "string" || position === null) {
             return;
           }
-          handleReorder(draggedViewId, id);
+          handleReorder(draggedViewId, id, position);
         },
       }),
     );
@@ -473,10 +515,16 @@ const ViewTab = ({
   }
 
   return (
-    <div
-      className={cn("relative", isDropTarget && "ring-primary rounded ring-2")}
-      ref={containerRef}
-    >
+    <div className="relative" ref={containerRef}>
+      {dropPosition !== null && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "bg-primary pointer-events-none absolute inset-y-1 z-20 w-0.5 rounded-full",
+            dropPosition === "before" ? "-start-0.5" : "-end-0.5",
+          )}
+        />
+      )}
       <TabsTab
         className="pe-6.5"
         onClick={onSelect}
