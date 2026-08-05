@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
+import type * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  GET_USAGE_ENTITLED_PROJECTION,
+  GET_USAGE_NO_PLAN_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 
 /** Read the caller organisation's usage entitlement and current state. */
@@ -60,7 +65,9 @@ export const readOrgEntitlementHandler = async function* ({
 
       const entitlement = rows.at(0);
       if (!entitlement) {
-        return { entitlement: null } as const;
+        return { entitlement: null } as const satisfies v.InferInput<
+          typeof GET_USAGE_NO_PLAN_PROJECTION
+        >;
       }
 
       const remainingUsageUnits = await getRemainingUsageUnits({
@@ -85,7 +92,7 @@ export const readOrgEntitlementHandler = async function* ({
           monthlyUsageUnitsPerSeat: entitlement.policyMonthlyUsageUnits,
         },
         remainingUsageUnits,
-      };
+      } satisfies v.InferInput<typeof GET_USAGE_ENTITLED_PROJECTION>;
     }),
   );
 

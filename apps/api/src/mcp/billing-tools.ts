@@ -13,6 +13,15 @@ import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  DELETE_TIME_ENTRY_PROJECTION,
+  LIST_INVOICES_DETAIL_PROJECTION,
+  LIST_INVOICES_LIST_PROJECTION,
+  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
+  LIST_TIME_ENTRIES_LIST_PROJECTION,
+  RESOLVE_RATE_PROJECTION,
+  SAVE_TIME_ENTRY_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   createCursorPage,
@@ -801,7 +810,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
       }),
       { entry },
     );
-    return { egress: "structured", payload: { entry }, textFields };
+    return {
+      egress: "structured",
+      payload: { entry } satisfies v.InferInput<
+        typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION
+      >,
+      textFields,
+    };
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -893,7 +908,9 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
 
   return {
     egress: "structured",
-    payload: { entries, nextCursor: page.nextCursor },
+    payload: { entries, nextCursor: page.nextCursor } satisfies v.InferInput<
+      typeof LIST_TIME_ENTRIES_LIST_PROJECTION
+    >,
     textFields,
   };
 };
@@ -1066,7 +1083,9 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({ timeEntryId: created.value.id });
+    return textResult({
+      timeEntryId: created.value.id,
+    } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
   }
 
   // Update branch.
@@ -1125,7 +1144,10 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({ timeEntryId, updated: true });
+  return textResult({
+    timeEntryId,
+    updated: true,
+  } satisfies v.InferInput<typeof SAVE_TIME_ENTRY_PROJECTION>);
 };
 
 // --- delete_time_entry --------------------------------------------------
@@ -1169,7 +1191,9 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({ deleted: deleted.value.deleted });
+  return textResult({
+    deleted: deleted.value.deleted,
+  } satisfies v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>);
 };
 
 // --- resolve_rate -------------------------------------------------------
@@ -1233,7 +1257,12 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
   // Passthrough: only a rate amount (minor units) and currency code, no
   // tenant-authored text.
-  return textResult(resolved.value ?? { hourlyRate: null, currency: null });
+  return textResult(
+    resolved.value ??
+      ({ hourlyRate: null, currency: null } satisfies v.InferInput<
+        typeof RESOLVE_RATE_PROJECTION
+      >),
+  );
 };
 
 // --- list_invoices ------------------------------------------------------
@@ -1409,7 +1438,13 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
       { invoice },
     );
 
-    return { egress: "structured", payload: { invoice }, textFields };
+    return {
+      egress: "structured",
+      payload: { invoice } satisfies v.InferInput<
+        typeof LIST_INVOICES_DETAIL_PROJECTION
+      >,
+      textFields,
+    };
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1478,7 +1513,10 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
 
   return {
     egress: "structured",
-    payload: { invoices: invoiceList, nextCursor: page.nextCursor },
+    payload: {
+      invoices: invoiceList,
+      nextCursor: page.nextCursor,
+    } satisfies v.InferInput<typeof LIST_INVOICES_LIST_PROJECTION>,
     textFields,
   };
 };
@@ -1515,6 +1553,9 @@ const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
 
   // Passthrough: plan/seat/period/remaining-units are organization billing
   // data, not tenant-authored text.
+  // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
+  // GET_USAGE_ENTITLED_PROJECTION where they are built
+  // (`readOrgEntitlementHandler`, handlers/usage/get-entitlement.ts).
   return textResult(entitlement.value);
 };
 

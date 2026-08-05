@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { panic, Result } from "better-result";
 
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -21,7 +22,6 @@ import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 
-import { projectForChat } from "./projection-schema";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";

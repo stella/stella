@@ -29,7 +29,7 @@ void mock.module("@/api/mcp/gateway/list-tools", () => ({
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { dehydrateRefs } = await import("./ref-mediation");
 const { containsRawUuid, projectForChat, REF_PROJECTION_FAILURE_MESSAGE } =
-  await import("./projection-schema");
+  await import("@/api/lib/chat/projection-schema");
 const { WRITE_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
 const { applyChatApprovalConfirmation, runRegistryWriteTool } =
   await import("./run-registry-write-tool");

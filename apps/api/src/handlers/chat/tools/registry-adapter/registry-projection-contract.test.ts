@@ -13,6 +13,7 @@ import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/wor
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
+import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
@@ -22,7 +23,6 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { deriveRefMediationEntry } from "./projection-schema";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 

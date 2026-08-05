@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
-
 import type {
   ChatProjectionSchema,
   DehydratedInput,
   OutputRefField,
   RefMediationLists,
-} from "./projection-schema";
+} from "@/api/lib/chat/projection-schema";
+import type {
+  AssertNoExtraFields,
+  LIST_MATTERS_LIST_PROJECTION,
+  LIST_PROPERTIES_PROJECTION,
+} from "@/api/lib/chat/projections";
 
 // Mocked so the fail-closed tests can assert the exact telemetry contract
 // (paths only, never values) without touching the analytics client.
@@ -33,7 +37,7 @@ const {
   renderProjectionShape,
   strippedField,
   unenumeratedJson,
-} = await import("./projection-schema");
+} = await import("@/api/lib/chat/projection-schema");
 const { READ_TOOL_REF_FIELD_MAP, WRITE_TOOL_REF_FIELD_MAP } =
   await import("./ref-field-map");
 
@@ -1114,5 +1118,48 @@ describe("renderProjectionShape", () => {
     expect(shape).toContain("contacts");
     // Stripped overview plumbing must not be advertised either.
     expect(shape).not.toContain("fieldId");
+  });
+});
+
+/**
+ * The compile-time half of the contract the runtime strict parse enforces: a
+ * handler payload carrying a field its projection does not classify must fail
+ * typecheck at the construction site, not at runtime in chat. Both tie
+ * mechanisms are exercised: `satisfies` for object-literal payloads (excess
+ * property checking) and `AssertNoExtraFields` for payloads a shared helper
+ * builds. Nothing here runs; a `@ts-expect-error` whose error never
+ * materializes is itself a typecheck failure, which is the assertion.
+ */
+describe("compile-time payload ties", () => {
+  test("an unclassified field fails against the projection input", () => {
+    const withExtraField = {
+      matters: [],
+      nextCursor: null,
+      // @ts-expect-error `totalCount` is not declared by the list branch.
+      totalCount: 0,
+    } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>;
+
+    const withoutExtraField = {
+      matters: [],
+      nextCursor: null,
+    } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>;
+
+    // Payloads a helper builds get the same guard through AssertNoExtraFields,
+    // which names the offending keys instead of relying on literal freshness.
+    const namedWithExtraField: AssertNoExtraFields<
+      // @ts-expect-error `total` is not declared by LIST_PROPERTIES_PROJECTION.
+      { properties: []; nextCursor: null; total: number },
+      v.InferInput<typeof LIST_PROPERTIES_PROJECTION>
+    > = { properties: [], nextCursor: null, total: 0 };
+
+    const namedWithoutExtraField: AssertNoExtraFields<
+      { properties: []; nextCursor: null },
+      v.InferInput<typeof LIST_PROPERTIES_PROJECTION>
+    > = { properties: [], nextCursor: null };
+
+    expect(withExtraField.matters).toEqual(withoutExtraField.matters);
+    expect(namedWithExtraField.properties).toEqual(
+      namedWithoutExtraField.properties,
+    );
   });
 });

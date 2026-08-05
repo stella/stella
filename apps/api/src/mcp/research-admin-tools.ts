@@ -21,6 +21,13 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-remove";
+import type {
+  AssertNoExtraFields,
+  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+  SEARCH_LEGISLATION_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedUserId,
@@ -487,8 +494,13 @@ const handleSearchLegislationTool: McpToolHandler = async ({
     return internalFailureResult(result.error);
   }
   // Passthrough: the output is public BOE statutory data and the query is
-  // caller-supplied, so no tenant-authored text needs redaction.
-  return textResult(result.value);
+  // caller-supplied, so no tenant-authored text needs redaction. Forwarded
+  // verbatim, so the projection tie is on the BOE client's return type.
+  type SearchLegislationPayload = AssertNoExtraFields<
+    typeof result.value,
+    v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+  >;
+  return textResult(result.value satisfies SearchLegislationPayload);
 };
 
 // --- list_audit_log -----------------------------------------------------
@@ -699,7 +711,9 @@ const handleAddMember = async ({
   if (Result.isError(added)) {
     return internalFailureResult(added.error);
   }
-  return textResult({ memberId: added.value.id });
+  return textResult({
+    memberId: added.value.id,
+  } satisfies v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>);
 };
 
 const handleRemoveMember = async ({
@@ -729,7 +743,12 @@ const handleRemoveMember = async ({
   if (Result.isError(removed)) {
     return internalFailureResult(removed.error);
   }
-  return textResult({ removed: true, id: removed.value.id });
+  return textResult({
+    removed: true,
+    id: removed.value.id,
+  } satisfies v.InferInput<
+    typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION
+  >);
 };
 
 const handleManageOrganizationTool: McpToolHandler = async ({
@@ -810,7 +829,11 @@ const handleManageOrganizationTool: McpToolHandler = async ({
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult(updated.value);
+  type ManageOrganizationSettingsPayload = AssertNoExtraFields<
+    typeof updated.value,
+    v.InferInput<typeof MANAGE_ORGANIZATION_SETTINGS_PROJECTION>
+  >;
+  return textResult(updated.value satisfies ManageOrganizationSettingsPayload);
 };
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {

@@ -12,6 +12,12 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import type {
+  AssertNoExtraFields,
+  LIST_TEMPLATES_LIST_PROJECTION,
+  SAVE_TEMPLATE_CREATE_PROJECTION,
+  TEMPLATE_DESCRIBE_PROJECTION,
+} from "@/api/lib/chat/projections";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -693,7 +699,10 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
   // Templates are organization-scoped, so the org id is the anonymization
   // scope. Only the org-authored free text (name, usage guidance, tags) is
   // redacted; ids and field counts pass through.
-  const payload = { templates: page.items, nextCursor: page.nextCursor };
+  const payload = {
+    templates: page.items,
+    nextCursor: page.nextCursor,
+  } satisfies v.InferInput<typeof LIST_TEMPLATES_LIST_PROJECTION>;
   const textFields = runTextFieldSpecs(
     buildTemplateListTextFieldSpecs(context.organizationId),
     payload,
@@ -734,7 +743,17 @@ const describeTemplateDetail: McpToolHandler = async ({ args, context }) => {
     result,
   );
 
-  return { egress: "structured", payload: result, textFields };
+  // `describeStoredTemplate` builds the describe payload, so there is no
+  // literal for excess-property checking to guard; tie its return type instead.
+  type TemplateDescribePayload = AssertNoExtraFields<
+    typeof result,
+    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
+  >;
+  return {
+    egress: "structured",
+    payload: result satisfies TemplateDescribePayload,
+    textFields,
+  };
 };
 
 const fillTemplateArgsSchema = v.strictObject({
@@ -1599,7 +1618,7 @@ const createTemplateFromDocx = async ({
     templateId: created.value.id,
     name: created.value.name,
     fieldCount: created.value.fieldCount,
-  });
+  } satisfies v.InferInput<typeof SAVE_TEMPLATE_CREATE_PROJECTION>);
 };
 
 // Configure branch of save_template: overlay field configuration onto an
@@ -1663,7 +1682,11 @@ const configureExistingTemplate = async ({
     return errorResult(described.error);
   }
 
-  return textResult(described);
+  type ConfiguredTemplatePayload = AssertNoExtraFields<
+    typeof described,
+    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
+  >;
+  return textResult(described satisfies ConfiguredTemplatePayload);
 };
 
 const handleSaveTemplateTool: McpToolHandler = async ({ args, context }) => {

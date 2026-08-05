@@ -30,6 +30,18 @@ import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspa
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import type {
+  AssertNoExtraFields,
+  DELETED_TRUE_PROJECTION,
+  LINK_MATTER_CONTACT_LINK_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  LIST_TASKS_DETAIL_PROJECTION,
+  LIST_TASKS_LIST_PROJECTION,
+  LOOKUP_BUSINESS_REGISTRY_PROJECTION,
+  SAVE_CONTACT_PROJECTION,
+  SAVE_MATTER_PROJECTION,
+  SAVE_TASK_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -664,7 +676,9 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({ matterId: created.value.id });
+    return textResult({
+      matterId: created.value.id,
+    } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
   }
 
   // Update branch.
@@ -751,7 +765,10 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
     }
   }
 
-  return textResult({ matterId: workspaceId, updated: true });
+  return textResult({
+    matterId: workspaceId,
+    updated: true,
+  } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
 };
 
 // --- delete_matter ------------------------------------------------------
@@ -796,7 +813,9 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({ deleted: true });
+  return textResult({
+    deleted: true,
+  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
 
 // --- list_contacts ------------------------------------------------------
@@ -846,6 +865,10 @@ const handleListContactsTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(listed)) {
     return internalFailureResult(listed.error);
   }
+  // No compile-time tie against LIST_CONTACTS_PROJECTION: the contacts page is
+  // forwarded verbatim and carries `Date` columns that only become the
+  // projection's `v.string()` after the JSON round-trip the chat adapter
+  // performs (`parsePayload`, run-registry-tool.ts).
   return textResult(listed.value);
 };
 
@@ -956,7 +979,9 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({ contactId: created.value.id });
+    return textResult({
+      contactId: created.value.id,
+    } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
   }
 
   // Update branch.
@@ -989,7 +1014,9 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return textResult({ contactId: updated.value.id });
+  return textResult({
+    contactId: updated.value.id,
+  } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
 };
 
 // --- delete_contact -----------------------------------------------------
@@ -1023,7 +1050,9 @@ const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return textResult({ deleted: true });
+  return textResult({
+    deleted: true,
+  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
 
 // --- lookup_business_registry -------------------------------------------
@@ -1059,8 +1088,13 @@ const handleLookupBusinessRegistryTool: McpToolHandler = async ({
     return internalFailureResult(result.error);
   }
   // Passthrough: the output is public business-register data and the query is
-  // caller-supplied, so no tenant-authored text needs redaction.
-  return textResult(result.value);
+  // caller-supplied, so no tenant-authored text needs redaction. Forwarded
+  // verbatim, so the projection tie is on the shared lookup's return type.
+  type LookupBusinessRegistryPayload = AssertNoExtraFields<
+    typeof result.value,
+    v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
+  >;
+  return textResult(result.value satisfies LookupBusinessRegistryPayload);
 };
 
 // --- list_tasks ---------------------------------------------------------
@@ -1314,7 +1348,13 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
       },
     );
 
-    return { egress: "structured", payload: { task }, textFields };
+    return {
+      egress: "structured",
+      payload: { task } satisfies v.InferInput<
+        typeof LIST_TASKS_DETAIL_PROJECTION
+      >,
+      textFields,
+    };
   }
 
   // List mode. matter_id is guaranteed present by the schema.
@@ -1383,7 +1423,9 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
 
   return {
     egress: "structured",
-    payload: { tasks, nextCursor: page.nextCursor },
+    payload: { tasks, nextCursor: page.nextCursor } satisfies v.InferInput<
+      typeof LIST_TASKS_LIST_PROJECTION
+    >,
     textFields,
   };
 };
@@ -1705,7 +1747,9 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return textResult({ taskId: created.value.entityId });
+    return textResult({
+      taskId: created.value.entityId,
+    } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
   }
 
   // Update branch.
@@ -1824,7 +1868,10 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     }
   }
 
-  return textResult({ taskId, updated: true });
+  return textResult({
+    taskId,
+    updated: true,
+  } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
 };
 
 // --- link_matter_contact ------------------------------------------------
@@ -1951,7 +1998,9 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
     if (Result.isError(removed)) {
       return internalFailureResult(removed.error);
     }
-    return textResult({ unlinked: true });
+    return textResult({
+      unlinked: true,
+    } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_UNLINK_PROJECTION>);
   }
 
   // Link branch. The schema guarantees contact_id is present alongside role.
@@ -1973,7 +2022,9 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
   if (Result.isError(created)) {
     return internalFailureResult(created.error);
   }
-  return textResult({ workspaceContactId: created.value.id });
+  return textResult({
+    workspaceContactId: created.value.id,
+  } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_LINK_PROJECTION>);
 };
 
 export const MATTER_TOOL_HANDLERS = {

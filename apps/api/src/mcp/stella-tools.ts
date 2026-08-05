@@ -28,6 +28,17 @@ import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspac
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  AssertNoExtraFields,
+  LIST_MATTERS_DETAIL_PROJECTION,
+  LIST_MATTERS_LIST_PROJECTION,
+  READ_CASE_LAW_DECISION_PROJECTION,
+  READ_CONTACT_PROJECTION,
+  READ_CONTENT_ACROSS_MATTERS_PROJECTION,
+  SEARCH_ACROSS_MATTERS_PROJECTION,
+  SEARCH_CASE_LAW_PROJECTION,
+  SET_PRACTICE_JURISDICTIONS_PROJECTION,
+} from "@/api/lib/chat/projections";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -896,7 +907,10 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     });
   }
 
-  const payload = { matters, nextCursor: page.nextCursor };
+  const payload = {
+    matters,
+    nextCursor: page.nextCursor,
+  } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>;
   const textFields = runTextFieldSpecs(
     LIST_MATTERS_LIST_TEXT_FIELD_SPECS,
     payload,
@@ -993,7 +1007,7 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
     members: memberCards,
-  };
+  } satisfies v.InferInput<typeof LIST_MATTERS_DETAIL_PROJECTION>;
 
   // Everything below belongs to one matter, so it all anonymizes under this
   // single workspace scope. Ids/status/dates pass through; user-authored
@@ -1073,7 +1087,7 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
     totalCount: result.totalCount,
     nextCursor: result.nextCursor,
     hits,
-  };
+  } satisfies v.InferInput<typeof SEARCH_ACROSS_MATTERS_PROJECTION>;
   const textFields = runTextFieldSpecs(
     SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS,
     payload,
@@ -1426,10 +1440,18 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     nextCursor: initialNextCursor(),
     workspaceId,
   };
+  // The egress window's `apply` below mutates this object in place, so the tie
+  // cannot ride on the literal: a `satisfies` clause would contextually pin
+  // `truncated` to `false`, which the mutation must be able to overwrite. Tie
+  // the literal's own inferred type instead.
+  type ReadContentPayload = AssertNoExtraFields<
+    typeof payload,
+    v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
+  >;
 
   return {
     egress: "structured",
-    payload,
+    payload: payload satisfies ReadContentPayload,
     textFields: runTextFieldSpecs(
       READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
       payload,
@@ -1586,7 +1608,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
       sourceUrl: hit.sourceUrl,
     })),
     totalCount: result.totalCount,
-  });
+  } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
 
   return await withOnboardingHintIfApplicable({
     context,
@@ -1743,7 +1765,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
               "The source licence does not permit AI use of the full text.",
           }),
     },
-  });
+  } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
 };
 
 const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
@@ -1791,7 +1813,7 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     // number fields are anonymized in place below.
     emails: arrayOrEmpty(contact.emails),
     phones: arrayOrEmpty(contact.phones),
-  };
+  } satisfies v.InferInput<typeof READ_CONTACT_PROJECTION>;
 
   const textFields = runTextFieldSpecs(
     buildContactTextFieldSpecs(context.organizationId),
@@ -1856,7 +1878,9 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
     });
   });
 
-  return textResult({ practiceJurisdictions });
+  return textResult({ practiceJurisdictions } satisfies v.InferInput<
+    typeof SET_PRACTICE_JURISDICTIONS_PROJECTION
+  >);
 };
 
 export const STELLA_TOOL_HANDLERS = {

@@ -22,6 +22,13 @@ import {
  * hydrates tenant UUIDs into chat refs, and enforces the "no raw tenant UUID
  * reaches the model" invariant together — so the shape and its ref decisions
  * cannot drift apart the way a hand-maintained path list can.
+ *
+ * Lives in `lib/` rather than the chat handler slice because the MCP tool
+ * handlers (`@/api/mcp/*-tools.ts`) import their own projection to tie payload
+ * literals at compile time. handlers -> lib is the only correct direction: the
+ * reverse would make the shared MCP core depend on the chat slice, and
+ * `lib-to-handler-imports` is a ratcheted metric. Keep this module's imports
+ * limited to `@/api/lib/*`, valibot, and better-result so that stays true.
  */
 
 // --- Ref vocabulary -----------------------------------------------------------

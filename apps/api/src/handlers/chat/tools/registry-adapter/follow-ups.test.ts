@@ -19,7 +19,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { runRegistryReadTool } = await import("./run-registry-tool");
-const { containsRawUuid } = await import("./projection-schema");
+const { containsRawUuid } = await import("@/api/lib/chat/projection-schema");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const ENTITY_UUID = "11111111-1111-4111-8111-111111111111";
