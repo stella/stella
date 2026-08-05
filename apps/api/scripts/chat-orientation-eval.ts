@@ -38,17 +38,39 @@
  *  - A bare id (no known `provider::` prefix) skips provider validation and
  *    resolves against the default provider chain.
  *
- * Flags:
- *   --api <url>         API base URL (default http://localhost:3001)
- *   --web-origin <url>  Origin header for better-auth (default http://localhost:3000)
- *   --email <email>     Sign-in email (default test@stella.dev)
- *   --models <a,b,c>    Comma-separated devModelId list; omit for one
- *                       pass with the org default model
- *   --json <path>       Write the full result object as JSON
- *   --task <n>          Run only benchmark task n (1-based)
- *   --keep              Keep the eval matter instead of deleting it
+ * Before running, --models entries whose model id looks like an OpenRouter
+ * slug (contains "/") are validated against the public OpenRouter catalog
+ * (https://openrouter.ai/api/v1/models): models not listed, or listed without
+ * "tools" in supported_parameters, are skipped with a warning and reported
+ * with outcome `unsupported`. When the catalog fetch fails, validation is
+ * skipped with a warning and every model runs.
  *
- * Exit code 0 when every task passes, 1 otherwise.
+ * Each turn is scored to one of four outcomes:
+ *   pass         all scoring checks passed
+ *   fail         at least one scoring check failed
+ *   no-response  zero tool calls and empty final text; signals a
+ *                provider/adapter incompatibility rather than an
+ *                orientation failure (still counts against the pass rate)
+ *   unsupported  model skipped by OpenRouter pre-validation
+ *
+ * Flags:
+ *   --api <url>          API base URL (default http://localhost:3001)
+ *   --web-origin <url>   Origin header for better-auth (default http://localhost:3000)
+ *   --email <email>      Sign-in email (default test@stella.dev)
+ *   --models <a,b,c>     Comma-separated devModelId list; omit for one
+ *                        pass with the org default model
+ *   --json <path>        Write the full result object as JSON
+ *   --task <n>           Run only benchmark task n (1-based)
+ *   --runs <n>           Run each task n times, each in a fresh thread
+ *                        (default 1); the report shows passes/N per task
+ *   --pass-threshold <p> Minimum per-task pass rate in (0, 1] required for
+ *                        exit code 0 (default 1.0)
+ *   --keep               Keep the eval matter instead of deleting it
+ *
+ * Exit code 0 when every (model, task) pass rate meets --pass-threshold;
+ * unsupported (skipped) models are reported and do not affect the exit code,
+ * except when pre-validation skips every requested model: with nothing left
+ * to run the script exits 1 without touching the API.
  */
 
 const DEFAULT_API_BASE = "http://localhost:3001";
@@ -70,6 +92,13 @@ const REDACTION_MARKER = "[internal-id-removed]";
 const CRUD_TIMEOUT_MS = 20_000;
 const CHAT_STREAM_TIMEOUT_MS = 300_000;
 
+/** Public OpenRouter catalog used to pre-validate slug-shaped --models entries. */
+const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const OPENROUTER_FETCH_TIMEOUT_MS = 15_000;
+
+const DEFAULT_RUNS = 1;
+const DEFAULT_PASS_THRESHOLD = 1;
+
 type CliOptions = {
   apiBase: string;
   webOrigin: string;
@@ -77,6 +106,8 @@ type CliOptions = {
   models: string[];
   jsonPath: string | null;
   taskFilter: number | null;
+  runs: number;
+  passThreshold: number;
   keep: boolean;
 };
 
@@ -102,6 +133,11 @@ type BenchTask = {
   contextScope: "matter" | "none";
   expected: (fixture: Fixture) => string[];
   maxToolCalls: number;
+  /** Anti-parroting floor. Tasks whose prompt contains the expected name
+   * (task 3) are gameable by echoing it back without touching the
+   * workspace, so a turn with fewer tool calls than this fails with
+   * "answered without reading". */
+  minToolCalls?: number;
   /** Tool names the turn must not use. Persisted `tool-call` parts carry the
    * tool `name` and its serialized `arguments` string (CHAT_PART_VALIDATORS
    * in apps/api/src/handlers/chat/chat-message-parts.ts), so a direct call
@@ -145,6 +181,9 @@ const BENCH_TASKS: readonly BenchTask[] = [
     contextScope: "matter",
     expected: (fixture) => [fixture.docAlphaName],
     maxToolCalls: 4,
+    // The prompt itself contains the expected document name, so the text
+    // check alone is gameable by parroting; require at least one read.
+    minToolCalls: 1,
   },
   {
     index: 4,
@@ -186,22 +225,61 @@ type TaskScore = {
   forbiddenToolUses: string[];
 };
 
-type TaskResult = {
+/** Result-column rendering per outcome; the union derives from this map. */
+const TASK_OUTCOME_DISPLAY = {
+  pass: "PASS",
+  fail: "FAIL",
+  "no-response": "no-response",
+  unsupported: "unsupported",
+} as const;
+
+type TaskOutcome = keyof typeof TASK_OUTCOME_DISPLAY;
+
+/** Outcomes produced by actually running a turn (everything but the
+ * pre-validation skip). */
+type ExecutedOutcome = Exclude<TaskOutcome, "unsupported">;
+
+type TaskResult =
+  | {
+      /** Model skipped by OpenRouter pre-validation; the turn never ran. */
+      outcome: "unsupported";
+      taskIndex: number;
+      taskLabel: string;
+      model: string;
+      notes: string[];
+    }
+  | {
+      outcome: ExecutedOutcome;
+      taskIndex: number;
+      taskLabel: string;
+      model: string | null;
+      /** 1-based repeat index within --runs. */
+      run: number;
+      score: TaskScore;
+      notes: string[];
+      finalText: string;
+    };
+
+/** Per (model, task) pass rate over --runs repeats; unsupported rows are
+ * excluded (those models never ran). */
+type TaskAggregate = {
   taskIndex: number;
   taskLabel: string;
   model: string | null;
-  pass: boolean;
-  score: TaskScore;
-  notes: string[];
-  finalText: string;
+  passes: number;
+  runs: number;
+  passRate: number;
 };
 
 type EvalRunReport = {
   startedAt: string;
   apiBase: string;
   email: string;
-  fixture: Fixture;
+  runs: number;
+  passThreshold: number;
+  fixture: Fixture | null;
   results: TaskResult[];
+  aggregates: TaskAggregate[];
   allPassed: boolean;
 };
 
@@ -252,6 +330,8 @@ const parseCliOptions = (argv: string[]): CliOptions => {
     models: [],
     jsonPath: null,
     taskFilter: null,
+    runs: DEFAULT_RUNS,
+    passThreshold: DEFAULT_PASS_THRESHOLD,
     keep: false,
   };
 
@@ -299,6 +379,30 @@ const parseCliOptions = (argv: string[]): CliOptions => {
           throw new EvalHarnessError(`--task expects a number, got "${raw}"`);
         }
         options.taskFilter = parsed;
+        index += 1;
+        break;
+      }
+      case "--runs": {
+        const raw = takeValue(flag, index);
+        const parsed = Number.parseInt(raw, 10);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          throw new EvalHarnessError(
+            `--runs expects a positive integer, got "${raw}"`,
+          );
+        }
+        options.runs = parsed;
+        index += 1;
+        break;
+      }
+      case "--pass-threshold": {
+        const raw = takeValue(flag, index);
+        const parsed = Number.parseFloat(raw);
+        if (Number.isNaN(parsed) || parsed <= 0 || parsed > 1) {
+          throw new EvalHarnessError(
+            `--pass-threshold expects a number in (0, 1], got "${raw}"`,
+          );
+        }
+        options.passThreshold = parsed;
         index += 1;
         break;
       }
@@ -448,6 +552,109 @@ const signIn = async (client: ApiClient, email: string): Promise<void> => {
     path: "/api/auth/organization/set-active",
     body: { organizationId },
   });
+};
+
+// ---------------------------------------------------------------------------
+// Model pre-validation against the OpenRouter catalog
+// ---------------------------------------------------------------------------
+
+/** devModelId entries take `provider::modelId` or bare-id form; only a
+ * modelId containing "/" looks like an OpenRouter slug worth validating. */
+const openRouterSlugOf = (model: string): string | null => {
+  const separator = model.indexOf("::");
+  const modelId = separator === -1 ? model : model.slice(separator + 2);
+  return modelId.includes("/") ? modelId : null;
+};
+
+/** Map of OpenRouter model id to whether it lists "tools" in
+ * supported_parameters, or null when the catalog could not be fetched
+ * (validation is then skipped with a warning). */
+const fetchOpenRouterToolSupport = async (): Promise<Map<
+  string,
+  boolean
+> | null> => {
+  const warnSkip = (reason: string): null => {
+    console.warn(`OpenRouter model validation skipped: ${reason}`);
+    return null;
+  };
+
+  const response = await fetch(OPENROUTER_MODELS_URL, {
+    signal: AbortSignal.timeout(OPENROUTER_FETCH_TIMEOUT_MS),
+  }).catch(String);
+  if (typeof response === "string") {
+    return warnSkip(response);
+  }
+  if (!response.ok) {
+    return warnSkip(`catalog fetch returned ${response.status}`);
+  }
+  const payload: unknown = await response.json().catch(String);
+  if (!isRecord(payload)) {
+    return warnSkip("catalog response is not a JSON object");
+  }
+  const data = payload["data"];
+  if (!Array.isArray(data)) {
+    return warnSkip("catalog response has no data array");
+  }
+
+  const toolSupport = new Map<string, boolean>();
+  for (const entry of data) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const id = getString(entry, "id");
+    if (id === undefined) {
+      continue;
+    }
+    const supportedParameters = entry["supported_parameters"];
+    toolSupport.set(
+      id,
+      Array.isArray(supportedParameters) &&
+        supportedParameters.includes("tools"),
+    );
+  }
+  return toolSupport;
+};
+
+type PartitionedModels = {
+  /** Models to actually run (null = org default pass). */
+  runnable: (string | null)[];
+  /** OpenRouter-slug models skipped by pre-validation, with the reason. */
+  unsupported: { model: string; reason: string }[];
+};
+
+const partitionModelsByToolSupport = async (
+  models: (string | null)[],
+): Promise<PartitionedModels> => {
+  const needsValidation = models.some(
+    (model) => model !== null && openRouterSlugOf(model) !== null,
+  );
+  const toolSupport = needsValidation
+    ? await fetchOpenRouterToolSupport()
+    : null;
+
+  const partitioned: PartitionedModels = { runnable: [], unsupported: [] };
+  for (const model of models) {
+    const slug = model === null ? null : openRouterSlugOf(model);
+    if (model === null || slug === null || toolSupport === null) {
+      partitioned.runnable.push(model);
+      continue;
+    }
+    const supportsTools = toolSupport.get(slug);
+    if (supportsTools === undefined) {
+      partitioned.unsupported.push({
+        model,
+        reason: "not listed in the OpenRouter catalog",
+      });
+    } else if (supportsTools) {
+      partitioned.runnable.push(model);
+    } else {
+      partitioned.unsupported.push({
+        model,
+        reason: 'missing "tools" in supported_parameters',
+      });
+    }
+  }
+  return partitioned;
 };
 
 // ---------------------------------------------------------------------------
@@ -722,11 +929,14 @@ const runBenchTask = async ({
   fixture,
   task,
   model,
+  run,
 }: {
   client: ApiClient;
   fixture: Fixture;
   task: BenchTask;
   model: string | null;
+  /** 1-based repeat index within --runs. */
+  run: number;
 }): Promise<TaskResult> => {
   const threadId = Bun.randomUUIDv7();
   const notes: string[] = [];
@@ -822,6 +1032,26 @@ const runBenchTask = async ({
     forbiddenToolUses,
   };
 
+  // Zero tool calls plus an empty final answer is a distinct outcome: the
+  // adapter produced nothing, which signals a provider/adapter
+  // incompatibility rather than an orientation failure.
+  const noResponse =
+    streamResponse.ok && turn.toolCalls === 0 && turn.text.trim().length === 0;
+  if (noResponse) {
+    notes.push(
+      `no tool calls and empty final text from ${model ?? "the org default model"}; ` +
+        "likely a provider/adapter incompatibility, not an orientation failure",
+    );
+  }
+
+  const belowMinToolCalls =
+    task.minToolCalls !== undefined && turn.toolCalls < task.minToolCalls;
+  if (belowMinToolCalls && !noResponse) {
+    notes.push(
+      `answered without reading (${turn.toolCalls} tool call(s) < min ${task.minToolCalls})`,
+    );
+  }
+
   if (missingExpected.length > 0) {
     notes.push(`missing: ${missingExpected.join(", ")}`);
   }
@@ -843,6 +1073,7 @@ const runBenchTask = async ({
 
   const pass =
     streamResponse.ok &&
+    !belowMinToolCalls &&
     missingExpected.length === 0 &&
     score.toolErrors === 0 &&
     score.toolCalls <= task.maxToolCalls &&
@@ -853,11 +1084,19 @@ const runBenchTask = async ({
     score.unresolvedRefSentinels === 0 &&
     score.redactionMarkers === 0;
 
+  const executedOutcome = (): ExecutedOutcome => {
+    if (noResponse) {
+      return "no-response";
+    }
+    return pass ? "pass" : "fail";
+  };
+
   return {
+    outcome: executedOutcome(),
     taskIndex: task.index,
     taskLabel: task.label,
     model,
-    pass,
+    run,
     score,
     notes,
     finalText: turn.text,
@@ -868,24 +1107,10 @@ const runBenchTask = async ({
 // Output
 // ---------------------------------------------------------------------------
 
-const printResultsTable = (results: readonly TaskResult[]): void => {
-  const header = [
-    "task",
-    "model",
-    "result",
-    "toolCalls",
-    "toolErrors",
-    "notes",
-  ];
-  const rows = results.map((result) => [
-    `${result.taskIndex} ${result.taskLabel}`,
-    result.model ?? "(org default)",
-    result.pass ? "PASS" : "FAIL",
-    String(result.score.toolCalls),
-    String(result.score.toolErrors),
-    result.notes.join("; ") || "-",
-  ]);
-
+const printTable = (
+  header: readonly string[],
+  rows: readonly (readonly string[])[],
+): void => {
   const widths = header.map((title, column) =>
     Math.max(title.length, ...rows.map((row) => row[column]?.length ?? 0)),
   );
@@ -899,6 +1124,51 @@ const printResultsTable = (results: readonly TaskResult[]): void => {
   for (const row of rows) {
     console.log(formatRow(row));
   }
+};
+
+const printResultsTable = (results: readonly TaskResult[]): void => {
+  const header = [
+    "task",
+    "model",
+    "run",
+    "result",
+    "toolCalls",
+    "toolErrors",
+    "notes",
+  ];
+  const rows = results.map((result) =>
+    result.outcome === "unsupported"
+      ? [
+          `${result.taskIndex} ${result.taskLabel}`,
+          result.model,
+          "-",
+          TASK_OUTCOME_DISPLAY[result.outcome],
+          "-",
+          "-",
+          result.notes.join("; ") || "-",
+        ]
+      : [
+          `${result.taskIndex} ${result.taskLabel}`,
+          result.model ?? "(org default)",
+          String(result.run),
+          TASK_OUTCOME_DISPLAY[result.outcome],
+          String(result.score.toolCalls),
+          String(result.score.toolErrors),
+          result.notes.join("; ") || "-",
+        ],
+  );
+  printTable(header, rows);
+};
+
+const printAggregateTable = (aggregates: readonly TaskAggregate[]): void => {
+  const header = ["task", "model", "passes", "passRate"];
+  const rows = aggregates.map((aggregate) => [
+    `${aggregate.taskIndex} ${aggregate.taskLabel}`,
+    aggregate.model ?? "(org default)",
+    `${aggregate.passes}/${aggregate.runs}`,
+    aggregate.passRate.toFixed(2),
+  ]);
+  printTable(header, rows);
 };
 
 // ---------------------------------------------------------------------------
@@ -918,6 +1188,51 @@ const main = async (): Promise<void> => {
     );
   }
 
+  const startedAt = new Date().toISOString();
+  const models: (string | null)[] =
+    options.models.length > 0 ? options.models : [null];
+  const { runnable, unsupported } = await partitionModelsByToolSupport(models);
+
+  const results: TaskResult[] = [];
+  for (const { model, reason } of unsupported) {
+    console.warn(`Skipping ${model}: ${reason}`);
+    for (const task of tasks) {
+      results.push({
+        outcome: "unsupported",
+        taskIndex: task.index,
+        taskLabel: task.label,
+        model,
+        notes: [reason],
+      });
+    }
+  }
+
+  const writeJsonReport = async (report: EvalRunReport): Promise<void> => {
+    if (options.jsonPath === null) {
+      return;
+    }
+    await Bun.write(options.jsonPath, JSON.stringify(report, null, 2));
+    console.log(`\nWrote JSON report to ${options.jsonPath}`);
+  };
+
+  if (runnable.length === 0) {
+    console.log("");
+    printResultsTable(results);
+    await writeJsonReport({
+      startedAt,
+      apiBase: options.apiBase,
+      email: options.email,
+      runs: options.runs,
+      passThreshold: options.passThreshold,
+      fixture: null,
+      results,
+      aggregates: [],
+      allPassed: false,
+    });
+    console.log("\nEvery model was skipped by pre-validation (exit 1).");
+    process.exit(1);
+  }
+
   console.log(`Signing in as ${options.email} at ${options.apiBase} ...`);
   await signIn(client, options.email);
 
@@ -928,20 +1243,25 @@ const main = async (): Promise<void> => {
       `${fixture.entityIds.length} entities`,
   );
 
-  const models: (string | null)[] =
-    options.models.length > 0 ? options.models : [null];
-
-  const results: TaskResult[] = [];
   try {
-    for (const model of models) {
+    for (const model of runnable) {
       for (const task of tasks) {
-        console.log(
-          `Running task ${task.index} (${task.label}) with ` +
-            `${model ?? "org default model"} ...`,
-        );
-        // oxlint-disable-next-line no-await-in-loop -- benchmark turns run sequentially by design
-        const result = await runBenchTask({ client, fixture, task, model });
-        results.push(result);
+        for (let run = 1; run <= options.runs; run += 1) {
+          console.log(
+            `Running task ${task.index} (${task.label}) ` +
+              `run ${run}/${options.runs} with ` +
+              `${model ?? "org default model"} ...`,
+          );
+          // oxlint-disable-next-line no-await-in-loop -- benchmark turns run sequentially by design
+          const result = await runBenchTask({
+            client,
+            fixture,
+            task,
+            model,
+            run,
+          });
+          results.push(result);
+        }
       }
     }
   } finally {
@@ -955,26 +1275,53 @@ const main = async (): Promise<void> => {
     }
   }
 
-  console.log("");
-  printResultsTable(results);
-
-  const allPassed = results.every((result) => result.pass);
-  const report: EvalRunReport = {
-    startedAt: new Date().toISOString(),
-    apiBase: options.apiBase,
-    email: options.email,
-    fixture,
-    results,
-    allPassed,
-  };
-
-  if (options.jsonPath !== null) {
-    await Bun.write(options.jsonPath, JSON.stringify(report, null, 2));
-    console.log(`\nWrote JSON report to ${options.jsonPath}`);
+  const aggregates: TaskAggregate[] = [];
+  for (const model of runnable) {
+    for (const task of tasks) {
+      const taskResults = results.filter(
+        (result) =>
+          result.outcome !== "unsupported" &&
+          result.model === model &&
+          result.taskIndex === task.index,
+      );
+      const passes = taskResults.filter(
+        (result) => result.outcome === "pass",
+      ).length;
+      aggregates.push({
+        taskIndex: task.index,
+        taskLabel: task.label,
+        model,
+        passes,
+        runs: taskResults.length,
+        passRate: taskResults.length === 0 ? 0 : passes / taskResults.length,
+      });
+    }
   }
 
+  console.log("");
+  printResultsTable(results);
+  console.log("");
+  printAggregateTable(aggregates);
+
+  const allPassed = aggregates.every(
+    (aggregate) => aggregate.passRate >= options.passThreshold,
+  );
+  await writeJsonReport({
+    startedAt,
+    apiBase: options.apiBase,
+    email: options.email,
+    runs: options.runs,
+    passThreshold: options.passThreshold,
+    fixture,
+    results,
+    aggregates,
+    allPassed,
+  });
+
   console.log(
-    allPassed ? "\nAll tasks passed." : "\nSome tasks failed (exit 1).",
+    allPassed
+      ? `\nAll tasks met the pass threshold (${options.passThreshold}).`
+      : `\nSome tasks fell below the pass threshold ${options.passThreshold} (exit 1).`,
   );
   process.exit(allPassed ? 0 : 1);
 };
