@@ -67,6 +67,12 @@ details unless they are already public in the repository.
   correctness depends on a helper being called at every call site, enforce it with a
   custom lint rule, not developer discipline. Do not over-apply this to genuine
   heuristics (a debounce timer is not a bug class).
+- Silent drift is a bug class: when structure X must mirror structure Y (a
+  projection map mirroring handler payloads, a frontend list mirroring backend
+  classifications, a fixture mirroring a real schema), derive one side from the
+  other or bind them with a compile-time check; never rely on discipline or a
+  hand-updated mirror test. A lookup whose miss means a bug must panic or emit
+  telemetry, never fall back silently to a default.
 - Avoid boolean fields for states that may grow. Use a named discriminator or
   domain type for values that answer "which kind/status/mode/type?" rather than
   a permanent yes/no question; a two-value union, enum, or equivalent domain type
@@ -163,6 +169,12 @@ failure playbook, and the current hotspot burn-down list in `/conventions-perf`.
 - Validate object literals against a large union type (route, link, query options) with
   `as const satisfies T`, not a `: T` annotation. `satisfies` checks the value without
   widening it or paying the annotation's instantiation cost.
+- Companion maps over a union (policy, consent, projection, or rendering
+  dispositions per tool/route/kind) must be total: `as const satisfies
+Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
+  member land without a decision. Derive the union from the source of truth
+  (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
+  hand-listing names.
 - Use `.at(0)` when the element may not exist (signals possible absence). Use `[0]`
   only when existence is already established (length check, or a `// SAFETY:` comment).
 - Skip barrel files (`index.ts`); import from explicit module paths.
@@ -226,6 +238,13 @@ failure playbook, and the current hotspot burn-down list in `/conventions-perf`.
 Only test what can actually go wrong: bugs the type system, framework, or linter would
 miss. Prefer invariants over examples when the input space is large. Full conventions
 in `/conventions-testing`.
+
+A test guarding a detector or backstop must use inputs the detector can actually
+match: production-shaped ids and payloads, not shortened stand-ins a UUID or
+pattern guard can never trip; an "asserts nothing bad happened" test over such
+fixtures is vacuous. Where a map declares paths or cases, assert declared set
+equals exercised set in both directions, and pin fixture literals that stand in
+for a producer's output with `satisfies` against the producer's return type.
 
 ## Internationalization (i18n)
 
