@@ -137,11 +137,13 @@ describe("Docker container isolation", () => {
 
     expect(requestBody).toMatchObject({
       HostConfig: {
+        CapDrop: ["ALL"],
         Memory: 2_147_483_648,
         NanoCpus: 2_000_000_000,
         NetworkMode: "stella-private",
         PidsLimit: 256,
         ReadonlyRootfs: true,
+        SecurityOpt: ["no-new-privileges"],
         Tmpfs: {
           "/home/agent": expect.stringContaining("size=256m"),
           "/tmp": expect.stringContaining("size=256m"),

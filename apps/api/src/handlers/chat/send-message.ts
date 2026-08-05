@@ -591,16 +591,17 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      // Only load external MCP tools for validation when the incoming
-      // message actually carries a part that needs them — an ordinary
-      // message never triggers connector discovery here. The streaming
-      // pass below always needs the full set and reuses this same load via
-      // the memoized loader instead of running discovery again.
+      // Agent runs cannot use per-user external connectors. Keep them out of
+      // validation too, so an invalid external-tool part is rejected by the
+      // tool schema without starting connector discovery. Normal streaming
+      // still reuses a validation-triggered load through the memoized loader.
       const externalToolsForValidation =
-        await resolveExternalToolsForValidation(
-          body.message,
-          externalMcpToolsLoader,
-        );
+        body.runMode === CHAT_RUN_MODE.agent
+          ? undefined
+          : await resolveExternalToolsForValidation(
+              body.message,
+              externalMcpToolsLoader,
+            );
 
       if (isClientConnectionAborted()) {
         return Result.err(

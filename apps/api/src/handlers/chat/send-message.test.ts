@@ -278,6 +278,43 @@ describe("agent sandbox preflight", () => {
 });
 
 describe("agent connector isolation", () => {
+  test("rejects external tool parts without discovering connectors", async () => {
+    loadExternalMcpToolsForUserMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        message: {
+          id: messageId,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "external-1",
+              name: "mcp__test__lookup",
+              arguments: "{}",
+              input: {},
+              state: "input-complete",
+            },
+          ],
+        },
+        runMode: CHAT_RUN_MODE.agent,
+        transaction: {
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid chat message" },
+    });
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+
   test("does not load external MCP clients for agent streaming", () => {
     expect(shouldLoadExternalMcpToolsForStreaming(CHAT_RUN_MODE.agent)).toBe(
       false,

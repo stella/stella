@@ -21,6 +21,9 @@ import {
 const NOW_SECONDS = 10_000;
 const SIGNING_SECRET = "test-only-signing-secret";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const validClaims = (): CanaryCredentialClaims => ({
   sub: CANARY_USER_ID,
   org_id: CANARY_ORGANIZATION_ID,
@@ -117,7 +120,7 @@ describe("canary delegated credential", () => {
 describe("canary MCP protocol", () => {
   test("lists the tools over the negotiated MCP protocol", () => {
     const state = createCanaryState();
-    const result = handleCanaryMessage({
+    const initializeResult = handleCanaryMessage({
       message: {
         jsonrpc: "2.0",
         id: "initialize",
@@ -129,7 +132,7 @@ describe("canary MCP protocol", () => {
       now: "2026-07-21T12:00:00.000Z",
     });
 
-    expect(result).toMatchObject({
+    expect(initializeResult).toMatchObject({
       jsonrpc: "2.0",
       id: "initialize",
       result: {
@@ -137,6 +140,38 @@ describe("canary MCP protocol", () => {
         capabilities: { tools: { listChanged: false } },
       },
     });
+
+    const listResult = handleCanaryMessage({
+      message: {
+        jsonrpc: "2.0",
+        id: "tools",
+        method: "tools/list",
+      },
+      claims: acceptedClaims(),
+      state,
+      now: "2026-07-21T12:00:00.000Z",
+    });
+    if (listResult === undefined || !isRecord(listResult.result)) {
+      throw new Error("tools/list did not return an object result");
+    }
+    const tools = listResult.result["tools"];
+    if (!Array.isArray(tools)) {
+      throw new TypeError("tools/list did not return a tools array");
+    }
+    const names = tools.map((tool) => {
+      if (!isRecord(tool) || typeof tool["name"] !== "string") {
+        throw new Error("tools/list returned a tool without a name");
+      }
+      return tool["name"];
+    });
+    expect(names.toSorted()).toEqual(
+      [
+        "canary_exfiltrate",
+        "canary_finish",
+        "canary_read_workspace",
+        "canary_write_workspace",
+      ].toSorted(),
+    );
   });
 
   test("requires the authorized read/write/deny sequence with an audit event", () => {
