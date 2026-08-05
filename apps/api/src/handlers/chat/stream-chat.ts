@@ -1093,12 +1093,19 @@ const providerErrorBody = (
   return isErrorBodyRecord(parsed.value) ? parsed.value : undefined;
 };
 
-const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
-  classifyAIError(
-    chunk.rawEvent ??
-      providerErrorBody(runErrorMessage(chunk)) ??
-      errorFromRunErrorChunk(chunk),
+const errorForRunErrorChunk = (chunk: RunErrorChunk): unknown => {
+  const rawEvent: unknown = chunk.rawEvent;
+  return (
+    rawEvent ??
+    providerErrorBody(runErrorMessage(chunk)) ??
+    errorFromRunErrorChunk(chunk)
   );
+};
+
+const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
+  const error = errorForRunErrorChunk(chunk);
+  return classifyAIError(error);
+};
 
 // Classified kinds (quota, billing, retired model, provider outage) are
 // expected operational states, and so is a sub-500 `HandlerError` this
@@ -1113,8 +1120,9 @@ const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
-  const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(errorFromRunErrorChunk(chunk), kind);
+  const error = errorForRunErrorChunk(chunk);
+  const kind = classifyAIError(error);
+  reportStreamFailure(error, kind);
   return {
     ...chunk,
     message: kind,
