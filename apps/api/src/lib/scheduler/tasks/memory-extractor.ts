@@ -369,6 +369,7 @@ const extractCandidates = async (
         serviceTier: "batch",
         organizationId: compaction.threadOrganizationId,
         orgAIConfig,
+        tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
         analytics,
         caching: resolveCaching({
           promptCachingEnabled,
