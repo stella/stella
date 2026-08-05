@@ -189,6 +189,37 @@ const accessDeniedResponse = ({
   });
 };
 
+/** Methods this endpoint serves once the standalone SSE stream is refused. */
+const MCP_SSE_UNSUPPORTED_ALLOW_HEADER = "OPTIONS, POST, DELETE";
+
+/**
+ * The transport is stateless: every request gets its own server and transport,
+ * both closed as soon as the response is built. Nothing survives to push
+ * server-initiated messages, so the standalone `GET` stream cannot be served.
+ * Left to the SDK, `GET` still answers `200 text/event-stream`, and the
+ * per-request `close()` ends that body before it reaches the client; the client
+ * sees the stream die on open, reconnects, and loops there instead of calling
+ * tools. The spec's answer for an endpoint that offers no stream is 405, which
+ * clients handle by staying on plain request/response.
+ */
+const sseUnsupportedResponse = () => {
+  const headers = createMcpCorsHeaders();
+  headers.set("Allow", MCP_SSE_UNSUPPORTED_ALLOW_HEADER);
+  headers.set("Content-Type", "application/json");
+
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: -32_000,
+        message: "Method Not Allowed: this endpoint serves no SSE stream.",
+      },
+      id: null,
+      jsonrpc: "2.0",
+    }),
+    { headers, status: 405 },
+  );
+};
+
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
@@ -385,6 +416,14 @@ export const createMcpHttpRequestHandler = ({
 
     try {
       const session = await authenticateMcpRequest(token, mode);
+
+      // Refuse the stream only after the token is accepted, so an
+      // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
+      // drives OAuth discovery.
+      if (request.method === "GET") {
+        return withMcpCors(sseUnsupportedResponse(), session, mode);
+      }
+
       server = await createMcpServer({ clientIp, mode, request, session });
       transport = new WebStandardStreamableHTTPServerTransport({
         enableJsonResponse: true,
