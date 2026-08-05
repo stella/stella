@@ -265,7 +265,11 @@ export const toMcpTools = (
   definitions.map(({ annotations, description, inputSchema, name }) => ({
     annotations,
     description,
-    inputSchema,
+    // SAFETY: a definition authors its schema as the SDK's JSON Schema
+    // interface; the wire type is that same data typed with an index
+    // signature, which TypeScript never infers for an interface. The value is
+    // plain JSON that goes straight out over `tools/list` unmodified.
+    inputSchema: inputSchema as McpTool["inputSchema"],
     name,
   }));
 
