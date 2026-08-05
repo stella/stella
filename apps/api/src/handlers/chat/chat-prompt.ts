@@ -7,13 +7,18 @@
 
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
-import { count, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  entities,
+  properties,
+  workspaces,
+} from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -718,6 +723,7 @@ const buildWorkspacePromptPartsFromDb = async ({
     return Result.ok(
       buildWorkspacePromptParts({
         entityCount: workspacePromptData.entityCount,
+        extractedProperties: workspacePromptData.extractedProperties,
         practiceJurisdictions,
         refRegistry,
         skillMetadata,
@@ -729,8 +735,27 @@ const buildWorkspacePromptPartsFromDb = async ({
     );
   });
 
+/**
+ * One extracted property (tabular-review column) surfaced in the connected-
+ * matter prompt section so the model knows the reviewed data that already
+ * exists before it reaches for content search.
+ */
+type ExtractedPropertySummary = {
+  name: string;
+  propertyId: SafeId<"property">;
+  valueType: string;
+};
+
+/**
+ * Bounds the extracted-property listing in the prompt. Matters keep a small
+ * curated column set; a runaway schema must not balloon the cache-stable
+ * scaffold.
+ */
+const PROMPT_EXTRACTED_PROPERTY_LIMIT = 40;
+
 type WorkspacePromptData = {
   entityCount: number;
+  extractedProperties: readonly ExtractedPropertySummary[];
   workspaceName: string;
 };
 
@@ -765,14 +790,35 @@ const loadWorkspacePromptData = async ({
       panic("Workspace prompt query returned no rows");
     }
 
+    const propertyRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            content: properties.content,
+            name: properties.name,
+            propertyId: properties.id,
+          })
+          .from(properties)
+          .where(eq(properties.workspaceId, workspaceId))
+          .orderBy(asc(properties.createdAt))
+          .limit(PROMPT_EXTRACTED_PROPERTY_LIMIT),
+      ),
+    );
+
     return Result.ok({
       entityCount: workspaceRow.entityCount,
+      extractedProperties: propertyRows.map((row) => ({
+        name: row.name,
+        propertyId: row.propertyId,
+        valueType: row.content.type,
+      })),
       workspaceName: workspaceRow.workspaceName,
     });
   });
 
 type BuildWorkspaceContextSectionsProps = {
   entityCount: number;
+  extractedProperties: readonly ExtractedPropertySummary[];
   refRegistry: ChatRefRegistry;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -780,18 +826,32 @@ type BuildWorkspaceContextSectionsProps = {
 
 const buildWorkspaceContextSections = ({
   entityCount,
+  extractedProperties,
   refRegistry,
   workspaceId,
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
   const matterRef = refRegistry.toMatterRef(workspaceId);
-  return [
-    `Connected to matter "${workspaceName}" (matter ref: ${matterRef}, ${entityCount.toLocaleString()} entities). Default any matter-scoped reads to this matter unless the user asks otherwise. Property and entity refs are NOT pre-listed — discover them via tools when needed.`,
+  const sections = [
+    `Connected to matter "${workspaceName}" (matter ref: ${matterRef}, ${entityCount.toLocaleString()} entities). Default any matter-scoped reads to this matter unless the user asks otherwise. Entity refs are NOT pre-listed — discover them via tools when needed.`,
   ];
+  if (extractedProperties.length > 0) {
+    const propertyList = extractedProperties
+      .map(
+        (property) =>
+          `"${property.name}" (${refRegistry.toPropertyRef(property.propertyId)}, ${property.valueType})`,
+      )
+      .join(", ");
+    sections.push(
+      `Extracted properties on this matter (its tabular-review columns): ${propertyList}. EXTRACTED DATA FIRST: when the question is answerable from an extracted property (clause presence, parties, dates, amounts, statuses), read those field values across the matter's documents — read tools return fields keyed by propertyRef — instead of searching document content; the extracted values are the human-reviewed source of truth. Use content search only when no extracted property covers the question.`,
+    );
+  }
+  return sections;
 };
 
 type BuildWorkspacePromptTextProps = {
   entityCount: number;
+  extractedProperties?: readonly ExtractedPropertySummary[] | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
@@ -803,6 +863,7 @@ type BuildWorkspacePromptTextProps = {
 
 export const buildWorkspacePromptText = ({
   entityCount,
+  extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
@@ -813,6 +874,7 @@ export const buildWorkspacePromptText = ({
 }: BuildWorkspacePromptTextProps) =>
   buildWorkspacePromptParts({
     entityCount,
+    extractedProperties,
     practiceJurisdictions,
     refRegistry,
     skillMetadata,
@@ -824,6 +886,7 @@ export const buildWorkspacePromptText = ({
 
 export const buildWorkspacePromptParts = ({
   entityCount,
+  extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
@@ -836,6 +899,7 @@ export const buildWorkspacePromptParts = ({
     practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
+      extractedProperties,
       refRegistry,
       workspaceId,
       workspaceName,

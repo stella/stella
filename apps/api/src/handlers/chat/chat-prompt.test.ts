@@ -52,7 +52,7 @@ const SKILL_METADATA = [
 ] as const;
 
 describe("chat prompt builders", () => {
-  test("workspace prompt anchors on the matter without listing properties", () => {
+  test("workspace prompt anchors on the matter; no property section when none exist", () => {
     const refRegistry = createChatRefRegistry();
     const prompt = buildWorkspacePromptText({
       entityCount: 42,
@@ -64,11 +64,32 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain('Connected to matter "Matter Alpha"');
     expect(prompt).toContain("42 entities");
-    // Property + entity refs are never preloaded — the model must
-    // discover them via tools.
-    expect(prompt).not.toContain("Available metadata columns");
-    expect(prompt).not.toContain("ref: prop_");
-    expect(prompt).not.toContain("Status");
+    expect(prompt).not.toContain("Extracted properties on this matter");
+    expect(prompt).not.toContain("prop_");
+  });
+
+  test("workspace prompt lists extracted properties as refs and prefers them over search", () => {
+    const refRegistry = createChatRefRegistry();
+    const propertyId = toSafeId<"property">(
+      "37286c24-6145-572e-ad27-15a1d4454d59",
+    );
+    const prompt = buildWorkspacePromptText({
+      entityCount: 6,
+      extractedProperties: [
+        { name: "Change of control", propertyId, valueType: "single-select" },
+      ],
+      refRegistry,
+      userContext: null,
+      workspaceId: WORKSPACE_ID,
+      workspaceName: "Matter Alpha",
+    });
+
+    // The tabular-review schema is visible up front: the model cannot
+    // prefer extracted data it does not know exists.
+    expect(prompt).toContain('"Change of control" (prop_1, single-select)');
+    expect(prompt).toContain("EXTRACTED DATA FIRST");
+    // Only the ref reaches the model, never the property UUID.
+    expect(prompt).not.toContain(propertyId);
   });
 
   test("system prompts include the code-mode read surface", () => {
