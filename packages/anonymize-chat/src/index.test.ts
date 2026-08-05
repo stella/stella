@@ -64,11 +64,11 @@ describe("chat anonymization pipeline contract", () => {
       "registration number",
       "social security number",
       "tax identification number",
-    ];
+    ] as const;
 
-    expect([...WASM_DEFAULT_ENTITY_LABELS].sort()).toEqual(
-      EXPECTED_WASM_DEFAULT_ENTITY_LABELS,
-    );
+    expect([...WASM_DEFAULT_ENTITY_LABELS].sort()).toEqual([
+      ...EXPECTED_WASM_DEFAULT_ENTITY_LABELS,
+    ]);
   });
 
   test("builds the shared client/server chat pipeline shape", () => {
