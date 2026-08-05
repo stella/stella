@@ -1,11 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
-import * as schema from "@/api/db/schema";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -15,20 +11,16 @@ import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citati
 import { citationScore } from "@/api/handlers/case-law/citation-score";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The materialized citation_authority column must equal citationScore()
 // evaluated at the same instant, so moving the blend out of the per-query
 // SQL into a precomputed column does not change ranking. `now` is pinned
 // on both sides because the value decays continuously with time.
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const NOW = new Date("2026-06-05T00:00:00.000Z");
 
-let client: Awaited<ReturnType<typeof createSchemaPglite>>;
+let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -37,24 +29,15 @@ const supremeCitingId = createSafeId<"caseLawDecision">();
 const regionalCitingId = createSafeId<"caseLawDecision">();
 const orphanId = createSafeId<"caseLawDecision">();
 
-// The full pushSchema() DDL push against pglite is close enough to
-// bun:test's 5s default hook timeout that running this file alongside
-// others in the same worker occasionally tips it over; match the
-// { timeout: 30_000 } convention used by the other pglite-schema
-// fixtures (entity-filters.differential.test.ts, legislation/
-// ingestion.test.ts).
+// createTestPglite()'s full in-process build (no PGLITE_TEST_SNAPSHOT) is
+// close enough to bun:test's 5s default hook timeout that running this file
+// alongside others in the same worker occasionally tips it over; match the
+// { timeout: 30_000 } convention used by the other pglite fixtures
+// (entity-filters.differential.test.ts, legislation/ingestion.test.ts).
 beforeAll(
   async () => {
-    client = await createSchemaPglite();
+    client = await createTestPglite();
     db = drizzle({ client });
-    await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-    await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-    await installPgliteSchemaPrerequisites(db);
-    const { sqlStatements } = await pushSchema(allSchema, db);
-    for (const statement of sqlStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
-      await db.execute(sql.raw(statement));
-    }
     // Calendar-only decision dates are UTC midnights in the TypeScript
     // reference implementation. A non-UTC database session must produce the
     // same score instead of applying its local offset during the implicit cast.

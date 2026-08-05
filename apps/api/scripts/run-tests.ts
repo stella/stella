@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -15,18 +16,17 @@ const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
 const REGULAR_TEST_BATCH_SIZE = 50;
 // Isolated (--isolate) runs accumulate a per-file module registry in one
-// process; on the Linux runners four DB-backed mock files exceed the 4 GB
-// batch budget, while three stay below it. Keep these batches small.
+// process; on the Linux runners four DB-backed mock files exceeded the DB
+// batch budget, while three stayed below it. Keep these batches small.
 const MODULE_MOCK_TEST_BATCH_SIZE = 3;
-// The test database is embedded PGlite. Measured behavior (per-file solo
-// sweep, 2026-07-20): ANY process that connects pays a ~2.2 GB peak during
-// the per-suite drizzle schema push, and each further DB file in the same
-// process adds ~0.2-0.3 GB (WASM memory never shrinks). DB-touching tests
-// therefore run in small dedicated batches so a process stays near the
-// floor; pure-logic tests keep the larger batch size (they stay in the
-// hundreds of MB). Follow-up that would collapse the floor itself: build
-// the schema once and boot each process from a PGlite dumpDataDir
-// snapshot instead of re-pushing.
+// The test database is embedded PGlite. The schema is built once per run
+// (scripts/build-pglite-snapshot.ts, spawned below) and every DB-touching
+// test process boots from that dumpDataDir snapshot, skipping the ~2.2 GB
+// drizzle-kit push peak that used to dominate each process (measured
+// per-file solo sweep, 2026-07-20). Each further DB file in a shared
+// process still retains its PGlite WASM memory (never shrinks), so
+// DB-touching tests keep running in small dedicated batches; pure-logic
+// tests keep the larger batch size (they stay in the hundreds of MB).
 //
 // A test connects iff it VALUE-imports one of the connection entry modules
 // (type-only imports are erased and connect nothing; handlers receive their
@@ -48,16 +48,22 @@ const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
 // including the module specifier so it cannot leak into marker matching.
 const TYPE_ONLY_IMPORT_RE =
   /^[ \t]*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
-// Hard per-batch peak-RSS budget. A batch that outgrows it fails the run
-// even when every test passes, so memory growth surfaces here as a readable
-// error instead of an opaque exit-137 kill when the hosted runner's memory
-// runs out. Raising it is a reviewed product decision (like the typecheck
-// and network baselines), not a mechanical way to make CI green.
-// Calibrated from the Linux runners' first measured full run (worst batch
-// 3670 MB; Linux RSS accounting runs hotter than macOS): high enough to
-// absorb near-threshold variance, low enough to leave ~3 GB for a
-// concurrent turbo task on the 7 GB runner.
-const MAX_BATCH_PEAK_RSS_MB = 4096;
+// Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
+// the run even when every test passes, so memory growth surfaces here as a
+// readable error instead of an opaque exit-137 kill when the hosted
+// runner's memory runs out. Raising one is a reviewed product decision
+// (like the typecheck and network baselines), not a mechanical way to make
+// CI green. Two budgets, because the batch kinds have different floors:
+// DB-touching batches boot PGlite from the prebuilt snapshot (see below),
+// logic batches never connect at all. Measured on a full macOS run,
+// 2026-08-05: worst DB batch 2072 MB (3 snapshot-booted files; each file
+// boots its own PGlite instance and WASM memory is retained for the
+// process lifetime), worst logic batch 1520 MB (50 files; chat stream
+// suites carry the largest module graphs). Linux RSS accounting runs
+// hotter than macOS, so both budgets carry headroom above those figures;
+// recalibrate from the peak-RSS lines the runner prints on CI.
+const MAX_DB_BATCH_PEAK_RSS_MB = 2560;
+const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
 const BYTES_PER_MB = 1024 * 1024;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -164,7 +170,65 @@ for (const { source, testPath } of classifiedTests) {
   regularTests.push(testPath);
 }
 
-const runTests = async (testFiles: string[], isolate: boolean) => {
+// Mirrors PGLITE_TEST_SNAPSHOT_ENV in src/tests/pglite-test-db.ts; a
+// literal here keeps the runner from importing the whole API schema graph.
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+
+const buildTestDbSnapshot = async (): Promise<string> => {
+  const snapshotPath = path.join(
+    tmpdir(),
+    `stella-pglite-test-snapshot-${process.pid}.tar`,
+  );
+  console.log("Building the PGlite test-database snapshot ...");
+  // Registered before the build so a failed build's partial file is also
+  // removed; `exit` does not fire on signals, so cover those explicitly.
+  const cleanupSnapshot = () => {
+    rmSync(snapshotPath, { force: true });
+  };
+  process.on("exit", cleanupSnapshot);
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      cleanupSnapshot();
+      process.exit(1);
+    });
+  }
+  const builder = Bun.spawn({
+    cmd: [
+      process.execPath,
+      path.join(apiRoot, "scripts/build-pglite-snapshot.ts"),
+      snapshotPath,
+    ],
+    cwd: apiRoot,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const builderExitCode = await builder.exited;
+  if (builderExitCode !== 0) {
+    console.error("PGlite snapshot build failed; aborting the test run.");
+    process.exit(builderExitCode);
+  }
+  return snapshotPath;
+};
+
+const testProcessEnv: Record<string, string | undefined> = {
+  ...process.env,
+};
+if (dbTests.length > 0 || moduleMockTests.length > 0) {
+  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+}
+
+type RunTestsOptions = {
+  isolate: boolean;
+  maxPeakRssMb: number;
+  testFiles: string[];
+};
+
+const runTests = async ({
+  isolate,
+  maxPeakRssMb,
+  testFiles,
+}: RunTestsOptions) => {
   if (testFiles.length === 0) {
     return 0;
   }
@@ -189,7 +253,7 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
   const child = Bun.spawn({
     cmd: command,
     cwd: apiRoot,
-    env: process.env,
+    env: testProcessEnv,
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
@@ -207,11 +271,11 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
         : Math.round(usage.maxRSS / 1024);
     console.log(
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
-        `${peakMb} MB (budget ${MAX_BATCH_PEAK_RSS_MB} MB)`,
+        `${peakMb} MB (budget ${maxPeakRssMb} MB)`,
     );
-    if (exitCode === 0 && peakMb > MAX_BATCH_PEAK_RSS_MB) {
+    if (exitCode === 0 && peakMb > maxPeakRssMb) {
       console.error(
-        `Test batch exceeded the ${MAX_BATCH_PEAK_RSS_MB} MB peak-RSS ` +
+        `Test batch exceeded the ${maxPeakRssMb} MB peak-RSS ` +
           "budget. Find what grew (new fixtures held across files, " +
           "unclosed pools/servers, oversized in-memory corpora) or split " +
           "the offending files; raising the budget requires justification " +
@@ -228,6 +292,7 @@ type RunTestBatchesOptions = {
   batchSize: number;
   batchStart: number;
   isolate: boolean;
+  maxPeakRssMb: number;
   testFiles: string[];
 };
 
@@ -235,6 +300,7 @@ const runTestBatches = async ({
   batchSize,
   batchStart,
   isolate,
+  maxPeakRssMb,
   testFiles,
 }: RunTestBatchesOptions): Promise<number> => {
   if (batchStart >= testFiles.length) {
@@ -242,7 +308,7 @@ const runTestBatches = async ({
   }
 
   const batch = testFiles.slice(batchStart, batchStart + batchSize);
-  const exitCode = await runTests(batch, isolate);
+  const exitCode = await runTests({ isolate, maxPeakRssMb, testFiles: batch });
   if (exitCode !== 0) {
     return exitCode;
   }
@@ -251,6 +317,7 @@ const runTestBatches = async ({
     batchSize,
     batchStart: batchStart + batchSize,
     isolate,
+    maxPeakRssMb,
     testFiles,
   });
 };
@@ -258,12 +325,14 @@ const runTestBatches = async ({
 type RunPreparedTestBatchesOptions = {
   batchStart: number;
   isolate: boolean;
+  maxPeakRssMb: number;
   testBatches: readonly string[][];
 };
 
 const runPreparedTestBatches = async ({
   batchStart,
   isolate,
+  maxPeakRssMb,
   testBatches,
 }: RunPreparedTestBatchesOptions): Promise<number> => {
   if (batchStart >= testBatches.length) {
@@ -274,7 +343,7 @@ const runPreparedTestBatches = async ({
   if (batch === undefined) {
     return 0;
   }
-  const exitCode = await runTests(batch, isolate);
+  const exitCode = await runTests({ isolate, maxPeakRssMb, testFiles: batch });
   if (exitCode !== 0) {
     return exitCode;
   }
@@ -282,6 +351,7 @@ const runPreparedTestBatches = async ({
   return runPreparedTestBatches({
     batchStart: batchStart + 1,
     isolate,
+    maxPeakRssMb,
     testBatches,
   });
 };
@@ -292,6 +362,7 @@ const regularExitCode = await runTestBatches({
   batchSize: REGULAR_TEST_BATCH_SIZE,
   batchStart: 0,
   isolate: false,
+  maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
   testFiles: regularTests,
 });
 if (regularExitCode !== 0) {
@@ -302,6 +373,7 @@ const dbExitCode = await runTestBatches({
   batchSize: DB_TEST_BATCH_SIZE,
   batchStart: 0,
   isolate: false,
+  maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
   testFiles: dbTests,
 });
 if (dbExitCode !== 0) {
@@ -312,6 +384,7 @@ process.exit(
   await runPreparedTestBatches({
     batchStart: 0,
     isolate: true,
+    maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
     testBatches: batchModuleMockTests(
       moduleMockTests,
       MODULE_MOCK_TEST_BATCH_SIZE,

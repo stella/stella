@@ -1,21 +1,14 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
-import * as schema from "@/api/db/schema";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { caseLawCorpusIndexAdapter } from "@/api/handlers/case-law/corpus-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The batched mark rewrites hundreds of per-row compare-and-set updates
 // into one VALUES join. The batching must not weaken the per-row CAS:
@@ -26,12 +19,11 @@ import {
 // re-mark a hash-current row whose generation already advanced — all
 // shapes a serializer-level test cannot prove.
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 const OLD_GENERATION = "case_law_v1_cze";
 const NEW_GENERATION = "case_law_v2_cze";
 
-let client: Awaited<ReturnType<typeof createSchemaPglite>>;
+let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -41,16 +33,8 @@ const regenId = createSafeId<"caseLawDecision">();
 
 beforeAll(
   async () => {
-    client = await createSchemaPglite();
+    client = await createTestPglite();
     db = drizzle({ client });
-    await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-    await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-    await installPgliteSchemaPrerequisites(db);
-    const { sqlStatements } = await pushSchema(allSchema, db);
-    for (const statement of sqlStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
-      await db.execute(sql.raw(statement));
-    }
     // The columns are naive timestamps while the statement's expected values
     // arrive as text; a non-UTC session proves the comparison does not detour
     // through timestamptz and the session time zone (which would make every

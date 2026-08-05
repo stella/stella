@@ -1,11 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { pushSchema } from "drizzle-kit/api-postgres";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import * as authSchema from "@/api/db/auth-schema";
-import * as rlsExports from "@/api/db/rls";
-import * as schema from "@/api/db/schema";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
   decisionBucketSql,
@@ -14,10 +10,7 @@ import {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import {
-  createSchemaPglite,
-  installPgliteSchemaPrerequisites,
-} from "@/api/tests/pglite-schema";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Regression: the sitemap-shard queries render the year/month/bucket fragments
 // into both the SELECT list and the GROUP BY (and ORDER BY). Each drizzle `sql`
@@ -28,72 +21,65 @@ import {
 // clause"). PGlite is real Postgres, so executing the grouped queries below
 // fails loudly if that mismatch ever returns.
 
-const allSchema = { ...schema, ...authSchema, ...rlsExports };
-
-let client: Awaited<ReturnType<typeof createSchemaPglite>>;
+let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
 
-beforeAll(async () => {
-  client = await createSchemaPglite();
-  db = drizzle({ client });
-  await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
-  await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
-  await installPgliteSchemaPrerequisites(db);
-  const { sqlStatements } = await pushSchema(allSchema, db);
-  for (const statement of sqlStatements) {
-    // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
-    await db.execute(sql.raw(statement));
-  }
+beforeAll(
+  async () => {
+    client = await createTestPglite();
+    db = drizzle({ client });
 
-  await db.insert(caseLawSources).values({
-    id: sourceId,
-    adapterKey: "test",
-    name: "Test source",
-  });
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: "test",
+      name: "Test source",
+    });
 
-  await db.insert(caseLawDecisions).values([
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "1 Cdo 1/2020",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2020-03-15",
-    },
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "2 Cdo 2/2020",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2020-05-20",
-    },
-    {
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "3 Cdo 3/2021",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: "2021-01-10",
-    },
-    {
-      // A dateless decision exercises the COALESCE undated-year/month fallback,
-      // the literal that previously got bound as a parameter.
-      id: createSafeId<"caseLawDecision">(),
-      sourceId,
-      caseNumber: "4 Cdo 4/undated",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate: null,
-    },
-  ]);
-}, 120_000);
+    await db.insert(caseLawDecisions).values([
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "1 Cdo 1/2020",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-03-15",
+      },
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "2 Cdo 2/2020",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-05-20",
+      },
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "3 Cdo 3/2021",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2021-01-10",
+      },
+      {
+        // A dateless decision exercises the COALESCE undated-year/month fallback,
+        // the literal that previously got bound as a parameter.
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "4 Cdo 4/undated",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: null,
+      },
+    ]);
+  },
+  { timeout: 120_000 },
+);
 
 afterAll(async () => {
   await client.close();
