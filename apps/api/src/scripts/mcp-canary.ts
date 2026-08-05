@@ -366,16 +366,14 @@ export const AUTHENTICATED_PROBES = [
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
+// Concurrent because the endpoint is stateless: no probe depends on another
+// having run, so ordering them would only lengthen the run.
 const runAuthenticatedProbes = async (
   target: CanaryTarget,
-): Promise<ProbeResult[]> => {
-  const results: ProbeResult[] = [];
-  for (const probe of AUTHENTICATED_PROBES) {
-    // oxlint-disable-next-line no-await-in-loop -- the probes mirror a client's sequential handshake.
-    results.push(await probe.run(target));
-  }
-  return results;
-};
+): Promise<ProbeResult[]> =>
+  await Promise.all(
+    AUTHENTICATED_PROBES.map(async ({ run }) => await run(target)),
+  );
 
 export const summarize = (results: readonly ProbeResult[]) => ({
   failed: results.filter((result) => result.status === PROBE_STATUS.failed)
