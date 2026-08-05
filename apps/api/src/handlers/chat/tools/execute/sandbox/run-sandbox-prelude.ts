@@ -7,6 +7,12 @@ export const SANDBOX_READ_GLOBAL = "read" as const;
 /** Local alias in emitted prelude for the captured bridge function. */
 export const SANDBOX_BRIDGE_LOCAL_ALIAS = "__readBridge" as const;
 
+/** Guest-visible name of the QuickJS console sink the host registers before prelude runs. */
+export const SANDBOX_CONSOLE_BRIDGE_GLOBAL = "__consoleCall" as const;
+
+/** Local alias in emitted prelude for the captured console sink. */
+export const SANDBOX_CONSOLE_LOCAL_ALIAS = "__consoleBridge" as const;
+
 export const SANDBOX_BLOCKED_GLOBALS = [
   "require",
   "process",
@@ -39,7 +45,8 @@ export const buildHostBridgePrelude = (): string => {
   ).join(" || ");
 
   const consoleBody = SANDBOX_CONSOLE_METHODS.map(
-    (method) => `    ${method}: () => {},`,
+    (method) =>
+      `    ${method}: (...args) => { ${SANDBOX_CONSOLE_LOCAL_ALIAS}("${method}", __formatConsoleArgs(args)); },`,
   ).join("\n");
 
   const blockedDeletes = SANDBOX_BLOCKED_GLOBALS.map(
@@ -49,6 +56,20 @@ export const buildHostBridgePrelude = (): string => {
   return `
   const ${SANDBOX_BRIDGE_LOCAL_ALIAS} = globalThis.${SANDBOX_HOST_BRIDGE_GLOBAL};
   delete globalThis.${SANDBOX_HOST_BRIDGE_GLOBAL};
+  const ${SANDBOX_CONSOLE_LOCAL_ALIAS} = globalThis.${SANDBOX_CONSOLE_BRIDGE_GLOBAL};
+  delete globalThis.${SANDBOX_CONSOLE_BRIDGE_GLOBAL};
+  const __formatConsoleArgs = (args) =>
+    args
+      .map((arg) => {
+        if (typeof arg === "string") return arg;
+        try {
+          const json = JSON.stringify(arg);
+          return json === undefined ? String(arg) : json;
+        } catch (error) {
+          return String(arg);
+        }
+      })
+      .join(" ");
   globalThis.console = {
 ${consoleBody}
   };

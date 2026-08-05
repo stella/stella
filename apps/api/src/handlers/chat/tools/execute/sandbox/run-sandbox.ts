@@ -10,6 +10,7 @@ import { Scope } from "quickjs-emscripten-core";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
+  SANDBOX_CONSOLE_BRIDGE_GLOBAL,
   SANDBOX_HOST_BRIDGE_GLOBAL,
   buildHostBridgePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
@@ -77,6 +78,7 @@ export type RunSandboxSuccess = {
   value: unknown;
   hostCalls: number;
   durationMs: number;
+  logs: readonly string[];
 };
 
 export type RunSandboxResult = Result<RunSandboxSuccess, SandboxError>;
@@ -282,6 +284,81 @@ const getUtf8ByteLength = (value: string): number =>
 
 const okUndefined = <TError = never>(): Result<undefined, TError> =>
   Result.ok<null, TError>(null).map(() => globalThis.undefined);
+
+/**
+ * Caps on captured console output. Logs ride along on success values AND on
+ * SandboxErrors (so a failed run keeps the progress it already logged), which
+ * means they land in tool results the model reads; the entry cap bounds a
+ * logging loop and the per-entry cap bounds a single huge line.
+ */
+export const MAX_SANDBOX_LOG_ENTRIES = 100;
+export const MAX_SANDBOX_LOG_ENTRY_LENGTH = 2000;
+export const SANDBOX_LOG_OVERFLOW_MARKER =
+  `[console output truncated after ${MAX_SANDBOX_LOG_ENTRIES} entries]` as const;
+const SANDBOX_LOG_ENTRY_TRUNCATION_SUFFIX = "… [truncated]";
+
+/**
+ * Prefixes match what `@tanstack/ai-code-mode` parses back out of log lines
+ * ("ERROR: ", "WARN: ", "INFO: ") when emitting `code_mode:console` events;
+ * plain `log` lines stay unprefixed.
+ */
+const SANDBOX_LOG_LEVEL_PREFIXES: Readonly<Record<string, string>> = {
+  warn: "WARN: ",
+  error: "ERROR: ",
+  info: "INFO: ",
+  debug: "DEBUG: ",
+};
+
+type SandboxLogCapture = {
+  entries: string[];
+  overflowed: boolean;
+};
+
+const createSandboxLogCapture = (): SandboxLogCapture => ({
+  entries: [],
+  overflowed: false,
+});
+
+type AppendSandboxLogProps = {
+  capture: SandboxLogCapture;
+  method: string;
+  text: string;
+};
+
+const appendSandboxLog = ({
+  capture,
+  method,
+  text,
+}: AppendSandboxLogProps): void => {
+  if (capture.overflowed) {
+    return;
+  }
+  if (capture.entries.length >= MAX_SANDBOX_LOG_ENTRIES) {
+    capture.overflowed = true;
+    capture.entries.push(SANDBOX_LOG_OVERFLOW_MARKER);
+    return;
+  }
+
+  const entry = `${SANDBOX_LOG_LEVEL_PREFIXES[method] ?? ""}${text}`;
+  capture.entries.push(
+    entry.length > MAX_SANDBOX_LOG_ENTRY_LENGTH
+      ? `${entry.slice(0, MAX_SANDBOX_LOG_ENTRY_LENGTH)}${SANDBOX_LOG_ENTRY_TRUNCATION_SUFFIX}`
+      : entry,
+  );
+};
+
+const attachSandboxLogsToError = (
+  error: SandboxError,
+  logs: readonly string[],
+): SandboxError =>
+  logs.length === 0
+    ? error
+    : new SandboxError({
+        reason: error.reason,
+        message: error.message,
+        logs,
+        cause: error.cause,
+      });
 
 const createTimeoutError = (limits: SandboxLimits): SandboxError =>
   new SandboxError({
@@ -514,6 +591,7 @@ export const runSandbox = async ({
         value: execution.value,
         hostCalls: execution.hostCalls,
         durationMs: Date.now() - startedAt,
+        logs: execution.logs,
       });
     });
   } finally {
@@ -564,6 +642,7 @@ const marshalReturnValue = (
 type ExecuteSandboxSuccess = {
   value: unknown;
   hostCalls: number;
+  logs: readonly string[];
 };
 
 type ExecuteSandboxScriptResult = Result<ExecuteSandboxSuccess, SandboxError>;
@@ -594,6 +673,7 @@ const executeSandboxScript = async ({
   deadline,
 }: ExecuteSandboxScriptProps): Promise<ExecuteSandboxScriptResult> => {
   const state = createHostBridgeState();
+  const logCapture = createSandboxLogCapture();
 
   return await Scope.withScopeAsync(async (scope) => {
     const sandboxContext = await createSandboxContext();
@@ -621,6 +701,22 @@ const executeSandboxScript = async ({
     scope.manage(readCall);
     ctx.setProp(ctx.global, SANDBOX_HOST_BRIDGE_GLOBAL, readCall);
 
+    // Console output is captured host-side (a synchronous sink outside the
+    // guest heap), so it survives every in-execution failure — timeout,
+    // memory, runtime throw — and never counts against the host-call cap.
+    const consoleCall = ctx.newFunction(
+      SANDBOX_CONSOLE_BRIDGE_GLOBAL,
+      (methodHandle, textHandle) => {
+        appendSandboxLog({
+          capture: logCapture,
+          method: ctx.getString(methodHandle),
+          text: ctx.getString(textHandle),
+        });
+      },
+    );
+    scope.manage(consoleCall);
+    ctx.setProp(ctx.global, SANDBOX_CONSOLE_BRIDGE_GLOBAL, consoleCall);
+
     try {
       return (
         await runScriptInContext({
@@ -631,10 +727,15 @@ const executeSandboxScript = async ({
           limits,
           deadline,
         })
-      ).map((value) => ({
-        value,
-        hostCalls: state.hostCalls,
-      }));
+      )
+        .map((value) => ({
+          value,
+          hostCalls: state.hostCalls,
+          logs: logCapture.entries,
+        }))
+        .mapError((error) =>
+          attachSandboxLogsToError(error, logCapture.entries),
+        );
     } finally {
       state.abortController.abort();
       state.closed = true;

@@ -259,6 +259,12 @@ export class SandboxError extends TaggedError("SandboxError")<{
     | "return-too-large"
     | "non-serialisable-return";
   message: string;
+  /**
+   * Console output captured before the failure, so callers can surface the
+   * partial progress a failed run already made. Absent for failures that
+   * happen before execution starts (transpile, forbidden-syntax).
+   */
+  logs?: readonly string[];
   cause?: unknown;
 }> {}
 

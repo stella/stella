@@ -8,6 +8,9 @@ import type {
   SandboxFunctionRegistry,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import {
+  MAX_SANDBOX_LOG_ENTRIES,
+  MAX_SANDBOX_LOG_ENTRY_LENGTH,
+  SANDBOX_LOG_OVERFLOW_MARKER,
   SandboxAdmissionNotIdleError,
   awaitSandboxAdmissionIdle,
   getSandboxAdmissionSnapshot,
@@ -470,6 +473,8 @@ describe("runSandbox", () => {
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.reason).toBe("forbidden-syntax");
+      // Pre-execution failures never carry logs: nothing has run yet.
+      expect(result.error.logs).toBeUndefined();
     }
   });
 
@@ -511,10 +516,10 @@ describe("runSandbox", () => {
     }
   });
 
-  it("treats console.log as a no-op", async () => {
+  it("captures console output with level prefixes on success", async () => {
     const result = await runSandbox({
       source: `
-        console.log("hi");
+        console.log("hi", { a: 1 }, [2, 3]);
         console.warn("warn");
         console.error("err");
         console.info("info");
@@ -526,6 +531,80 @@ describe("runSandbox", () => {
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value.value).toBe("ok");
+      expect(result.value.logs).toEqual([
+        'hi {"a":1} [2,3]',
+        "WARN: warn",
+        "ERROR: err",
+        "INFO: info",
+        "DEBUG: debug",
+      ]);
+    }
+  });
+
+  it("returns logs captured before a runtime failure", async () => {
+    const result = await runSandbox({
+      source: `
+        const doc = await read.echo({ value: "doc-1" });
+        console.log("found", doc.value);
+        throw new Error("boom");
+      `,
+      registry: baseRegistry,
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("runtime");
+      expect(result.error.logs).toEqual(["found doc-1"]);
+    }
+  });
+
+  it("returns logs captured before a wall-clock timeout", async () => {
+    const result = await runSandbox({
+      source: `
+        console.log("before-spin");
+        while (true) {}
+      `,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 200 },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+      expect(result.error.logs).toEqual(["before-spin"]);
+    }
+  });
+
+  it("caps captured log entries and marks the overflow", async () => {
+    const result = await runSandbox({
+      source: `
+        for (let i = 0; i < ${MAX_SANDBOX_LOG_ENTRIES + 50}; i++) {
+          console.log("line " + i);
+        }
+        throw new Error("boom");
+      `,
+      registry: baseRegistry,
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      const logs = result.error.logs ?? [];
+      expect(logs).toHaveLength(MAX_SANDBOX_LOG_ENTRIES + 1);
+      expect(logs.at(-1)).toBe(SANDBOX_LOG_OVERFLOW_MARKER);
+      expect(logs.at(0)).toBe("line 0");
+    }
+  });
+
+  it("truncates a single oversized log entry", async () => {
+    const result = await runSandbox({
+      source: `
+        console.log("y".repeat(${MAX_SANDBOX_LOG_ENTRY_LENGTH * 3}));
+        return "ok";
+      `,
+      registry: baseRegistry,
+    });
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      const entry = result.value.logs.at(0) ?? "";
+      expect(entry.startsWith("yyy")).toBe(true);
+      expect(entry.length).toBeLessThan(MAX_SANDBOX_LOG_ENTRY_LENGTH + 50);
     }
   });
 
@@ -942,15 +1021,15 @@ describe("runSandbox", () => {
     }
   });
 
-  it("does not expose the raw bridge function on globalThis", async () => {
+  it("does not expose the raw bridge functions on globalThis", async () => {
     const result = await runSandbox({
-      source: `return typeof globalThis.__readCall;`,
+      source: `return [typeof globalThis.__readCall, typeof globalThis.__consoleCall].join(":");`,
       registry: baseRegistry,
     });
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.value).toBe("undefined");
+      expect(result.value.value).toBe("undefined:undefined");
     }
   });
 

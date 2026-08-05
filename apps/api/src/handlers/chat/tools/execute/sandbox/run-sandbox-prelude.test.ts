@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   SANDBOX_BLOCKED_GLOBALS,
   SANDBOX_BRIDGE_LOCAL_ALIAS,
+  SANDBOX_CONSOLE_BRIDGE_GLOBAL,
+  SANDBOX_CONSOLE_LOCAL_ALIAS,
   SANDBOX_CONSOLE_METHODS,
   SANDBOX_HOST_BRIDGE_GLOBAL,
   SANDBOX_READ_GLOBAL,
@@ -25,10 +27,19 @@ describe("buildHostBridgePrelude", () => {
     }
   });
 
-  it("stubs every console method", () => {
+  it("captures the console bridge global before deleting it", () => {
+    const prelude = buildHostBridgePrelude();
+    const capture = `const ${SANDBOX_CONSOLE_LOCAL_ALIAS} = globalThis.${SANDBOX_CONSOLE_BRIDGE_GLOBAL};`;
+    const deletion = `delete globalThis.${SANDBOX_CONSOLE_BRIDGE_GLOBAL};`;
+    expect(prelude.indexOf(capture)).toBeLessThan(prelude.indexOf(deletion));
+  });
+
+  it("wires every console method to the console bridge", () => {
     const prelude = buildHostBridgePrelude();
     for (const method of SANDBOX_CONSOLE_METHODS) {
-      expect(prelude).toContain(`${method}: () => {},`);
+      expect(prelude).toContain(
+        `${method}: (...args) => { ${SANDBOX_CONSOLE_LOCAL_ALIAS}("${method}", __formatConsoleArgs(args)); },`,
+      );
     }
   });
 
