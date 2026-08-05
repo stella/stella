@@ -85,7 +85,7 @@ const createColumn = createSafeHandler(
           });
           return existing
             ? { status: "created" as const, id: existing.id }
-            : { status: "limit" as const };
+            : { status: "internal" as const };
         }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -107,6 +107,14 @@ const createColumn = createSafeHandler(
     if (result.status === "limit") {
       return Result.err(
         new HandlerError({ status: 400, message: "List column limit reached" }),
+      );
+    }
+    if (result.status === "internal") {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "List column conflict could not be resolved",
+        }),
       );
     }
     return Result.ok({ id: result.id });

@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "الفاعل",
           "dateTime": "التاريخ والوقت",
-          "event": "الحدث",
           "provenance": "المنشأ"
         },
         "loadEarlier": "تحميل الأقدم",

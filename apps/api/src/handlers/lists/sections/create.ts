@@ -57,7 +57,7 @@ const createSection = createSafeHandler(
           workspaceId,
           listId: body.listId,
           name: body.name,
-          position: body.position ?? id,
+          position: body.position ?? `~${Date.now()}:${id}`,
         });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

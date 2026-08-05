@@ -1,3 +1,6 @@
+import { timestamptz } from "@/api/db/columns";
+import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
+
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
   LIST_ITEM_TYPES,
@@ -6,7 +9,10 @@ import {
   pUuid,
   safeUuid,
   safeWorkspaceId,
+  sql,
+  stella,
   user,
+  workspaceCheck,
   wsPolicies,
 } from "./common";
 import type { SafeId } from "./common";
@@ -79,11 +85,15 @@ export const legalLists = p.pgTable(
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.unique("legal_lists_id_ws_unq").on(table.id, table.workspaceId),
+    p.check(
+      "legal_lists_status_check",
+      sql`${table.status} in ('active', 'archived')`,
+    ),
     p
       .index("legal_lists_workspace_status_created_idx")
       .on(table.workspaceId, table.status, table.createdAt, table.id),
@@ -99,8 +109,8 @@ export const legalListSections = p.pgTable(
     listId: safeUuid<"legalList">("list_id").notNull(),
     name: p.varchar({ length: 256 }).notNull(),
     position: p.varchar({ length: 64 }).notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -129,7 +139,7 @@ export const legalListColumns = p.pgTable(
     propertyId: safeUuid<"property">("property_id").notNull(),
     position: p.integer().notNull(),
     required: p.boolean().notNull().default(false),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -172,8 +182,8 @@ export const legalListItems = p.pgTable(
     addedBy: p.text("added_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -216,6 +226,10 @@ export const legalListItems = p.pgTable(
     p
       .index("legal_list_items_list_review_idx")
       .on(table.workspaceId, table.listId, table.reviewStatus, table.entityId),
+    p.check(
+      "legal_list_items_review_status_check",
+      sql`${table.reviewStatus} in ('unreviewed', 'in_review', 'verified', 'changes_requested', 'rejected')`,
+    ),
     ...wsPolicies(),
   ],
 );
@@ -228,9 +242,9 @@ export const legalListItemSources = p.pgTable(
     listId: safeUuid<"legalList">("list_id").notNull(),
     itemEntityId: safeUuid<"entity">("item_entity_id").notNull(),
     sourceEntityId: safeUuid<"entity">("source_entity_id").notNull(),
-    sourceEntityVersionId: safeUuid<"entityVersion">("source_entity_version_id")
-      .notNull()
-      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    sourceEntityVersionId: safeUuid<"entityVersion">(
+      "source_entity_version_id",
+    ).notNull(),
     locator: jsonb().$type<LegalListSourceLocator>().notNull(),
     quote: p.text(),
     verificationStatus: p
@@ -242,12 +256,12 @@ export const legalListItemSources = p.pgTable(
     verifiedBy: p.text("verified_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    verifiedAt: p.timestamp("verified_at"),
+    verifiedAt: timestamptz("verified_at"),
     createdBy: p.text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -263,6 +277,25 @@ export const legalListItemSources = p.pgTable(
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "legal_list_item_sources_version_fk",
+        columns: [
+          table.sourceEntityVersionId,
+          table.sourceEntityId,
+          table.workspaceId,
+        ],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "legal_list_item_sources_verification_status_check",
+      sql`${table.verificationStatus} in ('unverified', 'verified', 'rejected')`,
+    ),
+    p
+      .foreignKey({
         name: "legal_list_item_sources_source_entity_fk",
         columns: [table.sourceEntityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
@@ -274,7 +307,28 @@ export const legalListItemSources = p.pgTable(
     p
       .index("legal_list_item_sources_source_version_idx")
       .on(table.workspaceId, table.sourceEntityVersionId, table.id),
-    ...wsPolicies(),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: workspaceCheck,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("legal_list_item_sources_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 
@@ -293,9 +347,9 @@ export const legalListGenerationRuns = p.pgTable(
       onDelete: "set null",
     }),
     error: p.text(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
-    completedAt: p.timestamp("completed_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
   },
   (table) => [
     p
@@ -314,6 +368,10 @@ export const legalListGenerationRuns = p.pgTable(
     p
       .index("legal_list_generation_runs_status_idx")
       .on(table.workspaceId, table.status, table.createdAt, table.id),
+    p.check(
+      "legal_list_generation_runs_status_check",
+      sql`${table.status} in ('queued', 'running', 'review', 'committed', 'failed', 'cancelled')`,
+    ),
     ...wsPolicies(),
   ],
 );
@@ -326,10 +384,10 @@ export const legalListGenerationSources = p.pgTable(
     listId: safeUuid<"legalList">("list_id").notNull(),
     runId: safeUuid<"legalListGenerationRun">("run_id").notNull(),
     sourceEntityId: safeUuid<"entity">("source_entity_id").notNull(),
-    sourceEntityVersionId: safeUuid<"entityVersion">("source_entity_version_id")
-      .notNull()
-      .references(() => entityVersions.id, { onDelete: "cascade" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    sourceEntityVersionId: safeUuid<"entityVersion">(
+      "source_entity_version_id",
+    ).notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -340,6 +398,21 @@ export const legalListGenerationSources = p.pgTable(
           legalListGenerationRuns.id,
           legalListGenerationRuns.listId,
           legalListGenerationRuns.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_generation_sources_version_fk",
+        columns: [
+          table.sourceEntityVersionId,
+          table.sourceEntityId,
+          table.workspaceId,
+        ],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
         ],
       })
       .onDelete("cascade"),
@@ -356,7 +429,28 @@ export const legalListGenerationSources = p.pgTable(
     p
       .index("legal_list_generation_sources_run_idx")
       .on(table.workspaceId, table.runId, table.id),
-    ...wsPolicies(),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("legal_list_generation_sources_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("legal_list_generation_sources_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 
@@ -371,8 +465,8 @@ export const legalListGenerationCandidates = p.pgTable(
     name: p.varchar({ length: 2000 }).notNull(),
     description: p.text(),
     itemType: p.text("item_type", { enum: LIST_ITEM_TYPES }).notNull(),
-    itemStatus: p.varchar("item_status", { length: 32 }),
-    priority: p.varchar({ length: 16 }),
+    itemStatus: p.text("item_status", { enum: TASK_STATUSES }),
+    priority: p.text("priority", { enum: ENTITY_PRIORITIES }),
     dueDate: p.date("due_date", { mode: "string" }),
     suggestedAssigneeUserIds: jsonb("suggested_assignee_user_ids")
       .$type<SafeId<"user">[]>()
@@ -382,13 +476,11 @@ export const legalListGenerationCandidates = p.pgTable(
       .text("status", { enum: LEGAL_LIST_GENERATION_CANDIDATE_STATUSES })
       .notNull()
       .default("pending"),
-    acceptedEntityId: safeUuid<"entity">("accepted_entity_id").references(
-      () => entities.id,
-      { onDelete: "set null" },
-    ),
+    acceptedEntityId: safeUuid<"entity">("accepted_entity_id"),
+    acceptedEntityWorkspaceId: safeWorkspaceId("accepted_entity_workspace_id"),
     reservedEntityId: safeUuid<"entity">("reserved_entity_id"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -403,6 +495,16 @@ export const legalListGenerationCandidates = p.pgTable(
       })
       .onDelete("cascade"),
     p
+      .foreignKey({
+        name: "legal_list_gen_candidates_accepted_entity_fk",
+        columns: [table.acceptedEntityId, table.acceptedEntityWorkspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("set null"),
+    p
+      .unique("legal_list_gen_candidates_id_run_list_ws_unq")
+      .on(table.id, table.runId, table.listId, table.workspaceId),
+    p
       .uniqueIndex("legal_list_generation_candidates_run_position_uidx")
       .on(table.runId, table.position),
     p
@@ -414,6 +516,26 @@ export const legalListGenerationCandidates = p.pgTable(
         table.position,
         table.id,
       ),
+    p.check(
+      "legal_list_generation_candidates_item_type_check",
+      sql`${table.itemType} in ('task', 'fact', 'issue', 'requirement', 'event')`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_item_status_check",
+      sql`${table.itemStatus} is null or ${table.itemStatus} in ('open', 'in_progress', 'in_review', 'done', 'cancelled')`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_priority_check",
+      sql`${table.priority} is null or ${table.priority} in ('none', 'urgent', 'high', 'medium', 'low')`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_status_check",
+      sql`${table.status} in ('pending', 'accepting', 'accepted', 'rejected')`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_accepted_entity_scope_check",
+      sql`(${table.acceptedEntityId} is null and ${table.acceptedEntityWorkspaceId} is null) or (${table.acceptedEntityId} is not null and ${table.acceptedEntityWorkspaceId} = ${table.workspaceId})`,
+    ),
     ...wsPolicies(),
   ],
 );
@@ -428,19 +550,29 @@ export const legalListGenerationCandidateSources = p.pgTable(
     candidateId:
       safeUuid<"legalListGenerationCandidate">("candidate_id").notNull(),
     sourceEntityId: safeUuid<"entity">("source_entity_id").notNull(),
-    sourceEntityVersionId: safeUuid<"entityVersion">("source_entity_version_id")
-      .notNull()
-      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    sourceEntityVersionId: safeUuid<"entityVersion">(
+      "source_entity_version_id",
+    ).notNull(),
     locator: jsonb().$type<LegalListSourceLocator>().notNull(),
     quote: p.text(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
       .foreignKey({
         name: "legal_list_candidate_sources_candidate_fk",
-        columns: [table.candidateId],
-        foreignColumns: [legalListGenerationCandidates.id],
+        columns: [
+          table.candidateId,
+          table.runId,
+          table.listId,
+          table.workspaceId,
+        ],
+        foreignColumns: [
+          legalListGenerationCandidates.id,
+          legalListGenerationCandidates.runId,
+          legalListGenerationCandidates.listId,
+          legalListGenerationCandidates.workspaceId,
+        ],
       })
       .onDelete("cascade"),
     p
@@ -456,6 +588,21 @@ export const legalListGenerationCandidateSources = p.pgTable(
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "legal_list_candidate_sources_version_fk",
+        columns: [
+          table.sourceEntityVersionId,
+          table.sourceEntityId,
+          table.workspaceId,
+        ],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         name: "legal_list_candidate_sources_entity_fk",
         columns: [table.sourceEntityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
@@ -464,7 +611,28 @@ export const legalListGenerationCandidateSources = p.pgTable(
     p
       .index("legal_list_generation_candidate_sources_candidate_idx")
       .on(table.workspaceId, table.candidateId, table.id),
-    ...wsPolicies(),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("legal_list_generation_candidate_sources_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("legal_list_generation_candidate_sources_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 
@@ -479,7 +647,7 @@ export const legalListItemComments = p.pgTable(
     authorId: p.text("author_id").references(() => user.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -514,7 +682,7 @@ export const legalListItemReviews = p.pgTable(
     reviewerId: p.text("reviewer_id").references(() => user.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -531,6 +699,31 @@ export const legalListItemReviews = p.pgTable(
     p
       .index("legal_list_item_reviews_item_created_idx")
       .on(table.workspaceId, table.itemEntityId, table.createdAt, table.id),
-    ...wsPolicies(),
+    p.check(
+      "legal_list_item_reviews_decision_check",
+      sql`${table.decision} in ('verified', 'changes_requested', 'rejected')`,
+    ),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("legal_list_item_reviews_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("legal_list_item_reviews_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );

@@ -25,7 +25,17 @@ import { includes } from "@/api/lib/type-guards";
 const sourceSchema = t.Object({
   entityId: tSafeId("entity"),
   entityVersionId: tSafeId("entityVersion"),
-  locator: t.Unknown(),
+  locator: t.Union([
+    t.Object({ type: t.Literal("document") }),
+    t.Object({
+      type: t.Literal("docx-block"),
+      blockId: t.String({ minLength: 1, maxLength: 512 }),
+    }),
+    t.Object({
+      type: t.Literal("pdf-page"),
+      pageNumber: t.Integer({ minimum: 1 }),
+    }),
+  ]),
   quote: t.Optional(t.Nullable(t.String({ maxLength: 5000 }))),
 });
 const candidateSchema = t.Object({
@@ -47,6 +57,7 @@ const bodySchema = t.Object({
   listId: tSafeId("legalList"),
   runId: tSafeId("legalListGenerationRun"),
   candidates: t.Array(candidateSchema, {
+    minItems: 1,
     maxItems: LIMITS.legalListGenerationCandidatesMax,
   }),
 });

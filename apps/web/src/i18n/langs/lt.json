@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Atlikėjas",
           "dateTime": "Data ir laikas",
-          "event": "Įvykis",
           "provenance": "Kilmė"
         },
         "loadEarlier": "Įkelti ankstesnius",

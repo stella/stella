@@ -32,18 +32,22 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { api } from "@/lib/api";
-import { ensureRouteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
-import { FieldValue } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { FieldValue } from "@/components/workspaces/field-value";
 import {
+  isListItemType,
+  isTaskPriority,
+  isTaskStatus,
   ITEM_TYPE_TRANSLATION_KEYS,
   LIST_ITEM_TYPES,
-  isListItemType,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import type { ListItemType } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+} from "@/components/workspaces/tasks/task-detail-constants";
+import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
+import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
+import { ensureRouteQueryData } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
   legalListActivityOptions,
   legalListItemsOptions,
@@ -53,8 +57,8 @@ import {
   legalListOptions,
   legalListSourcesOptions,
   legalListsOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/legal-lists";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+} from "@/lib/workspaces/queries/legal-lists";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 const searchSchema = v.object({
   list: v.optional(v.string()),
@@ -98,9 +102,9 @@ function LegalListsPage() {
     const result = await Result.tryPromise(async () => {
       const response = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name });
-      if (response.error || !response.data) {
-        throw response.error;
+        .put({ name, queryKey: [...legalListKeys.all(workspaceId)] });
+      if (response.error) {
+        throw toAPIError(response.error);
       }
       return response.data;
     });
@@ -124,7 +128,7 @@ function LegalListsPage() {
       <aside className="bg-background flex w-64 shrink-0 flex-col border-e">
         <header className="flex items-center gap-2 border-b px-4 py-3">
           <ListChecksIcon className="size-4" />
-          <h1 className="text-sm font-semibold">{t("editor.listsGroup")}</h1>
+          <h1 className="text-sm font-semibold">{t("folio.listsGroup")}</h1>
         </header>
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {data.items.map((list) => (
@@ -133,7 +137,12 @@ function LegalListsPage() {
                 "bg-muted": list.id === selectedListId,
               })}
               key={list.id}
-              onClick={() => navigate({ search: { list: list.id } })}
+              onClick={() =>
+                detached(
+                  navigate({ search: { list: list.id } }),
+                  "LegalListsPage",
+                )
+              }
               variant="ghost"
             >
               <span className="truncate">{list.name}</span>
@@ -144,7 +153,7 @@ function LegalListsPage() {
           className="flex gap-2 border-t p-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void createList();
+            detached(createList(), "LegalListsPage");
           }}
         >
           <Input
@@ -167,7 +176,11 @@ function LegalListsPage() {
 
       <section className="bg-background min-w-0 flex-1 overflow-hidden">
         {selectedListId ? (
-          <LegalListDetail listId={selectedListId} workspaceId={workspaceId} />
+          <LegalListDetail
+            key={selectedListId}
+            listId={selectedListId}
+            workspaceId={workspaceId}
+          />
         ) : (
           <div className="text-muted-foreground grid h-full place-items-center text-sm">
             {t("common.empty")}
@@ -207,6 +220,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const [sourceItemId, setSourceItemId] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState(NO_COLUMN_VALUE);
   const [creating, setCreating] = useState(false);
+  const [decidingCandidateId, setDecidingCandidateId] = useState<string | null>(
+    null,
+  );
 
   const createItem = async () => {
     const itemName = name.trim();
@@ -218,7 +234,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: entitiesKeys.all(workspaceId),
+          queryKey: legalListKeys.items(workspaceId, listId),
           name: itemName,
           listId: toSafeId<"legalList">(listId),
           listItemType: itemType,
@@ -227,7 +243,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           }),
         });
       if (response.error) {
-        throw response.error;
+        throw toAPIError(response.error);
       }
     });
     setCreating(false);
@@ -245,6 +261,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["item-reviews"].post({
+        queryKey: legalListKeys.items(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         itemEntityId: toSafeId<"entity">(itemEntityId),
         decision: "verified",
@@ -266,6 +283,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .sections.post({
+        queryKey: legalListKeys.detail(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         name: nextSectionName,
       });
@@ -286,6 +304,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .columns.post({
+        queryKey: legalListKeys.detail(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         propertyId: toSafeId<"property">(selectedPropertyId),
       });
@@ -308,22 +327,30 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     candidateId: string,
     decision: "accept" | "reject",
   ) => {
-    if (!reviewRun) {
+    if (!reviewRun || decidingCandidateId !== null) {
       return;
     }
+    setDecidingCandidateId(candidateId);
     const endpoint = api.lists({
       workspaceId: toSafeId<"workspace">(workspaceId),
     })["generation-candidates"];
     const input = {
+      queryKey: legalListKeys.generations(workspaceId, listId),
       listId: toSafeId<"legalList">(listId),
       runId: toSafeId<"legalListGenerationRun">(reviewRun.id),
       candidateId: toSafeId<"legalListGenerationCandidate">(candidateId),
     };
-    const response =
-      decision === "accept"
-        ? await endpoint.accept.post(input)
-        : await endpoint.reject.post(input);
-    if (response.error) {
+    const result = await Result.tryPromise(async () => {
+      const response =
+        decision === "accept"
+          ? await endpoint.accept.post(input)
+          : await endpoint.reject.post(input);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    });
+    setDecidingCandidateId(null);
+    if (result.isErr()) {
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       return;
     }
@@ -360,7 +387,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void createSection();
+            detached(createSection(), "LegalListDetail");
           }}
         >
           <Input
@@ -403,7 +430,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   {properties.data
                     .filter(
                       (property) =>
-                        !list.data?.columns.some(
+                        !list.data.columns.some(
                           (column) => column.propertyId === property.id,
                         ),
                     )
@@ -416,7 +443,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               </Select>
               <Button
                 disabled={selectedPropertyId === NO_COLUMN_VALUE}
-                onClick={() => void addColumn()}
+                onClick={() => detached(addColumn(), "LegalListDetail")}
                 size="sm"
                 type="button"
                 variant="outline"
@@ -435,7 +462,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         className="flex gap-2 border-b px-6 py-3"
         onSubmit={(event) => {
           event.preventDefault();
-          void createItem();
+          detached(createItem(), "LegalListDetail");
         }}
       >
         <Input
@@ -456,7 +483,11 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           <SelectTrigger className="w-40">
             <SelectValue>
               {(value) =>
-                value ? t(ITEM_TYPE_TRANSLATION_KEYS[value]) : t("common.kind")
+                typeof value === "string" && isListItemType(value) ? (
+                  <ListItemTypeLabel value={value} />
+                ) : (
+                  t("common.kind")
+                )
               }
             </SelectValue>
           </SelectTrigger>
@@ -531,9 +562,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     )}
                     <div className="mt-3 flex justify-end gap-1">
                       <Button
-                        disabled={candidate.status === "accepting"}
+                        disabled={
+                          candidate.status === "accepting" ||
+                          decidingCandidateId !== null
+                        }
                         onClick={() =>
-                          void decideCandidate(candidate.id, "reject")
+                          detached(
+                            decideCandidate(candidate.id, "reject"),
+                            "LegalListDetail",
+                          )
                         }
                         size="sm"
                         variant="ghost"
@@ -541,8 +578,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                         {t("common.decline")}
                       </Button>
                       <Button
+                        disabled={
+                          candidate.status === "accepting" ||
+                          decidingCandidateId !== null
+                        }
                         onClick={() =>
-                          void decideCandidate(candidate.id, "accept")
+                          detached(
+                            decideCandidate(candidate.id, "accept"),
+                            "LegalListDetail",
+                          )
                         }
                         size="sm"
                       >
@@ -596,13 +640,13 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   <div className="flex items-center gap-2">
                     {isListItemType(item.itemType) && (
                       <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs font-normal">
-                        {t(ITEM_TYPE_TRANSLATION_KEYS[item.itemType])}
+                        <ListItemTypeLabel value={item.itemType} />
                       </span>
                     )}
                     <Button
                       className="h-auto min-w-0 justify-start p-0 font-medium"
                       onClick={() =>
-                        useInspectorStore.getState().openTask({
+                        useInspectorTabsStore.getState().openTask({
                           taskId: item.id,
                           workspaceId,
                           isNew: false,
@@ -622,9 +666,29 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     (section) => section.id === item.sectionId,
                   )?.name ?? ""}
                 </td>
-                <td className="px-4 py-3">{item.status}</td>
-                <td className="px-4 py-3">{item.priority}</td>
-                <td className="px-4 py-3">{item.dueDate ?? ""}</td>
+                <td className="px-4 py-3">
+                  {isTaskStatus(item.status)
+                    ? t(`tasks.statusValues.${item.status}`)
+                    : ""}
+                </td>
+                <td className="px-4 py-3">
+                  {isTaskPriority(item.priority)
+                    ? t(`tasks.priorityValues.${item.priority}`)
+                    : ""}
+                </td>
+                <td className="px-4 py-3">
+                  {item.dueDate
+                    ? formatter.dateTime(
+                        new Date(`${item.dueDate}T00:00:00Z`),
+                        {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          timeZone: "UTC",
+                        },
+                      )
+                    : ""}
+                </td>
                 {list.data.columns.map((column) => {
                   const property = properties.data?.find(
                     (candidate) => candidate.id === column.propertyId,
@@ -660,7 +724,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   <Button
                     aria-label={t("common.accept")}
                     disabled={item.reviewStatus === "verified"}
-                    onClick={() => void verifyItem(item.id)}
+                    onClick={() =>
+                      detached(verifyItem(item.id), "LegalListDetail")
+                    }
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -680,7 +746,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           <div className="flex justify-center p-4">
             <Button
               disabled={items.isFetchingNextPage}
-              onClick={() => void items.fetchNextPage()}
+              onClick={() => detached(items.fetchNextPage(), "LegalListDetail")}
               variant="outline"
             >
               {t("common.loadMore")}
@@ -693,13 +759,35 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           itemEntityId={sourceItemId}
           listId={listId}
           onClose={() => setSourceItemId("")}
-          onOpenDocument={(entityId, pdfPage) =>
-            navigate({
-              to: "/workspaces/$workspaceId/entities/$entityId",
-              params: { workspaceId, entityId },
-              search: { pdfPage },
-            })
-          }
+          onOpenDocument={(entityId, pdfPage) => {
+            detached(
+              (async () => {
+                const sourceEntity = await queryClient.fetchQuery(
+                  entityOptions(workspaceId, entityId),
+                );
+                const sourceFile = sourceEntity.fields.find(
+                  (field) => field.content.type === "file",
+                );
+                if (!sourceFile) {
+                  stellaToast.add({
+                    title: t("errors.actionFailed"),
+                    type: "error",
+                  });
+                  return;
+                }
+                await navigate({
+                  to: "/workspaces/$workspaceId/$viewId/document",
+                  params: { workspaceId, viewId: "all" },
+                  search: {
+                    entity: entityId,
+                    field: sourceFile.id,
+                    ...(pdfPage === undefined ? {} : { pdfPage }),
+                  },
+                });
+              })(),
+              "LegalListDetail",
+            );
+          }}
           workspaceId={workspaceId}
         />
       )}
@@ -736,6 +824,7 @@ const ItemSourcesPanel = ({
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["item-sources"].patch({
+        queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
         id: toSafeId<"legalListItemSource">(sourceId),
         listId: toSafeId<"legalList">(listId),
         itemEntityId: toSafeId<"entity">(itemEntityId),
@@ -795,7 +884,9 @@ const ItemSourcesPanel = ({
                   <Button
                     aria-label={t("common.accept")}
                     disabled={source.verificationStatus === "verified"}
-                    onClick={() => void verifySource(source.id)}
+                    onClick={() =>
+                      detached(verifySource(source.id), "LegalListDetail")
+                    }
                     size="icon-sm"
                     variant="ghost"
                   >
@@ -820,9 +911,17 @@ const ItemSourcesPanel = ({
             <ol className="grid gap-2">
               {activity.data?.items.map((event) => (
                 <li className="rounded-lg border p-3 text-xs" key={event.id}>
-                  <p>{getActivityLabel(event.operation, t)}</p>
+                  <p>
+                    <ActivityLabel
+                      action={event.action}
+                      operation={event.operation}
+                    />
+                  </p>
                   <p className="text-muted-foreground mt-1">
-                    {event.userId} · {formatter.dateTime(event.createdAt)}
+                    {event.actorName ??
+                      t("workspaces.overview.activity.deletedUser")}
+                    {" · "}
+                    {formatter.dateTime(new Date(event.createdAt))}
                   </p>
                 </li>
               ))}
@@ -839,21 +938,47 @@ const ItemSourcesPanel = ({
   );
 };
 
-const getActivityLabel = (
-  operation: string | null,
-  t: ReturnType<typeof useTranslations>,
-) => {
+const ActivityLabel = ({
+  operation,
+  action,
+}: {
+  operation: string | null;
+  action: string;
+}) => {
+  const t = useTranslations();
   if (operation === "source_added") {
-    return t("common.document");
+    return `${t("workspaces.overview.activity.actorActions.added")} · ${t("common.document")}`;
   }
-  if (
-    operation === "source_verified" ||
-    operation === "review_recorded" ||
-    operation === "generation_candidate_accepted"
-  ) {
-    return t("common.accept");
+  if (operation === "source_verified") {
+    return `${t("workspaces.overview.activity.actorActions.reviewed")} · ${t("common.document")}`;
   }
-  return t("common.history");
+  if (operation === "review_recorded") {
+    return t("workspaces.overview.activity.actorActions.reviewed");
+  }
+  if (operation === "generation_candidate_accepted") {
+    return t("workspaces.overview.activity.actorActions.created");
+  }
+  switch (action) {
+    case "create":
+      return t("workspaces.overview.activity.actorActions.created");
+    case "update":
+      return t("workspaces.overview.activity.actorActions.updated");
+    case "delete":
+      return t("workspaces.overview.activity.actorActions.deleted");
+    case "execute":
+      return t("workspaces.overview.activity.actorActions.executed");
+    case "review":
+      return t("workspaces.overview.activity.actorActions.reviewed");
+    case "cancel":
+      return t("workspaces.overview.activity.actorActions.cancelled");
+    default:
+      return t("common.history");
+  }
+};
+
+const ListItemTypeLabel = ({ value }: { value: ListItemType }) => {
+  const t = useTranslations();
+  return t(ITEM_TYPE_TRANSLATION_KEYS[value]);
 };
 
 const SourceLocatorLabel = ({

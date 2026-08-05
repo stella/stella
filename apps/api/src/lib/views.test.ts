@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { convertLayout } from "@/api/handlers/views/utils";
 import { getDefaultViews, normalizeDefaultViewLayout } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { convertLayout } from "@/api/lib/views/utils";
 
 describe("getDefaultViews", () => {
   test("pins requested file columns in the default table view", () => {
@@ -91,5 +91,31 @@ describe("getDefaultViews", () => {
         value: ["task"],
       },
     ]);
+  });
+
+  test("preserves a nested task kind filter on a default Lists view", () => {
+    const layout = {
+      version: 1,
+      type: "kanban",
+      filters: [
+        {
+          type: "group",
+          combinator: "and",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+          ],
+        },
+      ],
+      sorts: [],
+      hiddenProperties: [],
+      groupByPropertyId: "_status",
+    } satisfies Extract<ViewLayout, { type: "kanban" }>;
+
+    expect(normalizeDefaultViewLayout({ layout, name: "Lists" })).toBe(layout);
   });
 });

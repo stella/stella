@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Veicējs",
           "dateTime": "Datums un laiks",
-          "event": "Notikums",
           "provenance": "Izcelsme"
         },
         "loadEarlier": "Ielādēt agrākās",

@@ -320,9 +320,7 @@ export const normalizeDefaultViewLayout = ({
     layout.type !== "kanban" ||
     layout.groupByPropertyId !== "_status" ||
     !DEFAULT_NAME_SETS.lists.has(name) ||
-    layout.filters.some(
-      (node) => node.type === "predicate" && node.operand.type === "kind",
-    )
+    conditionIncludesKind(layout.filters, "task")
   ) {
     return layout;
   }

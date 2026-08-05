@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Szereplő",
           "dateTime": "Dátum és idő",
-          "event": "Esemény",
           "provenance": "Eredet"
         },
         "loadEarlier": "Korábbiak betöltése",

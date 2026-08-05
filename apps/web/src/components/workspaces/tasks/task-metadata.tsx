@@ -171,16 +171,22 @@ export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
 // -- List item type select --
 
 type ItemTypeSelectProps = {
+  ariaLabel: string;
   value: ListItemType;
   onChange: (value: ListItemType | null) => void;
 };
 
-export const ItemTypeSelect = ({ value, onChange }: ItemTypeSelectProps) => {
+export const ItemTypeSelect = ({
+  ariaLabel,
+  value,
+  onChange,
+}: ItemTypeSelectProps) => {
   const t = useTranslations();
 
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
+        aria-label={ariaLabel}
         className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >

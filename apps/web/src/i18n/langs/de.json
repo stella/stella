@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Akteur",
           "dateTime": "Datum und Uhrzeit",
-          "event": "Ereignis",
           "provenance": "Ursprung"
         },
         "loadEarlier": "Ältere laden",

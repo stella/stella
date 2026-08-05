@@ -14,7 +14,9 @@ const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
-const REGULAR_TEST_BATCH_SIZE = 50;
+// Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
+// guard once the additional handler and schema modules share one process.
+const REGULAR_TEST_BATCH_SIZE = 10;
 // Isolated (--isolate) runs accumulate a per-file module registry in one
 // process; on the Linux runners four DB-backed mock files exceeded the DB
 // batch budget, while three stayed below it. Keep these batches small.

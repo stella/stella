@@ -3703,7 +3703,6 @@ type Messages = {
         "list": {
           "actor": "Actor";
           "dateTime": "Date and time";
-          "event": "Event";
           "provenance": "Origin";
         };
         "loadEarlier": "Load earlier";

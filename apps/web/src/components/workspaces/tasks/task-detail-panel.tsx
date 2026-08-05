@@ -59,6 +59,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
 import type {
@@ -153,6 +154,9 @@ const TaskDetailPanelContent = ({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
         queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+        queryClient.invalidateQueries({
+          queryKey: legalListKeys.all(workspaceId),
+        }),
       ]);
     },
     onError: (error) => {
@@ -593,6 +597,7 @@ const TaskDetailPanelContent = ({
         <div className="space-y-3 px-4 py-3">
           <MetadataRow label={tCommon("type")}>
             <ItemTypeSelect
+              ariaLabel={tCommon("type")}
               onChange={handleItemTypeChange}
               value={currentItemType}
             />

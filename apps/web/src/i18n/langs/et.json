@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Täitja",
           "dateTime": "Kuupäev ja kellaaeg",
-          "event": "Sündmus",
           "provenance": "Päritolu"
         },
         "loadEarlier": "Laadi varasemad",

@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
+import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -88,16 +89,31 @@ const readItemActivity = createSafeHandler(
           .select({
             id: auditLogs.id,
             action: auditLogs.action,
-            userId: auditLogs.userId,
+            performerName: auditLogs.performerName,
+            userName: user.name,
             metadata: auditLogs.metadata,
             changes: auditLogs.changes,
             createdAt: auditLogs.createdAt,
           })
           .from(auditLogs)
+          .leftJoin(
+            member,
+            and(
+              eq(member.userId, auditLogs.userId),
+              eq(member.organizationId, auditLogs.organizationId),
+            ),
+          )
+          .leftJoin(
+            user,
+            and(eq(user.id, auditLogs.userId), eq(member.userId, user.id)),
+          )
           .where(
             and(
               eq(auditLogs.workspaceId, workspaceId),
-              eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM),
+              inArray(auditLogs.resourceType, [
+                AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+                AUDIT_RESOURCE_TYPE.ENTITY,
+              ]),
               eq(auditLogs.resourceId, params.itemEntityId),
               cursorCondition,
             ),
@@ -117,7 +133,7 @@ const readItemActivity = createSafeHandler(
         rows: result.map((event) => ({
           id: event.id,
           action: event.action,
-          userId: event.userId,
+          actorName: event.performerName ?? event.userName,
           changes: event.changes,
           createdAt: event.createdAt,
           operation:

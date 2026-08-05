@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListGenerationRuns } from "@/api/db/schema";
@@ -13,6 +13,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedLegalListGenerationRunId } from "@/api/lib/safe-id-boundaries";
 
@@ -39,21 +40,37 @@ const readGenerations = createSafeHandler(
   async function* ({ safeDb, workspaceId, params, query }) {
     const limit = query.limit ?? LIMITS.legalListGenerationRunsPageSizeDefault;
     const parts = query.cursor ? decodePaginationCursor(query.cursor) : null;
-    const rawCursor = parts?.at(0);
-    if (query.cursor && !isUuidPaginationCursorPart(rawCursor)) {
+    const cursorDate = parts
+      ? parseDateTimePaginationCursorPart(parts.at(0))
+      : null;
+    const rawCursorId = parts?.at(1);
+    if (
+      query.cursor &&
+      (!cursorDate || !isUuidPaginationCursorPart(rawCursorId))
+    ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
-    const cursor = isUuidPaginationCursorPart(rawCursor)
-      ? brandPersistedLegalListGenerationRunId(rawCursor)
+    const cursorId = isUuidPaginationCursorPart(rawCursorId)
+      ? brandPersistedLegalListGenerationRunId(rawCursorId)
       : null;
     const conditions = [
       eq(legalListGenerationRuns.workspaceId, workspaceId),
       eq(legalListGenerationRuns.listId, params.listId),
     ];
-    if (cursor !== null) {
-      conditions.push(lt(legalListGenerationRuns.id, cursor));
+    const cursorCondition =
+      cursorDate && cursorId
+        ? or(
+            lt(legalListGenerationRuns.createdAt, cursorDate),
+            and(
+              eq(legalListGenerationRuns.createdAt, cursorDate),
+              lt(legalListGenerationRuns.id, cursorId),
+            ),
+          )
+        : undefined;
+    if (cursorCondition) {
+      conditions.push(cursorCondition);
     }
     const rows = yield* Result.await(
       safeDb((tx) =>
@@ -68,7 +85,10 @@ const readGenerations = createSafeHandler(
           })
           .from(legalListGenerationRuns)
           .where(and(...conditions))
-          .orderBy(desc(legalListGenerationRuns.id))
+          .orderBy(
+            desc(legalListGenerationRuns.createdAt),
+            desc(legalListGenerationRuns.id),
+          )
           .limit(limit + 1),
       ),
     );
@@ -76,7 +96,8 @@ const readGenerations = createSafeHandler(
       createCursorPage({
         rows,
         limit,
-        cursorForItem: (run) => encodePaginationCursor([run.id]),
+        cursorForItem: (run) =>
+          encodePaginationCursor([run.createdAt.toISOString(), run.id]),
       }),
     );
   },

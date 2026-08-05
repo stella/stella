@@ -2660,6 +2660,15 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--item-type",
+                prop: "item_type",
+                kind: "enum",
+                enum: ["task", "fact", "issue", "requirement", "event"],
+                repeatable: false,
+                description: "What the List item represents",
+                required: false,
+              },
+              {
                 flag: "--due-date",
                 prop: "due_date",
                 kind: "nullable-string",
@@ -2741,6 +2750,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Task priority (e.g. none, low, medium, high)",
                   maxLength: 16,
+                },
+                item_type: {
+                  type: "string",
+                  enum: ["task", "fact", "issue", "requirement", "event"],
+                  description: "What the List item represents",
                 },
                 due_date: {
                   type: ["string", "null"],
@@ -28195,6 +28209,2140 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                       },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+          },
+        },
+        lists: {
+          kind: "route",
+          children: {
+            "columns-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "columns-create"],
+                capabilityId: "lists.columns.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--property-id",
+                    prop: "propertyId",
+                    required: true,
+                    part: "body",
+                    partPath: "propertyId",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--required",
+                    prop: "required",
+                    required: false,
+                    part: "body",
+                    partPath: "required",
+                  },
+                ],
+                inputOnly: ["body.position"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "propertyId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        propertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        position: {
+                          minimum: 0,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 0,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        required: {
+                          type: "boolean",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "create"],
+                capabilityId: "lists.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: ["body.description"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        description: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generation-candidates-acceptance-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "generation-candidates-acceptance-create",
+                ],
+                capabilityId: "lists.generation-candidates.acceptance.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--candidate-id",
+                    prop: "candidateId",
+                    required: true,
+                    part: "body",
+                    partPath: "candidateId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--section-id",
+                    prop: "sectionId",
+                    required: false,
+                    part: "body",
+                    partPath: "sectionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "runId", "candidateId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        candidateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        sectionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generation-candidates-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "generation-candidates-create",
+                ],
+                capabilityId: "lists.generation-candidates.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                ],
+                inputOnly: ["body.candidates"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "runId", "candidates"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        candidates: {
+                          minItems: 1,
+                          maxItems: 200,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["name", "itemType", "sources"],
+                            properties: {
+                              name: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                              description: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    maxLength: 10000,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                              itemType: {
+                                minLength: 1,
+                                maxLength: 32,
+                                type: "string",
+                              },
+                              status: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    maxLength: 32,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                              priority: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    maxLength: 16,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                              dueDate: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    format: "date",
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                              suggestedAssigneeUserIds: {
+                                maxItems: 500,
+                                type: "array",
+                                items: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                              },
+                              sources: {
+                                minItems: 1,
+                                maxItems: 10,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: [
+                                    "entityId",
+                                    "entityVersionId",
+                                    "locator",
+                                  ],
+                                  properties: {
+                                    entityId: {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    entityVersionId: {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    locator: {
+                                      anyOf: [
+                                        {
+                                          type: "object",
+                                          required: ["type"],
+                                          properties: {
+                                            type: {
+                                              const: "document",
+                                              type: "string",
+                                            },
+                                          },
+                                        },
+                                        {
+                                          type: "object",
+                                          required: ["type", "blockId"],
+                                          properties: {
+                                            type: {
+                                              const: "docx-block",
+                                              type: "string",
+                                            },
+                                            blockId: {
+                                              minLength: 1,
+                                              maxLength: 512,
+                                              type: "string",
+                                            },
+                                          },
+                                        },
+                                        {
+                                          type: "object",
+                                          required: ["type", "pageNumber"],
+                                          properties: {
+                                            type: {
+                                              const: "pdf-page",
+                                              type: "string",
+                                            },
+                                            pageNumber: {
+                                              minimum: 1,
+                                              anyOf: [
+                                                {
+                                                  format: "integer",
+                                                  default: 0,
+                                                  type: "string",
+                                                },
+                                                {
+                                                  minimum: 1,
+                                                  type: "integer",
+                                                },
+                                              ],
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                    quote: {
+                                      nullable: true,
+                                      anyOf: [
+                                        {
+                                          maxLength: 5000,
+                                          type: "string",
+                                        },
+                                        {
+                                          type: "null",
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generation-candidates-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "generation-candidates-list",
+                ],
+                capabilityId: "lists.generation-candidates.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "params",
+                    partPath: "runId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "runId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 200,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generation-candidates-rejection-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "generation-candidates-rejection-create",
+                ],
+                capabilityId: "lists.generation-candidates.rejection.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--candidate-id",
+                    prop: "candidateId",
+                    required: true,
+                    part: "body",
+                    partPath: "candidateId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "runId", "candidateId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        candidateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generations-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "generations-create"],
+                capabilityId: "lists.generations.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--instruction",
+                    prop: "instruction",
+                    required: true,
+                    part: "body",
+                    partPath: "instruction",
+                  },
+                ],
+                inputOnly: ["body.sources"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "instruction", "sources"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        instruction: {
+                          minLength: 1,
+                          maxLength: 4000,
+                          type: "string",
+                        },
+                        sources: {
+                          minItems: 1,
+                          maxItems: 100,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["entityId", "entityVersionId"],
+                            properties: {
+                              entityId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              entityVersionId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "generations-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "generations-list"],
+                capabilityId: "lists.generations.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "get"],
+                capabilityId: "lists.get",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-activity-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-activity-list"],
+                capabilityId: "lists.items.activity.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "params",
+                    partPath: "itemEntityId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "itemEntityId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 200,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-comments-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-comments-create"],
+                capabilityId: "lists.items.comments.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--body",
+                    prop: "body",
+                    required: true,
+                    part: "body",
+                    partPath: "body",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "itemEntityId", "body"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        body: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-list"],
+                capabilityId: "lists.items.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 500,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 500,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-reviews-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-reviews-update"],
+                capabilityId: "lists.items.reviews.update",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--decision",
+                    prop: "decision",
+                    required: true,
+                    part: "body",
+                    partPath: "decision",
+                  },
+                ],
+                inputOnly: ["body.note"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "itemEntityId", "decision"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        decision: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                        note: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-sources-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-sources-create"],
+                capabilityId: "lists.items.sources.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source-entity-id",
+                    prop: "sourceEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "sourceEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source-entity-version-id",
+                    prop: "sourceEntityVersionId",
+                    required: true,
+                    part: "body",
+                    partPath: "sourceEntityVersionId",
+                  },
+                ],
+                inputOnly: ["body.locator", "body.quote"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: [
+                        "listId",
+                        "itemEntityId",
+                        "sourceEntityId",
+                        "sourceEntityVersionId",
+                        "locator",
+                      ],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        sourceEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        sourceEntityVersionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        locator: {
+                          anyOf: [
+                            {
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "document",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type", "blockId"],
+                              properties: {
+                                type: {
+                                  const: "docx-block",
+                                  type: "string",
+                                },
+                                blockId: {
+                                  minLength: 1,
+                                  maxLength: 512,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type", "pageNumber"],
+                              properties: {
+                                type: {
+                                  const: "pdf-page",
+                                  type: "string",
+                                },
+                                pageNumber: {
+                                  minimum: 1,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 1,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        quote: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-sources-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-sources-list"],
+                capabilityId: "lists.items.sources.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "params",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "params",
+                    partPath: "itemEntityId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["listId", "itemEntityId", "workspaceId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 200,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-sources-verification-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "items-sources-verification-update",
+                ],
+                capabilityId: "lists.items.sources.verification.update",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--status",
+                    prop: "status",
+                    required: true,
+                    part: "body",
+                    partPath: "status",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id", "listId", "itemEntityId", "status"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "items-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "items-update"],
+                capabilityId: "lists.items.update",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--item-entity-id",
+                    prop: "itemEntityId",
+                    required: true,
+                    part: "body",
+                    partPath: "itemEntityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--position",
+                    prop: "position",
+                    required: false,
+                    part: "body",
+                    partPath: "position",
+                  },
+                ],
+                inputOnly: ["body.sectionId", "body.description"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "itemEntityId"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        itemEntityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        sectionId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        position: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        description: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "list"],
+                capabilityId: "lists.list",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--status",
+                    prop: "status",
+                    required: false,
+                    part: "query",
+                    partPath: "status",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "sections-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "sections-create"],
+                capabilityId: "lists.sections.create",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: true,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--position",
+                    prop: "position",
+                    required: false,
+                    part: "body",
+                    partPath: "position",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["listId", "name"],
+                      properties: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        position: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "update"],
+                capabilityId: "lists.update",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--status",
+                    prop: "status",
+                    required: false,
+                    part: "body",
+                    partPath: "status",
+                  },
+                ],
+                inputOnly: ["body.description"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        description: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
                     },
                   },
                 },
@@ -55788,6 +57936,42 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "priority",
                   },
                   {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-item-type",
+                    prop: "listItemType",
+                    required: false,
+                    part: "body",
+                    partPath: "listItemType",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-id",
+                    prop: "listId",
+                    required: false,
+                    part: "body",
+                    partPath: "listId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-section-id",
+                    prop: "listSectionId",
+                    required: false,
+                    part: "body",
+                    partPath: "listSectionId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-position",
+                    prop: "listPosition",
+                    required: false,
+                    part: "body",
+                    partPath: "listPosition",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--all-day",
@@ -55817,6 +58001,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 inputOnly: [
                   "body.dueDate",
+                  "body.listDescription",
                   "body.startAt",
                   "body.endAt",
                   "body.occurredAt",
@@ -55883,6 +58068,42 @@ export const generatedRouteMap: RouteNode = {
                               format: "date",
                               description:
                                 "Due date (ISO YYYY-MM-DD); pass null to clear",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        listItemType: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        listSectionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        listPosition: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        listDescription: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
                               type: "string",
                             },
                             {
@@ -56550,6 +58771,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "priority",
                   },
                   {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--list-item-type",
+                    prop: "listItemType",
+                    required: false,
+                    part: "body",
+                    partPath: "listItemType",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--all-day",
@@ -56633,6 +58863,11 @@ export const generatedRouteMap: RouteNode = {
                               type: "null",
                             },
                           ],
+                        },
+                        listItemType: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
                         },
                         startAt: {
                           nullable: true,

@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { legalLists } from "@/api/db/schema";
+import { legalLists, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -26,6 +26,11 @@ const createList = createSafeHandler(
   async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        await tx
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+          .for("update");
         const count = await tx.$count(
           legalLists,
           eq(legalLists.workspaceId, workspaceId),

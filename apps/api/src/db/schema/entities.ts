@@ -160,7 +160,7 @@ export const entities = p.pgTable(
       .where(isNotNull(table.dueDate)),
     p.check(
       "entities_list_item_type_task_only",
-      sql`${table.listItemType} IS NULL OR ${table.kind} = 'task'`,
+      sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN ('task', 'fact', 'issue', 'requirement', 'event'))`,
     ),
     p
       .index("entities_agenda_kind_idx")
@@ -354,6 +354,9 @@ export const entityVersions = p.pgTable(
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    p
+      .uniqueIndex("entity_versions_id_entity_ws_uidx")
+      .on(table.id, table.entityId, table.workspaceId),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
     p
       .index("entity_versions_stamp_idx")

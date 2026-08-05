@@ -9,12 +9,12 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { useLocale } from "@/i18n/formatting-context";
-import type { WorkspaceEntity } from "@/lib/types";
 import {
   isListItemType,
   ITEM_TYPE_TRANSLATION_KEYS,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
+} from "@/components/workspaces/tasks/task-detail-constants";
+import { useLocale } from "@/i18n/formatting-context";
+import type { WorkspaceEntity } from "@/lib/types";
 
 import { localISODate } from "./task-detail-constants";
 

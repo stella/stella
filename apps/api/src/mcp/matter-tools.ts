@@ -1494,19 +1494,13 @@ const saveTaskArgsSchema = v.pipe(
       ["link_entity_id"],
       ["unlink_link_id"],
       ["matter_id"],
-      ["list_id"],
-      ["list_section_id"],
-      ["list_description"],
     ],
     (i) =>
       i.task_id !== undefined ||
       (i.add_assignee_user_id === undefined &&
         i.remove_assignee_user_id === undefined &&
         i.link_entity_id === undefined &&
-        i.unlink_link_id === undefined &&
-        i.list_id === undefined &&
-        i.list_section_id === undefined &&
-        i.list_description === undefined),
+        i.unlink_link_id === undefined),
     "assignee and link changes require task_id (they apply to an existing task)",
   ),
   v.partialCheck(

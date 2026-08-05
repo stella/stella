@@ -342,6 +342,7 @@ const CONTRACT_CORPUS = {
               kind: "document",
               status: null,
               priority: null,
+              listItemType: null,
               dueDate: null,
               mimeType:
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

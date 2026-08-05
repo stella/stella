@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { legalListGenerationCandidates } from "@/api/db/schema";
+import {
+  legalListGenerationCandidates,
+  legalListGenerationRuns,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,6 +28,22 @@ const rejectGenerationCandidate = createSafeHandler(
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const rejected = yield* Result.await(
       safeDb(async (tx) => {
+        const run = (
+          await tx
+            .select({ id: legalListGenerationRuns.id })
+            .from(legalListGenerationRuns)
+            .where(
+              and(
+                eq(legalListGenerationRuns.id, body.runId),
+                eq(legalListGenerationRuns.listId, body.listId),
+                eq(legalListGenerationRuns.workspaceId, workspaceId),
+              ),
+            )
+            .for("update")
+        ).at(0);
+        if (!run) {
+          return false;
+        }
         const row = await tx
           .update(legalListGenerationCandidates)
           .set({ status: "rejected", updatedAt: new Date() })
@@ -40,6 +59,27 @@ const rejectGenerationCandidate = createSafeHandler(
           .returning({ id: legalListGenerationCandidates.id });
         if (!row.at(0)) {
           return false;
+        }
+        const pending = await tx.query.legalListGenerationCandidates.findFirst({
+          where: {
+            runId: { eq: body.runId },
+            listId: { eq: body.listId },
+            workspaceId: { eq: workspaceId },
+            status: { in: ["pending", "accepting"] },
+          },
+          columns: { id: true },
+        });
+        if (!pending) {
+          await tx
+            .update(legalListGenerationRuns)
+            .set({ status: "committed", updatedAt: new Date() })
+            .where(
+              and(
+                eq(legalListGenerationRuns.id, body.runId),
+                eq(legalListGenerationRuns.listId, body.listId),
+                eq(legalListGenerationRuns.workspaceId, workspaceId),
+              ),
+            );
         }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

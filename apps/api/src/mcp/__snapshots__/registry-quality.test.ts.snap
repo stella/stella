@@ -1486,7 +1486,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_tasks",
     "scope": "stella:read",
     "access": "read",
-    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each task's id, name, status, priority, and due date.",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
     "annotations": {
       "title": "List tasks",
       "readOnlyHint": true,
@@ -1536,7 +1536,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "save_task",
     "scope": "stella:matters_write",
     "access": "write",
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "idempotentHint": false,
@@ -1567,6 +1567,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "description": "Task priority (e.g. none, low, medium, high)",
           "maxLength": 16
+        },
+        "item_type": {
+          "type": "string",
+          "enum": [
+            "task",
+            "fact",
+            "issue",
+            "requirement",
+            "event"
+          ],
+          "description": "What the List item represents"
         },
         "due_date": {
           "type": [
@@ -3056,7 +3067,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_tasks",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each task's id, name, status, priority, and due date.",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
     "annotations": {
       "title": "List tasks",
       "readOnlyHint": true,

@@ -82,6 +82,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "entity_versions_id_entity_ws_uidx" ON public."entity_versions" USING btree ("id", "entity_id", "workspace_id")',
+    definitionBody:
+      "ON public.entity_versions USING btree (id, entity_id, workspace_id)",
+    isUnique: true,
+    name: "entity_versions_id_entity_ws_uidx",
+    tableName: "entity_versions",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "chat_messages_id_thread_uidx" ON public."chat_messages" USING btree ("id", "thread_id")',
     definitionBody: "ON public.chat_messages USING btree (id, thread_id)",
     isUnique: true,

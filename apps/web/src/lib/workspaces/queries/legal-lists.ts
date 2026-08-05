@@ -39,13 +39,36 @@ export const legalListsOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: legalListKeys.all(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api
+      const firstResponse = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .get({ query: { limit: 100, status: "active" }, fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
+        .get({
+          query: { limit: 100, status: "active" },
+          fetch: { signal },
+        });
+      if (firstResponse.error) {
+        throw toAPIError(firstResponse.error);
       }
-      return response.data;
+      const items = [...firstResponse.data.items];
+      let cursor = firstResponse.data.nextCursor ?? undefined;
+      while (cursor !== undefined) {
+        // oxlint-disable-next-line no-await-in-loop -- cursor pagination is sequential by definition; the sidebar must include every active List
+        const response = await api
+          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .get({
+            query: {
+              limit: 100,
+              status: "active",
+              cursor,
+            },
+            fetch: { signal },
+          });
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        items.push(...response.data.items);
+        cursor = response.data.nextCursor ?? undefined;
+      }
+      return { items };
     },
   });
 
@@ -86,7 +109,7 @@ export const legalListItemsOptions = (workspaceId: string, listId: string) =>
       }
       return response.data;
     },
-    initialPageParam: null,
+    initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     enabled: listId.length > 0,
   });

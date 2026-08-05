@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -20,7 +20,17 @@ const bodySchema = t.Object({
   itemEntityId: tSafeId("entity"),
   sourceEntityId: tSafeId("entity"),
   sourceEntityVersionId: tSafeId("entityVersion"),
-  locator: t.Unknown(),
+  locator: t.Union([
+    t.Object({ type: t.Literal("document") }),
+    t.Object({
+      type: t.Literal("docx-block"),
+      blockId: t.String({ minLength: 1, maxLength: 512 }),
+    }),
+    t.Object({
+      type: t.Literal("pdf-page"),
+      pageNumber: t.Integer({ minimum: 1 }),
+    }),
+  ]),
   quote: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 
@@ -42,34 +52,33 @@ const createItemSource = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const [item, source] = await Promise.all([
-          tx.query.legalListItems.findFirst({
-            where: {
-              entityId: { eq: body.itemEntityId },
-              listId: { eq: body.listId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { entityId: true },
-          }),
-          tx
-            .select({ id: entityVersions.id })
-            .from(entityVersions)
-            .innerJoin(
-              entities,
-              and(
-                eq(entities.id, entityVersions.entityId),
-                eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "document"),
-              ),
-            )
-            .where(
-              and(
-                eq(entityVersions.id, body.sourceEntityVersionId),
-                eq(entityVersions.entityId, body.sourceEntityId),
-              ),
-            )
-            .limit(1),
-        ]);
+        const item = await tx.query.legalListItems.findFirst({
+          where: {
+            entityId: { eq: body.itemEntityId },
+            listId: { eq: body.listId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { entityId: true },
+        });
+        const source = await tx
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .innerJoin(
+            entities,
+            and(
+              eq(entities.id, entityVersions.entityId),
+              eq(entities.workspaceId, workspaceId),
+              eq(entities.kind, "document"),
+            ),
+          )
+          .where(
+            and(
+              eq(entityVersions.id, body.sourceEntityVersionId),
+              eq(entityVersions.entityId, body.sourceEntityId),
+              isNull(entityVersions.deletedAt),
+            ),
+          )
+          .limit(1);
         if (!item || !source.at(0)) {
           return null;
         }

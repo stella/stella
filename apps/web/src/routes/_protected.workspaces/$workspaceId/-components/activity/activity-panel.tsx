@@ -854,7 +854,7 @@ const ActivityList = ({
         >
           <span>{t("workspaces.overview.activity.list.dateTime")}</span>
           <span>{t("workspaces.overview.activity.list.actor")}</span>
-          <span>{t("workspaces.overview.activity.list.event")}</span>
+          <span>{t("common.itemTypeValues.event")}</span>
           <span>{t("workspaces.overview.activity.list.provenance")}</span>
         </div>
         {listGroups.map((group) => {

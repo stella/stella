@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -57,31 +57,34 @@ const createGeneration = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const [list, versions] = await Promise.all([
-          tx.query.legalLists.findFirst({
-            where: {
-              id: { eq: body.listId },
-              workspaceId: { eq: workspaceId },
-              status: { eq: "active" },
-            },
-            columns: { id: true },
-          }),
-          tx
-            .select({
-              id: entityVersions.id,
-              entityId: entityVersions.entityId,
-            })
-            .from(entityVersions)
-            .innerJoin(
-              entities,
-              and(
-                eq(entities.id, entityVersions.entityId),
-                eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "document"),
-              ),
-            )
-            .where(inArray(entityVersions.id, distinctVersionIds)),
-        ]);
+        const list = await tx.query.legalLists.findFirst({
+          where: {
+            id: { eq: body.listId },
+            workspaceId: { eq: workspaceId },
+            status: { eq: "active" },
+          },
+          columns: { id: true },
+        });
+        const versions = await tx
+          .select({
+            id: entityVersions.id,
+            entityId: entityVersions.entityId,
+          })
+          .from(entityVersions)
+          .innerJoin(
+            entities,
+            and(
+              eq(entities.id, entityVersions.entityId),
+              eq(entities.workspaceId, workspaceId),
+              eq(entities.kind, "document"),
+            ),
+          )
+          .where(
+            and(
+              inArray(entityVersions.id, distinctVersionIds),
+              isNull(entityVersions.deletedAt),
+            ),
+          );
         const versionsById = new Map(
           versions.map((version) => [version.id, version.entityId]),
         );

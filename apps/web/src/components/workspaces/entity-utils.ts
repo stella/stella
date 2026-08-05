@@ -27,6 +27,7 @@ const INTERNAL_PROPERTIES = [
   "updated-at",
   "version",
   "kind",
+  "list-item-type",
   "status",
   "priority",
   "due-date",

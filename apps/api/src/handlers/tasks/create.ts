@@ -241,10 +241,9 @@ export const createTaskEntityHandler = async function* ({
         }
       }
 
+      const validAssigneeIds = [...new Set(body.assigneeIds ?? [])];
       const memberIdsToValidate = body.ownerUserId ? [body.ownerUserId] : [];
-      if (body.assigneeIds) {
-        memberIdsToValidate.push(...new Set(body.assigneeIds));
-      }
+      memberIdsToValidate.push(...validAssigneeIds);
       const memberIdsToLoad = [...memberIdsToValidate];
       if (!memberIdsToLoad.includes(userId)) {
         memberIdsToLoad.push(userId);
@@ -363,19 +362,15 @@ export const createTaskEntityHandler = async function* ({
         });
       }
 
-      if (body.assigneeIds !== undefined && body.assigneeIds.length > 0) {
-        const validIds = [...new Set(body.assigneeIds)];
-
-        if (validIds.length > 0) {
-          await tx.insert(taskAssignees).values(
-            validIds.map((uid) => ({
-              entityId,
-              workspaceId,
-              userId: uid,
-              role: "assignee" as const,
-            })),
-          );
-        }
+      if (validAssigneeIds.length > 0) {
+        await tx.insert(taskAssignees).values(
+          validAssigneeIds.map((assigneeId) => ({
+            entityId,
+            workspaceId,
+            userId: assigneeId,
+            role: "assignee" as const,
+          })),
+        );
       }
 
       await createWorkObligation({

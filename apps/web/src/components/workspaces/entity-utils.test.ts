@@ -25,6 +25,7 @@ const entity = (
   version: 1,
   status: null,
   priority: null,
+  listItemType: null,
   dueDate: null,
   agendaKind: "task",
   startAt: null,

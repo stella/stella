@@ -6,7 +6,6 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -56,12 +55,10 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
-import { detached } from "@/lib/detached";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
-import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import {
@@ -168,7 +165,6 @@ export const ViewSwitcher = ({
   onViewChange,
 }: ViewSwitcherProps) => {
   const t = useTranslations();
-  const navigate = useNavigate();
   const canCreateView = usePermissions({ view: ["create"] });
   const { data: views = [] } = useQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
@@ -217,7 +213,7 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
@@ -246,19 +242,7 @@ export const ViewSwitcher = ({
                   })
                 }
                 onReorder={handleReorder}
-                onSelect={() => {
-                  if (includesListItems(view.layout.filters)) {
-                    detached(
-                      navigate({
-                        to: "/workspaces/$workspaceId/lists",
-                        params: { workspaceId },
-                      }),
-                      "ViewSwitcher.onSelect",
-                    );
-                    return;
-                  }
-                  onViewChange(view.id);
-                }}
+                onSelect={() => onViewChange(view.id)}
                 onStartRename={() => setRenamingViewId(view.id)}
                 onStopRename={() =>
                   setRenamingViewId((current) =>
@@ -716,7 +700,7 @@ const useViewActionsMenu = ({
           aria-label={t("common.actions")}
           render={
             <Button
-              className="inset-e-0 absolute top-1/2 -translate-y-1/2"
+              className="absolute inset-e-0 top-1/2 -translate-y-1/2"
               size="icon-xs"
               variant="ghost"
             />

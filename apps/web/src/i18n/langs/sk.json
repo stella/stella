@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Aktér",
           "dateTime": "Dátum a čas",
-          "event": "Udalosť",
           "provenance": "Pôvod"
         },
         "loadEarlier": "Načítať staršie",

@@ -3700,7 +3700,6 @@
         "list": {
           "actor": "Wykonawca",
           "dateTime": "Data i godzina",
-          "event": "Zdarzenie",
           "provenance": "Pochodzenie"
         },
         "loadEarlier": "Wczytaj starsze",

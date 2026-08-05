@@ -23,6 +23,12 @@ import type {
   TableColumnDef,
   TableHeaderContext,
 } from "@/components/workspaces/table/types";
+import {
+  isListItemType,
+  isTaskPriority,
+  isTaskStatus,
+  ITEM_TYPE_TRANSLATION_KEYS,
+} from "@/components/workspaces/tasks/task-detail-constants";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
   AuthorCell,
@@ -31,12 +37,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import {
-  isListItemType,
-  isTaskPriority,
-  isTaskStatus,
-  ITEM_TYPE_TRANSLATION_KEYS,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 const selectColId = getInternalColId("select");
