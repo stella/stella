@@ -1,10 +1,20 @@
-import type { CallToolResult, Tool as McpTool } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  JsonSchemaType,
+  Tool as McpTool,
+} from "@modelcontextprotocol/server";
+
 import type { env } from "@/api/env";
 import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
 
-export type JsonSchema = McpTool["inputSchema"];
+/**
+ * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
+ * object shape every tool definition here writes. `JsonSchemaType` is the
+ * schema-shaped type the SDK itself accepts, so tools keep their literal shapes.
+ */
+export type JsonSchema = JsonSchemaType;
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 

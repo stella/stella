@@ -18,7 +18,7 @@
  * skips are always named so a credential-less run never reads as full coverage.
  */
 
-import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/server";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";

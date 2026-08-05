@@ -1,7 +1,7 @@
 import {
-  CallToolResultSchema,
+  isCallToolResult,
   type CallToolResult,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
 import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
@@ -395,14 +395,8 @@ const isExecutableMcpTool = (value: unknown): value is ExecutableMcpTool =>
   "execute" in value &&
   typeof value.execute === "function";
 
-const asCallToolResult = (value: unknown): CallToolResult => {
-  const parsed = CallToolResultSchema.safeParse(value);
-  if (parsed.success) {
-    return parsed.data;
-  }
-
-  return textResult(value);
-};
+const asCallToolResult = (value: unknown): CallToolResult =>
+  isCallToolResult(value) ? value : textResult(value);
 
 export const proxyMcpToolCall = async ({
   args,

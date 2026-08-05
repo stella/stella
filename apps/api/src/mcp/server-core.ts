@@ -1,5 +1,13 @@
-import { Server, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
-import type { CallToolResult, Tool as McpTool, ReadResourceResult, Resource } from "@modelcontextprotocol/server";
+import { createMcpHandler, Server } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  McpHttpHandler,
+  Tool as McpTool,
+  ReadResourceResult,
+  Resource,
+} from "@modelcontextprotocol/server";
+import { panic } from "better-result";
+
 import type { McpSession } from "@/api/mcp/auth";
 import {
   MCP_STATELESS_ALLOW_HEADER,
@@ -210,6 +218,45 @@ const sessionOperationUnsupportedResponse = () => {
   );
 };
 
+/**
+ * The handler factory receives only `{ era, authInfo, requestInfo }`, and auth
+ * is strictly pass-through, so the session we already resolved rides along on
+ * `authInfo.extra` under a namespaced key. The value is ours from a few
+ * microseconds earlier, not caller input: a missing or malformed one is a wiring
+ * bug, so it panics rather than degrading to an unauthenticated instance.
+ */
+const FACTORY_STATE_KEY = "app.stll.mcp/factory-state";
+
+type McpFactoryState = {
+  clientIp: string | null;
+  session: McpSession;
+};
+
+const isMcpFactoryState = (value: unknown): value is McpFactoryState => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const { clientIp, session } = value as Partial<McpFactoryState>;
+  return (
+    (clientIp === null || typeof clientIp === "string") &&
+    typeof session === "object" &&
+    session !== null &&
+    typeof session.organizationId === "string" &&
+    Array.isArray(session.scopes) &&
+    typeof session.userId === "string"
+  );
+};
+
+const readFactoryState = (
+  extra: Record<string, unknown> | undefined,
+): McpFactoryState => {
+  const state = extra?.[FACTORY_STATE_KEY];
+  if (!isMcpFactoryState(state)) {
+    panic("The MCP handler factory ran without its per-request session state");
+  }
+  return state;
+};
+
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
@@ -378,6 +425,27 @@ export const createMcpHttpRequestHandler = ({
     return server;
   };
 
+  // One handler per mode, built once. The handler owns per-request instance
+  // lifetime; building one per request would put teardown back on our side of
+  // the boundary, which is the mistake this replaces.
+  const handlers = new Map<McpMode, McpHttpHandler>();
+  const handlerForMode = (mode: McpMode): McpHttpHandler => {
+    const existing = handlers.get(mode);
+    if (existing) {
+      return existing;
+    }
+
+    const handler = createMcpHandler(({ authInfo, requestInfo }) => {
+      const { clientIp, session } = readFactoryState(authInfo?.extra);
+      if (!requestInfo) {
+        panic("The MCP handler factory ran without its HTTP request");
+      }
+      return createMcpServer({ clientIp, mode, request: requestInfo, session });
+    });
+    handlers.set(mode, handler);
+    return handler;
+  };
+
   return async (
     request: Request,
     {
@@ -401,9 +469,6 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    let server: Awaited<ReturnType<typeof createMcpServer>> | undefined;
-    let transport: WebStandardStreamableHTTPServerTransport | undefined;
-
     try {
       const session = await authenticateMcpRequest(token, mode);
 
@@ -418,17 +483,10 @@ export const createMcpHttpRequestHandler = ({
         );
       }
 
-      server = await createMcpServer({ clientIp, mode, request, session });
-      transport = new WebStandardStreamableHTTPServerTransport({
-        enableJsonResponse: true,
-      });
-
-      await server.connect(transport);
-
-      /* @mcp-codemod-error This object looks like a v1 handler-context mock (authInfo). v2 nests the context — reshape it (authInfo → http.authInfo), e.g. { sendRequest: fn } → { mcpReq: { send: fn } }. Passed as-is to a migrated handler that reads ctx.mcpReq.*, the v1 shape throws "Cannot read properties of undefined". */
-      const response = await transport.handleRequest(request, {
+      const response = await handlerForMode(mode).fetch(request, {
         authInfo: {
           clientId: session.userId,
+          extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
           scopes: session.scopes,
           token,
         },
@@ -465,13 +523,9 @@ export const createMcpHttpRequestHandler = ({
       });
 
       return retryableServerErrorResponse();
-    } finally {
-      if (transport) {
-        await transport.close().catch(() => null);
-      }
-      if (server) {
-        await server.close().catch(() => null);
-      }
     }
+    // No teardown here on purpose. The handler owns instance lifetime and a
+    // response body may still be streaming when this returns; closing it here
+    // is what truncated the notification stream under the hand-wired transport.
   };
 };

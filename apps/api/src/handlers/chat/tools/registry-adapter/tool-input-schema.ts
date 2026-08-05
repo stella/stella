@@ -14,7 +14,9 @@ import type { JsonSchema } from "@/api/mcp/tool-types";
  * (`registry-write-tools.ts`) so this stays the single such boundary cast.
  */
 export const toToolInputSchema = (schema: JsonSchema): JSONSchema => ({
-  type: schema.type,
+  // v2 types `type` as optional, so it is spread like the other fields rather
+  // than assigned through (`exactOptionalPropertyTypes` rejects the latter).
+  ...(schema.type === undefined ? {} : { type: schema.type }),
   ...(schema.properties === undefined ? {} : { properties: schema.properties }),
   ...(schema.required === undefined ? {} : { required: schema.required }),
 });
