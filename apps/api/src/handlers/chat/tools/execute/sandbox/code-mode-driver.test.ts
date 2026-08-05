@@ -144,6 +144,34 @@ describe("createStellaIsolateDriver", () => {
     expect(result.error?.message).toContain("boom");
   });
 
+  it("returns console output captured before a failure", async () => {
+    // The class of transcript this guards: a script fetches data, logs it,
+    // then throws later; the logs must survive so the model can self-correct
+    // from the partial results instead of guessing them from memory.
+    const result = await runCode({
+      code: `
+        const docs = await external_list({});
+        console.log("docs:", docs);
+        throw new Error("boom");
+      `,
+      bindings: bindingsRecord(
+        binding("external_list", async () => ["doc-1", "doc-2"]),
+      ),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.name).toBe("runtime");
+    expect(result.logs).toEqual(['docs: ["doc-1","doc-2"]']);
+  });
+
+  it("returns console output on success", async () => {
+    const result = await runCode({
+      code: `console.log("hello"); return 1;`,
+      bindings: bindingsRecord(binding("external_noop", async () => null)),
+    });
+    expect(result.success).toBe(true);
+    expect(result.logs).toEqual(["hello"]);
+  });
+
   it("maps forbidden syntax onto the forbidden-syntax reason", async () => {
     const result = await runCode({
       code: `import x from "fs"; return x;`,
@@ -151,6 +179,8 @@ describe("createStellaIsolateDriver", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.name).toBe("forbidden-syntax");
+    // Pre-execution failures never carry logs: nothing has run yet.
+    expect(result.logs).toBeUndefined();
   });
 
   it("times out at the deadline instead of waiting for unfinished host work", async () => {

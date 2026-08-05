@@ -74,10 +74,13 @@ const buildBindingAliasPrelude = (
   return `const { ${names.join(", ")} } = ${SANDBOX_READ_GLOBAL};`;
 };
 
-const toExecutionSuccess = <T>(value: unknown): ExecutionResult<T> => ({
+const toExecutionSuccess = <T>(
+  value: unknown,
+  logs: readonly string[],
+): ExecutionResult<T> => ({
   success: true,
   value: validateSandboxOutput<T>(value),
-  logs: [],
+  logs: [...logs],
 });
 
 // eslint-disable-next-line typescript/no-unnecessary-type-parameters -- T is imposed by the third-party IsolateDriver.execute<T> contract; runtime validation is JSON-shape only
@@ -137,16 +140,23 @@ export const createStellaIsolateDriver = ({
       });
 
       if (Result.isOk(result)) {
-        return toExecutionSuccess<T>(result.value.value);
+        return toExecutionSuccess<T>(result.value.value, result.value.logs);
       }
 
       // The SandboxError reason rides in `name`, so the tagged taxonomy
       // (timeout / host-call-limit / memory / return-too-large /
       // non-serialisable-return / forbidden-syntax / transpile / runtime)
       // survives code-mode's coarser `{ message, name }` error shape.
+      // Console output captured before the failure rides the top-level
+      // `logs` field: code-mode's execute_typescript output schema declares
+      // it on the failure shape too and forwards it verbatim, so the model
+      // keeps the partial progress a failed run already logged. Absent for
+      // pre-execution failures (transpile, forbidden-syntax).
+      const { logs } = result.error;
       return {
         success: false,
         error: { name: result.error.reason, message: result.error.message },
+        ...(logs === undefined ? {} : { logs: [...logs] }),
       };
     };
 
