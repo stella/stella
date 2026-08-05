@@ -42,6 +42,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { finalizeEmailIngest } from "@/api/lib/uploads/email-ingest";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -514,6 +515,7 @@ const runFinalize = async function* ({
         | typeof finalizeEntityCreate
         | typeof finalizeEntityVersion
         | typeof finalizeAgentSkill
+        | typeof finalizeEmailIngest
       >
     > extends AsyncGenerator<unknown, infer R, unknown>
       ? R
@@ -521,6 +523,8 @@ const runFinalize = async function* ({
   let purposeOk: RunAnyPurpose;
   if (purposeData.type === "entity_create") {
     purposeOk = yield* finalizeEntityCreate({ ...domainArgs, purposeData });
+  } else if (purposeData.type === "email_ingest") {
+    purposeOk = yield* finalizeEmailIngest({ ...domainArgs, purposeData });
   } else if (purposeData.type === "entity_version") {
     purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
   } else {

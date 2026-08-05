@@ -1,0 +1,42 @@
+{
+  "name": "@stll/outlook",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "cert": "bun scripts/create-dev-cert.ts",
+    "dev": "bun scripts/dev.ts",
+    "format": "oxfmt .",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/outlook",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@elysiajs/eden": "^1.4.9",
+    "@stll/api": "workspace:*",
+    "@stll/ui": "workspace:*",
+    "better-result": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "catalog:",
+    "mimetext": "^3.0.28",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "tailwind-merge": "^3.6.0",
+    "use-intl": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@tailwindcss/cli": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "libxml2-wasm": "^0.7.1",
+    "tailwindcss": "catalog:"
+  },
+  "crawlPosture": "private"
+}
