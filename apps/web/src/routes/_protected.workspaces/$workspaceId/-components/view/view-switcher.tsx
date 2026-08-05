@@ -259,6 +259,7 @@ export const ViewSwitcher = ({
                       })
                     : null
                 }
+                isMenuOpen={viewActions.isMenuOpen}
                 isRenaming={renamingViewId === view.id}
                 key={view.id}
                 onOpenContextMenu={(event) =>
@@ -381,6 +382,7 @@ type ViewTabProps = {
   workspaceId: string;
   view: WorkspaceView;
   isRenaming: boolean;
+  isMenuOpen: boolean;
   actions: React.ReactNode;
   onSelect: () => void;
   onReorder: (
@@ -397,6 +399,7 @@ const ViewTab = ({
   workspaceId,
   view,
   isRenaming,
+  isMenuOpen,
   actions,
   onSelect,
   onReorder,
@@ -417,6 +420,11 @@ const ViewTab = ({
   // wrapper is replaced whenever the tab enters or leaves rename mode.
   const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
   const handleReorder = useLatestCallback(onReorder);
+  // Read at drag start so opening or closing a menu does not re-register the
+  // draggable. A press that lands on an open menu's dismiss layer still
+  // reaches the tab, and the drag it starts previews that layer instead of
+  // the tab; refuse the drag until the menu is gone.
+  const canDragTab = useLatestCallback(() => !isMenuOpen);
 
   // Seed the draft from the current name each time rename begins,
   // since the trigger now lives in the parent (menu or double-click).
@@ -436,6 +444,7 @@ const ViewTab = ({
         ? [
             draggable({
               element: tabContainer,
+              canDrag: canDragTab,
               getInitialData: () => ({
                 type: VIEW_DRAG_TYPE,
                 viewId: id,
@@ -469,7 +478,7 @@ const ViewTab = ({
         },
       }),
     );
-  }, [id, canUpdateView, handleReorder, tabContainer]);
+  }, [id, canUpdateView, canDragTab, handleReorder, tabContainer]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -579,6 +588,7 @@ const useViewActionsMenu = ({
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
   const [target, setTarget] = useState<ViewActionsTarget | null>(null);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [convertPreview, setConvertPreview] = useState<ViewLayoutType | null>(
@@ -740,6 +750,7 @@ const useViewActionsMenu = ({
     return (
       <Menu
         onOpenChange={(open) => {
+          setIsActionsOpen(open);
           if (open) {
             setTarget({ view, canDelete });
           }
@@ -750,9 +761,10 @@ const useViewActionsMenu = ({
           render={
             <Button
               className="absolute inset-e-0 top-1/2 -translate-y-1/2"
-              // This button sits inside the tab, which is a draggable. Without
-              // this, pressing it to open the menu starts a tab drag whose
-              // native preview is not the tab. Dragging belongs to the tab.
+              // The tab around this button is a draggable; the button itself is
+              // not a drag affordance. This only covers presses that land on
+              // the button: once the menu is open its dismiss layer takes the
+              // press, which is why the tab also refuses to drag while open.
               draggable={false}
               size="icon-xs"
               variant="ghost"
@@ -813,5 +825,10 @@ const useViewActionsMenu = ({
     </>
   );
 
-  return { openFor, renderActions, overlays };
+  // A drag started while a menu is open produces a native preview of the
+  // dismiss layer rather than the tab, so the tabs refuse to drag until the
+  // menu closes.
+  const isMenuOpen = isActionsOpen || contextMenu.open;
+
+  return { openFor, renderActions, overlays, isMenuOpen };
 };

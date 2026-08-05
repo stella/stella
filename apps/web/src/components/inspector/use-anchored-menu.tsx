@@ -59,5 +59,5 @@ export const useAnchoredMenu = ({ children }: { children: ReactNode }) => {
     </Menu>
   );
 
-  return { openAt, close, element };
+  return { open, openAt, close, element };
 };
