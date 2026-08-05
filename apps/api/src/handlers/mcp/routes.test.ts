@@ -129,6 +129,33 @@ describe("MCP protected resource discovery routes", () => {
     ]);
   });
 
+  test("leaves JSON-RPC request bodies unread for both MCP transports", async () => {
+    const bodies: unknown[] = [];
+    const route = createMcpRoute({
+      handleMcpHttpRequest: async (request) => {
+        expect(request.bodyUsed).toBe(false);
+        bodies.push(await request.json());
+        return new Response("ok");
+      },
+    });
+    const body = { id: 1, jsonrpc: "2.0", method: "tools/list" };
+
+    for (const path of [MCP_HTTP_PATH, MCP_ANONYMIZED_HTTP_PATH]) {
+      // oxlint-disable-next-line no-await-in-loop -- each request must reach the transport before the next assertion
+      const response = await route.handle(
+        new Request(`http://localhost${path}`, {
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
+
+      expect(response.status).toBe(200);
+    }
+
+    expect(bodies).toEqual([body, body]);
+  });
+
   test("rejects unsupported MCP HTTP methods before transport handling", async () => {
     let calls = 0;
     const route = createMcpRoute({
