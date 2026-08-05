@@ -15,21 +15,16 @@ import {
 } from "@/lib/search-match-navigation";
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 
-import { classifyDocxFindKeydown } from "./docx-find.logic";
+import {
+  classifyDocxFindKeydown,
+  EMPTY_DOCX_FIND_SUMMARY,
+  resetOpenDocxFindQuery,
+} from "./docx-find.logic";
+import type { OpenDocxFindState } from "./docx-find.logic";
 
 const SEARCH_DEBOUNCE_MS = 150;
 
-const EMPTY_SUMMARY: SearchMatchSummary = { count: 0, truncated: false };
-
-type DocxFindState =
-  | { status: "closed" }
-  | {
-      status: "open";
-      activeIndex: number;
-      focusSeq: number;
-      query: string;
-      summary: SearchMatchSummary;
-    };
+type DocxFindState = { status: "closed" } | OpenDocxFindState;
 
 const CLOSED_STATE: DocxFindState = { status: "closed" };
 
@@ -111,7 +106,11 @@ export const useDocxFind = ({
       clearHighlight();
       setState((prev) =>
         prev.status === "open"
-          ? { ...prev, activeIndex: 0, summary: EMPTY_SUMMARY }
+          ? {
+              ...prev,
+              activeIndex: 0,
+              summary: EMPTY_DOCX_FIND_SUMMARY,
+            }
           : prev,
       );
       return;
@@ -144,7 +143,11 @@ export const useDocxFind = ({
     if (state.status !== "open") {
       return;
     }
-    setState({ ...state, query });
+    matchesRef.current = [];
+    clearHighlight();
+    setState((prev) =>
+      prev.status === "open" ? resetOpenDocxFindQuery(prev, query) : prev,
+    );
     debouncedSearch(query);
   };
 
@@ -187,7 +190,12 @@ export const useDocxFind = ({
       // `offsetParent` is null while an inspector tab is CSS-hidden, which is
       // how the pane keeps background tabs mounted. Only the visible editor
       // may claim the shortcut.
-      if (!container || container.offsetParent === null) {
+      if (
+        !container ||
+        container.offsetParent === null ||
+        !(event.target instanceof Node) ||
+        !container.contains(event.target)
+      ) {
         return;
       }
 
@@ -217,20 +225,26 @@ export const useDocxFind = ({
       const selection = window.getSelection();
       const selected =
         selection && !selection.isCollapsed ? selection.toString().trim() : "";
+      if (selected.length > 0) {
+        matchesRef.current = [];
+        editorRef.current?.getEditorRef()?.setPassageHighlight(null);
+      }
       setState((prev) => {
         if (prev.status === "open") {
-          return {
+          const focused = {
             ...prev,
             focusSeq: prev.focusSeq + 1,
-            query: selected.length > 0 ? selected : prev.query,
           };
+          return selected.length > 0
+            ? resetOpenDocxFindQuery(focused, selected)
+            : focused;
         }
         return {
           status: "open",
           activeIndex: 0,
           focusSeq: 0,
           query: selected,
-          summary: EMPTY_SUMMARY,
+          summary: EMPTY_DOCX_FIND_SUMMARY,
         };
       });
       if (selected.length > 0) {
@@ -252,6 +266,6 @@ export const useDocxFind = ({
     query: state.status === "open" ? state.query : "",
     setQuery,
     step,
-    summary: state.status === "open" ? state.summary : EMPTY_SUMMARY,
+    summary: state.status === "open" ? state.summary : EMPTY_DOCX_FIND_SUMMARY,
   };
 };
