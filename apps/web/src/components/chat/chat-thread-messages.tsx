@@ -1273,7 +1273,9 @@ const toAssistantPartRenderEntries = (
 };
 
 // "Process" parts are the low-emphasis progress rows of a turn: reasoning
-// trace disclosures and tool-step lines. Interactive tool cards (ask-user,
+// trace disclosures and tool-step lines. Tool-result parts are invisible
+// transport companions, so they stay inside a process run without becoming
+// visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
 // they stay outside the folded process disclosure.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
@@ -1282,6 +1284,9 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   }
   const { part } = entry;
   if (part.type === "thinking") {
+    return true;
+  }
+  if (part.type === "tool-result") {
     return true;
   }
   return (
@@ -1303,6 +1308,9 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   const { part } = entry;
   if (part.type === "thinking") {
     return part.content.trim().length > 0;
+  }
+  if (part.type === "tool-result") {
+    return false;
   }
   if (part.type !== "tool-call") {
     return true;
