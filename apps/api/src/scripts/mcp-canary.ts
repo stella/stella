@@ -333,13 +333,11 @@ const inspectNotificationStream = async (
 ): Promise<StreamObservation> => {
   const reader = body.getReader();
   const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
-  let observation: StreamObservation = "open";
-
-  while (Date.now() < deadline) {
-    const remainingMs = Math.max(1, deadline - Date.now());
-    // Reads must be sequential: a frame can be followed immediately by EOF,
-    // which is the truncation this bounded observation is meant to catch.
-    // eslint-disable-next-line no-await-in-loop
+  const observeUntilDeadline = async (): Promise<StreamObservation> => {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return "open";
+    }
     const readObservation = await Promise.race([
       reader.read().then(
         ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
@@ -348,13 +346,14 @@ const inspectNotificationStream = async (
       Bun.sleep(remainingMs).then(() => "open" as const),
     ]);
 
-    if (readObservation === "frame") {
-      continue;
-    }
-    observation = readObservation;
-    break;
-  }
+    // Reads stay sequential: a frame can be followed immediately by EOF,
+    // which is the truncation this bounded observation is meant to catch.
+    return readObservation === "frame"
+      ? observeUntilDeadline()
+      : readObservation;
+  };
 
+  const observation = await observeUntilDeadline();
   try {
     await reader.cancel();
   } catch {
