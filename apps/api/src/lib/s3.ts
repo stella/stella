@@ -580,6 +580,66 @@ export const getCorpusS3 = (): S3Client => {
   return _corpusClient;
 };
 
+/** A corpus object read returned a non-success status. */
+export class CorpusObjectReadError extends TaggedError(
+  "CorpusObjectReadError",
+)<{
+  message: string;
+  key: string;
+  status: number;
+}> {}
+
+// The presigned URL is consumed by the very next statement, so this only has
+// to outlive one bounded read.
+const CORPUS_READ_PRESIGN_TTL_SECONDS = 300;
+
+/**
+ * Read a corpus object's bytes.
+ *
+ * Deliberately NOT `getCorpusS3().file(key).bytes()`. Up to and including Bun
+ * 1.3.14, that call never frees the native buffer the HTTP thread accumulates
+ * the body into: the handler receives the bytes with `.clone` lifetime, JS
+ * gets its own copy, and the original allocation is leaked
+ * (oven-sh/bun#29083, fixed by oven-sh/bun#29086 and #29923). Because the
+ * stranded allocation is outside the JS heap it is invisible to heap
+ * snapshots and survives a forced GC — only RSS moves — and a reader that
+ * walks the whole corpus grows by roughly the object size on every read.
+ *
+ * Measured on linux/arm64, 4000 reads of a 256 KiB object at the indexing
+ * loop's read concurrency: the native call grew 48MB -> 1100MB and never
+ * plateaued, while this path stayed flat.
+ *
+ * TODO(bun-s3-native-read): once every runtime image is on a stable Bun that
+ * contains those fixes (the first stable after 1.3.14 — the fixes are not in
+ * 1.3.14 itself), delete this helper and call
+ * `getCorpusS3().file(key).bytes()` directly again. The native path is
+ * zero-copy after the fix, so it should also be faster than this one.
+ *
+ * The signed URL carries the caller's credentials in its query string and is
+ * therefore never logged, and it is passed straight to `fetch` rather than
+ * stored. Unlike the native call, `fetch` honours the abort signal, so a
+ * stalled read is genuinely cancelled instead of merely abandoned.
+ */
+export const readCorpusS3Bytes = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> => {
+  const response = await fetch(
+    getCorpusS3().presign(key, {
+      expiresIn: CORPUS_READ_PRESIGN_TTL_SECONDS,
+    }),
+    { signal },
+  );
+  if (!response.ok) {
+    throw new CorpusObjectReadError({
+      message: `Corpus object read failed with ${response.status}`,
+      key,
+      status: response.status,
+    });
+  }
+  return await response.bytes();
+};
+
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (
   key: string,

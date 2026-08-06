@@ -17,8 +17,8 @@ import type {
 import { LIMITS } from "@/api/lib/limits";
 import {
   deleteCorpusS3ObjectWithSignal,
-  getCorpusS3,
   putCorpusS3ObjectWithSignal,
+  readCorpusS3Bytes,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -345,7 +345,7 @@ export const readCorpusText = async (
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    read ?? (async () => await getCorpusS3().file(key).bytes()),
+    read ?? (async (signal) => await readCorpusS3Bytes(key, signal)),
     { timeoutMs },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
@@ -356,7 +356,7 @@ export const readCorpusSections = async (
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async () => await getCorpusS3().file(key).bytes(),
+    async (signal) => await readCorpusS3Bytes(key, signal),
   );
   // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
   const parsed: DecisionSection[] | null = JSON.parse(
@@ -370,7 +370,7 @@ export const readCorpusAst = async (
 ): Promise<DocumentAst | EmptyAst | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async () => await getCorpusS3().file(key).bytes(),
+    async (signal) => await readCorpusS3Bytes(key, signal),
   );
   // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
   const parsed: DocumentAst | EmptyAst | null = JSON.parse(
