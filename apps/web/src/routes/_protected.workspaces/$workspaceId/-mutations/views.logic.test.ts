@@ -127,6 +127,22 @@ describe("view reorder cache path", () => {
     expect(await cachedOrder(queryClient)).toEqual(CACHED_IDS);
   });
 
+  test("keeps a later drop's order when an earlier reorder fails", async () => {
+    const { viewOrderCache } = await import("./views.logic");
+    const queryClient = await seededClient();
+    const cache = viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID });
+
+    // Two drops in flight at once: nothing disables the strip between them.
+    const first = ["kanban", ...CACHED_IDS.slice(0, 3)];
+    const second = [...CACHED_IDS.slice(1), "overview"];
+    const firstContext = await cache.apply(first);
+    await cache.apply(second);
+
+    cache.restore(firstContext);
+
+    expect(await cachedOrder(queryClient)).toEqual(second);
+  });
+
   test("invalidates every cached locale variant on settle", async () => {
     const { viewsKeys } = await import("@/lib/workspaces/queries/views");
     const { viewOrderCache } = await import("./views.logic");

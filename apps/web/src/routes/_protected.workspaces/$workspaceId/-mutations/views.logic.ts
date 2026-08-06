@@ -35,6 +35,11 @@ export const reorderCachedViews = (
 /** What the optimistic write displaced, so a failed reorder can put it back. */
 export type ReorderViewsContext = {
   previousViews: WorkspaceView[] | undefined;
+  /**
+   * What the optimistic write left in the cache, so a rollback can tell whether
+   * the strip is still showing this reorder.
+   */
+  optimisticViews: WorkspaceView[] | undefined;
 };
 
 type ViewOrderCacheOptions = {
@@ -61,15 +66,25 @@ export const viewOrderCache = ({
       const previousViews =
         queryClient.getQueryData<WorkspaceView[]>(localizedKey);
 
-      queryClient.setQueryData<WorkspaceView[]>(localizedKey, (current) =>
-        reorderCachedViews(current, viewIds),
+      const optimisticViews = queryClient.setQueryData<WorkspaceView[]>(
+        localizedKey,
+        (current) => reorderCachedViews(current, viewIds),
       );
 
-      return { previousViews };
+      return { previousViews, optimisticViews };
     },
 
     restore: (context: ReorderViewsContext | undefined) => {
       if (!context?.previousViews) {
+        return;
+      }
+      // Nothing disables the strip while a reorder is in flight, so a second
+      // drop can land first. Rolling this one back would then undo the newer
+      // order and leave the strip wrong until the newer request settles. The
+      // cache holds what `apply` wrote until something replaces it, so an
+      // identity check answers "is this reorder still what the user sees?" for
+      // a later drop and a landed refetch alike.
+      if (queryClient.getQueryData(localizedKey) !== context.optimisticViews) {
         return;
       }
       queryClient.setQueryData(localizedKey, context.previousViews);
