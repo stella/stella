@@ -88,18 +88,25 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
 
 type MatterActivityPage = {
   items: readonly unknown[];
+  nextCursor: string | null;
 };
 
 // Whether a matter's cached activity pages prove there is nothing to disclose.
-// Undefined pages mean the activity query has never resolved for this matter,
-// so emptiness is unknown and the disclosure must stay available; only a
-// resolved, fully empty result counts as known-empty.
+// Emptiness must be proven, never assumed: an unresolved query, or one whose
+// last page still carries a cursor, may yet yield activity, so the disclosure
+// stays available. Only a drained, item-free result counts as known-empty.
 export const matterActivityIsKnownEmpty = (
   pages: readonly MatterActivityPage[] | undefined,
 ): boolean => {
-  if (pages === undefined || pages.length === 0) {
+  if (pages === undefined) {
     return false;
   }
+
+  const lastPage = pages.at(-1);
+  if (lastPage === undefined || lastPage.nextCursor !== null) {
+    return false;
+  }
+
   return pages.every((page) => page.items.length === 0);
 };
 

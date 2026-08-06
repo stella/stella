@@ -1397,8 +1397,10 @@ const MatterActivityList = ({
 
   // Nothing to disclose: render no list at all rather than an empty one, so the
   // matter row never opens onto a dead end. The row drops its disclosure toggle
-  // on the same resolved-empty result.
-  if (items.length === 0) {
+  // on the same drained, item-free result. An empty page that still has a
+  // continuation keeps the list mounted so its "show more" control stays
+  // reachable.
+  if (items.length === 0 && !hasNextPage) {
     return null;
   }
 

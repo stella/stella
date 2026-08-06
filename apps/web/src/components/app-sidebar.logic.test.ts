@@ -134,15 +134,31 @@ describe("sidebar matter activity disclosure", () => {
 
   test("keeps the disclosure when any page carries an item", () => {
     expect(
-      matterActivityIsKnownEmpty([{ items: [] }, { items: [{ id: "a" }] }]),
+      matterActivityIsKnownEmpty([
+        { items: [], nextCursor: "cursor" },
+        { items: [{ id: "a" }], nextCursor: null },
+      ]),
     ).toBe(false);
   });
 
-  test("drops the disclosure once every resolved page is empty", () => {
-    expect(matterActivityIsKnownEmpty([{ items: [] }])).toBe(true);
-    expect(matterActivityIsKnownEmpty([{ items: [] }, { items: [] }])).toBe(
+  test("keeps the disclosure while a continuation cursor remains", () => {
+    // An empty page that can still be followed by one holding activity: hiding
+    // the toggle here would strand the user with no way to load that page.
+    expect(
+      matterActivityIsKnownEmpty([{ items: [], nextCursor: "cursor" }]),
+    ).toBe(false);
+  });
+
+  test("drops the disclosure once a drained result holds no item", () => {
+    expect(matterActivityIsKnownEmpty([{ items: [], nextCursor: null }])).toBe(
       true,
     );
+    expect(
+      matterActivityIsKnownEmpty([
+        { items: [], nextCursor: "cursor" },
+        { items: [], nextCursor: null },
+      ]),
+    ).toBe(true);
   });
 });
 
