@@ -6,7 +6,7 @@ import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -129,7 +129,7 @@ export const readStyleSetPackage = async ({
 
   return await Result.tryPromise({
     try: async () => ({
-      buffer: Buffer.from(await getS3().file(s3Key).arrayBuffer()),
+      buffer: Buffer.from(await readS3ArrayBuffer(s3Key)),
       name,
       updatedAt,
     }),

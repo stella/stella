@@ -14,7 +14,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -195,16 +195,14 @@ const loadVersionDocxBuffer = async (
   organizationId: SafeId<"organization">,
   resolved: ResolvedVersionDocx,
 ): Promise<ArrayBuffer> =>
-  await getS3()
-    .file(
-      createFileKey({
-        organizationId,
-        workspaceId: resolved.workspaceId,
-        fileId: resolved.fileId,
-        mimeType: DOCX_MIME_TYPE,
-      }),
-    )
-    .arrayBuffer();
+  await readS3ArrayBuffer(
+    createFileKey({
+      organizationId,
+      workspaceId: resolved.workspaceId,
+      fileId: resolved.fileId,
+      mimeType: DOCX_MIME_TYPE,
+    }),
+  );
 
 /**
  * Server-executed `compare_versions` chat tool: diff two entity versions'

@@ -58,7 +58,7 @@ import {
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import {
   executeNativeExtraction,
@@ -190,7 +190,7 @@ const writeOcrSearchablePdfDerivative = async ({
 }): Promise<void> => {
   const written = await Result.tryPromise({
     try: async () => {
-      const sourceBuffer = await getS3().file(sourceKey).arrayBuffer();
+      const sourceBuffer = await readS3ArrayBuffer(sourceKey);
       lifecycleSignal.throwIfAborted();
       const searchablePdf = await createOcrSearchablePdf(sourceBuffer, payload);
       if (Result.isError(searchablePdf)) {

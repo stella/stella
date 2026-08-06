@@ -39,7 +39,7 @@ import {
   permissiveBodySchema,
   permissiveRouteSchema,
 } from "@/api/lib/permissive-route-schema";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -236,7 +236,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
   // Phase B: heavy IO + DOCX validation, all OUTSIDE the txn. The
   // source bytes are written to S3 before we open the txn; any
   // commit failure rolls them back via uploadedKeys.
-  const checkpointBuffer = await getS3().file(checkpointKey).arrayBuffer();
+  const checkpointBuffer = await readS3ArrayBuffer(checkpointKey);
   const validation = await validateDocxBuffer(checkpointBuffer);
   if (!validation.valid) {
     return Result.err(

@@ -45,7 +45,7 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -343,7 +343,7 @@ export const hydrateFilePart = async ({
 
     const buffer = yield* Result.await(
       Result.tryPromise({
-        try: async () => await getS3().file(s3Key).arrayBuffer(),
+        try: async () => await readS3ArrayBuffer(s3Key),
         catch: (cause) =>
           new ChatError({
             message: "Failed to read chat attachment",

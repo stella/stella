@@ -301,6 +301,11 @@ const probeKey = async (
   jurisdiction: string,
   key: string,
 ): Promise<ProbedDoc> => {
+  // The native read leaks its download buffer (see the rule), but this is a
+  // one-shot probe that exits: the process never lives long enough for the
+  // stranded allocations to matter, and it has no @/api/lib/s3 client to
+  // borrow.
+  // oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read
   const body = await withDeadline(s3.file(key).bytes(), "s3.get");
   const text = zstdDecompressToString(body);
   const documentId = key.slice(KEY_PREFIX.length).split("/").at(1) ?? key;

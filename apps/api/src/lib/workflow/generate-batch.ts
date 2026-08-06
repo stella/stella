@@ -7,7 +7,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import {
@@ -127,7 +127,7 @@ export const fetchAndPrepareFiles = async (
           fileId: meta.fileId,
           mimeType: DOCX_MIME_TYPE,
         });
-        const docxBuffer = await getS3().file(fileKey).arrayBuffer();
+        const docxBuffer = await readS3ArrayBuffer(fileKey);
         const reviewer = await FolioDocxReviewer.fromBuffer(docxBuffer);
         const blocks = reviewer.getContent();
         return {
@@ -148,7 +148,7 @@ export const fetchAndPrepareFiles = async (
         fileId: pdfFileId,
         mimeType: PDF_MIME_TYPE,
       });
-      const fileBuffer = await getS3().file(fileKey).arrayBuffer();
+      const fileBuffer = await readS3ArrayBuffer(fileKey);
       const preparedPdf = await addBatesNumbers(fileBuffer, simplifiedName);
       return {
         kind: "pdf",

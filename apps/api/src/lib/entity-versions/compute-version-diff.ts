@@ -8,7 +8,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { countVersionDiffWords } from "@/api/lib/entity-versions/version-diff-word-counts";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const VERSION_DIFF_STATS_SCOPES = ["text"] as const;
@@ -116,26 +116,22 @@ export const computeVersionDiffStats = async ({
 
   // Download both DOCX files
   const [newBuffer, prevBuffer] = await Promise.all([
-    getS3()
-      .file(
-        createFileKey({
-          organizationId,
-          workspaceId,
-          fileId: newFile.id,
-          mimeType: DOCX_MIME_TYPE,
-        }),
-      )
-      .arrayBuffer(),
-    getS3()
-      .file(
-        createFileKey({
-          organizationId,
-          workspaceId,
-          fileId: prevFile.id,
-          mimeType: DOCX_MIME_TYPE,
-        }),
-      )
-      .arrayBuffer(),
+    readS3ArrayBuffer(
+      createFileKey({
+        organizationId,
+        workspaceId,
+        fileId: newFile.id,
+        mimeType: DOCX_MIME_TYPE,
+      }),
+    ),
+    readS3ArrayBuffer(
+      createFileKey({
+        organizationId,
+        workspaceId,
+        fileId: prevFile.id,
+        mimeType: DOCX_MIME_TYPE,
+      }),
+    ),
   ]);
 
   const diff = await compareDocxVersions(prevBuffer, newBuffer, {

@@ -17,7 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { extractText } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type LoadEntityVersionDiffSourcesOptions = {
@@ -145,16 +145,14 @@ export const loadEntityVersionDiffSources = async function* ({
     Result.tryPromise({
       try: async () => {
         const toText = async (fileId: string) => {
-          const buffer = await getS3()
-            .file(
-              createFileKey({
-                organizationId,
-                workspaceId,
-                fileId,
-                mimeType: DOCX_MIME_TYPE,
-              }),
-            )
-            .arrayBuffer();
+          const buffer = await readS3ArrayBuffer(
+            createFileKey({
+              organizationId,
+              workspaceId,
+              fileId,
+              mimeType: DOCX_MIME_TYPE,
+            }),
+          );
           const extracted = await extractText(new Uint8Array(buffer));
           return extracted.paragraphs.map((p) => p.text).join("\n");
         };
@@ -236,16 +234,14 @@ export const loadEntityVersionDocxText = async function* ({
   const text = yield* Result.await(
     Result.tryPromise({
       try: async () => {
-        const buffer = await getS3()
-          .file(
-            createFileKey({
-              organizationId,
-              workspaceId,
-              fileId: file.id,
-              mimeType: DOCX_MIME_TYPE,
-            }),
-          )
-          .arrayBuffer();
+        const buffer = await readS3ArrayBuffer(
+          createFileKey({
+            organizationId,
+            workspaceId,
+            fileId: file.id,
+            mimeType: DOCX_MIME_TYPE,
+          }),
+        );
         const extracted = await extractText(new Uint8Array(buffer));
         return extracted.paragraphs.map((p) => p.text).join("\n");
       },

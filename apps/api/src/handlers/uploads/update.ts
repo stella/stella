@@ -39,7 +39,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
@@ -414,7 +414,7 @@ const runFinalize = async function* ({
   }
 
   // 3. Download for scan.
-  const fileBuffer = await getS3().file(tmpKey).arrayBuffer();
+  const fileBuffer = await readS3ArrayBuffer(tmpKey);
   if (!head.checksumSHA256) {
     const uploadedSha256 = new Bun.CryptoHasher("sha256")
       .update(fileBuffer)

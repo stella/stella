@@ -33,7 +33,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 // Mime types DeepL's /v2/document endpoint accepts. Anything
@@ -190,8 +190,7 @@ const translateEntity = createSafeHandler(
     });
 
     const sourceBytesResult = await Result.tryPromise({
-      try: async () =>
-        new Uint8Array(await getS3().file(sourceKey).arrayBuffer()),
+      try: async () => new Uint8Array(await readS3ArrayBuffer(sourceKey)),
       catch: (error: unknown) => error,
     });
 

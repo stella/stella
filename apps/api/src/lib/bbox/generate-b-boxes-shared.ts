@@ -13,7 +13,7 @@ import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import type { BoundingBox } from "@/api/types";
 
@@ -261,7 +261,7 @@ export const prepareJustificationData = async (
       mimeType: PDF_MIME_TYPE,
     });
 
-    const fileBuffer = await getS3().file(fileKey).arrayBuffer();
+    const fileBuffer = await readS3ArrayBuffer(fileKey);
     const pdf = await PDF.load(new Uint8Array(fileBuffer));
 
     return Result.ok({

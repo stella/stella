@@ -29,7 +29,7 @@ import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
 import { readManifest } from "@/api/lib/docx/template-manifest";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -108,8 +108,7 @@ const fillPreviewHandler = async function* ({
     );
   }
 
-  const s3File = getS3().file(template.s3Key);
-  const arrayBuf = await s3File.arrayBuffer();
+  const arrayBuf = await readS3ArrayBuffer(template.s3Key);
   const buffer = Buffer.from(arrayBuf);
 
   // Resolve clause slots before filling

@@ -19,7 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -400,7 +400,7 @@ export const loadFolioCollabSnapshot = async (
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });
-  const buffer = await getS3().file(key).arrayBuffer();
+  const buffer = await readS3ArrayBuffer(key);
 
   return Buffer.from(buffer).toString("base64");
 };
