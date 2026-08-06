@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  ENTITY_PRIORITIES as PRIORITY_VALUES,
+  TASK_STATUSES as STATUS_VALUES,
+} from "@stll/api-contract";
 import type { ConditionNode, GroupNode } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -711,16 +715,6 @@ const KIND_LABEL_KEYS = {
   document: "common.document",
   task: "search.kinds.task",
 } as const satisfies Record<(typeof ENTITY_KINDS)[number], TranslationKey>;
-
-const STATUS_VALUES = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
-
-const PRIORITY_VALUES = ["none", "urgent", "high", "medium", "low"] as const;
 
 const STATUS_VALUE_LABEL_KEYS = {
   open: "tasks.statusValues.open",

@@ -9,6 +9,20 @@ import {
   XCircleIcon,
 } from "lucide-react";
 
+import {
+  ENTITY_PRIORITIES as TASK_PRIORITIES,
+  isEntityPriority as isTaskPriority,
+  isTaskStatus,
+  TASK_STATUSES,
+} from "@stll/api-contract";
+import type {
+  EntityPriority as TaskPriority,
+  TaskStatus,
+} from "@stll/api-contract";
+
+export { isTaskPriority, isTaskStatus, TASK_PRIORITIES, TASK_STATUSES };
+export type { TaskPriority, TaskStatus };
+
 /** Normalize a date value that may be a Date object (Eden
  *  transforms `format: "date"`) or a YYYY-MM-DD string. */
 export const toISODate = (v: string | Date | null | undefined): string => {
@@ -23,31 +37,6 @@ export const toISODate = (v: string | Date | null | undefined): string => {
   }
   return v.slice(0, 10);
 };
-
-export const TASK_STATUSES = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
-
-export const TASK_PRIORITIES = [
-  "none",
-  "urgent",
-  "high",
-  "medium",
-  "low",
-] as const;
-
-export type TaskStatus = (typeof TASK_STATUSES)[number];
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
-
-export const isTaskStatus = (v: string | null): v is TaskStatus =>
-  v !== null && TASK_STATUSES.some((status) => status === v);
-
-export const isTaskPriority = (v: string | null): v is TaskPriority =>
-  v !== null && TASK_PRIORITIES.some((priority) => priority === v);
 
 export const STATUS_ICONS = {
   open: CircleIcon,

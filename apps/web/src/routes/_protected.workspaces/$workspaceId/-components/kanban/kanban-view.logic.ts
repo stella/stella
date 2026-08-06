@@ -1,5 +1,10 @@
 import { panic } from "better-result";
 
+import {
+  ENTITY_KINDS,
+  TASK_STATUSES as TASK_STATUS_ORDER,
+} from "@stll/api-contract";
+import type { EntityKind, TaskStatus } from "@stll/api-contract";
 import type { OptionColor } from "@stll/api/types";
 
 import {
@@ -138,15 +143,9 @@ const getGroupOptions = (property: WorkspaceProperty): GroupOption[] => {
 };
 
 /** All task statuses in the order they should appear as groups. */
-export const TASK_STATUS_ORDER = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
+export { TASK_STATUS_ORDER };
 
-const STATUS_OPTION_COLORS: Record<string, OptionColor> = {
+const STATUS_OPTION_COLORS = {
   // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   open: "gray",
   // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
@@ -156,11 +155,11 @@ const STATUS_OPTION_COLORS: Record<string, OptionColor> = {
   done: "green",
   // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   cancelled: "red",
-};
+} as const satisfies Record<TaskStatus, OptionColor>;
 
 const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
   TASK_STATUS_ORDER.map((status) => {
-    const optColor = STATUS_OPTION_COLORS[status] ?? "gray";
+    const optColor = STATUS_OPTION_COLORS[status];
     return {
       value: status,
       label: labels[status] ?? status,
@@ -170,18 +169,10 @@ const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
     };
   });
 
-export type EntityKindLabels = Record<
-  "document" | "folder" | "task" | "message" | "link",
-  string
->;
+export type EntityKindLabels = Record<EntityKind, string>;
 
-const getEntityKindGroupOptions = (labels: EntityKindLabels): GroupOption[] => [
-  { value: "document", label: labels.document },
-  { value: "folder", label: labels.folder },
-  { value: "task", label: labels.task },
-  { value: "message", label: labels.message },
-  { value: "link", label: labels.link },
-];
+const getEntityKindGroupOptions = (labels: EntityKindLabels): GroupOption[] =>
+  ENTITY_KINDS.map((kind) => ({ value: kind, label: labels[kind] }));
 
 type BuiltInGroupOptionsParams = {
   labels: EntityKindLabels;
