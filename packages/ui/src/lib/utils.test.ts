@@ -93,6 +93,10 @@ describe("composeRefs", () => {
 
     cleanup?.();
 
+    // The first ref returns no cleanup of its own, so detaching it is a call
+    // with `null`; without this the branch that synthesizes that call could go
+    // missing unnoticed.
+    expect(attached).toEqual([`first:${NODE}`, `second:${NODE}`, "first:null"]);
     expect(detached).toEqual(["second"]);
     expect(objectRef.current).toBeNull();
   });
