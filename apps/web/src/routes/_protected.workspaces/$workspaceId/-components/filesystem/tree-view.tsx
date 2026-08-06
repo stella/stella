@@ -18,14 +18,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  EyeOffIcon,
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-} from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon, FileIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -58,6 +51,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
   buildTree,
   findNode,
@@ -787,7 +781,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                       />
                     }
                   >
-                    <FolderIcon className="size-3.5" />
+                    <EntityKindIcon className="size-3.5" kind="folder" />
                   </Tooltip>
                 </BreadcrumbItem>
                 {breadcrumbs.map((crumb, i) => {
@@ -874,7 +868,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         )}
         ref={rootBarRef}
       >
-        <FolderIcon className="size-3.5" />
+        <EntityKindIcon className="size-3.5" kind="folder" />
         {t("workspaces.filesystem.moveToRoot")}
       </div>
       <div className="mt-1 min-h-0 flex-1 overflow-auto" ref={rowsViewportRef}>
@@ -1438,13 +1432,12 @@ const FilesystemRow = ({
       expanded={expanded}
       icon={(() => {
         if (isFolder) {
-          if (expanded) {
-            return (
-              <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-            );
-          }
           return (
-            <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+            <EntityKindIcon
+              className="text-muted-foreground size-4 shrink-0"
+              folderState={expanded ? "expanded" : "collapsed"}
+              kind="folder"
+            />
           );
         }
         if (file?.mimeType) {

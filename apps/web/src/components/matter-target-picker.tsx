@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, FolderIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { workspaceFoldersOptions } from "@/lib/workspaces/queries/entities";
@@ -247,7 +248,7 @@ const FolderPicker = ({
             onClick={() => onSelect(folder.entityId)}
             type="button"
           >
-            <FolderIcon className="size-4 shrink-0" />
+            <EntityKindIcon className="size-4 shrink-0" kind="folder" />
             <BidiText as="span" className="truncate">
               {folder.name}
             </BidiText>

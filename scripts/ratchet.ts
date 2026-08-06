@@ -296,6 +296,32 @@ const countNullishArrayFallback = (content: string): number => {
   return total;
 };
 
+// The kind-bearing lucide glyphs `no-direct-entity-glyph` bans: drawing one
+// by hand is a second entity-kind mapping, and every copy so far has drifted
+// (only "folder" handled, or the kind guessed from a label). Matched as whole
+// identifiers so both the import and the JSX use of a file that still draws
+// its own count.
+const ENTITY_GLYPH_IDENTIFIER = /\b(?:Folder|FolderOpen|ListTodo)(?:Icon)?\b/gu;
+
+const countEntityKindGlyphs = (content: string): number => {
+  let total = 0;
+  let inBlockComment = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+    total += (code.match(ENTITY_GLYPH_IDENTIFIER) ?? []).length;
+  }
+  return total;
+};
+
 /**
  * Regex literals whose worst case backtracks super-linearly in the length of
  * the subject — the shape that turns one oversized input into minutes of
@@ -945,6 +971,16 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countModuleLevelMutableCollections,
   },
   {
+    id: "entity-kind-glyph-adhoc",
+    description:
+      "raw folder/task lucide glyph identifiers (Folder/FolderOpen/ListTodo, with or without the Icon suffix) in web source outside entity-kind-icon.tsx; every entity glyph belongs to <EntityKindIcon> (see no-direct-entity-glyph)",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/web/src/components/workspaces/entity-kind-icon.tsx",
+    count: countEntityKindGlyphs,
+  },
+  {
     id: "raw-use-effect-suppressions",
     description:
       "no-raw-use-effect disable directives in apps/web/src (each is a reviewed exception; new effects use the wrappers or a better primitive — see /conventions-use-effect)",
@@ -1378,6 +1414,25 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+const ENTITY_GLYPH_FIXTURE_LINES = [
+  'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',
+  "const shut = <FolderIcon />;",
+  "const open = <FolderOpenIcon />;",
+  "const todo = <ListTodoIcon />;",
+  "const plain = <Folder />;",
+  "const nested = folderIcon.FolderIcon;",
+  "const unrelated = <FolderTreeIcon />; // longer identifier must not count",
+  "const lower = folder.entityId; // lowercase property must not count",
+  'const label = "FolderIcon in a string"; // string must not count',
+  "// FolderIcon in a comment must not count",
+];
+const SELF_TEST_ENTITY_GLYPHS = `${ENTITY_GLYPH_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the three import specifiers(3) + shut(1) + open(1) + todo(1) +
+// plain(1) + the nested member access(1) = 8. `FolderTreeIcon` (a different
+// identifier), the lowercase property, the string literal and the comment
+// are all excluded.
+const EXPECTED_ENTITY_GLYPHS = 8;
+
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
   "stellaToast.add({ title: error.message ?? fallback });",
@@ -1671,6 +1726,11 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
     writeFixture(
       root,
+      "apps/web/src/entity-glyphs.tsx",
+      SELF_TEST_ENTITY_GLYPHS,
+    );
+    writeFixture(
+      root,
       "apps/api/src/super-linear-regexes.ts",
       SELF_TEST_SUPER_LINEAR_REGEXES,
     );
@@ -1790,6 +1850,16 @@ const runSelfTest = (): number => {
     if (nullishMetric.count !== EXPECTED_NULLISH) {
       failures.push(
         `nullish-array-fallback counted ${nullishMetric.count}, expected ${EXPECTED_NULLISH}`,
+      );
+    }
+
+    const entityGlyphMetric = requireSnapshot(
+      snapshot,
+      "entity-kind-glyph-adhoc",
+    );
+    if (entityGlyphMetric.count !== EXPECTED_ENTITY_GLYPHS) {
+      failures.push(
+        `entity-kind-glyph-adhoc counted ${entityGlyphMetric.count}, expected ${EXPECTED_ENTITY_GLYPHS}`,
       );
     }
 

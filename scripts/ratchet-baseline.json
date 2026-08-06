@@ -40,6 +40,12 @@
       "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
     }
   },
+  "entity-kind-glyph-adhoc": {
+    "count": 2,
+    "files": {
+      "apps/web/src/components/search-dialog.tsx": 2
+    }
+  },
   "raw-use-effect-suppressions": {
     "count": 0,
     "files": {}

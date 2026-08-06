@@ -9,7 +9,7 @@ import {
   row_getIsSelected,
   row_getIsSomeSelected,
 } from "@tanstack/react-table/static-functions";
-import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -21,6 +21,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
   getEntityName,
   getFirstFile,
@@ -828,11 +829,11 @@ const FolderCell = ({
           icon={ChevronRightIcon}
         />
       </Tooltip>
-      {isExpanded ? (
-        <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-      ) : (
-        <FolderIcon className="text-muted-foreground size-4 shrink-0" />
-      )}
+      <EntityKindIcon
+        className="text-muted-foreground size-4 shrink-0"
+        folderState={isExpanded ? "expanded" : "collapsed"}
+        kind="folder"
+      />
       {isEditing ? (
         <InlineEdit
           inputClassName="w-48"

@@ -11,7 +11,6 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarIcon,
-  ListTodoIcon,
   MinusIcon,
   PlusIcon,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -216,7 +216,7 @@ function MyTodosPage() {
 
       {!isLoading && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
-          <ListTodoIcon className="size-10 opacity-40" />
+          <EntityKindIcon className="size-10 opacity-40" kind="task" />
           <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
           {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
             <Menu>
