@@ -89,11 +89,6 @@ const GROUP_EAGER_LOAD_COUNT = 3;
 // group-counts) stay in sync.
 const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 
-// Status grouping is rejected before a document table resolves its group
-// options, so it never needs status labels; shared so the empty object isn't
-// rebuilt every render.
-const EMPTY_STATUS_LABELS: Record<string, string> = {};
-
 // Stable key for a group. The null (uncategorized) bucket and real string values
 // live in disjoint namespaces so an option literally named "uncategorized"
 // can't collide with the null bucket.
@@ -296,9 +291,6 @@ export const GroupedTableLayout = ({
     );
   }
 
-  // Status grouping is rejected above (isUnsupportedGrouping), so a document
-  // table never needs status labels.
-  const statusLabels = EMPTY_STATUS_LABELS;
   const entityKindLabels = {
     document: t("common.document"),
     folder: t("search.kinds.folder"),
@@ -307,12 +299,19 @@ export const GroupedTableLayout = ({
     link: t("search.kinds.link"),
   };
 
-  const options = resolveGroupOptions({
-    grouping,
-    groupByPropertyId,
-    statusLabels,
-    entityKindLabels,
-  });
+  // Status grouping is rejected above (isUnsupportedGrouping), so this
+  // layout never supplies status labels; the params union means it cannot
+  // hand over an empty set by accident either.
+  const options = resolveGroupOptions(
+    grouping.type === "built-in"
+      ? {
+          type: "built-in",
+          propertyId: grouping.propertyId,
+          groupByPropertyId,
+          entityKindLabels,
+        }
+      : grouping,
+  );
   // Cells whose value is no longer a current option fold into the uncategorized
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.

@@ -157,12 +157,16 @@ const STATUS_OPTION_COLORS = {
   cancelled: "red",
 } as const satisfies Record<TaskStatus, OptionColor>;
 
-const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
+/** Every status carries a label. A partial map would render a raw column
+ *  heading such as "in_progress" to the user. */
+export type TaskStatusLabels = Record<TaskStatus, string>;
+
+const getStatusGroupOptions = (labels: TaskStatusLabels): GroupOption[] =>
   TASK_STATUS_ORDER.map((status) => {
     const optColor = STATUS_OPTION_COLORS[status];
     return {
       value: status,
-      label: labels[status] ?? status,
+      label: labels[status],
       color: resolveOptionColor(optColor).color,
       colorBg: resolveOptionColor(optColor).background,
       optionColor: optColor,
@@ -187,33 +191,52 @@ const getBuiltInGroupOptions = ({
     ? getEntityKindGroupOptions(labels)
     : [];
 
-type ResolveGroupOptionsParams = {
-  grouping: KanbanGrouping;
-  groupByPropertyId: string;
-  statusLabels: Record<string, string>;
-  entityKindLabels: EntityKindLabels;
-};
+/**
+ * A grouping plus exactly the labels that grouping consumes.
+ *
+ * The label maps used to ride along as separate fields for every call, so a
+ * caller could pass an empty status map to a status board (the column
+ * headings then fell back to raw values like "in_progress") and a status
+ * board could be built with no labels at all. Carrying them on the arm that
+ * reads them makes both unrepresentable.
+ *
+ * The discriminant sits at the top level rather than nested under a
+ * `grouping` field because TypeScript narrows a union only by its own
+ * properties: `params.grouping.type === "status"` would not narrow `params`.
+ */
+export type ResolveGroupOptionsParams =
+  | (Extract<KanbanGrouping, { type: "status" }> & {
+      statusLabels: TaskStatusLabels;
+    })
+  | (Extract<KanbanGrouping, { type: "built-in" }> & {
+      groupByPropertyId: string;
+      entityKindLabels: EntityKindLabels;
+    })
+  | Extract<KanbanGrouping, { type: "none" } | { type: "property" }>;
 
 /** Resolve the static option list for a grouping (excludes uncategorized). */
-export const resolveGroupOptions = ({
-  grouping,
-  groupByPropertyId,
-  statusLabels,
-  entityKindLabels,
-}: ResolveGroupOptionsParams): GroupOption[] => {
-  if (grouping.type === "status") {
-    return getStatusGroupOptions(statusLabels);
+export const resolveGroupOptions = (
+  params: ResolveGroupOptionsParams,
+): GroupOption[] => {
+  switch (params.type) {
+    case "status":
+      return getStatusGroupOptions(params.statusLabels);
+    case "built-in":
+      return getBuiltInGroupOptions({
+        labels: params.entityKindLabels,
+        mode: params.groupByPropertyId,
+      });
+    case "property":
+      return isGroupableProperty(params.property)
+        ? getGroupOptions(params.property)
+        : [];
+    case "none":
+      return [];
+    default: {
+      const exhaustive: never = params;
+      return exhaustive;
+    }
   }
-  if (grouping.type === "built-in") {
-    return getBuiltInGroupOptions({
-      labels: entityKindLabels,
-      mode: groupByPropertyId,
-    });
-  }
-  if (grouping.type === "property" && isGroupableProperty(grouping.property)) {
-    return getGroupOptions(grouping.property);
-  }
-  return [];
 };
 
 /** Append the uncategorized bucket (null value) after the options. */
