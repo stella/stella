@@ -4,6 +4,23 @@ import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
 
 describe("API deployment health receipt", () => {
+  test("supports either scheduled-alert authentication mechanism", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/scheduled-run-alerts.yml", import.meta.url),
+    ).text();
+
+    expect(workflow).toContain('if [ -z "$WEBHOOK_URL" ]; then');
+    expect(workflow).toContain('if [ -n "$WEBHOOK_TOKEN" ]; then');
+    expect(workflow).toContain(
+      'header_args+=(-H "Authorization: Bearer $WEBHOOK_TOKEN")',
+    );
+    expect(workflow).toContain('done <<< "$WEBHOOK_HEADERS"');
+    expect(workflow).toContain(`if [ "\${#header_args[@]}" -eq 0 ]; then`);
+    expect(
+      workflow.match(/Authorization: Bearer \$WEBHOOK_TOKEN/gu),
+    ).toHaveLength(1);
+  });
+
   test("ties staging promotion to the current health gate", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
