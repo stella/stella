@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- [#1741](https://github.com/stella/stella/pull/1741) [`0f1eceb`](https://github.com/stella/stella/commit/0f1eceb55bc199fb79d58680aec793cb755854e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose stella product identity through the generated MCP resource registry.
+
 ## 0.4.0
 
 ### Minor Changes
