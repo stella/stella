@@ -2,6 +2,7 @@ import {
   CircleDashedIcon,
   FileIcon,
   FolderIcon,
+  FolderOpenIcon,
   LinkIcon,
   ListTodoIcon,
   MailIcon,
@@ -75,10 +76,15 @@ export const EntityIcon = ({
   }
 };
 
+/** Whether a folder is drawn open or shut. Only trees and tables that own
+ *  an expand affordance know this; everything else draws a shut folder. */
+export type FolderState = "collapsed" | "expanded";
+
 type EntityKindIconProps = {
   kind: EntityKind;
   className?: string | undefined;
   fileName?: string | null | undefined;
+  folderState?: FolderState | undefined;
   mimeType?: string | null | undefined;
   status?: string | null | undefined;
 };
@@ -93,6 +99,7 @@ export const EntityKindIcon = ({
   kind,
   className,
   fileName,
+  folderState,
   mimeType,
   status,
 }: EntityKindIconProps) => {
@@ -108,7 +115,11 @@ export const EntityKindIcon = ({
       return <Icon className={cn(STATUS_COLORS[statusKey], className)} />;
     }
     case "folder":
-      return <FolderIcon className={className} />;
+      return folderState === "expanded" ? (
+        <FolderOpenIcon className={className} />
+      ) : (
+        <FolderIcon className={className} />
+      );
     case "message":
       return <MailIcon className={className} />;
     case "link":

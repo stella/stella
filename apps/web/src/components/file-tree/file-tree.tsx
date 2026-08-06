@@ -1,15 +1,12 @@
 import type { ReactNode } from "react";
 
-import {
-  ChevronRightIcon,
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-} from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
+
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 
 // Shared presentation for the file/folder tree used by the workspace Files view
 // and the skills file browser, so both render an identical tree (indentation
@@ -125,16 +122,13 @@ const flatten = (
   return rows;
 };
 
-const defaultIcon = (node: FileTreeNode, expanded: boolean): ReactNode => {
-  if (node.kind === "folder") {
-    return expanded ? (
-      <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-    ) : (
-      <FolderIcon className="text-muted-foreground size-4 shrink-0" />
-    );
-  }
-  return <FileIcon className="text-muted-foreground size-4 shrink-0" />;
-};
+const defaultIcon = (node: FileTreeNode, expanded: boolean): ReactNode => (
+  <EntityKindIcon
+    className="text-muted-foreground size-4 shrink-0"
+    folderState={expanded ? "expanded" : "collapsed"}
+    kind={node.kind === "folder" ? "folder" : "document"}
+  />
+);
 
 export type FileTreeProps = {
   nodes: FileTreeNode[];

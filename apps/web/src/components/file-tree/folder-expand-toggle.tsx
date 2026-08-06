@@ -1,9 +1,10 @@
 import type { ComponentProps } from "react";
 
-import { FolderIcon, FolderOpenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 
 type FolderExpandToggleProps = {
   allExpanded: boolean;
@@ -34,11 +35,11 @@ export const FolderExpandToggle = ({
       }
       variant="ghost"
     >
-      {allExpanded ? (
-        <FolderOpenIcon className="size-3.5" />
-      ) : (
-        <FolderIcon className="size-3.5" />
-      )}
+      <EntityKindIcon
+        className="size-3.5"
+        folderState={allExpanded ? "expanded" : "collapsed"}
+        kind="folder"
+      />
     </Button>
   );
 };

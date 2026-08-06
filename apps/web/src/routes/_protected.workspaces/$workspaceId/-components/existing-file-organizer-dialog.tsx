@@ -9,7 +9,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  FolderIcon,
   LoaderCircleIcon,
   RotateCcwIcon,
   Rows3Icon,
@@ -1163,7 +1162,10 @@ const OrganizerFolderNode = ({
           )}
           ref={dragHandleRef}
         >
-          <FolderIcon className="text-muted-foreground size-4" />
+          <EntityKindIcon
+            className="text-muted-foreground size-4"
+            kind="folder"
+          />
         </div>
         {isEditing ? (
           <InlineNameInput

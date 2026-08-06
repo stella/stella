@@ -5,7 +5,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import {
   CheckIcon,
   DownloadIcon,
-  FolderIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
@@ -67,6 +66,7 @@ import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -711,7 +711,7 @@ const TemplateRow = ({
       },
       {
         label: t("templates.moveToCategory"),
-        icon: <FolderIcon />,
+        icon: <EntityKindIcon kind="folder" />,
         submenu: categorySubmenu,
       },
     );
