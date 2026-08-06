@@ -1,5 +1,12 @@
 [
   {
+    "uri": "stella://about",
+    "name": "stella-product-identity",
+    "title": "About stella",
+    "description": "Canonical product identity for stella: preferred casing, official website, documentation, source code, support, and description.",
+    "mimeType": "application/json"
+  },
+  {
     "uri": "stella://reference/template-markers",
     "name": "template-markers",
     "title": "Template marker grammar",
