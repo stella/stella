@@ -18,8 +18,10 @@ import {
   chatKeys,
   chatThreadOptions,
   createChatRuntime,
+  groupedChatThreadsOptions,
   invalidateChatThreadLists,
   installChatRuntimeCleanup,
+  listChatHistoryItems,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
   sendThreadChatMessage,
@@ -58,6 +60,18 @@ const parseJsonRequestBody = (init: RequestInit | undefined): unknown => {
 };
 
 describe("chatKeys", () => {
+  test("isolates normalized history searches from the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const unfiltered = groupedChatThreadsOptions({ activeOrganizationId });
+    const searched = groupedChatThreadsOptions({
+      activeOrganizationId,
+      search: "  Matter B  ",
+    });
+
+    expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
+    expect(searched.queryKey.at(-1)).toBe("Matter B");
+  });
+
   test("separates plain chat transports from active DOCX edit transports", () => {
     const threadId = toChatThreadId("thread-A");
     const base = {
@@ -334,13 +348,41 @@ describe("mergeGroupedChatThreadPages", () => {
         threads: [{ id: "workspace-thread-C" }],
       },
     ]);
+    expect(
+      listChatHistoryItems(result).map((thread) => ({
+        id: thread.id,
+        scope: thread.scope,
+        workspaceId:
+          thread.scope === "workspace" ? thread.workspaceId : undefined,
+      })),
+    ).toEqual([
+      { id: "global-A", scope: "global", workspaceId: undefined },
+      {
+        id: "workspace-thread-A",
+        scope: "workspace",
+        workspaceId: "workspace-A",
+      },
+      { id: "global-B", scope: "global", workspaceId: undefined },
+      {
+        id: "workspace-thread-B",
+        scope: "workspace",
+        workspaceId: "workspace-A",
+      },
+      {
+        id: "workspace-thread-C",
+        scope: "workspace",
+        workspaceId: "workspace-B",
+      },
+    ]);
   });
 });
 
 describe("invalidateChatThreadLists", () => {
   test("invalidates grouped threads and workspace activity together", async () => {
     const queryClient = new QueryClient();
-    const groupedKey = chatKeys.groupedThreads("organization-a");
+    const groupedKey = chatKeys.groupedThreads({
+      activeOrganizationId: "organization-a",
+    });
     const activityKey = workspacesKeys.activity("organization-a", {
       workspaceId: "workspace-a",
     });
