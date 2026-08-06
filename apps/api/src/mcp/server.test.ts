@@ -353,36 +353,63 @@ describe("handleMcpHttpRequest", () => {
     });
   });
 
-  test("refuses every session operation with 405 so clients stay on request/response", async () => {
+  test("keeps the authenticated notification stream open until the client cancels", async () => {
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        headers: {
+          accept: "text/event-stream",
+          authorization: "Bearer token",
+        },
+        method: "GET",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const body = response.body;
+    expect(body).not.toBeNull();
+    if (body === null) {
+      throw new Error("Expected an authenticated notification stream");
+    }
+
+    const reader = body.getReader();
+    const firstRead = reader.read();
+    const initialState = await Promise.race([
+      firstRead.then(({ done }) =>
+        done ? ("ended" as const) : ("open" as const),
+      ),
+      Bun.sleep(20).then(() => "open" as const),
+    ]);
+    expect(initialState).toBe("open");
+
+    await reader.cancel();
+    await firstRead;
+  });
+
+  test("refuses session termination with 405", async () => {
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",
       scopes: ["stella:read"],
       userId: "user_1",
     });
 
-    // GET opens the notification stream and DELETE ends a session. A
-    // per-request transport can honour neither, so neither may be advertised.
-    const responses = await Promise.all(
-      ["GET", "DELETE"].map(
-        async (method) =>
-          await handleMcpHttpRequest(
-            new Request("http://localhost/mcp", {
-              headers: {
-                accept: "text/event-stream",
-                authorization: "Bearer token",
-              },
-              method,
-            }),
-          ),
-      ),
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        headers: { authorization: "Bearer token" },
+        method: "DELETE",
+      }),
     );
 
-    for (const response of responses) {
-      expect(response.status).toBe(405);
-      expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
-      // Refusing a session is not a credential problem: no re-consent trigger.
-      expect(response.headers.get("WWW-Authenticate")).toBeNull();
-    }
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+    expect(response.headers.get("WWW-Authenticate")).toBeNull();
     expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
   });
 
@@ -396,10 +423,7 @@ describe("handleMcpHttpRequest", () => {
     expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
   });
 
-  test("never answers with a stream body, which per-request teardown truncates", async () => {
-    // Server and transport are built per request and closed once the response
-    // is built, so any streamed body reaches the client already ended. Every
-    // method must therefore resolve to a complete, buffered response.
+  test("keeps POST buffered and DELETE non-streaming", async () => {
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",
       scopes: ["stella:read"],
@@ -408,13 +432,6 @@ describe("handleMcpHttpRequest", () => {
     resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
 
     const requests = [
-      new Request("http://localhost/mcp", {
-        headers: {
-          accept: "text/event-stream",
-          authorization: "Bearer token",
-        },
-        method: "GET",
-      }),
       createMcpRequest({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
       new Request("http://localhost/mcp", {
         headers: { authorization: "Bearer token" },

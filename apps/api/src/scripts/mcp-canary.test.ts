@@ -1,24 +1,18 @@
 import { isLegacyRequest } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
-import { MCP_STATELESS_ALLOW_HEADER } from "@/api/mcp/constants";
-
 import {
   AUTHENTICATED_PROBES,
+  type CanaryFetcher,
   createJsonRpcRequest,
   evaluateDiscovery,
   evaluateInitialize,
-  evaluateStreamRefusal,
+  evaluateStreamAvailability,
   evaluateToolsList,
   evaluateUnauthenticated,
+  runAuthenticatedStreamProbe,
   summarize,
 } from "./mcp-canary";
-
-const REFUSAL = {
-  allow: MCP_STATELESS_ALLOW_HEADER,
-  contentType: "application/json",
-  status: 405,
-};
 
 describe("canary protocol routing", () => {
   test("keeps the compatibility handshake legacy and sends tools/list through the modern handler", async () => {
@@ -48,63 +42,116 @@ describe("canary protocol routing", () => {
   });
 });
 
-describe("evaluateStreamRefusal", () => {
-  test("fails a stream answer, which per-request teardown truncates", () => {
-    // The whole point of the probe: a 2xx that hands the client a body already
-    // ended by teardown. Status alone reads as healthy, so the media type has
-    // to decide.
-    const result = evaluateStreamRefusal({
-      ...REFUSAL,
-      contentType: "text/event-stream",
-      status: 200,
-    });
-
-    expect(result.status).toBe("failed");
-    expect(result.detail).toContain("text/event-stream");
-  });
-
-  test("fails a stream answer regardless of charset parameters", () => {
-    const result = evaluateStreamRefusal({
-      ...REFUSAL,
-      contentType: "text/event-stream; charset=utf-8",
-      status: 200,
-    });
-
-    expect(result.status).toBe("failed");
-  });
-
-  test("passes only on the 405 that keeps clients on request/response", () => {
-    expect(evaluateStreamRefusal(REFUSAL).status).toBe("passed");
-    expect(evaluateStreamRefusal({ ...REFUSAL, status: 200 }).status).toBe(
-      "failed",
-    );
-  });
-
-  test("fails a 405 that never says what the endpoint does serve", () => {
-    // A refusal without Allow leaves the client guessing which method to use.
-    expect(evaluateStreamRefusal({ ...REFUSAL, allow: null }).status).toBe(
-      "failed",
-    );
+describe("evaluateStreamAvailability", () => {
+  test("passes an authenticated event stream", () => {
     expect(
-      evaluateStreamRefusal({ ...REFUSAL, allow: "OPTIONS, GET, POST, DELETE" })
-        .status,
-    ).toBe("failed");
-  });
-
-  test("accepts any ordering and spacing of the advertised methods", () => {
-    // Order is the server's business; the method set is the contract.
-    expect(
-      evaluateStreamRefusal({ ...REFUSAL, allow: "post ,  OPTIONS" }).status,
+      evaluateStreamAvailability({
+        contentType: "text/event-stream; charset=utf-8",
+        status: 200,
+      }).status,
     ).toBe("passed");
   });
 
-  test("fails a 405 that still advertises a session operation", () => {
-    // DELETE is a session operation too, so advertising it would promise a
-    // session this endpoint does not have.
+  test("fails the 405 that ChatGPT treats as a dead connector", () => {
     expect(
-      evaluateStreamRefusal({ ...REFUSAL, allow: "OPTIONS, POST, DELETE" })
-        .status,
+      evaluateStreamAvailability({
+        contentType: "application/json",
+        status: 405,
+      }).status,
     ).toBe("failed");
+  });
+
+  test("fails a 200 without the event-stream media type", () => {
+    expect(
+      evaluateStreamAvailability({
+        contentType: "application/json",
+        status: 200,
+      }).status,
+    ).toBe("failed");
+  });
+});
+
+describe("authenticated notification-stream probe", () => {
+  test("sends the production GET and cancels a stream that remains open", async () => {
+    let cancelled = false;
+    let requestHeaders: Headers | undefined;
+    let requestMethod: string | undefined;
+    let requestPath: string | undefined;
+    const fetcher: CanaryFetcher = async (input, init) => {
+      requestHeaders = new Headers(init.headers);
+      requestMethod = init.method;
+      requestPath = new URL(input instanceof Request ? input.url : input)
+        .pathname;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          cancel: () => {
+            cancelled = true;
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+    };
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("passed");
+    expect(requestPath).toBe("/mcp");
+    expect(requestMethod).toBe("GET");
+    expect(requestHeaders?.get("accept")).toBe("text/event-stream");
+    expect(requestHeaders?.get("authorization")).toBe("Bearer canary-token");
+    expect(cancelled).toBe(true);
+  });
+
+  test("fails a 200 event-stream body that has already completed", async () => {
+    const fetcher: CanaryFetcher = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.close();
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("completed");
+  });
+
+  test("fails when closing the probe stream fails", async () => {
+    const fetcher: CanaryFetcher = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          cancel: async () => {
+            throw new Error("synthetic cancellation failure");
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("cancellation failed");
   });
 });
 

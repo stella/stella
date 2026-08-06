@@ -2,12 +2,12 @@
  * Canary for the MCP transport of a *deployed* API.
  *
  * The transport can fail while every response still carries a 2xx: an
- * endpoint that answers `GET` with a stream body the stateless per-request
- * teardown truncates, an `initialize` that returns a JSON-RPC error inside a
- * 200, or a tool list that comes back empty. None of those raise a 5xx, log an
- * error, or trip an alarm, so the only observer is the client whose session
- * silently stops working. This canary drives the handshake a real client
- * drives and treats a well-formed session as the pass condition.
+ * missing or truncated authenticated `GET` event channel, an `initialize` that
+ * returns a JSON-RPC error inside a 200, or a tool list that comes back empty.
+ * None of those necessarily raise a 5xx, log an error, or trip an alarm, so the
+ * only observer is the client whose session silently stops working. This canary
+ * drives the handshake a real client drives and treats a well-formed session as
+ * the pass condition.
  *
  * Read-only by construction: it never calls a tool, so it cannot touch tenant
  * data. Response bodies are parsed but never printed, only the shape assertions
@@ -27,28 +27,13 @@ import {
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import {
-  MCP_DISCOVERY_PATH,
-  MCP_HTTP_PATH,
-  MCP_STATELESS_ALLOW_HEADER,
-} from "@/api/mcp/constants";
+import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "@/api/mcp/constants";
 
 const PROBE_TIMEOUT_MS = 20_000;
+const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
-
-/** Order and spacing are the server's business; the method set is not. */
-const parseAllowedMethods = (allow: string | null): string[] =>
-  (allow ?? "")
-    .split(",")
-    .map((method) => method.trim().toUpperCase())
-    .filter((method) => method.length > 0)
-    .toSorted();
-
-const EXPECTED_ALLOWED_METHODS = parseAllowedMethods(
-  MCP_STATELESS_ALLOW_HEADER,
-);
 
 const PROBE_STATUS = {
   failed: "failed",
@@ -164,33 +149,23 @@ export const evaluateUnauthenticated = ({
 };
 
 /**
- * The transport is stateless, so it cannot hold a server-initiated stream open
- * and must say so with 405. Answering `GET` with `text/event-stream` hands the
- * client a body that per-request teardown has already ended; the client sees
- * the stream die on open and reconnects forever instead of calling tools.
+ * ChatGPT opens this optional channel before it calls tools and treats a 405 as
+ * a dead connector. Headers are only the first half of the contract: the caller
+ * also observes the body briefly and fails if it completes or errors instead of
+ * remaining open as a notification channel.
  */
-export const evaluateStreamRefusal = ({
-  allow,
+export const evaluateStreamAvailability = ({
   contentType,
   status,
-}: Pick<ProbeResponse, "allow" | "contentType" | "status">): ProbeResult => {
+}: Pick<ProbeResponse, "contentType" | "status">): ProbeResult => {
   const name = PROBE_NAMES.stream;
-  if (mediaType(contentType) === SSE_CONTENT_TYPE) {
-    return failed(name, `${String(status)} ${SSE_CONTENT_TYPE} (expected 405)`);
+  if (status !== 200) {
+    return failed(name, `${String(status)} (expected 200)`);
   }
-  if (status !== 405) {
-    return failed(name, `${String(status)} (expected 405)`);
+  if (mediaType(contentType) !== SSE_CONTENT_TYPE) {
+    return failed(name, `200 ${contentType ?? "without a content type"}`);
   }
-  // The refusal is only actionable if it also tells the client what the
-  // endpoint does serve; a 405 with a wrong or missing Allow is a dead end.
-  const allowed = parseAllowedMethods(allow);
-  if (allowed.join(",") !== EXPECTED_ALLOWED_METHODS.join(",")) {
-    return failed(
-      name,
-      `405 allowing ${allowed.join(", ") || "nothing"} (expected ${MCP_STATELESS_ALLOW_HEADER})`,
-    );
-  }
-  return passed(name, "405, so clients stay on request/response");
+  return passed(name, "200 with an authenticated notification stream");
 };
 
 const jsonRpcResult = (body: unknown): Record<string, unknown> | undefined =>
@@ -342,7 +317,92 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> => {
   ];
 };
 
-type CanaryTarget = { baseUrl: string; token: string };
+export type CanaryTarget = { baseUrl: string; token: string };
+export type CanaryFetcher = typeof fetchWithTimeout;
+
+type StreamObservation = "cancel_failed" | "closed" | "open" | "read_failed";
+
+/**
+ * Distinguish a genuinely open event channel from a 200 response whose body was
+ * already truncated. A pending read at the deadline is the normal idle-stream
+ * case. If frames arrive during the window, keep reading so a frame followed by
+ * immediate EOF still fails rather than masquerading as a live channel.
+ */
+const inspectNotificationStream = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<StreamObservation> => {
+  const reader = body.getReader();
+  const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
+  const observeUntilDeadline = async (): Promise<StreamObservation> => {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return "open";
+    }
+    const readObservation = await Promise.race([
+      reader.read().then(
+        ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
+        () => "read_failed" as const,
+      ),
+      Bun.sleep(remainingMs).then(() => "open" as const),
+    ]);
+
+    // Reads stay sequential: a frame can be followed immediately by EOF,
+    // which is the truncation this bounded observation is meant to catch.
+    return readObservation === "frame"
+      ? observeUntilDeadline()
+      : readObservation;
+  };
+
+  const observation = await observeUntilDeadline();
+  try {
+    await reader.cancel();
+  } catch {
+    return "cancel_failed";
+  }
+  return observation;
+};
+
+export const runAuthenticatedStreamProbe = async (
+  { baseUrl, token }: CanaryTarget,
+  fetcher: CanaryFetcher = fetchWithTimeout,
+): Promise<ProbeResult> => {
+  const response = await fetcher(new URL(MCP_HTTP_PATH, baseUrl), {
+    headers: {
+      accept: SSE_CONTENT_TYPE,
+      authorization: `Bearer ${token}`,
+    },
+    method: "GET",
+    timeoutMs: PROBE_TIMEOUT_MS,
+  });
+  const headerResult = evaluateStreamAvailability({
+    contentType: response.headers.get("content-type"),
+    status: response.status,
+  });
+
+  if (headerResult.status !== PROBE_STATUS.passed) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      return failed(PROBE_NAMES.stream, "response-body cancellation failed");
+    }
+    return headerResult;
+  }
+  if (response.body === null) {
+    return failed(PROBE_NAMES.stream, "200 event stream with no response body");
+  }
+
+  const observation = await inspectNotificationStream(response.body);
+  if (observation === "closed") {
+    return failed(PROBE_NAMES.stream, "200 event stream completed immediately");
+  }
+  if (observation === "read_failed") {
+    return failed(PROBE_NAMES.stream, "200 event stream failed while reading");
+  }
+  if (observation === "cancel_failed") {
+    return failed(PROBE_NAMES.stream, "response-body cancellation failed");
+  }
+  return headerResult;
+};
 
 type AuthenticatedProbe = {
   name: string;
@@ -356,19 +416,7 @@ type AuthenticatedProbe = {
 export const AUTHENTICATED_PROBES = [
   {
     name: PROBE_NAMES.stream,
-    run: async ({ baseUrl, token }) =>
-      evaluateStreamRefusal(
-        await readProbeResponse(
-          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-            headers: {
-              accept: SSE_CONTENT_TYPE,
-              authorization: `Bearer ${token}`,
-            },
-            method: "GET",
-            timeoutMs: PROBE_TIMEOUT_MS,
-          }),
-        ),
-      ),
+    run: runAuthenticatedStreamProbe,
   },
   {
     name: PROBE_NAMES.initialize,
