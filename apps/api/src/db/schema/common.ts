@@ -316,13 +316,10 @@ export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 export const PROPERTY_ROLES = ["document-type-classifier"] as const;
 export type PropertyRole = (typeof PROPERTY_ROLES)[number];
 
-export const ENTITY_KINDS = [
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-] as const satisfies readonly EntityKind[];
+/** Re-exported so the schema layer keeps one import surface; the array is
+ *  declared in `@stll/api-contract` and every other consumer derives from
+ *  it. */
+export { ENTITY_KINDS } from "@stll/api-contract";
 
 export const TASK_ASSIGNEE_ROLES = ["assignee", "reviewer"] as const;
 

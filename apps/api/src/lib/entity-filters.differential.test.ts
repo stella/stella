@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { ENTITY_KINDS } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
@@ -78,13 +79,6 @@ const propertyContent = (key: PropKey) => {
     fallback: null,
   };
 };
-
-const ENTITY_KINDS: readonly EntityKind[] = [
-  "document",
-  "task",
-  "message",
-  "link",
-];
 
 beforeAll(
   async () => {
