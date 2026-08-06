@@ -19,7 +19,8 @@
 // a stable Bun containing the fixes (the first stable AFTER 1.3.14 — they are
 // not in 1.3.14 itself). See TODO(bun-s3-native-read).
 
-import { isIdentifier } from "./utils.ts";
+import { isAstNode, isIdentifier } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 // Body-materialising reads only. `.exists()`, `.stat()`, `.write()`,
 // `.delete()`, and `.presign()` carry no response body and do not leak.
@@ -40,15 +41,6 @@ const isFileCall = (node) =>
   node.callee.type === "MemberExpression" &&
   !node.callee.computed &&
   isIdentifier(node.callee.property, "file");
-
-/** True when `.file(...)`'s receiver is recognisably an S3 client. */
-const hasS3Receiver = (fileCall, s3Locals) => {
-  const receiver = fileCall.callee.object;
-  if (isS3AccessorCall(receiver)) {
-    return true;
-  }
-  return isIdentifier(receiver) && s3Locals.has(receiver.name);
-};
 
 const bodyReadMethod = (member) => {
   if (!member.computed && isIdentifier(member.property)) {
@@ -79,13 +71,6 @@ export default {
         },
       },
       create(context) {
-        // Locals bound to a Bun S3 client, so a script that builds its own
-        // `const s3 = new Bun.S3Client(...)` is covered too.
-        const s3Locals = new Set();
-        // Locals bound to an S3 *file handle*, for the two-step form
-        // `const f = getS3().file(k); await f.arrayBuffer();`.
-        const s3FileLocals = new Set();
-
         const isS3ClientConstruction = (init) =>
           init?.type === "NewExpression" &&
           ((isIdentifier(init.callee) && init.callee.name === "S3Client") ||
@@ -93,23 +78,88 @@ export default {
               !init.callee.computed &&
               isIdentifier(init.callee.property, "S3Client")));
 
-        return {
-          VariableDeclarator(node) {
-            if (!isIdentifier(node.id)) {
-              return;
+        const resolveVariable = (
+          identifierNode: AstNode & { name: string },
+        ) => {
+          let scope = context.sourceCode.getScope(identifierNode);
+          while (scope) {
+            const variable = scope.set.get(identifierNode.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        // Return the initializer only while the identifier still denotes that
+        // binding. Binding identity prevents a same-named parameter or nested
+        // local from inheriting provenance. Mutable bindings are accepted only
+        // when scope analysis proves they were never reassigned after init.
+        const getStableInitializer = (variable) => {
+          for (const def of variable.defs) {
+            if (
+              def.type !== "Variable" ||
+              !isAstNode(def.node) ||
+              def.node.type !== "VariableDeclarator" ||
+              !isAstNode(def.parent) ||
+              def.parent.type !== "VariableDeclaration"
+            ) {
+              continue;
             }
             if (
-              isS3AccessorCall(node.init) ||
-              isS3ClientConstruction(node.init)
+              def.parent.kind !== "const" &&
+              variable.references.some(
+                (reference) =>
+                  typeof reference.isWrite === "function" &&
+                  reference.isWrite() &&
+                  reference.init !== true,
+              )
             ) {
-              s3Locals.add(node.id.name);
-              return;
+              return null;
             }
-            if (isFileCall(node.init) && hasS3Receiver(node.init, s3Locals)) {
-              s3FileLocals.add(node.id.name);
-            }
-          },
+            return isAstNode(def.node.init) ? def.node.init : null;
+          }
+          return null;
+        };
 
+        const isS3ClientExpression = (
+          node,
+          visited = new Set<unknown>(),
+        ): boolean => {
+          if (isS3AccessorCall(node) || isS3ClientConstruction(node)) {
+            return true;
+          }
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          return isS3ClientExpression(getStableInitializer(variable), visited);
+        };
+
+        const isS3FileExpression = (
+          node,
+          visited = new Set<unknown>(),
+        ): boolean => {
+          if (isFileCall(node)) {
+            return isS3ClientExpression(node.callee.object, visited);
+          }
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          return isS3FileExpression(getStableInitializer(variable), visited);
+        };
+
+        return {
           CallExpression(node) {
             const callee = node.callee;
             if (callee.type !== "MemberExpression") {
@@ -120,12 +170,7 @@ export default {
               return;
             }
 
-            const receiver = callee.object;
-            const direct =
-              isFileCall(receiver) && hasS3Receiver(receiver, s3Locals);
-            const viaLocal =
-              isIdentifier(receiver) && s3FileLocals.has(receiver.name);
-            if (!direct && !viaLocal) {
+            if (!isS3FileExpression(callee.object)) {
               return;
             }
 

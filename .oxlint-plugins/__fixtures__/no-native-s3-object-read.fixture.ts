@@ -67,6 +67,16 @@ const ownClient = new S3Client({ bucket: "b" });
 // oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read
 const _ownClient = await ownClient.file(key).bytes();
 
+// A direct construction must not bypass provenance tracking.
+// oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read
+const _directOwnClient = await new Bun.S3Client({
+  bucket: "b",
+  accessKeyId: "a",
+  secretAccessKey: "s",
+})
+  .file(key)
+  .bytes();
+
 // --- Must NOT be flagged: no response body, so nothing to leak. ---
 
 const _exists = await getS3().file(key).exists();
@@ -81,12 +91,32 @@ const _localFile = await Bun.file("/tmp/example").arrayBuffer();
 // A fetch Response is the sanctioned replacement and must stay clean.
 const _viaFetch = await (await fetch(_signed)).arrayBuffer();
 
+// Provenance follows lexical bindings, not identifier spelling. Neither a
+// shadowed parameter nor a reassigned local is known to remain an S3 client.
+// oxlint-disable-next-line eslint/no-shadow -- the shadow is the regression shape
+const readShadowedClient = async (accessorClient: ReturnType<typeof getS3>) =>
+  await accessorClient.file(key).bytes();
+let reassignedClient = getS3();
+reassignedClient = {
+  ...reassignedClient,
+  file: () => ({
+    arrayBuffer: async () => await Promise.resolve(new ArrayBuffer(0)),
+    bytes: async () => await Promise.resolve(new Uint8Array()),
+    text: async () => await Promise.resolve(""),
+    json: async () => await Promise.resolve(null),
+    exists: async () => await Promise.resolve(false),
+    stat: async () => await Promise.resolve({ size: 0 }),
+  }),
+};
+const _reassignedClient = await reassignedClient.file(key).bytes();
+
 export {
   _bytes,
   _computedDirect,
   _computedHandle,
   _corpus,
   _direct,
+  _directOwnClient,
   _exists,
   _json,
   _localFile,
@@ -94,7 +124,9 @@ export {
   _signed,
   _stat,
   _text,
+  _reassignedClient,
   _viaFetch,
   _viaAccessorClient,
   _viaHandle,
+  readShadowedClient,
 };

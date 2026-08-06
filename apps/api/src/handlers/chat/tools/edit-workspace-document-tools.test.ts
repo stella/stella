@@ -35,6 +35,10 @@ void mock.module("@/api/lib/s3", () => ({
     },
   }),
   putS3ObjectWithSignal: s3WriteMock,
+  readS3ArrayBuffer: async (key: string) => {
+    s3ReadKeys.push(key);
+    return s3FileBuffer;
+  },
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
