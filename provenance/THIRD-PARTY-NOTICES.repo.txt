@@ -29,7 +29,7 @@ Project: root
 - @hocuspocus/server 4.4.0 — MIT
 - @libpdf/core 0.4.1 — MIT
 - @litko/yara-x 0.7.0 — MIT
-- @modelcontextprotocol/sdk 1.29.0 — MIT
+- @modelcontextprotocol/server 2.0.0 — MIT
 - @opentelemetry/api-logs 0.221.0 — Apache-2.0
 - @posthog/react 1.10.3 — MIT
 - @pydantic/genai-prices 0.0.72 — MIT

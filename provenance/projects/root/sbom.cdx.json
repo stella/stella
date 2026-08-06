@@ -44,6 +44,12 @@
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
@@ -525,6 +531,9 @@
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
@@ -2052,7 +2061,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
@@ -2385,7 +2394,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
@@ -2480,7 +2489,7 @@
             "location": "apps/api/src/lib/s3-presign.ts#29"
           },
           {
-            "location": "apps/api/src/lib/s3.ts#5"
+            "location": "apps/api/src/lib/s3.ts#6"
           }
         ]
       },
@@ -2867,6 +2876,12 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
@@ -3350,6 +3365,9 @@
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
@@ -5169,19 +5187,19 @@
           "name": " PBC (https://anthropic.com)"
         }
       ],
-      "bom-ref": "pkg:npm/@modelcontextprotocol/sdk@1.29.0",
-      "description": "Model Context Protocol implementation for TypeScript",
+      "bom-ref": "pkg:npm/@modelcontextprotocol/server@2.0.0",
+      "description": "Model Context Protocol implementation for TypeScript - Server package",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@modelcontextprotocol/sdk/package.json",
+            "concludedValue": "node_modules/@modelcontextprotocol/server/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@modelcontextprotocol/sdk/package.json"
+                "value": "node_modules/@modelcontextprotocol/server/package.json"
               }
             ]
           }
@@ -5191,7 +5209,7 @@
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts#1"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#4"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#1"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#1"
@@ -5212,10 +5230,13 @@
             "location": "apps/api/src/mcp/gateway/list-tools.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/resources.ts#6"
+            "location": "apps/api/src/mcp/resources.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#8"
+            "location": "apps/api/src/mcp/resources.ts#5"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#6"
           },
           {
             "location": "apps/api/src/mcp/server-core.ts#14"
@@ -5224,7 +5245,7 @@
             "location": "apps/api/src/mcp/stella-tools.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/tool-types.ts#4"
+            "location": "apps/api/src/mcp/tool-types.ts#5"
           },
           {
             "location": "apps/api/src/mcp/tool-utils.ts#1"
@@ -5233,10 +5254,7 @@
             "location": "apps/api/src/mcp/tools.ts#4"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#1"
-          },
-          {
-            "location": "apps/api/src/mcp/server-core.ts#2"
+            "location": "apps/api/src/scripts/mcp-canary.ts#26"
           }
         ]
       },
@@ -5259,17 +5277,17 @@
           }
         }
       ],
-      "name": "sdk",
+      "name": "server",
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@modelcontextprotocol/sdk/package.json"
+          "value": "node_modules/@modelcontextprotocol/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/sdk@1.29.0",
+      "purl": "pkg:npm/%40modelcontextprotocol/server@2.0.0",
       "scope": "required",
       "type": "library",
-      "version": "1.29.0"
+      "version": "2.0.0"
     },
     {
       "authors": [
@@ -5371,6 +5389,12 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
@@ -5854,6 +5878,9 @@
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
@@ -8389,10 +8416,10 @@
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#6"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#7"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#4"
           }
         ]
       },
@@ -8773,13 +8800,16 @@
             "location": "apps/api/src/lib/chat/chat-tool-types.ts#7"
           },
           {
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/docx/ai-field-generator.ts#12"
           },
           {
             "location": "apps/api/src/lib/docx/ai-field-generator.ts#13"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#5"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#2"
           },
           {
             "location": "apps/api/src/lib/stella-openrouter-text-adapter.ts#1"
@@ -10384,12 +10414,6 @@
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
           },
           {
-            "location": "apps/web/src/components/contact-picker.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#17"
-          },
-          {
             "location": "apps/web/src/components/feedback-dialog.tsx#1"
           },
           {
@@ -11287,7 +11311,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#14"
           }
         ]
       },
@@ -12232,6 +12256,12 @@
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
@@ -12713,6 +12743,9 @@
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
@@ -15830,10 +15863,13 @@
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
           },
           {
-            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#2"
           },
           {
             "location": "apps/api/src/lib/chat/persisted-message-content.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/projection-schema.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/ref-registry.ts#1"
@@ -15983,7 +16019,7 @@
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#8"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#5"
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/oauth.ts#1"
@@ -16011,6 +16047,9 @@
           },
           {
             "location": "apps/api/src/lib/s3-presign.ts#32"
+          },
+          {
+            "location": "apps/api/src/lib/s3.ts#7"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
@@ -16052,7 +16091,7 @@
             "location": "apps/api/src/lib/search/index-global.ts#1"
           },
           {
-            "location": "apps/api/src/lib/search/process-extraction.ts#9"
+            "location": "apps/api/src/lib/search/process-extraction.ts#3"
           },
           {
             "location": "apps/api/src/lib/search/types.ts#1"
@@ -16197,6 +16236,9 @@
           },
           {
             "location": "apps/api/src/mcp/research-admin-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#15"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#2"
@@ -18292,10 +18334,13 @@
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
           },
           {
-            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#2"
           },
           {
             "location": "apps/api/src/lib/chat/persisted-message-content.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/projection-schema.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/ref-registry.ts#1"
@@ -18445,7 +18490,7 @@
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#8"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#5"
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/oauth.ts#1"
@@ -18473,6 +18518,9 @@
           },
           {
             "location": "apps/api/src/lib/s3-presign.ts#32"
+          },
+          {
+            "location": "apps/api/src/lib/s3.ts#7"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
@@ -18514,7 +18562,7 @@
             "location": "apps/api/src/lib/search/index-global.ts#1"
           },
           {
-            "location": "apps/api/src/lib/search/process-extraction.ts#9"
+            "location": "apps/api/src/lib/search/process-extraction.ts#3"
           },
           {
             "location": "apps/api/src/lib/search/types.ts#1"
@@ -18659,6 +18707,9 @@
           },
           {
             "location": "apps/api/src/mcp/research-admin-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#15"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#2"
@@ -21364,7 +21415,7 @@
             "location": "apps/api/src/lib/machine-api-key-scope.ts#1"
           },
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#6"
           },
           {
             "location": "apps/api/src/lib/oauth-connections.ts#2"
@@ -21472,7 +21523,7 @@
             "location": "apps/api/src/lib/search/preview.ts#2"
           },
           {
-            "location": "apps/api/src/lib/search/process-extraction.ts#10"
+            "location": "apps/api/src/lib/search/process-extraction.ts#4"
           },
           {
             "location": "apps/api/src/lib/search/query.ts#1"
@@ -23992,7 +24043,7 @@
             "location": "apps/web/src/components/conditions/formula-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/components/contact-picker.tsx#6"
+            "location": "apps/web/src/components/contact-picker.tsx#5"
           },
           {
             "location": "apps/web/src/components/copy-field.tsx#1"
@@ -24004,7 +24055,10 @@
             "location": "apps/web/src/components/document-icon.tsx#4"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#24"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#23"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#3"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#3"
@@ -25423,7 +25477,7 @@
             "location": "apps/web/src/components/dev/autocomplete-playground.tsx#9"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#25"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#22"
@@ -25907,6 +25961,12 @@
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
@@ -26388,6 +26448,9 @@
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#1"
           },
           {
             "location": "apps/web/src/components/drag-preview-content.tsx#1"
@@ -28098,6 +28161,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/components/docx/use-docx-find.ts#4"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#11"
           },
           {
@@ -28128,7 +28194,7 @@
             "location": "apps/web/src/components/chat-editor-provider.tsx#24"
           },
           {
-            "location": "apps/web/src/components/contact-picker.tsx#7"
+            "location": "apps/web/src/components/contact-picker.tsx#6"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#4"
@@ -28470,7 +28536,7 @@
             "location": "apps/web/src/components/conditions/formula-editor.tsx#5"
           },
           {
-            "location": "apps/web/src/components/contact-picker.tsx#8"
+            "location": "apps/web/src/components/contact-picker.tsx#7"
           },
           {
             "location": "apps/web/src/components/copy-field.tsx#2"
@@ -28479,7 +28545,10 @@
             "location": "apps/web/src/components/date-picker-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#26"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#25"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-find-bar.tsx#4"
           },
           {
             "location": "apps/web/src/components/empty-screen.tsx#11"
@@ -29172,9 +29241,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#18"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#13"
           },
           {
@@ -29676,6 +29742,9 @@
             "location": "apps/api/src/handlers/templates/prefill.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/usage/get-entitlement.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#4"
           },
           {
@@ -29689,6 +29758,15 @@
           },
           {
             "location": "apps/api/src/lib/branded-types.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/model-ingress-guard.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/chat/projection-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/chat/projections.ts#1"
           },
           {
             "location": "apps/api/src/lib/conditions/parse-stored.ts#6"
@@ -29800,6 +29878,9 @@
           },
           {
             "location": "apps/api/src/mcp/tool-utils.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/mcp-canary.ts#27"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
