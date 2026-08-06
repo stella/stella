@@ -91,14 +91,25 @@ type MatterActivityPage = {
   nextCursor: string | null;
 };
 
-// Whether a matter's cached activity pages prove there is nothing to disclose.
-// Emptiness must be proven, never assumed: an unresolved query, or one whose
-// last page still carries a cursor, may yet yield activity, so the disclosure
-// stays available. Only a drained, item-free result counts as known-empty.
-export const matterActivityIsKnownEmpty = (
-  pages: readonly MatterActivityPage[] | undefined,
-): boolean => {
-  if (pages === undefined) {
+type MatterActivityIsKnownEmptyOptions = {
+  isInvalidated: boolean;
+  pages: readonly MatterActivityPage[] | undefined;
+  status: "error" | "pending" | "success";
+};
+
+// Whether a matter's cached activity proves there is nothing to disclose.
+// Emptiness must be proven, never assumed. A query that has not succeeded has
+// nothing to prove it with; an invalidated one describes the matter as it was
+// before the mutation that invalidated it, and the sidebar's disabled observer
+// will not refetch it; and a last page that still carries a cursor may be
+// followed by one holding activity. Only a fresh, drained, item-free result
+// counts as known-empty.
+export const matterActivityIsKnownEmpty = ({
+  isInvalidated,
+  pages,
+  status,
+}: MatterActivityIsKnownEmptyOptions): boolean => {
+  if (status !== "success" || isInvalidated || pages === undefined) {
     return false;
   }
 

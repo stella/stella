@@ -1,5 +1,11 @@
 import type * as React from "react";
-import { useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -7,7 +13,7 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getRouteApi,
   Link,
@@ -116,6 +122,7 @@ import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   workspaceActivityOptions,
+  workspacesKeys,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 
@@ -972,16 +979,34 @@ const MatterItem = ({
   // ever issuing a request: the expanded row owns the fetch, so `enabled: false`
   // keeps the sidebar at its current request count while still re-rendering the
   // disclosure once that fetch resolves.
-  const { data: cachedActivity } = useInfiniteQuery({
+  const { data: cachedActivity, status: activityStatus } = useInfiniteQuery({
     ...workspaceActivityOptions({
       activeOrganizationId,
       key: { workspaceId: ws.id },
     }),
     enabled: false,
   });
-  const activityIsKnownEmpty = matterActivityIsKnownEmpty(
-    cachedActivity?.pages,
+  // `invalidateQueries` does not refetch a disabled observer, so the cached
+  // pages can outlive the matter they describe. The invalidation flag lives on
+  // the cache entry rather than the observer result, so read it from there.
+  const queryClient = useQueryClient();
+  const activityQueryKey = workspacesKeys.activity(activeOrganizationId, {
+    workspaceId: ws.id,
+  });
+  const activityIsInvalidated = useSyncExternalStore(
+    useCallback(
+      (onStoreChange: () => void) =>
+        queryClient.getQueryCache().subscribe(onStoreChange),
+      [queryClient],
+    ),
+    () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
+    () => false,
   );
+  const activityIsKnownEmpty = matterActivityIsKnownEmpty({
+    isInvalidated: activityIsInvalidated,
+    pages: cachedActivity?.pages,
+    status: activityStatus,
+  });
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
