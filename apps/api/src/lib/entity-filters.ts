@@ -229,8 +229,16 @@ const isKindInPredicate = (node: ConditionNode): node is PredicateNode =>
 /**
  * Mirrors the SQL document→folder expansion in-memory: a kind filter
  * that includes "document" also matches folders.
+ *
+ * The SQL compiler expands every kind predicate it compiles, wherever it
+ * sits in the tree, so this recurses into groups the same way
+ * `gateMissingCompareFields` does. Matching only at the root left the two
+ * paths disagreeing about folders for one and the same grouped filter.
  */
 const expandKindNode = (node: ConditionNode): ConditionNode => {
+  if (node.type === "group") {
+    return { ...node, children: node.children.map(expandKindNode) };
+  }
   if (!isKindInPredicate(node)) {
     return node;
   }

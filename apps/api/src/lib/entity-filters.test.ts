@@ -208,6 +208,21 @@ describe("applyFilters (in-memory)", () => {
     expect(filtered).toHaveLength(2);
   });
 
+  // A grouped filter is the same filter: the expansion must not depend on
+  // where the kind predicate sits in the tree, or SQL and memory disagree
+  // about folders for identical input.
+  test("kind filter with 'document' includes folders inside a group", () => {
+    const items = [
+      makeEntity("1", "document"),
+      makeEntity("2", "folder"),
+      makeEntity("3", "task"),
+    ];
+    const filtered = applyFilters(items, [
+      { type: "group", combinator: "and", children: [kindIn(["document"])] },
+    ]);
+    expect(filtered.map((entity) => entity.entityId)).toEqual(["1", "2"]);
+  });
+
   test("property eq filter matches exact value", () => {
     const items = [
       makeEntity("1", "task", [["p1", "alpha"]]),
