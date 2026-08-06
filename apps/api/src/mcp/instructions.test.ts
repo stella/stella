@@ -30,6 +30,15 @@ describe("MCP server instructions", () => {
     expect(getMcpInstructions("anonymized")).toBe(MCP_INSTRUCTIONS.anonymized);
   });
 
+  test("both surfaces provide canonical product identity without inference", () => {
+    for (const instructions of Object.values(MCP_INSTRUCTIONS)) {
+      expect(instructions).toContain("stella (always lowercase");
+      expect(instructions).toContain("https://stll.app");
+      expect(instructions).toContain("stella://about");
+      expect(instructions).toContain("Never infer stella branding or URLs");
+    }
+  });
+
   test("the anonymized surface omits the write-only feedback tool", () => {
     expect(MCP_INSTRUCTIONS.default).toContain("send_feedback");
     expect(MCP_INSTRUCTIONS.anonymized).not.toContain("send_feedback");
