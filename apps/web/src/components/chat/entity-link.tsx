@@ -1,47 +1,20 @@
-import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import {
-  FileTextIcon,
-  FolderIcon,
-  LandmarkIcon,
-  ListTodoIcon,
-} from "lucide-react";
+import { LandmarkIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
+import { useEntityIconSource } from "@/components/chat/entity-icon-source";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
-import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { detached } from "@/lib/detached";
-import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 
 const ICON_CLASS = "inline size-3 shrink-0";
-
-const useResolvedEntity = ({
-  entityId,
-  workspaceId,
-}: {
-  entityId: string;
-  workspaceId: string | undefined;
-}) => {
-  const { data } = useQuery({
-    ...(workspaceId
-      ? entityOptions(workspaceId, entityId)
-      : {
-          queryKey: ["entity-link-disabled"] as const,
-          queryFn: skipToken,
-        }),
-    enabled: workspaceId !== undefined,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-
-  return data;
-};
 
 export const EntityMentionIcon = ({
   entityId,
@@ -50,28 +23,8 @@ export const EntityMentionIcon = ({
   entityId: string;
   workspaceId: string | undefined;
 }) => {
-  const entity = useResolvedEntity({ entityId, workspaceId });
-
-  if (entity?.kind === "folder") {
-    return <FolderIcon className={ICON_CLASS} />;
-  }
-
-  if (entity?.kind === "task") {
-    return <ListTodoIcon className={ICON_CLASS} />;
-  }
-
-  for (const field of Object.values(entity?.fields ?? {})) {
-    if (field.content.type === "file" && field.content.mimeType.length > 0) {
-      return (
-        <DocumentIcon
-          className={ICON_CLASS}
-          mimeType={field.content.mimeType}
-        />
-      );
-    }
-  }
-
-  return <FileTextIcon className={ICON_CLASS} />;
+  const source = useEntityIconSource({ entityId, workspaceId });
+  return <EntityIcon className={ICON_CLASS} source={source} />;
 };
 
 /** Renders `#stella-*=` and `#stella-decision=` links as

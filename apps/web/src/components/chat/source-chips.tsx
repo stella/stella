@@ -2,8 +2,9 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ExternalLinkIcon, FileTextIcon, FolderIcon } from "lucide-react";
+import { ExternalLinkIcon } from "lucide-react";
 
+import { isEntityKind } from "@stll/api-contract";
 import type { ChatMessage, ChatSourceDocument } from "@stll/api/types";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
@@ -20,8 +21,8 @@ import {
   collectExternalSources,
   collectSourceDocuments,
 } from "@/components/chat/source-chips.logic";
-import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -206,15 +207,18 @@ const SourceIcon = ({
 }: {
   kind: string;
   mimeType: string | null;
-}) => {
-  if (kind === "folder") {
-    return <FolderIcon className={cls} />;
-  }
-  if (mimeType) {
-    return <DocumentIcon className={cls} mimeType={mimeType} />;
-  }
-  return <FileTextIcon className={cn(cls, "text-muted-foreground")} />;
-};
+}) => (
+  // `EntityIcon` mutes the unresolved placeholder itself, which is what the
+  // previous fallback glyph did here.
+  <EntityIcon
+    className={cls}
+    source={
+      isEntityKind(kind)
+        ? { type: "resolved", kind, mimeType }
+        : { type: "unknown" }
+    }
+  />
+);
 
 const ExternalSourceChip = ({
   source,

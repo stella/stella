@@ -6,24 +6,24 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
-  FileTextIcon,
-  FolderIcon,
   LandmarkIcon,
   LoaderIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isEntityKind } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
+  ChatMentionKind,
   ChatMentionOption,
   ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
-import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 export const ChatMentionList = ({
@@ -417,11 +417,9 @@ export const MentionIcon = ({
 }: {
   id: string;
   category: ChatReferenceCategory;
-  kind: string;
+  kind: ChatMentionKind;
   mimeType: string | null;
 }) => {
-  const cls = "size-3.5 shrink-0 text-muted-foreground";
-
   if (category === "workspace") {
     return (
       <MatterIcon className="size-3.5 shrink-0" matter={{ id, color: null }} />
@@ -429,17 +427,19 @@ export const MentionIcon = ({
   }
 
   if (category === "decision") {
-    return <LandmarkIcon className={cls} />;
+    return <LandmarkIcon className="text-muted-foreground size-3.5 shrink-0" />;
   }
 
-  // Entity category: use document/folder icons
-  if (kind === "folder") {
-    return <FolderIcon className={cls} />;
-  }
-  if (mimeType) {
-    return <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />;
-  }
-  return <FileTextIcon className={cls} />;
+  return (
+    <EntityIcon
+      className="text-muted-foreground size-3.5 shrink-0"
+      source={
+        isEntityKind(kind)
+          ? { type: "resolved", kind, mimeType }
+          : { type: "unknown" }
+      }
+    />
+  );
 };
 
 /** Group items by category, preserving a stable order. */

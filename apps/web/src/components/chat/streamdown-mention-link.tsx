@@ -1,14 +1,11 @@
 import type React from "react";
 import { Fragment, isValidElement, useState } from "react";
 
-import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
-  FolderIcon,
   GlobeIcon,
   LandmarkIcon,
-  ListTodoIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -18,20 +15,20 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
+import { useEntityIconSource } from "@/components/chat/entity-icon-source";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
-import { DocumentIcon } from "@/components/document-icon";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
@@ -72,9 +69,6 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 const ENTITY_EXTENSION_RE = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
-const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/iu;
-const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/iu;
-
 const SKILL_CHIP_ICON = <WandSparklesIcon className="size-3 shrink-0" />;
 
 const isReactNodeArray = (
@@ -152,78 +146,15 @@ const getEntityDisplayLabel = (label: React.ReactNode): React.ReactNode => {
   return stripDocumentExtension(text);
 };
 
-/**
- * Read an entity's first file-field mime type from React Query
- * cache. The mention link already carries the entity ref, so we
- * never need the AI to encode the file extension in the visible
- * label — the right icon comes from the resolved entity itself.
- */
-const useResolvedEntityMime = ({
-  workspaceId,
-  entityId,
-}: {
-  workspaceId: string | undefined;
-  entityId: string | undefined;
-}): string | null => {
-  // staleTime: Infinity — first render fires one fetch per entity
-  // ref; subsequent renders (and the click handler) hit the same
-  // cache entry. Keeps mention rendering cheap even with many
-  // mentions in a thread.
-  const { data } = useQuery({
-    ...(workspaceId && entityId
-      ? entityOptions(workspaceId, entityId)
-      : {
-          queryKey: ["mention-entity-disabled"] as const,
-          queryFn: skipToken,
-        }),
-    enabled: workspaceId !== undefined && entityId !== undefined,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  if (!data?.fields) {
-    return null;
-  }
-  for (const field of data.fields) {
-    if (field.content.type === "file" && field.content.mimeType.length > 0) {
-      return field.content.mimeType;
-    }
-  }
-  return null;
-};
-
 const EntityChipIcon = ({
-  label,
   workspaceId,
   entityId,
 }: {
-  label: React.ReactNode;
   workspaceId?: string | undefined;
   entityId?: string | undefined;
 }) => {
-  const resolvedMime = useResolvedEntityMime({ workspaceId, entityId });
-  const text = getPlainText(label);
-
-  if (resolvedMime) {
-    return <DocumentIcon className="size-3 shrink-0" mimeType={resolvedMime} />;
-  }
-
-  if (!text) {
-    return <FileTextIcon className="size-3 shrink-0" />;
-  }
-
-  if (TASK_LABEL_RE.test(text)) {
-    return <ListTodoIcon className="size-3 shrink-0" />;
-  }
-
-  if (FOLDER_LABEL_RE.test(text)) {
-    return <FolderIcon className="size-3 shrink-0" />;
-  }
-
-  const mimeType = getDocumentMimeFromLabel(text);
-  if (mimeType) {
-    return <DocumentIcon className="size-3 shrink-0" mimeType={mimeType} />;
-  }
-
-  return <FileTextIcon className="size-3 shrink-0" />;
+  const source = useEntityIconSource({ entityId, workspaceId });
+  return <EntityIcon className="size-3 shrink-0" source={source} />;
 };
 
 type MentionChipProps = {
@@ -290,11 +221,7 @@ const EntityRefChip = ({
     return <span>{label}</span>;
   }
   const icon = (
-    <EntityChipIcon
-      entityId={refEntityId}
-      label={label}
-      workspaceId={refWorkspaceId}
-    />
+    <EntityChipIcon entityId={refEntityId} workspaceId={refWorkspaceId} />
   );
   const displayLabel = getEntityDisplayLabel(label);
 
@@ -460,11 +387,7 @@ const ParsedMentionChip = ({
 
   if (category === "entity") {
     const icon = (
-      <EntityChipIcon
-        entityId={id}
-        label={label}
-        workspaceId={mentionWorkspaceId}
-      />
+      <EntityChipIcon entityId={id} workspaceId={mentionWorkspaceId} />
     );
     const displayLabel = getEntityDisplayLabel(label);
     if (!interactive || !mentionWorkspaceId) {

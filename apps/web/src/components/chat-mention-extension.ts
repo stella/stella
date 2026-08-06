@@ -7,6 +7,8 @@ import {
 } from "@tiptap/react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
+import type { EntityKind } from "@stll/api-contract";
+
 import { ChatMentionList } from "@/components/chat-mention-list";
 import { ChatMentionNode } from "@/components/chat-mention-node";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";
@@ -15,12 +17,17 @@ export type { MentionCategory } from "@/components/chat/chat-mention-href";
 
 export type ChatReferenceCategory = MentionCategory | "decision";
 
+/** What a mention row points at: an entity kind when the category is
+ *  "entity", otherwise the category's own marker. Typed as the closed set
+ *  rather than `string` so an icon or label lookup cannot silently accept a
+ *  value nothing produces. */
+export type ChatMentionKind = EntityKind | "workspace" | "decision";
+
 export type ChatMentionOption = {
   id: string;
   label: string;
   category: ChatReferenceCategory;
-  /** Entity kind (document, folder, etc.) or workspace. */
-  kind: string;
+  kind: ChatMentionKind;
   mimeType: string | null;
   sourceViewId?: string;
   /** Set when the entity comes from a different workspace

@@ -1,13 +1,15 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { FileTextIcon, FolderIcon, LandmarkIcon } from "lucide-react";
+import { LandmarkIcon } from "lucide-react";
 
+import { isEntityKind } from "@stll/api-contract";
+import type { EntityKind } from "@stll/api-contract";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { isMentionCategory } from "@/components/chat/chat-mention-href";
-import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { getMatterColor } from "@/lib/matter-colors";
 
 export const ChatMentionNode = (props: NodeViewProps) => {
@@ -56,7 +58,7 @@ type ChatMentionAttrs = {
   id: string;
   label: string;
   category: ChatReferenceCategory;
-  kind: string;
+  kind: EntityKind | null;
   mimeType: string | null;
   sourceWorkspaceId: string | null;
 };
@@ -76,7 +78,7 @@ const readChatMentionAttrs = (value: unknown): ChatMentionAttrs => {
       id: "",
       label: "",
       category: "entity",
-      kind: "document",
+      kind: null,
       mimeType: null,
       sourceWorkspaceId: null,
     };
@@ -93,7 +95,7 @@ const readChatMentionAttrs = (value: unknown): ChatMentionAttrs => {
     id: typeof id === "string" ? id : "",
     label: typeof label === "string" ? label : "",
     category: isChatReferenceCategory(category) ? category : "entity",
-    kind: typeof kind === "string" ? kind : "document",
+    kind: isEntityKind(kind) ? kind : null,
     mimeType: typeof mimeType === "string" ? mimeType : null,
     sourceWorkspaceId:
       typeof sourceWorkspaceId === "string" ? sourceWorkspaceId : null,
@@ -109,8 +111,10 @@ const CategoryIcon = ({
   category: ChatReferenceCategory;
   /** Entity/workspace ID stored in the TipTap node. */
   attrId: string;
-  /** Kind stored in the TipTap node (fallback). */
-  attrKind: string;
+  /** Kind stored in the TipTap node; null when the stored attribute is
+   *  not a kind (a workspace mention, or content written before the
+   *  attribute existed). */
+  attrKind: EntityKind | null;
   /** MIME type stored in the TipTap node (fallback). */
   attrMimeType: string | null;
 }) => {
@@ -122,11 +126,14 @@ const CategoryIcon = ({
     return <LandmarkIcon className={cls} />;
   }
 
-  if (attrKind === "folder") {
-    return <FolderIcon className={cls} />;
-  }
-  if (attrMimeType) {
-    return <DocumentIcon className={cls} mimeType={attrMimeType} />;
-  }
-  return <FileTextIcon className={cls} />;
+  return (
+    <EntityIcon
+      className={cls}
+      source={
+        attrKind === null
+          ? { type: "unknown" }
+          : { type: "resolved", kind: attrKind, mimeType: attrMimeType }
+      }
+    />
+  );
 };
