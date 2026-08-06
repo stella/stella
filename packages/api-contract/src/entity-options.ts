@@ -22,7 +22,12 @@ export const TASK_STATUS = {
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 
-export const TASK_STATUSES = Object.values(TASK_STATUS);
+// Frozen and typed readonly: this is the one declaration every consumer
+// reads, so a stray `.push()` or in-place `.sort()` would reorder the kanban
+// columns and the filter menus everywhere at once.
+export const TASK_STATUSES: readonly TaskStatus[] = Object.freeze(
+  Object.values(TASK_STATUS),
+);
 
 export const isTaskStatus = (value: unknown): value is TaskStatus =>
   typeof value === "string" && TASK_STATUSES.some((status) => status === value);
@@ -38,7 +43,9 @@ export const ENTITY_PRIORITY = {
 export type EntityPriority =
   (typeof ENTITY_PRIORITY)[keyof typeof ENTITY_PRIORITY];
 
-export const ENTITY_PRIORITIES = Object.values(ENTITY_PRIORITY);
+export const ENTITY_PRIORITIES: readonly EntityPriority[] = Object.freeze(
+  Object.values(ENTITY_PRIORITY),
+);
 
 export const isEntityPriority = (value: unknown): value is EntityPriority =>
   typeof value === "string" &&
