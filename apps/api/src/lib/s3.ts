@@ -10,6 +10,7 @@ import { S3Client } from "bun";
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { safeErrorCode } from "@/api/lib/errors/utils";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 type S3Credentials = {
@@ -583,6 +584,7 @@ export const getCorpusS3 = (): S3Client => {
 // The signed URL is consumed by the very next statement, so it only has to
 // outlive one read.
 const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
+const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Fetch an object body over a presigned URL.
@@ -621,9 +623,9 @@ const fetchObject = async (
   key: string,
   signal?: AbortSignal,
 ): Promise<Response> => {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     client.presign(key, { expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS }),
-    signal ? { signal } : {},
+    { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
   );
   if (!response.ok) {
     throw new S3ObjectReadError({

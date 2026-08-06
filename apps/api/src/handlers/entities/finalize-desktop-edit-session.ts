@@ -375,7 +375,10 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await readS3ArrayBuffer(checkpointKey);
+      const checkpointBuffer = await readS3ArrayBuffer(
+        checkpointKey,
+        request.signal,
+      );
 
       const validation = await validateDocxBuffer(checkpointBuffer);
       if (!validation.valid) {

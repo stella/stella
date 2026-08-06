@@ -126,7 +126,7 @@ describe("OCR derivative durability", () => {
 
     expect(stageStart).toBeGreaterThan(-1);
     for (const storageCall of [
-      "getS3().file(sourceKey).arrayBuffer()",
+      "readS3ArrayBuffer(sourceKey, lifecycleSignal)",
       "await createOcrSearchablePdf(",
       "await getS3().write(",
     ]) {

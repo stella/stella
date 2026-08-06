@@ -179,9 +179,8 @@ const translateEntity = createSafeHandler(
       );
     }
 
-    // 3. Fetch source bytes from S3 directly — Bun's S3Client
-    // streams bytes from the SDK and avoids a presign + public-
-    // network round-trip (and the matching NAT egress).
+    // 3. Fetch source bytes through a presigned GET to avoid Bun's leaking
+    // native S3 download path.
     const sourceKey = createFileKey({
       organizationId: session.activeOrganizationId,
       workspaceId,

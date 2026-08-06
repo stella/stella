@@ -30,7 +30,7 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -163,7 +163,7 @@ const backfillChatFiles = async (): Promise<number> => {
     for (const row of rows) {
       // oxlint-disable-next-line no-await-in-loop -- bounded memory: read one source image from S3 at a time per row
       const source = await Result.tryPromise({
-        try: async () => await getS3().file(row.s3Key).bytes(),
+        try: async () => new Uint8Array(await readS3ArrayBuffer(row.s3Key)),
         catch: (cause) => cause,
       });
       if (Result.isError(source)) {

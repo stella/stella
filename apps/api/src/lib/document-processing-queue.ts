@@ -190,7 +190,7 @@ const writeOcrSearchablePdfDerivative = async ({
 }): Promise<void> => {
   const written = await Result.tryPromise({
     try: async () => {
-      const sourceBuffer = await readS3ArrayBuffer(sourceKey);
+      const sourceBuffer = await readS3ArrayBuffer(sourceKey, lifecycleSignal);
       lifecycleSignal.throwIfAborted();
       const searchablePdf = await createOcrSearchablePdf(sourceBuffer, payload);
       if (Result.isError(searchablePdf)) {

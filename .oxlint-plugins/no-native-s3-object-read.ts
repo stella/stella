@@ -29,6 +29,11 @@ const BODY_READS = new Set(["arrayBuffer", "bytes", "text", "json"]);
 // is caught through the `.file(...)` receiver check below instead.
 const S3_ACCESSORS = new Set(["getS3", "getCorpusS3"]);
 
+const isS3AccessorCall = (node) =>
+  node?.type === "CallExpression" &&
+  isIdentifier(node.callee) &&
+  S3_ACCESSORS.has(node.callee.name);
+
 /** True for `<something>.file(...)` — the call that yields the S3 file handle. */
 const isFileCall = (node) =>
   node?.type === "CallExpression" &&
@@ -39,14 +44,24 @@ const isFileCall = (node) =>
 /** True when `.file(...)`'s receiver is recognisably an S3 client. */
 const hasS3Receiver = (fileCall, s3Locals) => {
   const receiver = fileCall.callee.object;
-  if (
-    receiver.type === "CallExpression" &&
-    isIdentifier(receiver.callee) &&
-    S3_ACCESSORS.has(receiver.callee.name)
-  ) {
+  if (isS3AccessorCall(receiver)) {
     return true;
   }
   return isIdentifier(receiver) && s3Locals.has(receiver.name);
+};
+
+const bodyReadMethod = (member) => {
+  if (!member.computed && isIdentifier(member.property)) {
+    return member.property.name;
+  }
+  if (
+    member.computed &&
+    member.property.type === "Literal" &&
+    typeof member.property.value === "string"
+  ) {
+    return member.property.value;
+  }
+  return null;
 };
 
 export default {
@@ -83,7 +98,10 @@ export default {
             if (!isIdentifier(node.id)) {
               return;
             }
-            if (isS3ClientConstruction(node.init)) {
+            if (
+              isS3AccessorCall(node.init) ||
+              isS3ClientConstruction(node.init)
+            ) {
               s3Locals.add(node.id.name);
               return;
             }
@@ -94,12 +112,11 @@ export default {
 
           CallExpression(node) {
             const callee = node.callee;
-            if (
-              callee.type !== "MemberExpression" ||
-              callee.computed ||
-              !isIdentifier(callee.property) ||
-              !BODY_READS.has(callee.property.name)
-            ) {
+            if (callee.type !== "MemberExpression") {
+              return;
+            }
+            const method = bodyReadMethod(callee);
+            if (!method || !BODY_READS.has(method)) {
               return;
             }
 
@@ -115,7 +132,7 @@ export default {
             context.report({
               node,
               messageId: "noNativeS3ObjectRead",
-              data: { method: callee.property.name },
+              data: { method },
             });
           },
         };

@@ -47,6 +47,18 @@ const handle = getS3().file(key);
 // oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read
 const _viaHandle = await handle.arrayBuffer();
 
+// Static computed reads are the same native calls and must not bypass the
+// rule, whether made directly or through a file-handle local.
+// oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read, typescript/dot-notation -- computed-property bypass fixture
+const _computedDirect = await getS3().file(key)["bytes"]();
+// oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read, typescript/dot-notation -- computed-property bypass fixture
+const _computedHandle = await handle["text"]();
+
+// Binding an accessor result first must retain the S3-client provenance.
+const accessorClient = getCorpusS3();
+// oxlint-disable-next-line no-native-s3-object-read/no-native-s3-object-read
+const _viaAccessorClient = await accessorClient.file(key).json();
+
 // A script constructing its own client rather than using an accessor.
 declare const S3Client: new (
   options: Record<string, unknown>,
@@ -71,6 +83,8 @@ const _viaFetch = await (await fetch(_signed)).arrayBuffer();
 
 export {
   _bytes,
+  _computedDirect,
+  _computedHandle,
   _corpus,
   _direct,
   _exists,
@@ -81,5 +95,6 @@ export {
   _stat,
   _text,
   _viaFetch,
+  _viaAccessorClient,
   _viaHandle,
 };
