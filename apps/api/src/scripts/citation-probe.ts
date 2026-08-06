@@ -179,6 +179,9 @@ const BENIGN: readonly RegExp[] = [
   // Polish procurement-tribunal rulings (KIO/UZP): quasi-judicial, not a
   // court source the corpus ingests, so never a resolvable citation.
   /\bKIO ?\/? ?UZP\b/u,
+  // KIO's own docket format ("KIO/2462/10", "KIO 2475 /10"): same
+  // out-of-corpus tribunal, cited by case number rather than by name.
+  /\bKIO\s{0,1}\/?\s{0,1}\d{1,5}\s{0,1}\/\s{0,1}\d{2,4}\b/u,
   // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
   // with no digit anywhere in the captured tail is never a real citation:
   // every actual docket carries a number. Covers Polish anonymization
