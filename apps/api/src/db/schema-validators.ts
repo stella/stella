@@ -1,6 +1,8 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { ENTITY_KINDS } from "@stll/api-contract";
+
 import type { JsonObject } from "@/api/lib/json-value";
 import {
   positionRuleSchema,
@@ -47,14 +49,8 @@ const multiSelectType = t.Literal("multi-select");
 const dateType = t.Literal("date");
 const intType = t.Literal("int");
 
-export const entityKindSchema = t.UnionEnum([
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-]);
-export type EntityKind = Static<typeof entityKindSchema>;
+export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
+export type { EntityKind } from "@stll/api-contract";
 
 export const propertyContentTypeSchema = t.Union([
   fileType,

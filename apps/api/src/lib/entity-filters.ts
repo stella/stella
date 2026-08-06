@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { isEntityKind } from "@stll/api-contract";
 import {
   type CompareNode,
   type ConditionNode,
@@ -18,7 +19,6 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { compareByLocale } from "@/api/lib/collation";
 import { typedPgArray } from "@/api/lib/search/sql";
-import { includes } from "@/api/lib/type-guards";
 
 // -- Types --
 
@@ -388,25 +388,12 @@ const KIND_FOLDER = "folder" as const;
  * includes documents also matches folders.
  */
 const expandKindValues = (values: readonly string[]): EntityKind[] => {
-  const kinds = values.filter((value): value is EntityKind =>
-    isEntityKind(value),
-  );
+  const kinds = values.filter(isEntityKind);
   if (kinds.includes(KIND_DOCUMENT)) {
     return [...new Set([...kinds, KIND_FOLDER])];
   }
   return kinds;
 };
-
-const ENTITY_KINDS: readonly EntityKind[] = [
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-];
-
-const isEntityKind = (value: string): value is EntityKind =>
-  includes(ENTITY_KINDS, value);
 
 const asValueArray = (value: string | string[] | undefined): string[] => {
   if (Array.isArray(value)) {

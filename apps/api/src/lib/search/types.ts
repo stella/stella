@@ -1,18 +1,20 @@
 import { panic } from "better-result";
 
+import { isEntityKind } from "@stll/api-contract";
+
 import { ENTITY_KINDS } from "@/api/db/schema";
 import type { ContactType } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
-/** Narrow an unknown value to a valid EntityKind. */
+/** Narrow an unknown value to a valid EntityKind. Internal callers read
+ *  kinds straight off our own rows, so a miss is a broken invariant, not a
+ *  user input error. */
 export const parseEntityKind = (value: unknown): EntityKind => {
-  const s = String(value);
-  const match = ENTITY_KINDS.find((v) => v === s);
-  if (!match) {
-    panic(`Invalid entity kind: ${s}`);
+  if (!isEntityKind(value)) {
+    panic(`Invalid entity kind: ${String(value)}`);
   }
-  return match;
+  return value;
 };
 
 /**
