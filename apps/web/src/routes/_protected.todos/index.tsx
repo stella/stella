@@ -31,11 +31,13 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import type { TaskItem } from "@/routes/_protected.todos/-queries";
@@ -281,16 +283,23 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
 );
 
 const TaskRow = ({ task }: { task: ValidTask }) => {
-  const statusColor = isTaskStatus(task.status)
-    ? STATUS_COLORS[task.status]
-    : STATUS_COLORS.open;
+  const status = isTaskStatus(task.status) ? task.status : null;
+  const priority = isEntityPriority(task.priority) ? task.priority : null;
 
-  const PriorityIcon = isEntityPriority(task.priority)
-    ? PRIORITY_ICONS[task.priority]
-    : null;
-  const priorityColor = isEntityPriority(task.priority)
-    ? PRIORITY_COLORS[task.priority]
-    : null;
+  useExternalSyncEffect(() => {
+    if (status === null) {
+      captureInvalidTaskOption("status");
+    }
+    if (priority === null) {
+      captureInvalidTaskOption("priority");
+    }
+  }, [priority, status]);
+
+  const statusColor =
+    status === null ? STATUS_COLORS.open : STATUS_COLORS[status];
+
+  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
+  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
 
   const isOverdue =
     task.dueDate !== null &&

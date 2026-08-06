@@ -20,6 +20,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
@@ -47,10 +48,17 @@ export const CalendarEntityChip = ({
   const locale = useLocale();
   const name = entity.name || t("tasks.untitled");
   const openTask = useInspectorTabsStore((s) => s.openTask);
+  const status = isTaskStatus(entity.status) ? entity.status : null;
 
   const dragRef = useRef<HTMLButtonElement>(null);
 
   useInspectorFlash(entity.taskId, dragRef);
+
+  useExternalSyncEffect(() => {
+    if (status === null) {
+      captureInvalidTaskOption("status");
+    }
+  }, [status]);
 
   useExternalSyncEffect(() => {
     const el = dragRef.current;
@@ -100,9 +108,9 @@ export const CalendarEntityChip = ({
         "hover:bg-accent text-start text-xs",
         "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
-        isTaskStatus(entity.status)
-          ? TASK_STATUS_BORDER_COLORS[entity.status]
-          : TASK_STATUS_BORDER_COLORS.open,
+        status === null
+          ? TASK_STATUS_BORDER_COLORS.open
+          : TASK_STATUS_BORDER_COLORS[status],
       )}
       // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; dragRef is handed to the helper, not read for rendered output
       onClick={containedHandler(dragRef, handleClick)}

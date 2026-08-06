@@ -6,9 +6,28 @@ import {
   isTaskStatus,
   TASK_STATUSES,
 } from "./entity-options";
+import type { EntityPriority, TaskStatus } from "./entity-options";
+
+const EXPECTED_TASK_STATUSES = [
+  "open",
+  "in_progress",
+  "in_review",
+  "done",
+  "cancelled",
+] as const satisfies readonly TaskStatus[];
+
+const EXPECTED_ENTITY_PRIORITIES = [
+  "none",
+  "urgent",
+  "high",
+  "medium",
+  "low",
+] as const satisfies readonly EntityPriority[];
 
 describe("isTaskStatus", () => {
   test("accepts every declared status", () => {
+    expect(TASK_STATUSES).toEqual(EXPECTED_TASK_STATUSES);
+    expect(Object.isFrozen(TASK_STATUSES)).toBe(true);
     expect(TASK_STATUSES.filter(isTaskStatus)).toEqual([...TASK_STATUSES]);
   });
 
@@ -36,6 +55,8 @@ describe("isTaskStatus", () => {
 
 describe("isEntityPriority", () => {
   test("accepts every declared priority", () => {
+    expect(ENTITY_PRIORITIES).toEqual(EXPECTED_ENTITY_PRIORITIES);
+    expect(Object.isFrozen(ENTITY_PRIORITIES)).toBe(true);
     expect(ENTITY_PRIORITIES.filter(isEntityPriority)).toEqual([
       ...ENTITY_PRIORITIES,
     ]);

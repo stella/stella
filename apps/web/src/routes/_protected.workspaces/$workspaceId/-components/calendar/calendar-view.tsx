@@ -9,6 +9,7 @@ import { isTaskStatus } from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
@@ -17,6 +18,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
@@ -223,6 +225,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }),
     throwOnError: true,
   });
+
+  const hasInvalidYearTaskStatus =
+    mode === "year" && calendarTasks.some((task) => !isTaskStatus(task.status));
+
+  useExternalSyncEffect(() => {
+    if (hasInvalidYearTaskStatus) {
+      captureInvalidTaskOption("status");
+    }
+  }, [hasInvalidYearTaskStatus]);
 
   // Group tasks by date across all configured date properties
   const entitiesByDate = groupCalendarTasksByDate({
