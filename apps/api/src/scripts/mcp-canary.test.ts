@@ -3,12 +3,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   AUTHENTICATED_PROBES,
+  type CanaryFetcher,
   createJsonRpcRequest,
   evaluateDiscovery,
   evaluateInitialize,
   evaluateStreamAvailability,
   evaluateToolsList,
   evaluateUnauthenticated,
+  runAuthenticatedStreamProbe,
   summarize,
 } from "./mcp-canary";
 
@@ -66,6 +68,90 @@ describe("evaluateStreamAvailability", () => {
         status: 200,
       }).status,
     ).toBe("failed");
+  });
+});
+
+describe("authenticated notification-stream probe", () => {
+  test("sends the production GET and cancels a stream that remains open", async () => {
+    let cancelled = false;
+    let requestHeaders: Headers | undefined;
+    let requestMethod: string | undefined;
+    let requestPath: string | undefined;
+    const fetcher: CanaryFetcher = async (input, init) => {
+      requestHeaders = new Headers(init.headers);
+      requestMethod = init.method;
+      requestPath = new URL(input instanceof Request ? input.url : input)
+        .pathname;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          cancel: () => {
+            cancelled = true;
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+    };
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("passed");
+    expect(requestPath).toBe("/mcp");
+    expect(requestMethod).toBe("GET");
+    expect(requestHeaders?.get("accept")).toBe("text/event-stream");
+    expect(requestHeaders?.get("authorization")).toBe("Bearer canary-token");
+    expect(cancelled).toBe(true);
+  });
+
+  test("fails a 200 event-stream body that has already completed", async () => {
+    const fetcher: CanaryFetcher = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.close();
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("completed");
+  });
+
+  test("fails when closing the probe stream fails", async () => {
+    const fetcher: CanaryFetcher = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          cancel: async () => {
+            throw new Error("synthetic cancellation failure");
+          },
+        }),
+        {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        },
+      );
+
+    const result = await runAuthenticatedStreamProbe(
+      { baseUrl: "https://api.example", token: "canary-token" },
+      fetcher,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("cancellation failed");
   });
 });
 

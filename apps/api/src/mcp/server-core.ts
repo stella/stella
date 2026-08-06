@@ -57,7 +57,9 @@ const isByteStreamReadResult = (
     return false;
   }
   const { done, value: chunk }: Record<string, unknown> = { ...value };
-  return done === true ? chunk === undefined : chunk instanceof Uint8Array;
+  return done === true
+    ? chunk === undefined
+    : done === false && chunk instanceof Uint8Array;
 };
 
 const formatUnknownToolName = (toolName: string): string =>
@@ -504,6 +506,14 @@ export const createMcpHttpRequestHandler = ({
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
     });
+    const reportTransportError = (error: unknown, operation: string) => {
+      captureError(error, {
+        mode,
+        operation,
+        phase: "transport",
+        source: "mcp",
+      });
+    };
 
     let toreDown = false;
     const teardown = async () => {
@@ -511,8 +521,16 @@ export const createMcpHttpRequestHandler = ({
         return;
       }
       toreDown = true;
-      await transport.close().catch(() => null);
-      await server.close().catch(() => null);
+      const [transportResult, serverResult] = await Promise.allSettled([
+        transport.close(),
+        server.close(),
+      ]);
+      if (transportResult.status === "rejected") {
+        reportTransportError(transportResult.reason, "close_transport");
+      }
+      if (serverResult.status === "rejected") {
+        reportTransportError(serverResult.reason, "close_server");
+      }
     };
 
     try {
@@ -532,10 +550,14 @@ export const createMcpHttpRequestHandler = ({
       }
 
       const reader = response.body.getReader();
-      const completeExchange = () => {
-        detached(teardown(), "mcp.legacy-stream-teardown");
+      const completeExchange = async () => {
+        request.signal.removeEventListener("abort", abortExchange);
+        await teardown();
       };
-      request.signal.addEventListener("abort", completeExchange, {
+      const abortExchange = () => {
+        detached(completeExchange(), "mcp.legacy-stream-teardown");
+      };
+      request.signal.addEventListener("abort", abortExchange, {
         once: true,
       });
 
@@ -547,19 +569,25 @@ export const createMcpHttpRequestHandler = ({
               throw new TypeError("MCP transport returned a non-byte stream");
             }
             if (readResult.done) {
-              completeExchange();
+              await completeExchange();
               controller.close();
               return;
             }
             controller.enqueue(readResult.value);
           } catch (error) {
-            completeExchange();
+            reportTransportError(error, "read_stream");
+            await completeExchange();
             controller.error(error);
           }
         },
         cancel: async (reason) => {
-          completeExchange();
-          await reader.cancel(reason).catch(() => null);
+          try {
+            await reader.cancel(reason);
+          } catch (error) {
+            reportTransportError(error, "cancel_stream");
+          } finally {
+            await completeExchange();
+          }
         },
       });
 

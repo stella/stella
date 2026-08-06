@@ -373,12 +373,18 @@ describe("handleMcpHttpRequest", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
-    expect(response.body).not.toBeNull();
+    const body = response.body;
+    expect(body).not.toBeNull();
+    if (body === null) {
+      throw new Error("Expected an authenticated notification stream");
+    }
 
-    const reader = response.body!.getReader();
+    const reader = body.getReader();
     const firstRead = reader.read();
     const initialState = await Promise.race([
-      firstRead.then(() => "ended" as const),
+      firstRead.then(({ done }) =>
+        done ? ("ended" as const) : ("open" as const),
+      ),
       Bun.sleep(20).then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");

@@ -30,6 +30,7 @@ import { fetchWithTimeout } from "@/api/lib/fetch";
 import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "@/api/mcp/constants";
 
 const PROBE_TIMEOUT_MS = 20_000;
+const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
@@ -149,9 +150,9 @@ export const evaluateUnauthenticated = ({
 
 /**
  * ChatGPT opens this optional channel before it calls tools and treats a 405 as
- * a dead connector. A successful probe therefore needs both the 200 and the SSE
- * media type; its caller cancels the body immediately after checking the
- * headers so the canary does not wait for the long-lived stream.
+ * a dead connector. Headers are only the first half of the contract: the caller
+ * also observes the body briefly and fails if it completes or errors instead of
+ * remaining open as a notification channel.
  */
 export const evaluateStreamAvailability = ({
   contentType,
@@ -316,7 +317,93 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> => {
   ];
 };
 
-type CanaryTarget = { baseUrl: string; token: string };
+export type CanaryTarget = { baseUrl: string; token: string };
+export type CanaryFetcher = typeof fetchWithTimeout;
+
+type StreamObservation = "cancel_failed" | "closed" | "open" | "read_failed";
+
+/**
+ * Distinguish a genuinely open event channel from a 200 response whose body was
+ * already truncated. A pending read at the deadline is the normal idle-stream
+ * case. If frames arrive during the window, keep reading so a frame followed by
+ * immediate EOF still fails rather than masquerading as a live channel.
+ */
+const inspectNotificationStream = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<StreamObservation> => {
+  const reader = body.getReader();
+  const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
+  let observation: StreamObservation = "open";
+
+  while (Date.now() < deadline) {
+    const remainingMs = Math.max(1, deadline - Date.now());
+    // Reads must be sequential: a frame can be followed immediately by EOF,
+    // which is the truncation this bounded observation is meant to catch.
+    // eslint-disable-next-line no-await-in-loop
+    const readObservation = await Promise.race([
+      reader.read().then(
+        ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
+        () => "read_failed" as const,
+      ),
+      Bun.sleep(remainingMs).then(() => "open" as const),
+    ]);
+
+    if (readObservation === "frame") {
+      continue;
+    }
+    observation = readObservation;
+    break;
+  }
+
+  try {
+    await reader.cancel();
+  } catch {
+    return "cancel_failed";
+  }
+  return observation;
+};
+
+export const runAuthenticatedStreamProbe = async (
+  { baseUrl, token }: CanaryTarget,
+  fetcher: CanaryFetcher = fetchWithTimeout,
+): Promise<ProbeResult> => {
+  const response = await fetcher(new URL(MCP_HTTP_PATH, baseUrl), {
+    headers: {
+      accept: SSE_CONTENT_TYPE,
+      authorization: `Bearer ${token}`,
+    },
+    method: "GET",
+    timeoutMs: PROBE_TIMEOUT_MS,
+  });
+  const headerResult = evaluateStreamAvailability({
+    contentType: response.headers.get("content-type"),
+    status: response.status,
+  });
+
+  if (headerResult.status !== PROBE_STATUS.passed) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      return failed(PROBE_NAMES.stream, "response-body cancellation failed");
+    }
+    return headerResult;
+  }
+  if (response.body === null) {
+    return failed(PROBE_NAMES.stream, "200 event stream with no response body");
+  }
+
+  const observation = await inspectNotificationStream(response.body);
+  if (observation === "closed") {
+    return failed(PROBE_NAMES.stream, "200 event stream completed immediately");
+  }
+  if (observation === "read_failed") {
+    return failed(PROBE_NAMES.stream, "200 event stream failed while reading");
+  }
+  if (observation === "cancel_failed") {
+    return failed(PROBE_NAMES.stream, "response-body cancellation failed");
+  }
+  return headerResult;
+};
 
 type AuthenticatedProbe = {
   name: string;
@@ -330,22 +417,7 @@ type AuthenticatedProbe = {
 export const AUTHENTICATED_PROBES = [
   {
     name: PROBE_NAMES.stream,
-    run: async ({ baseUrl, token }) => {
-      const response = await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-        headers: {
-          accept: SSE_CONTENT_TYPE,
-          authorization: `Bearer ${token}`,
-        },
-        method: "GET",
-        timeoutMs: PROBE_TIMEOUT_MS,
-      });
-      const result = evaluateStreamAvailability({
-        contentType: response.headers.get("content-type"),
-        status: response.status,
-      });
-      await response.body?.cancel().catch(() => null);
-      return result;
-    },
+    run: runAuthenticatedStreamProbe,
   },
   {
     name: PROBE_NAMES.initialize,
