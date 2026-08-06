@@ -46,6 +46,20 @@ import {
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 
+type ByteStreamReadResult =
+  | { done: false; value: Uint8Array }
+  | { done: true; value?: undefined };
+
+const isByteStreamReadResult = (
+  value: unknown,
+): value is ByteStreamReadResult => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const { done, value: chunk }: Record<string, unknown> = { ...value };
+  return done === true ? chunk === undefined : chunk instanceof Uint8Array;
+};
+
 const formatUnknownToolName = (toolName: string): string =>
   toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
     ? toolName
@@ -517,7 +531,7 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
-      const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+      const reader = response.body.getReader();
       const completeExchange = () => {
         detached(teardown(), "mcp.legacy-stream-teardown");
       };
@@ -528,13 +542,16 @@ export const createMcpHttpRequestHandler = ({
       const monitoredBody = new ReadableStream<Uint8Array>({
         pull: async (controller) => {
           try {
-            const { done, value } = await reader.read();
-            if (done) {
+            const readResult: unknown = await reader.read();
+            if (!isByteStreamReadResult(readResult)) {
+              throw new TypeError("MCP transport returned a non-byte stream");
+            }
+            if (readResult.done) {
               completeExchange();
               controller.close();
               return;
             }
-            controller.enqueue(value);
+            controller.enqueue(readResult.value);
           } catch (error) {
             completeExchange();
             controller.error(error);
