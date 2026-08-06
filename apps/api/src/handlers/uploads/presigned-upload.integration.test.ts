@@ -28,10 +28,8 @@ void mock.module("@/api/lib/s3", () => ({
   ...realS3,
   getS3: () => ({
     delete: deleteObjectMock,
-    file: () => ({
-      arrayBuffer: async () => new ArrayBuffer(0),
-    }),
   }),
+  readS3ArrayBuffer: async () => new ArrayBuffer(0),
 }));
 
 const { default: abortUpload } = await import("./delete");

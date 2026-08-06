@@ -53,13 +53,11 @@ void mock.module("@/api/lib/content-encryption", () => ({
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
-    file: () => ({
-      arrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
-    }),
     write: s3WriteMock,
     delete: s3DeleteMock,
   }),
   putS3ObjectWithSignal: s3WriteMock,
+  readS3ArrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
 }));
 
 void mock.module("@/api/lib/file-scan/scan", () => ({

@@ -18,20 +18,13 @@ const realS3 = await import("@/api/lib/s3");
 
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
-  getS3: () => ({
-    file: (key: string) => ({
-      arrayBuffer: async () => {
-        const buf = s3Objects.get(key);
-        if (!buf) {
-          throw new Error(`Missing S3 object: ${key}`);
-        }
-        return buf.buffer.slice(
-          buf.byteOffset,
-          buf.byteOffset + buf.byteLength,
-        );
-      },
-    }),
-  }),
+  readS3ArrayBuffer: async (key: string) => {
+    const buf = s3Objects.get(key);
+    if (!buf) {
+      throw new Error(`Missing S3 object: ${key}`);
+    }
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  },
 }));
 
 const { loadTemplateVersionDiffSources } = await import("./versions");
