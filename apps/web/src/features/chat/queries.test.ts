@@ -323,6 +323,12 @@ describe("mergeGroupedChatThreadPages", () => {
             workspaceName: "Matter B",
             threads: [
               {
+                createdAt: date("2026-05-16T06:00:00.000Z"),
+                id: "workspace-thread-D",
+                title: "Workspace D",
+                updatedAt: date("2026-05-16T06:00:00.000Z"),
+              },
+              {
                 createdAt: date("2026-05-16T04:00:00.000Z"),
                 id: "workspace-thread-C",
                 title: "Workspace C",
@@ -345,7 +351,7 @@ describe("mergeGroupedChatThreadPages", () => {
       },
       {
         workspaceId: "workspace-B",
-        threads: [{ id: "workspace-thread-C" }],
+        threads: [{ id: "workspace-thread-D" }, { id: "workspace-thread-C" }],
       },
     ]);
     expect(
@@ -354,24 +360,45 @@ describe("mergeGroupedChatThreadPages", () => {
         scope: thread.scope,
         workspaceId:
           thread.scope === "workspace" ? thread.workspaceId : undefined,
+        workspaceName:
+          thread.scope === "workspace" ? thread.workspaceName : undefined,
       })),
     ).toEqual([
-      { id: "global-A", scope: "global", workspaceId: undefined },
+      {
+        id: "global-A",
+        scope: "global",
+        workspaceId: undefined,
+        workspaceName: undefined,
+      },
       {
         id: "workspace-thread-A",
         scope: "workspace",
         workspaceId: "workspace-A",
+        workspaceName: "Matter A",
       },
-      { id: "global-B", scope: "global", workspaceId: undefined },
+      {
+        id: "workspace-thread-D",
+        scope: "workspace",
+        workspaceId: "workspace-B",
+        workspaceName: "Matter B",
+      },
+      {
+        id: "global-B",
+        scope: "global",
+        workspaceId: undefined,
+        workspaceName: undefined,
+      },
       {
         id: "workspace-thread-B",
         scope: "workspace",
         workspaceId: "workspace-A",
+        workspaceName: "Matter A",
       },
       {
         id: "workspace-thread-C",
         scope: "workspace",
         workspaceId: "workspace-B",
+        workspaceName: "Matter B",
       },
     ]);
   });

@@ -100,13 +100,21 @@ export const ThreadsSheet = ({
     return null;
   })();
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
-    useInfiniteQuery(
-      groupedChatThreadsOptions({
-        activeOrganizationId,
-        search: debouncedSearch,
-      }),
-    );
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    isPending,
+    refetch,
+  } = useInfiniteQuery(
+    groupedChatThreadsOptions({
+      activeOrganizationId,
+      search: debouncedSearch,
+    }),
+  );
   const groupedThreads = mergeGroupedChatThreadPages(data?.pages);
   const historyItems = listChatHistoryItems(groupedThreads);
   const emptyLabel = (() => {
@@ -117,6 +125,18 @@ export const ThreadsSheet = ({
       return commonT("noResults");
     }
     return t("chat.noThreads");
+  })();
+  const threadListState: ThreadListState = (() => {
+    if (isError && historyItems.length === 0) {
+      return {
+        isRetrying: isFetching,
+        onRetry: () => {
+          detached(refetch(), "ThreadsSheet");
+        },
+        status: "error",
+      };
+    }
+    return { emptyLabel, status: "ready" };
   })();
 
   return (
@@ -162,8 +182,8 @@ export const ThreadsSheet = ({
             </InputGroup>
             <ThreadList
               activeThreadRef={activeThreadRef}
-              emptyLabel={emptyLabel}
               onOpenChange={setIsOpen}
+              state={threadListState}
               threads={historyItems}
             />
             {hasNextPage ? (
@@ -269,25 +289,54 @@ const DeleteThreadButton = ({
   );
 };
 
+type ThreadListState =
+  | {
+      isRetrying: boolean;
+      onRetry: () => void;
+      status: "error";
+    }
+  | {
+      emptyLabel: string;
+      status: "ready";
+    };
+
 type ThreadListProps = {
   activeThreadRef: ChatThreadRef | null;
-  emptyLabel: string;
   onOpenChange: (open: boolean) => void;
+  state: ThreadListState;
   threads: ChatHistoryItem[];
 };
 
 const ThreadList = ({
   activeThreadRef,
-  emptyLabel,
   onOpenChange,
+  state,
   threads,
 }: ThreadListProps) => {
   const t = useTranslations();
 
+  if (state.status === "error") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-4">
+        <p className="text-muted-foreground text-center text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
+        <Button
+          disabled={state.isRetrying}
+          onClick={state.onRetry}
+          size="sm"
+          variant="outline"
+        >
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
+  }
+
   if (threads.length === 0) {
     return (
       <p className="text-muted-foreground py-4 text-center text-sm">
-        {emptyLabel}
+        {state.emptyLabel}
       </p>
     );
   }
