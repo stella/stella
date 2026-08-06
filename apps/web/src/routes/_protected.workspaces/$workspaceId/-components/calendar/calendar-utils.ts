@@ -6,6 +6,8 @@
  * datestamp-only, no time component).
  */
 
+import type { TaskStatus } from "@stll/api-contract";
+
 import { getFirstWeekday } from "@/i18n/week";
 import type { WorkspaceFieldContent } from "@/lib/types";
 import { includesValue } from "@/lib/utils";
@@ -229,13 +231,13 @@ export const isTaskDateProperty = (id: string) =>
  * 2024-01-07 is a Sunday (getUTCDay() === 0); offsetting by the first
  * weekday yields labels starting from that day.
  */
-export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
+export const TASK_STATUS_DOT_COLORS = {
   open: "var(--option-gray)",
   in_progress: "var(--option-blue)",
   in_review: "var(--option-amber)",
   done: "var(--option-emerald)",
   cancelled: "var(--option-red)",
-};
+} as const satisfies Record<TaskStatus, string>;
 
 export const getWeekdayLabels = (
   locale: string,

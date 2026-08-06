@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isTaskStatus } from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -508,9 +509,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       for (const { entity } of entries) {
         yearDots.push({
           date,
-          color: entity.status
-            ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "var(--option-gray)")
-            : "var(--option-gray)",
+          color: isTaskStatus(entity.status)
+            ? TASK_STATUS_DOT_COLORS[entity.status]
+            : TASK_STATUS_DOT_COLORS.open,
         });
       }
     }
