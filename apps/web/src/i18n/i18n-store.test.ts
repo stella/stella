@@ -1,4 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
+import { runInNewContext } from "node:vm";
+
+import { UI_LOCALES } from "@stll/locales";
 
 import {
   buildFormattingLocale,
@@ -10,6 +13,62 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import en from "@/i18n/langs/en.json";
+
+type PrepaintOptions = {
+  languages?: readonly string[];
+  prefersDark?: boolean;
+  storage?: Readonly<Record<string, string>>;
+  storageThrows?: boolean;
+};
+
+const runPrepaint = async ({
+  languages = [],
+  prefersDark = false,
+  storage = {},
+  storageThrows = false,
+}: PrepaintOptions = {}) => {
+  const source = await Bun.file(
+    new URL("../../public/prepaint-init.js", import.meta.url),
+  ).text();
+  const classNames = new Set<string>();
+  const documentElement = {
+    lang: "en",
+    dir: "ltr",
+    classList: {
+      add: (...tokens: string[]) => {
+        for (const token of tokens) {
+          if (/\s/u.test(token)) {
+            throw new DOMException(
+              "The token contains HTML space characters",
+              "InvalidCharacterError",
+            );
+          }
+          classNames.add(token);
+        }
+      },
+    },
+    style: {
+      colorScheme: "",
+      backgroundColor: "",
+    },
+  };
+
+  runInNewContext(source, {
+    document: { documentElement },
+    localStorage: {
+      getItem: (key: string) => {
+        if (storageThrows) {
+          throw new DOMException("Storage is unavailable", "SecurityError");
+        }
+        return storage[key] ?? null;
+      },
+    },
+    matchMedia: () => ({ matches: prefersDark }),
+    navigator: { languages },
+  });
+
+  return { classNames, documentElement };
+};
 
 // Baseline: the app has already booted in English, so the boot latch is on.
 const resetToBootedEnglish = (): void => {
@@ -102,6 +161,96 @@ test("every supported language resolves to a known writing direction", () => {
   for (const lang of supportedLanguages) {
     expect(["ltr", "rtl"]).toContain(getLangDir(lang));
   }
+});
+
+test("prepaint-init.js locale sets match the i18n sources", async () => {
+  // public/prepaint-init.js runs before the bundle loads, so it cannot
+  // import UI_LOCALES or LANG_DIR and duplicates them instead. Adding a
+  // language without updating the script would make first-paint detection
+  // diverge from the application, so pin both sets to their sources here.
+  const source = await Bun.file(
+    new URL("../../public/prepaint-init.js", import.meta.url),
+  ).text();
+
+  const declaredUiLocales = /const UI_LOCALES = \[(.*?)\];/su.exec(source);
+  const declaredRtlLocales = /const RTL_LOCALES = \[(.*?)\];/su.exec(source);
+  expect(declaredUiLocales).not.toBeNull();
+  expect(declaredRtlLocales).not.toBeNull();
+
+  // Locale tags are ASCII identifiers, not user-facing text, so order them
+  // by code point rather than with a locale-aware collator.
+  const byCodePoint = (a: string, b: string) => (a < b ? -1 : Number(a > b));
+  const scriptUiLocales = [
+    ...(declaredUiLocales?.[1] ?? "").matchAll(/"([^"]+)"/gu),
+  ]
+    .map((match) => match[1] ?? "")
+    .sort(byCodePoint);
+  const scriptRtlLocales = [
+    ...(declaredRtlLocales?.[1] ?? "").matchAll(/"([^"]+)"/gu),
+  ]
+    .map((match) => match[1] ?? "")
+    .sort(byCodePoint);
+  const expectedUiLocales = [...UI_LOCALES].sort(byCodePoint);
+  const expectedRtlLocales = UI_LOCALES.filter(
+    (lang) => getLangDir(lang) === "rtl",
+  ).toSorted(byCodePoint);
+
+  expect(scriptUiLocales).toEqual(expectedUiLocales);
+  expect(scriptRtlLocales).toEqual(expectedRtlLocales);
+});
+
+test("prepaint-init.js uses the first supported browser locale", async () => {
+  const arabicFirst = await runPrepaint({ languages: ["ar-SA", "en-US"] });
+  expect(arabicFirst.documentElement.lang).toBe("ar");
+  expect(arabicFirst.documentElement.dir).toBe("rtl");
+
+  const englishFirst = await runPrepaint({ languages: ["en-US", "ar-SA"] });
+  expect(englishFirst.documentElement.lang).toBe("en");
+  expect(englishFirst.documentElement.dir).toBe("ltr");
+});
+
+test("prepaint-init.js prefers the persisted locale", async () => {
+  const result = await runPrepaint({
+    languages: ["en-US"],
+    storage: {
+      "stella-i18n": JSON.stringify({ state: { lang: "ar" }, version: 0 }),
+    },
+  });
+
+  expect(result.documentElement.lang).toBe("ar");
+  expect(result.documentElement.dir).toBe("rtl");
+});
+
+test("prepaint-init.js survives malformed or unavailable storage", async () => {
+  const malformed = await runPrepaint({
+    languages: ["ar-SA"],
+    storage: {
+      "stella-i18n": "{",
+      "stella-ui-palette": "invalid palette",
+    },
+  });
+  expect(malformed.documentElement.lang).toBe("ar");
+  expect(malformed.documentElement.dir).toBe("rtl");
+
+  const unavailable = await runPrepaint({
+    languages: ["ar-SA"],
+    storageThrows: true,
+  });
+  expect(unavailable.documentElement.lang).toBe("ar");
+  expect(unavailable.documentElement.dir).toBe("rtl");
+});
+
+test("prepaint-init.js preserves valid theme and palette preferences", async () => {
+  const result = await runPrepaint({
+    storage: {
+      "stella-ui-palette": "nord",
+      "stella-ui-theme": "dark",
+    },
+  });
+
+  expect(result.classNames).toEqual(new Set(["dark", "palette-nord"]));
+  expect(result.documentElement.style.colorScheme).toBe("dark");
+  expect(result.documentElement.style.backgroundColor).toBe("#0c0c0d");
 });
 
 test("buildFormattingLocale never builds an invalid tag for any language + region", () => {
