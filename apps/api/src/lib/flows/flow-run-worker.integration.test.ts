@@ -103,6 +103,15 @@ void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
   putS3ObjectWithSignal: s3WriteMock,
+  // `mock.module` replaces the module, so every named export a consumer
+  // imports must exist here or the import fails at link time. This suite
+  // reads no object; throwing surfaces one that appears later.
+  readS3ArrayBuffer: () => {
+    throw new Error("Unexpected S3 object read in this suite");
+  },
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({

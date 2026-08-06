@@ -35,6 +35,9 @@ void mock.module("@/api/lib/s3", () => ({
     s3ReadKeys.push(key);
     return s3FileBuffer;
   },
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,

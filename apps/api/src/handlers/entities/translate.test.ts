@@ -58,6 +58,9 @@ void mock.module("@/api/lib/s3", () => ({
   }),
   putS3ObjectWithSignal: s3WriteMock,
   readS3ArrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 
 void mock.module("@/api/lib/file-scan/scan", () => ({
