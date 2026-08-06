@@ -340,6 +340,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
+    "./.oxlint-plugins/no-native-s3-object-read.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
@@ -476,6 +477,16 @@ export default defineConfig({
           "error",
           { allowedColumnExpressions: ["table.metadata"] },
         ],
+      },
+    },
+    {
+      // Exercise no-native-s3-object-read against its regression fixture; the
+      // rule is otherwise scoped to apps/api, which the fixtures dir is not.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-native-s3-object-read.fixture.ts",
+      ],
+      rules: {
+        "no-native-s3-object-read/no-native-s3-object-read": "error",
       },
     },
     {
@@ -1738,6 +1749,7 @@ export default defineConfig({
       files: ["apps/api/**/*.ts"],
       rules: {
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
+        "no-native-s3-object-read/no-native-s3-object-read": "error",
       },
     },
     {

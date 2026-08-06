@@ -29,12 +29,15 @@ void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,
-    file: (key: string) => {
-      s3ReadKeys.push(key);
-      return { arrayBuffer: async () => s3FileBuffer };
-    },
   }),
   putS3ObjectWithSignal: s3WriteMock,
+  readS3ArrayBuffer: async (key: string) => {
+    s3ReadKeys.push(key);
+    return s3FileBuffer;
+  },
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,

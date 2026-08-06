@@ -18,7 +18,7 @@ import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
 import {
   MAX_TEMPLATE_LANGUAGES,
@@ -220,7 +220,7 @@ const updateTemplateHandler = async function* ({
 
         // Re-embed the manifest in the DOCX so the S3 file
         // stays in sync with the DB.
-        const docxBuffer = await getS3().file(locked.s3Key).arrayBuffer();
+        const docxBuffer = await readS3ArrayBuffer(locked.s3Key);
         const updatedDocx = await writeManifest(
           Buffer.from(docxBuffer),
           manifest,

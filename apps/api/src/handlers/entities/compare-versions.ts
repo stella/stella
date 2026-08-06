@@ -16,7 +16,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { countVersionDiffWords } from "@/api/lib/entity-versions/version-diff-word-counts";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -115,26 +115,22 @@ export default createSafeHandler(
     // author concurrently; the author query runs in its own safeDb
     // transaction and does not depend on the file bytes.
     const [baseBuffer, targetBuffer, targetAuthorResult] = await Promise.all([
-      getS3()
-        .file(
-          createFileKey({
-            organizationId,
-            workspaceId,
-            fileId: baseFile.id,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-        )
-        .arrayBuffer(),
-      getS3()
-        .file(
-          createFileKey({
-            organizationId,
-            workspaceId,
-            fileId: targetFile.id,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-        )
-        .arrayBuffer(),
+      readS3ArrayBuffer(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: baseFile.id,
+          mimeType: DOCX_MIME_TYPE,
+        }),
+      ),
+      readS3ArrayBuffer(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: targetFile.id,
+          mimeType: DOCX_MIME_TYPE,
+        }),
+      ),
       safeDb((tx) =>
         tx
           .select({ userName: user.name })

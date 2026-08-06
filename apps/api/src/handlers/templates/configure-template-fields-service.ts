@@ -28,7 +28,7 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 
 type ConfigureTemplateFieldsOptions = {
   safeDb: SafeDb;
@@ -104,9 +104,7 @@ export const configureTemplateFields = async function* ({
         return { ok: false as const, reason: "not-found" as const };
       }
 
-      const buffer = Buffer.from(
-        await getS3().file(locked.s3Key).arrayBuffer(),
-      );
+      const buffer = Buffer.from(await readS3ArrayBuffer(locked.s3Key));
 
       // Prefer the manifest embedded in the stored DOCX; fall back to the DB
       // column and finally to a fresh discovery so a manifest-less raw upload

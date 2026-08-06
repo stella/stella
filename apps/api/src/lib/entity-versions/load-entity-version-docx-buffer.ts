@@ -16,7 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type LoadEntityVersionDocxBufferOptions = {
@@ -156,16 +156,14 @@ export const loadEntityVersionDocxBuffer = async ({
 
   const bufferResult = await Result.tryPromise({
     try: async () =>
-      await getS3()
-        .file(
-          createFileKey({
-            organizationId,
-            workspaceId,
-            fileId: fileContent.id,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-        )
-        .arrayBuffer(),
+      await readS3ArrayBuffer(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: fileContent.id,
+          mimeType: DOCX_MIME_TYPE,
+        }),
+      ),
     catch: (cause) =>
       new HandlerError({
         status: 500,

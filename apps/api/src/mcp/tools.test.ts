@@ -66,6 +66,11 @@ void mock.module("@/api/lib/s3", () => ({
     accessKeyId: "test-access-key",
     secretAccessKey: "test-secret-key",
   }),
+  // The DOCX conversion tests exercise the safe read helper directly.
+  readS3ArrayBuffer: s3ArrayBufferMock,
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 
 // Default passthrough: just await the wrapped operation, so every existing
@@ -1602,7 +1607,10 @@ describe("OpenAI-compatible MCP tools", () => {
       throw new Error("Expected payload.text to be a string");
     }
     expect(payload["text"]).not.toContain("# Agreement");
-    expect(s3FileMock).not.toHaveBeenCalled();
+    // Guards the read helper the handler actually calls. `getS3().file()` is
+    // no longer on this path at all, so asserting against it would hold even
+    // if the auxiliary DOCX were read.
+    expect(s3ArrayBufferMock).not.toHaveBeenCalled();
   });
 
   test("read_content_across_matters falls back to plaintext when docx-to-markdown conversion fails", async () => {

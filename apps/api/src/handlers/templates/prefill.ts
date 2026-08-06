@@ -28,7 +28,7 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -334,9 +334,7 @@ const prefillTemplate = createSafeRootHandler(
     const targets = yield* Result.await(
       Result.tryPromise({
         try: async () => {
-          const buffer = Buffer.from(
-            await getS3().file(template.s3Key).arrayBuffer(),
-          );
+          const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
           const [discovered, manifest] = await Promise.all([
             discoverTemplate(buffer),
             readManifest(buffer),

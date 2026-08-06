@@ -173,7 +173,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
@@ -2310,7 +2310,7 @@ const readActivePdfForModel = async ({
     });
     const buffer = yield* Result.await(
       Result.tryPromise({
-        try: async () => await getS3().file(s3Key).arrayBuffer(),
+        try: async () => await readS3ArrayBuffer(s3Key),
         catch: (cause) =>
           new HandlerError({
             status: 500,

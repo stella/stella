@@ -1,0 +1,187 @@
+// Ban Bun's native S3 object-body reads.
+//
+// Up to and including Bun 1.3.14, `S3Client.file(key).bytes()` /
+// `.arrayBuffer()` / `.text()` / `.json()` never free the native buffer the
+// HTTP thread accumulates the response body into: the handler is invoked with
+// `.clone` lifetime, JS receives its own copy, and the original allocation is
+// stranded (oven-sh/bun#29083, fixed upstream by #29086 and #29923). The
+// leaked allocation lives outside the JS heap, so it is invisible to heap
+// snapshots and survives a forced GC — only RSS moves. Any process that reads
+// a steady stream of objects grows by roughly the object size per read until
+// the runtime kills it.
+//
+// One missed call site silently reintroduces that, and the symptom (RSS climb
+// with a flat heap) is expensive to trace back, so this is a rule rather than
+// a convention. Read through `readS3ArrayBuffer` / `readCorpusS3Bytes` in
+// apps/api/src/lib/s3.ts, which fetch over a presigned URL instead.
+//
+// Remove this rule together with those helpers once every runtime image is on
+// a stable Bun containing the fixes (the first stable AFTER 1.3.14 — they are
+// not in 1.3.14 itself). See TODO(bun-s3-native-read).
+
+import { isAstNode, isIdentifier } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+
+// Body-materialising reads only. `.exists()`, `.stat()`, `.write()`,
+// `.delete()`, and `.presign()` carry no response body and do not leak.
+const BODY_READS = new Set(["arrayBuffer", "bytes", "text", "json"]);
+
+// Accessors that hand back a Bun S3 client. A local `new Bun.S3Client(...)`
+// is caught through the `.file(...)` receiver check below instead.
+const S3_ACCESSORS = new Set(["getS3", "getCorpusS3"]);
+
+const isS3AccessorCall = (node) =>
+  node?.type === "CallExpression" &&
+  isIdentifier(node.callee) &&
+  S3_ACCESSORS.has(node.callee.name);
+
+/** True for `<something>.file(...)` — the call that yields the S3 file handle. */
+const isFileCall = (node) =>
+  node?.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  !node.callee.computed &&
+  isIdentifier(node.callee.property, "file");
+
+const bodyReadMethod = (member) => {
+  if (!member.computed && isIdentifier(member.property)) {
+    return member.property.name;
+  }
+  if (
+    member.computed &&
+    member.property.type === "Literal" &&
+    typeof member.property.value === "string"
+  ) {
+    return member.property.value;
+  }
+  return null;
+};
+
+export default {
+  meta: { name: "no-native-s3-object-read" },
+  rules: {
+    "no-native-s3-object-read": {
+      meta: {
+        type: "problem",
+        messages: {
+          noNativeS3ObjectRead:
+            "Do not read an S3 object body with .{{method}}(); Bun 1.3.14 " +
+            "leaks the native download buffer (oven-sh/bun#29083). Use " +
+            "readS3ArrayBuffer() or readCorpusS3Bytes() from " +
+            "@/api/lib/s3 instead.",
+        },
+      },
+      create(context) {
+        const isS3ClientConstruction = (init) =>
+          init?.type === "NewExpression" &&
+          ((isIdentifier(init.callee) && init.callee.name === "S3Client") ||
+            (init.callee.type === "MemberExpression" &&
+              !init.callee.computed &&
+              isIdentifier(init.callee.property, "S3Client")));
+
+        const resolveVariable = (
+          identifierNode: AstNode & { name: string },
+        ) => {
+          let scope = context.sourceCode.getScope(identifierNode);
+          while (scope) {
+            const variable = scope.set.get(identifierNode.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        // Return the initializer only while the identifier still denotes that
+        // binding. Binding identity prevents a same-named parameter or nested
+        // local from inheriting provenance. Mutable bindings are accepted only
+        // when scope analysis proves they were never reassigned after init.
+        const getStableInitializer = (variable) => {
+          for (const def of variable.defs) {
+            if (
+              def.type !== "Variable" ||
+              !isAstNode(def.node) ||
+              def.node.type !== "VariableDeclarator" ||
+              !isAstNode(def.parent) ||
+              def.parent.type !== "VariableDeclaration"
+            ) {
+              continue;
+            }
+            if (
+              def.parent.kind !== "const" &&
+              variable.references.some(
+                (reference) =>
+                  typeof reference.isWrite === "function" &&
+                  reference.isWrite() &&
+                  reference.init !== true,
+              )
+            ) {
+              return null;
+            }
+            return isAstNode(def.node.init) ? def.node.init : null;
+          }
+          return null;
+        };
+
+        const isS3ClientExpression = (
+          node,
+          visited = new Set<unknown>(),
+        ): boolean => {
+          if (isS3AccessorCall(node) || isS3ClientConstruction(node)) {
+            return true;
+          }
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          return isS3ClientExpression(getStableInitializer(variable), visited);
+        };
+
+        const isS3FileExpression = (
+          node,
+          visited = new Set<unknown>(),
+        ): boolean => {
+          if (isFileCall(node)) {
+            return isS3ClientExpression(node.callee.object, visited);
+          }
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          return isS3FileExpression(getStableInitializer(variable), visited);
+        };
+
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            if (callee.type !== "MemberExpression") {
+              return;
+            }
+            const method = bodyReadMethod(callee);
+            if (!method || !BODY_READS.has(method)) {
+              return;
+            }
+
+            if (!isS3FileExpression(callee.object)) {
+              return;
+            }
+
+            context.report({
+              node,
+              messageId: "noNativeS3ObjectRead",
+              data: { method },
+            });
+          },
+        };
+      },
+    },
+  },
+};

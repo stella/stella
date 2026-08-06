@@ -23,7 +23,7 @@ import {
   isNativelyRenderableMimeType,
 } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -253,7 +253,7 @@ export const readEmailHtmlPreviewHandler = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const fileBuffer = await getS3().file(fileKey).arrayBuffer();
+  const fileBuffer = await readS3ArrayBuffer(fileKey);
   const htmlResult = await emailToHtml(fileBuffer, emailMimeType);
 
   if (Result.isError(htmlResult)) {

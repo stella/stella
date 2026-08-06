@@ -23,7 +23,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -384,7 +384,7 @@ const processPdfDerivativeJob = async ({
 };
 
 const getS3File = async (key: string): Promise<ArrayBuffer> =>
-  await getS3().file(key).arrayBuffer();
+  await readS3ArrayBuffer(key);
 
 // The derivative-state literals below cast `::text::jsonb`, never a bare
 // `::jsonb`. A bare cast fixes the bind parameter's type to jsonb, so the

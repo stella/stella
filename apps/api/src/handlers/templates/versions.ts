@@ -11,7 +11,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
 /** Presigned download URLs expire after 15 minutes, matching every
@@ -266,10 +266,10 @@ export const loadTemplateVersionDiffSources = async ({
   const previousS3Key = previous.at(0)?.s3Key ?? null;
 
   const [currentBuffer, prevBuffer] = await Promise.all([
-    getS3().file(version.s3Key).arrayBuffer(),
+    readS3ArrayBuffer(version.s3Key),
     previousS3Key === null
       ? Promise.resolve(null)
-      : getS3().file(previousS3Key).arrayBuffer(),
+      : readS3ArrayBuffer(previousS3Key),
   ]);
 
   const [currentText, prevText] = await Promise.all([

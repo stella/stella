@@ -10,6 +10,7 @@ import { S3Client } from "bun";
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { safeErrorCode } from "@/api/lib/errors/utils";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 type S3Credentials = {
@@ -579,6 +580,74 @@ export const getCorpusS3 = (): S3Client => {
   _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
   return _corpusClient;
 };
+
+// The signed URL is consumed by the very next statement, so it only has to
+// outlive one read.
+const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
+const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Fetch an object body over a presigned URL.
+ *
+ * Every object read in this codebase goes through here rather than through
+ * Bun's `S3Client.file(key).bytes()` / `.arrayBuffer()`. Up to and including
+ * Bun 1.3.14, those calls never free the native buffer the HTTP thread
+ * accumulates the body into: the handler receives the bytes with `.clone`
+ * lifetime, JS gets its own copy, and the original allocation is stranded
+ * (oven-sh/bun#29083, fixed by oven-sh/bun#29086 and #29923). Because the
+ * leaked allocation is outside the JS heap it is invisible to heap snapshots
+ * and survives a forced GC — only RSS moves — so any process that reads a
+ * steady stream of objects grows by roughly the object size per read until it
+ * is killed.
+ *
+ * Measured on linux/arm64, 4000 reads of a 256 KiB object at the corpus
+ * indexing loop's read concurrency: the native call grew 48MB -> 1100MB and
+ * never plateaued, while this path stayed flat.
+ *
+ * `no-native-s3-object-read` (tools/oxlint-rules) keeps new call sites off the
+ * native reads, because a single missed one silently reintroduces the leak.
+ *
+ * TODO(bun-s3-native-read): once every runtime image is on a stable Bun
+ * containing those fixes (the first stable AFTER 1.3.14 — they are not in
+ * 1.3.14 itself), delete these helpers and the lint rule and go back to
+ * `.bytes()` / `.arrayBuffer()`. The native path is zero-copy after the fix,
+ * so it should then be faster than this one.
+ *
+ * The signed URL carries the caller's credentials in its query string, so it
+ * is passed straight to `fetch` and never logged or stored. Unlike the native
+ * calls, `fetch` honours an abort signal, so a read that outlives its ceiling
+ * is genuinely cancelled rather than merely abandoned.
+ */
+const fetchObject = async (
+  client: S3Client,
+  key: string,
+  signal?: AbortSignal,
+): Promise<Response> => {
+  const response = await fetchWithTimeout(
+    client.presign(key, { expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS }),
+    { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    throw new S3ObjectReadError({
+      message: `Object read for ${key} failed with ${response.status}`,
+    });
+  }
+  return response;
+};
+
+/** Read a legal-corpus object's bytes. See `fetchObject`. */
+export const readCorpusS3Bytes = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> =>
+  await (await fetchObject(getCorpusS3(), key, signal)).bytes();
+
+/** Read a documents-bucket object. See `fetchObject`. */
+export const readS3ArrayBuffer = async (
+  key: string,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> =>
+  await (await fetchObject(getS3(), key, signal)).arrayBuffer();
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (

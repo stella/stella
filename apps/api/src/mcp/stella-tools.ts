@@ -49,7 +49,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
@@ -1312,17 +1312,16 @@ const loadCurrentVersionDocxMarkdown = async ({
   const markdownResult = await Result.tryPromise({
     try: async () =>
       await withTimeout(
-        async () => {
-          const buffer = await getS3()
-            .file(
-              createFileKey({
-                organizationId: context.organizationId,
-                workspaceId,
-                fileId: file.id,
-                mimeType: DOCX_MIME_TYPE,
-              }),
-            )
-            .arrayBuffer();
+        async (signal) => {
+          const buffer = await readS3ArrayBuffer(
+            createFileKey({
+              organizationId: context.organizationId,
+              workspaceId,
+              fileId: file.id,
+              mimeType: DOCX_MIME_TYPE,
+            }),
+            signal,
+          );
           return await docxToMarkdown(buffer);
         },
         {

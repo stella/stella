@@ -62,6 +62,10 @@ void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
   putS3ObjectWithSignal: writeMock,
+  readS3ArrayBuffer: arrayBufferMock,
+  readCorpusS3Bytes: () => {
+    throw new Error("Unexpected corpus object read in this suite");
+  },
 }));
 
 const {
@@ -124,7 +128,7 @@ describe("chat attachment hydration", () => {
       throw result.error;
     }
     expect(result.value.type).toBe("blocked");
-    expect(fileMock).not.toHaveBeenCalled();
+    expect(arrayBufferMock).not.toHaveBeenCalled();
   });
 
   test("hydrates non-extractable attachments as raw override when the user allows it", async () => {

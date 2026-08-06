@@ -12,12 +12,20 @@
  *   AWS_REGION=eu-central-1 bun src/scripts/citation-probe.ts \
  *     --bucket <legal-corpus-bucket> [--sample 18]
  */
+import { TaggedError } from "better-result";
+
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { zstdDecompressToString } from "@/api/lib/compression";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 const JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
+
+class CitationProbeS3ReadError extends TaggedError("CitationProbeS3ReadError")<{
+  message: string;
+  status: number;
+}> {}
 
 const args = Bun.argv.slice(2);
 const argValue = (name: string): string | undefined => {
@@ -301,7 +309,20 @@ const probeKey = async (
   jurisdiction: string,
   key: string,
 ): Promise<ProbedDoc> => {
-  const body = await withDeadline(s3.file(key).bytes(), "s3.get");
+  // Presigned GET rather than `s3.file(key).bytes()`: the native read strands
+  // its download buffer on every call (see `no-native-s3-object-read`). This
+  // probe is short-lived enough not to care, but reading the same way as the
+  // rest of the codebase keeps one path to revert when the runtime is fixed.
+  const response = await fetchWithTimeout(s3.presign(key, { expiresIn: 300 }), {
+    timeoutMs: 30_000,
+  });
+  if (!response.ok) {
+    throw new CitationProbeS3ReadError({
+      message: `s3.get: failed with ${String(response.status)}`,
+      status: response.status,
+    });
+  }
+  const body = await response.bytes();
   const text = zstdDecompressToString(body);
   const documentId = key.slice(KEY_PREFIX.length).split("/").at(1) ?? key;
   if (text.trim().length === 0) {

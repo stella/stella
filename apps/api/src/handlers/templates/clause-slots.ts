@@ -14,7 +14,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { resolveClauseSlotBodies } from "@/api/lib/docx/resolve-clause-slots";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 const clauseSlotsParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -50,7 +50,7 @@ const getTemplateClauseSlots = createSafeRootHandler(
       );
     }
 
-    const arrayBuf = await getS3().file(template.s3Key).arrayBuffer();
+    const arrayBuf = await readS3ArrayBuffer(template.s3Key);
     const slots = await discoverClauseSlots(Buffer.from(arrayBuf));
     if (slots.length === 0) {
       return Result.ok({ slots: [] });

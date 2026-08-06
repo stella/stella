@@ -43,7 +43,7 @@ import type {
   InputType,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 
@@ -89,7 +89,7 @@ const loadTemplate = async (
   if (!template) {
     return null;
   }
-  const buffer = Buffer.from(await getS3().file(template.s3Key).arrayBuffer());
+  const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
   return { name: template.name, fileName: template.fileName, buffer };
 };
 

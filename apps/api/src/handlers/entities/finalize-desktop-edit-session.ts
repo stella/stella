@@ -42,7 +42,7 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
@@ -375,7 +375,10 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await getS3().file(checkpointKey).arrayBuffer();
+      const checkpointBuffer = await readS3ArrayBuffer(
+        checkpointKey,
+        request.signal,
+      );
 
       const validation = await validateDocxBuffer(checkpointBuffer);
       if (!validation.valid) {

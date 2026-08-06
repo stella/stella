@@ -10,7 +10,7 @@ import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractText } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 const previewTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -45,7 +45,7 @@ const previewTemplateHandler = async function* ({
     );
   }
 
-  const buffer = Buffer.from(await getS3().file(template.s3Key).arrayBuffer());
+  const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
 
   const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
     await Promise.all([
