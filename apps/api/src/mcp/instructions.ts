@@ -13,7 +13,7 @@ import type { McpMode } from "@/api/mcp/constants";
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1600;
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 900;
 
-const DEFAULT_INSTRUCTIONS = `Stella is a legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing.
+const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 
@@ -25,7 +25,7 @@ Static reference documents are available via \`resources/list\` then \`resources
 
 Hit a bug or a gap? File it with the send_feedback tool.`;
 
-const ANONYMIZED_INSTRUCTIONS = `Stella is a legal workspace; this anonymized surface offers read and search over matters, documents, contacts, case law and clauses. Tenant and personal text is redacted on egress.
+const ANONYMIZED_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this anonymized surface offers read and search over matters, documents, contacts, case law and clauses. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed. Tenant and personal text is redacted on egress.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 

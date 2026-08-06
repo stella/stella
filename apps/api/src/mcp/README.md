@@ -14,7 +14,7 @@ case law, skills and connected tools. The same gateway can expose anonymized
 read/search surfaces for clients that should not receive raw legal or personal
 data.
 
-The server exposes two MCP resources:
+The server exposes two MCP endpoints:
 
 - `/mcp`: the default stella MCP. It includes first-party stella tools,
   OpenAI-compatible `search` / `fetch` tools, user-managed skills, and enabled
@@ -25,6 +25,11 @@ The server exposes two MCP resources:
   `search`/`fetch` tools) for clients that should receive anonymized results.
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
+
+Both endpoints expose static MCP resources through `resources/list` and
+`resources/read`, including `stella://about` for canonical product identity and
+official URLs, and `stella://reference/template-markers` for the DOCX template
+marker grammar.
 
 OAuth protected-resource discovery is served from:
 

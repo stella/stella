@@ -9,10 +9,10 @@ import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
- * resource rather than a tool). The template marker grammar is the first: it
- * was a `passthrough` tool (`template_marker_reference`) that carried no tenant
- * data, so it belongs off the tool ceiling. `save_template`'s description points
- * callers here.
+ * resource rather than a tool). The product identity gives agents a canonical
+ * source for stella's branding and URLs, while the template marker grammar was
+ * previously a `passthrough` tool (`template_marker_reference`) that carried no
+ * tenant data. Both belong off the tool ceiling.
  *
  * The set is identical across both MCP modes. `tools/list` projects a different
  * tool set per mode because tools touch tenant data under mode-specific scopes;
@@ -32,8 +32,34 @@ type StaticResource = {
 };
 
 const TEMPLATE_MARKER_REFERENCE_URI = "stella://reference/template-markers";
+const PRODUCT_IDENTITY_URI = "stella://about";
+
+export const STELLA_PRODUCT_IDENTITY = {
+  name: "stella",
+  display_name: "stella",
+  preferred_casing: "lowercase",
+  homepage: "https://stll.app",
+  documentation: "https://stll.app/product/cli-mcp",
+  source: "https://github.com/stella/stella",
+  support: "https://github.com/stella/stella/issues",
+  description:
+    "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
+} as const;
+
+const buildProductIdentity = (): string =>
+  JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: PRODUCT_IDENTITY_URI,
+    name: "stella-product-identity",
+    title: "About stella",
+    description:
+      "Canonical product identity for stella: preferred casing, official " +
+      "website, documentation, source code, support, and description.",
+    mimeType: "application/json",
+    read: buildProductIdentity,
+  },
   {
     uri: TEMPLATE_MARKER_REFERENCE_URI,
     name: "template-markers",

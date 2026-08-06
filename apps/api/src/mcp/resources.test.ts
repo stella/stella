@@ -7,12 +7,14 @@ import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
+const PRODUCT_IDENTITY_URI = "stella://about";
 
 describe("MCP resources", () => {
-  test("lists the template marker reference in both modes", () => {
+  test("lists the public static resources in both modes", () => {
     for (const mode of ["default", "anonymized"] as const) {
       const resources = listMcpResources(mode);
       const uris = resources.map((resource) => resource.uri);
+      expect(uris).toContain(PRODUCT_IDENTITY_URI);
       expect(uris).toContain(MARKER_REFERENCE_URI);
       // The marker reference is static, public, and tenant-independent, so the
       // set is identical across modes.
@@ -29,6 +31,31 @@ describe("MCP resources", () => {
     }
     expect(content.uri).toBe(MARKER_REFERENCE_URI);
     expect(content.text).toBe(buildMarkerReference());
+  });
+
+  test("exposes canonical lowercase branding and verified product links", () => {
+    const resources = listMcpResources("default");
+    const about = resources.find(
+      (resource) => resource.uri === PRODUCT_IDENTITY_URI,
+    );
+    expect(about?.mimeType).toBe("application/json");
+
+    const result = readMcpResource(PRODUCT_IDENTITY_URI, "default");
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected product identity text content");
+    }
+    expect(JSON.parse(content.text)).toEqual({
+      name: "stella",
+      display_name: "stella",
+      preferred_casing: "lowercase",
+      homepage: "https://stll.app",
+      documentation: "https://stll.app/product/cli-mcp",
+      source: "https://github.com/stella/stella",
+      support: "https://github.com/stella/stella/issues",
+      description:
+        "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
+    });
   });
 
   test("the marker reference covers every canonical directive kind", () => {

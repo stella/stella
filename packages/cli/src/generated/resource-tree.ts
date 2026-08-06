@@ -19,6 +19,15 @@ export const generatedResourceTree: ResourceNode = {
     show: {
       kind: "route",
       children: {
+        "stella-product-identity": {
+          kind: "leaf",
+          spec: {
+            kind: "show",
+            commandPath: ["reference", "show", "stella-product-identity"],
+            name: "stella-product-identity",
+            uri: "stella://about",
+          },
+        },
         "template-markers": {
           kind: "leaf",
           spec: {
