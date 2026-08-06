@@ -31,11 +31,14 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
         run: |
-          if [ -z "$WEBHOOK_URL" ] || [ -z "$WEBHOOK_TOKEN" ]; then
-            echo "::error::scheduled-run alert webhook secrets are not configured"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::error::scheduled-run alert webhook URL is not configured"
             exit 1
           fi
           header_args=()
+          if [ -n "$WEBHOOK_TOKEN" ]; then
+            header_args+=(-H "Authorization: Bearer $WEBHOOK_TOKEN")
+          fi
           if [ -n "$WEBHOOK_HEADERS" ]; then
             while IFS= read -r header; do
               if [ -n "$header" ]; then
@@ -43,9 +46,12 @@ jobs:
               fi
             done <<< "$WEBHOOK_HEADERS"
           fi
+          if [ "${#header_args[@]}" -eq 0 ]; then
+            echo "::error::scheduled-run alert webhook credentials are not configured"
+            exit 1
+          fi
           jq -n --arg text "Failed workflow: $WORKFLOW_NAME (event: $RUN_EVENT, branch: $HEAD_BRANCH, head sha: $HEAD_SHA). Run: $RUN_URL" '{text: $text}' |
             curl --fail-with-body -sS -X POST \
-              -H "Authorization: Bearer $WEBHOOK_TOKEN" \
               -H "content-type: application/json" \
               "${header_args[@]}" \
               --data-binary @- \
