@@ -5,6 +5,8 @@ import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/ce
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useTranslations } from "use-intl";
 
+import { isTaskStatus } from "@stll/api-contract";
+import type { TaskStatus } from "@stll/api-contract";
 import {
   Tooltip,
   TooltipPopup,
@@ -18,17 +20,18 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 
-const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
+const TASK_STATUS_BORDER_COLORS = {
   open: "border-s-muted-foreground",
   in_progress: "border-s-foreground-strong-muted",
   in_review: "border-s-warning",
   done: "border-s-success",
   cancelled: "border-s-destructive",
-};
+} as const satisfies Record<TaskStatus, string>;
 
 type CalendarEntityChipProps = {
   entity: CalendarTask;
@@ -45,10 +48,17 @@ export const CalendarEntityChip = ({
   const locale = useLocale();
   const name = entity.name || t("tasks.untitled");
   const openTask = useInspectorTabsStore((s) => s.openTask);
+  const status = isTaskStatus(entity.status) ? entity.status : null;
 
   const dragRef = useRef<HTMLButtonElement>(null);
 
   useInspectorFlash(entity.taskId, dragRef);
+
+  useExternalSyncEffect(() => {
+    if (status === null) {
+      captureInvalidTaskOption("status");
+    }
+  }, [status]);
 
   useExternalSyncEffect(() => {
     const el = dragRef.current;
@@ -98,10 +108,9 @@ export const CalendarEntityChip = ({
         "hover:bg-accent text-start text-xs",
         "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
-        entity.status
-          ? (TASK_STATUS_BORDER_COLORS[entity.status] ??
-              "border-s-muted-foreground")
-          : "border-s-muted-foreground",
+        status === null
+          ? TASK_STATUS_BORDER_COLORS.open
+          : TASK_STATUS_BORDER_COLORS[status],
       )}
       // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; dragRef is handed to the helper, not read for rendered output
       onClick={containedHandler(dragRef, handleClick)}

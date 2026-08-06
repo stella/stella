@@ -50,9 +50,11 @@ import {
   getKanbanGroupingPropertyId,
   resolveGroupOptions,
   resolveKanbanGrouping,
-  TASK_STATUS_ORDER,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import type {
+  EntityGroup,
+  ResolveGroupOptionsParams,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
@@ -284,11 +286,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   // -- Unified grouping: resolve options, then render one board --
 
-  const statusLabels: Record<string, string> = isStatusGrouping
-    ? Object.fromEntries(
-        TASK_STATUS_ORDER.map((s) => [s, t(`tasks.statusValues.${s}`)]),
-      )
-    : {};
   const entityKindLabels = {
     document: t("common.document"),
     folder: t("search.kinds.folder"),
@@ -297,12 +294,34 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     link: t("search.kinds.link"),
   };
 
-  const options = resolveGroupOptions({
-    grouping,
-    groupByPropertyId,
-    statusLabels,
-    entityKindLabels,
-  });
+  // Each arm carries only the labels its grouping reads, so the status
+  // board cannot be built without a complete set of status labels.
+  const groupParams = ((): ResolveGroupOptionsParams => {
+    if (grouping.type === "status") {
+      return {
+        type: "status",
+        propertyId: grouping.propertyId,
+        statusLabels: {
+          open: t("tasks.statusValues.open"),
+          in_progress: t("tasks.statusValues.in_progress"),
+          in_review: t("tasks.statusValues.in_review"),
+          done: t("tasks.statusValues.done"),
+          cancelled: t("tasks.statusValues.cancelled"),
+        },
+      };
+    }
+    if (grouping.type === "built-in") {
+      return {
+        type: "built-in",
+        propertyId: grouping.propertyId,
+        groupByPropertyId,
+        entityKindLabels,
+      };
+    }
+    return grouping;
+  })();
+
+  const options = resolveGroupOptions(groupParams);
 
   const groups = getEntityGroups(options, t("common.uncategorized"));
 

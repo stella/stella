@@ -5,6 +5,15 @@ export { CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "./chat";
 export type { ChatSendRequest, SafeId } from "./chat";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
+export {
+  ENTITY_PRIORITIES,
+  ENTITY_PRIORITY,
+  isEntityPriority,
+  isTaskStatus,
+  TASK_STATUS,
+  TASK_STATUSES,
+} from "./entity-options";
+export type { EntityPriority, TaskStatus } from "./entity-options";
 export { API_VALIDATION_ERROR_CODE, normalizeApiError } from "./error";
 export type {
   ApiErrorInput,

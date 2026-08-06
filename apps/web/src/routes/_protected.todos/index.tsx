@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
+import type { EntityPriority, TaskStatus } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -29,11 +31,13 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import type { TaskItem } from "@/routes/_protected.todos/-queries";
@@ -50,29 +54,29 @@ export const Route = createFileRoute("/_protected/todos/")({
   component: MyTodosPage,
 });
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS = {
   open: "bg-muted-foreground",
   in_progress: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
   in_review: "bg-warning",
   done: "bg-success dark:bg-success",
   cancelled: "bg-destructive dark:bg-destructive",
-};
+} as const satisfies Record<TaskStatus, string>;
 
-const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
+const PRIORITY_ICONS = {
   none: MinusIcon,
   urgent: AlertCircleIcon,
   high: ArrowUpIcon,
   medium: MinusIcon,
   low: ArrowDownIcon,
-};
+} as const satisfies Record<EntityPriority, typeof MinusIcon>;
 
-const PRIORITY_COLORS: Record<string, string> = {
+const PRIORITY_COLORS = {
   none: "text-muted-foreground",
   urgent: "text-destructive",
   high: "text-warning",
   medium: "text-warning",
   low: "text-foreground-muted dark:text-foreground",
-};
+} as const satisfies Record<EntityPriority, string>;
 
 const SKELETON_GROUP_KEYS = ["alpha", "beta", "gamma"];
 const SKELETON_ROW_KEYS = ["one", "two", "three"];
@@ -279,15 +283,23 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
 );
 
 const TaskRow = ({ task }: { task: ValidTask }) => {
-  const statusColor =
-    STATUS_COLORS[task.status ?? "open"] ?? "bg-muted-foreground";
+  const status = isTaskStatus(task.status) ? task.status : null;
+  const priority = isEntityPriority(task.priority) ? task.priority : null;
 
-  const PriorityIcon = task.priority
-    ? (PRIORITY_ICONS[task.priority] ?? MinusIcon)
-    : null;
-  const priorityColor = task.priority
-    ? (PRIORITY_COLORS[task.priority] ?? "text-muted-foreground")
-    : null;
+  useExternalSyncEffect(() => {
+    if (status === null) {
+      captureInvalidTaskOption("status");
+    }
+    if (priority === null) {
+      captureInvalidTaskOption("priority");
+    }
+  }, [priority, status]);
+
+  const statusColor =
+    status === null ? STATUS_COLORS.open : STATUS_COLORS[status];
+
+  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
+  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
 
   const isOverdue =
     task.dueDate !== null &&

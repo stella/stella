@@ -3,6 +3,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
+import { isEntityKind, TASK_STATUSES } from "@stll/api-contract";
+
 import { entities, fields } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,27 +21,7 @@ export const tGroupByPropertyId = t.Union([
   tSafeId("property"),
 ]);
 
-const TASK_STATUS_VALUES = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
-const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map(
-  (status) => sql`${status}`,
-);
-const ENTITY_KIND_VALUES = [
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-] as const;
-type EntityKindValue = (typeof ENTITY_KIND_VALUES)[number];
-
-const isEntityKindValue = (value: string): value is EntityKindValue =>
-  ENTITY_KIND_VALUES.some((kind) => kind === value);
+const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((status) => sql`${status}`);
 
 const invalidKanbanGroup = () =>
   new HandlerError({ status: 400, message: "Invalid Kanban group" });
@@ -65,7 +47,7 @@ const buildKindGroupCondition = (
     return Result.err(invalidKanbanGroup());
   }
 
-  if (!isEntityKindValue(groupValue)) {
+  if (!isEntityKind(groupValue)) {
     return Result.err(invalidKanbanGroup());
   }
 

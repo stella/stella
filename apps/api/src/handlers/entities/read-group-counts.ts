@@ -3,6 +3,8 @@ import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
+import { TASK_STATUSES } from "@stll/api-contract";
+
 import { assertIdentifierLiteral } from "@/api/db/json-utils";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, properties } from "@/api/db/schema";
@@ -25,13 +27,6 @@ const KIND_GROUP_ID = "_kind";
 // Folders and tasks are not rows in a document table view; the flat window query
 // excludes them, so the grouped counts must too.
 const TABLE_EXCLUDED_ENTITY_KINDS = ["folder", "task"] satisfies EntityKind[];
-const TASK_STATUS_VALUES = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
 // Inline the status literals with `sql.raw` rather than binding them: the
 // enclosing CASE expression is rendered into both the SELECT list and the
 // GROUP BY, and a bound value would get different placeholder numbers per
@@ -39,7 +34,7 @@ const TASK_STATUS_VALUES = [
 // constants, never user input, so inlining is byte-identical and safe.
 // `assertIdentifierLiteral` enforces that "fixed code constant" contract at
 // runtime, not just by convention.
-const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map((statusValue) => {
+const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((statusValue) => {
   assertIdentifierLiteral(statusValue);
 
   return sql.raw(`'${statusValue}'`);
