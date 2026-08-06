@@ -2,12 +2,12 @@
  * Canary for the MCP transport of a *deployed* API.
  *
  * The transport can fail while every response still carries a 2xx: an
- * endpoint that answers `GET` with a stream body the stateless per-request
- * teardown truncates, an `initialize` that returns a JSON-RPC error inside a
- * 200, or a tool list that comes back empty. None of those raise a 5xx, log an
- * error, or trip an alarm, so the only observer is the client whose session
- * silently stops working. This canary drives the handshake a real client
- * drives and treats a well-formed session as the pass condition.
+ * missing or truncated authenticated `GET` event channel, an `initialize` that
+ * returns a JSON-RPC error inside a 200, or a tool list that comes back empty.
+ * None of those necessarily raise a 5xx, log an error, or trip an alarm, so the
+ * only observer is the client whose session silently stops working. This canary
+ * drives the handshake a real client drives and treats a well-formed session as
+ * the pass condition.
  *
  * Read-only by construction: it never calls a tool, so it cannot touch tenant
  * data. Response bodies are parsed but never printed, only the shape assertions
@@ -27,28 +27,12 @@ import {
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import {
-  MCP_DISCOVERY_PATH,
-  MCP_HTTP_PATH,
-  MCP_STATELESS_ALLOW_HEADER,
-} from "@/api/mcp/constants";
+import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "@/api/mcp/constants";
 
 const PROBE_TIMEOUT_MS = 20_000;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
-
-/** Order and spacing are the server's business; the method set is not. */
-const parseAllowedMethods = (allow: string | null): string[] =>
-  (allow ?? "")
-    .split(",")
-    .map((method) => method.trim().toUpperCase())
-    .filter((method) => method.length > 0)
-    .toSorted();
-
-const EXPECTED_ALLOWED_METHODS = parseAllowedMethods(
-  MCP_STATELESS_ALLOW_HEADER,
-);
 
 const PROBE_STATUS = {
   failed: "failed",
@@ -164,33 +148,23 @@ export const evaluateUnauthenticated = ({
 };
 
 /**
- * The transport is stateless, so it cannot hold a server-initiated stream open
- * and must say so with 405. Answering `GET` with `text/event-stream` hands the
- * client a body that per-request teardown has already ended; the client sees
- * the stream die on open and reconnects forever instead of calling tools.
+ * ChatGPT opens this optional channel before it calls tools and treats a 405 as
+ * a dead connector. A successful probe therefore needs both the 200 and the SSE
+ * media type; its caller cancels the body immediately after checking the
+ * headers so the canary does not wait for the long-lived stream.
  */
-export const evaluateStreamRefusal = ({
-  allow,
+export const evaluateStreamAvailability = ({
   contentType,
   status,
-}: Pick<ProbeResponse, "allow" | "contentType" | "status">): ProbeResult => {
+}: Pick<ProbeResponse, "contentType" | "status">): ProbeResult => {
   const name = PROBE_NAMES.stream;
-  if (mediaType(contentType) === SSE_CONTENT_TYPE) {
-    return failed(name, `${String(status)} ${SSE_CONTENT_TYPE} (expected 405)`);
+  if (status !== 200) {
+    return failed(name, `${String(status)} (expected 200)`);
   }
-  if (status !== 405) {
-    return failed(name, `${String(status)} (expected 405)`);
+  if (mediaType(contentType) !== SSE_CONTENT_TYPE) {
+    return failed(name, `200 ${contentType ?? "without a content type"}`);
   }
-  // The refusal is only actionable if it also tells the client what the
-  // endpoint does serve; a 405 with a wrong or missing Allow is a dead end.
-  const allowed = parseAllowedMethods(allow);
-  if (allowed.join(",") !== EXPECTED_ALLOWED_METHODS.join(",")) {
-    return failed(
-      name,
-      `405 allowing ${allowed.join(", ") || "nothing"} (expected ${MCP_STATELESS_ALLOW_HEADER})`,
-    );
-  }
-  return passed(name, "405, so clients stay on request/response");
+  return passed(name, "200 with an authenticated notification stream");
 };
 
 const jsonRpcResult = (body: unknown): Record<string, unknown> | undefined =>
@@ -356,19 +330,22 @@ type AuthenticatedProbe = {
 export const AUTHENTICATED_PROBES = [
   {
     name: PROBE_NAMES.stream,
-    run: async ({ baseUrl, token }) =>
-      evaluateStreamRefusal(
-        await readProbeResponse(
-          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-            headers: {
-              accept: SSE_CONTENT_TYPE,
-              authorization: `Bearer ${token}`,
-            },
-            method: "GET",
-            timeoutMs: PROBE_TIMEOUT_MS,
-          }),
-        ),
-      ),
+    run: async ({ baseUrl, token }) => {
+      const response = await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
+        headers: {
+          accept: SSE_CONTENT_TYPE,
+          authorization: `Bearer ${token}`,
+        },
+        method: "GET",
+        timeoutMs: PROBE_TIMEOUT_MS,
+      });
+      const result = evaluateStreamAvailability({
+        contentType: response.headers.get("content-type"),
+        status: response.status,
+      });
+      await response.body?.cancel().catch(() => null);
+      return result;
+    },
   },
   {
     name: PROBE_NAMES.initialize,

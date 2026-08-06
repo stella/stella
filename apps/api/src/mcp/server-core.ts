@@ -14,6 +14,7 @@ import type {
 } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
+import { detached } from "@/api/lib/detached";
 import type { McpSession } from "@/api/mcp/auth";
 import {
   MCP_STATELESS_ALLOW_HEADER,
@@ -190,21 +191,6 @@ const accessDeniedResponse = ({
     status,
   });
 };
-
-/**
- * `GET` opens the standalone notification stream and `DELETE` terminates a
- * session. Both presuppose state that outlives a request, and this transport
- * has none: every request gets its own server and transport, closed as soon as
- * the response is built.
- *
- * `GET` is the one that bites. Left to the SDK it answers
- * `200 text/event-stream`, and the per-request `close()` ends that body before
- * it reaches the client; the client sees the stream die on open, reconnects,
- * and loops there instead of calling tools. 405 is what the spec prescribes for
- * an endpoint that serves no stream, and clients handle it by staying on plain
- * request/response.
- */
-const SESSION_ONLY_HTTP_METHODS = new Set(["GET", "DELETE"]);
 
 const sessionOperationUnsupportedResponse = () => {
   const headers = createMcpCorsHeaders();
@@ -481,10 +467,11 @@ export const createMcpHttpRequestHandler = ({
   };
 
   /**
-   * The 2025-era leg, wired exactly as it was before the modern handler landed:
-   * a per-request server over the streamable transport in JSON mode. Closing
-   * both afterwards is safe here and only here, because the response is fully
-   * buffered by construction and the streaming methods never reach this path.
+   * The 2025-era leg uses a fresh server and transport for every request. POST
+   * responses are buffered and can be torn down immediately. GET is different:
+   * ChatGPT opens the optional notification channel and treats a 405 as a dead
+   * connector, so its server and transport live exactly as long as the returned
+   * SSE body. No state is shared between that channel and later POST requests.
    */
   const serveLegacyRequest = async ({
     authInfo,
@@ -504,12 +491,69 @@ export const createMcpHttpRequestHandler = ({
       enableJsonResponse: true,
     });
 
-    try {
-      await server.connect(transport);
-      return await transport.handleRequest(request, { authInfo });
-    } finally {
+    let toreDown = false;
+    const teardown = async () => {
+      if (toreDown) {
+        return;
+      }
+      toreDown = true;
       await transport.close().catch(() => null);
       await server.close().catch(() => null);
+    };
+
+    try {
+      await server.connect(transport);
+      const response = await transport.handleRequest(request, { authInfo });
+      const isEventStream =
+        response.headers
+          .get("content-type")
+          ?.split(";")
+          .at(0)
+          ?.trim()
+          .toLowerCase() === "text/event-stream";
+
+      if (response.body === null || !isEventStream) {
+        await teardown();
+        return response;
+      }
+
+      const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+      const completeExchange = () => {
+        detached(teardown(), "mcp.legacy-stream-teardown");
+      };
+      request.signal.addEventListener("abort", completeExchange, {
+        once: true,
+      });
+
+      const monitoredBody = new ReadableStream<Uint8Array>({
+        pull: async (controller) => {
+          try {
+            const { done, value } = await reader.read();
+            if (done) {
+              completeExchange();
+              controller.close();
+              return;
+            }
+            controller.enqueue(value);
+          } catch (error) {
+            completeExchange();
+            controller.error(error);
+          }
+        },
+        cancel: async (reason) => {
+          completeExchange();
+          await reader.cancel(reason).catch(() => null);
+        },
+      });
+
+      return new Response(monitoredBody, {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText,
+      });
+    } catch (error) {
+      await teardown();
+      throw error;
     }
   };
 
@@ -539,10 +583,10 @@ export const createMcpHttpRequestHandler = ({
     try {
       const session = await authenticateMcpRequest(token, mode);
 
-      // Refuse session operations only after the token is accepted, so an
+      // Refuse session termination only after the token is accepted, so an
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
-      if (SESSION_ONLY_HTTP_METHODS.has(request.method)) {
+      if (request.method === "DELETE") {
         return withMcpCors(
           sessionOperationUnsupportedResponse(),
           session,
