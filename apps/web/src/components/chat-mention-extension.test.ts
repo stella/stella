@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import type {
+  ChatMentionKind,
+  ChatMentionOption,
+} from "@/components/chat-mention-extension";
 import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
+
+// A real producer never emits the category as the kind: an entity row
+// carries an entity kind, and the other categories carry their own marker.
+const KIND_BY_CATEGORY = {
+  entity: "document",
+  workspace: "workspace",
+  decision: "decision",
+} as const satisfies Record<ChatMentionOption["category"], ChatMentionKind>;
 
 const option = ({
   category = "entity",
@@ -15,7 +26,7 @@ const option = ({
   id,
   label,
   category,
-  kind: category,
+  kind: KIND_BY_CATEGORY[category],
   mimeType: null,
 });
 

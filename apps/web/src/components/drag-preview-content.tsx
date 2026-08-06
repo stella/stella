@@ -1,9 +1,9 @@
 import { createElement } from "react";
 
-import { FolderIcon } from "lucide-react";
+import { isEntityKind } from "@stll/api-contract";
 
-import { DocumentIcon } from "@/components/document-icon";
 import type { DragPreviewData } from "@/components/drag-preview";
+import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 
 const cardStyle = {
   display: "flex",
@@ -23,18 +23,17 @@ const cardStyle = {
 } as const;
 
 const ItemIcon = ({ data }: { data: DragPreviewData }) => {
-  if (data.kind === "folder") {
-    return createElement(FolderIcon, {
-      className: "size-3.5 shrink-0 text-muted-foreground",
-    });
+  if (!isEntityKind(data.kind)) {
+    return null;
   }
-  if (data.mimeType) {
-    return createElement(DocumentIcon, {
+  return createElement(EntityIcon, {
+    className: "size-3.5 shrink-0 text-muted-foreground",
+    source: {
+      type: "resolved",
+      kind: data.kind,
       mimeType: data.mimeType,
-      className: "size-3.5 shrink-0",
-    });
-  }
-  return null;
+    },
+  });
 };
 
 export const PreviewContent = ({ data }: { data: DragPreviewData }) =>
