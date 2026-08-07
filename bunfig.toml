@@ -86,7 +86,6 @@ minimumReleaseAgeExcludes = [
   # ownership match the preceding releases; remove after quarantine expiry.
   # better-result 3: opted in immediately for migration evaluation.
   # 3.0.0 was published at 2026-08-01T21:35:30.036Z.
-  "better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z
   "drizzle-kit",
   "drizzle-orm",
 ]
