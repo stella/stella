@@ -1,5 +1,6 @@
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
+import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
@@ -55,11 +56,58 @@ export default defineConfig({
   // via @astrojs/sitemap's serialize() once there is real content to
   // source dates from.
   integrations: [
+    // Docs live under /docs (every entry sits in src/content/docs/docs/),
+    // English-only, structured by Diátaxis (get started / how-to /
+    // reference / explanation). The landing keeps its own 404 page.
+    starlight({
+      title: "stella docs",
+      disable404Route: true,
+      components: {
+        Head: "./src/components/docs-head.astro",
+      },
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/stella/stella",
+        },
+      ],
+      sidebar: [
+        {
+          label: "Get started",
+          items: [{ autogenerate: { directory: "docs/get-started" } }],
+        },
+        {
+          label: "How-to guides",
+          items: [{ autogenerate: { directory: "docs/how-to" } }],
+        },
+        {
+          label: "Reference",
+          items: [{ autogenerate: { directory: "docs/reference" } }],
+        },
+        {
+          label: "Explanation",
+          items: [{ autogenerate: { directory: "docs/explanation" } }],
+        },
+      ],
+    }),
     sitemap({
       changefreq: "weekly",
       // The /changelog/<release> stubs are noindex link-preview redirect pages;
-      // keep them (and nothing else under /changelog/…) out of the sitemap.
-      filter: (page) => !/\/changelog\/.+/u.test(new URL(page).pathname),
+      // Starlight also emits fallback copies of the English-only docs under
+      // every configured locale. Keep both classes of noindex page out of the
+      // sitemap rather than advertising untranslated fallback URLs.
+      filter: (page) => {
+        const pathname = new URL(page).pathname;
+        return (
+          !/\/changelog\/.+/u.test(pathname) &&
+          !UI_LOCALES.some(
+            (tag) =>
+              tag !== "en" &&
+              pathname.startsWith(`/${tag.toLowerCase()}/docs/`),
+          )
+        );
+      },
       // Emit localized URLs + hreflang alternates in the sitemap. Keys are the
       // URL path segments (default locale at root keyed "en"); values are the
       // hreflang codes.

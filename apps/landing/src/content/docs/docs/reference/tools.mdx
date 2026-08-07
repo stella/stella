@@ -1,0 +1,79 @@
+---
+title: Tool reference
+description: Every tool the stella server and CLI expose, generated from the registry.
+---
+
+import registry from "../../../../../../../packages/cli/src/generated/registry-snapshot.json";
+import { generatedRouteMap } from "../../../../../../../packages/cli/src/generated/route-map";
+
+export const collectLeaves = (node) =>
+  node.kind === "route"
+    ? Object.values(node.children).flatMap(collectLeaves)
+    : [node];
+
+export const registryByName = new Map(
+  registry.map((tool) => [tool.name, tool]),
+);
+
+export const referenceRows = collectLeaves(generatedRouteMap).map((node) => {
+  if (node.kind === "capability-leaf") {
+    return {
+      access: node.spec.destructive ? "destructive" : node.spec.access,
+      command: node.spec.commandPath,
+      description:
+        node.spec.description ?? `Invoke ${node.spec.capabilityId}.`,
+      name: `capability:${node.spec.capabilityId}`,
+      title: node.spec.capabilityId,
+    };
+  }
+
+const tool = registryByName.get(node.spec.toolName);
+return {
+access: node.spec.destructive
+? "destructive"
+: tool?.annotations?.readOnlyHint
+? "read"
+: "write",
+command: node.spec.commandPath,
+description: tool?.description ?? `Invoke ${node.spec.toolName}.`,
+name: node.spec.toolName,
+title: tool?.annotations?.title ?? tool?.name ?? node.spec.toolName,
+};
+});
+
+This page is generated from the committed CLI route tree and tool-registry
+snapshot. It includes curated MCP tools, discriminator subcommands, and every
+generated `stella capability <domain> <action>` command that the CLI exposes.
+
+Access is the tool's declared behavior: **read** tools never change state;
+**write** tools do and ordinary writes may execute immediately;
+**destructive** writes delete or irreversibly change data and require explicit
+confirmation. Some additional writes can also request server-side
+confirmation based on their target.
+
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>CLI command</th>
+      <th>Access</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    {referenceRows.map((tool) => (
+      <tr>
+        <td>
+          <strong>{tool.title}</strong>
+          <br />
+          <code>{tool.name}</code>
+        </td>
+        <td>
+          <code>stella {tool.command.join(" ")}</code>
+        </td>
+        <td>{tool.access}</td>
+        <td>{tool.description}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>

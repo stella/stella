@@ -1,0 +1,47 @@
+---
+import { ogCardPath } from "../lib/og-card-path";
+
+const { dir, entry, head, isFallback } = Astro.locals.starlightRoute;
+// The marketing site is multilingual, so Starlight creates locale fallback
+// routes for these English-only docs. Do not advertise those fallback copies
+// as translated hreflang alternatives, and canonicalize them to the original
+// English document so crawlers consolidate rather than duplicate the content.
+const fallbackCanonicalUrl = new URL(`/${entry.id}/`, Astro.site ?? Astro.url.origin);
+const documentationHead = head.filter(
+  ({ tag, attrs }) => !(tag === "link" && attrs?.rel === "alternate"),
+);
+if (isFallback) {
+  const canonicalIndex = documentationHead.findIndex(
+    ({ tag, attrs }) => tag === "link" && attrs?.rel === "canonical",
+  );
+  const canonicalHead = documentationHead[canonicalIndex];
+  if (canonicalHead) {
+    documentationHead[canonicalIndex] = {
+      ...canonicalHead,
+      attrs: { ...canonicalHead.attrs, href: fallbackCanonicalUrl.href },
+    };
+  }
+}
+const renderedTitle =
+  head.find(({ tag }) => tag === "title")?.content ?? entry.data.title;
+const socialImagePath = ogCardPath({
+  pathname: Astro.url.pathname,
+  title: renderedTitle,
+  direction: dir,
+});
+const socialImageUrl = new URL(
+  socialImagePath,
+  Astro.site ?? Astro.url.origin,
+);
+---
+
+{
+  documentationHead.map(({ tag: Tag, attrs, content }) => (
+    <Tag {...attrs} set:html={content} />
+  ))
+}
+<meta property="og:image" content={socialImageUrl.href} />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={renderedTitle} />

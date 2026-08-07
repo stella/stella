@@ -1,0 +1,31 @@
+---
+title: stella documentation
+description: Connect stella to your AI assistant, use the CLI, and browse the tool reference.
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+stella is an open legal workspace. Everything you can do in the app is also
+available to scripts and AI agents through the same permission model: a remote
+MCP server, a generated command-line client, and the in-app assistant all
+project the same tool registry.
+
+<CardGrid>
+  <Card title="Get started" icon="rocket">
+    [Connect your AI assistant](/docs/get-started/connect-ai-assistant/) or [set
+    up the CLI](/docs/get-started/cli/).
+  </Card>
+  <Card title="How-to guides" icon="open-book">
+    Task-focused guides: [manage connected
+    apps](/docs/how-to/manage-connections/), [use the anonymized
+    endpoint](/docs/how-to/anonymized-access/).
+  </Card>
+  <Card title="Reference" icon="document">
+    [Every tool](/docs/reference/tools/) the server and CLI expose, generated
+    from the registry.
+  </Card>
+  <Card title="Explanation" icon="information">
+    [How the agent surface is built](/docs/explanation/agent-surface/) and why
+    it cannot drift from the app.
+  </Card>
+</CardGrid>

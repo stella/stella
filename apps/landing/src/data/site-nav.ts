@@ -7,6 +7,7 @@ type NavLabelKey = Extract<
   | "footer.anonymization"
   | "footer.agent"
   | "footer.contact"
+  | "footer.documentation"
   | "footer.editor"
   | "footer.press"
   | "footer.publicData"
@@ -50,6 +51,7 @@ export const contactHref = "mailto:contact@stll.app";
 export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 
 export const resourceLinks = [
+  { kind: "translated", labelKey: "footer.documentation", href: "/docs" },
   { kind: "translated", labelKey: "nav.security", href: "/security" },
   { kind: "translated", labelKey: "nav.blog", href: "/blog" },
   { kind: "translated", labelKey: "nav.aiFactSheet", href: "/ai-info" },
