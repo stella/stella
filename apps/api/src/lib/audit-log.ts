@@ -95,7 +95,7 @@ export type AuditExecutionContext = {
     | { type: "user"; id: SafeId<"user"> }
     | { type: "agent" | "service"; id: string; name: string | null };
   trigger:
-    | { type: "direct" }
+    | { type: "direct"; source?: "mcp" }
     | {
         type: "user_dispatch";
         userId: SafeId<"user">;
@@ -194,7 +194,7 @@ const executionColumns = (
       case "agent_delegation":
         return trigger.agentId;
       case "direct":
-        return null;
+        return trigger.source ?? null;
       default: {
         const exhaustive: never = trigger;
         return exhaustive;

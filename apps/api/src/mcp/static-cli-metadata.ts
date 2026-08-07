@@ -72,6 +72,13 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "documents_write",
       inputOnly: ["file"],
     },
+    open_document_version_upload: {
+      command: ["document", "open-version-upload"],
+      // Interactive MCP App launcher; local CLI uploads use the generated
+      // transport contract directly and never need an embedded host view.
+      excluded: true,
+      scope: "documents_write",
+    },
     delete_document: {
       command: ["document", "delete"],
       scope: "documents_write",

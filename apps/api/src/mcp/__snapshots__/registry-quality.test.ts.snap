@@ -1032,7 +1032,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "upload_document_version",
     "scope": "stella:documents_write",
     "access": "write",
-    "description": "Upload a file as a new version of an existing document. Pass entity_id and attach file when the host supports MCP file parameters. When file is omitted, opens a portable MCP App file picker in compatible hosts. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
+    "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
     "annotations": {
       "title": "Upload document version",
       "idempotentHint": false,
@@ -1042,7 +1042,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "entity_id"
+        "entity_id",
+        "file"
       ],
       "properties": {
         "entity_id": {
@@ -1076,6 +1077,31 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "string"
             }
           }
+        }
+      }
+    }
+  },
+  {
+    "name": "open_document_version_upload",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Open a portable file picker for uploading a new version of an existing document. Use only when upload_document_version cannot receive a host file reference; do not use when the host already supplied an attached file.",
+    "annotations": {
+      "title": "Open document version upload",
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "properties": {
+        "entity_id": {
+          "minLength": 1,
+          "description": "Existing document entity ID that will receive a new version",
+          "type": "string"
         }
       }
     }

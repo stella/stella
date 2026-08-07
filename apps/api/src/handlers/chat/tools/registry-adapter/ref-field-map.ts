@@ -344,6 +344,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // not a second in-app tool; keeping this explicit false still makes every new
   // registry write take a compile-time projection decision.
   upload_document_version: { chatProjectable: false },
+  open_document_version_upload: { chatProjectable: false },
   delete_document: {
     chatProjectable: true,
     // `version_id` is an entity-version handle: passes through.

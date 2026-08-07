@@ -14,6 +14,7 @@ import type {
   ReadResourceResult,
   Resource,
 } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -335,13 +336,15 @@ describe("handleMcpHttpRequest", () => {
     );
   });
 
-  test("the official v2 client discovers and calls the canonical upload tool", async () => {
+  test("the official v2 client separates host-file upload from the picker app", async () => {
     const context = { type: "documents-mcp-context" };
-    const definition = DOCUMENTS_MCP_TOOL_DEFINITIONS.find(
-      ({ name }) => name === "upload_document_version",
+    const definitions = DOCUMENTS_MCP_TOOL_DEFINITIONS.filter(({ name }) =>
+      ["upload_document_version", "open_document_version_upload"].includes(
+        name,
+      ),
     );
-    if (!definition) {
-      throw new Error("Canonical upload tool definition is missing");
+    if (definitions.length !== 2) {
+      panic("Canonical upload and picker tool definitions are missing");
     }
 
     authenticateMcpRequestMock.mockResolvedValue({
@@ -350,18 +353,30 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    listMcpToolsMock.mockResolvedValue(toMcpTools([definition]));
+    listMcpToolsMock.mockResolvedValue(toMcpTools(definitions));
     getMcpToolRequiredScopesHintMock.mockReturnValue([
       "stella:documents_write",
     ]);
-    getMcpToolDefinitionMock.mockResolvedValue(definition);
-    handleMcpToolCallMock.mockResolvedValue({
-      content: [{ type: "text", text: "Choose a file in the upload panel." }],
-      structuredContent: {
-        entityId: "entity_1",
-        workspaceId: "workspace_1",
-      },
-    });
+    getMcpToolDefinitionMock.mockImplementation(async (toolName: string) =>
+      definitions.find(({ name }) => name === toolName),
+    );
+    handleMcpToolCallMock.mockImplementation(
+      async ({ toolName }: { toolName: string }) =>
+        toolName === "upload_document_version"
+          ? {
+              content: [{ type: "text", text: "Uploaded document version." }],
+              structuredContent: { entityVersionId: "version_1" },
+            }
+          : {
+              content: [
+                { type: "text", text: "Choose a file in the upload panel." },
+              ],
+              structuredContent: {
+                entityId: "entity_1",
+                workspaceId: "workspace_1",
+              },
+            },
+    );
 
     const transportFetch: FetchLike = async (input, init) =>
       await handleMcpHttpRequest(new Request(input.toString(), init), {
@@ -382,19 +397,44 @@ describe("handleMcpHttpRequest", () => {
       const uploadTool = listed.tools.find(
         ({ name }) => name === "upload_document_version",
       );
+      const pickerTool = listed.tools.find(
+        ({ name }) => name === "open_document_version_upload",
+      );
 
       expect(uploadTool?._meta).toMatchObject({
-        ui: { resourceUri: "ui://stella/document-version-upload" },
         "openai/fileParams": ["file"],
       });
-      const called = await client.callTool(
+      expect(uploadTool?._meta).not.toHaveProperty("ui");
+      expect(pickerTool?._meta).toMatchObject({
+        ui: { resourceUri: "ui://stella/document-version-upload" },
+      });
+      const uploaded = await client.callTool(
         {
           name: "upload_document_version",
+          arguments: {
+            entity_id: "entity_1",
+            file: {
+              download_url: "https://files.example/agreement.docx",
+              file_id: "file_1",
+              file_name: "agreement.docx",
+              mime_type:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            },
+          },
+        },
+        { timeout: 2000 },
+      );
+      expect(uploaded.structuredContent).toEqual({
+        entityVersionId: "version_1",
+      });
+      const opened = await client.callTool(
+        {
+          name: "open_document_version_upload",
           arguments: { entity_id: "entity_1" },
         },
         { timeout: 2000 },
       );
-      expect(called.structuredContent).toEqual({
+      expect(opened.structuredContent).toEqual({
         entityId: "entity_1",
         workspaceId: "workspace_1",
       });
@@ -407,12 +447,33 @@ describe("handleMcpHttpRequest", () => {
         "stella:documents_write",
         "stella:matters_write",
       ]);
-      expect(handleMcpToolCallMock).toHaveBeenCalledWith({
-        args: { entity_id: "entity_1" },
-        context,
-        mode: "documents",
-        toolName: "upload_document_version",
-      });
+      expect(handleMcpToolCallMock.mock.calls).toEqual([
+        [
+          {
+            args: {
+              entity_id: "entity_1",
+              file: {
+                download_url: "https://files.example/agreement.docx",
+                file_id: "file_1",
+                file_name: "agreement.docx",
+                mime_type:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              },
+            },
+            context,
+            mode: "documents",
+            toolName: "upload_document_version",
+          },
+        ],
+        [
+          {
+            args: { entity_id: "entity_1" },
+            context,
+            mode: "documents",
+            toolName: "open_document_version_upload",
+          },
+        ],
+      ]);
     } finally {
       await client.close();
     }

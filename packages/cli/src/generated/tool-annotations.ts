@@ -130,6 +130,11 @@ export const generatedToolAnnotations: Readonly<
     scope: "documents_write",
     inputOnly: ["file"],
   },
+  open_document_version_upload: {
+    command: ["document", "open-version-upload"],
+    excluded: true,
+    scope: "documents_write",
+  },
   delete_document: {
     command: ["document", "delete"],
     scope: "documents_write",

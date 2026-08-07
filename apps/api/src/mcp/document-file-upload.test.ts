@@ -2,7 +2,7 @@ import {
   getToolUiResourceUri,
   McpUiToolMetaSchema,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 
@@ -13,7 +13,10 @@ import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
-import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
+import {
+  DOCUMENT_TOOL_DEFINITIONS,
+  DOCUMENT_TOOL_HANDLERS,
+} from "@/api/mcp/document-tools";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -51,29 +54,24 @@ const createContext = (): McpRequestContext => {
 };
 
 describe("document file upload surface", () => {
-  test("serves one canonical schema with MCP Apps and ChatGPT file metadata", () => {
-    const definition = DOCUMENT_TOOL_DEFINITIONS.find(
+  test("keeps host-file uploads UI-free and isolates the portable picker", () => {
+    const uploadDefinition = DOCUMENT_TOOL_DEFINITIONS.find(
       ({ name }) => name === "upload_document_version",
     );
-    if (!definition) {
-      throw new Error("upload_document_version definition is missing");
+    const pickerDefinition = DOCUMENT_TOOL_DEFINITIONS.find(
+      ({ name }) => name === "open_document_version_upload",
+    );
+    if (!uploadDefinition || !pickerDefinition) {
+      panic("Canonical upload and picker tool definitions are missing");
     }
 
-    const listed = toMcpTools([definition]).at(0);
-    const parsedUi = McpUiToolMetaSchema.safeParse(listed?._meta?.["ui"]);
-    expect(parsedUi.success).toBe(true);
-    if (!parsedUi.success) {
-      throw new Error("upload tool UI metadata is invalid");
-    }
-    expect(getToolUiResourceUri({ _meta: { ui: parsedUi.data } })).toBe(
-      DOCUMENT_UPLOAD_APP_RESOURCE_URI,
-    );
-    expect(listed?._meta).toMatchObject({
-      ui: { resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI },
+    const listedUpload = toMcpTools([uploadDefinition]).at(0);
+    expect(listedUpload?._meta).toMatchObject({
       "openai/fileParams": ["file"],
     });
-    expect(listed?.inputSchema).toMatchObject({
-      required: ["entity_id"],
+    expect(listedUpload?._meta).not.toHaveProperty("ui");
+    expect(listedUpload?.inputSchema).toMatchObject({
+      required: ["entity_id", "file"],
       properties: {
         file: {
           required: ["download_url", "file_id"],
@@ -85,6 +83,42 @@ describe("document file upload surface", () => {
           },
         },
       },
+    });
+
+    const listedPicker = toMcpTools([pickerDefinition]).at(0);
+    const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
+    expect(parsedUi.success).toBe(true);
+    if (!parsedUi.success) {
+      panic("Upload picker UI metadata is invalid");
+    }
+    expect(getToolUiResourceUri({ _meta: { ui: parsedUi.data } })).toBe(
+      DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+    );
+    expect(listedPicker?._meta).toMatchObject({
+      ui: { resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI },
+    });
+    expect(listedPicker?._meta).not.toHaveProperty("openai/fileParams");
+    expect(listedPicker?.inputSchema).toMatchObject({
+      required: ["entity_id"],
+    });
+    expect(listedPicker?.inputSchema.properties).not.toHaveProperty("file");
+  });
+
+  test("rejects a host-file upload before dispatch when the host omitted the file", async () => {
+    const result = await DOCUMENT_TOOL_HANDLERS.upload_document_version({
+      args: {
+        entity_id: "00000000-0000-4000-8000-000000000010",
+      },
+      context: createContext(),
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    if (!("content" in result)) {
+      panic("Expected a structured MCP validation error");
+    }
+    expect(result.content.at(0)).toMatchObject({
+      type: "text",
+      text: expect.stringContaining('"code":"validation_error"'),
     });
   });
 
