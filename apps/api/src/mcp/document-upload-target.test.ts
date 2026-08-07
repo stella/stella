@@ -13,6 +13,7 @@ describe("document upload target lifecycle", () => {
       setUploadEnabled,
     });
 
+    controller.handleToolInput("old-document");
     controller.handleToolResult({
       entityId: "old-document",
       workspaceId: "old-workspace",
@@ -42,12 +43,14 @@ describe("document upload target lifecycle", () => {
       setLabel: () => undefined,
       setUploadEnabled: () => undefined,
     });
+    controller.handleToolInput("first-document");
     controller.handleToolResult({
       entityId: "first-document",
       workspaceId: "first-workspace",
     });
 
     const uploadTarget = controller.snapshot();
+    controller.handleToolInput("second-document");
     controller.handleToolResult({
       entityId: "second-document",
       workspaceId: "second-workspace",
@@ -61,5 +64,34 @@ describe("document upload target lifecycle", () => {
       entityId: "second-document",
       workspaceId: "second-workspace",
     });
+  });
+
+  test("a late result for an older input cannot retarget the upload", () => {
+    const setUploadEnabled = mock((_enabled: boolean) => undefined);
+    const controller = createUploadTargetController({
+      hasSelectedFile: () => true,
+      setLabel: () => undefined,
+      setUploadEnabled,
+    });
+
+    controller.handleToolInput("first-document");
+    controller.handleToolInput("second-document");
+    controller.handleToolResult({
+      entityId: "first-document",
+      workspaceId: "first-workspace",
+    });
+
+    expect(controller.snapshot()).toBeUndefined();
+    expect(setUploadEnabled).toHaveBeenLastCalledWith(false);
+
+    controller.handleToolResult({
+      entityId: "second-document",
+      workspaceId: "second-workspace",
+    });
+    expect(controller.snapshot()).toEqual({
+      entityId: "second-document",
+      workspaceId: "second-workspace",
+    });
+    expect(setUploadEnabled).toHaveBeenLastCalledWith(true);
   });
 });

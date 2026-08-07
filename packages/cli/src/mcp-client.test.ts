@@ -270,6 +270,10 @@ describe("tools/call timeout policy", () => {
 
 describe("metadata operation timeout policy", () => {
   test("forwards a caller deadline to tool and resource SDK operations", async () => {
+    const delayedResponseMs = 150;
+    const shortTimeoutMs = 50;
+    const longTimeoutMs = 500;
+    const targetMethods: string[] = [];
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
@@ -283,7 +287,10 @@ describe("metadata operation timeout policy", () => {
         if (lifecycle !== null) {
           return lifecycle;
         }
-        await Bun.sleep(20);
+        if (body.method !== undefined) {
+          targetMethods.push(body.method);
+        }
+        await Bun.sleep(delayedResponseMs);
         let result: Record<string, unknown>;
         if (body.method === "tools/list") {
           result = { tools: [] };
@@ -302,36 +309,56 @@ describe("metadata operation timeout policy", () => {
       token: "test-token",
     };
     try {
+      let methodCount = targetMethods.length;
       expect(
-        Result.isError(await listTools({ ...connection, timeoutMs: 1 })),
+        Result.isError(
+          await listTools({ ...connection, timeoutMs: shortTimeoutMs }),
+        ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("tools/list");
+      methodCount = targetMethods.length;
       expect(
-        Result.isOk(await listTools({ ...connection, timeoutMs: 100 })),
+        Result.isOk(
+          await listTools({ ...connection, timeoutMs: longTimeoutMs }),
+        ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("tools/list");
+      methodCount = targetMethods.length;
       expect(
-        Result.isError(await listResources({ ...connection, timeoutMs: 1 })),
+        Result.isError(
+          await listResources({ ...connection, timeoutMs: shortTimeoutMs }),
+        ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("resources/list");
+      methodCount = targetMethods.length;
       expect(
-        Result.isOk(await listResources({ ...connection, timeoutMs: 100 })),
+        Result.isOk(
+          await listResources({ ...connection, timeoutMs: longTimeoutMs }),
+        ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("resources/list");
+      methodCount = targetMethods.length;
       expect(
         Result.isError(
           await readResource({
             ...connection,
-            timeoutMs: 1,
+            timeoutMs: shortTimeoutMs,
             uri: "stella://about",
           }),
         ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("resources/read");
+      methodCount = targetMethods.length;
       expect(
         Result.isOk(
           await readResource({
             ...connection,
-            timeoutMs: 100,
+            timeoutMs: longTimeoutMs,
             uri: "stella://about",
           }),
         ),
       ).toBe(true);
+      expect(targetMethods.slice(methodCount)).toContain("resources/read");
     } finally {
       void server.stop(true);
     }
