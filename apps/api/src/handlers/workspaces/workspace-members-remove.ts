@@ -98,6 +98,10 @@ export const removeWorkspaceMemberHandler = async function* ({
           and(
             eq(workObligations.workspaceId, workspaceId),
             eq(workObligations.ownerUserId, userId),
+            inArray(workObligations.status, [
+              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+              WORK_OBLIGATION_STATUS.ACTIVE,
+            ]),
           ),
         )
         .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
@@ -123,50 +127,29 @@ export const removeWorkspaceMemberHandler = async function* ({
       }
 
       if (ownedWork.length > 0) {
-        const activeEntityIds = ownedWork
-          .filter(
-            ({ status }) =>
-              status !== WORK_OBLIGATION_STATUS.COMPLETED &&
-              status !== WORK_OBLIGATION_STATUS.CANCELLED,
-          )
-          .map(({ entityId }) => entityId);
-        const closedEntityIds = ownedWork
-          .filter(
-            ({ status }) =>
-              status === WORK_OBLIGATION_STATUS.COMPLETED ||
-              status === WORK_OBLIGATION_STATUS.CANCELLED,
-          )
-          .map(({ entityId }) => entityId);
+        const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
         const now = new Date();
 
-        if (activeEntityIds.length > 0) {
-          await tx
-            .update(workObligations)
-            .set({
-              ownerUserId: null,
-              status: WORK_OBLIGATION_STATUS.UNASSIGNED,
-              acknowledgedAt: null,
-              acknowledgedByUserId: null,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(workObligations.workspaceId, workspaceId),
-                inArray(workObligations.entityId, activeEntityIds),
-              ),
-            );
-        }
-        if (closedEntityIds.length > 0) {
-          await tx
-            .update(workObligations)
-            .set({ ownerUserId: null, updatedAt: now })
-            .where(
-              and(
-                eq(workObligations.workspaceId, workspaceId),
-                inArray(workObligations.entityId, closedEntityIds),
-              ),
-            );
-        }
+        await tx
+          .update(workObligations)
+          .set({
+            ownerUserId: null,
+            status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            acknowledgedAt: null,
+            acknowledgedByUserId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(workObligations.workspaceId, workspaceId),
+              eq(workObligations.ownerUserId, userId),
+              inArray(workObligations.entityId, activeEntityIds),
+              inArray(workObligations.status, [
+                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                WORK_OBLIGATION_STATUS.ACTIVE,
+              ]),
+            ),
+          );
 
         const unassignmentEvents: (typeof workObligationEvents.$inferInsert)[] =
           [];
@@ -234,15 +217,10 @@ export const removeWorkspaceMemberHandler = async function* ({
           resourceId: work.entityId,
           changes: {
             ownerUserId: { old: userId, new: null },
-            ...(work.status === WORK_OBLIGATION_STATUS.COMPLETED ||
-            work.status === WORK_OBLIGATION_STATUS.CANCELLED
-              ? {}
-              : {
-                  status: {
-                    old: work.status,
-                    new: WORK_OBLIGATION_STATUS.UNASSIGNED,
-                  },
-                }),
+            status: {
+              old: work.status,
+              new: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            },
           },
           metadata: { cause: "owner_removed_from_workspace" },
         });

@@ -1,10 +1,12 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { workObligations } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { createTaskHandler } from "./create";
+import { createTaskEntityHandler, createTaskHandler } from "./create";
 
 type CreateTaskCtx = Parameters<typeof createTaskHandler>[0];
 type ScopedDb = CreateTaskCtx["scopedDb"];
@@ -154,6 +156,47 @@ describe("createTaskHandler validation", () => {
     );
 
     expect(scopedDb).toHaveBeenCalledTimes(1);
+  });
+
+  test("creates unassigned work for an authorized caller without workspace membership", async () => {
+    const obligationRows: Record<string, unknown>[] = [];
+    const { safeDb } = createScopedDbMock({
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({ for: async () => [] }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: async (values: Record<string, unknown>) => {
+          if (table === workObligations) {
+            obligationRows.push(values);
+          }
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => [],
+        }),
+      }),
+    });
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Firm-admin task" },
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(obligationRows).toEqual([
+      expect.objectContaining({ ownerUserId: null, status: "unassigned" }),
+    ]);
   });
 
   test("all valid TASK_STATUSES pass validation", async () => {

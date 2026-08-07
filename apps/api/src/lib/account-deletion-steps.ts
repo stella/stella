@@ -43,6 +43,10 @@ import {
   rateEntries,
   taskAssignees,
   userFiles,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
   workspaceMembers,
   workspaceViewTemplates,
   workspaces,
@@ -54,6 +58,7 @@ import {
 } from "@/api/lib/account-deletion-reassignment";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -299,6 +304,7 @@ export type ReassignActiveTaskAssignmentsParams = {
 
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
   taskAssignees,
+  workObligations,
   member,
   workspaceMembers,
 ] as const satisfies readonly PgTable[];
@@ -320,8 +326,19 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   reassignments,
 }: ReassignActiveTaskAssignmentsParams): Promise<number> => {
   let taskReassignmentCount = 0;
+  const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
+  // Delegation locks a requested workspace membership before locking its
+  // obligation. Hold the departing user's membership rows first so a
+  // concurrent delegation either lands before this cleanup and is cleared,
+  // or observes the committed membership deletion and fails validation.
+  await tx
+    .select({ id: workspaceMembers.id })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, currentUserId))
+    .for("update");
+
   const currentTaskAssignments = await tx
     .select({
       entityId: taskAssignees.entityId,
@@ -449,6 +466,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
               inArray(workspaceMembers.userId, reassignmentUserIds),
             ),
           )
+          .for("update", { of: workspaceMembers })
       ).map((row) => `${row.workspaceId}:${row.userId}`),
     );
     const existingReassignmentKeys = new Set(
@@ -476,6 +494,9 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       targets: reassignmentTargets,
       validMembershipKeys,
     });
+    for (const update of updates) {
+      obligationOwnerByEntityId.set(update.entityId, update.reassignedUserId);
+    }
     const assignmentByEntityId = new Map(
       currentTaskAssignments.map((assignment) => [
         assignment.entityId,
@@ -539,6 +560,120 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       }),
     );
     taskReassignmentCount = updates.length;
+  }
+
+  const ownedMutableWork = await tx
+    .select({
+      entityId: workObligations.entityId,
+      organizationId: workspaces.organizationId,
+      status: workObligations.status,
+      workspaceId: workObligations.workspaceId,
+    })
+    .from(workObligations)
+    .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+    .where(
+      and(
+        eq(workObligations.ownerUserId, currentUserId),
+        inArray(workObligations.status, [
+          WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+          WORK_OBLIGATION_STATUS.ACTIVE,
+        ]),
+      ),
+    )
+    .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1)
+    .for("update", { of: workObligations });
+
+  if (ownedMutableWork.length > LIMITS.accountDeletionTaskAssignmentsMax) {
+    throw new HandlerError({
+      code: "account_deletion_task_reassignment_limit_exceeded",
+      status: 400,
+      message:
+        "Too many active work obligations to reassign during account deletion.",
+    });
+  }
+
+  if (ownedMutableWork.length > 0) {
+    const now = new Date();
+    // SAFETY: one deleted user's mutable obligations, bounded by the enforced
+    // accountDeletionTaskAssignmentsMax check immediately above.
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
+    await Promise.all(
+      ownedMutableWork.map((work) => {
+        const nextOwnerUserId =
+          obligationOwnerByEntityId.get(work.entityId) ?? null;
+        return tx
+          .update(workObligations)
+          .set({
+            ownerUserId: nextOwnerUserId,
+            status:
+              nextOwnerUserId === null
+                ? WORK_OBLIGATION_STATUS.UNASSIGNED
+                : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+            acknowledgedAt: null,
+            acknowledgedByUserId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(workObligations.entityId, work.entityId),
+              eq(workObligations.workspaceId, work.workspaceId),
+              eq(workObligations.ownerUserId, currentUserId),
+              inArray(workObligations.status, [
+                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                WORK_OBLIGATION_STATUS.ACTIVE,
+              ]),
+            ),
+          );
+      }),
+    );
+
+    await tx.insert(workObligationEvents).values(
+      ownedMutableWork.map((work) => ({
+        id: createSafeId<"workObligationEvent">(),
+        workspaceId: work.workspaceId,
+        obligationEntityId: work.entityId,
+        actorUserId: currentUserId,
+        type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+        details: {
+          type: "ownership_changed" as const,
+          previousOwnerUserId: currentUserId,
+          nextOwnerUserId: obligationOwnerByEntityId.get(work.entityId) ?? null,
+          cause: "account_deletion" as const,
+        },
+        occurredAt: now,
+      })),
+    );
+    await tx.insert(auditLogs).values(
+      ownedMutableWork.map((work) => {
+        const nextOwnerUserId =
+          obligationOwnerByEntityId.get(work.entityId) ?? null;
+        const nextStatus =
+          nextOwnerUserId === null
+            ? WORK_OBLIGATION_STATUS.UNASSIGNED
+            : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+        return {
+          action: AUDIT_ACTION.UPDATE,
+          activityCategory: "tasks" as const,
+          changes: {
+            ownerUserId: { old: currentUserId, new: nextOwnerUserId },
+            ...(work.status === nextStatus
+              ? {}
+              : { status: { old: work.status, new: nextStatus } }),
+          },
+          metadata: {
+            accountDeletionRequestId: deletionRequestId,
+            cause: "account-deletion",
+            fromUserId: currentUserId,
+            toUserId: nextOwnerUserId,
+          },
+          organizationId: work.organizationId,
+          resourceId: work.entityId,
+          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+          userId: currentUserId,
+          workspaceId: work.workspaceId,
+        };
+      }),
+    );
   }
 
   await tx.delete(member).where(eq(member.userId, currentUserId));

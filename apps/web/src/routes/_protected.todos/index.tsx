@@ -56,6 +56,7 @@ import type {
   MyWorkQueue,
 } from "@/routes/_protected.todos/-queries";
 import { myWorkOptions } from "@/routes/_protected.todos/-queries";
+import { getDisplayedWorkDate } from "@/routes/_protected.todos/-task-row.logic";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -340,7 +341,7 @@ const TaskRow = ({ task }: { task: MyWorkItem }) => {
     ? (PRIORITY_COLORS[task.priority] ?? "text-muted-foreground")
     : null;
 
-  const displayedDate = task.hardDeadlineDate ?? task.workingTargetDate;
+  const displayedDate = getDisplayedWorkDate(task);
   const isDue =
     task.attention === "hard_deadline_due" ||
     task.attention === "working_target_due";

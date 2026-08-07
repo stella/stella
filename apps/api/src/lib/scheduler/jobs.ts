@@ -23,6 +23,7 @@ type SchedulerJobDefinition = {
   description: string;
   schedule: SchedulerSchedule;
   payload?: SchedulerPayload | null;
+  payloadUpdate?: "preserve" | "replace";
   enabled?: boolean;
 };
 
@@ -31,6 +32,7 @@ export const ensureSchedulerJob = async ({
   enabled = true,
   id,
   payload = null,
+  payloadUpdate = "replace",
   schedule,
   task,
 }: SchedulerJobDefinition): Promise<void> => {
@@ -65,7 +67,7 @@ export const ensureSchedulerJob = async ({
         description,
         enabled,
         ...(shouldRefreshNextRunAt && { nextRunAt }),
-        payload,
+        ...(payloadUpdate === "replace" && { payload }),
         schedule,
         task,
       },
@@ -169,9 +171,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   },
   {
-    description: "Backfill governed work rows for legacy tasks",
+    description: "Periodically repair governed work rows for legacy tasks",
     id: "workObligations.backfillLegacyTasks.v1",
-    mode: "oneShot",
+    mode: "recurring",
+    payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_WORK_OBLIGATIONS_TASK,
   },

@@ -16,7 +16,7 @@ type CreateWorkObligationOptions = {
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
   actorUserId: SafeId<"user">;
-  ownerUserId: SafeId<"user">;
+  ownerUserId: SafeId<"user"> | null;
   agendaKind: AgendaItemKind;
   taskStatus: TaskStatus;
   workingTargetDate: string | null;
@@ -41,10 +41,12 @@ export const createWorkObligation = async ({
   sourceDescription,
 }: CreateWorkObligationOptions) => {
   const now = new Date();
-  const isSelfAssigned = actorUserId === ownerUserId;
+  const isSelfAssigned = ownerUserId !== null && actorUserId === ownerUserId;
   const assignedStatus = isSelfAssigned
     ? WORK_OBLIGATION_STATUS.ACTIVE
     : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+  const initialStatus =
+    ownerUserId === null ? WORK_OBLIGATION_STATUS.UNASSIGNED : assignedStatus;
   const status = (() => {
     if (taskStatus === TASK_STATUS.DONE) {
       return WORK_OBLIGATION_STATUS.COMPLETED;
@@ -52,7 +54,7 @@ export const createWorkObligation = async ({
     if (taskStatus === TASK_STATUS.CANCELLED) {
       return WORK_OBLIGATION_STATUS.CANCELLED;
     }
-    return assignedStatus;
+    return initialStatus;
   })();
 
   await tx.insert(workObligations).values({
@@ -83,7 +85,9 @@ export const createWorkObligation = async ({
       details: { type: "created" },
       occurredAt: now,
     },
-    {
+  ];
+  if (ownerUserId !== null) {
+    events.push({
       id: createSafeId<"workObligationEvent">(),
       workspaceId,
       obligationEntityId: entityId,
@@ -95,8 +99,8 @@ export const createWorkObligation = async ({
         nextOwnerUserId: ownerUserId,
       },
       occurredAt: now,
-    },
-  ];
+    });
+  }
   if (isSelfAssigned) {
     events.push({
       id: createSafeId<"workObligationEvent">(),
@@ -117,7 +121,7 @@ export const createWorkObligation = async ({
       type: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
       details: {
         type: "status_changed",
-        previousStatus: assignedStatus,
+        previousStatus: initialStatus,
         nextStatus: status,
       },
       occurredAt: now,
@@ -132,7 +136,7 @@ export const createWorkObligation = async ({
       type: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
       details: {
         type: "status_changed",
-        previousStatus: assignedStatus,
+        previousStatus: initialStatus,
         nextStatus: status,
       },
       occurredAt: now,

@@ -10,6 +10,7 @@ import {
   WORK_OBLIGATION_TYPE,
   workObligationEvents,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import type { WorkObligationSource } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -17,7 +18,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const updateWorkObligationParams = workspaceParams({
@@ -87,10 +90,43 @@ const updateWorkObligation = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await lockWorkObligation(tx, {
+        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
+        // Membership removal locks workspace-member rows before obligations.
+        // Lock a requested owner in the same order so removal either observes
+        // and clears this delegation, or commits first and makes it invalid.
+        if (body.ownerUserId !== undefined && body.ownerUserId !== null) {
+          const ownerMembership = await tx
+            .select({ userId: workspaceMembers.userId })
+            .from(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, workspaceId),
+                eq(workspaceMembers.userId, body.ownerUserId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (!ownerMembership.at(0)) {
+            return { status: "invalid_owner" as const };
+          }
+        }
+
+        let existing = await lockWorkObligation(tx, {
           entityId: params.entityId,
           workspaceId,
         });
+        if (!existing) {
+          await ensureLegacyWorkObligation({
+            tx,
+            entityId: params.entityId,
+            workspaceId,
+          });
+          existing = await lockWorkObligation(tx, {
+            entityId: params.entityId,
+            workspaceId,
+          });
+        }
         if (!existing) {
           return { status: "not_found" as const };
         }
@@ -102,23 +138,6 @@ const updateWorkObligation = createSafeHandler(
             existing.status === WORK_OBLIGATION_STATUS.CANCELLED)
         ) {
           return { status: "closed_owner_change" as const };
-        }
-
-        if (
-          body.ownerUserId !== undefined &&
-          body.ownerUserId !== null &&
-          body.ownerUserId !== existing.ownerUserId
-        ) {
-          const member = await tx.query.workspaceMembers.findFirst({
-            where: {
-              workspaceId: { eq: workspaceId },
-              userId: { eq: body.ownerUserId },
-            },
-            columns: { userId: true },
-          });
-          if (!member) {
-            return { status: "invalid_owner" as const };
-          }
         }
 
         if (

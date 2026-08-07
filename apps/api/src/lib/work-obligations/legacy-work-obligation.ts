@@ -3,16 +3,20 @@ import { and, eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
+  taskAssignees,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import type {
   WorkObligationSource,
   WorkObligationStatus,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type LegacyTask = {
   id: SafeId<"entity">;
@@ -24,6 +28,7 @@ type LegacyTask = {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date | null;
+  assigneeUserIds: SafeId<"user">[];
 };
 
 export const legacyWorkObligationValues = (task: LegacyTask) => {
@@ -32,7 +37,12 @@ export const legacyWorkObligationValues = (task: LegacyTask) => {
     status = WORK_OBLIGATION_STATUS.COMPLETED;
   } else if (task.status === "cancelled") {
     status = WORK_OBLIGATION_STATUS.CANCELLED;
+  } else if (task.assigneeUserIds.length === 1) {
+    status = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
   }
+
+  const ownerUserId =
+    task.assigneeUserIds.length === 1 ? task.assigneeUserIds[0] : null;
 
   let sourceType: WorkObligationSource = WORK_OBLIGATION_SOURCE.MANUAL;
   if (
@@ -52,6 +62,7 @@ export const legacyWorkObligationValues = (task: LegacyTask) => {
       ? WORK_OBLIGATION_TYPE.DEADLINE
       : WORK_OBLIGATION_TYPE.TASK,
     status,
+    ownerUserId,
     workingTargetDate: task.dueDate,
     hardDeadlineDate: isDeadline ? task.dueDate : null,
     sourceType,
@@ -73,6 +84,8 @@ export const ensureLegacyWorkObligation = async ({
   entityId,
   workspaceId,
 }: EnsureLegacyWorkObligationOptions): Promise<void> => {
+  await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
   const tasks = await tx
     .select({
       id: entities.id,
@@ -100,8 +113,34 @@ export const ensureLegacyWorkObligation = async ({
     return;
   }
 
+  const assignments = await tx
+    .select({ userId: taskAssignees.userId })
+    .from(taskAssignees)
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+        eq(workspaceMembers.userId, taskAssignees.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(taskAssignees.entityId, entityId),
+        eq(taskAssignees.workspaceId, workspaceId),
+      ),
+    )
+    .limit(2)
+    .for("update", { of: workspaceMembers });
+
   await tx
     .insert(workObligations)
-    .values(legacyWorkObligationValues(task))
+    .values(
+      legacyWorkObligationValues({
+        ...task,
+        assigneeUserIds: assignments.map((assignment) =>
+          brandPersistedUserId(assignment.userId),
+        ),
+      }),
+    )
     .onConflictDoNothing({ target: workObligations.entityId });
 };

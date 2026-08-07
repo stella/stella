@@ -98,7 +98,7 @@ export type WorkObligationEventDetails =
       type: "ownership_changed";
       previousOwnerUserId: string | null;
       nextOwnerUserId: string | null;
-      cause?: "owner_removed_from_workspace";
+      cause?: "account_deletion" | "owner_removed_from_workspace";
     }
   | { type: "acknowledged" }
   | {
@@ -158,7 +158,10 @@ export const workObligations = p.pgTable(
       .text("source_type", { enum: WORK_OBLIGATION_SOURCES })
       .notNull()
       .default(WORK_OBLIGATION_SOURCE.MANUAL),
-    sourceEntityId: safeUuid<"entity">("source_entity_id"),
+    sourceEntityId: safeUuid<"entity">("source_entity_id").references(
+      () => entities.id,
+      { onDelete: "set null" },
+    ),
     sourceDescription: p.varchar("source_description", { length: 1000 }),
     createdByUserId: p
       .text("created_by_user_id")

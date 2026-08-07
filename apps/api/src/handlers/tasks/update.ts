@@ -187,6 +187,14 @@ export const updateTaskHandler = async function* ({
       const now = new Date();
 
       if (workflow) {
+        const updatesLegacyDeadline =
+          body.dueDate !== undefined &&
+          (agendaKind === "deadline" ||
+            (agendaKind === undefined &&
+              workflow.type === WORK_OBLIGATION_TYPE.DEADLINE));
+        const nextLegacyHardDeadlineDate = updatesLegacyDeadline
+          ? body.dueDate
+          : undefined;
         let nextWorkflowStatus = workflow.status;
         let workflowEventType:
           | "completed"
@@ -275,6 +283,7 @@ export const updateTaskHandler = async function* ({
           if (
             body.dueDate !== null &&
             workflow.hardDeadlineDate !== null &&
+            !updatesLegacyDeadline &&
             body.dueDate > workflow.hardDeadlineDate
           ) {
             return {
@@ -299,6 +308,32 @@ export const updateTaskHandler = async function* ({
               field: "working_target_date",
               previousDate: workflow.workingTargetDate,
               nextDate: body.dueDate,
+            },
+            reason: workflowReason ?? null,
+            occurredAt: now,
+          });
+        }
+
+        if (
+          nextLegacyHardDeadlineDate !== undefined &&
+          nextLegacyHardDeadlineDate !== workflow.hardDeadlineDate
+        ) {
+          workflowSet.hardDeadlineDate = nextLegacyHardDeadlineDate;
+          workflowChanges["hardDeadlineDate"] = {
+            old: workflow.hardDeadlineDate,
+            new: nextLegacyHardDeadlineDate,
+          };
+          workflowEvents.push({
+            id: createSafeId<"workObligationEvent">(),
+            workspaceId,
+            obligationEntityId: body.taskId,
+            actorUserId: userId,
+            type: WORK_OBLIGATION_EVENT_TYPE.HARD_DEADLINE_CHANGED,
+            details: {
+              type: "date_changed",
+              field: "hard_deadline_date",
+              previousDate: workflow.hardDeadlineDate,
+              nextDate: nextLegacyHardDeadlineDate,
             },
             reason: workflowReason ?? null,
             occurredAt: now,

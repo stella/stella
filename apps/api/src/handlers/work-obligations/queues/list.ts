@@ -111,8 +111,16 @@ const myWork = createSafeRootHandler(
             WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
             WORK_OBLIGATION_STATUS.ACTIVE,
           ]),
-          lte(sortDate, asOf),
         );
+        {
+          const overdue = or(
+            lte(workObligations.hardDeadlineDate, asOf),
+            lte(workObligations.workingTargetDate, asOf),
+          );
+          if (overdue) {
+            conditions.push(overdue);
+          }
+        }
         break;
       case MY_WORK_QUEUE.COMPLETED:
         conditions.push(

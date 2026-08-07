@@ -44,6 +44,7 @@ ALTER TABLE "work_obligation_events" ENABLE ROW LEVEL SECURITY;--> statement-bre
 
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_entity_workspace_fk" FOREIGN KEY ("entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
+ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_source_entity_id_entities_id_fk" FOREIGN KEY ("source_entity_id") REFERENCES "entities"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_source_entity_workspace_fk" FOREIGN KEY ("source_entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE NO ACTION ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_owner_user_id_user_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_acknowledged_by_user_id_user_id_fk" FOREIGN KEY ("acknowledged_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint

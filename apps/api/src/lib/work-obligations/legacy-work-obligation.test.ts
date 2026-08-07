@@ -21,6 +21,7 @@ describe("legacy work obligation mapping", () => {
       createdBy: createSafeId<"user">(),
       createdAt,
       updatedAt: null,
+      assigneeUserIds: [],
     };
 
     const first = legacyWorkObligationValues(task);
@@ -34,6 +35,36 @@ describe("legacy work obligation mapping", () => {
       workingTargetDate: "2026-02-01",
       hardDeadlineDate: "2026-02-01",
       updatedAt: createdAt,
+    });
+  });
+
+  test("derives ownership only from one unambiguous assignee", () => {
+    const assignee = createSafeId<"user">();
+    const task = {
+      id: createSafeId<"entity">(),
+      workspaceId: createSafeId<"workspace">(),
+      agendaKind: "task",
+      agendaSource: null,
+      status: "open",
+      dueDate: null,
+      createdBy: createSafeId<"user">(),
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: null,
+      assigneeUserIds: [assignee],
+    };
+
+    expect(legacyWorkObligationValues(task)).toMatchObject({
+      ownerUserId: assignee,
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+    });
+    expect(
+      legacyWorkObligationValues({
+        ...task,
+        assigneeUserIds: [assignee, createSafeId<"user">()],
+      }),
+    ).toMatchObject({
+      ownerUserId: null,
+      status: WORK_OBLIGATION_STATUS.UNASSIGNED,
     });
   });
 });

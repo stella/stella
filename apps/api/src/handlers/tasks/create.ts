@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -8,6 +8,7 @@ import {
   entities,
   entityVersions,
   taskAssignees,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -218,19 +219,25 @@ export const createTaskEntityHandler = async function* ({
       }
 
       const entityId = createSafeId<"entity">();
-      const ownerUserId = body.ownerUserId ?? userId;
-      const memberIdsToValidate = [ownerUserId];
+      const memberIdsToValidate = body.ownerUserId ? [body.ownerUserId] : [];
       if (body.assigneeIds) {
         memberIdsToValidate.push(...new Set(body.assigneeIds));
       }
-      const members = await tx.query.workspaceMembers.findMany({
-        where: {
-          workspaceId: { eq: workspaceId },
-          userId: { in: memberIdsToValidate },
-        },
-        columns: { userId: true },
-        limit: LIMITS.workspaceMembersCount,
-      });
+      const memberIdsToLoad = [...memberIdsToValidate];
+      if (!memberIdsToLoad.includes(userId)) {
+        memberIdsToLoad.push(userId);
+      }
+      const members = await tx
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            inArray(workspaceMembers.userId, memberIdsToLoad),
+          ),
+        )
+        .limit(LIMITS.workspaceMembersCount)
+        .for("update");
       const workspaceMemberIds = new Set(
         members.map((member) => brandPersistedUserId(member.userId)),
       );
@@ -241,6 +248,8 @@ export const createTaskEntityHandler = async function* ({
           message: "The owner and assignees must be workspace members",
         };
       }
+      const ownerUserId =
+        body.ownerUserId ?? (workspaceMemberIds.has(userId) ? userId : null);
 
       await tx.insert(entities).values({
         id: entityId,

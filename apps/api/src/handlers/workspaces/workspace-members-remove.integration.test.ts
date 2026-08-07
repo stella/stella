@@ -11,7 +11,15 @@ import {
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { auditLogs, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  auditLogs,
+  entities,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -20,6 +28,8 @@ import {
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { ensureActiveWorkspace } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -210,6 +220,124 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
         expect(pushSessionEventMock).not.toHaveBeenCalled();
         expect(closeSessionConnectionsMock).not.toHaveBeenCalled();
         expect(broadcastMock).not.toHaveBeenCalled();
+
+        outerTx.rollback();
+      });
+    } catch (error) {
+      if (error instanceof TransactionRollbackError) {
+        return;
+      }
+      throw error;
+    }
+
+    throw new Error("Expected the integration test transaction to roll back");
+  });
+
+  test("the synchronous cap excludes closed ownership history", async () => {
+    try {
+      await testDb.transaction(async (outerTx) => {
+        const closedEntityIds = Array.from(
+          {
+            length: LIMITS.workspaceMemberRemovalWorkObligationsMax + 1,
+          },
+          () => createSafeId<"entity">(),
+        );
+        const mutableEntityId = createSafeId<"entity">();
+        await outerTx.insert(entities).values([
+          ...closedEntityIds.map((id) => ({
+            id,
+            workspaceId: ids.wsA2,
+            kind: "task" as const,
+            name: `Closed ownership ${id}`,
+            status: "completed",
+          })),
+          {
+            id: mutableEntityId,
+            workspaceId: ids.wsA2,
+            kind: "task" as const,
+            name: "Mutable ownership",
+            status: "open",
+          },
+        ]);
+        await outerTx.insert(workObligations).values([
+          ...closedEntityIds.map((entityId) => ({
+            entityId,
+            workspaceId: ids.wsA2,
+            ownerUserId: ids.userA1,
+            status: WORK_OBLIGATION_STATUS.COMPLETED,
+          })),
+          {
+            entityId: mutableEntityId,
+            workspaceId: ids.wsA2,
+            ownerUserId: ids.userA1,
+            status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+          },
+        ]);
+
+        const rlsTx = markRlsDatabase(outerTx);
+        const databaseIdentity = {
+          organizationId: ids.orgA,
+          serverValidatedWorkspaceIds: [ids.wsA2],
+          userId: ids.userA2,
+        };
+        const safeDb = asTestRaw<SafeDb>(
+          createMembershipSafeDb(rlsTx, databaseIdentity),
+        );
+        const recordAuditEvent = createAuditRecorder({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA2,
+          userId: ids.userA2,
+          request: new Request(
+            `https://api.example.test/v1/workspaces/${ids.wsA2}/members/${ids.userA1}`,
+          ),
+          server: null,
+        });
+
+        const result = await Result.gen(() =>
+          removeWorkspaceMemberHandler({
+            safeDb,
+            workspaceId: ids.wsA2,
+            userId: ids.userA1,
+            actorUserId: ids.userA2,
+            recordAuditEvent,
+          }),
+        );
+        expect(result).toEqual(Result.ok({ id: ids.memberA1wsA2 }));
+
+        await outerTx.execute(sql`RESET ROLE`);
+        expect(
+          await outerTx
+            .select({
+              ownerUserId: workObligations.ownerUserId,
+              status: workObligations.status,
+            })
+            .from(workObligations)
+            .where(eq(workObligations.entityId, mutableEntityId)),
+        ).toEqual([
+          {
+            ownerUserId: null,
+            status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+          },
+        ]);
+        expect(
+          await outerTx.$count(
+            workObligations,
+            and(
+              inArray(workObligations.entityId, closedEntityIds),
+              eq(workObligations.ownerUserId, ids.userA1),
+              eq(workObligations.status, WORK_OBLIGATION_STATUS.COMPLETED),
+            ),
+          ),
+        ).toBe(closedEntityIds.length);
+        expect(
+          await outerTx.$count(
+            workObligationEvents,
+            inArray(workObligationEvents.obligationEntityId, [
+              ...closedEntityIds,
+              mutableEntityId,
+            ]),
+          ),
+        ).toBe(1);
 
         outerTx.rollback();
       });

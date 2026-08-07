@@ -31,6 +31,10 @@ import {
   localISODate,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import {
+  getTaskDetailInstanceKey,
+  getTaskStatusUpdate,
+} from "@/components/workspaces/tasks/task-detail-panel.logic";
 import { LinksSection } from "@/components/workspaces/tasks/task-links";
 import {
   AssigneePicker,
@@ -64,7 +68,11 @@ type TaskDetailPanelProps = {
   taskId: string;
 };
 
-export const TaskDetailPanel = ({
+export const TaskDetailPanel = (props: TaskDetailPanelProps) => (
+  <TaskDetailPanelContent key={getTaskDetailInstanceKey(props)} {...props} />
+);
+
+const TaskDetailPanelContent = ({
   workspaceId,
   taskId,
 }: TaskDetailPanelProps) => {
@@ -112,6 +120,7 @@ export const TaskDetailPanel = ({
       status?: string;
       priority?: string;
       dueDate?: string | null;
+      workflowReason?: string;
     }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -122,7 +131,10 @@ export const TaskDetailPanel = ({
         });
       return unwrapEden(response);
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
+      if (variables.workflowReason) {
+        setWorkflowReason("");
+      }
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
@@ -316,25 +328,7 @@ export const TaskDetailPanel = ({
     if (!value) {
       return;
     }
-    const workflowStatus = task?.workObligation?.status;
-    if (value === "done") {
-      workflowActionMutation.mutate({ type: "transition", action: "complete" });
-      return;
-    }
-    if (value === "cancelled") {
-      const reason = workflowReason.trim();
-      workflowActionMutation.mutate({
-        type: "transition",
-        action: "cancel",
-        ...(reason ? { reason } : {}),
-      });
-      return;
-    }
-    if (workflowStatus === "completed" || workflowStatus === "cancelled") {
-      workflowActionMutation.mutate({ type: "transition", action: "reopen" });
-      return;
-    }
-    updateMutation.mutate({ taskId, status: value });
+    updateMutation.mutate(getTaskStatusUpdate(taskId, value, workflowReason));
   };
 
   const handlePriorityChange = (value: TaskPriority | null) => {
