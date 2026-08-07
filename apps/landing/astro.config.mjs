@@ -6,6 +6,8 @@ import { defineConfig } from "astro/config";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { UI_LOCALES } from "@stll/locales";
 
+import { ogCards } from "./src/integrations/og-cards";
+
 // Keep this aligned with the production CDN response-headers policy.
 // `wasm-unsafe-eval` permits WebAssembly compilation without enabling
 // JavaScript eval; COOP/COEP expose SharedArrayBuffer to the threaded runtime.
@@ -67,6 +69,9 @@ export default defineConfig({
       },
     }),
     react(),
+    // Draws each page's social card from the title it just rendered; must run
+    // after the pages exist, which `astro:build:done` guarantees.
+    ogCards(),
   ],
   vite: {
     // Cross-origin isolation for the live anonymization demo's wasm (needs

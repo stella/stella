@@ -9,6 +9,7 @@ import {
   type Locale,
 } from "../i18n/config";
 import { catalogs, getAlternates, stripLocale } from "../i18n/utils";
+import { ogCardPath } from "../lib/og-card-path";
 import SiteHeader from "../components/SiteHeader.astro";
 
 /** One ancestor on the trail from the site root to the current page. */
@@ -29,6 +30,11 @@ type BreadcrumbTrail = {
 type Props = {
   title?: string;
   description?: string;
+  /**
+   * Card override for pages whose preview is not their title (changelog
+   * releases). Left unset, the page gets a card generated from its own
+   * <title> by the og-cards integration.
+   */
   socialImage?: string;
   socialImageAlt?: string;
   header?: boolean;
@@ -59,10 +65,21 @@ type Props = {
 // survives one edit and not the second.
 const PRODUCT_DESCRIPTION = catalogs.en.meta.homeDescription;
 
+// Resolved before the props so the social card can be picked for this page's
+// writing direction: the card is set in one face, and which face covers the
+// title depends on the script.
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const localeConfig = locales[locale];
+
 const {
   title = "stella | open source legal workspace",
   description = PRODUCT_DESCRIPTION,
-  socialImage = "/images/og-card.png",
+  socialImage = ogCardPath({
+    direction: localeConfig.dir,
+    pathname: Astro.url.pathname,
+    title,
+  }),
   socialImageAlt = description,
   header = true,
   headerOverlay = false,
@@ -88,9 +105,6 @@ const canonicalHref =
   robots === "index" || canonicalPath ? canonicalUrl.href : undefined;
 const socialImageUrl = new URL(socialImage, Astro.site);
 
-const rawLocale = Astro.currentLocale ?? defaultLocale;
-const locale: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
-const localeConfig = locales[locale];
 const basePath = stripLocale(Astro.url.pathname);
 const hasLocalizedAlternates = translationScope === "all-locales";
 const alternates =
