@@ -88,6 +88,11 @@ const _updateWhereGuard = sql`UPDATE t SET generation = ${checkpoint.revision} W
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _viaParameter = (at: Date) => sql`${decisions.createdAt} > ${at}`;
 
+const boundaryTimestamp = cursor.createdAt;
+// The timestamp column can be on the right of a raw SQL comparison too.
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _columnOnRight = sql`${boundaryTimestamp} < ${decisions.createdAt}`;
+
 // --- Family B: Drizzle comparison calls the rule MUST flag ---
 
 // The paged-list keyset that re-serves page one forever.
@@ -138,6 +143,18 @@ const _mutableBinding = lte(decisions.updatedAt, mutableNow);
 // rule cannot tell them apart. The few real sites carry a disable comment.
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _columnToColumn = gt(decisions.updatedAt, searchDocuments.updatedAt);
+
+// A nested SQL fragment can still bind a truncated JS Date; the tag alone
+// does not make every interpolation a database-native expression.
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _nestedBoundDate = gt(decisions.createdAt, sql`${cursor.createdAt}`);
+
+// Merely containing a clock read does not make the whole operand fresh.
+const _conditionalClock = gt(
+  decisions.createdAt,
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+  cursor.id === boundaryId ? cursor.createdAt : new Date(),
+);
 
 // --- Cases the rule MUST NOT flag ---
 
@@ -214,6 +231,9 @@ export const __noTruncatedTimestampComparisonFixture = {
   _parsedDate,
   _mutableBinding,
   _columnToColumn,
+  _columnOnRight,
+  _nestedBoundDate,
+  _conditionalClock,
   _castCasGuard,
   _castComparison,
   _castTuple,

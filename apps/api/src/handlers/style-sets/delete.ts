@@ -7,6 +7,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
@@ -64,8 +68,24 @@ export default createSafeRootHandler(
             },
           });
         }
+        const [deletionBoundary] = await tx
+          .select({ token: timestampCasToken(styleSets.deletedAt) })
+          .from(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+            ),
+          )
+          .limit(1);
+        if (
+          deletionBoundary?.token === null ||
+          deletionBoundary === undefined
+        ) {
+          return false;
+        }
         return {
-          deletedAt,
+          deletedAtToken: deletionBoundary.token,
           s3Keys: existing.cleanupS3Key
             ? [existing.s3Key, existing.cleanupS3Key]
             : [existing.s3Key],
@@ -96,15 +116,19 @@ export default createSafeRootHandler(
     yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — storage cleanup for the already-audited style set deletion
-        await tx.delete(styleSets).where(
-          and(
-            eq(styleSets.id, params.styleSetId),
-            eq(styleSets.organizationId, session.activeOrganizationId),
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
-            eq(styleSets.deletedAt, deleted.deletedAt),
-            isNotNull(styleSets.deletedAt),
-          ),
-        );
+        await tx
+          .delete(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              timestampMatchesCasToken(
+                styleSets.deletedAt,
+                deleted.deletedAtToken,
+              ),
+              isNotNull(styleSets.deletedAt),
+            ),
+          );
       }),
     );
     return Result.ok({});

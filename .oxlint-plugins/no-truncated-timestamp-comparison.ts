@@ -117,7 +117,7 @@ const EXTRA_TIMESTAMP_COLUMN_SPELLINGS = new Set(
 // the SQL identifier it maps to (`created_at`, matched case-insensitively
 // because Postgres folds unquoted identifiers).
 const isTimestampColumnName = (name: string): boolean =>
-  /At$/u.test(name) ||
+  name.endsWith('At') ||
   name.toLowerCase().endsWith("_at") ||
   EXTRA_TIMESTAMP_COLUMN_SPELLINGS.has(name.toLowerCase());
 
@@ -204,6 +204,7 @@ const EXPLICIT_TIMESTAMP_CAST = new RegExp(
   String.raw`^\s*(?:::\s*${TIMESTAMPTZ_TYPE}|::\s*"?timestamp\b"?(?:\s*\(\s*\d+\s*\))?\s+at\s+time\s+zone\b)`,
   "iu",
 );
+const EXPLICIT_NON_TIMESTAMP_CAST = /^\s*::\s*interval\b/iu;
 
 // A quasi's `value` is a plain `{ raw, cooked }` record, not an AST node, so
 // it carries no `type` to narrow on. Prefer the cooked text: an escape like
@@ -291,12 +292,81 @@ const isSqlTaggedTemplate = (node: unknown): boolean => {
   return false;
 };
 
-// A literal read of the wall clock. Matched in the operand's own source text
-// rather than by walking the subtree, so `new Date(Date.now() - STALE_MS)`,
-// `Date.now() - ttl`, and `new Date( )` all resolve the same way — while
-// `new Date(cursorIso)` (a value that DID round-trip through the database)
-// does not.
-const FRESH_CLOCK_READ = /\bnew\s+Date\s*\(\s*\)|\bDate\s*\.\s*now\s*\(/u;
+const isIdentifierNamed = (node: unknown, name: string): boolean =>
+  isAstNode(node) && node.type === "Identifier" && node["name"] === name;
+
+const isDateNowCall = (node: unknown): boolean => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
+  }
+  const { callee } = node;
+  return (
+    isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    callee.computed !== true &&
+    isIdentifierNamed(callee.object, "Date") &&
+    isIdentifierNamed(callee.property, "now") &&
+    Array.isArray(node.arguments) &&
+    node.arguments.length === 0
+  );
+};
+
+const isClockAdjustment = (node: unknown): boolean =>
+  isAstNode(node) &&
+  (node.type === "Literal" ||
+    node.type === "Identifier" ||
+    (node.type === "UnaryExpression" && isClockAdjustment(node.argument)) ||
+    (node.type === "BinaryExpression" &&
+      (node["operator"] === "+" ||
+        node["operator"] === "-" ||
+        node["operator"] === "*" ||
+        node["operator"] === "/") &&
+      isClockAdjustment(node.left) &&
+      isClockAdjustment(node.right)));
+
+const isClockArithmetic = (node: unknown): boolean => {
+  if (isDateNowCall(node)) {
+    return true;
+  }
+  if (!isAstNode(node) || node.type !== "BinaryExpression") {
+    return false;
+  }
+  const operator = node["operator"];
+  if (
+    operator !== "+" &&
+    operator !== "-" &&
+    operator !== "*" &&
+    operator !== "/"
+  ) {
+    return false;
+  }
+  return (
+    (isClockArithmetic(node.left) && isClockAdjustment(node.right)) ||
+    (isClockAdjustment(node.left) && isClockArithmetic(node.right))
+  );
+};
+
+// The entire operand, not merely one branch or nested subexpression, must be
+// a fresh clock read. A substring test would incorrectly exempt
+// `cursor.createdAt ?? new Date()` and re-open the truncation bug.
+const isFreshClockRead = (node: unknown): boolean => {
+  if (isDateNowCall(node)) {
+    return true;
+  }
+  if (!isAstNode(node) || node.type !== "NewExpression") {
+    return false;
+  }
+  if (
+    !isIdentifierNamed(node.callee, "Date") ||
+    !Array.isArray(node.arguments)
+  ) {
+    return false;
+  }
+  return (
+    node.arguments.length === 0 ||
+    (node.arguments.length === 1 && isClockArithmetic(node.arguments[0]))
+  );
+};
 
 // Drizzle's scalar comparison builders. `isNull`/`isNotNull` are absent
 // because they bind no value; `between` is absent because nothing in this
@@ -343,11 +413,6 @@ export default {
             : [],
         );
 
-        const textOf = (node: unknown): string => {
-          const text = context.sourceCode?.getText?.(node);
-          return typeof text === "string" ? text : "";
-        };
-
         // Resolve the `Variable` an Identifier binds to by walking the scope
         // chain outward from its use site (this plugin API has no ready-made
         // `findVariable`; mirrors require-function-replacer.ts).
@@ -392,19 +457,52 @@ export default {
             ) {
               return false;
             }
-            return FRESH_CLOCK_READ.test(textOf(def.node.init));
+            return isFreshClockRead(def.node.init);
+          });
+        };
+
+        const isSafeSqlFragment = (node: unknown): boolean => {
+          if (!isSqlTaggedTemplate(node) || !isAstNode(node)) {
+            return false;
+          }
+          const { quasi } = node;
+          if (!isAstNode(quasi) || quasi.type !== "TemplateLiteral") {
+            return false;
+          }
+          const expressions = Array.isArray(quasi.expressions)
+            ? quasi.expressions
+            : [];
+          const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+          return expressions.every((expression, index) => {
+            if (
+              EXPLICIT_TIMESTAMP_CAST.test(
+                stripSqlComments(rawTextOf(quasis[index + 1])),
+              ) ||
+              EXPLICIT_NON_TIMESTAMP_CAST.test(
+                stripSqlComments(rawTextOf(quasis[index + 1])),
+              )
+            ) {
+              return true;
+            }
+            const callee = calleeName(expression);
+            return (
+              (callee !== undefined && allowedOperandCalls.has(callee)) ||
+              isFreshClockRead(expression) ||
+              bindsToClockRead(expression) ||
+              isSafeSqlFragment(expression)
+            );
           });
         };
 
         const isAllowedOperand = (node: unknown): boolean => {
           if (isSqlTaggedTemplate(node)) {
-            return true;
+            return isSafeSqlFragment(node);
           }
           const callee = calleeName(node);
           if (callee !== undefined && allowedOperandCalls.has(callee)) {
             return true;
           }
-          if (FRESH_CLOCK_READ.test(textOf(node))) {
+          if (isFreshClockRead(node)) {
             return true;
           }
           return bindsToClockRead(node);
@@ -471,6 +569,31 @@ export default {
             let precedingSql = "";
             for (const [index, expression] of expressions.entries()) {
               precedingSql += stripSqlComments(rawTextOf(quasis[index]));
+
+              // `${boundary} < ${table.createdAt}`: the timestamp column is
+              // on the right, so the unsafe operand is the previous
+              // interpolation. The normal slot check below covers the common
+              // column-on-the-left form.
+              const before = stripSqlComments(rawTextOf(quasis[index]));
+              const reversedMatch = COMPARISON_OPERATOR.exec(before);
+              const reversedHead =
+                reversedMatch === null
+                  ? ""
+                  : before.slice(0, reversedMatch.index);
+              const reversedOperand =
+                reversedMatch !== null &&
+                reversedHead.trim() === "" &&
+                isTimestampColumnExpression(expression) &&
+                !isTimestampColumnExpression(expressions[index - 1])
+                  ? expressions[index - 1]
+                  : undefined;
+              if (
+                reversedOperand !== undefined &&
+                !isAllowedOperand(reversedOperand)
+              ) {
+                report(reversedOperand);
+              }
+
               if (
                 !isTimestampComparisonSlot(
                   quasis,

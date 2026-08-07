@@ -309,7 +309,7 @@ const isChatCompactionSnapshotCurrent = async ({
       id: { eq: brandPersistedChatMessageId(firstSnapshotMessage.id) },
       threadId: { eq: threadId },
     },
-    columns: { createdAt: true, id: true },
+    columns: { id: true },
   });
   if (!firstPersistedMessage) {
     return false;
@@ -325,8 +325,9 @@ const isChatCompactionSnapshotCurrent = async ({
     .where(
       and(
         eq(chatMessages.threadId, threadId),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${firstPersistedMessage.createdAt}, ${firstPersistedMessage.id})`,
+        // Resolve the exact tuple by id inside Postgres. Reading created_at
+        // through a Date here would narrow it before the snapshot comparison.
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select boundary.created_at, boundary.id from chat_messages boundary where boundary.id = ${firstPersistedMessage.id} and boundary.thread_id = ${threadId})`,
       ),
     )
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))

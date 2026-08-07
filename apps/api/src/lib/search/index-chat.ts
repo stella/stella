@@ -1,8 +1,11 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { chatThreads } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
@@ -205,7 +208,7 @@ export const extractMessageSearchText = (
 
 type ChatSearchMessageRow = {
   content: SearchablePersistedChatMessageContent;
-  createdAt: Date;
+  createdAtToken: TimestampCasToken;
   id: SafeId<"chatMessage">;
   role: "assistant" | "system" | "user";
 };
@@ -230,10 +233,15 @@ type ChatSearchMessageRow = {
 export const upsertChatThreadSearchDocument = async (
   threadId: SafeId<"chatThread">,
 ): Promise<void> => {
-  const thread = await rootDb.query.chatThreads.findFirst({
-    where: { id: { eq: threadId } },
-    columns: { id: true, title: true, updatedAt: true },
-  });
+  const [thread] = await rootDb
+    .select({
+      id: chatThreads.id,
+      title: chatThreads.title,
+      updatedAtToken: timestampCasToken(chatThreads.updatedAt),
+    })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId))
+    .limit(1);
 
   if (!thread) {
     return;
@@ -241,7 +249,7 @@ export const upsertChatThreadSearchDocument = async (
 
   const searchableText = await rollUpThreadText({
     threadId: thread.id,
-    threadUpdatedAt: thread.updatedAt,
+    threadUpdatedAtToken: thread.updatedAtToken,
   });
   await rootDb.execute(sql`
     INSERT INTO chat_thread_search_documents (
@@ -251,7 +259,7 @@ export const upsertChatThreadSearchDocument = async (
       ${thread.title},
       ${searchableText},
       NULL,
-      ${thread.updatedAt},
+      ${thread.updatedAtToken}::timestamptz,
       to_tsvector(
         'simple',
         unaccent(
@@ -270,14 +278,12 @@ export const upsertChatThreadSearchDocument = async (
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
-  /* oxlint-disable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard inside a SQL template, where a line directive cannot reach; a focused fix keeps this rule-only change reviewable */
   await rootDb.execute(sql`
     UPDATE chat_thread_search_documents
     SET preview_generation = ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
     WHERE thread_id = ${thread.id}
-      AND updated_at = ${thread.updatedAt}
+      AND updated_at = ${thread.updatedAtToken}::timestamptz
   `);
-  /* oxlint-enable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- restores the guard after the statement above */
 };
 
 /** Page through a thread's messages by `(created_at, id)`, write the
@@ -300,10 +306,10 @@ export const upsertChatThreadSearchDocument = async (
  *  order to diverge from. */
 const rollUpThreadText = async ({
   threadId,
-  threadUpdatedAt,
+  threadUpdatedAtToken,
 }: {
   threadId: SafeId<"chatThread">;
-  threadUpdatedAt: Date;
+  threadUpdatedAtToken: TimestampCasToken;
 }): Promise<string> => {
   const textParts: string[] = [];
   let accumulatedLength = 0;
@@ -322,7 +328,7 @@ const rollUpThreadText = async ({
 
     // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's WHERE depends on the previous page's last (created_at, id) cursor.
     const page = await rootDb.execute<ChatSearchMessageRow>(sql`
-      SELECT id, role, content, created_at AS "createdAt"
+      SELECT id, role, content, created_at::text AS "createdAtToken"
       FROM chat_messages
       WHERE ${where}
       ORDER BY created_at, id
@@ -337,7 +343,7 @@ const rollUpThreadText = async ({
     await upsertChatMessageSearchDocuments({
       messages: page,
       threadId,
-      threadUpdatedAt,
+      threadUpdatedAtToken,
     });
 
     for (const message of page) {
@@ -371,11 +377,11 @@ const rollUpThreadText = async ({
 const upsertChatMessageSearchDocuments = async ({
   messages,
   threadId,
-  threadUpdatedAt,
+  threadUpdatedAtToken,
 }: {
   messages: readonly ChatSearchMessageRow[];
   threadId: SafeId<"chatThread">;
-  threadUpdatedAt: Date;
+  threadUpdatedAtToken: TimestampCasToken;
 }): Promise<void> => {
   if (messages.length === 0) {
     return;
@@ -389,8 +395,8 @@ const upsertChatMessageSearchDocuments = async ({
       ${message.role},
       ${searchableText},
       to_tsvector('simple', unaccent(arabic_normalize(coalesce(${searchableText}, '')))),
-      ${message.createdAt},
-      ${threadUpdatedAt}
+      ${message.createdAtToken}::timestamptz,
+      ${threadUpdatedAtToken}::timestamptz
     )`;
   });
 
