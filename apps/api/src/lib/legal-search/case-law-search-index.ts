@@ -246,6 +246,7 @@ export const backfillSearchIndex = async (
           isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
           or(
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
             gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
             notExists(
               tx

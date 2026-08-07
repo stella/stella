@@ -57,7 +57,6 @@ const listDocxSuggestions = createSafeHandler(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
       }
-
       let cursor = decodedCursor;
       if (cursor.timestamp.precision === "milliseconds") {
         // The legacy timestamp cannot order rows inside its millisecond. Its

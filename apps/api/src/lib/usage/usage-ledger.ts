@@ -155,7 +155,9 @@ export const getRemainingUsageUnits = async ({
     .where(
       and(
         eq(usageAllocations.organizationId, organizationId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
         lte(usageAllocations.periodStart, asOf),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
         gt(usageAllocations.periodEnd, asOf),
       ),
     );
@@ -170,7 +172,9 @@ export const getRemainingUsageUnits = async ({
     .where(
       and(
         eq(usageEvents.organizationId, organizationId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
         lte(usageEvents.periodStart, asOf),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
         gt(usageEvents.periodEnd, asOf),
       ),
     );

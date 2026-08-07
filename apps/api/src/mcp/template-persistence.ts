@@ -128,6 +128,7 @@ export const claimTemplatePersistenceRequest = async ({
             TEMPLATE_PERSISTENCE_REQUEST_STATUS.PENDING,
           ),
           eq(templatePersistenceRequests.claimToken, existing.claimToken),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lte(templatePersistenceRequests.claimedAt, staleBefore),
         ),
       )

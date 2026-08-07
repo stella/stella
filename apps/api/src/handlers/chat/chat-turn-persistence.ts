@@ -131,6 +131,7 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       and(
         eq(chatTurns.threadId, threadId),
         eq(chatTurns.status, "running"),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
         lte(chatTurns.leaseExpiresAt, now),
       ),
     );

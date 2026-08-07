@@ -81,10 +81,12 @@ export const recoverStuckReportExports = async (
       or(
         and(
           eq(reportExports.status, "running"),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lt(reportExports.updatedAt, runningCutoff),
         ),
         and(
           eq(reportExports.status, "queued"),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lt(reportExports.updatedAt, queuedCutoff),
         ),
       ),

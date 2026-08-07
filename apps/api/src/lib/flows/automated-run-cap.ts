@@ -68,6 +68,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
       flowRuns,
       and(
         eq(flowRuns.definitionId, definitionId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
         gte(flowRuns.createdAt, startOfUtcDay(now)),
         sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
       ),

@@ -33,6 +33,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { detached } from "@/api/lib/detached";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
@@ -1910,7 +1914,9 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
       id: documentProcessingRuns.id,
-      nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+      nextAttemptAtToken: timestampCasToken(
+        documentProcessingRuns.nextAttemptAt,
+      ),
     })
     .from(documentProcessingRuns)
     .where(
@@ -1935,13 +1941,16 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
   }
 
   const capturedSchedules = or(
-    ...retryableRuns.map(({ attemptCount, id, nextAttemptAt }) =>
+    ...retryableRuns.map(({ attemptCount, id, nextAttemptAtToken }) =>
       and(
         eq(documentProcessingRuns.id, id),
         eq(documentProcessingRuns.attemptCount, attemptCount),
-        nextAttemptAt === null
+        nextAttemptAtToken === null
           ? isNull(documentProcessingRuns.nextAttemptAt)
-          : eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
+          : timestampMatchesCasToken(
+              documentProcessingRuns.nextAttemptAt,
+              nextAttemptAtToken,
+            ),
       ),
     ),
   );
@@ -2122,7 +2131,9 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
       attemptCount: documentProcessingRuns.attemptCount,
       entityId: documentProcessingRuns.entityId,
       id: documentProcessingRuns.id,
-      nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+      nextAttemptAtToken: timestampCasToken(
+        documentProcessingRuns.nextAttemptAt,
+      ),
       workspaceId: documentProcessingRuns.workspaceId,
     })
     .from(documentProcessingRuns)
@@ -2208,13 +2219,16 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
     return 0;
   }
   const capturedSchedules = or(
-    ...candidates.map(({ attemptCount, id, nextAttemptAt }) =>
+    ...candidates.map(({ attemptCount, id, nextAttemptAtToken }) =>
       and(
         eq(documentProcessingRuns.id, id),
         eq(documentProcessingRuns.attemptCount, attemptCount),
-        nextAttemptAt === null
+        nextAttemptAtToken === null
           ? isNull(documentProcessingRuns.nextAttemptAt)
-          : eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
+          : timestampMatchesCasToken(
+              documentProcessingRuns.nextAttemptAt,
+              nextAttemptAtToken,
+            ),
       ),
     ),
   );
