@@ -457,6 +457,7 @@ function ChatIndex() {
               autoFocus
               context={{ activeOrganizationId, threadRef }}
               controller={controller}
+              guideAnchorsEnabled
               variant="large"
               mcpOrganizationId={activeOrganizationId}
               models={{
@@ -477,6 +478,7 @@ function ChatIndex() {
                     // (~system prompt + tools) rather than 0% until send.
                     context: chatDraftMeta?.context ?? null,
                   }}
+                  guideAnchorsEnabled
                   models={{
                     activeOrganizationId,
                     threadRef,

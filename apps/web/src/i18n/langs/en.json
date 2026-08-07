@@ -824,7 +824,6 @@
     },
     "back": "Back",
     "cancel": "Cancel",
-    "captions": "Captions",
     "caseLaw": "Case Law",
     "category": "Category",
     "categoryName": "Category name",
@@ -962,7 +961,6 @@
     "organization": "Organization",
     "organizationName": "Organization name",
     "pin": "Pin",
-    "playVideo": "Play video",
     "playbooks": "Playbooks",
     "preparing": "Preparing…",
     "preview": "Preview",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "This DOCX contains structures Folio cannot safely rewrite. To avoid corrupting the file, download it and edit it in Word.",
     "unsupportedDocxEditTitle": "Editing blocked",
     "viewOnly": "View only"
+  },
+  "guides": {
+    "action": {
+      "replay": "Replay",
+      "skip": "Skip",
+      "start": "Start"
+    },
+    "checklist": {
+      "progress": "{completed} of {total} complete"
+    },
+    "community": {
+      "body": "Get help from other users and the developers in our community chat.",
+      "directLinkLabel": "Talk to us",
+      "directPrompt": "Want to talk directly with the team?",
+      "linkLabel": "Open the community forum"
+    },
+    "help": {
+      "buttonLabel": "Help and guides",
+      "subtitle": "Interactive tours of the workspace",
+      "tabs": {
+        "community": "Community",
+        "guides": "Guides"
+      },
+      "title": "Help and guides"
+    },
+    "leave": "Leave guide",
+    "minutes": "{count} min",
+    "status": {
+      "skipped": "Skipped"
+    },
+    "tours": {
+      "chat": {
+        "description": "What sits behind the + button, and when to reach for each option",
+        "examplePrompt": "Summarize the key obligations in this contract",
+        "steps": {
+          "anonymize": {
+            "body": "Replaces names, identifiers, and other personal data with placeholders before the request leaves your workspace, then restores the real values in the answer you read.",
+            "title": "Send anonymized",
+            "when": "Turn it on when the text carries personal data and the question does not turn on who the parties are. Leave it off when identity is the point, such as a conflict check, because placeholders take away exactly what you are asking about."
+          },
+          "attach": {
+            "body": "Uploads a file from this device into the conversation. It is read for this thread only and is not filed into a matter.",
+            "title": "Attach a file",
+            "when": "Best for a one-off document you do not need to keep: a draft that just arrived by email, a scan, a spreadsheet you only want summarized."
+          },
+          "composer": {
+            "body": "Write what you want in plain language: the task, what it concerns, and the shape of answer you expect. Everything else here only sharpens a request you have already written.",
+            "title": "Start with the request"
+          },
+          "context": {
+            "body": "Points the request at material that is already filed here: a whole matter, or a single file inside it. Nothing is uploaded and nothing is copied; the reference is a link to where the material already lives.",
+            "title": "Reference a matter or a file",
+            "when": "Use this instead of attaching whenever the document is already filed. Reference the matter to let the assistant look across it; reference one file when you know exactly which one to read. Typing @ in an empty composer opens this list directly."
+          },
+          "mcp": {
+            "body": "Turns a connected server's tools on or off for your chats: business registries, internal systems, anything your team has connected.",
+            "title": "Connected tool servers",
+            "when": "Turn one on when the answer needs live data from outside the workspace. Leave the rest off: the fewer tools in play, the narrower and more predictable the answer."
+          },
+          "models": {
+            "body": "Switches the model for this conversation only. Every other thread keeps the default set for your workspace.",
+            "title": "Which model",
+            "when": "Switch up for close reading, drafting, and anything where a wrong answer is expensive. Stay on the default for lookups, summaries, and quick rewrites, where the extra depth changes nothing but the wait."
+          },
+          "plusMenu": {
+            "body": "The + button opens the composer menu: attach a file, switch model, run a skill, reference a matter, or enable a connected tool server. The next steps open it and take each option in turn.",
+            "title": "Everything you can add sits behind +",
+            "when": "Reach for + whenever the answer depends on something the assistant cannot see yet: a file, a matter, an internal rule, or a live external source."
+          },
+          "send": {
+            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
+            "title": "Send it",
+            "when": "Send early. A short first answer tells you which context is still missing faster than a perfect first prompt does."
+          },
+          "skills": {
+            "body": "Inserts a saved prompt or a skill your team has written: a reviewed set of instructions that handles the same task the same way every time.",
+            "title": "Skills and saved prompts",
+            "when": "Use one when the task repeats and the wording matters, such as a standard contract review or an intake summary. Typing / in an empty composer opens this list directly."
+          }
+        },
+        "title": "Ask with the right context"
+      },
+      "documents": {
+        "description": "Upload a file and open it",
+        "steps": {
+          "browse": {
+            "body": "Find and open any document you have added.",
+            "title": "Browse your documents"
+          },
+          "upload": {
+            "body": "Add a file to bring it into your workspace.",
+            "title": "Upload a document"
+          }
+        },
+        "title": "Work with documents"
+      },
+      "playbooks": {
+        "description": "Turn review know-how into a reusable playbook",
+        "steps": {
+          "create": {
+            "body": "Start a playbook to capture how a review should run.",
+            "title": "Create a playbook"
+          }
+        },
+        "title": "Build a playbook"
+      },
+      "tabularReview": {
+        "description": "Extract answers across many files at once",
+        "steps": {
+          "addColumn": {
+            "body": "Add a question to answer across every row.",
+            "title": "Add a column"
+          }
+        },
+        "title": "Review in a table"
+      },
+      "workflows": {
+        "description": "Chain steps into a repeatable workflow",
+        "steps": {
+          "create": {
+            "body": "Combine steps that run together on demand.",
+            "title": "Create a workflow"
+          }
+        },
+        "title": "Automate a workflow"
+      }
+    },
+    "unavailable": "This guide is not available right now",
+    "whenLabel": "When to use it:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Duplicating matter",
     "emptyDocuments": {
       "description": "Upload documents to enable table extraction, document organization, in-browser editing, and search across this matter.",
-      "title": "Upload your first documents",
-      "videoLabel": "Matter documents overview"
+      "title": "Upload your first documents"
     },
     "emptyMatters": {
       "description": "Create a matter to organize documents, contacts, tasks, and team activity in one place.",
-      "title": "Create your first matter",
-      "videoLabel": "Matter setup overview"
+      "title": "Create your first matter"
     },
     "entitiesCount": "{count, plural, one {# item} other {# items}}",
     "exportToCsv": "Export to CSV",

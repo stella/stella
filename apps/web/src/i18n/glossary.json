@@ -874,6 +874,29 @@
   ],
   "nouns": [
     {
+      "id": "guide",
+      "en": "Guide",
+      "note": "Names the in-app help section holding the interactive walkthroughs (`guides.*`). Czech and Slovak must use the SINGULAR noun: the nominative plural (cs \"průvodci\", sk \"sprievodcovia\") denotes human tour guides rather than a help section, which is the drift these bans catch. Other locales may use the plural freely. Lint-only entry (nouns are not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "cs": ["průvodci"],
+        "sk": ["sprievodcovia"]
+      },
+      "translations": {
+        "ar": "دليل",
+        "cs": "Průvodce",
+        "sk": "Sprievodca",
+        "pl": "Przewodnik",
+        "de": "Anleitung",
+        "et": "Juhend",
+        "hu": "Útmutató",
+        "lt": "Vadovas",
+        "lv": "Ceļvedis",
+        "es": "Guía",
+        "fr": "Tutoriel",
+        "pt-BR": "Guia"
+      }
+    },
+    {
       "id": "workspace",
       "en": "Workspace",
       "note": "\"Workspace\" as product positioning (the category stella belongs to: the landing's identity phrase, the app's own \"your stella workspace\"), NOT the Matter alias — where English \"workspace\" names a matter, the Matter term wins and this concept's bans do not help. Each locale settles one rendering and reuses it; the forms banned here are the near-synonyms the landing had drifted to (cs \"pracovní prostředí\" is Czech for a desktop environment or for workplace conditions, pl \"przestrzeń robocza\"/\"środowisko pracy\", lt \"darbo erdvė\", lv \"darba vide\", hu \"munkatér\"). pt-BR \"ambiente de trabalho\" (a desktop environment, or a physical workplace) is banned now that the app's `consent.description` no longer uses it. Lint-only entry (not tabulated in TERMINOLOGY.md).",

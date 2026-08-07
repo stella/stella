@@ -824,7 +824,6 @@
     },
     "back": "Vissza",
     "cancel": "Mégse",
-    "captions": "Feliratok",
     "caseLaw": "Ítélkezési gyakorlat",
     "category": "Kategória",
     "categoryName": "Kategória neve",
@@ -962,7 +961,6 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
-    "playVideo": "Videó lejátszása",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Ez a DOCX olyan szerkezeteket tartalmaz, amelyeket a Folio nem tud biztonságosan átírni. A fájl sérülésének elkerülése érdekében töltse le, és szerkessze Wordben.",
     "unsupportedDocxEditTitle": "A szerkesztés letiltva",
     "viewOnly": "Csak megtekintés"
+  },
+  "guides": {
+    "action": {
+      "replay": "Újrajátszás",
+      "skip": "Kihagyás",
+      "start": "Kezdés"
+    },
+    "checklist": {
+      "progress": "{completed} / {total} kész"
+    },
+    "community": {
+      "body": "Kérjen segítséget más felhasználóktól és a fejlesztőktől a közösségi csevegésünkben.",
+      "directLinkLabel": "Írjon nekünk",
+      "directPrompt": "Közvetlenül a csapattal szeretne beszélni?",
+      "linkLabel": "Közösségi fórum megnyitása"
+    },
+    "help": {
+      "buttonLabel": "Súgó és útmutatók",
+      "subtitle": "Interaktív bemutatók a munkaterületen",
+      "tabs": {
+        "community": "Közösség",
+        "guides": "Útmutatók"
+      },
+      "title": "Súgó és útmutatók"
+    },
+    "leave": "Kilépés az útmutatóból",
+    "minutes": "{count} perc",
+    "status": {
+      "skipped": "Kihagyva"
+    },
+    "tours": {
+      "chat": {
+        "description": "Mi rejlik a + gomb mögött, és mikor melyik lehetőséghez nyúljon",
+        "examplePrompt": "Foglalja össze a szerződés legfontosabb kötelezettségeit",
+        "steps": {
+          "anonymize": {
+            "body": "A neveket, azonosítókat és egyéb személyes adatokat helyőrzőkre cseréli, mielőtt a kérés elhagyja a munkaterületét, majd a válaszban visszaállítja a valódi értékeket.",
+            "title": "Küldés anonimizálva",
+            "when": "Akkor kapcsolja be, ha a szöveg személyes adatot tartalmaz, és a kérdés nem azon múlik, kik a felek. Hagyja kikapcsolva, ha éppen a személyazonosság a lényeg, például összeférhetetlenségi vizsgálatnál: a helyőrzők pontosan azt tüntetik el, amire rákérdez."
+          },
+          "attach": {
+            "body": "Feltölt egy fájlt erről az eszközről a beszélgetésbe. Csak ehhez a szálhoz olvassa be, és nem kerül be egy ügybe.",
+            "title": "Fájl csatolása",
+            "when": "Egyszeri dokumentumhoz való, amelyet nem kell megőriznie: épp e-mailben érkezett tervezethez, beolvasott irathoz, táblázathoz, amelyből csak összefoglalót kér."
+          },
+          "composer": {
+            "body": "Írja le hétköznapi nyelven, mit szeretne: a feladatot, hogy mire vonatkozik, és milyen formájú választ vár. Minden más itt csak élesíti a már megfogalmazott kérést.",
+            "title": "Kezdje a kéréssel"
+          },
+          "context": {
+            "body": "A kérést a már elhelyezett anyagra irányítja: egy egész ügyre vagy egyetlen fájlra azon belül. Semmi nem töltődik fel és nem másolódik; a hivatkozás oda mutat, ahol az anyag már megvan.",
+            "title": "Hivatkozás ügyre vagy fájlra",
+            "when": "Csatolás helyett használja, valahányszor a dokumentum már be van iktatva. Az ügyre hivatkozzon, ha az asszisztensnek végig kell néznie; egyetlen fájlra, ha pontosan tudja, melyiket olvassa. A @ az üres szerkesztőben közvetlenül megnyitja ezt a listát."
+          },
+          "mcp": {
+            "body": "Be- és kikapcsolja egy csatlakoztatott kiszolgáló eszközeit a csevegéseiben: cégnyilvántartások, belső rendszerek, bármi, amit a csapata csatlakoztatott.",
+            "title": "Csatlakoztatott eszközkiszolgálók",
+            "when": "Akkor kapcsoljon be egyet, ha a válaszhoz a munkaterületen kívüli friss adat kell. A többit hagyja kikapcsolva: minél kevesebb eszköz van játékban, annál szűkebb és kiszámíthatóbb a válasz."
+          },
+          "models": {
+            "body": "Csak ebben a beszélgetésben vált modellt. A többi szál megtartja a munkaterülethez beállított alapértelmezést.",
+            "title": "Melyik modell",
+            "when": "Erősebb modellre váltson alapos olvasáshoz, fogalmazáshoz és mindenhez, ahol a hibás válasz sokba kerül. Kereséshez, összefoglalókhoz és gyors átfogalmazásokhoz maradjon az alapértelmezettnél: a többletmélység ott csak a várakozási időt növeli."
+          },
+          "plusMenu": {
+            "body": "A + gomb megnyitja a szerkesztő menüjét: fájl csatolása, modellváltás, skill futtatása, hivatkozás egy ügyre vagy csatlakoztatott eszközkiszolgáló bekapcsolása. A következő lépések megnyitják, és sorra veszik a lehetőségeket.",
+            "title": "Minden hozzáadható elem a + mögött van",
+            "when": "Nyúljon a + gombhoz, valahányszor a válasz olyasmin múlik, amit az asszisztens még nem lát: egy fájlon, egy ügyön, egy belső szabályon vagy egy friss külső forráson."
+          },
+          "send": {
+            "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
+            "title": "Küldje el",
+            "when": "Küldjön korán. Egy rövid első válasz gyorsabban megmutatja, milyen kontextus hiányzik még, mint a tökéletesre csiszolt első prompt."
+          },
+          "skills": {
+            "body": "Beilleszt egy mentett promptot vagy a csapata által írt skillt: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
+            "title": "Skillek és mentett promptok",
+            "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
+          }
+        },
+        "title": "Kérdezzen a megfelelő kontextussal"
+      },
+      "documents": {
+        "description": "Töltsön fel egy fájlt, és nyissa meg",
+        "steps": {
+          "browse": {
+            "body": "Keresse meg és nyissa meg bármelyik hozzáadott dokumentumot.",
+            "title": "Dokumentumok tallózása"
+          },
+          "upload": {
+            "body": "Adjon hozzá egy fájlt, hogy bekerüljön a munkaterületére.",
+            "title": "Dokumentum feltöltése"
+          }
+        },
+        "title": "Munka dokumentumokkal"
+      },
+      "playbooks": {
+        "description": "Alakítsa át a felülvizsgálati tudást újrafelhasználható forgatókönyvvé",
+        "steps": {
+          "create": {
+            "body": "Indítson el egy forgatókönyvet, hogy rögzítse a felülvizsgálat menetét.",
+            "title": "Forgatókönyv létrehozása"
+          }
+        },
+        "title": "Forgatókönyv összeállítása"
+      },
+      "tabularReview": {
+        "description": "Nyerjen ki válaszokat sok fájlból egyszerre",
+        "steps": {
+          "addColumn": {
+            "body": "Adjon hozzá egy kérdést, amelyre minden sorban választ kap.",
+            "title": "Oszlop hozzáadása"
+          }
+        },
+        "title": "Áttekintés táblázatban"
+      },
+      "workflows": {
+        "description": "Fűzzön össze lépéseket ismételhető munkafolyamattá",
+        "steps": {
+          "create": {
+            "body": "Kombináljon lépéseket, amelyek igény szerint együtt futnak.",
+            "title": "Munkafolyamat létrehozása"
+          }
+        },
+        "title": "Munkafolyamat automatizálása"
+      }
+    },
+    "unavailable": "Ez az útmutató jelenleg nem érhető el",
+    "whenLabel": "Mikor használja:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Ügy másolása folyamatban",
     "emptyDocuments": {
       "description": "Töltsön fel dokumentumokat a táblázatok kinyeréséhez, a dokumentumok rendszerezéséhez, a böngészőn belüli szerkesztéshez és az ügyön belüli kereséshez.",
-      "title": "Töltse fel az első dokumentumokat",
-      "videoLabel": "Ügy dokumentumainak áttekintése"
+      "title": "Töltse fel az első dokumentumokat"
     },
     "emptyMatters": {
       "description": "Hozzon létre egy ügyet, hogy egy helyen rendezze a dokumentumokat, kapcsolattartókat, feladatokat és a csapat tevékenységét.",
-      "title": "Hozza létre az első ügyét",
-      "videoLabel": "Ügybeállítás áttekintése"
+      "title": "Hozza létre az első ügyét"
     },
     "entitiesCount": "{count, plural, one {# elem} other {# elem}}",
     "exportToCsv": "Exportálás CSV-be",

@@ -748,6 +748,14 @@ const createAuth = () => {
           type: "string",
           required: false,
         },
+        // Server-owned: the authenticated /me/guide-progress endpoint merges
+        // one closed tour/status pair at a time without exposing a full-map
+        // replacement through Better Auth.
+        guideProgress: {
+          type: "string",
+          required: false,
+          input: false,
+        },
         // Server-owned: captured from the edge's viewer-country header in
         // the user-create hook below; client input is ignored.
         detectedCountry: {

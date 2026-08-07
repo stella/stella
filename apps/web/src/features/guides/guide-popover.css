@@ -1,0 +1,242 @@
+/*
+ * Guided-tour popover chrome.
+ *
+ * driver.js appends its popover to `document.body`, outside the app's
+ * component tree, so the utility classes the rest of the app is styled with
+ * never reach it. Everything here is plain CSS written against the design
+ * tokens published on `:root` (the `--color-*` alias with the underlying
+ * token as a fallback, because Tailwind only emits an alias a utility uses).
+ *
+ * Two deliberate departures from driver.js's defaults:
+ *
+ * 1. A fixed, predictable position. driver anchors the popover beside whatever
+ *    it spotlights, so the card jumps around the viewport between steps.
+ *    Reading from one stable place beats proximity to the target, so the card
+ *    is centred horizontally and pinned near the top, clear of the bottom band
+ *    where the composer and the surfaces it opens live. driver rewrites
+ *    `top`/`left` inline on every render, scroll, and resize, so the overrides
+ *    have to be `!important` (an author `!important` outranks an inline
+ *    declaration); the arrow is hidden because it no longer points at
+ *    anything.
+ *
+ * 2. Controls sized for a glance. The tour is read while the user is looking
+ *    somewhere else on the screen, so the footer gets a comfortable hit area
+ *    and an explicit hierarchy: next primary, back secondary, leave quiet and
+ *    on its own row so it is never mistaken for, or fat-fingered instead of,
+ *    the navigation pair.
+ *
+ * Every rule is scoped to `.stella-guide-popover` (the engine's
+ * `popoverClass`) so no other driver.js usage inherits any of it.
+ */
+
+.driver-popover.stella-guide-popover {
+  --stella-guide-surface: var(--color-popover, var(--popover));
+  --stella-guide-text: var(
+    --color-popover-foreground,
+    var(--popover-foreground)
+  );
+  --stella-guide-muted: var(--color-muted-foreground, var(--muted-foreground));
+  --stella-guide-border: var(--color-border, var(--border));
+  --stella-guide-accent: var(--color-accent, var(--accent));
+  --stella-guide-primary: var(--color-primary, var(--primary));
+  --stella-guide-primary-text: var(
+    --color-primary-foreground,
+    var(--primary-foreground)
+  );
+  --stella-guide-ring: var(--color-ring, var(--ring));
+  --stella-guide-radius: var(--radius, 0.625rem);
+
+  /* Below any top chrome, and far enough above the fold that a spotlighted
+   * control in the lower half of the screen stays uncovered. */
+  --stella-guide-inset-top: max(4.5rem, 8vh);
+  --stella-guide-width: min(34rem, calc(100vw - 2rem));
+
+  position: fixed !important;
+  inset-block-start: var(--stella-guide-inset-top) !important;
+  inset-block-end: auto !important;
+  /* `inset-inline: 0` plus `margin-inline: auto` centres a fixed element in
+   * both writing directions, with no transform to undo per direction. */
+  inset-inline: 0 !important;
+  margin-block: 0;
+  margin-inline: auto !important;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: column;
+  inline-size: var(--stella-guide-width);
+  min-inline-size: 0;
+  max-inline-size: var(--stella-guide-width);
+  /* Capped so a long step cannot grow down over the spotlight, and bounded by
+   * the viewport so a short window still fits. The description is what
+   * scrolls, which keeps the controls reachable at any height. */
+  max-block-size: min(
+    calc(100dvh - var(--stella-guide-inset-top) - 1.5rem),
+    24rem
+  );
+  padding: 1.25rem;
+  font-family: inherit;
+  color: var(--stella-guide-text);
+  background-color: var(--stella-guide-surface);
+  border: 1px solid var(--stella-guide-border);
+  border-radius: var(--stella-guide-radius);
+  box-shadow: 0 10px 30px
+    color-mix(in srgb, var(--stella-guide-text) 18%, transparent);
+}
+
+.stella-guide-popover .driver-popover-arrow {
+  display: none !important;
+}
+
+.stella-guide-popover .driver-popover-title {
+  flex: 0 0 auto;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--stella-guide-text);
+}
+
+.stella-guide-popover .driver-popover-description {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  margin-block-start: 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--stella-guide-text);
+}
+
+/* The "when would I reach for this?" line the engine appends under the body. */
+.stella-guide-popover .stella-guide-when {
+  margin-block-start: 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--stella-guide-muted);
+}
+
+.stella-guide-popover .stella-guide-when-label {
+  font-weight: 600;
+}
+
+/*
+ * Row 1: progress on the reading-start side, back and next on the far side.
+ * Row 2: leave, on its own, quiet.
+ */
+.stella-guide-popover .driver-popover-footer {
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  margin-block-start: 1.25rem;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--stella-guide-border);
+  text-align: start;
+}
+
+.stella-guide-popover .driver-popover-progress-text {
+  grid-row: 1;
+  grid-column: 1;
+  font-size: 0.8125rem;
+  color: var(--stella-guide-muted);
+}
+
+.stella-guide-popover .driver-popover-navigation-btns {
+  grid-row: 1;
+  grid-column: 2;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* driver spaces the pair with a physical margin; the flex gap above replaces
+ * it, and dropping it keeps the spacing symmetric under RTL. */
+.stella-guide-popover .driver-popover-navigation-btns button + button {
+  margin-inline-start: 0;
+  margin-left: 0;
+}
+
+.stella-guide-popover .driver-popover-footer-btn {
+  box-sizing: border-box;
+  padding: 0.75rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  border-radius: calc(var(--stella-guide-radius) - 0.125rem);
+  cursor: pointer;
+}
+
+.stella-guide-popover .driver-popover-next-btn {
+  color: var(--stella-guide-primary-text);
+  background-color: var(--stella-guide-primary);
+  border: 1px solid transparent;
+}
+
+.stella-guide-popover .driver-popover-next-btn:hover,
+.stella-guide-popover .driver-popover-next-btn:focus-visible {
+  background-color: color-mix(
+    in srgb,
+    var(--stella-guide-primary) 88%,
+    transparent
+  );
+}
+
+.stella-guide-popover .driver-popover-prev-btn {
+  color: var(--stella-guide-text);
+  background-color: transparent;
+  border: 1px solid var(--stella-guide-border);
+}
+
+.stella-guide-popover .driver-popover-prev-btn:hover,
+.stella-guide-popover .driver-popover-prev-btn:focus-visible {
+  background-color: var(--stella-guide-accent);
+}
+
+/*
+ * The way out. driver renders it as a bare "×" pinned to the popover's top
+ * corner; the engine relabels it and moves it into the footer, so everything
+ * about its default box has to be undone here.
+ */
+.stella-guide-popover .driver-popover-close-btn {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  justify-self: start;
+  position: static;
+  box-sizing: border-box;
+  inline-size: auto;
+  block-size: auto;
+  /* Pulled back by its own padding so the label lines up with the body text
+   * while keeping a full-size hit area. */
+  margin-inline-start: -0.75rem;
+  padding: 0.625rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: start;
+  color: var(--stella-guide-muted);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--stella-guide-radius) - 0.125rem);
+  cursor: pointer;
+}
+
+.stella-guide-popover .driver-popover-close-btn:hover,
+.stella-guide-popover .driver-popover-close-btn:focus-visible {
+  color: var(--stella-guide-text);
+  background-color: var(--stella-guide-accent);
+}
+
+.stella-guide-popover .driver-popover-footer-btn:focus-visible,
+.stella-guide-popover .driver-popover-close-btn:focus-visible {
+  outline: 2px solid var(--stella-guide-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stella-guide-popover .driver-popover-footer-btn,
+  .stella-guide-popover .driver-popover-close-btn {
+    transition:
+      color 120ms ease,
+      background-color 120ms ease;
+  }
+}

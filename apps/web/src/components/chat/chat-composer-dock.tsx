@@ -14,6 +14,8 @@ import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
   useChatAnonymized,
   useSetChatAnonymized,
@@ -22,6 +24,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type ChatComposerDockProps = {
   threadRef: ChatThreadRef;
+  guideAnchorsEnabled?: boolean;
   /**
    * The already-available thread data (or the pre-thread draft meta).
    * The dock reads only the fields that drive the row, so a surface
@@ -67,6 +70,7 @@ type ChatComposerDockProps = {
 // request won't honour.
 export const ChatComposerDock = ({
   threadRef,
+  guideAnchorsEnabled = false,
   data,
   onNewThread,
   leadingContext,
@@ -120,11 +124,18 @@ export const ChatComposerDock = ({
               threadRef={threadRef}
             />
           )}
-          <ChatAnonymizedToggle
-            enabled={anonymized}
-            onChange={setAnonymized}
-            size="icon-xs"
-          />
+          {/* Wrapper, not the toggle itself: the anchor is registered here so
+              the guides slice stays out of the chat feature slice's imports. */}
+          <span
+            {...guideAnchor(GUIDE_ANCHORS.chatAnonymize, guideAnchorsEnabled)}
+            className="inline-flex"
+          >
+            <ChatAnonymizedToggle
+              enabled={anonymized}
+              onChange={setAnonymized}
+              size="icon-xs"
+            />
+          </span>
           {endExtras}
         </div>
       }

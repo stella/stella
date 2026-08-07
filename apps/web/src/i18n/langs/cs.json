@@ -824,7 +824,6 @@
     },
     "back": "Zpět",
     "cancel": "Zrušit",
-    "captions": "Titulky",
     "caseLaw": "Judikatura",
     "category": "Kategorie",
     "categoryName": "Název kategorie",
@@ -962,7 +961,6 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
-    "playVideo": "Přehrát video",
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Tento DOCX obsahuje struktury, které Folio neumí bezpečně přepsat. Aby se soubor nepoškodil, stáhněte ho a upravte ve Wordu.",
     "unsupportedDocxEditTitle": "Úpravy zablokovány",
     "viewOnly": "Jen ke čtení"
+  },
+  "guides": {
+    "action": {
+      "replay": "Přehrát znovu",
+      "skip": "Přeskočit",
+      "start": "Začít"
+    },
+    "checklist": {
+      "progress": "{completed} z {total} dokončeno"
+    },
+    "community": {
+      "body": "Získejte pomoc od ostatních uživatelů a vývojářů v našem komunitním chatu.",
+      "directLinkLabel": "Ozvěte se nám",
+      "directPrompt": "Chcete si promluvit přímo s týmem?",
+      "linkLabel": "Otevřít komunitní fórum"
+    },
+    "help": {
+      "buttonLabel": "Nápověda a průvodce",
+      "subtitle": "Interaktivní prohlídky pracovního prostoru",
+      "tabs": {
+        "community": "Komunita",
+        "guides": "Průvodce"
+      },
+      "title": "Nápověda a průvodce"
+    },
+    "leave": "Ukončit průvodce",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Přeskočeno"
+    },
+    "tours": {
+      "chat": {
+        "description": "Co se skrývá pod tlačítkem + a kdy sáhnout po které volbě",
+        "examplePrompt": "Shrňte klíčové povinnosti v této smlouvě",
+        "steps": {
+          "anonymize": {
+            "body": "Nahradí jména, identifikátory a další osobní údaje zástupnými hodnotami dřív, než dotaz opustí váš pracovní prostor, a v odpovědi, kterou čtete, je zase doplní zpět.",
+            "title": "Odeslat anonymizovaně",
+            "when": "Zapněte, když text obsahuje osobní údaje a otázka nestojí na tom, kdo jsou strany. Nechte vypnuté, když jde právě o totožnost, třeba u kontroly střetu zájmů: zástupné hodnoty odeberou přesně to, na co se ptáte."
+          },
+          "attach": {
+            "body": "Nahraje soubor z tohoto zařízení do konverzace. Přečte se jen pro toto vlákno a nezaloží se do spisu.",
+            "title": "Připojit soubor",
+            "when": "Hodí se pro jednorázový dokument, který nepotřebujete uchovat: návrh, jenž právě přišel e-mailem, sken nebo tabulku, kterou chcete jen shrnout."
+          },
+          "composer": {
+            "body": "Napište běžnou řečí, co chcete: jaký úkol, čeho se týká a jakou podobu odpovědi čekáte. Všechno ostatní zde už jen zpřesňuje zadání, které jste napsali.",
+            "title": "Začněte zadáním"
+          },
+          "context": {
+            "body": "Nasměruje dotaz na materiál, který už je založený: na celý spis, nebo na jediný soubor v něm. Nic se nenahrává ani nekopíruje; odkaz vede tam, kde materiál už leží.",
+            "title": "Odkázat na spis nebo soubor",
+            "when": "Použijte místo připojení souboru vždy, když je dokument už založený. Odkažte na spis, má-li se asistent podívat napříč ním; na jeden soubor, když přesně víte, který má číst. Napsáním @ v prázdném editoru otevřete tento seznam přímo."
+          },
+          "mcp": {
+            "body": "Zapíná a vypíná nástroje připojeného serveru pro vaše chaty: obchodní rejstříky, interní systémy, cokoli váš tým připojil.",
+            "title": "Připojené servery nástrojů",
+            "when": "Zapněte, když odpověď potřebuje živá data zvenčí. Ostatní nechte vypnuté: čím méně nástrojů je ve hře, tím užší a předvídatelnější odpověď."
+          },
+          "models": {
+            "body": "Přepne model jen pro tuto konverzaci. Ostatní vlákna si ponechají výchozí model nastavený pro váš pracovní prostor.",
+            "title": "Který model",
+            "when": "Silnější model zvolte pro pozorné čtení, koncipování a všude, kde je chybná odpověď drahá. U vyhledávání, shrnutí a rychlých přepisů zůstaňte u výchozího: hloubka navíc změní jen dobu čekání."
+          },
+          "plusMenu": {
+            "body": "Tlačítko + otevře nabídku editoru: připojit soubor, přepnout model, spustit dovednost, odkázat na spis nebo zapnout připojený server nástrojů. Následující kroky ji otevřou a projdou volbu po volbě.",
+            "title": "Vše, co lze přidat, je pod +",
+            "when": "Sáhněte po +, kdykoli odpověď závisí na něčem, co asistent zatím nevidí: na souboru, spisu, interním pravidle nebo živém externím zdroji."
+          },
+          "send": {
+            "body": "Odešle zprávu se vším, co jste výše připojili, na co jste odkázali nebo co jste zapnuli. Editor zůstane na místě, takže navazujícím dotazem doplníte to, co v první odpovědi chybělo.",
+            "title": "Odešlete zprávu",
+            "when": "Odesílejte brzy. Krátká první odpověď ukáže, jaký kontext ještě chybí, rychleji než dokonale vymyšlené první zadání."
+          },
+          "skills": {
+            "body": "Vloží uložené zadání nebo dovednost, kterou napsal váš tým: schválený soubor pokynů, díky němuž se stejný úkol pokaždé zpracuje stejně.",
+            "title": "Dovednosti a uložená zadání",
+            "when": "Použijte je, když se úkol opakuje a záleží na formulaci, například u standardní revize smlouvy nebo shrnutí zadání zakázky. Napsáním / v prázdném editoru otevřete tento seznam přímo."
+          }
+        },
+        "title": "Ptejte se se správným kontextem"
+      },
+      "documents": {
+        "description": "Nahrajte soubor a otevřete jej",
+        "steps": {
+          "browse": {
+            "body": "Najděte a otevřete libovolný přidaný dokument.",
+            "title": "Procházet dokumenty"
+          },
+          "upload": {
+            "body": "Přidejte soubor a přeneste jej do pracovního prostoru.",
+            "title": "Nahrát dokument"
+          }
+        },
+        "title": "Práce s dokumenty"
+      },
+      "playbooks": {
+        "description": "Proměňte znalosti z revize v opakovaně použitelný playbook",
+        "steps": {
+          "create": {
+            "body": "Založte playbook a zachyťte, jak má revize probíhat.",
+            "title": "Vytvořit playbook"
+          }
+        },
+        "title": "Sestavit playbook"
+      },
+      "tabularReview": {
+        "description": "Získejte odpovědi napříč mnoha soubory najednou",
+        "steps": {
+          "addColumn": {
+            "body": "Přidejte otázku, na kterou se odpoví v každém řádku.",
+            "title": "Přidat sloupec"
+          }
+        },
+        "title": "Revize v tabulce"
+      },
+      "workflows": {
+        "description": "Zřetězte kroky do opakovatelného pracovního postupu",
+        "steps": {
+          "create": {
+            "body": "Zkombinujte kroky, které se na vyžádání spustí společně.",
+            "title": "Vytvořit pracovní postup"
+          }
+        },
+        "title": "Automatizovat pracovní postup"
+      }
+    },
+    "unavailable": "Tento průvodce nyní není k dispozici",
+    "whenLabel": "Kdy to použít:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Duplikování spisu",
     "emptyDocuments": {
       "description": "Nahrajte dokumenty a získejte extrakci tabulek, organizaci dokumentů, úpravy přímo v prohlížeči a vyhledávání napříč tímto spisem.",
-      "title": "Nahrajte první dokumenty",
-      "videoLabel": "Přehled dokumentů ve spisu"
+      "title": "Nahrajte první dokumenty"
     },
     "emptyMatters": {
       "description": "Vytvořte spis pro organizaci dokumentů, kontaktů, úkolů a týmové aktivity na jednom místě.",
-      "title": "Vytvořte první spis",
-      "videoLabel": "Přehled nastavení spisu"
+      "title": "Vytvořte první spis"
     },
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
     "exportToCsv": "Uložit do CSV",

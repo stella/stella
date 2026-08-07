@@ -29,20 +29,36 @@ function MenuPreviewLayout({
   );
 }
 
+type PreviewPaneProps = React.ComponentProps<"div"> & {
+  /**
+   * `default` is the side pane described above. `thumbnail` is the same pane
+   * shrunk to sit inline inside a card or list row beside its own label.
+   */
+  size?: "default" | "thumbnail";
+};
+
 function PreviewPane({
   children,
   className,
+  size = "default",
   ...props
-}: React.ComponentProps<"div">) {
+}: PreviewPaneProps) {
   return (
     <div
-      className={cn("pointer-events-none w-64 p-2 select-none", className)}
+      className={cn(
+        "pointer-events-none select-none",
+        size === "thumbnail" ? "w-32" : "w-64 p-2",
+        className,
+      )}
       data-slot="preview-pane"
       {...props}
     >
       <div
         aria-hidden
-        className="bg-muted/40 h-36 overflow-hidden rounded-md border p-2"
+        className={cn(
+          "bg-muted/40 overflow-hidden rounded-md border",
+          size === "thumbnail" ? "h-20 p-1.5" : "h-36 p-2",
+        )}
       >
         {children}
       </div>

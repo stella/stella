@@ -824,7 +824,6 @@
     },
     "back": "Atgal",
     "cancel": "Atšaukti",
-    "captions": "Subtitrai",
     "caseLaw": "Teismų praktika",
     "category": "Kategorija",
     "categoryName": "Kategorijos pavadinimas",
@@ -962,7 +961,6 @@
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
-    "playVideo": "Paleisti vaizdo įrašą",
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Šiame DOCX yra struktūrų, kurių Folio negali saugiai perrašyti. Kad failas nesugadintumėte, atsisiųskite jį ir redaguokite programoje Word.",
     "unsupportedDocxEditTitle": "Redagavimas užblokuotas",
     "viewOnly": "Tik peržiūra"
+  },
+  "guides": {
+    "action": {
+      "replay": "Kartoti",
+      "skip": "Praleisti",
+      "start": "Pradėti"
+    },
+    "checklist": {
+      "progress": "Atlikta {completed} iš {total}"
+    },
+    "community": {
+      "body": "Gaukite pagalbos iš kitų naudotojų ir kūrėjų mūsų bendruomenės pokalbiuose.",
+      "directLinkLabel": "Susisiekite su mumis",
+      "directPrompt": "Norite tiesiogiai pasikalbėti su komanda?",
+      "linkLabel": "Atverti bendruomenės forumą"
+    },
+    "help": {
+      "buttonLabel": "Pagalba ir vadovai",
+      "subtitle": "Interaktyvios darbo srities apžvalgos",
+      "tabs": {
+        "community": "Bendruomenė",
+        "guides": "Vadovai"
+      },
+      "title": "Pagalba ir vadovai"
+    },
+    "leave": "Išeiti iš vadovo",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Praleista"
+    },
+    "tours": {
+      "chat": {
+        "description": "Kas slypi po mygtuku + ir kada rinktis kurią parinktį",
+        "examplePrompt": "Apibendrinkite pagrindines šios sutarties prievoles",
+        "steps": {
+          "anonymize": {
+            "body": "Prieš užklausai paliekant jūsų darbo sritį pakeičia vardus, identifikatorius ir kitus asmens duomenis vietaženkliais, o jūsų skaitomame atsakyme grąžina tikrąsias reikšmes.",
+            "title": "Siųsti nuasmenintai",
+            "when": "Įjunkite, kai tekste yra asmens duomenų, o klausimas nepriklauso nuo to, kas yra šalys. Palikite išjungtą, kai svarbiausia būtent tapatybė, pavyzdžiui, tikrinant interesų konfliktą: vietaženkliai pašalina būtent tai, ko klausiate."
+          },
+          "attach": {
+            "body": "Įkelia failą iš šio įrenginio į pokalbį. Jis perskaitomas tik šioje gijoje ir į bylą neįsegamas.",
+            "title": "Prisegti failą",
+            "when": "Tinka vienkartiniam dokumentui, kurio nereikia saugoti: ką tik el. paštu gautam projektui, skenuotai kopijai ar skaičiuoklei, kurios tenorite santraukos."
+          },
+          "composer": {
+            "body": "Paprasta kalba parašykite, ko norite: kokia užduotis, su kuo ji susijusi ir kokios formos atsakymo tikitės. Visa kita čia tik patikslina jau parašytą užklausą.",
+            "title": "Pradėkite nuo užklausos"
+          },
+          "context": {
+            "body": "Nukreipia užklausą į jau įsegtą medžiagą: į visą bylą arba į vieną joje esantį failą. Niekas neįkeliama ir nekopijuojama; nuoroda veda ten, kur medžiaga jau yra.",
+            "title": "Nurodyti bylą arba failą",
+            "when": "Naudokite vietoj failo prisegimo visada, kai dokumentas jau įsegtas. Nurodykite bylą, kai asistentas turi peržvelgti ją visą; vieną failą, kai tiksliai žinote, kurį skaityti. Įvedus @ tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
+          },
+          "mcp": {
+            "body": "Įjungia arba išjungia prijungto serverio įrankius jūsų pokalbiuose: įmonių registrus, vidines sistemas, visa, ką prijungė jūsų komanda.",
+            "title": "Prijungti įrankių serveriai",
+            "when": "Įjunkite, kai atsakymui reikia gyvų duomenų iš už darbo srities ribų. Kitus palikite išjungtus: kuo mažiau įrankių žaidime, tuo siauresnis ir nuspėjamesnis atsakymas."
+          },
+          "models": {
+            "body": "Pakeičia modelį tik šiame pokalbyje. Visos kitos gijos lieka su jūsų darbo srities numatytuoju modeliu.",
+            "title": "Kuris modelis",
+            "when": "Į stipresnį modelį pereikite atidžiam skaitymui, rengimui ir visur, kur klaidingas atsakymas brangiai kainuoja. Paieškoms, santraukoms ir greitiems perrašymams likite prie numatytojo: papildomas gylis ten pakeičia tik laukimo laiką."
+          },
+          "plusMenu": {
+            "body": "Mygtukas + atveria redaktoriaus meniu: prisegti failą, pakeisti modelį, paleisti įgūdį, nurodyti bylą arba įjungti prijungtą įrankių serverį. Kiti žingsniai jį atveria ir aptaria kiekvieną parinktį iš eilės.",
+            "title": "Viskas, ką galima pridėti, slypi po +",
+            "when": "Naudokite +, kai atsakymas priklauso nuo to, ko asistentas dar nemato: failo, bylos, vidinės taisyklės ar gyvo išorinio šaltinio."
+          },
+          "send": {
+            "body": "Išsiunčia žinutę su viskuo, ką aukščiau prisegėte, nurodėte ar įjungėte. Redaktorius lieka vietoje, todėl tolesniu klausimu galėsite pridėti tai, ko trūko pirmame atsakyme.",
+            "title": "Išsiųskite žinutę",
+            "when": "Siųskite anksti. Trumpas pirmas atsakymas greičiau parodo, kokio konteksto dar trūksta, nei tobulai nušlifuota pirma užklausa."
+          },
+          "skills": {
+            "body": "Įterpia įrašytą užklausą arba jūsų komandos parašytą įgūdį: peržiūrėtą nurodymų rinkinį, kuris tą pačią užduotį kaskart atlieka vienodai.",
+            "title": "Įgūdžiai ir įrašytos užklausos",
+            "when": "Naudokite, kai užduotis kartojasi ir svarbi formuluotė, pavyzdžiui, tikrinant tipinę sutartį ar rengiant priėmimo santrauką. Įvedus / tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
+          }
+        },
+        "title": "Klauskite su tinkamu kontekstu"
+      },
+      "documents": {
+        "description": "Įkelkite failą ir jį atidarykite",
+        "steps": {
+          "browse": {
+            "body": "Raskite ir atidarykite bet kurį pridėtą dokumentą.",
+            "title": "Naršyti dokumentus"
+          },
+          "upload": {
+            "body": "Pridėkite failą, kad įtrauktumėte jį į savo darbo sritį.",
+            "title": "Įkelti dokumentą"
+          }
+        },
+        "title": "Darbas su dokumentais"
+      },
+      "playbooks": {
+        "description": "Paverskite peržiūros patirtį pakartotinai naudojamu planu",
+        "steps": {
+          "create": {
+            "body": "Pradėkite planą, kad užfiksuotumėte, kaip turėtų vykti peržiūra.",
+            "title": "Sukurti planą"
+          }
+        },
+        "title": "Sudaryti planą"
+      },
+      "tabularReview": {
+        "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
+        "steps": {
+          "addColumn": {
+            "body": "Pridėkite klausimą, į kurį bus atsakyta kiekvienoje eilutėje.",
+            "title": "Pridėti stulpelį"
+          }
+        },
+        "title": "Peržiūra lentelėje"
+      },
+      "workflows": {
+        "description": "Sujunkite veiksmus į pakartojamą darbo eigą",
+        "steps": {
+          "create": {
+            "body": "Derinkite veiksmus, kurie pagal poreikį vykdomi kartu.",
+            "title": "Sukurti darbo eigą"
+          }
+        },
+        "title": "Automatizuoti darbo eigą"
+      }
+    },
+    "unavailable": "Šis vadovas šiuo metu nepasiekiamas",
+    "whenLabel": "Kada naudoti:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Byla dubliuojama",
     "emptyDocuments": {
       "description": "Įkelkite dokumentus, kad galėtumėte išgauti lenteles, tvarkyti dokumentus, redaguoti naršyklėje ir ieškoti šioje byloje.",
-      "title": "Įkelkite pirmuosius dokumentus",
-      "videoLabel": "Bylos dokumentų apžvalga"
+      "title": "Įkelkite pirmuosius dokumentus"
     },
     "emptyMatters": {
       "description": "Sukurkite bylą, kad vienoje vietoje tvarkytumėte dokumentus, kontaktus, užduotis ir komandos veiklą.",
-      "title": "Sukurkite pirmąją bylą",
-      "videoLabel": "Bylos nustatymo apžvalga"
+      "title": "Sukurkite pirmąją bylą"
     },
     "entitiesCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
     "exportToCsv": "Eksportuoti į CSV",

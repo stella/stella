@@ -824,7 +824,6 @@
     },
     "back": "Retour",
     "cancel": "Annuler",
-    "captions": "Légendes",
     "caseLaw": "Jurisprudence",
     "category": "Catégorie",
     "categoryName": "Nom de la catégorie",
@@ -962,7 +961,6 @@
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "pin": "Épingler",
-    "playVideo": "Lire la vidéo",
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Ce fichier DOCX contient des structures que Folio ne peut pas réécrire sans risque. Pour éviter de corrompre le fichier, téléchargez-le et modifiez-le dans Word.",
     "unsupportedDocxEditTitle": "Modification bloquée",
     "viewOnly": "Lecture seule"
+  },
+  "guides": {
+    "action": {
+      "replay": "Rejouer",
+      "skip": "Ignorer",
+      "start": "Commencer"
+    },
+    "checklist": {
+      "progress": "{completed} sur {total} terminés"
+    },
+    "community": {
+      "body": "Obtenez de l'aide auprès d'autres utilisateurs et des développeurs dans notre chat communautaire.",
+      "directLinkLabel": "Parlons-en",
+      "directPrompt": "Vous souhaitez parler directement à l’équipe ?",
+      "linkLabel": "Ouvrir le forum communautaire"
+    },
+    "help": {
+      "buttonLabel": "Aide et guides",
+      "subtitle": "Visites interactives de votre espace de travail",
+      "tabs": {
+        "community": "Communauté",
+        "guides": "Tutoriels"
+      },
+      "title": "Aide et guides"
+    },
+    "leave": "Quitter le guide",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Ignoré"
+    },
+    "tours": {
+      "chat": {
+        "description": "Ce que contient le bouton + et quand choisir chaque option",
+        "examplePrompt": "Résumez les principales obligations de ce contrat",
+        "steps": {
+          "anonymize": {
+            "body": "Remplace les noms, identifiants et autres données personnelles par des marqueurs avant que la demande ne quitte votre espace de travail, puis rétablit les vraies valeurs dans la réponse que vous lisez.",
+            "title": "Envoyer en mode anonymisé",
+            "when": "Activez-le quand le texte contient des données personnelles et que la question ne dépend pas de l'identité des parties. Laissez-le désactivé quand l'identité est précisément l'objet, par exemple un contrôle de conflits d'intérêts : les marqueurs retirent exactement ce sur quoi vous interrogez."
+          },
+          "attach": {
+            "body": "Téléverse un fichier depuis cet appareil dans la conversation. Il est lu pour ce fil uniquement et n'est pas classé dans un dossier.",
+            "title": "Joindre un fichier",
+            "when": "Idéal pour un document ponctuel que vous n'avez pas besoin de conserver : un projet reçu à l'instant par courriel, un scan, un tableur dont vous voulez seulement un résumé."
+          },
+          "composer": {
+            "body": "Écrivez en langage courant ce que vous voulez : la tâche, ce qu'elle concerne et la forme de réponse attendue. Tout le reste ne fait qu'affiner une demande déjà rédigée.",
+            "title": "Commencer par la demande"
+          },
+          "context": {
+            "body": "Oriente la demande vers un élément déjà classé : un dossier entier ou un seul fichier qu'il contient. Rien n'est téléversé ni copié ; la référence est un lien vers l'endroit où l'élément se trouve déjà.",
+            "title": "Référencer un dossier ou un fichier",
+            "when": "À utiliser au lieu d'une pièce jointe dès que le document est déjà classé. Référencez le dossier pour que l'assistant le parcoure en entier ; un seul fichier quand vous savez précisément lequel lire. Taper @ dans un éditeur vide ouvre directement cette liste."
+          },
+          "mcp": {
+            "body": "Active ou désactive les outils d'un serveur connecté pour vos discussions : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
+            "title": "Serveurs d'outils connectés",
+            "when": "Activez-en un quand la réponse a besoin de données à jour venant de l'extérieur de l'espace de travail. Laissez les autres désactivés : moins il y a d'outils en jeu, plus la réponse est ciblée et prévisible."
+          },
+          "models": {
+            "body": "Change de modèle pour cette conversation seulement. Tous les autres fils gardent le modèle par défaut de votre espace de travail.",
+            "title": "Quel modèle",
+            "when": "Passez à un modèle plus puissant pour la lecture attentive, la rédaction et tout ce dont une erreur coûte cher. Restez sur le modèle par défaut pour les recherches, les résumés et les reformulations rapides : la profondeur supplémentaire n'y change que le temps d'attente."
+          },
+          "plusMenu": {
+            "body": "Le bouton + ouvre le menu de l'éditeur : joindre un fichier, changer de modèle, lancer une compétence, référencer un dossier ou activer un serveur d'outils connecté. Les étapes suivantes l'ouvrent et passent chaque option en revue.",
+            "title": "Tout ce que vous pouvez ajouter est sous +",
+            "when": "Utilisez + dès que la réponse dépend de quelque chose que l'assistant ne voit pas encore : un fichier, un dossier, une règle interne ou une source externe à jour."
+          },
+          "send": {
+            "body": "Envoie le message avec tout ce que vous avez joint, référencé ou activé ci-dessus. L'éditeur reste en place, si bien qu'une question de suivi peut ajouter ce qui manquait à la première réponse.",
+            "title": "Envoyer la demande",
+            "when": "Envoyez tôt. Une première réponse courte montre plus vite quel contexte manque encore qu'un premier prompt parfait."
+          },
+          "skills": {
+            "body": "Insère un prompt enregistré ou une compétence rédigée par votre équipe : un jeu d'instructions validé qui traite la même tâche de la même façon à chaque fois.",
+            "title": "Compétences et prompts enregistrés",
+            "when": "Utilisez-en une quand la tâche se répète et que la formulation compte, par exemple une revue de contrat standard ou un résumé d'ouverture. Taper / dans un éditeur vide ouvre directement cette liste."
+          }
+        },
+        "title": "Poser la question avec le bon contexte"
+      },
+      "documents": {
+        "description": "Importez un fichier et ouvrez-le",
+        "steps": {
+          "browse": {
+            "body": "Trouvez et ouvrez tout document que vous avez ajouté.",
+            "title": "Parcourir vos documents"
+          },
+          "upload": {
+            "body": "Ajoutez un fichier pour le placer dans votre espace de travail.",
+            "title": "Importer un document"
+          }
+        },
+        "title": "Travailler avec des documents"
+      },
+      "playbooks": {
+        "description": "Transformez votre savoir-faire de révision en playbook réutilisable",
+        "steps": {
+          "create": {
+            "body": "Démarrez un playbook pour consigner le déroulement souhaité de la révision.",
+            "title": "Créer un playbook"
+          }
+        },
+        "title": "Concevoir un playbook"
+      },
+      "tabularReview": {
+        "description": "Extrayez des réponses de nombreux fichiers en une seule fois",
+        "steps": {
+          "addColumn": {
+            "body": "Ajoutez une question à traiter sur chaque ligne.",
+            "title": "Ajouter une colonne"
+          }
+        },
+        "title": "Réviser dans un tableau"
+      },
+      "workflows": {
+        "description": "Enchaînez des étapes dans un flux de travail reproductible",
+        "steps": {
+          "create": {
+            "body": "Combinez des étapes qui se lancent ensemble à la demande.",
+            "title": "Créer un flux de travail"
+          }
+        },
+        "title": "Automatiser un flux de travail"
+      }
+    },
+    "unavailable": "Ce guide est indisponible pour le moment",
+    "whenLabel": "Quand l'utiliser :"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Duplication du dossier",
     "emptyDocuments": {
       "description": "Importez des documents pour activer l’extraction de tableaux, l’organisation des documents, la modification dans le navigateur et la recherche dans ce dossier.",
-      "title": "Importez vos premiers documents",
-      "videoLabel": "Vue d’ensemble des documents du dossier"
+      "title": "Importez vos premiers documents"
     },
     "emptyMatters": {
       "description": "Créez un dossier pour organiser les documents, contacts, tâches et l’activité de l’équipe au même endroit.",
-      "title": "Créez votre premier dossier",
-      "videoLabel": "Présentation de la configuration du dossier"
+      "title": "Créez votre premier dossier"
     },
     "entitiesCount": "{count, plural, one {# élément} other {# éléments}}",
     "exportToCsv": "Exporter en CSV",

@@ -107,6 +107,7 @@
     "class-variance-authority": "^0.7.1",
     "cobe": "^2.0.1",
     "diff": "catalog:",
+    "driver.js": "1.8.0",
     "immer": "^11.1.15",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.2.108",
@@ -147,6 +148,7 @@
     "jszip": "catalog:",
     "react-grab": "^0.1.50",
     "rollup-plugin-visualizer": "^7.0.1",
+    "typescript": "catalog:",
     "unified": "^11.0.5"
   },
   "crawlPosture": "mixed"

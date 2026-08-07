@@ -68,6 +68,8 @@ import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -121,6 +123,7 @@ export type ComposerContextMenuProps = {
 
 type ComposerPlusMenuProps = {
   disabled: boolean;
+  guideAnchorsEnabled?: boolean;
   onOpenFilePicker: () => void;
   models?: ComposerModelsMenuProps | undefined;
   skills?: ComposerSkillsMenuProps | undefined;
@@ -145,6 +148,7 @@ type ComposerPlusMenuProps = {
 // composer — is what triggers the fetches.
 export const ComposerPlusMenu = ({
   disabled,
+  guideAnchorsEnabled = false,
   onOpenFilePicker,
   models,
   skills,
@@ -236,6 +240,7 @@ export const ComposerPlusMenu = ({
         disabled={disabled}
         render={
           <Button
+            {...guideAnchor(GUIDE_ANCHORS.chatToolsButton, guideAnchorsEnabled)}
             className={cn(
               "border-border size-7 shrink-0 rounded-full border",
               triggerClassName,
@@ -249,14 +254,24 @@ export const ComposerPlusMenu = ({
         <PlusIcon className="size-4" />
       </MenuTrigger>
       <MenuPopup align="start" side="top">
-        <MenuItem onClick={onOpenFilePicker}>
+        <MenuItem
+          {...guideAnchor(GUIDE_ANCHORS.chatMenuAttach, guideAnchorsEnabled)}
+          onClick={onOpenFilePicker}
+        >
           <PaperclipIcon />
           {t("chat.attachFile")}
         </MenuItem>
-        {models && <ComposerModelsSubmenu enabled={menuOpen} models={models} />}
+        {models && (
+          <ComposerModelsSubmenu
+            enabled={menuOpen}
+            guideAnchorsEnabled={guideAnchorsEnabled}
+            models={models}
+          />
+        )}
         {skills && (
           <ComposerSkillsSubmenu
             enabled={menuOpen}
+            guideAnchorsEnabled={guideAnchorsEnabled}
             onOpenChange={setSkillsSubmenuOpen}
             open={skillsSubmenuOpen}
             skills={skills}
@@ -266,11 +281,18 @@ export const ComposerPlusMenu = ({
           <ComposerContextSubmenu
             context={context}
             enabled={menuOpen}
+            guideAnchorsEnabled={guideAnchorsEnabled}
             onOpenChange={setContextSubmenuOpen}
             open={contextSubmenuOpen}
           />
         )}
-        {mcp && <ComposerMcpSubmenu enabled={menuOpen} mcp={mcp} />}
+        {mcp && (
+          <ComposerMcpSubmenu
+            enabled={menuOpen}
+            guideAnchorsEnabled={guideAnchorsEnabled}
+            mcp={mcp}
+          />
+        )}
       </MenuPopup>
     </Menu>
   );
@@ -351,9 +373,11 @@ const useFocusSearchOnOpen = (
 
 const ComposerModelsSubmenu = ({
   enabled,
+  guideAnchorsEnabled,
   models,
 }: {
   enabled: boolean;
+  guideAnchorsEnabled: boolean;
   models: ComposerModelsMenuProps;
 }) => {
   const t = useTranslations();
@@ -402,7 +426,9 @@ const ComposerModelsSubmenu = ({
         }
       }}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger
+        {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
+      >
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
@@ -484,11 +510,13 @@ const itemSecondary = (item: SlashItem): string => {
 
 const ComposerSkillsSubmenu = ({
   enabled,
+  guideAnchorsEnabled,
   onOpenChange,
   open,
   skills,
 }: {
   enabled: boolean;
+  guideAnchorsEnabled: boolean;
   /** Controlled open state so the "/" trigger can force this specific
    *  submenu open alongside the root menu. */
   onOpenChange: (open: boolean) => void;
@@ -581,7 +609,9 @@ const ComposerSkillsSubmenu = ({
       }}
       open={open}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger
+        {...guideAnchor(GUIDE_ANCHORS.chatMenuSkills, guideAnchorsEnabled)}
+      >
         <BookOpenIcon />
         {/* Reuses the chat landing page's "Skills" section label (same
             value) instead of adding a duplicate key. */}
@@ -641,11 +671,13 @@ type ContextMatter = {
 const ComposerContextSubmenu = ({
   context,
   enabled,
+  guideAnchorsEnabled,
   onOpenChange,
   open,
 }: {
   context: ComposerContextMenuProps;
   enabled: boolean;
+  guideAnchorsEnabled: boolean;
   /** Controlled open state so the "@" trigger can force this specific
    *  submenu open alongside the root menu. */
   onOpenChange: (open: boolean) => void;
@@ -679,7 +711,9 @@ const ComposerContextSubmenu = ({
       }}
       open={open}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger
+        {...guideAnchor(GUIDE_ANCHORS.chatMenuContext, guideAnchorsEnabled)}
+      >
         <AtSignIcon />
         {t("chat.composerMenu.context")}
       </MenuSubTrigger>
@@ -882,9 +916,11 @@ const ComposerContextMatterSub = ({
 
 const ComposerMcpSubmenu = ({
   enabled,
+  guideAnchorsEnabled,
   mcp,
 }: {
   enabled: boolean;
+  guideAnchorsEnabled: boolean;
   mcp: { activeOrganizationId: string };
 }) => {
   const t = useTranslations();
@@ -1004,7 +1040,9 @@ const ComposerMcpSubmenu = ({
         }
       }}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger
+        {...guideAnchor(GUIDE_ANCHORS.chatMenuMcp, guideAnchorsEnabled)}
+      >
         <ServerIcon />
         {t("chat.composerMenu.mcpServers")}
       </MenuSubTrigger>

@@ -824,7 +824,6 @@
     },
     "back": "Tagasi",
     "cancel": "Tühista",
-    "captions": "Subtiitrid",
     "caseLaw": "Kohtupraktika",
     "category": "Kategooria",
     "categoryName": "Kategooria nimi",
@@ -962,7 +961,6 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
-    "playVideo": "Esita video",
     "playbooks": "Playbookid",
     "preparing": "Ettevalmistamine…",
     "preview": "Eelvaade",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "See DOCX sisaldab struktuure, mida Folio ei suuda turvaliselt ümber kirjutada. Faili rikkumise vältimiseks laadi see alla ja muuda Wordis.",
     "unsupportedDocxEditTitle": "Muutmine on blokeeritud",
     "viewOnly": "Ainult vaatamiseks"
+  },
+  "guides": {
+    "action": {
+      "replay": "Esita uuesti",
+      "skip": "Jäta vahele",
+      "start": "Alusta"
+    },
+    "checklist": {
+      "progress": "{completed} / {total} tehtud"
+    },
+    "community": {
+      "body": "Küsi abi teistelt kasutajatelt ja arendajatelt meie kogukonna vestluses.",
+      "directLinkLabel": "Võtke meiega ühendust",
+      "directPrompt": "Kas soovite meeskonnaga otse rääkida?",
+      "linkLabel": "Ava kogukonna foorum"
+    },
+    "help": {
+      "buttonLabel": "Abi ja juhendid",
+      "subtitle": "Interaktiivsed tuurid tööruumis",
+      "tabs": {
+        "community": "Kogukond",
+        "guides": "Juhendid"
+      },
+      "title": "Abi ja juhendid"
+    },
+    "leave": "Välju juhendist",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Vahele jäetud"
+    },
+    "tours": {
+      "chat": {
+        "description": "Mis peitub nupu + taga ja millal kumbagi valikut kasutada",
+        "examplePrompt": "Võta kokku selle lepingu peamised kohustused",
+        "steps": {
+          "anonymize": {
+            "body": "Asendab nimed, tunnused ja muud isikuandmed kohatäidetega, enne kui päring sinu tööruumist lahkub, ning taastab õiged väärtused vastuses, mida loed.",
+            "title": "Saada anonüümitult",
+            "when": "Lülita sisse, kui tekst sisaldab isikuandmeid ja küsimus ei sõltu sellest, kes on osapooled. Jäta välja, kui just isik ongi küsimuse tuum, näiteks huvide konflikti kontrollimisel: kohatäited eemaldavad täpselt selle, mille kohta küsid."
+          },
+          "attach": {
+            "body": "Laadib faili sellest seadmest vestlusesse. Seda loetakse ainult selle lõime jaoks ja toimikusse seda ei salvestata.",
+            "title": "Lisa fail",
+            "when": "Sobib ühekordsele dokumendile, mida pole vaja alles hoida: äsja e-postiga saabunud kavand, skann või tabel, millest soovid vaid kokkuvõtet."
+          },
+          "composer": {
+            "body": "Kirjuta tavakeeles, mida soovid: ülesanne, mida see puudutab ja millises vormis vastust ootad. Kõik ülejäänu siin üksnes teravdab juba kirja pandud soovi.",
+            "title": "Alusta soovist"
+          },
+          "context": {
+            "body": "Suunab päringu materjalile, mis on juba salvestatud: tervele toimikule või ühele failile selle sees. Midagi ei laadita üles ega kopeerita; viide osutab kohta, kus materjal juba asub.",
+            "title": "Viita toimikule või failile",
+            "when": "Kasuta seda faili lisamise asemel alati, kui dokument on juba salvestatud. Viita toimikule, kui assistent peaks selle tervikuna läbi vaatama; ühele failile siis, kui tead täpselt, mida lugeda. @ tühjas redaktoris avab selle loendi otse."
+          },
+          "mcp": {
+            "body": "Lülitab ühendatud serveri tööriistad sinu vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille sinu meeskond on ühendanud.",
+            "title": "Ühendatud tööriistaserverid",
+            "when": "Lülita sisse, kui vastus vajab värskeid andmeid väljastpoolt tööruumi. Ülejäänud jäta välja: mida vähem tööriistu mängus, seda kitsam ja etteaimatavam on vastus."
+          },
+          "models": {
+            "body": "Vahetab mudelit ainult selles vestluses. Kõik teised lõimed jäävad sinu tööruumi vaikemudeli juurde.",
+            "title": "Milline mudel",
+            "when": "Vali tugevam mudel tähelepaneliku lugemise, koostamise ja kõige jaoks, kus vale vastus läheb kalliks. Otsingute, kokkuvõtete ja kiirete ümbersõnastuste puhul jää vaikemudeli juurde: lisasügavus muudab seal ainult ooteaega."
+          },
+          "plusMenu": {
+            "body": "Nupp + avab redaktori menüü: lisa fail, vaheta mudelit, käivita oskus, viita toimikule või lülita sisse ühendatud tööriistaserver. Järgmised sammud avavad menüü ja käivad valikud ükshaaval läbi.",
+            "title": "Kõik lisatav peitub nupu + taga",
+            "when": "Kasuta nuppu +, kui vastus sõltub millestki, mida assistent veel ei näe: failist, toimikust, majasisesest reeglist või värskest välisallikast."
+          },
+          "send": {
+            "body": "Saadab sõnumi koos kõigega, mille eespool lisasid, millele viitasid või mille sisse lülitasid. Redaktor jääb paigale, nii et järelküsimusega saad lisada selle, mis esimesest vastusest puudus.",
+            "title": "Saada teele",
+            "when": "Saada varakult. Lühike esimene vastus näitab kiiremini, milline kontekst veel puudub, kui täiuslikuks lihvitud esimene viip."
+          },
+          "skills": {
+            "body": "Lisab salvestatud viiba või sinu meeskonna kirjutatud oskuse: üle vaadatud juhiste kogumi, mis lahendab sama ülesande iga kord ühtmoodi.",
+            "title": "Oskused ja salvestatud viibad",
+            "when": "Kasuta siis, kui ülesanne kordub ja sõnastus loeb, näiteks tavapärase lepingu ülevaatamisel või vastuvõtu kokkuvõttes. / tühjas redaktoris avab selle loendi otse."
+          }
+        },
+        "title": "Küsi õige kontekstiga"
+      },
+      "documents": {
+        "description": "Laadi fail üles ja ava see",
+        "steps": {
+          "browse": {
+            "body": "Leia ja ava mis tahes lisatud dokument.",
+            "title": "Sirvi oma dokumente"
+          },
+          "upload": {
+            "body": "Lisa fail, et tuua see oma tööruumi.",
+            "title": "Laadi dokument üles"
+          }
+        },
+        "title": "Töö dokumentidega"
+      },
+      "playbooks": {
+        "description": "Muuda ülevaatuse oskusteave korduvkasutatavaks juhendiks",
+        "steps": {
+          "create": {
+            "body": "Alusta juhendit, et jäädvustada, kuidas ülevaatus peaks toimuma.",
+            "title": "Loo juhend"
+          }
+        },
+        "title": "Koosta juhend"
+      },
+      "tabularReview": {
+        "description": "Eralda vastused paljudest failidest korraga",
+        "steps": {
+          "addColumn": {
+            "body": "Lisa küsimus, millele igal real vastata.",
+            "title": "Lisa veerg"
+          }
+        },
+        "title": "Ülevaatus tabelis"
+      },
+      "workflows": {
+        "description": "Ühenda sammud korratavaks töövooks",
+        "steps": {
+          "create": {
+            "body": "Kombineeri sammud, mis käivituvad nõudmisel koos.",
+            "title": "Loo töövoog"
+          }
+        },
+        "title": "Automatiseeri töövoog"
+      }
+    },
+    "unavailable": "See juhend ei ole praegu saadaval",
+    "whenLabel": "Millal kasutada:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Toimiku dubleerimine",
     "emptyDocuments": {
       "description": "Laadige dokumendid üles, et võimaldada tabelite eraldamist, dokumentide korrastamist, brauseris redigeerimist ja otsingut selles toimikus.",
-      "title": "Laadige üles esimesed dokumendid",
-      "videoLabel": "Toimiku dokumentide ülevaade"
+      "title": "Laadige üles esimesed dokumendid"
     },
     "emptyMatters": {
       "description": "Looge toimik, et korraldada dokumendid, kontaktid, ülesanded ja tiimi tegevus ühes kohas.",
-      "title": "Looge esimene toimik",
-      "videoLabel": "Toimiku seadistamise ülevaade"
+      "title": "Looge esimene toimik"
     },
     "entitiesCount": "{count, plural, one {# element} other {# elementi}}",
     "exportToCsv": "Ekspordi CSV-sse",

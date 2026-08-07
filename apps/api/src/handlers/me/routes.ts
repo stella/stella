@@ -6,6 +6,7 @@ import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
+import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import { sessionAuthMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -21,6 +22,9 @@ export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
   .get("/oauth-connections", listOAuthConnections.handler)
+  .patch("/guide-progress", updateGuideProgress.handler, {
+    body: updateGuideProgress.config.body,
+  })
   .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
     params: disconnectOAuthConnection.config.params,
   })

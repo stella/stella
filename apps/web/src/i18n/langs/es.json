@@ -824,7 +824,6 @@
     },
     "back": "Volver",
     "cancel": "Cancelar",
-    "captions": "Subtítulos",
     "caseLaw": "Jurisprudencia",
     "category": "Categoría",
     "categoryName": "Nombre de categoría",
@@ -962,7 +961,6 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
-    "playVideo": "Reproducir vídeo",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Este DOCX contiene estructuras que Folio no puede reescribir de forma segura. Para no dañar el archivo, descárgalo y edítalo en Word.",
     "unsupportedDocxEditTitle": "Edición bloqueada",
     "viewOnly": "Solo lectura"
+  },
+  "guides": {
+    "action": {
+      "replay": "Repetir",
+      "skip": "Omitir",
+      "start": "Empezar"
+    },
+    "checklist": {
+      "progress": "{completed} de {total} completado"
+    },
+    "community": {
+      "body": "Obtén ayuda de otros usuarios y de los desarrolladores en nuestro chat de la comunidad.",
+      "directLinkLabel": "Habla con nosotros",
+      "directPrompt": "¿Quieres hablar directamente con el equipo?",
+      "linkLabel": "Abrir el foro de la comunidad"
+    },
+    "help": {
+      "buttonLabel": "Ayuda y guías",
+      "subtitle": "Recorridos interactivos del espacio de trabajo",
+      "tabs": {
+        "community": "Comunidad",
+        "guides": "Guías"
+      },
+      "title": "Ayuda y guías"
+    },
+    "leave": "Salir de la guía",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Omitido"
+    },
+    "tours": {
+      "chat": {
+        "description": "Qué hay detrás del botón + y cuándo recurrir a cada opción",
+        "examplePrompt": "Resume las obligaciones clave de este contrato",
+        "steps": {
+          "anonymize": {
+            "body": "Sustituye nombres, identificadores y otros datos personales por marcadores antes de que la petición salga de tu espacio de trabajo, y repone los valores reales en la respuesta que lees.",
+            "title": "Enviar anonimizado",
+            "when": "Actívalo cuando el texto contenga datos personales y la pregunta no dependa de quiénes son las partes. Déjalo apagado cuando lo que importa es la identidad, por ejemplo en una comprobación de conflictos: los marcadores quitan justo aquello por lo que preguntas."
+          },
+          "attach": {
+            "body": "Sube un archivo desde este dispositivo a la conversación. Se lee solo para este hilo y no queda archivado en un asunto.",
+            "title": "Adjuntar un archivo",
+            "when": "Ideal para un documento puntual que no necesitas conservar: un borrador recién llegado por correo, un escaneo, una hoja de cálculo de la que solo quieres un resumen."
+          },
+          "composer": {
+            "body": "Escribe en lenguaje llano lo que quieres: la tarea, sobre qué trata y en qué forma esperas la respuesta. Todo lo demás solo afina una petición que ya has escrito.",
+            "title": "Empieza por la petición"
+          },
+          "context": {
+            "body": "Dirige la petición a material ya archivado: un asunto entero o un único archivo dentro de él. No se sube ni se copia nada; la referencia es un enlace al lugar donde el material ya está.",
+            "title": "Referenciar un asunto o un archivo",
+            "when": "Úsalo en lugar de adjuntar siempre que el documento ya esté archivado. Referencia el asunto para que el asistente lo recorra entero; un solo archivo cuando sabes exactamente cuál debe leer. Escribir @ en un editor vacío abre esta lista directamente."
+          },
+          "mcp": {
+            "body": "Activa o desactiva las herramientas de un servidor conectado en tus chats: registros mercantiles, sistemas internos, cualquier cosa que tu equipo haya conectado.",
+            "title": "Servidores de herramientas conectados",
+            "when": "Activa uno cuando la respuesta necesite datos actualizados de fuera del espacio de trabajo. Deja el resto apagado: cuantas menos herramientas en juego, más acotada y previsible es la respuesta."
+          },
+          "models": {
+            "body": "Cambia el modelo solo en esta conversación. El resto de hilos mantiene el modelo predeterminado de tu espacio de trabajo.",
+            "title": "Qué modelo",
+            "when": "Sube a un modelo más potente para la lectura atenta, la redacción y todo aquello donde una respuesta equivocada sale cara. Quédate en el predeterminado para búsquedas, resúmenes y reescrituras rápidas: ahí la profundidad extra solo cambia la espera."
+          },
+          "plusMenu": {
+            "body": "El botón + abre el menú del editor: adjuntar un archivo, cambiar de modelo, ejecutar una habilidad, referenciar un asunto o activar un servidor de herramientas conectado. Los pasos siguientes lo abren y recorren cada opción.",
+            "title": "Todo lo que puedes añadir está detrás de +",
+            "when": "Recurre a + siempre que la respuesta dependa de algo que el asistente aún no ve: un archivo, un asunto, una regla interna o una fuente externa actualizada."
+          },
+          "send": {
+            "body": "Envía el mensaje junto con todo lo que hayas adjuntado, referenciado o activado arriba. El editor se queda donde está, así que una pregunta de seguimiento puede añadir lo que faltó en la primera respuesta.",
+            "title": "Envíalo",
+            "when": "Envía pronto. Una primera respuesta corta indica antes qué contexto falta que un primer prompt perfecto."
+          },
+          "skills": {
+            "body": "Inserta un prompt guardado o una habilidad escrita por tu equipo: un conjunto de instrucciones revisado que resuelve la misma tarea igual cada vez.",
+            "title": "Habilidades y prompts guardados",
+            "when": "Úsala cuando la tarea se repite y la formulación importa, por ejemplo una revisión de contrato estándar o un resumen de apertura. Escribir / en un editor vacío abre esta lista directamente."
+          }
+        },
+        "title": "Preguntar con el contexto adecuado"
+      },
+      "documents": {
+        "description": "Sube un archivo y ábrelo",
+        "steps": {
+          "browse": {
+            "body": "Encuentra y abre cualquier documento que hayas añadido.",
+            "title": "Explora tus documentos"
+          },
+          "upload": {
+            "body": "Añade un archivo para incorporarlo a tu espacio de trabajo.",
+            "title": "Subir un documento"
+          }
+        },
+        "title": "Trabaja con documentos"
+      },
+      "playbooks": {
+        "description": "Convierte el conocimiento de revisión en un playbook reutilizable",
+        "steps": {
+          "create": {
+            "body": "Inicia un playbook para registrar cómo debe realizarse una revisión.",
+            "title": "Crear un playbook"
+          }
+        },
+        "title": "Crea un playbook"
+      },
+      "tabularReview": {
+        "description": "Extrae respuestas de muchos archivos a la vez",
+        "steps": {
+          "addColumn": {
+            "body": "Añade una pregunta para responder en cada fila.",
+            "title": "Añadir una columna"
+          }
+        },
+        "title": "Revisa en una tabla"
+      },
+      "workflows": {
+        "description": "Encadena pasos en un flujo de trabajo repetible",
+        "steps": {
+          "create": {
+            "body": "Combina pasos que se ejecutan juntos cuando lo necesites.",
+            "title": "Crear un flujo de trabajo"
+          }
+        },
+        "title": "Automatiza un flujo de trabajo"
+      }
+    },
+    "unavailable": "Esta guía no está disponible en este momento",
+    "whenLabel": "Cuándo usarlo:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Duplicando asunto",
     "emptyDocuments": {
       "description": "Suba documentos para habilitar la extracción de tablas, la organización de documentos, la edición en el navegador y la búsqueda en este asunto.",
-      "title": "Suba sus primeros documentos",
-      "videoLabel": "Resumen de documentos del asunto"
+      "title": "Suba sus primeros documentos"
     },
     "emptyMatters": {
       "description": "Cree un asunto para organizar documentos, contactos, tareas y actividad del equipo en un solo lugar.",
-      "title": "Cree su primer asunto",
-      "videoLabel": "Resumen de configuración del asunto"
+      "title": "Cree su primer asunto"
     },
     "entitiesCount": "{count, plural, one {# elemento} other {# elementos}}",
     "exportToCsv": "Exportar a CSV",

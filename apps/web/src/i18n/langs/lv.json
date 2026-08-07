@@ -824,7 +824,6 @@
     },
     "back": "Atpakaļ",
     "cancel": "Atcelt",
-    "captions": "Subtitri",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
     "categoryName": "Kategorijas nosaukums",
@@ -962,7 +961,6 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
-    "playVideo": "Atskaņot video",
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Šajā DOCX failā ir struktūras, ko Folio nevar droši pārrakstīt. Lai nesabojātu failu, lejupielādējiet to un rediģējiet programmā Word.",
     "unsupportedDocxEditTitle": "Rediģēšana bloķēta",
     "viewOnly": "Tikai skatīšana"
+  },
+  "guides": {
+    "action": {
+      "replay": "Atkārtot",
+      "skip": "Izlaist",
+      "start": "Sākt"
+    },
+    "checklist": {
+      "progress": "Pabeigti {completed} no {total}"
+    },
+    "community": {
+      "body": "Saņemiet palīdzību no citiem lietotājiem un izstrādātājiem mūsu kopienas tērzēšanā.",
+      "directLinkLabel": "Sazinieties ar mums",
+      "directPrompt": "Vai vēlaties runāt tieši ar komandu?",
+      "linkLabel": "Atvērt kopienas forumu"
+    },
+    "help": {
+      "buttonLabel": "Palīdzība un ceļveži",
+      "subtitle": "Interaktīvi darba vietas pārskati",
+      "tabs": {
+        "community": "Kopiena",
+        "guides": "Ceļveži"
+      },
+      "title": "Palīdzība un ceļveži"
+    },
+    "leave": "Iziet no ceļveža",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Izlaists"
+    },
+    "tours": {
+      "chat": {
+        "description": "Kas slēpjas aiz pogas + un kad izvēlēties katru iespēju",
+        "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
+        "steps": {
+          "anonymize": {
+            "body": "Aizstāj vārdus, identifikatorus un citus personas datus ar vietturiem, pirms pieprasījums atstāj jūsu darbvietu, un atbildē, ko lasāt, atjauno īstās vērtības.",
+            "title": "Sūtīt anonimizēti",
+            "when": "Ieslēdziet, kad tekstā ir personas dati un atbilde nav atkarīga no tā, kas ir puses. Atstājiet izslēgtu, kad svarīga ir tieši identitāte, piemēram, interešu konflikta pārbaudē: vietturi aizvāc tieši to, par ko jautājat."
+          },
+          "attach": {
+            "body": "Augšupielādē failu no šīs ierīces sarunā. To izlasa tikai šai sarakstei, un tas netiek iekļauts lietā.",
+            "title": "Pievienot failu",
+            "when": "Der vienreizējam dokumentam, kas nav jāsaglabā: tikko pa e-pastu saņemtam projektam, skenējumam vai izklājlapai, no kuras vēlaties tikai kopsavilkumu."
+          },
+          "composer": {
+            "body": "Vienkāršā valodā uzrakstiet, ko vēlaties: uzdevumu, uz ko tas attiecas un kādā formā gaidāt atbildi. Viss pārējais šeit tikai precizē jau uzrakstīto pieprasījumu.",
+            "title": "Sāciet ar pieprasījumu"
+          },
+          "context": {
+            "body": "Novirza pieprasījumu uz jau reģistrētu materiālu: uz visu lietu vai vienu failu tajā. Nekas netiek augšupielādēts un nekas netiek kopēts; atsauce ir saite uz vietu, kur materiāls jau glabājas.",
+            "title": "Atsaukties uz lietu vai failu",
+            "when": "Izmantojiet to pievienošanas vietā vienmēr, kad dokuments jau ir reģistrēts. Atsaucieties uz lietu, ja asistentam tā jāpārskata visa; uz vienu failu, ja precīzi zināt, kurš jāizlasa. Ierakstot @ tukšā redaktorā, šis saraksts atveras uzreiz."
+          },
+          "mcp": {
+            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "title": "Pievienotie rīku serveri",
+            "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
+          },
+          "models": {
+            "body": "Maina modeli tikai šajā sarunā. Visas pārējās sarakstes paliek pie jūsu darbvietas noklusējuma modeļa.",
+            "title": "Kurš modelis",
+            "when": "Uz jaudīgāku modeli pārejiet rūpīgai lasīšanai, sagatavošanai un visur, kur nepareiza atbilde dārgi maksā. Meklējumiem, kopsavilkumiem un ātriem pārrakstījumiem palieciet pie noklusējuma: papildu dziļums tur maina vienīgi gaidīšanas laiku."
+          },
+          "plusMenu": {
+            "body": "Poga + atver redaktora izvēlni: pievienot failu, mainīt modeli, palaist prasmi, atsaukties uz lietu vai ieslēgt pievienotu rīku serveri. Nākamie soļi to atver un pēc kārtas izskata katru iespēju.",
+            "title": "Viss pievienojamais slēpjas aiz +",
+            "when": "Izmantojiet +, kad atbilde ir atkarīga no kaut kā, ko asistents vēl neredz: no faila, lietas, iekšēja noteikuma vai aktuāla ārēja avota."
+          },
+          "send": {
+            "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
+            "title": "Nosūtiet ziņu",
+            "when": "Sūtiet agri. Īsa pirmā atbilde ātrāk parāda, kāda konteksta vēl trūkst, nekā perfekti noslīpēta pirmā uzvedne."
+          },
+          "skills": {
+            "body": "Ievieto saglabātu uzvedni vai jūsu komandas uzrakstītu prasmi: pārbaudītu norādījumu kopumu, kas vienu un to pašu uzdevumu katru reizi izpilda vienādi.",
+            "title": "Prasmes un saglabātās uzvednes",
+            "when": "Izmantojiet, kad uzdevums atkārtojas un formulējums ir svarīgs, piemēram, tipveida līguma pārbaudē vai uzņemšanas kopsavilkumā. Ierakstot / tukšā redaktorā, šis saraksts atveras uzreiz."
+          }
+        },
+        "title": "Jautājiet ar pareizo kontekstu"
+      },
+      "documents": {
+        "description": "Augšupielādējiet failu un atveriet to",
+        "steps": {
+          "browse": {
+            "body": "Atrodiet un atveriet jebkuru pievienoto dokumentu.",
+            "title": "Pārlūkot dokumentus"
+          },
+          "upload": {
+            "body": "Pievienojiet failu, lai ienestu to savā darba vietā.",
+            "title": "Augšupielādēt dokumentu"
+          }
+        },
+        "title": "Darbs ar dokumentiem"
+      },
+      "playbooks": {
+        "description": "Pārvērtiet pārskatīšanas zināšanas atkārtoti izmantojamā plānā",
+        "steps": {
+          "create": {
+            "body": "Sāciet plānu, lai fiksētu, kā jānorit pārskatīšanai.",
+            "title": "Izveidot plānu"
+          }
+        },
+        "title": "Izstrādāt plānu"
+      },
+      "tabularReview": {
+        "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
+        "steps": {
+          "addColumn": {
+            "body": "Pievienojiet jautājumu, uz kuru atbildēt katrā rindā.",
+            "title": "Pievienot kolonnu"
+          }
+        },
+        "title": "Pārskatīšana tabulā"
+      },
+      "workflows": {
+        "description": "Sasaistiet soļus atkārtojamā darbplūsmā",
+        "steps": {
+          "create": {
+            "body": "Apvienojiet soļus, kas pēc pieprasījuma tiek izpildīti kopā.",
+            "title": "Izveidot darbplūsmu"
+          }
+        },
+        "title": "Automatizēt darbplūsmu"
+      }
+    },
+    "unavailable": "Šis ceļvedis pašlaik nav pieejams",
+    "whenLabel": "Kad to izmantot:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Dublē lietu",
     "emptyDocuments": {
       "description": "Augšupielādējiet dokumentus, lai iespējotu tabulu izguvi, dokumentu kārtošanu, rediģēšanu pārlūkā un meklēšanu šajā lietā.",
-      "title": "Augšupielādējiet pirmos dokumentus",
-      "videoLabel": "Lietas dokumentu pārskats"
+      "title": "Augšupielādējiet pirmos dokumentus"
     },
     "emptyMatters": {
       "description": "Izveidojiet lietu, lai vienuviet organizētu dokumentus, kontaktpersonas, uzdevumus un komandas aktivitātes.",
-      "title": "Izveidojiet pirmo lietu",
-      "videoLabel": "Lietas iestatīšanas pārskats"
+      "title": "Izveidojiet pirmo lietu"
     },
     "entitiesCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
     "exportToCsv": "Eksportēt uz CSV",

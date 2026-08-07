@@ -33,6 +33,11 @@ export const user = pgTable(
     // shortcut (the default registry then applies unchanged). Structurally
     // validated and length-capped before persistence (see `user-shortcuts.ts`).
     userShortcuts: text("user_shortcuts"),
+    // Serialized JSON map of onboarding-guide tour id -> status. Rides the
+    // session query so in-app guide progress follows the user across devices
+    // without a separate table or per-route request. Shape/length validated in
+    // the Better Auth create/update hooks.
+    guideProgress: text("guide_progress"),
     // ISO 3166-1 alpha-2 code captured from the edge at signup; seeds the
     // practice-jurisdiction suggestion in onboarding. Null when the edge
     // did not advertise a country (local dev, self-hosted without a proxy).
@@ -74,6 +79,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
   userShortcuts: "user_shortcuts",
+  guideProgress: "guide_progress",
   detectedCountry: "detected_country",
   twoFactorEnabled: "two_factor_enabled",
   deletedAt: "deleted_at",

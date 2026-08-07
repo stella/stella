@@ -32,6 +32,7 @@ export const noopAnalytics: Analytics = {
     logDevError(error, devErrorContext(context));
   },
   capturePageViewed: noop,
+  captureGuideStepSkipped: noop,
   identifyUser: noop,
   reset: noop,
 };

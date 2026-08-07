@@ -7,7 +7,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 
 import { EmptyScreen } from "@/components/empty-screen";
-import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type EmptyStateProps = {
@@ -110,10 +109,6 @@ const WorkspaceUploadEmptyScreen = ({
           onClick: () => fileInputRef.current?.click(),
         }}
         title={title}
-        video={{
-          ...EMPTY_SCREEN_MATTERS_VIDEO,
-          title: tWorkspaces("emptyMatters.videoLabel"),
-        }}
       />
       <input
         className="sr-only"

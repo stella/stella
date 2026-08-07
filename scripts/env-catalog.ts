@@ -190,8 +190,6 @@ const EXAMPLE_VALUES: Record<string, string> = {
   USE_MOCK_AI: "true",
   VITE_API_URL: "http://localhost:3001",
   VITE_COLLAB_URL: "ws://localhost:3002",
-  VITE_EMPTY_STATE_MATTERS_VIDEO_URL:
-    "https://assets.stll.app/empty-states/matters-intro.mp4",
   VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
@@ -315,10 +313,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show Microsoft login only when the API has matching OAuth credentials.",
   VITE_COLLAB_URL:
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
-  VITE_EMPTY_STATE_MATTERS_VIDEO_URL:
-    "Public URL for the Matters onboarding video. Unset uses only the bundled poster.",
   VITE_FEEDBACK_EMAIL_TO:
     "Recipient for the in-app feedback button. Unset hides the button.",
+  VITE_GUIDES_ENABLED: "Show the in-app interactive guides.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -554,7 +551,6 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "GOTENBERG_API_BASIC_AUTH_USERNAME",
   "PUBLIC_API_URL",
   "PUBLIC_APP_URL",
-  "PUBLIC_EMPTY_STATE_MATTERS_VIDEO_URL",
   "PUBLIC_FEEDBACK_EMAIL_TO",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
   "PUBLIC_LAW_ENABLED",

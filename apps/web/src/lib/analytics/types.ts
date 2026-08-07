@@ -4,6 +4,7 @@ export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
   identify: "$identify",
   pageViewed: "page_viewed",
+  guideStepSkipped: "guide_step_skipped",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -12,9 +13,27 @@ export type WebAnalyticsEvent =
 export type Analytics = {
   captureError: (error: unknown, context?: ErrorCaptureContext) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
+  captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
 };
+
+// Why a guide step could not be shown against the live app surface. Emitted so
+// divergence between a tour and the real UI is observed, not silent.
+//
+// Discriminated rather than a flat record with optional fields: `tour-empty`
+// describes the whole run and has no one anchor to name, and a placeholder
+// there would be a value no dashboard filter can match.
+export type GuideStepSkippedProperties =
+  // `anchor-missing` is real divergence: the anchor should have been on the
+  // page. `anchor-pending` is declared-unwired, so it is expected noise until
+  // the owning surface lands.
+  | {
+      reason: "anchor-missing" | "anchor-pending";
+      tourId: string;
+      anchorId: string;
+    }
+  | { reason: "tour-empty"; tourId: string };
 
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }

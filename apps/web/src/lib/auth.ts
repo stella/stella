@@ -112,6 +112,7 @@ const authClientPlugins = [
       timezoneId: { type: "string" },
       wordEditShortcut: { type: "string", required: false },
       userShortcuts: { type: "string", required: false },
+      guideProgress: { type: "string", required: false },
       detectedCountry: { type: "string", required: false },
     },
   }),

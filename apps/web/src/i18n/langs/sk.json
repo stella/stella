@@ -824,7 +824,6 @@
     },
     "back": "Späť",
     "cancel": "Zrušiť",
-    "captions": "Titulky",
     "caseLaw": "Judikatúra",
     "category": "Kategória",
     "categoryName": "Názov kategórie",
@@ -962,7 +961,6 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "pin": "Pripnúť",
-    "playVideo": "Prehrať video",
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
@@ -1669,6 +1667,135 @@
     "unsupportedDocxEditDescription": "Tento DOCX obsahuje štruktúry, ktoré Folio nedokáže bezpečne prepísať. Aby sa súbor nepoškodil, stiahnite ho a upravte vo Worde.",
     "unsupportedDocxEditTitle": "Úpravy zablokované",
     "viewOnly": "Len na čítanie"
+  },
+  "guides": {
+    "action": {
+      "replay": "Prehrať znova",
+      "skip": "Preskočiť",
+      "start": "Začať"
+    },
+    "checklist": {
+      "progress": "{completed} z {total} dokončených"
+    },
+    "community": {
+      "body": "Získajte pomoc od ostatných používateľov a vývojárov v našom komunitnom chate.",
+      "directLinkLabel": "Ozvite sa nám",
+      "directPrompt": "Chcete sa porozprávať priamo s tímom?",
+      "linkLabel": "Otvoriť komunitné fórum"
+    },
+    "help": {
+      "buttonLabel": "Pomocník a sprievodca",
+      "subtitle": "Interaktívne prehliadky pracovného priestoru",
+      "tabs": {
+        "community": "Komunita",
+        "guides": "Sprievodca"
+      },
+      "title": "Pomocník a sprievodca"
+    },
+    "leave": "Ukončiť sprievodcu",
+    "minutes": "{count} min.",
+    "status": {
+      "skipped": "Preskočené"
+    },
+    "tours": {
+      "chat": {
+        "description": "Čo sa skrýva pod tlačidlom + a kedy siahnuť po ktorej možnosti",
+        "examplePrompt": "Zhrňte kľúčové povinnosti v tejto zmluve",
+        "steps": {
+          "anonymize": {
+            "body": "Nahradí mená, identifikátory a ďalšie osobné údaje zástupnými hodnotami skôr, než dopyt opustí váš pracovný priestor, a v odpovedi, ktorú čítate, ich zase doplní späť.",
+            "title": "Odoslať anonymizovane",
+            "when": "Zapnite, keď text obsahuje osobné údaje a otázka nestojí na tom, kto sú strany. Nechajte vypnuté, keď ide práve o totožnosť, napríklad pri kontrole konfliktu záujmov: zástupné hodnoty odoberú presne to, na čo sa pýtate."
+          },
+          "attach": {
+            "body": "Nahrá súbor z tohto zariadenia do konverzácie. Prečíta sa len pre toto vlákno a nezaloží sa do spisu.",
+            "title": "Priložiť súbor",
+            "when": "Hodí sa pre jednorazový dokument, ktorý nepotrebujete uchovať: návrh, ktorý práve prišiel e-mailom, sken alebo tabuľku, ktorú chcete len zhrnúť."
+          },
+          "composer": {
+            "body": "Napíšte bežnou rečou, čo chcete: akú úlohu, čoho sa týka a akú podobu odpovede čakáte. Všetko ostatné tu už len spresňuje zadanie, ktoré ste napísali.",
+            "title": "Začnite zadaním"
+          },
+          "context": {
+            "body": "Nasmeruje dopyt na materiál, ktorý je už založený: na celý spis alebo na jediný súbor v ňom. Nič sa nenahráva ani nekopíruje; odkaz vedie tam, kde materiál už leží.",
+            "title": "Odkázať na spis alebo súbor",
+            "when": "Použite namiesto priloženia súboru vždy, keď je dokument už založený. Odkážte na spis, ak sa má asistent pozrieť naprieč ním; na jeden súbor, keď presne viete, ktorý má čítať. Napísaním @ v prázdnom editore otvoríte tento zoznam priamo."
+          },
+          "mcp": {
+            "body": "Zapína a vypína nástroje pripojeného servera pre vaše chaty: obchodné registre, interné systémy, čokoľvek, čo váš tím pripojil.",
+            "title": "Pripojené servery nástrojov",
+            "when": "Zapnite, keď odpoveď potrebuje živé dáta zvonku. Ostatné nechajte vypnuté: čím menej nástrojov je v hre, tým užšia a predvídateľnejšia odpoveď."
+          },
+          "models": {
+            "body": "Prepne model len pre túto konverzáciu. Ostatné vlákna si ponechajú predvolený model nastavený pre váš pracovný priestor.",
+            "title": "Ktorý model",
+            "when": "Silnejší model zvoľte na pozorné čítanie, koncipovanie a všade, kde je nesprávna odpoveď drahá. Pri vyhľadávaní, zhrnutiach a rýchlych prepisoch zostaňte pri predvolenom: hĺbka navyše zmení len čas čakania."
+          },
+          "plusMenu": {
+            "body": "Tlačidlo + otvorí ponuku editora: priložiť súbor, prepnúť model, spustiť zručnosť, odkázať na spis alebo zapnúť pripojený server nástrojov. Nasledujúce kroky ju otvoria a prejdú možnosť po možnosti.",
+            "title": "Všetko, čo sa dá pridať, je pod +",
+            "when": "Siahnite po +, kedykoľvek odpoveď závisí od niečoho, čo asistent zatiaľ nevidí: od súboru, spisu, interného pravidla alebo živého externého zdroja."
+          },
+          "send": {
+            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
+            "title": "Odošlite správu",
+            "when": "Odosielajte skoro. Krátka prvá odpoveď ukáže, aký kontext ešte chýba, rýchlejšie než dokonale vymyslené prvé zadanie."
+          },
+          "skills": {
+            "body": "Vloží uložené zadanie alebo zručnosť, ktorú napísal váš tím: schválený súbor pokynov, vďaka ktorému sa tá istá úloha zakaždým spracuje rovnako.",
+            "title": "Zručnosti a uložené zadania",
+            "when": "Použite ich, keď sa úloha opakuje a záleží na formulácii, napríklad pri štandardnej revízii zmluvy alebo zhrnutí zadania zákazky. Napísaním / v prázdnom editore otvoríte tento zoznam priamo."
+          }
+        },
+        "title": "Pýtajte sa so správnym kontextom"
+      },
+      "documents": {
+        "description": "Nahrajte súbor a otvorte ho",
+        "steps": {
+          "browse": {
+            "body": "Nájdite a otvorte ľubovoľný pridaný dokument.",
+            "title": "Prehľadávať dokumenty"
+          },
+          "upload": {
+            "body": "Pridajte súbor a preneste ho do pracovného priestoru.",
+            "title": "Nahrať dokument"
+          }
+        },
+        "title": "Práca s dokumentmi"
+      },
+      "playbooks": {
+        "description": "Premeňte znalosti z revízie na opakovane použiteľný playbook",
+        "steps": {
+          "create": {
+            "body": "Založte playbook a zachyťte, ako má revízia prebiehať.",
+            "title": "Vytvoriť playbook"
+          }
+        },
+        "title": "Zostaviť playbook"
+      },
+      "tabularReview": {
+        "description": "Získajte odpovede naprieč mnohými súbormi naraz",
+        "steps": {
+          "addColumn": {
+            "body": "Pridajte otázku, na ktorú sa odpovie v každom riadku.",
+            "title": "Pridať stĺpec"
+          }
+        },
+        "title": "Revízia v tabuľke"
+      },
+      "workflows": {
+        "description": "Zreťazte kroky do opakovateľného pracovného postupu",
+        "steps": {
+          "create": {
+            "body": "Skombinujte kroky, ktoré sa na požiadanie spustia spoločne.",
+            "title": "Vytvoriť pracovný postup"
+          }
+        },
+        "title": "Automatizovať pracovný postup"
+      }
+    },
+    "unavailable": "Tento sprievodca momentálne nie je k dispozícii",
+    "whenLabel": "Kedy to použiť:"
   },
   "inspector": {
     "anonymization": {
@@ -3207,13 +3334,11 @@
     "duplicatingWorkspace": "Duplikovanie spisu",
     "emptyDocuments": {
       "description": "Nahrajte dokumenty, aby ste mohli extrahovať tabuľky, organizovať dokumenty, upravovať ich priamo v prehliadači a vyhľadávať v tomto spise.",
-      "title": "Nahrajte prvé dokumenty",
-      "videoLabel": "Prehľad dokumentov v spise"
+      "title": "Nahrajte prvé dokumenty"
     },
     "emptyMatters": {
       "description": "Vytvorte spis na organizáciu dokumentov, kontaktov, úloh a tímovej aktivity na jednom mieste.",
-      "title": "Vytvorte prvý spis",
-      "videoLabel": "Prehľad nastavenia spisu"
+      "title": "Vytvorte prvý spis"
     },
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položiek}}",
     "exportToCsv": "Exportovať do CSV",

@@ -21,6 +21,8 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -30,6 +32,9 @@ type ChatInputSurfaceProps = {
   className?: string;
   controller: ChatEditorController;
   disabled?: boolean;
+  /** Register this as the canonical main-chat guide surface. Shared and
+   * nested chat composers leave this off so tours cannot target duplicates. */
+  guideAnchorsEnabled?: boolean;
   /**
    * Editor stature. `compact` (default) is the one-line follow-up bar: an
    * empty composer collapses to a single placeholder line. `large` is the
@@ -89,6 +94,7 @@ export const ChatInputSurface = ({
   className,
   controller,
   disabled = false,
+  guideAnchorsEnabled = false,
   variant = "compact",
   onSubmit,
   onFocusChange,
@@ -177,6 +183,7 @@ export const ChatInputSurface = ({
     // handlers so the row sits outside the border but still inside scope.
     <div className={cn("flex flex-col", className)}>
       <div
+        {...guideAnchor(GUIDE_ANCHORS.chatComposer, guideAnchorsEnabled)}
         className={cn(
           "bg-background rounded-lg border",
           "transition-colors",
@@ -257,6 +264,7 @@ export const ChatInputSurface = ({
               )}
             >
               <ComposerPlusMenu
+                guideAnchorsEnabled={guideAnchorsEnabled}
                 context={
                   context
                     ? {
@@ -308,6 +316,7 @@ export const ChatInputSurface = ({
                   this surface cannot render a second, parallel control. */}
               <ChatComposerActionButton
                 canSend={!submitDisabled && canSubmit}
+                guideAnchorsEnabled={guideAnchorsEnabled}
                 isGenerating={isGenerating}
                 onSend={() => {
                   detached(submitDraft(), "ChatInputSurface");
