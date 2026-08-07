@@ -1,0 +1,11 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["vite/client"]
+  },
+  "include": ["src/mcp/apps/**/*.ts"]
+}

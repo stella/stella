@@ -29,6 +29,7 @@ const registryEnumOf = (
   )?.inputSchema.properties?.["registry"];
   if (
     registry !== undefined &&
+    registry !== null &&
     typeof registry === "object" &&
     "enum" in registry &&
     Array.isArray(registry.enum)
@@ -172,7 +173,9 @@ describe("toMcpTools input schema conversion", () => {
     } as const satisfies McpToolDefinition["inputSchema"];
 
     expect(
-      toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
-    ).toEqual(inputSchema);
+      JSON.stringify(
+        toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
+      ),
+    ).toBe(JSON.stringify(inputSchema));
   });
 });

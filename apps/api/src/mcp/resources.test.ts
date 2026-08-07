@@ -1,8 +1,12 @@
+import { McpUiResourceMetaSchema } from "@modelcontextprotocol/ext-apps";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { ProtocolError } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
+import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { DIRECTIVE_KINDS } from "@stll/template-conditions";
 
+import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
@@ -10,6 +14,10 @@ const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 describe("MCP resources", () => {
+  test("shares the official MCP Apps resource MIME type", () => {
+    expect(MCP_APP_RESOURCE_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
+  });
+
   test("lists the public static resources in both modes", () => {
     for (const mode of ["default", "anonymized"] as const) {
       const resources = listMcpResources(mode);
@@ -22,8 +30,8 @@ describe("MCP resources", () => {
     }
   });
 
-  test("reads the marker reference contents built from the canonical grammar", () => {
-    const result = readMcpResource(MARKER_REFERENCE_URI, "default");
+  test("reads the marker reference contents built from the canonical grammar", async () => {
+    const result = await readMcpResource(MARKER_REFERENCE_URI, "default");
     expect(result.contents).toHaveLength(1);
     const [content] = result.contents;
     if (!content || !("text" in content)) {
@@ -33,14 +41,14 @@ describe("MCP resources", () => {
     expect(content.text).toBe(buildMarkerReference());
   });
 
-  test("exposes canonical lowercase branding and verified product links", () => {
+  test("exposes canonical lowercase branding and verified product links", async () => {
     const resources = listMcpResources("default");
     const about = resources.find(
       (resource) => resource.uri === PRODUCT_IDENTITY_URI,
     );
     expect(about?.mimeType).toBe("application/json");
 
-    const result = readMcpResource(PRODUCT_IDENTITY_URI, "default");
+    const result = await readMcpResource(PRODUCT_IDENTITY_URI, "default");
     const content = result.contents.at(0);
     if (!content || !("text" in content)) {
       throw new Error("Expected product identity text content");
@@ -58,8 +66,8 @@ describe("MCP resources", () => {
     });
   });
 
-  test("the marker reference covers every canonical directive kind", () => {
-    const result = readMcpResource(MARKER_REFERENCE_URI, "default");
+  test("the marker reference covers every canonical directive kind", async () => {
+    const result = await readMcpResource(MARKER_REFERENCE_URI, "default");
     const content = result.contents.at(0);
     if (!content || !("text" in content)) {
       throw new Error("Expected marker reference text content");
@@ -72,9 +80,40 @@ describe("MCP resources", () => {
     }
   });
 
-  test("throws for an unknown resource uri", () => {
-    expect(() =>
-      readMcpResource("stella://reference/unknown", "default"),
-    ).toThrow(ProtocolError);
+  test("serves the bundled document upload MCP App with storage-only CSP", async () => {
+    expect(listMcpResources("default")).not.toContainEqual(
+      expect.objectContaining({ uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI }),
+    );
+
+    const result = await readMcpResource(
+      DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+      "default",
+    );
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected document upload app HTML");
+    }
+    expect(content.mimeType).toBe("text/html;profile=mcp-app");
+    expect(content.text).toContain("Upload a new version");
+    expect(content.text).toContain("ui/initialize");
+    expect(
+      McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
+    ).toBe(true);
+    expect(content._meta).toMatchObject({
+      ui: {
+        csp: { connectDomains: expect.any(Array) },
+        prefersBorder: true,
+      },
+    });
+  });
+
+  test("throws for an unknown resource uri", async () => {
+    let caught: unknown;
+    try {
+      await readMcpResource("stella://reference/unknown", "default");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ProtocolError);
   });
 });

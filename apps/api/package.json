@@ -7,6 +7,8 @@
     "./types": "./src/types.ts"
   },
   "scripts": {
+    "build": "bun run build:mcp-apps",
+    "build:mcp-apps": "MCP_APP_INPUT=app.html vite build --config scripts/mcp-app.vite.config.ts",
     "test": "bun scripts/run-tests.ts",
     "test:property": "bun scripts/run-tests.ts --property",
     "dev": "bun run docker:dev && NODE_ENV=development bun --port 3001 --preload ./src/dev/register-mock-ai.ts --watch src/server.ts",
@@ -14,7 +16,7 @@
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.contracts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.contracts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.mcp-apps.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/api",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "oxfmt .",
@@ -22,7 +24,7 @@
     "canary:mcp": "bun --env-file=.env.example src/scripts/mcp-canary.ts",
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
-    "db:push": "bun run --env-file=.env drizzle-kit push",
+    "db:push": "bun run db:migrate && bun run --env-file=.env drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
     "db:seed-dev": "bun scripts/seed-dev.ts",
     "db:seed-matter-activity": "bun scripts/seed-matter-activity.ts",
@@ -115,13 +117,17 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@faker-js/faker": "^10.5.0",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "@types/nodemailer": "^8.0.1",
     "drizzle-kit": "catalog:",
     "expect-type": "^1.4.0",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-singlefile": "^2.3.0"
   },
   "crawlPosture": "unserved"
 }

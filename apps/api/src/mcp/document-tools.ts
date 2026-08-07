@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import {
   and,
@@ -13,6 +14,7 @@ import {
 } from "drizzle-orm";
 import * as v from "valibot";
 
+import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { entities, entityVersions, properties } from "@/api/db/schema";
@@ -64,6 +66,11 @@ import type { VersionDiffSegment } from "@/api/lib/text-diff";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+  UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
+  uploadRemoteDocumentVersion,
+} from "@/api/mcp/document-file-upload";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -98,6 +105,7 @@ type DocumentToolName =
   | "list_documents"
   | "read_document"
   | "save_document"
+  | "upload_document_version"
   | "delete_document"
   | "list_properties"
   | "set_field_value";
@@ -599,6 +607,31 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
+    scope: "stella:documents_write",
+  },
+  {
+    _meta: {
+      ui: {
+        resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+      "openai/fileParams": ["file"],
+    },
+    annotations: {
+      title: "Upload document version",
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    description:
+      "Upload a file as a new version of an existing document. Pass entity_id " +
+      "and attach file when the host supports MCP file parameters. When file " +
+      "is omitted, opens a portable MCP App file picker in compatible hosts. " +
+      "The upload uses stella's standard presigned, checksum-verified, scanned, " +
+      "and audited file-version pipeline.",
+    inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
     scope: "stella:documents_write",
   },
   {
@@ -1687,6 +1720,57 @@ const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
   return await updateDocumentEntity({ context, input });
 };
 
+const handleUploadDocumentVersionTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  if (!Value.Check(UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA, args)) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message:
+        "Invalid input: expected { entity_id: string, file?: { download_url, file_id, mime_type?, file_name? } }",
+    });
+  }
+  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const entityId = brandPersistedEntityId(args.entity_id);
+  const owner = await resolveEntityWorkspace({ context, entityId });
+  if (owner.status !== "ok") {
+    return documentEntityNotAvailable(owner);
+  }
+  const active = ensureActiveWorkspace({
+    context,
+    workspaceId: owner.workspaceId,
+  });
+  if (typeof active !== "string") {
+    return active;
+  }
+
+  if (args.file === undefined) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: "Choose a file in the upload panel to add a new document version.",
+        },
+      ],
+      structuredContent: {
+        entityId,
+        workspaceId: owner.workspaceId,
+      },
+    };
+  }
+
+  return await uploadRemoteDocumentVersion({
+    context,
+    entityId,
+    file: args.file,
+    workspaceId: owner.workspaceId,
+  });
+};
+
 const deleteDocumentArgsSchema = v.strictObject({
   entity_id: v.pipe(v.string(), v.minLength(1)),
   version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -1992,6 +2076,7 @@ export const DOCUMENT_TOOL_HANDLERS = {
   list_properties: handleListPropertiesTool,
   read_document: handleReadDocumentTool,
   save_document: handleSaveDocumentTool,
+  [DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName]: handleUploadDocumentVersionTool,
   set_field_value: handleSetFieldValueTool,
 } satisfies Record<DocumentToolName, McpToolHandler>;
 

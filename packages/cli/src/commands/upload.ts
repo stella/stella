@@ -28,6 +28,7 @@ const optionalStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: parseString }) as const;
 
 type UploadFlags = OutputFlagValues & {
+  readonly entityId: string | undefined;
   readonly file: string;
   readonly mimeType: string | undefined;
   readonly name: string | undefined;
@@ -72,9 +73,9 @@ export const uploadCommand: Command<Context> = buildCommand<
   Context
 >({
   docs: {
-    brief: "Upload a local file as a document in one command",
+    brief: "Upload a local file as a document or new version",
     fullDescription:
-      "Reads the local file, computes its SHA-256 checksum, infers its MIME type from the standard extension database unless overridden, resolves the matter's file property when --property-id is omitted, reserves a presigned upload, PUTs the exact bytes with the signed headers, and finalizes the document. A failed PUT is abandoned automatically; a finalize failure prints the upload id so finalization can be retried without uploading the bytes again.",
+      "Reads the local file, computes its SHA-256 checksum, infers its MIME type unless overridden, reserves a presigned upload, PUTs the exact bytes with the signed headers, and finalizes it. Pass --entity-id to add a version to an existing document; omit it to create a document, resolving the matter's file property when --property-id is omitted. A failed PUT is abandoned automatically; a finalize failure prints the upload id for retry.",
   },
   func: async function func(this: Context, flags) {
     const writers = writersFor(this);
@@ -91,14 +92,27 @@ export const uploadCommand: Command<Context> = buildCommand<
       setExit(this, EXIT_CODES.auth);
       return;
     }
-    if (!scopeGranted({ token: this.token, scope: "matters_write" })) {
+    if (
+      flags.entityId !== undefined &&
+      (flags.parentId !== undefined || flags.propertyId !== undefined)
+    ) {
       writers.stderr(
-        "Missing scope stella:matters_write. Re-run 'stella auth login' to grant stella:matters_write.\n",
+        "--entity-id creates a version and cannot be combined with --parent-id or --property-id.\n",
+      );
+      setExit(this, EXIT_CODES.validation);
+      return;
+    }
+    const requiredScope =
+      flags.entityId === undefined ? "matters_write" : "documents_write";
+    if (!scopeGranted({ token: this.token, scope: requiredScope })) {
+      writers.stderr(
+        `Missing scope stella:${requiredScope}. Re-run 'stella auth login' to grant stella:${requiredScope}.\n`,
       );
       setExit(this, EXIT_CODES.auth);
       return;
     }
     if (
+      flags.entityId === undefined &&
       flags.propertyId === undefined &&
       !scopeGranted({ token: this.token, scope: "read" })
     ) {
@@ -118,9 +132,14 @@ export const uploadCommand: Command<Context> = buildCommand<
         filePath: flags.file,
         mimeType: flags.mimeType,
         name: flags.name,
-        parentId: flags.parentId,
-        propertyId: flags.propertyId,
         workspaceId: flags.workspace,
+        ...(flags.entityId === undefined
+          ? {
+              target: "new_document" as const,
+              parentId: flags.parentId,
+              propertyId: flags.propertyId,
+            }
+          : { target: "new_version" as const, entityId: flags.entityId }),
       },
     });
     if (Result.isOk(uploaded)) {
@@ -165,6 +184,9 @@ export const uploadCommand: Command<Context> = buildCommand<
         "File-property id override; by default the unique file property is discovered automatically",
       ),
       parentId: optionalStringFlag("Destination folder entity id"),
+      entityId: optionalStringFlag(
+        "Existing document entity id; when set, upload the file as its new version",
+      ),
       name: optionalStringFlag(
         "Document name override; defaults to the local file name",
       ),

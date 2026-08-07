@@ -13,6 +13,15 @@ import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
+const DEV_API_PROXY_PATHS = [
+  "/api",
+  "/v1",
+  "/mcp",
+  "/.well-known",
+  "/health",
+  "/dev-public",
+  "/oauth-ui",
+] as const;
 const APP_VERSION = readFileSync(
   path.resolve(APP_ROOT, "../../VERSION"),
   "utf-8",
@@ -146,6 +155,7 @@ const isPromiseLikePluginOption = (
 
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
+  const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
     logCapPlugin(),
     ensurePluginOption(
@@ -211,6 +221,19 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
+      ...(devApiProxyTarget
+        ? {
+            proxy: Object.fromEntries(
+              DEV_API_PROXY_PATHS.map((route) => [
+                route,
+                {
+                  changeOrigin: true,
+                  target: devApiProxyTarget,
+                },
+              ]),
+            ),
+          }
+        : {}),
       headers: {
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "credentialless",

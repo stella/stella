@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { callTool, fetchToolsListRaw } from "./mcp-client.js";
+import { respondToMcpLifecycle } from "./mcp-test-lifecycle.js";
 
 const toolsListBody = JSON.stringify({
   jsonrpc: "2.0",
@@ -11,16 +12,29 @@ const toolsListBody = JSON.stringify({
 
 describe("fetchToolsListRaw authenticated scope evidence", () => {
   test("returns effective scopes and exact scope-omitted tools attested by the server", async () => {
+    const methods: string[] = [];
     const server = Bun.serve({
       port: 0,
-      fetch: () =>
-        new Response(toolsListBody, {
-          headers: {
-            "Content-Type": "application/json",
-            "x-stella-scopes": "stella:read stella:search",
-            "x-stella-scope-omitted-tools": "save_filled_template",
-          },
-        }),
+      fetch: async (request) => {
+        if (request.method === "GET") {
+          return new Response(null, { status: 405 });
+        }
+        const body: { method?: string } = JSON.parse(await request.text());
+        if (body.method !== undefined) {
+          methods.push(body.method);
+        }
+        const lifecycle = respondToMcpLifecycle(body);
+        return (
+          lifecycle ??
+          new Response(toolsListBody, {
+            headers: {
+              "Content-Type": "application/json",
+              "x-stella-scopes": "stella:read stella:search",
+              "x-stella-scope-omitted-tools": "save_filled_template",
+            },
+          })
+        );
+      },
     });
 
     try {
@@ -38,6 +52,11 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
         expect(result.value.scopeOmittedTools).toEqual([
           "save_filled_template",
         ]);
+        expect(methods).toEqual([
+          "initialize",
+          "notifications/initialized",
+          "tools/list",
+        ]);
       }
     } finally {
       void server.stop(true);
@@ -47,10 +66,19 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
   test("leaves scope evidence absent for an older unattested server", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: () =>
-        new Response(toolsListBody, {
-          headers: { "Content-Type": "application/json" },
-        }),
+      fetch: async (request) => {
+        if (request.method === "GET") {
+          return new Response(null, { status: 405 });
+        }
+        const body: { method?: string } = JSON.parse(await request.text());
+        const lifecycle = respondToMcpLifecycle(body);
+        return (
+          lifecycle ??
+          new Response(toolsListBody, {
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+      },
     });
 
     try {
@@ -74,7 +102,15 @@ describe("tools/call timeout policy", () => {
   test("a tool-specific finite deadline can exceed the generic deadline", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: async () => {
+      fetch: async (request) => {
+        if (request.method === "GET") {
+          return new Response(null, { status: 405 });
+        }
+        const body: { method?: string } = JSON.parse(await request.text());
+        const lifecycle = respondToMcpLifecycle(body);
+        if (lifecycle !== null) {
+          return lifecycle;
+        }
         await Bun.sleep(20);
         return Response.json({
           jsonrpc: "2.0",

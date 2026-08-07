@@ -377,6 +377,43 @@ describe("invoke_capability gates", () => {
     );
   });
 
+  test("documents mode reaches the canonical entity-version reservation with its advertised scopes", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.create",
+        input: {
+          body: {
+            purpose: "entity_version",
+            entityId: "00000000-0000-4000-8000-000000000001",
+            name: "agreement.docx",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size: 42,
+            sha256Hex: "a".repeat(64),
+          },
+          params: { workspaceId: "ws_1" },
+        },
+        validateOnly: true,
+      },
+      context: createContext({
+        grantedScopes: [
+          "stella:read",
+          "stella:documents_write",
+          "stella:matters_write",
+        ],
+      }),
+      mode: "documents",
+      toolName: "invoke_capability",
+    });
+
+    expect(
+      parseToolPayload<{ valid: boolean; capability: string }>(result),
+    ).toEqual({
+      valid: true,
+      capability: "uploads.create",
+    });
+  });
+
   // Scope-gate outcome for a read capability under a given granted-scope set.
   // validateOnly stops after the scope + destructive gates, so the result is
   // never the handler's DB execution: it is `missing_scope` when the gate

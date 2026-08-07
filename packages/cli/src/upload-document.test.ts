@@ -14,6 +14,7 @@ type InvocationCall = {
 };
 
 const uploadInput: UploadDocumentInput = {
+  target: "new_document",
   filePath: "/tmp/agreement.txt",
   mimeType: "text/plain",
   name: undefined,
@@ -63,6 +64,47 @@ test("upload timeout covers a maximum-size file at the supported slow rate", () 
 });
 
 describe("document upload state machine", () => {
+  test("uploads a new version without property discovery", async () => {
+    const calls: InvocationCall[] = [];
+    const dependencies = createDependencies({
+      invoke: async (capability, input, confirm) => {
+        calls.push({ capability, input, confirm });
+        return capability === "uploads.create"
+          ? { status: "ok", payload: reservation }
+          : {
+              status: "ok",
+              payload: {
+                finalizedResult: {
+                  type: "entity_version",
+                  entityVersionId: "version-1",
+                },
+              },
+            };
+      },
+    });
+
+    const result = await uploadDocument({
+      dependencies,
+      input: {
+        target: "new_version",
+        entityId: "entity-1",
+        filePath: uploadInput.filePath,
+        mimeType: uploadInput.mimeType,
+        name: uploadInput.name,
+        workspaceId: uploadInput.workspaceId,
+      },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(calls.map(({ capability }) => capability)).toEqual([
+      "uploads.create",
+      "uploads.update",
+    ]);
+    expect(calls.at(0)?.input).toMatchObject({
+      body: { purpose: "entity_version", entityId: "entity-1" },
+    });
+  });
+
   test("discovers the file property, PUTs exact bytes and headers, then finalizes", async () => {
     const calls: InvocationCall[] = [];
     const puts: Parameters<UploadDocumentDependencies["put"]>[0][] = [];

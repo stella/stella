@@ -125,7 +125,10 @@ type McpServerDependencies = {
     scopes?: readonly string[],
   ) => Promise<McpTool[]>;
   listMcpResources: (mode: McpMode) => Resource[];
-  readMcpResource: (uri: string, mode: McpMode) => ReadResourceResult;
+  readMcpResource: (
+    uri: string,
+    mode: McpMode,
+  ) => ReadResourceResult | Promise<ReadResourceResult>;
   resolveMcpSessionContext: (
     session: McpSession,
     options: { clientIp?: string | null; request: Request },
@@ -133,8 +136,15 @@ type McpServerDependencies = {
 };
 
 const MCP_SERVER_VERSION = "0.1.0";
-const getMcpServerName = (mode: McpMode) =>
-  mode === "anonymized" ? "stella (anonymized)" : "stella";
+const getMcpServerName = (mode: McpMode) => {
+  if (mode === "anonymized") {
+    return "stella (anonymized)";
+  }
+  if (mode === "documents") {
+    return "stella (documents)";
+  }
+  return "stella";
+};
 
 const extractBearerToken = (request: Request): string | undefined => {
   const header = request.headers.get("authorization");
@@ -349,14 +359,14 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    // The SDK accepts synchronous request handlers, and both resource reads are
-    // synchronous, so neither needs an async wrapper.
     server.setRequestHandler("resources/list", () => ({
       resources: listMcpResources(mode),
     }));
 
-    server.setRequestHandler("resources/read", (resourceRequest) =>
-      readMcpResource(resourceRequest.params.uri, mode),
+    server.setRequestHandler(
+      "resources/read",
+      async (resourceRequest) =>
+        await readMcpResource(resourceRequest.params.uri, mode),
     );
 
     server.setRequestHandler("tools/call", async (toolRequest) => {

@@ -5,6 +5,8 @@ import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DISCOVERY_PATH,
+  MCP_DOCUMENTS_DISCOVERY_PATH,
+  MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/constants";
@@ -84,6 +86,8 @@ export const createMcpRoute = ({
     .get(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryHandler("anonymized"))
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(MCP_DISCOVERY_PATH, discoveryHandler())
+    .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryHandler("documents"))
     .all(
       MCP_HTTP_PATH,
       async ({ request, server }) =>
@@ -93,6 +97,15 @@ export const createMcpRoute = ({
       // The MCP transports own JSON parsing. If Elysia parses first, the
       // web-standard Request reaches them with an already-consumed body and
       // every valid JSON-RPC POST is rejected as a parse error.
+      { parse: "none" },
+    )
+    .all(
+      MCP_DOCUMENTS_HTTP_PATH,
+      async ({ request, server }) =>
+        await handleMcpTransportRoute(request, {
+          clientIp: resolveClientIp(request, server ?? null),
+          mode: "documents",
+        }),
       { parse: "none" },
     )
     .all(

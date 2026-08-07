@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light dark;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--color-text-primary, CanvasText);
+}
+
+main {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1rem;
+}
+
+#target {
+  overflow: hidden;
+  color: var(--color-text-secondary, GrayText);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+input,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--color-border-primary, ButtonBorder);
+  border-radius: 0.5rem;
+  padding: 0.6rem;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: var(--color-background-inverse, ButtonFace);
+  color: var(--color-text-inverse, ButtonText);
+  font-weight: 650;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+#status {
+  min-height: 1.2em;
+  font-size: 0.85rem;
+}
+
+#status.status-error {
+  color: var(--color-text-danger, #b42318);
+}
+
+#status.status-success {
+  color: var(--color-text-success, #067647);
+}

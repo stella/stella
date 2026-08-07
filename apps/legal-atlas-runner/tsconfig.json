@@ -31,5 +31,5 @@
     "types": ["bun"]
   },
   "include": ["src", "../api/src", "../../types"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "../api/src/mcp/apps"]
 }

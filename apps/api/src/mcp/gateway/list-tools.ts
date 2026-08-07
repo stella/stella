@@ -199,7 +199,7 @@ export const getGatewayMcpToolDefinition = async ({
   toolName: string;
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
-  if (staticTool || mode === "anonymized") {
+  if (staticTool || mode !== "default") {
     return staticTool;
   }
 
@@ -303,11 +303,8 @@ const toWireValue = (value: unknown): WireValue => {
 };
 
 const convertInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
-  const fields: {
-    [K in keyof McpToolInputSchema]: McpToolInputSchema[K];
-  } = schema;
   const converted = Object.fromEntries(
-    Object.entries(fields).map(([key, value]: [string, unknown]) => [
+    Object.entries(schema).map(([key, value]: [string, unknown]) => [
       key,
       toWireValue(value),
     ]),
@@ -340,11 +337,13 @@ const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
-  definitions.map(({ annotations, description, inputSchema, name }) => ({
+  definitions.map(({ _meta, annotations, description, inputSchema, name }) => ({
+    ...(_meta === undefined ? {} : { _meta }),
     annotations,
     description,
     inputSchema: toWireInputSchema(inputSchema),
     name,
+    title: annotations.title,
   }));
 
 // Display title for a dynamically-gated tool. External connectors and skills

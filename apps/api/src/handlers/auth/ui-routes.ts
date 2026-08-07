@@ -5,6 +5,10 @@ import { env } from "@/api/env";
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
 
+export const OAUTH_UI_LOGIN_PATH = "/oauth-ui/auth";
+export const OAUTH_UI_ORGANIZATION_PATH = "/oauth-ui/auth/organization";
+export const OAUTH_UI_CONSENT_PATH = "/oauth-ui/consent";
+
 const redirectToFrontend = ({
   path,
   request,
@@ -27,10 +31,12 @@ const redirectToFrontend = ({
 };
 
 export const authUiRoute = new Elysia()
-  .get("/auth", ({ request }) => redirectToFrontend({ path: "/auth", request }))
-  .get("/auth/organization", ({ request }) =>
+  .get(OAUTH_UI_LOGIN_PATH, ({ request }) =>
+    redirectToFrontend({ path: "/auth", request }),
+  )
+  .get(OAUTH_UI_ORGANIZATION_PATH, ({ request }) =>
     redirectToFrontend({ path: "/auth/organization", request }),
   )
-  .get("/consent", ({ request }) =>
+  .get(OAUTH_UI_CONSENT_PATH, ({ request }) =>
     redirectToFrontend({ path: "/consent", request }),
   );

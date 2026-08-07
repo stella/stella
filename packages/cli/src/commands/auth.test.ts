@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Context } from "../context.js";
+import { respondToMcpLifecycle } from "../mcp-test-lifecycle.js";
 import { runWhoami } from "./auth.js";
 
 // Guards the "identity command whose --help promises a server-verified result
@@ -51,10 +52,18 @@ const startIdentityServer = ({
   let requests = 0;
   const server = Bun.serve({
     port: 0,
-    fetch() {
+    async fetch(request) {
       requests += 1;
       if (status !== 200) {
         return new Response("nope", { status });
+      }
+      if (request.method === "GET") {
+        return new Response(null, { status: 405 });
+      }
+      const body: { method?: string } = JSON.parse(await request.text());
+      const lifecycle = respondToMcpLifecycle(body);
+      if (lifecycle !== null) {
+        return lifecycle;
       }
       const headers = new Headers({ "Content-Type": "application/json" });
       if (organizationId !== undefined) {

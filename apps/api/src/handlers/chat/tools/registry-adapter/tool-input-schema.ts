@@ -1,6 +1,6 @@
 import type { JSONSchema } from "@tanstack/ai";
 
-import type { JsonSchema } from "@/api/mcp/tool-types";
+import type { McpToolInputSchema } from "@/api/mcp/tool-types";
 
 /**
  * The MCP registry stores each tool's input as a plain JSON Schema object
@@ -28,7 +28,7 @@ const copyJsonValue = (value: unknown): unknown => {
   return value;
 };
 
-export const toToolInputSchema = (schema: JsonSchema): JSONSchema => {
+export const toToolInputSchema = (schema: McpToolInputSchema): JSONSchema => {
   const converted: JSONSchema = {};
   for (const [key, value] of Object.entries(schema)) {
     converted[key] = copyJsonValue(value);

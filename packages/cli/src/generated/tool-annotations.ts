@@ -124,6 +124,12 @@ export const generatedToolAnnotations: Readonly<
     command: ["document", "save"],
     scope: "documents_write",
   },
+  upload_document_version: {
+    command: ["document", "upload-version"],
+    excluded: true,
+    scope: "documents_write",
+    inputOnly: ["file"],
+  },
   delete_document: {
     command: ["document", "delete"],
     scope: "documents_write",

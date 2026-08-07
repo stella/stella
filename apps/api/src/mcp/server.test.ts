@@ -1,4 +1,9 @@
 import {
+  Client,
+  StreamableHTTPClientTransport,
+  type FetchLike,
+} from "@modelcontextprotocol/client";
+import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
@@ -23,7 +28,9 @@ import {
   McpOrganizationAccessError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
@@ -326,6 +333,89 @@ describe("handleMcpHttpRequest", () => {
       "default",
       ["stella:read"],
     );
+  });
+
+  test("the official v2 client discovers and calls the canonical upload tool", async () => {
+    const context = { type: "documents-mcp-context" };
+    const definition = DOCUMENTS_MCP_TOOL_DEFINITIONS.find(
+      ({ name }) => name === "upload_document_version",
+    );
+    if (!definition) {
+      throw new Error("Canonical upload tool definition is missing");
+    }
+
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read", "stella:documents_write", "stella:matters_write"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    listMcpToolsMock.mockResolvedValue(toMcpTools([definition]));
+    getMcpToolRequiredScopesHintMock.mockReturnValue([
+      "stella:documents_write",
+    ]);
+    getMcpToolDefinitionMock.mockResolvedValue(definition);
+    handleMcpToolCallMock.mockResolvedValue({
+      content: [{ type: "text", text: "Choose a file in the upload panel." }],
+      structuredContent: {
+        entityId: "entity_1",
+        workspaceId: "workspace_1",
+      },
+    });
+
+    const transportFetch: FetchLike = async (input, init) =>
+      await handleMcpHttpRequest(new Request(input.toString(), init), {
+        mode: "documents",
+      });
+    const transport = new StreamableHTTPClientTransport(
+      new URL("http://localhost/mcp-documents"),
+      {
+        fetch: transportFetch,
+        requestInit: { headers: { authorization: "Bearer token" } },
+      },
+    );
+    const client = new Client({ name: "stella-e2e-test", version: "1.0.0" });
+
+    try {
+      await client.connect(transport, { timeout: 2000 });
+      const listed = await client.listTools(undefined, { timeout: 2000 });
+      const uploadTool = listed.tools.find(
+        ({ name }) => name === "upload_document_version",
+      );
+
+      expect(uploadTool?._meta).toMatchObject({
+        ui: { resourceUri: "ui://stella/document-version-upload" },
+        "openai/fileParams": ["file"],
+      });
+      const called = await client.callTool(
+        {
+          name: "upload_document_version",
+          arguments: { entity_id: "entity_1" },
+        },
+        { timeout: 2000 },
+      );
+      expect(called.structuredContent).toEqual({
+        entityId: "entity_1",
+        workspaceId: "workspace_1",
+      });
+      expect(authenticateMcpRequestMock).toHaveBeenCalledWith(
+        "token",
+        "documents",
+      );
+      expect(listMcpToolsMock).toHaveBeenCalledWith(context, "documents", [
+        "stella:read",
+        "stella:documents_write",
+        "stella:matters_write",
+      ]);
+      expect(handleMcpToolCallMock).toHaveBeenCalledWith({
+        args: { entity_id: "entity_1" },
+        context,
+        mode: "documents",
+        toolName: "upload_document_version",
+      });
+    } finally {
+      await client.close();
+    }
   });
 
   test("captures a token-verification infrastructure outage as a retryable 5xx, not a 401", async () => {

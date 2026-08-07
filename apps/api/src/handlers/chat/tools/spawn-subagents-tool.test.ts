@@ -283,7 +283,11 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
 
   test("skips the pre-flight entirely (and never reads the ledger) when usage enforcement is disabled", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
     env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
     runSubagentImpl = async () => ({ text: "ok", usage: undefined });
@@ -297,6 +301,8 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       expect(result.results[0]?.status).toBe("completed");
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 
@@ -308,7 +314,11 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
 describe("createSpawnSubagentsTool — abort propagation", () => {
   test("rejects with AbortError and reports no results when the parent signal aborts mid-run", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
     env.USAGE_ENFORCEMENT_ENABLED = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
     runSubagentCalls.length = 0;
 
     const abortError = new Error("Subagent run was aborted.");
@@ -347,6 +357,8 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
       }
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });

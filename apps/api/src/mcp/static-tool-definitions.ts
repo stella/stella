@@ -115,6 +115,23 @@ export const ANONYMIZED_MCP_TOOL_DEFINITIONS =
     return projected === null ? [] : [projected];
   }) satisfies readonly McpToolDefinition[];
 
+const DEFAULT_MCP_TOOL_DEFINITIONS_WIDE: readonly McpToolDefinition[] =
+  DEFAULT_MCP_TOOL_DEFINITIONS;
+
+const DOCUMENTS_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...DOCUMENT_TOOL_SET.definitions.map(({ name }) => name),
+  // The upload MCP App drives the canonical presign/PUT/finalize pipeline
+  // through this existing capability seam. tools.ts applies a mode-specific
+  // capability allowlist, so guessed non-upload capability IDs fail closed.
+  "invoke_capability",
+]);
+
+/** Projection from the canonical registry; no host-specific tool copies. */
+export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS_WIDE.filter(({ name }) =>
+    DOCUMENTS_MCP_TOOL_NAMES.has(name),
+  ) satisfies readonly McpToolDefinition[];
+
 /**
  * Scopes actually used by the anonymized projection. A test cross-checks this
  * against `MCP_ANONYMIZED_RESOURCE_SCOPES` so no advertised scope is orphaned
@@ -131,6 +148,9 @@ const MCP_TOOL_DEFINITION_MAPS = {
   anonymized: new Map<string, McpToolDefinition>(
     ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
   ),
+  documents: new Map<string, McpToolDefinition>(
+    DOCUMENTS_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
+  ),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
 export const getStaticMcpToolDefinition = (
@@ -140,7 +160,12 @@ export const getStaticMcpToolDefinition = (
 
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",
-): readonly McpToolDefinition[] =>
-  mode === "default"
-    ? DEFAULT_MCP_TOOL_DEFINITIONS
-    : ANONYMIZED_MCP_TOOL_DEFINITIONS;
+): readonly McpToolDefinition[] => {
+  if (mode === "default") {
+    return DEFAULT_MCP_TOOL_DEFINITIONS;
+  }
+  if (mode === "documents") {
+    return DOCUMENTS_MCP_TOOL_DEFINITIONS;
+  }
+  return ANONYMIZED_MCP_TOOL_DEFINITIONS;
+};

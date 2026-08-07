@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { EXIT_CODES } from "./mcp-constants.js";
+import { respondToMcpLifecycle } from "./mcp-test-lifecycle.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 
@@ -47,12 +48,19 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
+      if (req.method === "GET") {
+        return new Response(null, { status: 405 });
+      }
       if (req.method === "PUT") {
         return putHandler === undefined
           ? new Response("unexpected PUT", { status: 405 })
           : await putHandler(req);
       }
       const body: JsonRpcRequest = JSON.parse(await req.text());
+      const lifecycle = respondToMcpLifecycle(body);
+      if (lifecycle !== null) {
+        return lifecycle;
+      }
       const index = requests.length;
       requests.push(body);
       const response = handler(body, index);

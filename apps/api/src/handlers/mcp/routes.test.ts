@@ -5,6 +5,8 @@ import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DISCOVERY_PATH,
+  MCP_DOCUMENTS_DISCOVERY_PATH,
+  MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
   STELLA_CLI_MAXIMUM_VERSION,
@@ -65,6 +67,17 @@ describe("MCP protected resource discovery routes", () => {
     );
   });
 
+  test("serves least-privilege metadata from the documents path", async () => {
+    const response = await mcpRoute.handle(
+      new Request(`http://localhost${MCP_DOCUMENTS_DISCOVERY_PATH}`),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(
+      getMcpProtectedResourceMetadata("documents"),
+    );
+  });
+
   test("answers CORS preflight requests on the root compatibility path", async () => {
     const response = await mcpRoute.handle(
       new Request(`http://localhost${ROOT_MCP_DISCOVERY_PATH}`, {
@@ -104,6 +117,33 @@ describe("MCP protected resource discovery routes", () => {
     ]);
   });
 
+  test("leaves the JSON-RPC request body unread for the MCP SDK transport", async () => {
+    const jsonRpcBody = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+      params: {},
+    });
+    let forwardedBody: string | undefined;
+    const route = createMcpRoute({
+      handleMcpHttpRequest: async (request) => {
+        forwardedBody = await request.text();
+        return new Response("ok");
+      },
+    });
+
+    const response = await route.handle(
+      new Request(`http://localhost${MCP_HTTP_PATH}`, {
+        body: jsonRpcBody,
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(forwardedBody).toBe(jsonRpcBody);
+  });
+
   test("forwards anonymized MCP HTTP methods with anonymized mode", async () => {
     const calls: { method: string; mode: string | undefined }[] = [];
     const route = createMcpRoute({
@@ -129,31 +169,29 @@ describe("MCP protected resource discovery routes", () => {
     ]);
   });
 
-  test("leaves JSON-RPC request bodies unread for both MCP transports", async () => {
-    const bodies: unknown[] = [];
+  test("forwards documents MCP HTTP methods with documents mode", async () => {
+    const calls: { method: string; mode: string | undefined }[] = [];
     const route = createMcpRoute({
-      handleMcpHttpRequest: async (request) => {
-        expect(request.bodyUsed).toBe(false);
-        bodies.push(await request.json());
+      handleMcpHttpRequest: async (request, options) => {
+        calls.push({ method: request.method, mode: options?.mode });
         return new Response("ok");
       },
     });
-    const body = { id: 1, jsonrpc: "2.0", method: "tools/list" };
 
-    for (const path of [MCP_HTTP_PATH, MCP_ANONYMIZED_HTTP_PATH]) {
-      // oxlint-disable-next-line no-await-in-loop -- each request must reach the transport before the next assertion
+    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: asserts the recorded call order below
       const response = await route.handle(
-        new Request(`http://localhost${path}`, {
-          body: JSON.stringify(body),
-          headers: { "content-type": "application/json" },
-          method: "POST",
-        }),
+        new Request(`http://localhost${MCP_DOCUMENTS_HTTP_PATH}`, { method }),
       );
-
       expect(response.status).toBe(200);
     }
 
-    expect(bodies).toEqual([body, body]);
+    expect(calls).toEqual([
+      { method: "OPTIONS", mode: "documents" },
+      { method: "GET", mode: "documents" },
+      { method: "POST", mode: "documents" },
+      { method: "DELETE", mode: "documents" },
+    ]);
   });
 
   test("rejects unsupported MCP HTTP methods before transport handling", async () => {
@@ -165,7 +203,11 @@ describe("MCP protected resource discovery routes", () => {
       },
     });
 
-    for (const path of [MCP_HTTP_PATH, MCP_ANONYMIZED_HTTP_PATH]) {
+    for (const path of [
+      MCP_HTTP_PATH,
+      MCP_DOCUMENTS_HTTP_PATH,
+      MCP_ANONYMIZED_HTTP_PATH,
+    ]) {
       for (const method of ["PATCH", "PUT"]) {
         // oxlint-disable-next-line no-await-in-loop -- deterministic sequential test setup over a small fixed method list
         const response = await route.handle(
