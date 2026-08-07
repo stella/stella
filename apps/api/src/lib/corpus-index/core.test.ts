@@ -5,7 +5,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusJobInput } from "@/api/lib/corpus-index/core";
 import {
+  corpusDocumentsDeleteQuery,
   createCorpusIndexer,
+  deleteQueryChunks,
   settleAll,
   settleAllCleanup,
   settleBoth,
@@ -13,6 +15,7 @@ import {
 } from "@/api/lib/corpus-index/core";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * A batch is sized in rows, but a passage family turns one row into as many
@@ -947,5 +950,167 @@ describe("first-ever fenced appends", () => {
       [],
     );
     expect(calls.some(({ url }) => url.includes("/ingest"))).toBe(true);
+  });
+});
+
+/**
+ * The engine plans every delete task against every split whose delete opstamp
+ * is behind it, so the cost of N tasks is O(N x splits) and it is charged to
+ * the janitor asynchronously, long after the calls that created them returned.
+ * A per-row delete therefore looks free at the call site and is not: it is the
+ * shape that stops the planner converging at all.
+ *
+ * The invariant is not "a converged batch does nothing" — a re-projection
+ * legitimately re-deletes. It is that the number of remote delete tasks scales
+ * with the indexes a batch touches, never with the rows it carries. Measuring
+ * two batch sizes is what makes that a property rather than an example: the
+ * per-row shape fails it for any pair of sizes.
+ */
+describe("delete-task amplification", () => {
+  const GENERATION = "case_law_v2";
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  type DeleteCall = { url: string; query: string };
+
+  const runBatch = async (
+    rowCount: number,
+  ): Promise<{ deletes: DeleteCall[]; indexed: number }> => {
+    const deletes: DeleteCall[] = [];
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      // The client always sends a serialized string body; anything else is a
+      // test-harness mistake, not a case to coerce.
+      const body = typeof init?.body === "string" ? init.body : "";
+      if (url.includes("/delete-tasks")) {
+        const parsed: unknown = JSON.parse(body.length > 0 ? body : "{}");
+        const query =
+          isRecord(parsed) && typeof parsed["query"] === "string"
+            ? parsed["query"]
+            : "";
+        deletes.push({ url, query });
+      }
+      if (url.includes("/ingest")) {
+        const sent = body.split("\n").filter((line) => line.length > 0).length;
+        return new Response(JSON.stringify({ num_docs_for_processing: sent }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    // One jurisdiction, so every row's previous copy lives in the same index:
+    // the batch touches exactly one index however many rows it carries.
+    const indexId = corpusIndexId(GENERATION, "CZ");
+    const rows = Array.from({ length: rowCount }, (_, seq) => ({
+      id: toSafeId<"caseLawDecision">(`dec-${seq}`),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: `hash-${seq}`,
+      indexedHash: `stale-${seq}`,
+      indexedGeneration: indexId,
+      // SAFETY: tests fabricate the branded token the adapters normally
+      // select as `updated_at::text`.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+      projectionIndexId: indexId,
+    }));
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this test's adapter ignores the transaction; the callback
+      // boundary itself is what the indexer must cross before reporting success.
+      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", (typeof rows)[0]>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: (selected) => [selected.projectionIndexId],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => rows,
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows: markedRows }) =>
+        new Set(markedRows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+    const indexed = await indexer.backfillRows(scopedDb, rows, GENERATION, {
+      beforeDatabaseMark: async () => undefined,
+      beforeRemoteEffect: async ({ effect }) => await effect(),
+      recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+      // A committed copy exists, so the replay delete genuinely has to run.
+      reserveExternalAppend: async (_tx, { rows: reservedRows }) =>
+        new Map(
+          reservedRows.map((selected) => [
+            selected.id,
+            { indexIds: [indexId], revision: 2, mayHaveCopy: true },
+          ]),
+        ),
+    });
+    return { deletes, indexed };
+  };
+
+  test("delete-task count does not grow with batch size", async () => {
+    const small = await runBatch(4);
+    const large = await runBatch(40);
+
+    expect(small.indexed).toBe(4);
+    expect(large.indexed).toBe(40);
+    // The load-bearing assertion. Restore a per-row delete and this reads
+    // 4 vs 40.
+    expect(large.deletes).toHaveLength(small.deletes.length);
+    expect(small.deletes).toHaveLength(1);
+  });
+
+  test("every row still reaches a delete query", async () => {
+    const { deletes } = await runBatch(40);
+    const queried = deletes.map(({ query }) => query).join(" ");
+
+    for (let seq = 0; seq < 40; seq += 1) {
+      expect(queried).toContain(`document_id:"dec-${seq}"`);
+    }
+  });
+
+  test("an id that could alter the query is rejected, not escaped", () => {
+    // The terms are OR-joined, so one id that breaks out of its quotes
+    // changes what the whole task deletes. Ids come from `uuid` columns; one
+    // that reaches here in another shape is a defect upstream.
+    expect(() =>
+      corpusDocumentsDeleteQuery(['a" OR document_id:"b']),
+    ).toThrow();
+    expect(corpusDocumentsDeleteQuery(["a1b2-c3", "d4e5_f6"])).toBe(
+      'document_id:"a1b2-c3" OR document_id:"d4e5_f6"',
+    );
+  });
+
+  test("chunking bounds one task's query without dropping ids", () => {
+    const ids = Array.from({ length: 300 }, (_, seq) => `id-${seq}`);
+
+    const chunks = deleteQueryChunks(ids);
+
+    // Every id lands in exactly one chunk, and no chunk outgrows the bound.
+    expect(chunks.flat()).toEqual(ids);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(128);
+    }
   });
 });
