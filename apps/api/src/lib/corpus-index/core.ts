@@ -64,13 +64,42 @@ const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
       });
 
 /**
- * Delete-task query selecting every search document a row projects to. Keyed
- * on the stable Postgres id, which every one of the row's documents carries,
- * so it is exactly as correct for a passage-split row as for a whole one — and
- * it needs no record of how many documents the previous version emitted.
+ * Delete-task query selecting every search document a batch of rows projects
+ * to. Keyed on the stable Postgres id, which every one of a row's documents
+ * carries, so it is exactly as correct for a passage-split row as for a whole
+ * one, and it needs no record of how many documents the previous version
+ * emitted.
+ *
+ * Terms are OR-joined rather than written as an engine set query: the joined
+ * form parses identically across query-language versions, and a delete query
+ * that silently changes meaning removes the wrong documents.
  */
+export const corpusDocumentsDeleteQuery = (
+  entityIds: readonly string[],
+): string => entityIds.map((id) => `document_id:"${id}"`).join(" OR ");
+
+/** Single-row delete query; the batch of one. */
 export const corpusDocumentDeleteQuery = (entityId: string): string =>
-  `document_id:"${entityId}"`;
+  corpusDocumentsDeleteQuery([entityId]);
+
+/**
+ * Ids per delete task. The engine plans every delete task against every split
+ * whose delete opstamp is behind it, so task COUNT (not task size) is what
+ * costs: one task per row makes planning O(rows x splits) and the planner
+ * stops converging once the backlog outruns it. Batching is therefore the
+ * point, and this bound only keeps the query a single task carries from
+ * growing without limit.
+ */
+const DELETE_QUERY_MAX_IDS = 128;
+
+/** Partition ids into per-task groups, each within {@link DELETE_QUERY_MAX_IDS}. */
+export const deleteQueryChunks = <T>(entityIds: readonly T[]): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < entityIds.length; index += DELETE_QUERY_MAX_IDS) {
+    chunks.push([...entityIds.slice(index, index + DELETE_QUERY_MAX_IDS)]);
+  }
+  return chunks;
+};
 
 /** One row and every search document it projects to. */
 type BuiltRow<TRow> = { row: TRow; docs: Record<string, unknown>[] };
@@ -800,12 +829,13 @@ export const createCorpusIndexer = <
    * stable Postgres id keeps erasure and re-index correct without that
    * bookkeeping.
    */
-  type RemoveWithOptionsArgs = {
-    entityId: SafeId<TBrand>;
-    indexId: string;
-    operation: "delete" | "redact";
-    scopedDb: ScopedDb;
-  } & (
+  /**
+   * Fenced callers pass both halves of the guard or neither. Kept as its own
+   * union and intersected at each use: routing it through `Omit` flattens the
+   * branches into independent optional properties, and the pair stops being
+   * correlated for narrowing.
+   */
+  type RemoteEffectGuard =
     | {
         beforeRemoteEffect: GuardRemoteEffect;
         onLeaseLost: () => Promise<void>;
@@ -813,21 +843,37 @@ export const createCorpusIndexer = <
     | {
         beforeRemoteEffect?: undefined;
         onLeaseLost?: undefined;
-      }
-  );
+      };
 
-  const removeWithOptions = async ({
+  type RemoveTargets = {
+    indexId: string;
+    operation: "delete" | "redact";
+    scopedDb: ScopedDb;
+  };
+
+  type RemoveManyWithOptionsArgs = RemoveTargets & {
+    entityIds: readonly SafeId<TBrand>[];
+  } & RemoteEffectGuard;
+
+  type RemoveWithOptionsArgs = RemoveTargets & {
+    entityId: SafeId<TBrand>;
+  } & RemoteEffectGuard;
+
+  const removeManyWithOptions = async ({
     beforeRemoteEffect,
-    entityId,
+    entityIds,
     indexId,
     onLeaseLost,
     operation,
     scopedDb,
-  }: RemoveWithOptionsArgs): Promise<Result<void, CorpusIndexError>> => {
+  }: RemoveManyWithOptionsArgs): Promise<Result<void, CorpusIndexError>> => {
+    if (entityIds.length === 0) {
+      return Result.ok(undefined);
+    }
     const deleteByQuery = async () =>
       await getCorpusIndexClient().deleteByQuery(
         indexId,
-        corpusDocumentDeleteQuery(entityId),
+        corpusDocumentsDeleteQuery(entityIds),
       );
     let deleted: Awaited<ReturnType<typeof deleteByQuery>>;
     if (beforeRemoteEffect === undefined) {
@@ -850,22 +896,43 @@ export const createCorpusIndexer = <
       deleted.isErr() && deleted.error.status === 404
         ? Result.ok(undefined)
         : deleted;
+    // One audit row per entity however many entities shared the task: the
+    // trail records what happened to a document, not what carried it.
     await adapter.recordJobs(
       scopedDb,
-      [
-        {
-          entityId,
-          contentHash: null,
-          operation,
-          status: result.isErr() ? "failed" : "succeeded",
-          ...(result.isErr()
-            ? { errorMessage: result.error.message.slice(0, 2048) }
-            : {}),
-        },
-      ],
+      entityIds.map((entityId) => ({
+        entityId,
+        contentHash: null,
+        operation,
+        status: result.isErr() ? ("failed" as const) : ("succeeded" as const),
+        ...(result.isErr()
+          ? { errorMessage: result.error.message.slice(0, 2048) }
+          : {}),
+      })),
       indexId,
     );
     return result;
+  };
+
+  // Narrows on `args`, not on destructured locals: destructuring splits the
+  // guard pair into independent variables, and testing one of them then tells
+  // the checker nothing about the other.
+  const removeWithOptions = async (
+    args: RemoveWithOptionsArgs,
+  ): Promise<Result<void, CorpusIndexError>> => {
+    const { entityId, indexId, operation, scopedDb } = args;
+    return await removeManyWithOptions(
+      args.beforeRemoteEffect === undefined
+        ? { entityIds: [entityId], indexId, operation, scopedDb }
+        : {
+            beforeRemoteEffect: args.beforeRemoteEffect,
+            entityIds: [entityId],
+            indexId,
+            onLeaseLost: args.onLeaseLost,
+            operation,
+            scopedDb,
+          },
+    );
   };
 
   const remove = async (
@@ -1126,22 +1193,48 @@ export const createCorpusIndexer = <
             oldIndexId,
           }));
         });
-        let staleError: CorpusIndexError | null = null;
+        // Grouped by target index, never issued per row. A delete task is
+        // planned against every split whose delete opstamp is behind it, so
+        // one task per row makes planning O(rows x splits) — a cost the
+        // engine pays asynchronously, long after these calls return, and one
+        // that compounds until the planner can no longer converge. The number
+        // of tasks a batch emits must scale with the indexes it touches
+        // (jurisdictions), not with the rows it carries.
+        const movedByIndex = new Map<string, SafeId<TBrand>[]>();
         for (const entry of moved) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
-          const removed = await removeWithOptions({
+          const forIndex = movedByIndex.get(entry.oldIndexId);
+          if (forIndex === undefined) {
+            movedByIndex.set(entry.oldIndexId, [entry.id]);
+          } else {
+            forIndex.push(entry.id);
+          }
+        }
+        // Chunked here rather than inside the remove: the batch is what knows
+        // how many ids there are, and one call staying one remote task is what
+        // keeps the task count readable at this call site.
+        const deleteUnits: { entityIds: SafeId<TBrand>[]; indexId: string }[] =
+          [];
+        for (const [oldIndexId, ids] of movedByIndex) {
+          for (const chunk of deleteQueryChunks(ids)) {
+            deleteUnits.push({ entityIds: chunk, indexId: oldIndexId });
+          }
+        }
+        let staleError: CorpusIndexError | null = null;
+        for (const unit of deleteUnits) {
+          // oxlint-disable-next-line no-await-in-loop -- one task per (index, chunk): bounded by the batch's distinct indexes, not by its rows; sequential so the first failure stops before the ingest below
+          const removed = await removeManyWithOptions({
             ...(options.type === "incremental"
               ? {}
               : {
                   beforeRemoteEffect: options.beforeRemoteEffect,
                   onLeaseLost: async () =>
                     await options.recoverRemoteEffectLeaseLoss({
-                      entityIds: [entry.id],
-                      indexId: entry.oldIndexId,
+                      entityIds: unit.entityIds,
+                      indexId: unit.indexId,
                     }),
                 }),
-            entityId: entry.id,
-            indexId: entry.oldIndexId,
+            entityIds: unit.entityIds,
+            indexId: unit.indexId,
             operation: "delete",
             scopedDb,
           });
