@@ -1424,7 +1424,7 @@ const sendMessage = createSafeRootHandler(
           : restrictChatToolsToScope(chatTools, body.toolScope);
 
       const externalMcpSystemHint = buildExternalMcpSystemHint(
-        externalMcpTools?.connectors ?? [],
+        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
       );
       // The "safe" half is whatever the prompt builder declared
       // safe. The anonymized-mode hint is a fixed assembler-owned
