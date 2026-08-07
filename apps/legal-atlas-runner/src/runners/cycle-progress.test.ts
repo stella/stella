@@ -231,13 +231,13 @@ describe("stepCadence", () => {
       decisionsProcessed: RESCAN_CYCLE.skipped,
       decisionsWritten: 0,
     });
-    expect(
-      CYCLE_CADENCE_DELAY_MS[CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF],
-    ).toBeGreaterThan(CYCLE_CADENCE_DELAY_MS[CYCLE_CADENCE.FAST]);
+    expect(CYCLE_CADENCE_DELAY_MS[CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]).toBe(
+      60 * 60 * 1000,
+    );
   });
 
   test("the signal keeps firing while the condition holds", () => {
-    // Once backed off the adapter cycles about once a day, so re-reporting is
+    // Once backed off the adapter cycles about once an hour, so re-reporting is
     // not a flood; going silent would look exactly like a cleared condition.
     const steps = runCycles(repeat(RESCAN_CYCLE, UNPRODUCTIVE_THRESHOLD + 2));
 

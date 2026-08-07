@@ -192,10 +192,10 @@ const advanceStreaks = (
       // re-scan. It does clear the quiet streak, because a cycle that ended
       // early left a source with work outstanding.
       return { quietCycles: 0, unproductiveCycles: streaks.unproductiveCycles };
-    default:
-      return panic(
-        `Unhandled cycle productivity: ${productivity satisfies never}`,
-      );
+    default: {
+      const unhandled: never = productivity;
+      return panic(`Unhandled cycle productivity: ${String(unhandled)}`);
+    }
   }
 };
 
@@ -224,7 +224,7 @@ export type CadenceStep = {
   cadence: CycleCadence;
   /**
    * Non-null on every cycle at or past the threshold, not only the one that
-   * crosses it: the escalated cadence means at most one signal a day, and a
+   * crosses it: the hourly cadence bounds the signal rate, and a
    * condition that stops being reported looks identical to one that cleared.
    */
   unproductiveRescan: UnproductiveRescanSignal | null;

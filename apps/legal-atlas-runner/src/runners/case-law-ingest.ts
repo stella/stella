@@ -215,19 +215,18 @@ const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
 const CITATION_AUTHORITY_RETRY_DELAY_MS = 10 * 60 * 1000;
 
 // Cadence backoff (thresholds, delays and the state machine live in
-// ./cycle-progress): an adapter that is caught up, or one that keeps
-// re-fetching decisions it already holds, polls once a day instead of every
-// CYCLE_DELAY_MS. Either resets to the fast cadence on the next cycle that
-// writes a row. Keeps us from hammering court servers in steady state, and
-// keeps a source that writes nothing from holding a cycle slot against
-// sources that have work.
+// ./cycle-progress): a caught-up adapter polls daily. One that keeps
+// re-fetching decisions it already holds polls hourly because that signal can
+// also describe a legitimate forward re-ingest. Either resets to the fast
+// cadence on the next cycle that writes a row. This keeps us from hammering
+// court servers in steady state without stalling a catch-up walk for months.
 
 /** Log line for entering a cadence, so a transition is greppable. */
 const CADENCE_ENTRY_MESSAGE = {
   [CYCLE_CADENCE.FAST]: "Resuming fast cadence",
   [CYCLE_CADENCE.CAUGHT_UP]: "Caught up; switching to daily polling",
   [CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]:
-    "Re-fetching stored decisions without writing any; switching to daily polling",
+    "Re-fetching stored decisions without writing any; switching to hourly polling",
 } as const satisfies Record<CycleCadence, string>;
 
 // Liveness watchdog. A self-scheduling timer measures how late it fires
