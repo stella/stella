@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
@@ -120,6 +121,83 @@ describe("sidebar matter context", () => {
         activeWorkspaceId: undefined,
       }),
     ).toBeNull();
+  });
+});
+
+describe("sidebar matter activity disclosure", () => {
+  const knownEmptyInput = (
+    pages: { items: readonly unknown[]; nextCursor: string | null }[],
+  ) => ({ isInvalidated: false, pages, status: "success" as const });
+
+  test("keeps the disclosure while the activity result is unknown", () => {
+    // Never fetched, still loading, or failed: none of these prove the matter
+    // is empty, so the toggle stays rather than flickering out under the
+    // pointer.
+    expect(
+      matterActivityIsKnownEmpty({
+        isInvalidated: false,
+        pages: undefined,
+        status: "pending",
+      }),
+    ).toBe(false);
+    expect(
+      matterActivityIsKnownEmpty({
+        isInvalidated: false,
+        pages: [{ items: [], nextCursor: null }],
+        status: "error",
+      }),
+    ).toBe(false);
+    expect(matterActivityIsKnownEmpty(knownEmptyInput([]))).toBe(false);
+  });
+
+  test("keeps the disclosure once the cached result is invalidated", () => {
+    // The sidebar's observer is disabled, so an invalidated empty result is
+    // never refetched: a matter that just gained activity would keep a hidden
+    // toggle forever.
+    expect(
+      matterActivityIsKnownEmpty({
+        isInvalidated: true,
+        pages: [{ items: [], nextCursor: null }],
+        status: "success",
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps the disclosure when any page carries an item", () => {
+    expect(
+      matterActivityIsKnownEmpty(
+        knownEmptyInput([
+          { items: [], nextCursor: "cursor" },
+          { items: [{ id: "a" }], nextCursor: null },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  test("keeps the disclosure while a continuation cursor remains", () => {
+    // An empty page that can still be followed by one holding activity: hiding
+    // the toggle here would strand the user with no way to load that page.
+    expect(
+      matterActivityIsKnownEmpty(
+        knownEmptyInput([{ items: [], nextCursor: "cursor" }]),
+      ),
+    ).toBe(false);
+  });
+
+  test("drops the disclosure once a drained result holds no item", () => {
+    expect(
+      matterActivityIsKnownEmpty(
+        knownEmptyInput([{ items: [], nextCursor: null }]),
+      ),
+    ).toBe(true);
+    expect(
+      matterActivityIsKnownEmpty(
+        knownEmptyInput([
+          { items: [], nextCursor: "cursor" },
+          { items: [], nextCursor: null },
+        ]),
+      ),
+    ).toBe(true);
   });
 });
 
