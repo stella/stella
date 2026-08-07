@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 import { useCallback, useRef } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -19,7 +19,6 @@ import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,
   type ComposerModelsMenuProps,
-  type ComposerPlusMenuHandle,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -85,13 +84,6 @@ type ChatInputSurfaceProps = {
   mcpOrganizationId?: string | undefined;
 };
 
-const hasBlockingCharacterShortcutModifier = (
-  event: KeyboardEvent<HTMLElement>,
-) => {
-  const isAltGraph = event.getModifierState("AltGraph");
-  return event.metaKey || (!isAltGraph && (event.altKey || event.ctrlKey));
-};
-
 export const ChatInputSurface = ({
   autoFocus,
   className,
@@ -111,7 +103,6 @@ export const ChatInputSurface = ({
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
-  const plusMenuRef = useRef<ComposerPlusMenuHandle>(null);
   const {
     attachments,
     canSubmit,
@@ -218,41 +209,6 @@ export const ChatInputSurface = ({
                 : "ps-3 pe-3 pt-2 pb-1",
             )}
             onKeyDown={(event) => {
-              // "/" in an empty composer, on a surface with a Skills submenu,
-              // opens the (+) menu at Skills instead of typing the character —
-              // the composer (+) menu replaces the old slash popover here (see
-              // `disableSlashSuggestion` on `useChatEditor`). Modifier
-              // combinations and IME composition fall through untouched; AltGr
-              // is allowed because some layouts emit printable characters with
-              // Ctrl+Alt set.
-              if (
-                skillsOrganizationId !== undefined &&
-                isBlank &&
-                event.key === "/" &&
-                !event.nativeEvent.isComposing &&
-                !hasBlockingCharacterShortcutModifier(event)
-              ) {
-                event.preventDefault();
-                plusMenuRef.current?.openSkills();
-              }
-              // "@" in an empty composer, on a surface with a Context submenu,
-              // opens the (+) menu at Context the same way. Shift is
-              // deliberately NOT excluded: many keyboard layouts (e.g. US
-              // QWERTY) only produce "@" with Shift held, so requiring its
-              // absence would make this unreachable there. A non-empty
-              // composer keeps the existing "@" mention suggestion popover
-              // (`ChatMention` in chat-editor-provider.tsx) untouched — this
-              // only intercepts the empty-composer entry point.
-              if (
-                context !== undefined &&
-                isBlank &&
-                event.key === "@" &&
-                !event.nativeEvent.isComposing &&
-                !hasBlockingCharacterShortcutModifier(event)
-              ) {
-                event.preventDefault();
-                plusMenuRef.current?.openContext();
-              }
               event.stopPropagation();
             }}
             role="presentation"
@@ -318,8 +274,6 @@ export const ChatInputSurface = ({
                 }
                 models={models}
                 onOpenFilePicker={openFilePicker}
-                onProgrammaticMenuClose={focus}
-                ref={plusMenuRef}
                 skills={
                   skillsOrganizationId
                     ? { activeOrganizationId: skillsOrganizationId, editor }

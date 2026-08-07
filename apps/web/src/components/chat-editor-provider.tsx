@@ -546,7 +546,6 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
-  disableSlashSuggestion = false,
   onDraftStart,
   placeholder,
   reservedCommands = false,
@@ -554,13 +553,6 @@ export const useChatEditor = ({
   threadRef,
   suggestedFollowupPrompt,
 }: {
-  /**
-   * Suppress the `/`-triggered `PromptSlash` popover only for an empty
-   * composer. Chat surfaces with a Skills submenu route that blank-composer
-   * shortcut to the (+) menu instead, while still keeping slash suggestions
-   * after existing text.
-   */
-  disableSlashSuggestion?: boolean | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   /**
@@ -960,9 +952,7 @@ export const useChatEditor = ({
 
   const promptSlashExtension = PromptSlash.configure({
     // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
-    suggestion: createPromptSlashSuggestion(() => slashItemsRef.current, {
-      suppressEmptyTrigger: disableSlashSuggestion,
-    }),
+    suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
   });
 
   const editor = useEditor({

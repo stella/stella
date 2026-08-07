@@ -343,7 +343,6 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
-    disableSlashSuggestion: true,
     reservedCommands: true,
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
