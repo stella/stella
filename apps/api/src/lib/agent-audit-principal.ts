@@ -31,7 +31,10 @@ export const resolveAgentAuditExecution = async ({
 
   switch (credential.type) {
     case "delegated_user":
-      return undefined;
+      return {
+        performer: { id: userId, type: "user" },
+        trigger: { source: "mcp", type: "direct" },
+      };
     case "machine_api_key":
       return {
         performer: {
@@ -62,7 +65,10 @@ export const resolveAgentAuditExecution = async ({
         .then((rows) => rows.at(0) ?? null);
 
       if (!registration) {
-        return undefined;
+        return {
+          performer: { id: userId, type: "user" },
+          trigger: { source: "mcp", type: "direct" },
+        };
       }
 
       return {

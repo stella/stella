@@ -4,6 +4,7 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
     finalize: "uploads.update",
     reserve: "uploads.create",
   },
+  pickerToolName: "open_document_version_upload",
   purpose: "entity_version",
   resourceUri: "ui://stella/document-version-upload",
   toolName: "upload_document_version",

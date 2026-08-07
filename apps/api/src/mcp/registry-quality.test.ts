@@ -48,8 +48,11 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // should recover a slot through consolidation before expanding this ceiling.
 // default bumped 46 -> 47 for upload_document_version, the canonical
 // host-file/MCP-App entry point backed by the existing version-upload pipeline.
+// default bumped 47 -> 48 to split the host-file data tool from its portable
+// picker launcher; UI metadata is static, so a combined tool rendered the
+// picker even after a host-provided file had already uploaded successfully.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 47,
+  default: 48,
   anonymized: 21,
 };
 

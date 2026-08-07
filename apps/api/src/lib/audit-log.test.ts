@@ -74,7 +74,7 @@ describe("createBackgroundAuditRecorder", () => {
     expect(inserted[1]).toMatchObject({ activityCategory: "documents" });
   });
 
-  test("defaults ordinary mutations to a directly acting user", async () => {
+  test("stores the transport source for a directly acting user", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
       insert: () => ({
@@ -86,7 +86,7 @@ describe("createBackgroundAuditRecorder", () => {
     const recorder = createBackgroundAuditRecorder({
       execution: {
         performer: { id: safeId<"user">("user-1"), type: "user" },
-        trigger: { type: "direct" },
+        trigger: { source: "mcp", type: "direct" },
       },
       organizationId: safeId<"organization">("org-1"),
       userId: safeId<"user">("user-1"),
@@ -105,6 +105,7 @@ describe("createBackgroundAuditRecorder", () => {
       performerName: null,
       performerType: "user",
       triggerType: "direct",
+      triggerSource: "mcp",
       triggerUserId: null,
     });
   });

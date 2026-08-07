@@ -27,14 +27,31 @@ describe("resolveAgentAuditExecution", () => {
     selectMock.mockClear();
   });
 
-  test("keeps an unregistered OAuth client as delegated user activity", async () => {
+  test("attributes an unregistered OAuth client to its user through MCP", async () => {
     const execution = await resolveAgentAuditExecution({
       credential: { clientId: "first-party-cli", type: "oauth_client" },
       organizationId,
       userId,
     });
 
-    expect(execution).toBeUndefined();
+    expect(execution).toEqual({
+      performer: { id: userId, type: "user" },
+      trigger: { source: "mcp", type: "direct" },
+    });
+  });
+
+  test("attributes a delegated user token to its user through MCP", async () => {
+    const execution = await resolveAgentAuditExecution({
+      credential: { type: "delegated_user" },
+      organizationId,
+      userId,
+    });
+
+    expect(execution).toEqual({
+      performer: { id: userId, type: "user" },
+      trigger: { source: "mcp", type: "direct" },
+    });
+    expect(selectMock).not.toHaveBeenCalled();
   });
 
   test("promotes a claimed agent registration to agent activity", async () => {

@@ -59,7 +59,18 @@ export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = t.Object(
       description:
         "Existing document entity ID that will receive a new version",
     }),
-    file: t.Optional(OPENAI_FILE_REFERENCE_SCHEMA),
+    file: OPENAI_FILE_REFERENCE_SCHEMA,
+  },
+  { additionalProperties: false },
+);
+
+export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = t.Object(
+  {
+    entity_id: t.String({
+      minLength: 1,
+      description:
+        "Existing document entity ID that will receive a new version",
+    }),
   },
   { additionalProperties: false },
 );

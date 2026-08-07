@@ -67,6 +67,7 @@ import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+  OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
   UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
@@ -79,6 +80,7 @@ import type {
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
+  McpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -106,6 +108,7 @@ type DocumentToolName =
   | "read_document"
   | "save_document"
   | "upload_document_version"
+  | "open_document_version_upload"
   | "delete_document"
   | "list_properties"
   | "set_field_value";
@@ -611,10 +614,6 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   },
   {
     _meta: {
-      ui: {
-        resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
-        visibility: ["model", "app"],
-      },
       "openai/fileParams": ["file"],
     },
     annotations: {
@@ -623,15 +622,36 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Upload a file as a new version of an existing document. Pass entity_id " +
-      "and attach file when the host supports MCP file parameters. When file " +
-      "is omitted, opens a portable MCP App file picker in compatible hosts. " +
-      "The upload uses stella's standard presigned, checksum-verified, scanned, " +
-      "and audited file-version pipeline.",
+      "Upload an attached host file as a new version of an existing document. " +
+      "Pass entity_id and file. Use open_document_version_upload only when the " +
+      "host cannot supply MCP file parameters. The upload uses stella's standard " +
+      "presigned, checksum-verified, scanned, and audited file-version pipeline.",
     inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
+    scope: "stella:documents_write",
+  },
+  {
+    _meta: {
+      ui: {
+        resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
+    annotations: {
+      title: "Open document version upload",
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    description:
+      "Open a portable file picker for uploading a new version of an existing " +
+      "document. Use only when upload_document_version cannot receive a host file " +
+      "reference; do not use when the host already supplied an attached file.",
+    inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
     scope: "stella:documents_write",
   },
   {
@@ -1720,6 +1740,43 @@ const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
   return await updateDocumentEntity({ context, input });
 };
 
+type DocumentVersionUploadTargetResult =
+  | {
+      status: "ok";
+      entityId: SafeId<"entity">;
+      workspaceId: SafeId<"workspace">;
+    }
+  | { status: "error"; response: McpToolResponse };
+
+const resolveDocumentVersionUploadTarget = async ({
+  context,
+  entityId: rawEntityId,
+}: {
+  context: McpRequestContext;
+  entityId: string;
+}): Promise<DocumentVersionUploadTargetResult> => {
+  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+    return { status: "error", response: errorResult("Forbidden") };
+  }
+
+  const entityId = brandPersistedEntityId(rawEntityId);
+  const owner = await resolveEntityWorkspace({ context, entityId });
+  if (owner.status !== "ok") {
+    return {
+      status: "error",
+      response: documentEntityNotAvailable(owner),
+    };
+  }
+  const active = ensureActiveWorkspace({
+    context,
+    workspaceId: owner.workspaceId,
+  });
+  if (typeof active !== "string") {
+    return { status: "error", response: active };
+  }
+  return { entityId, status: "ok", workspaceId: owner.workspaceId };
+};
+
 const handleUploadDocumentVersionTool: McpToolHandler = async ({
   args,
   context,
@@ -1728,47 +1785,57 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
     return structuredErrorResult({
       code: "validation_error",
       message:
-        "Invalid input: expected { entity_id: string, file?: { download_url, file_id, mime_type?, file_name? } }",
+        "Invalid input: expected { entity_id: string, file: { download_url, file_id, mime_type?, file_name? } }",
     });
   }
-  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
-    return errorResult("Forbidden");
-  }
 
-  const entityId = brandPersistedEntityId(args.entity_id);
-  const owner = await resolveEntityWorkspace({ context, entityId });
-  if (owner.status !== "ok") {
-    return documentEntityNotAvailable(owner);
-  }
-  const active = ensureActiveWorkspace({
+  const target = await resolveDocumentVersionUploadTarget({
     context,
-    workspaceId: owner.workspaceId,
+    entityId: args.entity_id,
   });
-  if (typeof active !== "string") {
-    return active;
-  }
-
-  if (args.file === undefined) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: "Choose a file in the upload panel to add a new document version.",
-        },
-      ],
-      structuredContent: {
-        entityId,
-        workspaceId: owner.workspaceId,
-      },
-    };
+  if (target.status === "error") {
+    return target.response;
   }
 
   return await uploadRemoteDocumentVersion({
     context,
-    entityId,
+    entityId: target.entityId,
     file: args.file,
-    workspaceId: owner.workspaceId,
+    workspaceId: target.workspaceId,
   });
+};
+
+const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  if (!Value.Check(OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA, args)) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid input: expected { entity_id: string }",
+    });
+  }
+
+  const target = await resolveDocumentVersionUploadTarget({
+    context,
+    entityId: args.entity_id,
+  });
+  if (target.status === "error") {
+    return target.response;
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: "Choose a file in the upload panel to add a new document version.",
+      },
+    ],
+    structuredContent: {
+      entityId: target.entityId,
+      workspaceId: target.workspaceId,
+    },
+  };
 };
 
 const deleteDocumentArgsSchema = v.strictObject({
@@ -2074,6 +2141,8 @@ export const DOCUMENT_TOOL_HANDLERS = {
   delete_document: handleDeleteDocumentTool,
   list_documents: handleListDocumentsTool,
   list_properties: handleListPropertiesTool,
+  [DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName]:
+    handleOpenDocumentVersionUploadTool,
   read_document: handleReadDocumentTool,
   save_document: handleSaveDocumentTool,
   [DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName]: handleUploadDocumentVersionTool,

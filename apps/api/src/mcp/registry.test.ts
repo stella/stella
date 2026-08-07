@@ -96,6 +96,7 @@ describe("MCP tool registry", () => {
       "read_document",
       "save_document",
       "upload_document_version",
+      "open_document_version_upload",
       "delete_document",
       "list_properties",
       "set_field_value",
