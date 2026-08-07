@@ -157,6 +157,26 @@ const INCREMENTAL_SELECT_COLUMNS = {
 const hasContent = sql`${caseLawDecisions.contentHash} IS NOT NULL`;
 const hasCorpusJurisdiction = sql`${caseLawDecisions.country} ~ '^[A-Za-z]{2,8}$'`;
 
+/**
+ * Whether this generation still needs the row's current content.
+ *
+ * `case_law_decisions.indexed_hash` and the generation projection's
+ * `indexed_hash` both record "what of this row is in the engine", and a
+ * generation rebuild commits only the projection: it leaves the serving marker
+ * null. Selecting on the serving marker alone therefore re-indexes every row
+ * the rebuild already placed, which is a no-op against the engine and costs a
+ * corpus read, a delete task and an ingest apiece.
+ *
+ * A row with no projection row reads null here and still selects, as does one
+ * whose content moved past what the projection committed. A queued action also
+ * selects: metadata-only refreshes retain the content hash but still need to
+ * replace the generation's document.
+ */
+const projectionNeedsCurrentContent = sql`(
+  ${caseLawCorpusIndexProjections.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}
+  OR ${caseLawCorpusIndexProjections.pendingAction} IS NOT NULL
+)`;
+
 const settleReservedGenerationProjections = async (
   tx: Transaction,
   {
@@ -677,6 +697,7 @@ export const caseLawCorpusIndexAdapter = {
             hasCorpusJurisdiction,
             redistributableCaseLawSource,
             isNull(caseLawDecisions.indexedHash),
+            projectionNeedsCurrentContent,
           ),
         )
         .limit(limit),
