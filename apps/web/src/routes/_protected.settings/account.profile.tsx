@@ -85,9 +85,9 @@ const PREFERENCE_ROW_KEYS = [
   "numbers",
 ];
 
-// Mirrors the real profile fragment: settings header, the timezone +
-// word-edit-identity Frame, and the sessions section, so the layout does
-// not jump when the session query resolves.
+// Mirrors the real profile fragment: settings header, the display-name
+// Frame, the timezone + word-edit-identity Frame, and the sessions section,
+// so the layout does not jump when the session query resolves.
 function ProfilePagePending() {
   return (
     <>
@@ -95,6 +95,19 @@ function ProfilePagePending() {
         <Skeleton className="h-7 w-32" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </header>
+      <Frame>
+        <FrameHeader>
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="mt-1.5 h-4 w-72 max-w-full" />
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex flex-col gap-4 p-4">
+            <Skeleton className="h-9 w-full max-w-lg rounded-md" />
+            <Skeleton className="h-9 w-20 rounded-md" />
+          </div>
+        </FramePanel>
+      </Frame>
+
       <Frame>
         <FrameHeader>
           <Skeleton className="h-4 w-24" />
@@ -182,6 +195,7 @@ function ProfilePage() {
     <ProfilePageBody
       key={[
         user?.id ?? "anonymous",
+        user?.name ?? "",
         user?.preferredName ?? "",
         user?.wordEditShortcut ?? "",
       ].join(":")}
@@ -198,6 +212,9 @@ function ProfilePageBody() {
   );
   const storedTz = session?.user.timezoneId ?? "UTC";
   const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
+  const [displayName, setDisplayName] = useState(
+    () => session?.user.name ?? "",
+  );
   const [preferredName, setPreferredName] = useState(
     () => session?.user.preferredName ?? "",
   );
@@ -290,6 +307,32 @@ function ProfilePageBody() {
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.timezoneSaved"),
+        type: "success",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: sessionOptions.queryKey,
+      });
+    },
+    onError: () => {
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+
+  const updateDisplayName = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.updateUser({
+        name: displayName.trim(),
+      });
+      if (error) {
+        throw toAuthClientError(error);
+      }
+    },
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.displayNameSaved"),
         type: "success",
       });
       await queryClient.invalidateQueries({
@@ -405,6 +448,49 @@ function ProfilePageBody() {
         description={t("settings.account.profileDescription")}
         title={t("common.profile")}
       />
+      <Frame>
+        <FrameHeader>
+          <FrameTitle>{t("common.displayName")}</FrameTitle>
+          <FrameDescription>
+            {t("settings.account.displayNameDescription")}
+          </FrameDescription>
+        </FrameHeader>
+        <FramePanel>
+          <form
+            action={async () => {
+              // The column must never go blank: it is the label every
+              // identity surface renders. Stop the empty submit here rather
+              // than letting the server silently keep the previous value.
+              if (displayName.trim().length === 0) {
+                stellaToast.add({
+                  title: t("settings.account.displayNameRequired"),
+                  type: "error",
+                });
+                return;
+              }
+              await updateDisplayName.mutateAsync().catch(() => {
+                // The error toast is surfaced via the mutation's
+                // `onError`; swallow here so the action settles.
+              });
+            }}
+            className="flex flex-col gap-4 p-4"
+          >
+            <div className="flex max-w-lg flex-col gap-2">
+              <Label className="sr-only" htmlFor="display-name-input">
+                {t("common.displayName")}
+              </Label>
+              <Input
+                id="display-name-input"
+                maxLength={120}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+              />
+            </div>
+            <ProfileSubmitButton label={t("common.save")} />
+          </form>
+        </FramePanel>
+      </Frame>
+
       <Frame>
         <FrameHeader>
           <FrameTitle>{t("settings.account.timezone")}</FrameTitle>
