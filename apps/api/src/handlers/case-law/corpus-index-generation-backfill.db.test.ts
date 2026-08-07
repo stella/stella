@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import {
   caseLawCorpusProjectionJoin,
@@ -198,7 +199,7 @@ const queueSourceReconciliation = async (
   const boundary = (
     await db
       .select({
-        createdAt: caseLawDecisions.createdAt,
+        createdAtToken: timestampCasToken(caseLawDecisions.createdAt),
         id: caseLawDecisions.id,
       })
       .from(caseLawDecisions)
@@ -206,12 +207,17 @@ const queueSourceReconciliation = async (
       .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
       .limit(1)
   ).at(0);
+  // The SQL trigger stamps the watermark in the database, so the fixture
+  // carries the exact stored timestamp rather than a truncated `Date`.
+  const upperCreatedAt = boundary
+    ? sql`${boundary.createdAtToken}::timestamptz`
+    : null;
   await db
     .insert(caseLawCorpusIndexSourceReconciliations)
     .values({
       generation,
       sourceId,
-      upperCreatedAt: boundary?.createdAt ?? null,
+      upperCreatedAt,
       upperId: boundary?.id ?? null,
     })
     .onConflictDoUpdate({
@@ -223,7 +229,7 @@ const queueSourceReconciliation = async (
         cursorCreatedAt: null,
         cursorId: null,
         revision: sql`${caseLawCorpusIndexSourceReconciliations.revision} + 1`,
-        upperCreatedAt: boundary?.createdAt ?? null,
+        upperCreatedAt,
         upperId: boundary?.id ?? null,
       },
     });
@@ -2354,6 +2360,119 @@ test("rejects a pending hash without a pending action", async () => {
     "case_law_corpus_index_projections_pending_revision_nonnegative",
   );
 });
+
+test(
+  "a microsecond-precision keyset drains instead of re-serving its cursor row",
+  async () => {
+    // Postgres timestamps carry microseconds, a JS `Date` carries
+    // milliseconds. A cursor read back as a `Date` is truncated, so the page
+    // predicate re-selects the row the cursor was written from and the walk
+    // never empties. These fixtures share one millisecond and differ only
+    // below it: the only shape that tells an exact cursor from a truncated
+    // one.
+    const generation = "case_law_v40";
+    const microsecondFixtures = [
+      "2026-07-30 21:38:52.982238+00",
+      "2026-07-30 21:38:52.982239+00",
+      "2026-07-30 21:38:52.982240+00",
+      "2026-07-30 21:38:52.982999+00",
+    ].map((createdAt, index) => ({
+      createdAt,
+      id: toSafeId<"caseLawDecision">(
+        `00000000-0000-4000-8000-00000000040${index}`,
+      ),
+    }));
+    const microsecondIds = microsecondFixtures.map(({ id }) => id);
+
+    await db.insert(caseLawDecisions).values(
+      microsecondFixtures.map(({ createdAt, id }, index) => ({
+        caseNumber: `40 T ${index}/2026`,
+        contentHash: `microsecond-${index}`,
+        country: "CZE",
+        court: "Microsecond court",
+        createdAt: sql`${createdAt}::timestamptz`,
+        decisionDate: "2026-01-01",
+        fulltext: "text",
+        id,
+        language: "cs",
+        languageGroupKey: `microsecond-${index}`,
+        slug: `microsecond-${index}`,
+        sourceId: publicSourceId,
+      })),
+    );
+
+    try {
+      // Guards the fixture itself: a millisecond-seeded row cannot reproduce
+      // the defect, so the seed must survive the round trip with distinct
+      // microseconds that collapse to a single millisecond.
+      const precision = (
+        await db
+          .select({
+            exact: sql<number>`count(distinct ${caseLawDecisions.createdAt})::int`,
+            truncated: sql<number>`count(distinct date_trunc('milliseconds', ${caseLawDecisions.createdAt}))::int`,
+          })
+          .from(caseLawDecisions)
+          .where(inArray(caseLawDecisions.id, microsecondIds))
+      ).at(0);
+      expect(precision).toEqual({
+        exact: microsecondFixtures.length,
+        truncated: 1,
+      });
+
+      const indexed: SafeId<"caseLawDecision">[] = [];
+      const backfill = createCaseLawGenerationBackfill({
+        backfillRows: async (_runnerDb, rows, _generation, options) => {
+          await options.beforeRemoteEffect({
+            effect: completeRemoteEffect,
+            onLeaseLost: noRemoteEffectCompensation,
+          });
+          indexed.push(...rows.map(({ id }) => id));
+          return rows.length;
+        },
+        newLeaseToken: () => "00000000-0000-4000-8000-000000000940",
+        removeProjection: ignoreProjectionRemoval,
+      });
+
+      // One row per page, so a correct walk needs at most one drive per
+      // decision plus the drive that observes the drained snapshot.
+      const decisionCount = (
+        await db
+          .select({ value: sql<number>`count(*)::int` })
+          .from(caseLawDecisions)
+      ).at(0)?.value;
+      if (decisionCount === undefined) {
+        throw new Error("expected a decision count");
+      }
+      const driveLimit = decisionCount + 2;
+      const driveUntilComplete = async (drives = 0): Promise<number> => {
+        if (drives >= driveLimit) {
+          return drives;
+        }
+        const { status } = await backfill(scopedDb, 1, generation);
+        return status === "complete"
+          ? drives + 1
+          : await driveUntilComplete(drives + 1);
+      };
+
+      expect(await driveUntilComplete()).toBeLessThan(driveLimit);
+      expect(await readCheckpoint(generation)).toMatchObject({
+        status: "complete",
+      });
+      expect(indexed).toHaveLength(new Set(indexed).size);
+      expect(indexed.filter((id) => microsecondIds.includes(id))).toEqual(
+        microsecondIds,
+      );
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, microsecondIds));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
 
 test(
   "a trigger-seeded projection reserves as append-safe until a reservation crosses the boundary",
