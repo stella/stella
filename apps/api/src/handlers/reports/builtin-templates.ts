@@ -10,9 +10,21 @@
  * The manifest is embedded in the DOCX (customXml) by the generation script, so
  * the fill pipeline reads it from the buffer; it is also exported here for the
  * picker read surface and the generation script.
+ *
+ * The asset is pulled in through a `with { type: "file" }` import rather than
+ * resolved from `import.meta.url`. `bun build --compile` (see
+ * `apps/api/Dockerfile`) links the server into a standalone binary whose
+ * `import.meta.url` is `file:///$bunfs/root/server`, so a URL built relative to
+ * it points at `/$bunfs/root/assets/dd-report.docx`: a path that exists in the
+ * source tree but not in the binary, making every read fail with ENOENT. The
+ * import attribute instead makes the bundler embed the asset and resolve the
+ * specifier to a readable path, so the bytes travel with the code and cannot
+ * drift out of the build.
  */
 
 import type { TemplateManifest } from "@/api/lib/docx/types";
+
+import ddReportDocx from "./assets/dd-report.docx" with { type: "file" };
 
 export type BuiltinReportTemplate = {
   key: string;
@@ -63,11 +75,8 @@ const ddReportTemplate: BuiltinReportTemplate = {
   key: DD_REPORT_KEY,
   name: "Due Diligence Report",
   manifest: DD_REPORT_MANIFEST,
-  loadBuffer: async () => {
-    // Resolved relative to this module; the asset ships in the deployment image.
-    const url = new URL("assets/dd-report.docx", import.meta.url);
-    return Buffer.from(await Bun.file(url).arrayBuffer());
-  },
+  loadBuffer: async () =>
+    Buffer.from(await Bun.file(ddReportDocx).arrayBuffer()),
 };
 
 const BUILTIN_REPORT_TEMPLATES: readonly BuiltinReportTemplate[] = [
