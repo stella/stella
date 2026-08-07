@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.4.2
+
+### Patch Changes
+
+- [#1765](https://github.com/stella/stella/pull/1765) [`3b33233`](https://github.com/stella/stella/commit/3b33233800a45b55258fa7b145d19befd4a8c91d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the one-command document version upload workflow and run CLI MCP traffic through the official v2 client transport.
+
 ## 0.4.1
 
 ### Patch Changes
