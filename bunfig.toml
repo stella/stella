@@ -8,7 +8,7 @@ minimumReleaseAge = 432_000
 # by the quarantine on every publish cycle.
 minimumReleaseAgeExcludes = [
   # Office-format text extraction for search indexing. Opted in ahead
-  # of the quarantine window; runs only inside the sandboxed extraction
+  # of the quarantine window; runs only inside the isolated extraction
   # subprocess, never in the API process. Listed with its platform
   # subpackages per the napi note below.
   "@firecrawl/anydoc", # quarantine-expires: 2026-08-09T15:24:34.170Z

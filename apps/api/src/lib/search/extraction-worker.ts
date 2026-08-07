@@ -1,16 +1,13 @@
 /**
- * Sandboxed extraction worker.
+ * Isolated extraction worker.
  *
  * Runs as a standalone Bun subprocess. Receives the MIME type
  * as a CLI argument and raw file bytes on stdin; writes
  * extracted plain text to stdout.
  *
- * The sandbox is what makes third-party format parsers acceptable
- * here: each one runs against attacker-supplied bytes, and a crash,
- * hang, or memory blow-up costs one file's text and nothing else.
- *
- * If the parser crashes or hangs, the parent process kills this
- * subprocess via timeout; the main API server is unaffected.
+ * Process isolation keeps parser crashes and hangs out of the API
+ * event loop. This is not an OS security sandbox: parsers retain the
+ * worker process's permissions. The parent enforces a hard timeout.
  *
  * Usage:  bun run extraction-worker.ts <mimeType>
  *   stdin  → raw file bytes

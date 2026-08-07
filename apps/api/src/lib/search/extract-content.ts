@@ -3,10 +3,10 @@
  * presentations, and the other office formats listed in
  * `extractable-mime-types.ts`).
  *
- * Extraction runs in an isolated Bun subprocess so that parser
- * crashes or exploits (buffer overflow, prototype pollution,
- * infinite loops) cannot affect the main API process. A hard
- * timeout kills the subprocess if it hangs.
+ * Extraction runs in a separate Bun subprocess so parser crashes do
+ * not directly crash the API process. A hard timeout kills the
+ * subprocess if it hangs. This is process isolation, not an OS
+ * security sandbox.
  */
 
 import { Result } from "better-result";
@@ -134,7 +134,7 @@ export const extractFileTextResult = async (
 
 /**
  * Best-effort extraction for request paths where an empty fallback is valid.
- * Durable document processing uses `extractFileTextResult` so a sandbox crash
+ * Durable document processing uses `extractFileTextResult` so a worker crash
  * can never be mistaken for a successfully empty document.
  */
 export const extractFileText = async (
