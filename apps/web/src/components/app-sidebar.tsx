@@ -1,5 +1,11 @@
 import type * as React from "react";
-import { useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -7,7 +13,7 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getRouteApi,
   Link,
@@ -44,6 +50,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
@@ -116,6 +123,7 @@ import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   workspaceActivityOptions,
+  workspacesKeys,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 
@@ -968,6 +976,39 @@ const MatterItem = ({
     },
   });
 
+  // Read whatever the activity query has already cached for this matter without
+  // ever issuing a request: the expanded row owns the fetch, so `enabled: false`
+  // keeps the sidebar at its current request count while still re-rendering the
+  // disclosure once that fetch resolves.
+  const { data: cachedActivity, status: activityStatus } = useInfiniteQuery({
+    ...workspaceActivityOptions({
+      activeOrganizationId,
+      key: { workspaceId: ws.id },
+    }),
+    enabled: false,
+  });
+  // `invalidateQueries` does not refetch a disabled observer, so the cached
+  // pages can outlive the matter they describe. The invalidation flag lives on
+  // the cache entry rather than the observer result, so read it from there.
+  const queryClient = useQueryClient();
+  const activityQueryKey = workspacesKeys.activity(activeOrganizationId, {
+    workspaceId: ws.id,
+  });
+  const activityIsInvalidated = useSyncExternalStore(
+    useCallback(
+      (onStoreChange: () => void) =>
+        queryClient.getQueryCache().subscribe(onStoreChange),
+      [queryClient],
+    ),
+    () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
+    () => false,
+  );
+  const activityIsKnownEmpty = matterActivityIsKnownEmpty({
+    isInvalidated: activityIsInvalidated,
+    pages: cachedActivity?.pages,
+    status: activityStatus,
+  });
+
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
 
@@ -1136,32 +1177,34 @@ const MatterItem = ({
         }}
         ref={dropRef}
       >
-        <Tooltip
-          content={isExpanded ? t("common.showLess") : t("common.showMore")}
-          render={
-            <Button
-              aria-controls={`matter-activity-${ws.id}`}
-              aria-expanded={isExpanded}
-              aria-label={
-                isExpanded ? t("common.showLess") : t("common.showMore")
-              }
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
-              onClick={onExpandedChange}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
+        {activityIsKnownEmpty ? null : (
+          <Tooltip
+            content={isExpanded ? t("common.showLess") : t("common.showMore")}
+            render={
+              <Button
+                aria-controls={`matter-activity-${ws.id}`}
+                aria-expanded={isExpanded}
+                aria-label={
+                  isExpanded ? t("common.showLess") : t("common.showMore")
+                }
+                className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
+                onClick={onExpandedChange}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 transition-transform duration-150",
+                isExpanded && "rotate-90",
+              )}
+              flip={!isExpanded}
+              icon={ChevronRightIcon}
             />
-          }
-        >
-          <DirectionalIcon
-            className={cn(
-              "size-3.5 transition-transform duration-150",
-              isExpanded && "rotate-90",
-            )}
-            flip={!isExpanded}
-            icon={ChevronRightIcon}
-          />
-        </Tooltip>
+          </Tooltip>
+        )}
         <SidebarMenuButton
           asChild
           className="ps-8 pe-12 group-data-[collapsible=icon]:ps-2"
@@ -1378,8 +1421,13 @@ const MatterActivityList = ({
     );
   }
 
-  if (items.length === 0) {
-    return <SidebarMenuSub className="border-0" id={id} />;
+  // Nothing to disclose: render no list at all rather than an empty one, so the
+  // matter row never opens onto a dead end. The row drops its disclosure toggle
+  // on the same drained, item-free result. An empty page that still has a
+  // continuation keeps the list mounted so its "show more" control stays
+  // reachable.
+  if (items.length === 0 && !hasNextPage) {
+    return null;
   }
 
   return (
