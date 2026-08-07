@@ -2,13 +2,13 @@ import { expect, test } from "bun:test";
 
 const migration = await Bun.file(
   new URL(
-    "../../../drizzle/20260805120000_ai_memory_source_cleanup/migration.sql",
+    "../../../drizzle/20260808012000_ai_memory_source_cleanup/migration.sql",
     import.meta.url,
   ),
 ).text();
 const schemaMigration = await Bun.file(
   new URL(
-    "../../../drizzle/20260805111000_ai_memory/migration.sql",
+    "../../../drizzle/20260808005000_ai_memory/migration.sql",
     import.meta.url,
   ),
 ).text();
