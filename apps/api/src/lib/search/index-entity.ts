@@ -286,7 +286,6 @@ export const upsertSearchDocument = async (
   const hasObservedSource = observedSource !== null;
 
   await rootDb.transaction(async (tx) => {
-    /* oxlint-disable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard inside a SQL template, where a line directive cannot reach; a focused fix keeps this rule-only change reviewable */
     // oxlint-disable-next-line require-search-scope/require-search-scope -- atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
       INSERT INTO search_documents (
@@ -363,7 +362,6 @@ export const upsertSearchDocument = async (
         tsv = EXCLUDED.tsv
       RETURNING entity_id AS "entityId"
     `);
-    /* oxlint-enable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- restores the guard after the statement above */
 
     if (!indexed.at(0)) {
       return;

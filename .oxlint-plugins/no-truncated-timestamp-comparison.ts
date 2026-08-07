@@ -32,13 +32,12 @@
 // obvious cases, and this bug class has already survived a documented
 // convention, purpose-built helpers, and two rounds of hand review.
 //
-// The dangerous position is anchored on the LEFT operand being a timestamp
-// column, recognised by the schema's naming convention (a property or SQL
-// identifier ending in `At` / `_at`, plus the handful of columns in
-// EXTRA_TIMESTAMP_COLUMN_NAMES that predate it). Anchoring on the right
-// operand instead is impossible: `cursor.createdAt` and `table.createdAt` are
-// the same shape, and telling them apart is exactly the inference this rule
-// refuses to do.
+// The dangerous position is anchored on a timestamp column, recognised by the
+// schema's naming convention (a property or SQL identifier ending in `At` /
+// `_at`, plus the handful of columns in EXTRA_TIMESTAMP_COLUMN_NAMES that
+// predate it). Drizzle comparisons check either argument. Raw SQL checks the
+// conventional column-on-the-left form and the unambiguous reversed form where
+// a non-column interpolation is compared against a timestamp member.
 //
 // Flagged — raw SQL templates:
 //   sql`(${t.createdAt}, ${t.id}) > (${cursor.createdAt}, ${cursor.id})`
@@ -267,9 +266,9 @@ const calleeName = (node: unknown): string | undefined => {
   return undefined;
 };
 
-// A `sql` fragment is evaluated by Postgres, so no JS `Date` is involved and
-// nothing can truncate. `sql\`now()\`` and a nested fragment both read this
-// way.
+// Recognise a Drizzle `sql` tag. A static fragment is database-native, but a
+// tag alone is not a safety proof: `sql\`${cursor.createdAt}\`` still binds a
+// truncated Date. The recursive check in `create` inspects its expressions.
 const isSqlTaggedTemplate = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "TaggedTemplateExpression") {
     return false;
