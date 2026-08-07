@@ -42,6 +42,7 @@ import {
 import {
   timestampCasToken,
   type TimestampCasToken,
+  timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
@@ -126,7 +127,7 @@ const SELECT_COLUMNS = {
   generationPendingAction: sql<CaseLawCorpusIndexProjectionAction | null>`null`,
   generationPendingIndexIds: sql<string[]>`'{}'::varchar(64)[]`,
   generationPendingRevision: sql<number>`0`,
-  createdAt: caseLawDecisions.createdAt,
+  createdAtToken: timestampCasToken(caseLawDecisions.createdAt),
   updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
 };
 
@@ -1026,27 +1027,43 @@ const backfillIncrementalCorpusIndex = async (
   }
 };
 
+/**
+ * Keyset and snapshot timestamps travel as exact-precision text tokens, never
+ * as `Date`: Postgres keeps microseconds, a `Date` keeps milliseconds, and a
+ * truncated cursor re-selects the row it was written from forever.
+ */
 type GenerationBackfillCheckpoint = {
-  cursorCreatedAt: Date | null;
+  cursorCreatedAt: TimestampCasToken | null;
   cursorId: SafeId<"caseLawDecision"> | null;
   generation: string;
   generationOrder: number;
-  snapshotAt: Date;
+  snapshotAt: TimestampCasToken;
+};
+
+const GENERATION_CHECKPOINT_COLUMNS = {
+  cursorCreatedAt: timestampCasToken(
+    caseLawCorpusIndexBackfills.cursorCreatedAt,
+  ),
+  cursorId: caseLawCorpusIndexBackfills.cursorId,
+  generation: caseLawCorpusIndexBackfills.generation,
+  generationOrder: caseLawCorpusIndexBackfills.generationOrder,
+  snapshotAt: timestampCasToken(caseLawCorpusIndexBackfills.snapshotAt),
+  status: caseLawCorpusIndexBackfills.status,
 };
 
 type GenerationBackfillRow = IndexableRow & {
-  createdAt: Date;
+  createdAtToken: TimestampCasToken;
   generationIndexedHash: string | null;
   sourceDescriptor: CorpusSourceDescriptor | null;
 };
 
 type SourceReconciliationCheckpoint = {
-  cursorCreatedAt: Date | null;
+  cursorCreatedAt: TimestampCasToken | null;
   cursorId: SafeId<"caseLawDecision"> | null;
   generation: string;
   revision: number;
   sourceId: SafeId<"caseLawSource">;
-  upperCreatedAt: Date | null;
+  upperCreatedAt: TimestampCasToken | null;
   upperId: SafeId<"caseLawDecision"> | null;
 };
 
@@ -1161,9 +1178,13 @@ const sameCursor = ({
 }: {
   checkpoint: GenerationBackfillCheckpoint;
 }) =>
-  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
-  sql`${caseLawCorpusIndexBackfills.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}
-      AND ${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`;
+  and(
+    timestampMatchesCasToken(
+      caseLawCorpusIndexBackfills.cursorCreatedAt,
+      checkpoint.cursorCreatedAt,
+    ),
+    sql`${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
+  );
 
 const nextLeaseExpiry = () =>
   sql<Date>`now() + (${BACKFILL_LEASE_MS} * interval '1 millisecond')`;
@@ -1208,12 +1229,10 @@ const selectGenerationBackfillPage = async (
       )
       .where(
         and(
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-          lte(caseLawDecisions.createdAt, checkpoint.snapshotAt),
+          sql`${caseLawDecisions.createdAt} <= ${checkpoint.snapshotAt}::timestamptz`,
           checkpoint.cursorCreatedAt === null
             ? undefined
-            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}::timestamptz, ${checkpoint.cursorId})`,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
@@ -1273,12 +1292,10 @@ const selectGenerationEligibilityPage = async (
           eq(caseLawDecisions.sourceId, checkpoint.sourceId),
           checkpoint.upperCreatedAt === null
             ? sql`false`
-            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (${checkpoint.upperCreatedAt}, ${checkpoint.upperId})`,
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (${checkpoint.upperCreatedAt}::timestamptz, ${checkpoint.upperId})`,
           checkpoint.cursorCreatedAt === null
             ? undefined
-            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}::timestamptz, ${checkpoint.cursorId})`,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
@@ -1293,14 +1310,16 @@ const selectSourceReconciliationCheckpoint = async (
     (
       await tx
         .select({
-          cursorCreatedAt:
+          cursorCreatedAt: timestampCasToken(
             caseLawCorpusIndexSourceReconciliations.cursorCreatedAt,
+          ),
           cursorId: caseLawCorpusIndexSourceReconciliations.cursorId,
           generation: caseLawCorpusIndexSourceReconciliations.generation,
           revision: caseLawCorpusIndexSourceReconciliations.revision,
           sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
-          upperCreatedAt:
+          upperCreatedAt: timestampCasToken(
             caseLawCorpusIndexSourceReconciliations.upperCreatedAt,
+          ),
           upperId: caseLawCorpusIndexSourceReconciliations.upperId,
         })
         .from(caseLawCorpusIndexSourceReconciliations)
@@ -1365,11 +1384,15 @@ const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
     ),
     eq(caseLawCorpusIndexSourceReconciliations.sourceId, checkpoint.sourceId),
     eq(caseLawCorpusIndexSourceReconciliations.revision, checkpoint.revision),
-    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
-    sql`${caseLawCorpusIndexSourceReconciliations.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}`,
+    timestampMatchesCasToken(
+      caseLawCorpusIndexSourceReconciliations.cursorCreatedAt,
+      checkpoint.cursorCreatedAt,
+    ),
     sql`${caseLawCorpusIndexSourceReconciliations.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
-    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
-    sql`${caseLawCorpusIndexSourceReconciliations.upperCreatedAt} IS NOT DISTINCT FROM ${checkpoint.upperCreatedAt}`,
+    timestampMatchesCasToken(
+      caseLawCorpusIndexSourceReconciliations.upperCreatedAt,
+      checkpoint.upperCreatedAt,
+    ),
     sql`${caseLawCorpusIndexSourceReconciliations.upperId} IS NOT DISTINCT FROM ${checkpoint.upperId}`,
   );
 
@@ -1423,7 +1446,7 @@ export const createCaseLawGenerationBackfill =
         // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
         const existing = (
           await tx
-            .select()
+            .select(GENERATION_CHECKPOINT_COLUMNS)
             .from(caseLawCorpusIndexBackfills)
             .where(eq(caseLawCorpusIndexBackfills.generation, generation))
             .limit(1)
@@ -1443,7 +1466,7 @@ export const createCaseLawGenerationBackfill =
           .insert(caseLawCorpusIndexBackfills)
           .values({ generation, snapshotAt: sql`clock_timestamp()` })
           .onConflictDoNothing()
-          .returning();
+          .returning(GENERATION_CHECKPOINT_COLUMNS);
         const created = inserted.at(0);
         if (created) {
           return created;
@@ -1451,7 +1474,7 @@ export const createCaseLawGenerationBackfill =
 
         const concurrent = (
           await tx
-            .select()
+            .select(GENERATION_CHECKPOINT_COLUMNS)
             .from(caseLawCorpusIndexBackfills)
             .where(eq(caseLawCorpusIndexBackfills.generation, generation))
             .limit(1)
@@ -1609,7 +1632,7 @@ export const createCaseLawGenerationBackfill =
             const rows = await tx
               .update(caseLawCorpusIndexSourceReconciliations)
               .set({
-                cursorCreatedAt: lastSourceRow.createdAt,
+                cursorCreatedAt: sql`${lastSourceRow.createdAtToken}::timestamptz`,
                 cursorId: lastSourceRow.id,
                 updatedAt: sql`now()`,
               })
@@ -1737,7 +1760,7 @@ export const createCaseLawGenerationBackfill =
                 ),
               ),
             )
-            .returning();
+            .returning(GENERATION_CHECKPOINT_COLUMNS);
           return claimedRows.at(0);
         });
         if (!claimedReconciliation) {
@@ -1784,7 +1807,7 @@ export const createCaseLawGenerationBackfill =
               ),
             ),
           )
-          .returning();
+          .returning(GENERATION_CHECKPOINT_COLUMNS);
         return rows.at(0);
       });
       if (!claimed) {
@@ -1830,7 +1853,7 @@ export const createCaseLawGenerationBackfill =
                 }),
               ),
             )
-            .returning();
+            .returning(GENERATION_CHECKPOINT_COLUMNS);
           return rows.at(0);
         });
         if (!completed) {
@@ -1910,7 +1933,7 @@ export const createCaseLawGenerationBackfill =
         const advancedRows = await tx
           .update(caseLawCorpusIndexBackfills)
           .set({
-            cursorCreatedAt: last.createdAt,
+            cursorCreatedAt: sql`${last.createdAtToken}::timestamptz`,
             cursorId: last.id,
             leaseExpiresAt: null,
             leaseToken: null,

@@ -94,11 +94,12 @@ export const enqueueStyleSetPackageCleanupJob = async ({
 export const deleteQueuedStyleSetPackages = async (
   styleSetId: string,
 ): Promise<void> => {
+  // BullMQ 6 dropped the separate `paused` state: a paused queue's jobs are
+  // reported as `waiting`, which this list already covers.
   const jobs = await getQueue().getJobs([
     "active",
     "delayed",
     "failed",
-    "paused",
     "prioritized",
     "waiting",
     "waiting-children",

@@ -154,8 +154,9 @@ const buildRow = (modelId: string, format: IntlFormatter): ModelRow => {
   const price: ModelPrice = calc.model_price;
   return {
     modelId,
-    inputPerM: formatPerMTok(price.input_mtok, markup, format),
-    outputPerM: formatPerMTok(price.output_mtok, markup, format),
+    // genai-prices 0.1 moved the per-mtok rates behind an index signature.
+    inputPerM: formatPerMTok(price["input_mtok"], markup, format),
+    outputPerM: formatPerMTok(price["output_mtok"], markup, format),
     perCall: formatUsd(calc.total_price * markup, format),
     hasPrice: true,
   };

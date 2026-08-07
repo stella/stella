@@ -55,11 +55,16 @@ import {
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 import {
+  CYCLE_CADENCE,
+  CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
+  type CadenceStreaks,
+  type CycleCadence,
   type CycleOutcome,
   type CycleResult,
+  INITIAL_CADENCE_STREAKS,
   cycleMadeProgress,
-  cycleWasIdle,
+  stepCadence,
 } from "./cycle-progress";
 import {
   RECOMPUTE_OUTCOME,
@@ -176,7 +181,8 @@ type SourceDef = {
 };
 
 const HEARTBEAT_PATH = "/tmp/ingestion.lock";
-const CYCLE_DELAY_MS = 5000;
+/** Base of the failure backoff, and the cadence a healthy adapter runs at. */
+const CYCLE_DELAY_MS = CYCLE_CADENCE_DELAY_MS[CYCLE_CADENCE.FAST];
 const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
 const SEARCH_INDEX_INTERVAL_MS = 10_000;
@@ -208,13 +214,20 @@ const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
 // `nextRecomputeDelayMs`.
 const CITATION_AUTHORITY_RETRY_DELAY_MS = 10 * 60 * 1000;
 
-// Idle backoff: once an adapter is caught up (no new decisions
-// for IDLE_THRESHOLD consecutive cycles), poll once a day instead
-// of every CYCLE_DELAY_MS. Resets to fast cadence on the next
-// non-zero insert. Keeps us from hammering court servers in
-// steady state.
-const IDLE_THRESHOLD = 3;
-const IDLE_DELAY_MS = 24 * 60 * 60 * 1000;
+// Cadence backoff (thresholds, delays and the state machine live in
+// ./cycle-progress): a caught-up adapter polls daily. One that keeps
+// re-fetching decisions it already holds polls hourly because that signal can
+// also describe a legitimate forward re-ingest. Either resets to the fast
+// cadence on the next cycle that writes a row. This keeps us from hammering
+// court servers in steady state without stalling a catch-up walk for months.
+
+/** Log line for entering a cadence, so a transition is greppable. */
+const CADENCE_ENTRY_MESSAGE = {
+  [CYCLE_CADENCE.FAST]: "Resuming fast cadence",
+  [CYCLE_CADENCE.CAUGHT_UP]: "Caught up; switching to daily polling",
+  [CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]:
+    "Re-fetching stored decisions without writing any; switching to hourly polling",
+} as const satisfies Record<CycleCadence, string>;
 
 // Liveness watchdog. A self-scheduling timer measures how late it fires
 // versus its interval; sustained lag means the event loop is starved (a
@@ -638,6 +651,7 @@ const runOneCycle = async (
     return {
       outcome: CYCLE_OUTCOME.FAILED,
       inserted: 0,
+      skipped: 0,
       pagesProcessed: 0,
     };
   }
@@ -742,6 +756,7 @@ const runOneCycle = async (
   return {
     outcome,
     inserted: result?.inserted ?? 0,
+    skipped: result?.skipped ?? 0,
     pagesProcessed: result?.pagesProcessed ?? 0,
   };
 };
@@ -761,8 +776,9 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let noProgressStreak = 0;
   /** Separate counter for backoff; not reset by the alert threshold. */
   let backoffFailures = 0;
-  /** Consecutive completed cycles with zero inserts; drives idle backoff. */
-  let idleCycles = 0;
+  /** Quiet and unproductive streaks; drive the inter-cycle delay. */
+  let streaks: CadenceStreaks = INITIAL_CADENCE_STREAKS;
+  let cadence: CycleCadence = CYCLE_CADENCE.FAST;
 
   while (true) {
     if (isDraining()) {
@@ -813,24 +829,22 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         backoffFailures++;
       } else {
         backoffFailures = 0;
-        // Idle means caught up with nothing to do, so only a clean cycle that
-        // found nothing counts toward it. Every other cycle reaching here
-        // moved through the source, and a halt or a timeout partway in is a
-        // source with work left rather than a quiet one: it has to clear the
-        // idle state, or the delay below parks a working adapter on the daily
-        // cadence for a day at a time.
-        if (cycleWasIdle(cycle)) {
-          idleCycles++;
-          if (idleCycles === IDLE_THRESHOLD) {
-            logInfo(`[${adapterKey}] Caught up; switching to daily polling`);
-          }
-        } else {
-          if (idleCycles >= IDLE_THRESHOLD) {
-            logInfo(
-              `[${adapterKey}] New decisions found; resuming fast cadence`,
-            );
-          }
-          idleCycles = 0;
+        // How the cycle ended does not decide the cadence; what it wrote
+        // does. An adapter whose page budget outlasts its cycle deadline
+        // times out every cycle, so keying the cadence on a clean outcome
+        // pinned a source re-fetching its stored corpus to the fast cadence
+        // forever, holding a cycle slot against sources with work.
+        const step = stepCadence(streaks, cycle);
+        streaks = step.streaks;
+        if (step.cadence !== cadence) {
+          cadence = step.cadence;
+          logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
+        }
+        if (step.unproductiveRescan) {
+          logger.error("case_law.ingestion.unproductive_rescan", {
+            adapterKey,
+            ...step.unproductiveRescan,
+          });
         }
       }
     } catch (error) {
@@ -860,15 +874,11 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
 
     writeHeartbeat();
     // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
-    // Otherwise: idle delay if caught up, else fast cadence.
-    let delayMs: number;
-    if (backoffFailures > 0) {
-      delayMs = Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000);
-    } else if (idleCycles >= IDLE_THRESHOLD) {
-      delayMs = IDLE_DELAY_MS;
-    } else {
-      delayMs = CYCLE_DELAY_MS;
-    }
+    // Otherwise the cadence the last returned cycle earned.
+    const delayMs =
+      backoffFailures > 0
+        ? Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000)
+        : CYCLE_CADENCE_DELAY_MS[cadence];
     // oxlint-disable-next-line no-await-in-loop -- inter-cycle backoff/idle delay; the loop must pause before the next cycle, so this await is intentionally sequential
     await Bun.sleep(delayMs);
   }
