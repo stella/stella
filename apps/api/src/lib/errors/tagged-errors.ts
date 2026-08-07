@@ -247,6 +247,17 @@ export class ChatLoopDetectedError extends TaggedError(
   message: string;
 }> {}
 
+/**
+ * Terminal outcomes the chat stream raises itself when a model attempt yields
+ * no usable assistant turn: an outcome it models, not a shape it failed to
+ * anticipate (an empty completion is even retried on the fallback model). A
+ * consumer that grades a failure has to treat the whole union that way; see
+ * `isAnticipatedAIFailure`.
+ */
+export type ChatTerminalError =
+  | ChatEmptyCompletionError
+  | ChatLoopDetectedError;
+
 /** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
 export class SandboxError extends TaggedError("SandboxError")<{
   reason:
