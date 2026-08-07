@@ -6,12 +6,11 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
-import { listOrganizationMachineApiKeys } from "@/api/lib/machine-api-key-queries";
 import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-} from "@/api/lib/pagination";
+  listOrganizationMachineApiKeys,
+  machineApiKeyCursor,
+} from "@/api/lib/machine-api-key-queries";
+import { createCursorPage } from "@/api/lib/pagination";
 
 const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
 const MACHINE_API_KEY_PAGE_SIZE_MAX = 200;
@@ -45,34 +44,6 @@ type MachineApiKeySummary = {
   lastRequest: Date | null;
 };
 
-type MachineApiKeyCursor = { createdAt: Date; id: string };
-
-/**
- * Cursor over `(created_at, id)`, the same pair the query orders and indexes by.
- * A malformed cursor is rejected rather than silently treated as "first page",
- * so a client bug surfaces instead of quietly re-reading page one forever.
- */
-const decodeMachineApiKeyCursor = (
-  cursor: string,
-): MachineApiKeyCursor | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (parts?.length !== 2) {
-    return null;
-  }
-
-  const [createdAt, id] = parts;
-  if (typeof createdAt !== "string" || typeof id !== "string") {
-    return null;
-  }
-
-  const parsed = new Date(createdAt);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return { createdAt: parsed, id };
-};
-
 /**
  * List the machine API keys belonging to the caller's active organization.
  *
@@ -94,8 +65,10 @@ const listMachineApiKeys = createSafeRootHandler(
   async function* ({ session, query }) {
     const limit = query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT;
 
+    // A malformed cursor is rejected rather than silently treated as "first
+    // page", so a client bug surfaces instead of quietly re-reading page one.
     const cursor = query.cursor
-      ? decodeMachineApiKeyCursor(query.cursor)
+      ? machineApiKeyCursor.decode(query.cursor)
       : null;
     if (query.cursor !== undefined && cursor === null) {
       return Result.err(
@@ -122,12 +95,15 @@ const listMachineApiKeys = createSafeRootHandler(
 
     // Paginate first, then render. Cutting the page before dropping
     // undescribable rows keeps `nextCursor` anchored to a real row's
-    // `(created_at, id)`, so pagination cannot skip rows or stall.
+    // `(created_at, id)`. The cursor carries the database's own
+    // microsecond-precision rendering of `created_at`, not a JS `Date`, so
+    // the boundary comparison cannot skip the keys that share the boundary's
+    // truncated millisecond.
     const page = createCursorPage({
       rows,
       limit,
       cursorForItem: (row) =>
-        encodePaginationCursor([row.createdAt.toISOString(), row.id]),
+        machineApiKeyCursor.encode(row.createdAtCursor, row.id),
     });
 
     const items: MachineApiKeySummary[] = [];

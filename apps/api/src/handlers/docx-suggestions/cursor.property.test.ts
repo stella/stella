@@ -3,42 +3,83 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedDocxSuggestionId } from "@/api/lib/safe-id-boundaries";
 
-import {
-  decodeDocxSuggestionCursor,
-  encodeDocxSuggestionCursor,
-} from "./cursor";
+import { docxSuggestionCursor } from "./cursor";
 
-// The cursor is exactly `(created_at ISO string, suggestion uuid)`. Any value
-// in the `Date` range round-trips through `toISOString()`; the only value that
-// cannot is the Invalid Date, which the encoder never produces.
-const validDate = fc.date({ noInvalidDate: true });
-
-// Filter predicate to steer generators away from the (astronomically
-// unlikely) case where a random string is itself a valid part. Reuses the
-// production decoder's own predicates so the test preconditions can never
-// drift from what `decodeDocxSuggestionCursor` actually accepts.
-const isDateTimeCursorPart = (value: string): boolean =>
-  parseDateTimePaginationCursorPart(value) !== null;
+// The cursor is `(PostgreSQL microsecond timestamp text, suggestion uuid)`.
+// The timestamp half is the database's own rendering of `created_at`, never
+// a JS `Date`: a `Date` carries milliseconds, so a boundary built from one
+// re-admits the row the page was cut at and the list never advances.
+const microsecondTimestamp = fc
+  .tuple(
+    fc.date({
+      min: new Date("2000-01-01T00:00:00.000Z"),
+      max: new Date("2099-12-31T23:59:59.999Z"),
+      noInvalidDate: true,
+    }),
+    fc.integer({ min: 0, max: 999_999 }),
+  )
+  .map(
+    ([date, microseconds]) =>
+      `${date.toISOString().slice(0, 19)}.${microseconds.toString().padStart(6, "0")}Z`,
+  );
 
 describe("docx suggestion cursor codec (properties)", () => {
-  test("decode ∘ encode recovers the (createdAt, id) pair", () => {
+  test("INVARIANT: decode ∘ encode recovers the timestamp at full precision", () => {
     fc.assert(
-      fc.property(validDate, fc.uuid(), (createdAt, rawId) => {
+      fc.property(microsecondTimestamp, fc.uuid(), (timestamp, rawId) => {
         const id = brandPersistedDocxSuggestionId(rawId);
-        const decoded = decodeDocxSuggestionCursor(
-          encodeDocxSuggestionCursor({ createdAt, id }),
-        );
-        expect(decoded).not.toBeNull();
-        expect(decoded?.createdAt).toEqual(createdAt);
-        expect(decoded?.id).toBe(id);
+        expect(
+          docxSuggestionCursor.decode(
+            docxSuggestionCursor.encode(timestamp, id),
+          ),
+        ).toEqual({
+          timestamp: {
+            type: "pgTimestampCursor",
+            value: timestamp,
+            precision: "microseconds",
+          },
+          id,
+        });
       }),
+      propertyConfig({ numRuns: 500 }),
+    );
+  });
+
+  test("INVARIANT: cursors issued before the fix still decode, tagged millisecond", () => {
+    // The old encoder was `encodePaginationCursor([createdAt.toISOString(), id])`.
+    // Those cursors are in flight in clients; decoding one must never throw or
+    // 400, it only resumes at the coarser precision it was cut with.
+    fc.assert(
+      fc.property(
+        fc.date({
+          min: new Date("2000-01-01T00:00:00.000Z"),
+          max: new Date("2099-12-31T23:59:59.999Z"),
+          noInvalidDate: true,
+        }),
+        fc.uuid(),
+        (createdAt, rawId) => {
+          const id = brandPersistedDocxSuggestionId(rawId);
+          expect(
+            docxSuggestionCursor.decode(
+              encodePaginationCursor([createdAt.toISOString(), rawId]),
+            ),
+          ).toEqual({
+            timestamp: {
+              type: "pgTimestampCursor",
+              value: createdAt.toISOString(),
+              precision: "milliseconds",
+            },
+            id,
+          });
+        },
+      ),
       propertyConfig({ numRuns: 500 }),
     );
   });
@@ -46,10 +87,10 @@ describe("docx suggestion cursor codec (properties)", () => {
   test("decode never throws and yields a valid cursor or null for any string", () => {
     fc.assert(
       fc.property(fc.string(), (raw) => {
-        const decoded = decodeDocxSuggestionCursor(raw);
+        const decoded = docxSuggestionCursor.decode(raw);
         expect(
           decoded === null ||
-            (decoded.createdAt instanceof Date &&
+            (typeof decoded.timestamp.value === "string" &&
               typeof decoded.id === "string"),
         ).toBe(true);
       }),
@@ -70,7 +111,7 @@ describe("docx suggestion cursor codec (properties)", () => {
         const encoded = Buffer.from(JSON.stringify(value)).toString(
           "base64url",
         );
-        expect(decodeDocxSuggestionCursor(encoded)).toBeNull();
+        expect(docxSuggestionCursor.decode(encoded)).toBeNull();
       }),
       propertyConfig({ numRuns: 300 }),
     );
@@ -83,20 +124,22 @@ describe("docx suggestion cursor codec (properties)", () => {
     fc.assert(
       fc.property(wrongArity, (parts) => {
         expect(
-          decodeDocxSuggestionCursor(encodePaginationCursor(parts)),
+          docxSuggestionCursor.decode(encodePaginationCursor(parts)),
         ).toBeNull();
       }),
       propertyConfig({ numRuns: 300 }),
     );
   });
 
+  // Both preconditions reuse the production predicates the codec itself
+  // applies, so they cannot drift from what `decode` actually accepts.
   test("a non-UUID id part decodes to null", () => {
     fc.assert(
-      fc.property(validDate, fc.string(), (createdAt, rawId) => {
+      fc.property(microsecondTimestamp, fc.string(), (timestamp, rawId) => {
         fc.pre(!isUuidPaginationCursorPart(rawId));
         expect(
-          decodeDocxSuggestionCursor(
-            encodePaginationCursor([createdAt.toISOString(), rawId]),
+          docxSuggestionCursor.decode(
+            encodePaginationCursor([timestamp, rawId]),
           ),
         ).toBeNull();
       }),
@@ -104,12 +147,12 @@ describe("docx suggestion cursor codec (properties)", () => {
     );
   });
 
-  test("a non-datetime created-at part decodes to null", () => {
+  test("a non-timestamp created-at part decodes to null", () => {
     fc.assert(
       fc.property(fc.string(), fc.uuid(), (rawCreatedAt, rawId) => {
-        fc.pre(!isDateTimeCursorPart(rawCreatedAt));
+        fc.pre(parsePgTimestampCursorValue(rawCreatedAt) === null);
         expect(
-          decodeDocxSuggestionCursor(
+          docxSuggestionCursor.decode(
             encodePaginationCursor([rawCreatedAt, rawId]),
           ),
         ).toBeNull();

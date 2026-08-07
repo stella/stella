@@ -286,11 +286,16 @@ export const remainingDocumentOrder = [
   asc(caseLawDecisions.id),
 ] as const;
 
-/** Keyset position in the requested tier (requestedAt, id). */
-export type RequestedDocumentCursor = {
-  requestedAt: Date;
-  id: SafeId<"caseLawDecision">;
-};
+/**
+ * Keyset position in the requested tier: the previous page's last row.
+ * Only its id travels, because the boundary's
+ * `(document_fetch_requested_at, id)` pair is read back in the database.
+ * `document_fetch_requested_at` is written by SQL `now()` and therefore
+ * carries microseconds, which a JS `Date` boundary would truncate to the
+ * millisecond; the ascending `>` comparison would then still admit the row
+ * the page was cut at and re-emit it at the head of every following page.
+ */
+export type RequestedDocumentCursor = SafeId<"caseLawDecision">;
 
 /** Keyset position in the remaining tier (attempts, decisionDate, id). */
 export type RemainingDocumentCursor = {
@@ -364,15 +369,7 @@ export const loadRequestedDocuments = async ({
       eq(caseLawDecisions.sourceId, sourceId),
       requestedDocumentPredicate,
       after
-        ? or(
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-            gt(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
-            and(
-              // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
-              eq(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
-              gt(caseLawDecisions.id, after.id),
-            ),
-          )
+        ? sql`(${caseLawDecisions.documentFetchRequestedAt}, ${caseLawDecisions.id}) > (select b.document_fetch_requested_at, b.id from case_law_decisions b where b.id = ${after})`
         : undefined,
     ),
   });

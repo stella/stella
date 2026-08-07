@@ -117,7 +117,7 @@ const EXTRA_TIMESTAMP_COLUMN_SPELLINGS = new Set(
 // the SQL identifier it maps to (`created_at`, matched case-insensitively
 // because Postgres folds unquoted identifiers).
 const isTimestampColumnName = (name: string): boolean =>
-  name.endsWith('At') ||
+  name.endsWith("At") ||
   name.toLowerCase().endsWith("_at") ||
   EXTRA_TIMESTAMP_COLUMN_SPELLINGS.has(name.toLowerCase());
 
@@ -473,6 +473,17 @@ export default {
             ? quasi.expressions
             : [];
           const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+          const staticSql = stripSqlComments(quasis.map(rawTextOf).join(" "));
+          const selected =
+            /\bselect\s+(?:(?:"?[\w$]+"?)\s*\.\s*)?"?(?<name>[\w$]+)"?/iu.exec(
+              staticSql,
+            );
+          if (
+            selected?.groups?.["name"] !== undefined &&
+            isTimestampColumnName(selected.groups["name"])
+          ) {
+            return true;
+          }
           return expressions.every((expression, index) => {
             if (
               EXPLICIT_TIMESTAMP_CAST.test(
@@ -494,6 +505,30 @@ export default {
           });
         };
 
+        const bindsToSafeSqlFragment = (node: unknown): boolean => {
+          if (
+            !isAstNode(node) ||
+            node.type !== "Identifier" ||
+            typeof node["name"] !== "string"
+          ) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some(
+            (def) =>
+              def.type === "Variable" &&
+              isAstNode(def.node) &&
+              def.node.type === "VariableDeclarator" &&
+              isAstNode(def.parent) &&
+              def.parent.type === "VariableDeclaration" &&
+              def.parent.kind === "const" &&
+              isSafeSqlFragment(def.node.init),
+          );
+        };
+
         const isAllowedOperand = (node: unknown): boolean => {
           if (isSqlTaggedTemplate(node)) {
             return isSafeSqlFragment(node);
@@ -505,7 +540,7 @@ export default {
           if (isFreshClockRead(node)) {
             return true;
           }
-          return bindsToClockRead(node);
+          return bindsToClockRead(node) || bindsToSafeSqlFragment(node);
         };
 
         const report = (node: unknown) => {

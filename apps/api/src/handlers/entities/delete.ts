@@ -169,10 +169,7 @@ export const deleteEntitiesHandler = async function* ({
       await forEachOcrDerivativePage({
         readPage: async (cursor, limit) =>
           await tx
-            .select({
-              createdAt: documentProcessingRuns.createdAt,
-              id: documentProcessingRuns.id,
-            })
+            .select({ id: documentProcessingRuns.id })
             .from(documentProcessingRuns)
             .where(
               and(
