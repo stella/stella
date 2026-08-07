@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -6,6 +6,7 @@ import {
   entities,
   entityVersions,
   fields,
+  properties,
   workspaces,
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -88,6 +89,7 @@ export const writeFileVersion = async ({
     .select({
       currentVersionId: entities.currentVersionId,
       docSequence: entities.docSequence,
+      kind: entities.kind,
       readOnly: entities.readOnly,
     })
     .from(entities)
@@ -103,6 +105,9 @@ export const writeFileVersion = async ({
   }
   if (lockedEntity.readOnly) {
     return { status: "entity-read-only" };
+  }
+  if (lockedEntity.kind !== "document") {
+    return { status: "missing-file-field" };
   }
 
   const currentVersionId = lockedEntity.currentVersionId;
@@ -120,7 +125,36 @@ export const writeFileVersion = async ({
   const fileField = currentVersion.fields.find(
     (candidate) => candidate.content.type === "file",
   );
-  if (!fileField) {
+  const systemFileProperty = fileField
+    ? undefined
+    : await tx
+        .select({ id: properties.id })
+        .from(properties)
+        .where(
+          and(
+            eq(properties.workspaceId, workspaceId),
+            eq(properties.system, true),
+            sql`${properties.content}->>'type' = 'file'`,
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows.at(0));
+  const filePropertyId = fileField?.propertyId ?? systemFileProperty?.id;
+  if (!filePropertyId) {
+    return { status: "missing-file-field" };
+  }
+  // `save_document` deliberately creates an empty first version. Attaching
+  // its first file is therefore an append under the workspace's system file
+  // property, while ordinary version writes keep replacing the existing file
+  // field. A row already occupying that property with a non-file shape is a
+  // malformed document, not an empty one; reject it instead of colliding with
+  // the per-version property uniqueness constraint below.
+  if (
+    !fileField &&
+    currentVersion.fields.some(
+      (candidate) => candidate.propertyId === filePropertyId,
+    )
+  ) {
     return { status: "missing-file-field" };
   }
 
@@ -149,36 +183,45 @@ export const writeFileVersion = async ({
     source,
   });
 
-  await tx.insert(fields).values(
-    cloneFieldsForRevision({
-      currentFields: currentVersion.fields,
-      entityVersionId,
-      propertyId: fileField.propertyId,
-      replacementFieldId: fieldId,
-      replacementContent: fileContentWithMintedObject({
-        encrypted: false,
-        fileName,
-        id: fileId,
-        mimeType,
-        pdfFileId: null,
-        sha256Hex,
-        sizeBytes,
-        type: "file",
-        version: 1,
-        pdfDerivative: pdfDerivativeStateForFile({
-          encrypted: false,
-          mimeType,
-        }),
-        thumbnailFileId: null,
-        thumbnailDerivative: thumbnailDerivativeStateForFile({
-          encrypted: false,
-          mimeType,
-        }),
-        ...(scanWarnings !== undefined && { scanWarnings }),
-      }),
-      workspaceId,
+  const replacementContent = fileContentWithMintedObject({
+    encrypted: false,
+    fileName,
+    id: fileId,
+    mimeType,
+    pdfFileId: null,
+    sha256Hex,
+    sizeBytes,
+    type: "file",
+    version: 1,
+    pdfDerivative: pdfDerivativeStateForFile({
+      encrypted: false,
+      mimeType,
     }),
-  );
+    thumbnailFileId: null,
+    thumbnailDerivative: thumbnailDerivativeStateForFile({
+      encrypted: false,
+      mimeType,
+    }),
+    ...(scanWarnings !== undefined && { scanWarnings }),
+  });
+  const revisionFields = cloneFieldsForRevision({
+    currentFields: currentVersion.fields,
+    entityVersionId,
+    propertyId: filePropertyId,
+    replacementFieldId: fieldId,
+    replacementContent,
+    workspaceId,
+  });
+  if (!fileField) {
+    revisionFields.push({
+      id: fieldId,
+      content: replacementContent,
+      entityVersionId,
+      propertyId: filePropertyId,
+      workspaceId,
+    });
+  }
+  await tx.insert(fields).values(revisionFields);
 
   const currentCellMetadataRows = await tx
     .select({
@@ -198,7 +241,7 @@ export const writeFileVersion = async ({
     )
     .for("update");
   const metadataToCopy = currentCellMetadataRows.filter(
-    (row) => row.propertyId !== fileField.propertyId,
+    (row) => row.propertyId !== filePropertyId,
   );
   if (metadataToCopy.length > 0) {
     await tx.insert(cellMetadata).values(
