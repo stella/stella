@@ -1161,6 +1161,7 @@ const sameCursor = ({
 }: {
   checkpoint: GenerationBackfillCheckpoint;
 }) =>
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
   sql`${caseLawCorpusIndexBackfills.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}
       AND ${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`;
 
@@ -1207,10 +1208,12 @@ const selectGenerationBackfillPage = async (
       )
       .where(
         and(
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
           lte(caseLawDecisions.createdAt, checkpoint.snapshotAt),
           checkpoint.cursorCreatedAt === null
             ? undefined
-            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
+              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
@@ -1270,10 +1273,12 @@ const selectGenerationEligibilityPage = async (
           eq(caseLawDecisions.sourceId, checkpoint.sourceId),
           checkpoint.upperCreatedAt === null
             ? sql`false`
-            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (${checkpoint.upperCreatedAt}, ${checkpoint.upperId})`,
+            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
+              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (${checkpoint.upperCreatedAt}, ${checkpoint.upperId})`,
           checkpoint.cursorCreatedAt === null
             ? undefined
-            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+            : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
+              sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
@@ -1360,8 +1365,10 @@ const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
     ),
     eq(caseLawCorpusIndexSourceReconciliations.sourceId, checkpoint.sourceId),
     eq(caseLawCorpusIndexSourceReconciliations.revision, checkpoint.revision),
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
     sql`${caseLawCorpusIndexSourceReconciliations.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}`,
     sql`${caseLawCorpusIndexSourceReconciliations.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
     sql`${caseLawCorpusIndexSourceReconciliations.upperCreatedAt} IS NOT DISTINCT FROM ${checkpoint.upperCreatedAt}`,
     sql`${caseLawCorpusIndexSourceReconciliations.upperId} IS NOT DISTINCT FROM ${checkpoint.upperId}`,
   );

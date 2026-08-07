@@ -283,7 +283,9 @@ export const acquireNextDueJob = async ({
 const dueJobPredicate = (now: Date) =>
   and(
     eq(schedulerJobs.enabled, true),
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     lte(schedulerJobs.nextRunAt, now),
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     or(isNull(schedulerJobs.lockedUntil), lte(schedulerJobs.lockedUntil, now)),
   );
 

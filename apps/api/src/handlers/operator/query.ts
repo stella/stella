@@ -165,6 +165,7 @@ export const queryRegistrationsPage = async function* ({
 }) {
   const { limit } = filter;
 
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
   const conditions: SQL[] = [gte(user.createdAt, filter.since)];
   if (filter.cursor) {
     const cursor = registrationCursor.decode(filter.cursor);

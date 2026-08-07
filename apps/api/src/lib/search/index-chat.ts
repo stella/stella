@@ -270,12 +270,14 @@ export const upsertChatThreadSearchDocument = async (
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
+  /* oxlint-disable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard inside a SQL template, where a line directive cannot reach; a focused fix keeps this rule-only change reviewable */
   await rootDb.execute(sql`
     UPDATE chat_thread_search_documents
     SET preview_generation = ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
     WHERE thread_id = ${thread.id}
       AND updated_at = ${thread.updatedAt}
   `);
+  /* oxlint-enable no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- restores the guard after the statement above */
 };
 
 /** Page through a thread's messages by `(created_at, id)`, write the

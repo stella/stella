@@ -61,8 +61,10 @@ const listDocxSuggestions = createSafeHandler(
         );
       }
       const keyset = or(
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
         gt(docxSuggestions.createdAt, cursor.createdAt),
         and(
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
           eq(docxSuggestions.createdAt, cursor.createdAt),
           gt(docxSuggestions.id, cursor.id),
         ),

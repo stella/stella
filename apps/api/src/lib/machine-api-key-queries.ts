@@ -99,8 +99,10 @@ export const listOrganizationMachineApiKeys = async ({
         : and(
             organizationScope(organizationId),
             or(
+              // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
               lt(apikey.createdAt, cursor.createdAt),
               and(
+                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
                 eq(apikey.createdAt, cursor.createdAt),
                 lt(apikey.id, cursor.id),
               ),

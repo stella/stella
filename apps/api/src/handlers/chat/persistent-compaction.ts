@@ -325,6 +325,7 @@ const isChatCompactionSnapshotCurrent = async ({
     .where(
       and(
         eq(chatMessages.threadId, threadId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
         sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${firstPersistedMessage.createdAt}, ${firstPersistedMessage.id})`,
       ),
     )

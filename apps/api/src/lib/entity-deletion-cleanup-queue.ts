@@ -214,6 +214,7 @@ export const processEntityDeletionCleanupRequest = async (
           ),
           and(
             eq(entityDeletionCleanupRequests.status, "processing"),
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
             lt(entityDeletionCleanupRequests.updatedAt, staleBefore),
           ),
         ),

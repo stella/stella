@@ -136,6 +136,7 @@ const loadNextTrackedCaseBatch = async (syncStartedAt: Date) =>
         eq(infoSoudTrackedCases.enabled, true),
         or(
           isNull(infoSoudTrackedCases.lastSyncAttemptAt),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lt(infoSoudTrackedCases.lastSyncAttemptAt, syncStartedAt),
         ),
       ),

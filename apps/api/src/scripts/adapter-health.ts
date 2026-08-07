@@ -236,6 +236,7 @@ const getGrowthCounts = (sinceDate: Date) =>
       inserted: count(),
     })
     .from(caseLawDecisions)
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
     .where(gt(caseLawDecisions.createdAt, sinceDate))
     .groupBy(caseLawDecisions.sourceId);
 

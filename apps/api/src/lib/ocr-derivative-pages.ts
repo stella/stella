@@ -31,8 +31,10 @@ export const ocrDerivativeCursorFilter = (
   cursor === null
     ? undefined
     : or(
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
         lt(documentProcessingRuns.createdAt, cursor.createdAt),
         and(
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
           eq(documentProcessingRuns.createdAt, cursor.createdAt),
           gt(documentProcessingRuns.id, cursor.id),
         ),

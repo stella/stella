@@ -96,16 +96,15 @@ export default createSafeRootHandler(
     yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — storage cleanup for the already-audited style set deletion
-        await tx
-          .delete(styleSets)
-          .where(
-            and(
-              eq(styleSets.id, params.styleSetId),
-              eq(styleSets.organizationId, session.activeOrganizationId),
-              eq(styleSets.deletedAt, deleted.deletedAt),
-              isNotNull(styleSets.deletedAt),
-            ),
-          );
+        await tx.delete(styleSets).where(
+          and(
+            eq(styleSets.id, params.styleSetId),
+            eq(styleSets.organizationId, session.activeOrganizationId),
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
+            eq(styleSets.deletedAt, deleted.deletedAt),
+            isNotNull(styleSets.deletedAt),
+          ),
+        );
       }),
     );
     return Result.ok({});

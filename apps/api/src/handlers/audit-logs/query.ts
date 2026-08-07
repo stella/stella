@@ -104,12 +104,15 @@ export const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
     conditions.push(eq(auditLogs.userId, query.userId));
   }
   if (query.from) {
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
     conditions.push(gte(auditLogs.createdAt, new Date(query.from)));
   }
   if (query.to) {
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
     conditions.push(lte(auditLogs.createdAt, new Date(query.to)));
   }
   if (query.toExclusive) {
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
     conditions.push(lt(auditLogs.createdAt, new Date(query.toExclusive)));
   }
   if (query.cursor) {

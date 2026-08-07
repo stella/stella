@@ -1941,7 +1941,8 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
         eq(documentProcessingRuns.attemptCount, attemptCount),
         nextAttemptAt === null
           ? isNull(documentProcessingRuns.nextAttemptAt)
-          : eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
+          : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
+            eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
       ),
     ),
   );
@@ -2214,7 +2215,8 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
         eq(documentProcessingRuns.attemptCount, attemptCount),
         nextAttemptAt === null
           ? isNull(documentProcessingRuns.nextAttemptAt)
-          : eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
+          : // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond compare-and-set guard; a focused fix keeps this rule-only change reviewable
+            eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
       ),
     ),
   );

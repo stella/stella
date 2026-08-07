@@ -158,6 +158,7 @@ export const backfillLegislationSearchIndex = async (
           redistributableLegislationSource,
           gt(
             legislationDocuments.updatedAt,
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
             legislationSearchDocuments.updatedAt,
           ),
         ),

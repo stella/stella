@@ -365,8 +365,10 @@ export const loadRequestedDocuments = async ({
       requestedDocumentPredicate,
       after
         ? or(
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
             gt(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
             and(
+              // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- pre-existing millisecond keyset boundary; a focused fix keeps this rule-only change reviewable
               eq(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
               gt(caseLawDecisions.id, after.id),
             ),

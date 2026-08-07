@@ -263,6 +263,7 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
       .where(
         and(
           inArray(extractionRuns.status, ACTIVE_EXTRACTION_RUN_STATUSES),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lte(extractionRuns.updatedAt, before),
         ),
       )

@@ -119,6 +119,20 @@ export default defineConfig({
     "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
+    // Anchored on the timestamp column, so the operand is always required
+    // to carry the safe form; helpers that emit their own cast are named in
+    // `allowedOperandCalls` rather than inferred from shape.
+    "no-truncated-timestamp-comparison/no-truncated-timestamp-comparison": [
+      "error",
+      {
+        allowedOperandCalls: [
+          "pgTimestampCursorBoundary",
+          "pgTimestampCursorValue",
+          "timestampCasToken",
+          "databaseNow",
+        ],
+      },
+    ],
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
     "no-unsafe-inner-html/no-unsafe-inner-html": "error",
@@ -391,6 +405,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
+    "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -467,6 +482,20 @@ export default defineConfig({
           "error",
           { allowedColumnExpressions: ["apikey.metadata"] },
         ],
+      },
+    },
+    {
+      // no-naive-timestamp-cast's fixture builds truncating comparisons on
+      // purpose (`created_at > ${cursor}::timestamp`) to exercise that rule's
+      // cast detection. They are examples, not call sites, so the comparison
+      // guard is off there rather than layering a second disable directive on
+      // every line.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-naive-timestamp-cast.fixture.ts",
+      ],
+      rules: {
+        "no-truncated-timestamp-comparison/no-truncated-timestamp-comparison":
+          "off",
       },
     },
     {
