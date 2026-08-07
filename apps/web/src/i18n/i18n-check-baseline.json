@@ -50,6 +50,7 @@
     "auth.continueWithEmail",
     "billing.approve",
     "billing.codes.active",
+    "billing.codes.activity",
     "billing.codes.codeLabelField",
     "billing.codes.task",
     "billing.expenses.categories.expert_witness",
@@ -123,6 +124,7 @@
     "flows.runs.review.rejected",
     "flows.runs.start",
     "flows.status.cancelled",
+    "flows.status.completed",
     "flows.status.failed",
     "flows.status.pending",
     "flows.status.skipped",
@@ -186,6 +188,7 @@
     "organization.matterNumber.description",
     "organization.matterNumber.title",
     "organization.members.noMembersFound",
+    "organization.roles.owner",
     "search.dateFrom",
     "search.dateTo",
     "search.kinds.chat",
@@ -211,12 +214,18 @@
     "styleSets.defaultBadge",
     "styleSets.newDocument",
     "success.documentCreated",
+    "tasks.activity",
     "tasks.dueDate",
     "tasks.myTasksTitle",
+    "tasks.owner",
     "tasks.priorityValues.high",
     "tasks.priorityValues.low",
     "tasks.priorityValues.medium",
+    "tasks.queue.completed",
+    "tasks.sourceTypeValues.calendar",
+    "tasks.sourceTypeValues.manual",
     "tasks.statusValues.cancelled",
+    "tasks.workTypeValues.task",
     "templates.conditionField",
     "templates.conditionOpContains",
     "templates.conditionOpIs",
@@ -488,6 +497,9 @@
       "cs"
     ],
     "common.sessions": [
+      "fr"
+    ],
+    "common.source": [
       "fr"
     ],
     "common.status": [

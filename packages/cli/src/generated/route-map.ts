@@ -2668,6 +2668,14 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--workflow-reason",
+                prop: "workflow_reason",
+                kind: "string",
+                repeatable: false,
+                description: "Reason for a governed status or deadline change",
+                required: false,
+              },
+              {
                 flag: "--add-assignee-user-id",
                 prop: "add_assignee_user_id",
                 kind: "string",
@@ -2738,6 +2746,12 @@ export const generatedRouteMap: RouteNode = {
                   type: ["string", "null"],
                   description: "Due date (ISO YYYY-MM-DD); pass null to clear",
                   maxLength: 10,
+                },
+                workflow_reason: {
+                  type: "string",
+                  description:
+                    "Reason for a governed status or deadline change",
+                  maxLength: 1000,
                 },
                 add_assignee_user_id: {
                   type: "string",
@@ -55779,6 +55793,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "assigneeIds",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--owner-user-id",
+                    prop: "ownerUserId",
+                    required: false,
+                    part: "body",
+                    partPath: "ownerUserId",
+                  },
                 ],
                 inputOnly: [
                   "body.dueDate",
@@ -55794,6 +55817,9 @@ export const generatedRouteMap: RouteNode = {
                   "body.organizer",
                   "body.attendees",
                   "body.recurrence",
+                  "body.workingTargetDate",
+                  "body.hardDeadlineDate",
+                  "body.sourceDescription",
                 ],
                 paginated: false,
                 destructive: false,
@@ -56114,8 +56140,55 @@ export const generatedRouteMap: RouteNode = {
                           maxItems: 500,
                           type: "array",
                           items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                             type: "string",
                           },
+                        },
+                        ownerUserId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        workingTargetDate: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        hardDeadlineDate: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        sourceDescription: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 1000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                       },
                     },
@@ -56473,6 +56546,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "allDay",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workflow-reason",
+                    prop: "workflowReason",
+                    required: false,
+                    part: "body",
+                    partPath: "workflowReason",
+                  },
                 ],
                 inputOnly: [
                   "body.dueDate",
@@ -56809,6 +56891,11 @@ export const generatedRouteMap: RouteNode = {
                               type: "null",
                             },
                           ],
+                        },
+                        workflowReason: {
+                          minLength: 1,
+                          maxLength: 1000,
+                          type: "string",
                         },
                       },
                     },
@@ -60984,6 +61071,449 @@ export const generatedRouteMap: RouteNode = {
                 destructive: false,
                 scope: "matters_write",
                 schemaTruncated: true,
+              },
+            },
+          },
+        },
+        "work-obligations": {
+          kind: "route",
+          children: {
+            "acknowledgements-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "work-obligations",
+                  "acknowledgements-create",
+                ],
+                capabilityId: "work-obligations.acknowledgements.create",
+                description:
+                  "Acknowledge ownership of governed work assigned to the signed-in user.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "entityId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "queues-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "work-obligations", "queues-list"],
+                capabilityId: "work-obligations.queues.list",
+                description:
+                  "List the signed-in user's governed work in inbox, upcoming, at-risk, or completed queues with cursor pagination.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--as-of",
+                    prop: "asOf",
+                    required: false,
+                    part: "query",
+                    partPath: "asOf",
+                  },
+                ],
+                inputOnly: ["query.queue"],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        queue: {
+                          anyOf: [
+                            {
+                              const: "inbox",
+                              type: "string",
+                            },
+                            {
+                              const: "upcoming",
+                              type: "string",
+                            },
+                            {
+                              const: "at_risk",
+                              type: "string",
+                            },
+                            {
+                              const: "completed",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        asOf: {
+                          format: "date",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            transition: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "work-obligations", "transition"],
+                capabilityId: "work-obligations.transition",
+                description:
+                  "Complete, cancel, or reopen governed work while preserving its lifecycle history.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["complete", "cancel", "reopen"],
+                    repeatable: false,
+                    flag: "--action",
+                    prop: "action",
+                    required: true,
+                    part: "body",
+                    partPath: "action",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--reason",
+                    prop: "reason",
+                    required: false,
+                    part: "body",
+                    partPath: "reason",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["action"],
+                      properties: {
+                        action: {
+                          default: "complete",
+                          type: "string",
+                          enum: ["complete", "cancel", "reopen"],
+                        },
+                        reason: {
+                          minLength: 1,
+                          maxLength: 1000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "entityId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "work-obligations", "update"],
+                capabilityId: "work-obligations.update",
+                description:
+                  "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--reason",
+                    prop: "reason",
+                    required: false,
+                    part: "body",
+                    partPath: "reason",
+                  },
+                ],
+                inputOnly: [
+                  "body.ownerUserId",
+                  "body.type",
+                  "body.workingTargetDate",
+                  "body.hardDeadlineDate",
+                  "body.sourceType",
+                  "body.sourceEntityId",
+                  "body.sourceDescription",
+                ],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        ownerUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        type: {
+                          anyOf: [
+                            {
+                              const: "task",
+                              type: "string",
+                            },
+                            {
+                              const: "deadline",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        workingTargetDate: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        hardDeadlineDate: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        sourceType: {
+                          anyOf: [
+                            {
+                              const: "manual",
+                              type: "string",
+                            },
+                            {
+                              const: "calendar",
+                              type: "string",
+                            },
+                            {
+                              const: "email",
+                              type: "string",
+                            },
+                            {
+                              const: "document",
+                              type: "string",
+                            },
+                            {
+                              const: "import",
+                              type: "string",
+                            },
+                            {
+                              const: "api",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        sourceEntityId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        sourceDescription: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 1000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        reason: {
+                          minLength: 1,
+                          maxLength: 1000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "entityId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
               },
             },
           },

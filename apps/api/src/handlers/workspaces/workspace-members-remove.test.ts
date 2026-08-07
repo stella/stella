@@ -60,6 +60,9 @@ describe("removeWorkspaceMember", () => {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
+            limit: () => ({
+              for: async () => [],
+            }),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: "user_lead" }];

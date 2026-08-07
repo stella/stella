@@ -216,6 +216,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   usage: "stella:read",
   "view-templates": "stella:matters_write",
   views: "stella:matters_write",
+  "work-obligations": "stella:matters_write",
   workspaces: "stella:matters_write",
 };
 

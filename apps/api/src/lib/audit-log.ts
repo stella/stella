@@ -72,6 +72,7 @@ export const AUDIT_RESOURCE_TYPE = {
   WORKSPACE: "workspace",
   WORKSPACE_CONTACT: "workspace_contact",
   WORKSPACE_MEMBER: "workspace_member",
+  WORK_OBLIGATION: "work_obligation",
 } as const;
 
 export type AuditResourceType =

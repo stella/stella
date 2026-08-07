@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { savedSearches } from "@/api/db/schema";
+import { entities, savedSearches, workObligations } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
@@ -23,6 +23,7 @@ import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
+import listWorkObligations from "@/api/handlers/work-obligations/queues/list";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -86,6 +87,12 @@ const savedSearchA = toSafeId<"savedSearch">(
 );
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
+);
+const foreignOwnedTaskB = toSafeId<"entity">(
+  "22222222-2222-4222-8222-222222222246",
+);
+const visibleOwnedTaskB = toSafeId<"entity">(
+  "22222222-2222-4222-8222-222222222247",
 );
 
 const savedSearchCriteria = (
@@ -333,6 +340,21 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.templateB),
   },
+  {
+    name: "governed work queue",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listWorkObligations, workspaceA, {
+        query: { queue: "upcoming", asOf: "2026-08-01", limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listWorkObligations, workspaceB, {
+        query: { queue: "upcoming", asOf: "2026-08-01", limit: 100 },
+      }),
+    expectDenied: (result) =>
+      expectPageExcludesField(result, "entityId", foreignOwnedTaskB),
+    expectPositive: (result) =>
+      expectPageContainsField(result, "entityId", visibleOwnedTaskB),
+  },
 ];
 
 beforeAll(async () => {
@@ -353,6 +375,36 @@ beforeAll(async () => {
       userId: ids.userB1,
       name: "Workspace B agreements",
       criteria: savedSearchCriteria(ids.wsB1),
+    },
+  ]);
+  await testDb.insert(entities).values([
+    {
+      id: foreignOwnedTaskB,
+      workspaceId: ids.wsB1,
+      kind: "task",
+      name: "foreign-owned task B",
+    },
+    {
+      id: visibleOwnedTaskB,
+      workspaceId: ids.wsB1,
+      kind: "task",
+      name: "visible-owned task B",
+    },
+  ]);
+  await testDb.insert(workObligations).values([
+    {
+      entityId: foreignOwnedTaskB,
+      workspaceId: ids.wsB1,
+      status: "awaiting_acknowledgement",
+      ownerUserId: ids.userA1,
+      createdByUserId: ids.userB1,
+    },
+    {
+      entityId: visibleOwnedTaskB,
+      workspaceId: ids.wsB1,
+      status: "awaiting_acknowledgement",
+      ownerUserId: ids.userB1,
+      createdByUserId: ids.userB1,
     },
   ]);
 });
@@ -480,16 +532,38 @@ function expectEmptyPage(result: unknown): void {
 
 function expectPageContainsId(result: unknown, expectedId: string): void {
   expect(getStatusCode(result)).toBeNull();
-  expect(getPageItems(result).some((item) => item.id === expectedId)).toBe(
+  expect(getPageItems(result).some((item) => item["id"] === expectedId)).toBe(
     true,
   );
 }
 
 function expectPageExcludesId(result: unknown, excludedId: string): void {
   expect(getStatusCode(result)).toBeNull();
-  expect(getPageItems(result).some((item) => item.id === excludedId)).toBe(
+  expect(getPageItems(result).some((item) => item["id"] === excludedId)).toBe(
     false,
   );
+}
+
+function expectPageContainsField(
+  result: unknown,
+  field: string,
+  expectedValue: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageItems(result).some((item) => item[field] === expectedValue),
+  ).toBe(true);
+}
+
+function expectPageExcludesField(
+  result: unknown,
+  field: string,
+  excludedValue: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageItems(result).some((item) => item[field] === excludedValue),
+  ).toBe(false);
 }
 
 function expectRecordFieldEquals(
@@ -536,16 +610,16 @@ const getStatusCode = (result: unknown): number | null => {
   return null;
 };
 
-const getPageItems = (result: unknown): { id: string }[] => {
+const getPageItems = (result: unknown): Record<string, unknown>[] => {
   if (!isRecord(result) || !Array.isArray(result["items"])) {
     throw new Error("Expected a page response");
   }
 
   return result["items"].map((item) => {
-    if (!isRecord(item) || typeof item["id"] !== "string") {
-      throw new Error("Expected every page item to include a string id");
+    if (!isRecord(item)) {
+      throw new Error("Expected every page item to be an object");
     }
-    return { id: item["id"] };
+    return item;
   });
 };
 

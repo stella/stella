@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -8,6 +8,7 @@ import {
   entities,
   entityVersions,
   taskAssignees,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -26,8 +27,10 @@ import {
 } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { includes } from "@/api/lib/type-guards";
+import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 
 import { validateAgendaFields } from "./agenda-fields";
 
@@ -98,10 +101,14 @@ const createTaskBodySchema = t.Object({
   ),
   recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
   assigneeIds: t.Optional(
-    t.Array(t.String(), {
+    t.Array(tSafeId("user"), {
       maxItems: LIMITS.workspaceMembersCount,
     }),
   ),
+  ownerUserId: t.Optional(tSafeId("user")),
+  workingTargetDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
 });
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
@@ -128,6 +135,10 @@ export const createTaskEntityHandler = async function* ({
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
   const taskPriority = body.priority ?? "none";
+  const workingTargetDate = body.workingTargetDate ?? body.dueDate ?? null;
+  const hardDeadlineDate =
+    body.hardDeadlineDate ??
+    (agendaKind === AGENDA_ITEM_KIND.DEADLINE ? (body.dueDate ?? null) : null);
 
   if (!includes(AGENDA_ITEM_KINDS, agendaKind)) {
     return Result.err(
@@ -142,6 +153,18 @@ export const createTaskEntityHandler = async function* ({
   if (!includes(ENTITY_PRIORITIES, taskPriority)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid task priority" }),
+    );
+  }
+  if (
+    workingTargetDate !== null &&
+    hardDeadlineDate !== null &&
+    workingTargetDate > hardDeadlineDate
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Working target cannot be after the hard deadline",
+      }),
     );
   }
   const agendaFields = validateAgendaFields({
@@ -196,6 +219,38 @@ export const createTaskEntityHandler = async function* ({
       }
 
       const entityId = createSafeId<"entity">();
+      const memberIdsToValidate = body.ownerUserId ? [body.ownerUserId] : [];
+      if (body.assigneeIds) {
+        memberIdsToValidate.push(...new Set(body.assigneeIds));
+      }
+      const memberIdsToLoad = [...memberIdsToValidate];
+      if (!memberIdsToLoad.includes(userId)) {
+        memberIdsToLoad.push(userId);
+      }
+      const members = await tx
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            inArray(workspaceMembers.userId, memberIdsToLoad),
+          ),
+        )
+        .limit(LIMITS.workspaceMembersCount)
+        .for("update");
+      const workspaceMemberIds = new Set(
+        members.map((member) => brandPersistedUserId(member.userId)),
+      );
+      if (memberIdsToValidate.some((id) => !workspaceMemberIds.has(id))) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "The owner and assignees must be workspace members",
+        };
+      }
+      const ownerUserId =
+        body.ownerUserId ?? (workspaceMemberIds.has(userId) ? userId : null);
+
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
@@ -206,7 +261,7 @@ export const createTaskEntityHandler = async function* ({
         agendaKind,
         status: taskStatus,
         priority: taskPriority,
-        dueDate: body.dueDate ?? null,
+        dueDate: workingTargetDate,
         startAt: toDateOrNull(body.startAt),
         endAt: toDateOrNull(body.endAt),
         occurredAt: toDateOrNull(body.occurredAt),
@@ -237,25 +292,6 @@ export const createTaskEntityHandler = async function* ({
         .where(eq(entities.id, entityId));
 
       if (body.assigneeIds !== undefined && body.assigneeIds.length > 0) {
-        const members = await tx.query.workspaceMembers.findMany({
-          where: {
-            workspaceId: { eq: workspaceId },
-            userId: { in: body.assigneeIds },
-          },
-          columns: { userId: true },
-          limit: LIMITS.workspaceMembersCount,
-        });
-        const memberIds = new Set(members.map((m) => m.userId));
-        const invalidIds = body.assigneeIds.filter(
-          (uid) => !memberIds.has(uid),
-        );
-        if (invalidIds.length > 0) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Some assignee IDs are not workspace members",
-          };
-        }
         const validIds = [...new Set(body.assigneeIds)];
 
         if (validIds.length > 0) {
@@ -270,21 +306,44 @@ export const createTaskEntityHandler = async function* ({
         }
       }
 
+      await createWorkObligation({
+        tx,
+        entityId,
+        workspaceId,
+        actorUserId: userId,
+        ownerUserId,
+        agendaKind,
+        taskStatus,
+        workingTargetDate,
+        hardDeadlineDate,
+        ...(body.sourceDescription === undefined
+          ? {}
+          : { sourceDescription: body.sourceDescription }),
+      });
+
       await tx
         .update(workspaces)
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: entityId,
-        metadata: {
-          kind: "task",
-          agendaKind,
-          ...(body.parentId && { parentId: body.parentId }),
+      await recordAuditEvent(tx, [
+        {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entityId,
+          metadata: {
+            kind: "task",
+            agendaKind,
+            ...(body.parentId && { parentId: body.parentId }),
+          },
         },
-      });
+        {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+          resourceId: entityId,
+          metadata: { ownerUserId },
+        },
+      ]);
 
       return { ok: true as const, entityId };
     }),

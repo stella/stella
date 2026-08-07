@@ -39,6 +39,10 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import {
+  BACKFILL_WORK_OBLIGATIONS_TASK,
+  backfillWorkObligations,
+} from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
   SchedulerTaskRegistry,
@@ -67,6 +71,7 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     ],
     [RECONCILE_BUFFER_INTENTS_TASK, reconcileBufferIntents],
     [REPAIR_CHAT_SEARCH_INDEX_TASK, repairChatSearchIndex],
+    [BACKFILL_WORK_OBLIGATIONS_TASK, backfillWorkObligations],
     [
       REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
       repairSearchSemanticTimestampsTask,

@@ -300,7 +300,6 @@
       "legalSentence": "Õiguslause",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
-      "source": "Allikas",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
@@ -1001,6 +1000,7 @@
     "signOut": "Logi välja",
     "somethingWentWrong": "Midagi läks valesti",
     "sort": "Sorteeri",
+    "source": "Allikas",
     "status": "Olek",
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Toimik edukalt dubleeritud"
   },
   "tasks": {
+    "acknowledge": "Kinnita vastuvõtmine",
+    "acknowledgementRequired": "Kinnita, et oled selle töö eest vastutuse võtnud.",
+    "activity": "Tegevus",
+    "activityTypes": {
+      "acknowledged": "Vastutus kinnitatud",
+      "cancelled": "Töö tühistatud",
+      "completed": "Töö lõpetatud",
+      "created": "Töö loodud",
+      "delegated": "Vastutus delegeeritud",
+      "hardDeadlineChanged": "Siduv tähtaeg muudetud",
+      "ownerAssigned": "Vastutaja määratud",
+      "provenanceChanged": "Allikas muudetud",
+      "reopened": "Töö taasavatud",
+      "typeChanged": "Töö tüüp muudetud",
+      "workingTargetChanged": "Töö sihttähtaeg muudetud"
+    },
     "addAssignee": "Lisa isik",
     "addSubtask": "Lisa alamülesanne",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Määratud",
     "clearDate": "Tühjenda kuupäev",
+    "completeWork": "Lõpeta töö",
+    "delegationReason": "Muudatuse põhjus",
     "deletedAccount": "Kustutatud konto",
     "dueDate": "Tähtaeg",
+    "hardDeadline": "Siduv tähtaeg",
+    "hardDeadlineOverdue": "Siduv tähtaeg on möödunud",
     "linkEntity": "Seo kirje",
     "linkedEntities": "Seotud kirjed",
     "myTasksTitle": "Minu ülesanded",
+    "myWorkTitle": "Minu töö",
     "newTask": "Uus ülesanne",
+    "noActivity": "Tegevusi veel pole",
     "noAssignees": "Kedagi pole määratud",
     "noLinks": "Seotud kirjed puuduvad",
+    "noOwner": "Vastutaja puudub",
     "noSubtasks": "Alamülesanded puuduvad",
     "noTasksAssigned": "Sulle pole ülesandeid määratud",
+    "noWorkInQueue": "Selles järjekorras pole tööd",
     "notFound": "Ülesannet ei leitud",
     "overdue": "Tähtaeg ületatud",
+    "owner": "Vastutaja",
     "priority": "Prioriteet",
     "priorityValues": {
       "high": "Kõrge",
@@ -2895,6 +2920,18 @@
       "medium": "Keskmine",
       "none": "Puudub",
       "urgent": "Kiire"
+    },
+    "queue": {
+      "atRisk": "Ohus",
+      "completed": "Lõpetatud",
+      "inbox": "Sisendkaust",
+      "upcoming": "Tulekul"
+    },
+    "reopenWork": "Ava töö uuesti",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalender",
+      "manual": "Käsitsi"
     },
     "status": "Staatus",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Alamülesanded",
     "title": "Ülesanded",
-    "untitled": "Pealkirjata ülesanne"
+    "untitled": "Pealkirjata ülesanne",
+    "workTypeValues": {
+      "deadline": "Tähtaeg",
+      "task": "Ülesanne"
+    }
   },
   "templates": {
     "addItem": "Lisa element",

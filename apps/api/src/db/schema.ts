@@ -21,6 +21,7 @@ export * from "./schema/skills";
 export * from "./schema/style-sets";
 export * from "./schema/saved-searches";
 export * from "./schema/usage";
+export * from "./schema/workflow";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,

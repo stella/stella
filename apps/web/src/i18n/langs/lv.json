@@ -300,7 +300,6 @@
       "legalSentence": "Tiesību tēze",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
-      "source": "Avots",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
@@ -1001,6 +1000,7 @@
     "signOut": "Atslēgties",
     "somethingWentWrong": "Kaut kas nogāja greizi",
     "sort": "Kārtot",
+    "source": "Avots",
     "status": "Statuss",
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Lieta veiksmīgi dublēta"
   },
   "tasks": {
+    "acknowledge": "Apstiprināt uzņemšanos",
+    "acknowledgementRequired": "Apstipriniet, ka esat uzņēmies atbildību par šo darbu.",
+    "activity": "Aktivitāte",
+    "activityTypes": {
+      "acknowledged": "Atbildība apstiprināta",
+      "cancelled": "Darbs atcelts",
+      "completed": "Darbs pabeigts",
+      "created": "Darbs izveidots",
+      "delegated": "Atbildība deleģēta",
+      "hardDeadlineChanged": "Saistošais termiņš mainīts",
+      "ownerAssigned": "Atbildīgā persona piešķirta",
+      "provenanceChanged": "Avots mainīts",
+      "reopened": "Darbs atkārtoti atvērts",
+      "typeChanged": "Darba veids mainīts",
+      "workingTargetChanged": "Darba mērķa datums mainīts"
+    },
     "addAssignee": "Pievienot atbildīgo",
     "addSubtask": "Pievienot apakšuzdevumu",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Atbildīgie",
     "clearDate": "Notīrīt datumu",
+    "completeWork": "Pabeigt darbu",
+    "delegationReason": "Izmaiņu iemesls",
     "deletedAccount": "Dzēsts konts",
     "dueDate": "Izpildes termiņš",
+    "hardDeadline": "Saistošais termiņš",
+    "hardDeadlineOverdue": "Saistošais termiņš nokavēts",
     "linkEntity": "Saistīt ierakstu",
     "linkedEntities": "Saistītie ieraksti",
     "myTasksTitle": "Mani uzdevumi",
+    "myWorkTitle": "Mans darbs",
     "newTask": "Jauns uzdevums",
+    "noActivity": "Aktivitāšu vēl nav",
     "noAssignees": "Nav atbildīgo",
     "noLinks": "Nav saistīto ierakstu",
+    "noOwner": "Nav atbildīgās personas",
     "noSubtasks": "Nav apakšuzdevumu",
     "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
+    "noWorkInQueue": "Šajā rindā nav darba",
     "notFound": "Uzdevums nav atrasts",
     "overdue": "Nokavēts",
+    "owner": "Atbildīgā persona",
     "priority": "Prioritāte",
     "priorityValues": {
       "high": "Augsta",
@@ -2895,6 +2920,18 @@
       "medium": "Vidēja",
       "none": "Nav",
       "urgent": "Steidzams"
+    },
+    "queue": {
+      "atRisk": "Apdraudēti",
+      "completed": "Pabeigti",
+      "inbox": "Iesūtne",
+      "upcoming": "Gaidāmi"
+    },
+    "reopenWork": "Atkārtoti atvērt darbu",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendārs",
+      "manual": "Manuāli"
     },
     "status": "Statuss",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Apakšuzdevumi",
     "title": "Uzdevumi",
-    "untitled": "Uzdevums bez nosaukuma"
+    "untitled": "Uzdevums bez nosaukuma",
+    "workTypeValues": {
+      "deadline": "Termiņš",
+      "task": "Uzdevums"
+    }
   },
   "templates": {
     "addItem": "Pievienot vienību",

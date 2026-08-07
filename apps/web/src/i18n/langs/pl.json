@@ -300,7 +300,6 @@
       "legalSentence": "Teza orzeczenia",
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
-      "source": "Źródło",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
@@ -1001,6 +1000,7 @@
     "signOut": "Wyloguj się",
     "somethingWentWrong": "Coś poszło nie tak",
     "sort": "Sortuj",
+    "source": "Źródło",
     "status": "Status",
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Sprawa została pomyślnie zduplikowana"
   },
   "tasks": {
+    "acknowledge": "Potwierdź przyjęcie",
+    "acknowledgementRequired": "Potwierdź, że przyjmujesz odpowiedzialność za tę pracę.",
+    "activity": "Aktywność",
+    "activityTypes": {
+      "acknowledged": "Odpowiedzialność przyjęta",
+      "cancelled": "Praca anulowana",
+      "completed": "Praca ukończona",
+      "created": "Praca utworzona",
+      "delegated": "Odpowiedzialność przekazana",
+      "hardDeadlineChanged": "Nieprzekraczalny termin zmieniony",
+      "ownerAssigned": "Osoba odpowiedzialna przypisana",
+      "provenanceChanged": "Źródło zmienione",
+      "reopened": "Praca ponownie otwarta",
+      "typeChanged": "Typ pracy zmieniony",
+      "workingTargetChanged": "Termin roboczy zmieniony"
+    },
     "addAssignee": "Przypisz osobę",
     "addSubtask": "Dodaj podzadanie",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Przypisani",
     "clearDate": "Wyczyść datę",
+    "completeWork": "Ukończ pracę",
+    "delegationReason": "Powód zmiany",
     "deletedAccount": "Usunięte konto",
     "dueDate": "Termin",
+    "hardDeadline": "Nieprzekraczalny termin",
+    "hardDeadlineOverdue": "Nieprzekraczalny termin minął",
     "linkEntity": "Powiąż element",
     "linkedEntities": "Powiązane elementy",
     "myTasksTitle": "Moje zadania",
+    "myWorkTitle": "Moja praca",
     "newTask": "Nowe zadanie",
+    "noActivity": "Brak aktywności",
     "noAssignees": "Brak przypisanych",
     "noLinks": "Brak powiązanych elementów",
+    "noOwner": "Brak osoby odpowiedzialnej",
     "noSubtasks": "Brak podzadań",
     "noTasksAssigned": "Nie masz przypisanych zadań",
+    "noWorkInQueue": "Brak pracy w tej kolejce",
     "notFound": "Nie znaleziono zadania",
     "overdue": "Po terminie",
+    "owner": "Osoba odpowiedzialna",
     "priority": "Priorytet",
     "priorityValues": {
       "high": "Wysoki",
@@ -2895,6 +2920,18 @@
       "medium": "Średni",
       "none": "Brak",
       "urgent": "Pilne"
+    },
+    "queue": {
+      "atRisk": "Zagrożone",
+      "completed": "Ukończone",
+      "inbox": "Odebrane",
+      "upcoming": "Nadchodzące"
+    },
+    "reopenWork": "Otwórz ponownie",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendarz",
+      "manual": "Ręcznie"
     },
     "status": "Status",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Podzadania",
     "title": "Zadania",
-    "untitled": "Zadanie bez tytułu"
+    "untitled": "Zadanie bez tytułu",
+    "workTypeValues": {
+      "deadline": "Termin",
+      "task": "Zadanie"
+    }
   },
   "templates": {
     "addItem": "Dodaj element",

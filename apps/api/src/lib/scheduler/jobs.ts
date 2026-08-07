@@ -15,6 +15,7 @@ import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-p
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 
 type SchedulerJobDefinition = {
   id: string;
@@ -22,6 +23,7 @@ type SchedulerJobDefinition = {
   description: string;
   schedule: SchedulerSchedule;
   payload?: SchedulerPayload | null;
+  payloadUpdate?: "preserve" | "replace";
   enabled?: boolean;
 };
 
@@ -30,6 +32,7 @@ export const ensureSchedulerJob = async ({
   enabled = true,
   id,
   payload = null,
+  payloadUpdate = "replace",
   schedule,
   task,
 }: SchedulerJobDefinition): Promise<void> => {
@@ -64,7 +67,7 @@ export const ensureSchedulerJob = async ({
         description,
         enabled,
         ...(shouldRefreshNextRunAt && { nextRunAt }),
-        payload,
+        ...(payloadUpdate === "replace" && { payload }),
         schedule,
         task,
       },
@@ -166,6 +169,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  },
+  {
+    description: "Periodically repair governed work rows for legacy tasks",
+    id: "workObligations.backfillLegacyTasks.v1",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_WORK_OBLIGATIONS_TASK,
   },
   {
     description: "Repair stale chat search projections",

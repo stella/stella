@@ -1576,6 +1576,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "Due date (ISO YYYY-MM-DD); pass null to clear",
           "maxLength": 10
         },
+        "workflow_reason": {
+          "type": "string",
+          "description": "Reason for a governed status or deadline change",
+          "maxLength": 1000
+        },
         "add_assignee_user_id": {
           "type": "string",
           "description": "User ID to assign to the task (must be a workspace member)"

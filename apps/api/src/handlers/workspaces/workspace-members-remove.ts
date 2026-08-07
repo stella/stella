@@ -1,16 +1,21 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -18,6 +23,7 @@ import {
   pushSessionEvent,
 } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 
@@ -31,6 +37,7 @@ export type RemoveWorkspaceMemberProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -43,6 +50,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   safeDb,
   workspaceId,
   userId,
+  actorUserId,
   recordAuditEvent,
 }: RemoveWorkspaceMemberProps) {
   // Lock + delete in one transaction to prevent TOCTOU.
@@ -80,6 +88,29 @@ export const removeWorkspaceMemberHandler = async function* ({
         return { ok: false as const, reason: "last-member" as const };
       }
 
+      const ownedWork = await tx
+        .select({
+          entityId: workObligations.entityId,
+          status: workObligations.status,
+        })
+        .from(workObligations)
+        .where(
+          and(
+            eq(workObligations.workspaceId, workspaceId),
+            eq(workObligations.ownerUserId, userId),
+            inArray(workObligations.status, [
+              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+              WORK_OBLIGATION_STATUS.ACTIVE,
+            ]),
+          ),
+        )
+        .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
+        .for("update");
+
+      if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
+        return { ok: false as const, reason: "owned-work-limit" as const };
+      }
+
       const deleteResult = await tx
         .delete(workspaceMembers)
         .where(
@@ -93,6 +124,52 @@ export const removeWorkspaceMemberHandler = async function* ({
 
       if (!deleted) {
         return { ok: false as const, reason: "not-found" as const };
+      }
+
+      if (ownedWork.length > 0) {
+        const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
+        const now = new Date();
+
+        await tx
+          .update(workObligations)
+          .set({
+            ownerUserId: null,
+            status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            acknowledgedAt: null,
+            acknowledgedByUserId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(workObligations.workspaceId, workspaceId),
+              eq(workObligations.ownerUserId, userId),
+              inArray(workObligations.entityId, activeEntityIds),
+              inArray(workObligations.status, [
+                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                WORK_OBLIGATION_STATUS.ACTIVE,
+              ]),
+            ),
+          );
+
+        const unassignmentEvents: (typeof workObligationEvents.$inferInsert)[] =
+          [];
+        for (const { entityId } of ownedWork) {
+          unassignmentEvents.push({
+            id: createSafeId<"workObligationEvent">(),
+            workspaceId,
+            obligationEntityId: entityId,
+            actorUserId,
+            type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+            details: {
+              type: "ownership_changed",
+              previousOwnerUserId: userId,
+              nextOwnerUserId: null,
+              cause: "owner_removed_from_workspace",
+            },
+            occurredAt: now,
+          });
+        }
+        await tx.insert(workObligationEvents).values(unassignmentEvents);
       }
 
       const leadWasCleared = workspace.leadUserId === userId;
@@ -115,20 +192,40 @@ export const removeWorkspaceMemberHandler = async function* ({
         )
         .returning({ id: desktopEditSessions.id });
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.DELETE,
-        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-        resourceId: deleted.id,
-        changes: {
-          deleted: {
-            old: { userId, workspaceId },
-            new: null,
+      const auditEvents: AuditEvent[] = [
+        {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+          resourceId: deleted.id,
+          changes: {
+            deleted: {
+              old: { userId, workspaceId },
+              new: null,
+            },
+          },
+          metadata: {
+            closedDesktopEditSessions: closedSessions.length,
+            unassignedWorkObligations: ownedWork.length,
           },
         },
-        metadata: {
-          closedDesktopEditSessions: closedSessions.length,
-        },
-      });
+      ];
+
+      for (const work of ownedWork) {
+        auditEvents.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+          resourceId: work.entityId,
+          changes: {
+            ownerUserId: { old: userId, new: null },
+            status: {
+              old: work.status,
+              new: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            },
+          },
+          metadata: { cause: "owner_removed_from_workspace" },
+        });
+      }
+      await recordAuditEvent(tx, auditEvents);
 
       if (leadWasCleared) {
         await recordAuditEvent(tx, {
@@ -153,6 +250,14 @@ export const removeWorkspaceMemberHandler = async function* ({
   );
 
   if (!txResult.ok) {
+    if (txResult.reason === "owned-work-limit") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
+        }),
+      );
+    }
     if (txResult.reason === "last-member") {
       return Result.err(
         new HandlerError({
@@ -190,12 +295,14 @@ const removeWorkspaceMember = createSafeHandler(
     safeDb,
     workspaceId,
     params: { userId },
+    user,
     recordAuditEvent,
   }) {
     return yield* removeWorkspaceMemberHandler({
       safeDb,
       workspaceId,
       userId: brandPersistedUserId(userId),
+      actorUserId: user.id,
       recordAuditEvent,
     });
   },

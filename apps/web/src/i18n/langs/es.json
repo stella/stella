@@ -300,7 +300,6 @@
       "legalSentence": "Fundamento jurídico",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nombre popular",
-      "source": "Fuente",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
@@ -1001,6 +1000,7 @@
     "signOut": "Cerrar sesión",
     "somethingWentWrong": "Algo salió mal",
     "sort": "Ordenar",
+    "source": "Fuente",
     "status": "Estado",
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Asunto duplicado correctamente"
   },
   "tasks": {
+    "acknowledge": "Confirmar aceptación",
+    "acknowledgementRequired": "Confirma que has aceptado la responsabilidad de este trabajo.",
+    "activity": "Actividad",
+    "activityTypes": {
+      "acknowledged": "Responsabilidad aceptada",
+      "cancelled": "Trabajo cancelado",
+      "completed": "Trabajo completado",
+      "created": "Trabajo creado",
+      "delegated": "Responsabilidad delegada",
+      "hardDeadlineChanged": "Fecha límite firme modificada",
+      "ownerAssigned": "Responsable asignado",
+      "provenanceChanged": "Fuente modificada",
+      "reopened": "Trabajo reabierto",
+      "typeChanged": "Tipo de trabajo modificado",
+      "workingTargetChanged": "Objetivo de trabajo modificado"
+    },
     "addAssignee": "Añadir asignado",
     "addSubtask": "Añadir subtarea",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Asignados",
     "clearDate": "Borrar fecha",
+    "completeWork": "Completar trabajo",
+    "delegationReason": "Motivo del cambio",
     "deletedAccount": "Cuenta eliminada",
     "dueDate": "Fecha límite",
+    "hardDeadline": "Fecha límite firme",
+    "hardDeadlineOverdue": "Fecha límite firme vencida",
     "linkEntity": "Vincular elemento",
     "linkedEntities": "Elementos vinculados",
     "myTasksTitle": "Mis tareas",
+    "myWorkTitle": "Mi trabajo",
     "newTask": "Nueva tarea",
+    "noActivity": "Aún no hay actividad",
     "noAssignees": "Sin asignados",
     "noLinks": "Sin elementos vinculados",
+    "noOwner": "Sin responsable",
     "noSubtasks": "Sin subtareas",
     "noTasksAssigned": "No tienes tareas asignadas",
+    "noWorkInQueue": "No hay trabajo en esta cola",
     "notFound": "Tarea no encontrada",
     "overdue": "Vencida",
+    "owner": "Responsable",
     "priority": "Prioridad",
     "priorityValues": {
       "high": "Alta",
@@ -2895,6 +2920,18 @@
       "medium": "Media",
       "none": "Ninguna",
       "urgent": "Urgente"
+    },
+    "queue": {
+      "atRisk": "En riesgo",
+      "completed": "Completado",
+      "inbox": "Bandeja de entrada",
+      "upcoming": "Próximo"
+    },
+    "reopenWork": "Reabrir trabajo",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Calendario",
+      "manual": "Entrada manual"
     },
     "status": "Estado",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Subtareas",
     "title": "Tareas",
-    "untitled": "Tarea sin título"
+    "untitled": "Tarea sin título",
+    "workTypeValues": {
+      "deadline": "Plazo",
+      "task": "Tarea"
+    }
   },
   "templates": {
     "addItem": "Añadir elemento",

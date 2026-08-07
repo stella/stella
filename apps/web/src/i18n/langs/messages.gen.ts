@@ -303,7 +303,6 @@ type Messages = {
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
-      "source": "Source";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -1004,6 +1003,7 @@ type Messages = {
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
+    "source": "Source";
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
@@ -2871,6 +2871,22 @@ type Messages = {
     "workspaceDuplicatedSuccessfully": "Matter duplicated successfully";
   };
   "tasks": {
+    "acknowledge": "Acknowledge";
+    "acknowledgementRequired": "Confirm that you have accepted responsibility for this work.";
+    "activity": "Activity";
+    "activityTypes": {
+      "acknowledged": "Responsibility acknowledged";
+      "cancelled": "Work cancelled";
+      "completed": "Work completed";
+      "created": "Work created";
+      "delegated": "Ownership delegated";
+      "hardDeadlineChanged": "Hard deadline changed";
+      "ownerAssigned": "Owner assigned";
+      "provenanceChanged": "Source changed";
+      "reopened": "Work reopened";
+      "typeChanged": "Work type changed";
+      "workingTargetChanged": "Working target changed";
+    };
     "addAssignee": "Add assignee";
     "addSubtask": "Add subtask";
     "assigneeRoles": {
@@ -2879,18 +2895,27 @@ type Messages = {
     };
     "assignees": "Assignees";
     "clearDate": "Clear date";
+    "completeWork": "Complete work";
+    "delegationReason": "Reason for change";
     "deletedAccount": "Deleted account";
     "dueDate": "Due date";
+    "hardDeadline": "Hard deadline";
+    "hardDeadlineOverdue": "Hard deadline overdue";
     "linkEntity": "Link entity";
     "linkedEntities": "Linked entities";
     "myTasksTitle": "My tasks";
+    "myWorkTitle": "My work";
     "newTask": "New task";
+    "noActivity": "No activity yet";
     "noAssignees": "No assignees";
     "noLinks": "No linked entities";
+    "noOwner": "No accountable owner";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
+    "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
     "overdue": "Overdue";
+    "owner": "Owner";
     "priority": "Priority";
     "priorityValues": {
       "high": "High";
@@ -2898,6 +2923,18 @@ type Messages = {
       "medium": "Medium";
       "none": "None";
       "urgent": "Urgent";
+    };
+    "queue": {
+      "atRisk": "At risk";
+      "completed": "Completed";
+      "inbox": "Inbox";
+      "upcoming": "Upcoming";
+    };
+    "reopenWork": "Reopen work";
+    "sourceTypeValues": {
+      "api": "API";
+      "calendar": "Calendar";
+      "manual": "Manual";
     };
     "status": "Status";
     "statusValues": {
@@ -2910,6 +2947,10 @@ type Messages = {
     "subtasks": "Subtasks";
     "title": "Tasks";
     "untitled": "Untitled task";
+    "workTypeValues": {
+      "deadline": "Deadline";
+      "task": "Task";
+    };
   };
   "templates": {
     "addItem": "Add item";

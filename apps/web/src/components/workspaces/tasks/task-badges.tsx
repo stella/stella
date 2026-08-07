@@ -11,6 +11,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceEntity } from "@/lib/types";
 
+import { localISODate } from "./task-detail-constants";
+
 const PRIORITY_CONFIG: Record<
   string,
   { icon: typeof ArrowUpIcon; className: string }
@@ -28,9 +30,7 @@ const PRIORITY_CONFIG: Record<
 };
 
 const isOverdue = (dueDate: string, status: string | null) =>
-  status !== "done" &&
-  status !== "cancelled" &&
-  dueDate < new Date().toISOString().slice(0, 10);
+  status !== "done" && status !== "cancelled" && dueDate < localISODate();
 
 type TaskBadgesProps = {
   entity: WorkspaceEntity;

@@ -835,6 +835,21 @@ export const CAPABILITY_DISPATCH = {
   "views.update": {
     load: async () => await import("@/api/handlers/views/update"),
   },
+  "work-obligations.acknowledgements.create": {
+    load: async () =>
+      await import("@/api/handlers/work-obligations/acknowledgements/create"),
+  },
+  "work-obligations.queues.list": {
+    load: async () =>
+      await import("@/api/handlers/work-obligations/queues/list"),
+  },
+  "work-obligations.transition": {
+    load: async () =>
+      await import("@/api/handlers/work-obligations/transition"),
+  },
+  "work-obligations.update": {
+    load: async () => await import("@/api/handlers/work-obligations/update"),
+  },
   "workspaces.anonymization-allowlist.create": {
     load: async () =>
       await import("@/api/handlers/workspaces/anonymization-allowlist/create"),

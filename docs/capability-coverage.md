@@ -421,6 +421,15 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `views.table-export` | read               | stella:read          | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `views.update`       | write              | stella:matters_write | —       | generic invoke → `stella capability views update`                    |
 
+## work-obligations
+
+| Capability                                 | Access | Scope                | Feature | Reachable via                                                                 |
+| ------------------------------------------ | ------ | -------------------- | ------- | ----------------------------------------------------------------------------- |
+| `work-obligations.acknowledgements.create` | write  | stella:matters_write | —       | generic invoke → `stella capability work-obligations acknowledgements-create` |
+| `work-obligations.queues.list`             | read   | stella:read          | —       | generic invoke → `stella capability work-obligations queues-list`             |
+| `work-obligations.transition`              | write  | stella:matters_write | —       | generic invoke → `stella capability work-obligations transition`              |
+| `work-obligations.update`                  | write  | stella:matters_write | —       | generic invoke → `stella capability work-obligations update`                  |
+
 ## workspaces
 
 | Capability                                  | Access             | Scope                | Feature | Reachable via                                                                  |

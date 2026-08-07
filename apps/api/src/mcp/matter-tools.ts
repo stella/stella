@@ -491,6 +491,10 @@ export const MATTER_TOOL_DEFINITIONS = [
           "Due date (ISO YYYY-MM-DD); pass null to clear",
           { maxLength: 10 },
         ),
+        workflow_reason: stringProp(
+          "Reason for a governed status or deadline change",
+          { maxLength: 1000 },
+        ),
         add_assignee_user_id: stringProp(
           "User ID to assign to the task (must be a workspace member)",
         ),
@@ -1440,6 +1444,9 @@ const saveTaskArgsSchema = v.pipe(
     status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
     priority: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
     due_date: v.optional(v.nullable(v.pipe(v.string(), v.regex(ISO_DATE)))),
+    workflow_reason: v.optional(
+      v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1000)),
+    ),
     add_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     remove_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     link_entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -1481,6 +1488,14 @@ const saveTaskArgsSchema = v.pipe(
         i.unlink_link_id === undefined),
     "assignee and link changes require task_id (they apply to an existing task)",
   ),
+  v.partialCheck(
+    [["task_id"], ["status"], ["due_date"], ["workflow_reason"]],
+    (i) =>
+      i.workflow_reason === undefined ||
+      (i.task_id !== undefined &&
+        (i.status !== undefined || i.due_date !== undefined)),
+    "workflow_reason only applies to status or due_date updates",
+  ),
   // An update must request at least one action.
   v.partialCheck(
     [
@@ -1489,6 +1504,7 @@ const saveTaskArgsSchema = v.pipe(
       ["status"],
       ["priority"],
       ["due_date"],
+      ["workflow_reason"],
       ["add_assignee_user_id"],
       ["remove_assignee_user_id"],
       ["link_entity_id"],
@@ -1712,7 +1728,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       issues: parsed.issues,
       message: crossFieldOrGeneric(
         parsed.issues,
-        "Invalid input: expected { task_id?, matter_id?, name?, status?, priority?, due_date?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
+        "Invalid input: expected { task_id?, matter_id?, name?, status?, priority?, due_date?, workflow_reason?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
       ),
     });
   }
@@ -1787,12 +1803,14 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     input.name !== undefined ||
     input.status !== undefined ||
     input.priority !== undefined ||
-    input.due_date !== undefined
+    input.due_date !== undefined ||
+    input.workflow_reason !== undefined
   ) {
     const updated = await Result.gen(() =>
       updateTaskHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: {
           taskId,
@@ -1800,6 +1818,9 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
           ...(input.status === undefined ? {} : { status: input.status }),
           ...(input.priority === undefined ? {} : { priority: input.priority }),
           ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
+          ...(input.workflow_reason === undefined
+            ? {}
+            : { workflowReason: input.workflow_reason }),
         },
       }),
     );

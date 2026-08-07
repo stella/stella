@@ -300,7 +300,6 @@
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
-      "source": "Zdroj",
       "sourceFields": {
         "decisionCategory": "Kategorie rozhodnutí",
         "publishedOnWeb": "Zveřejněno na webu"
@@ -1001,6 +1000,7 @@
     "signOut": "Odhlásit se",
     "somethingWentWrong": "Něco se pokazilo",
     "sort": "Řadit",
+    "source": "Zdroj",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Spis úspěšně duplikován"
   },
   "tasks": {
+    "acknowledge": "Potvrdit převzetí",
+    "acknowledgementRequired": "Potvrďte, že jste převzali odpovědnost za tuto práci.",
+    "activity": "Aktivita",
+    "activityTypes": {
+      "acknowledged": "Převzetí odpovědnosti potvrzeno",
+      "cancelled": "Práce zrušena",
+      "completed": "Práce dokončena",
+      "created": "Práce vytvořena",
+      "delegated": "Odpovědnost předána",
+      "hardDeadlineChanged": "Pevná lhůta změněna",
+      "ownerAssigned": "Odpovědná osoba přiřazena",
+      "provenanceChanged": "Zdroj změněn",
+      "reopened": "Práce znovu otevřena",
+      "typeChanged": "Typ práce změněn",
+      "workingTargetChanged": "Pracovní termín změněn"
+    },
     "addAssignee": "Přidat osobu",
     "addSubtask": "Přidat podúkol",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Přiřazení",
     "clearDate": "Vymazat datum",
+    "completeWork": "Dokončit práci",
+    "delegationReason": "Důvod změny",
     "deletedAccount": "Smazaný účet",
     "dueDate": "Termín",
+    "hardDeadline": "Pevná lhůta",
+    "hardDeadlineOverdue": "Pevná lhůta překročena",
     "linkEntity": "Propojit položku",
     "linkedEntities": "Propojené položky",
     "myTasksTitle": "Moje úkoly",
+    "myWorkTitle": "Moje práce",
     "newTask": "Nový úkol",
+    "noActivity": "Zatím žádná aktivita",
     "noAssignees": "Žádní přiřazení",
     "noLinks": "Žádné propojené položky",
+    "noOwner": "Bez odpovědné osoby",
     "noSubtasks": "Žádné podúkoly",
     "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
+    "noWorkInQueue": "V této frontě není žádná práce",
     "notFound": "Úkol nenalezen",
     "overdue": "Po termínu",
+    "owner": "Odpovědná osoba",
     "priority": "Priorita",
     "priorityValues": {
       "high": "Vysoká",
@@ -2895,6 +2920,18 @@
       "medium": "Střední",
       "none": "Žádná",
       "urgent": "Urgentní"
+    },
+    "queue": {
+      "atRisk": "Ohrožené",
+      "completed": "Dokončené",
+      "inbox": "Schránka",
+      "upcoming": "Nadcházející"
+    },
+    "reopenWork": "Znovu otevřít práci",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendář",
+      "manual": "Ručně"
     },
     "status": "Stav",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Podúkoly",
     "title": "Úkoly",
-    "untitled": "Úkol bez názvu"
+    "untitled": "Úkol bez názvu",
+    "workTypeValues": {
+      "deadline": "Lhůta",
+      "task": "Úkol"
+    }
   },
   "templates": {
     "addItem": "Přidat položku",

@@ -300,7 +300,6 @@
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
-      "source": "Šaltinis",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"
@@ -1001,6 +1000,7 @@
     "signOut": "Atsijungti",
     "somethingWentWrong": "Kažkas nepavyko",
     "sort": "Rūšiuoti",
+    "source": "Šaltinis",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Byla sėkmingai dubliuota"
   },
   "tasks": {
+    "acknowledge": "Patvirtinti prisiėmimą",
+    "acknowledgementRequired": "Patvirtinkite, kad prisiėmėte atsakomybę už šį darbą.",
+    "activity": "Veikla",
+    "activityTypes": {
+      "acknowledged": "Atsakomybė patvirtinta",
+      "cancelled": "Darbas atšauktas",
+      "completed": "Darbas užbaigtas",
+      "created": "Darbas sukurtas",
+      "delegated": "Atsakomybė perduota",
+      "hardDeadlineChanged": "Galutinis terminas pakeistas",
+      "ownerAssigned": "Atsakingas asmuo paskirtas",
+      "provenanceChanged": "Šaltinis pakeistas",
+      "reopened": "Darbas atnaujintas",
+      "typeChanged": "Darbo tipas pakeistas",
+      "workingTargetChanged": "Darbinis terminas pakeistas"
+    },
     "addAssignee": "Priskirti asmenį",
     "addSubtask": "Pridėti použduotį",
     "assigneeRoles": {
@@ -2876,18 +2892,27 @@
     },
     "assignees": "Priskirti",
     "clearDate": "Išvalyti datą",
+    "completeWork": "Užbaigti darbą",
+    "delegationReason": "Pakeitimo priežastis",
     "deletedAccount": "Ištrinta paskyra",
     "dueDate": "Terminas",
+    "hardDeadline": "Galutinis terminas",
+    "hardDeadlineOverdue": "Galutinis terminas praleistas",
     "linkEntity": "Susieti įrašą",
     "linkedEntities": "Susiję įrašai",
     "myTasksTitle": "Mano užduotys",
+    "myWorkTitle": "Mano darbai",
     "newTask": "Nauja užduotis",
+    "noActivity": "Veiklos dar nėra",
     "noAssignees": "Nėra priskirtų",
     "noLinks": "Nėra susietų įrašų",
+    "noOwner": "Nėra atsakingo asmens",
     "noSubtasks": "Nėra použduočių",
     "noTasksAssigned": "Jums nėra priskirtų užduočių",
+    "noWorkInQueue": "Šioje eilėje darbų nėra",
     "notFound": "Užduotis nerasta",
     "overdue": "Vėluojama",
+    "owner": "Atsakingas asmuo",
     "priority": "Prioritetas",
     "priorityValues": {
       "high": "Aukštas",
@@ -2895,6 +2920,18 @@
       "medium": "Vidutinis",
       "none": "Nėra",
       "urgent": "Skubu"
+    },
+    "queue": {
+      "atRisk": "Rizikingi",
+      "completed": "Užbaigti",
+      "inbox": "Gauta",
+      "upcoming": "Artėjantys"
+    },
+    "reopenWork": "Atnaujinti darbą",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendorius",
+      "manual": "Rankinis"
     },
     "status": "Būsena",
     "statusValues": {
@@ -2906,7 +2943,11 @@
     },
     "subtasks": "Použduočiai",
     "title": "Užduotys",
-    "untitled": "Užduotis be pavadinimo"
+    "untitled": "Užduotis be pavadinimo",
+    "workTypeValues": {
+      "deadline": "Terminas",
+      "task": "Užduotis"
+    }
   },
   "templates": {
     "addItem": "Pridėti elementą",

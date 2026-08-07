@@ -93,6 +93,7 @@ import {
   templateVersions,
   templates,
 } from "./templates";
+import { workObligationEvents, workObligations } from "./workflow";
 import {
   anonymizationAllowlistEntries,
   anonymizationBlacklistEntries,
@@ -186,6 +187,8 @@ export const relations = defineRelations(
     userFiles,
     workspaceViews,
     workspaceViewTemplates,
+    workObligations,
+    workObligationEvents,
   },
   (r) => ({
     contacts: {
@@ -337,6 +340,10 @@ export const relations = defineRelations(
         from: r.workspaces.id,
         to: r.folioCollabSessions.workspaceId,
       }),
+      workObligations: r.many.workObligations({
+        from: r.workspaces.id,
+        to: r.workObligations.workspaceId,
+      }),
     },
     workspaceMembers: {
       workspace: r.one.workspaces({
@@ -449,6 +456,10 @@ export const relations = defineRelations(
         from: r.entities.id,
         to: r.taskAssignees.entityId,
       }),
+      workObligation: r.one.workObligations({
+        from: r.entities.id,
+        to: r.workObligations.entityId,
+      }),
       linksAsSource: r.many.entityLinks({
         from: r.entities.id,
         to: r.entityLinks.sourceEntityId,
@@ -467,6 +478,40 @@ export const relations = defineRelations(
       }),
       user: r.one.user({
         from: r.taskAssignees.userId,
+        to: r.user.id,
+      }),
+    },
+    workObligations: {
+      entity: r.one.entities({
+        from: r.workObligations.entityId,
+        to: r.entities.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.workObligations.workspaceId,
+        to: r.workspaces.id,
+      }),
+      owner: r.one.user({
+        from: r.workObligations.ownerUserId,
+        to: r.user.id,
+        alias: "workObligationOwner",
+      }),
+      acknowledgedBy: r.one.user({
+        from: r.workObligations.acknowledgedByUserId,
+        to: r.user.id,
+        alias: "workObligationAcknowledgedBy",
+      }),
+      events: r.many.workObligationEvents({
+        from: r.workObligations.entityId,
+        to: r.workObligationEvents.obligationEntityId,
+      }),
+    },
+    workObligationEvents: {
+      obligation: r.one.workObligations({
+        from: r.workObligationEvents.obligationEntityId,
+        to: r.workObligations.entityId,
+      }),
+      actor: r.one.user({
+        from: r.workObligationEvents.actorUserId,
         to: r.user.id,
       }),
     },
