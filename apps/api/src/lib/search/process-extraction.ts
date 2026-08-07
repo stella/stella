@@ -17,7 +17,6 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3ObjectWithSignal } from "@/api/lib/s3";
 import {
-  canExtractMimeType,
   extractFileTextResult,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
