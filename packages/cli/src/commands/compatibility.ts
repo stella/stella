@@ -2,7 +2,10 @@ import { buildCommand, buildRouteMap } from "@stricli/core";
 import type { RouteMap } from "@stricli/core";
 import { Result } from "better-result";
 
-import { checkServerCompatibility } from "../compatibility.js";
+import {
+  checkServerCompatibility,
+  type CompatibilityReport,
+} from "../compatibility.js";
 import type { Context } from "../context.js";
 
 type CheckFlags = {
@@ -13,7 +16,7 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
   docs: {
     brief: "Verify that a deployed stella API supports this CLI",
     fullDescription:
-      "Checks the public MCP protected-resource contract, inclusive CLI version range, and the packaged CLI's full resource-scope surface. This command does not require authentication.",
+      "Checks the public MCP protocol revision, required capabilities, and the packaged CLI's full resource-scope surface. Older servers fall back to their legacy CLI version range. This command does not require authentication.",
   },
   func: async function func(this: Context, flags) {
     const result = await checkServerCompatibility(flags.server);
@@ -21,8 +24,9 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
       return new Error(result.error.message);
     }
 
+    const contract = describeContract(result.value);
     this.process.stdout.write(
-      `Compatible: CLI ${result.value.cliVersion}, API contract ${result.value.apiContractVersion} at ${result.value.serverUrl}.\n`,
+      `Compatible: CLI ${result.value.cliVersion}, ${contract} at ${result.value.serverUrl}.\n`,
     );
     return undefined;
   },
@@ -36,6 +40,19 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
     },
   },
 });
+
+const describeContract = (report: CompatibilityReport): string => {
+  switch (report.compatibilitySource) {
+    case "contract":
+      return `API protocol ${report.apiProtocolVersion}, server revision ${report.serverRevision}`;
+    case "legacy":
+      return `legacy API contract ${report.apiProtocolVersion}`;
+    default: {
+      const exhaustive: never = report;
+      return exhaustive;
+    }
+  }
+};
 
 export const compatibilityRoute: RouteMap<Context> = buildRouteMap({
   docs: { brief: "Check CLI and deployed API compatibility" },

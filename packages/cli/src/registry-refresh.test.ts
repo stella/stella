@@ -90,7 +90,6 @@ const okFetch =
   (
     raw: string,
     headers: {
-      cliLatest?: string;
       cliMinimum?: string;
       grantedScopes?: readonly string[];
       scopeOmittedTools?: readonly string[];
@@ -312,6 +311,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
+      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
@@ -334,6 +334,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
+      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -347,6 +348,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
+      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["Bad Name"])), // invalid tool name
       bakedListings: [listing("list_matters")],
     });
@@ -361,6 +363,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
+      fetchLatestVersion: async () => undefined,
       fetchRaw: errFetch(),
       bakedListings: [listing("list_matters")],
     });
@@ -377,6 +380,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
+      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"])),
       bakedListings: [listing("list_matters")],
     });
@@ -391,10 +395,10 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
 
 describe("CLI update nudge (spec 051 addendum)", () => {
   const refreshWith = async (over: {
-    cliLatest?: string;
     cliMinimum?: string;
     currentVersion: string;
     lastNudged?: string;
+    npmLatest?: string;
   }) => {
     const env = await makeCacheEnv();
     if (over.lastNudged !== undefined) {
@@ -412,22 +416,20 @@ describe("CLI update nudge (spec 051 addendum)", () => {
         force: true,
         currentVersion: over.currentVersion,
         fetchRaw: okFetch(toolsBody(["list_matters"]), {
-          ...(over.cliLatest === undefined
-            ? {}
-            : { cliLatest: over.cliLatest }),
           ...(over.cliMinimum === undefined
             ? {}
             : { cliMinimum: over.cliMinimum }),
         }),
+        fetchLatestVersion: async () => over.npmLatest,
         bakedListings: [listing("list_matters")],
       }),
     };
   };
 
-  test("a newer server-advertised version prints exactly one nudge line", async () => {
+  test("a newer npm-published version prints exactly one nudge line", async () => {
     const { outcome, env } = await refreshWith({
       currentVersion: "0.1.0",
-      cliLatest: "0.2.0",
+      npmLatest: "0.2.0",
     });
     expect(outcome).toEqual({
       status: "refreshed",
@@ -439,23 +441,23 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(written?.lastNudgedVersion).toBe("0.2.0");
   });
 
-  test("the same or an older advertised version is silent", async () => {
+  test("the same or an older published version is silent", async () => {
     const same = await refreshWith({
       currentVersion: "0.2.0",
-      cliLatest: "0.2.0",
+      npmLatest: "0.2.0",
     });
     expect(same.outcome).toEqual({ status: "refreshed", deltaEmpty: true });
     const older = await refreshWith({
       currentVersion: "0.3.0",
-      cliLatest: "0.2.0",
+      npmLatest: "0.2.0",
     });
     expect(older.outcome).toEqual({ status: "refreshed", deltaEmpty: true });
   });
 
-  test("a malformed advertised version is silent (fail-silent parse)", async () => {
+  test("a malformed published version is silent (fail-silent parse)", async () => {
     const { outcome } = await refreshWith({
       currentVersion: "0.1.0",
-      cliLatest: "not-a-version",
+      npmLatest: "not-a-version",
     });
     expect(outcome).toEqual({ status: "refreshed", deltaEmpty: true });
   });
@@ -463,7 +465,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
   test("a minimum above the current version warns it is unsupported", async () => {
     const { outcome } = await refreshWith({
       currentVersion: "0.1.0",
-      cliLatest: "0.3.0",
+      npmLatest: "0.3.0",
       cliMinimum: "0.2.0",
     });
     expect(outcome.status).toBe("refreshed");
@@ -474,10 +476,21 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     }
   });
 
+  test("an unsupported version still warns when npm is unreachable", async () => {
+    const { outcome } = await refreshWith({
+      currentVersion: "0.1.0",
+      cliMinimum: "0.2.0",
+    });
+    expect(outcome.status).toBe("refreshed");
+    if (outcome.status === "refreshed") {
+      expect(outcome.nudge).toContain("no longer supported");
+    }
+  });
+
   test("anti-nag: the version already nudged is not nudged again within TTL", async () => {
     const { outcome } = await refreshWith({
       currentVersion: "0.1.0",
-      cliLatest: "0.2.0",
+      npmLatest: "0.2.0",
       lastNudged: "0.2.0",
     });
     expect(outcome).toEqual({ status: "refreshed", deltaEmpty: true });

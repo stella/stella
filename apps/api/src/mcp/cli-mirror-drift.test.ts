@@ -4,9 +4,6 @@ import { readFileSync } from "node:fs";
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
-  STELLA_CLI_LATEST_VERSION,
-  STELLA_CLI_MAXIMUM_VERSION,
-  STELLA_CLI_MINIMUM_VERSION,
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 
@@ -62,27 +59,6 @@ const extractObjectKeys = (text: string, marker: string): string[] => {
   return [...block.matchAll(/^\s*(\w+):/gmu)].map((match) => match[1] ?? "");
 };
 
-const parseSemver = (version: string): [number, number, number] => {
-  const parts = version.split(".").map(Number);
-  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) {
-    throw new Error(`unparseable semver: ${version}`);
-  }
-  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-};
-
-/** -1 / 0 / 1 for a < b / a == b / a > b. */
-const compareSemver = (a: string, b: string): number => {
-  const left = parseSemver(a);
-  const right = parseSemver(b);
-  for (let i = 0; i < 3; i += 1) {
-    const delta = (left[i] ?? 0) - (right[i] ?? 0);
-    if (delta !== 0) {
-      return Math.sign(delta);
-    }
-  }
-  return 0;
-};
-
 describe("CLI mirrors of apps/api MCP constants", () => {
   test("every server error code maps to a CLI exit class (and no stale mappings)", () => {
     // A new code in MCP_ERROR_CODES would arrive at the CLI as an unmapped
@@ -114,10 +90,7 @@ describe("CLI mirrors of apps/api MCP constants", () => {
     );
   });
 
-  test("the packed CLI version sits within the API's advertised support band", () => {
-    // The production canary checks the exact packed CLI version against the
-    // inclusive [MINIMUM, MAXIMUM] band the API advertises. Bumping the CLI past
-    // MAXIMUM, or the API raising MINIMUM past the shipped CLI, must fail here.
+  test("the generated CLI version matches its package manifest", () => {
     const cliVersionText = cliFile("src/generated/cli-version.ts");
     const cliVersion = /CLI_VERSION\s*=\s*"([^"]+)"/u.exec(cliVersionText)?.[1];
     if (cliVersion === undefined) {
@@ -136,25 +109,6 @@ describe("CLI mirrors of apps/api MCP constants", () => {
     }
     const packageVersion = packageManifest.version;
 
-    // Generated version stays in sync with the package manifest it is baked from.
     expect(cliVersion).toBe(packageVersion);
-
-    // Band is well-formed and both the advertised "latest" and the packed CLI
-    // fall inside it.
-    expect(
-      compareSemver(STELLA_CLI_MINIMUM_VERSION, STELLA_CLI_MAXIMUM_VERSION),
-    ).toBeLessThanOrEqual(0);
-    expect(
-      compareSemver(STELLA_CLI_MINIMUM_VERSION, STELLA_CLI_LATEST_VERSION),
-    ).toBeLessThanOrEqual(0);
-    expect(
-      compareSemver(STELLA_CLI_LATEST_VERSION, STELLA_CLI_MAXIMUM_VERSION),
-    ).toBeLessThanOrEqual(0);
-    expect(
-      compareSemver(STELLA_CLI_MINIMUM_VERSION, cliVersion),
-    ).toBeLessThanOrEqual(0);
-    expect(
-      compareSemver(cliVersion, STELLA_CLI_MAXIMUM_VERSION),
-    ).toBeLessThanOrEqual(0);
   });
 });

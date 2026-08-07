@@ -6,36 +6,45 @@ import {
   AUTH_FETCH_TIMEOUT_MS,
   CLI_REQUIRED_RESOURCE_SCOPES,
 } from "./auth/constants.js";
+import {
+  CLI_MINIMUM_SERVER_REVISION,
+  CLI_REQUIRED_CAPABILITIES,
+  CLI_SUPPORTED_API_PROTOCOLS,
+} from "./generated/api-contract.js";
 
 const MCP_DISCOVERY_PATH = "/.well-known/oauth-protected-resource/mcp";
-export const CLI_SUPPORTED_API_CONTRACT_VERSION = 1;
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
 const SEMVER_BUILD_PATTERN = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
+const positiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 
 const compatibilityMetadataSchema = v.looseObject({
   resource: v.pipe(v.string(), v.url()),
   scopes_supported: v.array(v.string()),
-  stella_compatibility: v.strictObject({
-    api_contract_version: v.pipe(v.number(), v.integer()),
-    cli_version: v.strictObject({
-      minimum: v.string(),
-      maximum: v.string(),
+  stella_contract: v.optional(
+    v.looseObject({
+      protocol: positiveIntegerSchema,
+      revision: positiveIntegerSchema,
+      capabilities: v.record(v.string(), positiveIntegerSchema),
     }),
-  }),
+  ),
+  // Transitional fallback for servers deployed before contract revisions.
+  stella_compatibility: v.optional(
+    v.strictObject({
+      api_contract_version: positiveIntegerSchema,
+      cli_version: v.strictObject({
+        minimum: v.string(),
+        maximum: v.string(),
+      }),
+    }),
+  ),
 });
 
-type CompatibilityMetadata = {
-  readonly resource: string;
-  readonly scopes_supported: readonly string[];
-  readonly stella_compatibility: {
-    readonly api_contract_version: number;
-    readonly cli_version: {
-      readonly minimum: string;
-      readonly maximum: string;
-    };
-  };
-};
+type CompatibilityMetadata = v.InferOutput<typeof compatibilityMetadataSchema>;
+type StellaContract = NonNullable<CompatibilityMetadata["stella_contract"]>;
+type LegacyCompatibility = NonNullable<
+  CompatibilityMetadata["stella_compatibility"]
+>;
 
 type SemverIdentifier =
   | { readonly type: "numeric"; readonly value: number }
@@ -48,10 +57,20 @@ type ParsedSemver = {
   readonly prerelease: readonly SemverIdentifier[];
 };
 
-export type CompatibilityReport = {
-  readonly apiContractVersion: number;
-  readonly cliMaximumVersion: string;
-  readonly cliMinimumVersion: string;
+type NegotiatedContract =
+  | {
+      readonly apiProtocolVersion: number;
+      readonly compatibilitySource: "contract";
+      readonly serverRevision: number;
+    }
+  | {
+      readonly apiProtocolVersion: number;
+      readonly compatibilitySource: "legacy";
+      readonly legacyCliMaximumVersion: string;
+      readonly legacyCliMinimumVersion: string;
+    };
+
+export type CompatibilityReport = NegotiatedContract & {
   readonly cliVersion: string;
   readonly resource: string;
   readonly serverUrl: string;
@@ -155,17 +174,55 @@ const compareSemver = (left: ParsedSemver, right: ParsedSemver): number => {
   return 0;
 };
 
-const validateCompatibility = (
-  metadata: CompatibilityMetadata,
-  serverUrl: string,
-): Result<CompatibilityReport, CompatibilityCheckError> => {
-  const compatibility = metadata.stella_compatibility;
-  if (
-    compatibility.api_contract_version !== CLI_SUPPORTED_API_CONTRACT_VERSION
-  ) {
+const supportsProtocol = (protocol: number): boolean =>
+  CLI_SUPPORTED_API_PROTOCOLS.some((supported) => supported === protocol);
+
+const validateContract = (
+  contract: StellaContract,
+): Result<NegotiatedContract, CompatibilityCheckError> => {
+  if (!supportsProtocol(contract.protocol)) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI requires contract ${CLI_SUPPORTED_API_CONTRACT_VERSION}.`,
+        message: `Server API protocol ${contract.protocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+      }),
+    );
+  }
+  if (contract.revision < CLI_MINIMUM_SERVER_REVISION) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `Server contract revision ${contract.revision} is too old; this CLI requires revision ${CLI_MINIMUM_SERVER_REVISION} or newer.`,
+      }),
+    );
+  }
+
+  const missingCapabilities = Object.entries(CLI_REQUIRED_CAPABILITIES)
+    .filter(
+      ([name, requiredVersion]) =>
+        (contract.capabilities[name] ?? 0) < requiredVersion,
+    )
+    .map(([name, requiredVersion]) => `${name}>=${requiredVersion}`);
+  if (missingCapabilities.length > 0) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `Server contract is missing required ${missingCapabilities.length === 1 ? "capability" : "capabilities"}: ${missingCapabilities.join(", ")}.`,
+      }),
+    );
+  }
+
+  return Result.ok({
+    apiProtocolVersion: contract.protocol,
+    compatibilitySource: "contract",
+    serverRevision: contract.revision,
+  });
+};
+
+const validateLegacyCompatibility = (
+  compatibility: LegacyCompatibility,
+): Result<NegotiatedContract, CompatibilityCheckError> => {
+  if (!supportsProtocol(compatibility.api_contract_version)) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
       }),
     );
   }
@@ -197,9 +254,38 @@ const validateCompatibility = (
   ) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `CLI ${packageJson.version} is incompatible with this server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
+        message: `CLI ${packageJson.version} is incompatible with this legacy server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
       }),
     );
+  }
+
+  return Result.ok({
+    apiProtocolVersion: compatibility.api_contract_version,
+    compatibilitySource: "legacy",
+    legacyCliMaximumVersion: compatibility.cli_version.maximum,
+    legacyCliMinimumVersion: compatibility.cli_version.minimum,
+  });
+};
+
+const validateCompatibility = (
+  metadata: CompatibilityMetadata,
+  serverUrl: string,
+): Result<CompatibilityReport, CompatibilityCheckError> => {
+  let negotiated: Result<NegotiatedContract, CompatibilityCheckError>;
+  if (metadata.stella_contract !== undefined) {
+    negotiated = validateContract(metadata.stella_contract);
+  } else if (metadata.stella_compatibility !== undefined) {
+    negotiated = validateLegacyCompatibility(metadata.stella_compatibility);
+  } else {
+    negotiated = Result.err(
+      new CompatibilityCheckError({
+        message:
+          "The server metadata does not advertise a stella compatibility contract.",
+      }),
+    );
+  }
+  if (Result.isError(negotiated)) {
+    return Result.err(negotiated.error);
   }
 
   const supportedScopes = new Set(metadata.scopes_supported);
@@ -227,9 +313,7 @@ const validateCompatibility = (
   }
 
   return Result.ok({
-    apiContractVersion: compatibility.api_contract_version,
-    cliMaximumVersion: compatibility.cli_version.maximum,
-    cliMinimumVersion: compatibility.cli_version.minimum,
+    ...negotiated.value,
     cliVersion: packageJson.version,
     resource: metadata.resource,
     serverUrl,
@@ -266,7 +350,7 @@ export const checkServerCompatibility = async (
       const parsed = v.safeParse(compatibilityMetadataSchema, body);
       if (!parsed.success) {
         throw new CompatibilityCheckError({
-          message: `Stella compatibility discovery at ${discoveryUrl.toString()} is absent or malformed. Deploy an API that advertises stella_compatibility before publishing this CLI.`,
+          message: `stella compatibility discovery at ${discoveryUrl.toString()} is absent or malformed. Deploy an API that advertises a stella compatibility contract before publishing this CLI.`,
         });
       }
 

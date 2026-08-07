@@ -1,15 +1,12 @@
-// CLI update nudge (spec 051 addendum). The runtime `tools/list` fetch carries
-// the server's advertised latest CLI version in a response header; if it is
-// newer than the running CLI, we print exactly one stderr hint. This module is
-// pure (no I/O): version parsing is Valibot-validated and any unparsable or
-// missing input yields no nudge (fail-silent). The nudge never touches stdout
-// or the exit code.
+// CLI update nudge (spec 051 addendum). The latest published version comes from
+// npm's release channel while the server independently advertises its minimum
+// supported version. This module is pure (no I/O): version parsing is
+// Valibot-validated and any unparsable or missing input yields no nudge
+// (fail-silent). The nudge never touches stdout or the exit code.
 
 import * as v from "valibot";
 
-// Mirror of `apps/api/src/mcp/constants.ts` (no shared module between the API and
-// the published CLI by design). Keep these header names in sync with that file.
-export const CLI_LATEST_HEADER = "x-stella-cli-latest";
+// Mirror of the server-owned minimum-policy header.
 export const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 
 const SemVerSchema = v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/u));

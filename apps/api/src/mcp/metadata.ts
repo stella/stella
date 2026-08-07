@@ -8,8 +8,7 @@ import {
   MCP_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
-  STELLA_CLI_LATEST_HEADER,
-  STELLA_CLI_LATEST_VERSION,
+  STELLA_API_CONTRACT,
   STELLA_CLI_MAXIMUM_VERSION,
   STELLA_CLI_MINIMUM_HEADER,
   STELLA_CLI_MINIMUM_VERSION,
@@ -26,7 +25,6 @@ export const createMcpMetadataHeaders = () =>
     "Cache-Control": "public, max-age=300",
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
-    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 export const createMcpCorsHeaders = () =>
@@ -38,7 +36,6 @@ export const createMcpCorsHeaders = () =>
     "Access-Control-Max-Age": "86400",
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
-    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 // User-facing identifiers (auth.md PRM) shown to a person during the agent
@@ -54,9 +51,15 @@ export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
   authorization_servers: [getAuthIssuerUrl()],
   scopes_supported: [...getMcpResourceScopes(mode)],
   bearer_methods_supported: ["header"],
+  stella_contract: {
+    protocol: STELLA_API_CONTRACT.protocol,
+    revision: STELLA_API_CONTRACT.revision,
+    capabilities: { ...STELLA_API_CONTRACT.capabilities },
+  },
   // RFC 9728 permits additional protected-resource metadata parameters and
-  // requires clients to ignore ones they do not understand. Keeping Stella's
-  // release contract in one extension preserves the standard OAuth fields.
+  // requires clients to ignore ones they do not understand. Keep the old
+  // package-version extension during the transition so already-published CLIs
+  // continue to parse discovery; new CLIs prefer `stella_contract` above.
   stella_compatibility: {
     api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
     cli_version: {

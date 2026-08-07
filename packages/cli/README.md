@@ -11,10 +11,10 @@ npm i -g @stll/cli
 ## Usage
 
 The command surface (`stella <resource> <action>`) is generated from the
-Stella MCP tool registry, so it mirrors the tools exposed by a Stella server.
+stella MCP tool registry, so it mirrors the tools exposed by a stella server.
 Run `stella --help` to list available commands.
 
-Authenticate against a Stella server with:
+Authenticate against a stella server with:
 
 ```sh
 stella auth login
@@ -31,7 +31,9 @@ stella compatibility check --server https://api.stll.app
 ```
 
 Release automation runs this command from the exact packed tarball against
-production before publishing a new CLI version.
+production before publishing a new CLI version. Compatibility is negotiated by
+wire protocol, server revision, and required capabilities rather than by the
+CLI package version.
 
 ## Links
 

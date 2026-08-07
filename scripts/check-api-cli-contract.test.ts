@@ -4,9 +4,7 @@ import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
-  STELLA_CLI_LATEST_VERSION,
-  STELLA_CLI_MAXIMUM_VERSION,
-  STELLA_CLI_MINIMUM_VERSION,
+  STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "../apps/api/src/mcp/constants";
 import cliPackage from "../packages/cli/package.json" with { type: "json" };
@@ -16,7 +14,11 @@ import {
   CLI_REQUIRED_RESOURCE_SCOPES,
   CLI_REQUIRED_SCOPES,
 } from "../packages/cli/src/auth/constants";
-import { CLI_SUPPORTED_API_CONTRACT_VERSION } from "../packages/cli/src/compatibility";
+import {
+  CLI_MINIMUM_SERVER_REVISION,
+  CLI_REQUIRED_CAPABILITIES,
+  CLI_SUPPORTED_API_PROTOCOLS,
+} from "../packages/cli/src/generated/api-contract";
 
 const SHARED_NPM_PACKAGES = [
   "business-registries",
@@ -57,10 +59,21 @@ describe("API and CLI release contract", () => {
     expect(privatePackages["version"]).toBe(false);
   });
 
-  test("the server advertises the contract version implemented by the CLI", () => {
-    expect(STELLA_MCP_API_CONTRACT_VERSION).toBe(
-      CLI_SUPPORTED_API_CONTRACT_VERSION,
+  test("the server satisfies the generated CLI protocol contract", () => {
+    expect(CLI_SUPPORTED_API_PROTOCOLS).toContain(
+      STELLA_MCP_API_CONTRACT_VERSION,
     );
+    expect(STELLA_API_CONTRACT.revision).toBeGreaterThanOrEqual(
+      CLI_MINIMUM_SERVER_REVISION,
+    );
+    const serverCapabilities: Readonly<Record<string, number>> =
+      STELLA_API_CONTRACT.capabilities;
+    for (const [name, requiredVersion] of Object.entries(
+      CLI_REQUIRED_CAPABILITIES,
+    )) {
+      expect(serverCapabilities).toHaveProperty(name);
+      expect(serverCapabilities[name]).toBeGreaterThanOrEqual(requiredVersion);
+    }
   });
 
   test("the API and CLI use matching official MCP v2 packages", () => {
@@ -75,22 +88,7 @@ describe("API and CLI release contract", () => {
     );
   });
 
-  test("the current CLI package cannot exceed server support", () => {
-    expect(
-      Bun.semver.satisfies(
-        cliPackage.version,
-        `>=${STELLA_CLI_MINIMUM_VERSION} <=${STELLA_CLI_MAXIMUM_VERSION}`,
-      ),
-    ).toBe(true);
-    expect(
-      Bun.semver.satisfies(
-        STELLA_CLI_LATEST_VERSION,
-        `>=${STELLA_CLI_MINIMUM_VERSION} <=${STELLA_CLI_MAXIMUM_VERSION}`,
-      ),
-    ).toBe(true);
-  });
-
-  test("automated versioning regenerates allowed CLI metadata", async () => {
+  test("automated versioning regenerates the baked CLI package version", async () => {
     const [rootPackage, ciWorkflow] = await Promise.all([
       Bun.file(new URL("../package.json", import.meta.url)).json(),
       Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
