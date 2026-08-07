@@ -148,7 +148,6 @@
     "jszip": "catalog:",
     "react-grab": "^0.1.50",
     "rollup-plugin-visualizer": "^7.0.1",
-    "typescript": "catalog:",
     "unified": "^11.0.5"
   },
   "crawlPosture": "mixed"
