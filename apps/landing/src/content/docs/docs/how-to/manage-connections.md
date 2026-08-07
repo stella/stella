@@ -16,9 +16,10 @@ scoped: an app only holds the permissions you approved at connect time.
 
 ## Disconnect an app
 
-Choose **Disconnect** next to the app. This removes the grant **and revokes
-its issued tokens** in the same step, so a disconnected app loses access
-immediately rather than when its tokens would have expired.
+Choose **Disconnect** next to the app. This removes the grant and prevents the
+app from renewing its access. An access token the app already holds is
+stateless and can remain usable until its expiry, for at most 15 minutes after
+disconnecting.
 
 ## Reconnect
 

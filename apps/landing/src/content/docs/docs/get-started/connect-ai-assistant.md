@@ -7,7 +7,8 @@ sidebar:
 
 stella exposes a remote [MCP](https://modelcontextprotocol.io) server. Any
 assistant that supports remote MCP servers with OAuth can connect to your
-workspace; you approve exactly which permissions it gets.
+workspace. The client chooses which permissions to request; stella shows that
+set for you to approve or reject as a whole.
 
 ## Server address
 
@@ -23,8 +24,10 @@ Self-hosted instances serve the same endpoint on their own API host.
 2. Paste the server address above and confirm.
 3. Claude opens stella's sign-in page: enter your email and the one-time code
    you receive.
-4. Review the requested permissions and choose which to grant. Grants are per
-   organization; you can disconnect at any time from stella's
+4. Review the requested permissions and approve or reject the complete set. To
+   request fewer permissions, change the connector's scope configuration in
+   Claude before authorizing it. Grants are per organization; you can
+   disconnect at any time from stella's
    **Settings → Connections**.
 
 ## ChatGPT
@@ -39,7 +42,8 @@ Self-hosted instances serve the same endpoint on their own API host.
 
 Any client speaking Streamable HTTP with OAuth 2.0 works the same way: point
 it at the server address and complete the browser sign-in. The server
-advertises its scopes; grant only what the client should be able to do.
+advertises its scopes. Check the client's requested set before approving it,
+and configure the client to request only what it should be able to do.
 
 ## Next steps
 

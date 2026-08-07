@@ -4,15 +4,52 @@ description: Every tool the stella server and CLI expose, generated from the reg
 ---
 
 import registry from "../../../../../../../packages/cli/src/generated/registry-snapshot.json";
+import { generatedRouteMap } from "../../../../../../../packages/cli/src/generated/route-map";
 
-This page is generated from the committed tool-registry snapshot, the same
-artifact the CLI's commands are generated from, so it cannot drift from the
-deployed surface.
+export const collectLeaves = (node) =>
+  node.kind === "route"
+    ? Object.values(node.children).flatMap(collectLeaves)
+    : [node];
+
+export const registryByName = new Map(
+  registry.map((tool) => [tool.name, tool]),
+);
+
+export const referenceRows = collectLeaves(generatedRouteMap).map((node) => {
+  if (node.kind === "capability-leaf") {
+    return {
+      access: node.spec.destructive ? "destructive" : node.spec.access,
+      command: node.spec.commandPath,
+      description:
+        node.spec.description ?? `Invoke ${node.spec.capabilityId}.`,
+      name: `capability:${node.spec.capabilityId}`,
+      title: node.spec.capabilityId,
+    };
+  }
+
+  const tool = registryByName.get(node.spec.toolName);
+  return {
+    access: node.spec.destructive
+      ? "destructive"
+      : tool?.annotations?.readOnlyHint
+        ? "read"
+        : "write",
+    command: node.spec.commandPath,
+    description: tool?.description ?? `Invoke ${node.spec.toolName}.`,
+    name: node.spec.toolName,
+    title: tool?.annotations?.title ?? tool?.name ?? node.spec.toolName,
+  };
+});
+
+This page is generated from the committed CLI route tree and tool-registry
+snapshot. It includes curated MCP tools, discriminator subcommands, and every
+generated `stella capability <domain> <action>` command that the CLI exposes.
 
 Access is the tool's declared behavior: **read** tools never change state;
-**write** tools do and require confirmation in interactive clients;
-**destructive** writes delete or irreversibly change data and always require
-explicit confirmation.
+**write** tools do and ordinary writes may execute immediately;
+**destructive** writes delete or irreversibly change data and require explicit
+confirmation. Some additional writes can also request server-side
+confirmation based on their target.
 
 <table>
   <thead>
@@ -24,7 +61,7 @@ explicit confirmation.
     </tr>
   </thead>
   <tbody>
-    {registry.map((tool) => (
+    {referenceRows.map((tool) => (
       <tr>
         <td>
           <strong>{tool.annotations?.title ?? tool.name}</strong>
@@ -32,14 +69,10 @@ explicit confirmation.
           <code>{tool.name}</code>
         </td>
         <td>
-          <code>stella {tool.cli.command.join(" ")}</code>
+          <code>stella {tool.command.join(" ")}</code>
         </td>
         <td>
-          {tool.annotations?.destructiveHint
-            ? "destructive"
-            : tool.annotations?.readOnlyHint
-              ? "read"
-              : "write"}
+          {tool.access}
         </td>
         <td>{tool.description}</td>
       </tr>

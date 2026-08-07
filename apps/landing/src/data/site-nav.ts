@@ -7,6 +7,7 @@ type NavLabelKey = Extract<
   | "footer.anonymization"
   | "footer.agent"
   | "footer.contact"
+  | "footer.documentation"
   | "footer.editor"
   | "footer.press"
   | "footer.publicData"
