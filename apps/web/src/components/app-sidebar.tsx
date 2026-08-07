@@ -157,7 +157,9 @@ export function AppSidebar(props: AppSidebarProps) {
   );
   const mounted = useHasMounted();
   const { data: groupedChatThreadPages } = useInfiniteQuery({
-    ...groupedChatThreadsOptions(user.activeOrganizationId),
+    ...groupedChatThreadsOptions({
+      activeOrganizationId: user.activeOrganizationId,
+    }),
     enabled: mounted,
   });
   const groupedChatThreads = mergeGroupedChatThreadPages(

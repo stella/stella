@@ -5577,7 +5577,17 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "get-threads"],
                 capabilityId: "chat.get-threads",
                 access: "read",
-                flags: [],
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--search",
+                    prop: "search",
+                    required: false,
+                    part: "query",
+                    partPath: "search",
+                  },
+                ],
                 inputOnly: [],
                 paginated: true,
                 paginationPart: "query",
@@ -5593,6 +5603,10 @@ export const generatedRouteMap: RouteNode = {
                       properties: {
                         cursor: {
                           maxLength: 512,
+                          type: "string",
+                        },
+                        search: {
+                          maxLength: 500,
                           type: "string",
                         },
                         limit: {

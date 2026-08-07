@@ -12,11 +12,17 @@ import {
   useMatch,
   useNavigate,
 } from "@tanstack/react-router";
-import { MessageSquareIcon, TrashIcon } from "lucide-react";
+import { MessageSquareIcon, SearchIcon, TrashIcon } from "lucide-react";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import {
   Sheet,
   SheetHeader,
@@ -31,8 +37,10 @@ import { cn } from "@stll/ui/lib/utils";
 import {
   groupedChatThreadsOptions,
   invalidateChatThreadLists,
+  listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -59,6 +67,8 @@ export const ThreadsSheet = ({
   const t = useTranslations();
   const commonT = useTranslations("common");
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch] = useDebounce(search, 250);
   const triggerLabel = label ?? commonT("history");
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -90,9 +100,44 @@ export const ThreadsSheet = ({
     return null;
   })();
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery(groupedChatThreadsOptions(activeOrganizationId));
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    isPending,
+    refetch,
+  } = useInfiniteQuery(
+    groupedChatThreadsOptions({
+      activeOrganizationId,
+      search: debouncedSearch,
+    }),
+  );
   const groupedThreads = mergeGroupedChatThreadPages(data?.pages);
+  const historyItems = listChatHistoryItems(groupedThreads);
+  const emptyLabel = (() => {
+    if (isPending) {
+      return commonT("loading");
+    }
+    if (debouncedSearch.trim().length > 0) {
+      return commonT("noResults");
+    }
+    return t("chat.noThreads");
+  })();
+  const threadListState: ThreadListState = (() => {
+    if (isError && historyItems.length === 0) {
+      return {
+        isRetrying: isFetching,
+        onRetry: () => {
+          detached(refetch(), "ThreadsSheet");
+        },
+        status: "error",
+      };
+    }
+    return { emptyLabel, status: "ready" };
+  })();
 
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
@@ -123,33 +168,24 @@ export const ThreadsSheet = ({
         </SheetHeader>
         <SheetPanel>
           <div className="flex flex-col gap-4">
-            <ThreadGroup
-              activeThreadRef={activeThreadRef}
-              emptyLabel={hasNextPage ? undefined : t("chat.noThreads")}
-              heading={t("navigation.chat")}
-              onOpenChange={setIsOpen}
-              scope="global"
-              threads={groupedThreads.global.map((thread) => ({
-                createdAt: thread.createdAt,
-                id: thread.id,
-                title: thread.title,
-              }))}
-            />
-            {groupedThreads.workspaces.map((workspace) => (
-              <ThreadGroup
-                activeThreadRef={activeThreadRef}
-                heading={workspace.workspaceName}
-                key={workspace.workspaceId}
-                onOpenChange={setIsOpen}
-                scope="workspace"
-                threads={workspace.threads.map((thread) => ({
-                  createdAt: thread.createdAt,
-                  id: thread.id,
-                  title: thread.title,
-                }))}
-                workspaceId={workspace.workspaceId}
+            <InputGroup className="bg-background sticky top-0 z-10">
+              <InputGroupAddon>
+                <SearchIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label={commonT("search")}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={commonT("search")}
+                type="search"
+                value={search}
               />
-            ))}
+            </InputGroup>
+            <ThreadList
+              activeThreadRef={activeThreadRef}
+              onOpenChange={setIsOpen}
+              state={threadListState}
+              threads={historyItems}
+            />
             {hasNextPage ? (
               <Button
                 className="self-center"
@@ -208,7 +244,8 @@ const DeleteThreadButton = ({
     onSettled: async (_data, error, variables) => {
       if (error) {
         await queryClient.invalidateQueries({
-          queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
+          queryKey: groupedChatThreadsOptions({ activeOrganizationId })
+            .queryKey,
         });
         return;
       }
@@ -252,71 +289,70 @@ const DeleteThreadButton = ({
   );
 };
 
-type ThreadGroupBaseProps = {
+type ThreadListState =
+  | {
+      isRetrying: boolean;
+      onRetry: () => void;
+      status: "error";
+    }
+  | {
+      emptyLabel: string;
+      status: "ready";
+    };
+
+type ThreadListProps = {
   activeThreadRef: ChatThreadRef | null;
-  emptyLabel?: string | undefined;
-  heading: string;
   onOpenChange: (open: boolean) => void;
-  threads: {
-    createdAt: string | Date;
-    id: string;
-    title: string;
-  }[];
+  state: ThreadListState;
+  threads: ChatHistoryItem[];
 };
 
-type ThreadGroupProps =
-  | (ThreadGroupBaseProps & {
-      scope: "global";
-      workspaceId?: never;
-    })
-  | (ThreadGroupBaseProps & {
-      scope: "workspace";
-      workspaceId: string;
-    });
-
-const ThreadGroup = ({
+const ThreadList = ({
   activeThreadRef,
-  emptyLabel,
-  heading,
-  workspaceId,
   onOpenChange,
-  scope,
+  state,
   threads,
-}: ThreadGroupProps) => {
+}: ThreadListProps) => {
   const t = useTranslations();
 
-  if (threads.length === 0) {
-    if (!emptyLabel) {
-      return null;
-    }
-
+  if (state.status === "error") {
     return (
-      <div className="flex flex-col gap-1">
-        <p className="text-muted-foreground px-1 text-xs font-medium uppercase">
-          <BidiText>{heading}</BidiText>
+      <div className="flex flex-col items-center justify-center gap-3 py-4">
+        <p className="text-muted-foreground text-center text-sm">
+          {t("common.somethingWentWrong")}
         </p>
-        <p className="text-muted-foreground py-4 text-center text-sm">
-          {emptyLabel}
-        </p>
+        <Button
+          disabled={state.isRetrying}
+          onClick={state.onRetry}
+          size="sm"
+          variant="outline"
+        >
+          {t("common.retry")}
+        </Button>
       </div>
+    );
+  }
+
+  if (threads.length === 0) {
+    return (
+      <p className="text-muted-foreground py-4 text-center text-sm">
+        {state.emptyLabel}
+      </p>
     );
   }
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-muted-foreground px-1 text-xs font-medium uppercase">
-        <BidiText>{heading}</BidiText>
-      </p>
       {threads.map((thread) => {
         const threadRef: ChatThreadRef =
-          scope === "workspace"
+          thread.scope === "workspace"
             ? {
-                scope,
+                scope: thread.scope,
                 threadId: toChatThreadId(thread.id),
-                workspaceId,
+                workspaceId: thread.workspaceId,
               }
             : {
-                scope,
+                scope: thread.scope,
                 threadId: toChatThreadId(thread.id),
               };
         return (
@@ -351,7 +387,13 @@ const ThreadGroup = ({
                   : thread.title}
               </BidiText>
               <span className="text-muted-foreground text-xs">
-                {new Date(thread.createdAt).toLocaleDateString(
+                {thread.scope === "workspace" ? (
+                  <>
+                    <BidiText as="span">{thread.workspaceName}</BidiText>
+                    {" · "}
+                  </>
+                ) : null}
+                {new Date(thread.updatedAt).toLocaleDateString(
                   getFormattingLocale(),
                 )}
               </span>

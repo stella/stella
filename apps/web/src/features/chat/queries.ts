@@ -119,6 +119,11 @@ type ChatThreadTitleKey = {
   workspaceId?: string | undefined;
 };
 
+type GroupedChatThreadsKey = {
+  activeOrganizationId: string;
+  search?: string | undefined;
+};
+
 type GroupedChatThreadsPage = Awaited<
   ReturnType<typeof fetchGroupedChatThreads>
 >;
@@ -126,6 +131,21 @@ export type GroupedChatThreads = Pick<
   GroupedChatThreadsPage,
   "global" | "workspaces"
 >;
+
+type GlobalChatHistoryItem = GroupedChatThreads["global"][number] & {
+  scope: "global";
+};
+
+type WorkspaceChatHistoryItem =
+  GroupedChatThreads["workspaces"][number]["threads"][number] &
+    Pick<
+      GroupedChatThreads["workspaces"][number],
+      "workspaceId" | "workspaceName"
+    > & {
+      scope: "workspace";
+    };
+
+export type ChatHistoryItem = GlobalChatHistoryItem | WorkspaceChatHistoryItem;
 
 const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -246,11 +266,12 @@ export const chatKeys = {
     "template-thread",
     key.templateId,
   ],
-  groupedThreads: (activeOrganizationId: string) => [
+  groupedThreads: ({ activeOrganizationId, search }: GroupedChatThreadsKey) => [
     ...chatKeys.all,
     activeOrganizationId,
     "threads",
     "grouped",
+    search ?? "",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
@@ -542,9 +563,11 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  search,
   signal,
 }: {
   cursor?: string | undefined;
+  search?: string | undefined;
   signal?: AbortSignal | undefined;
 } = {}) => {
   const response = await api.chat.threads.get({
@@ -552,6 +575,7 @@ const fetchGroupedChatThreads = async ({
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(search !== undefined && { search }),
     },
   });
 
@@ -663,6 +687,46 @@ export const mergeGroupedChatThreadPages = (
   }
 
   return { global, workspaces: Array.from(workspacesById.values()) };
+};
+
+/**
+ * Canonical cross-scope chat-history projection. Every history surface consumes
+ * this list so global and matter chats cannot acquire separate inclusion or
+ * ordering rules.
+ */
+export const listChatHistoryItems = (
+  groupedThreads: GroupedChatThreads,
+): ChatHistoryItem[] => {
+  const items: ChatHistoryItem[] = groupedThreads.global.map((thread) => ({
+    ...thread,
+    scope: "global",
+  }));
+
+  for (const workspace of groupedThreads.workspaces) {
+    for (const thread of workspace.threads) {
+      items.push({
+        ...thread,
+        scope: "workspace",
+        workspaceId: workspace.workspaceId,
+        workspaceName: workspace.workspaceName,
+      });
+    }
+  }
+
+  return items.toSorted((left, right) => {
+    const updatedAtDelta =
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    if (updatedAtDelta !== 0) {
+      return updatedAtDelta;
+    }
+    if (left.id < right.id) {
+      return 1;
+    }
+    if (left.id > right.id) {
+      return -1;
+    }
+    return 0;
+  });
 };
 
 const getChatApiPath = () => apiUrl("/chat");
@@ -2284,16 +2348,28 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
-export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
-  infiniteQueryOptions({
-    queryKey: chatKeys.groupedThreads(activeOrganizationId),
+export const groupedChatThreadsOptions = ({
+  activeOrganizationId,
+  search,
+}: GroupedChatThreadsKey) => {
+  const normalizedSearch = search?.trim() || undefined;
+  return infiniteQueryOptions({
+    queryKey: chatKeys.groupedThreads({
+      activeOrganizationId,
+      search: normalizedSearch,
+    }),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
-      await fetchGroupedChatThreads({ cursor: pageParam, signal }),
+      await fetchGroupedChatThreads({
+        cursor: pageParam,
+        search: normalizedSearch,
+        signal,
+      }),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
+};
 
 const fetchChatThreadTitle = async ({
   threadId,

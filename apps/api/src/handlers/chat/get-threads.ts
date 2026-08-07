@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -15,6 +15,7 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
@@ -23,6 +24,7 @@ const config = {
   mcp: { type: "capability", reason: "assistant_chat" },
   query: t.Object({
     cursor: t.Optional(t.String({ maxLength: 512 })),
+    search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
     limit: t.Optional(
       t.Integer({
         minimum: 1,
@@ -58,6 +60,17 @@ const getThreads = createSafeRootHandler(
         where ${chatMessages.threadId} = ${chatThreads.id}
       )`,
     ];
+    const search = query.search?.trim();
+    if (search) {
+      const pattern = `%${escapeLike(search)}%`;
+      const searchCondition = or(
+        ilike(chatThreads.title, pattern),
+        ilike(workspacesTable.name, pattern),
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
     // Membership-mode RLS filters workspace-scoped threads and verifies every
     // data_workspace_ids entry on global threads without materializing an
     // application-side workspace allowlist. The joined status predicate keeps

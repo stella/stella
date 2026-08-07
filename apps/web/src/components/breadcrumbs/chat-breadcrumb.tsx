@@ -62,7 +62,7 @@ export const ChatBreadcrumb = ({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const { data: groupedTitle } = useInfiniteQuery({
-    ...groupedChatThreadsOptions(activeOrganizationId),
+    ...groupedChatThreadsOptions({ activeOrganizationId }),
     select: (data) => selectThreadTitle(data.pages, threadId),
   });
 
@@ -108,7 +108,9 @@ export const ChatBreadcrumb = ({
   const displayTitle =
     currentTitle.length > 0 ? currentTitle : t("chat.newChat");
 
-  const groupedKey = groupedChatThreadsOptions(activeOrganizationId).queryKey;
+  const groupedKey = groupedChatThreadsOptions({
+    activeOrganizationId,
+  }).queryKey;
   const titleKey = titleOptions.queryKey;
   const rename = useMutation({
     mutationFn: async (nextTitle: string) => {

@@ -48,6 +48,7 @@ import {
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
+  listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -120,7 +121,7 @@ function ChatIndex() {
   );
   const workspaces = workspacesData?.workspaces;
   const { data: groupedThreadPages } = useInfiniteQuery(
-    groupedChatThreadsOptions(activeOrganizationId),
+    groupedChatThreadsOptions({ activeOrganizationId }),
   );
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
@@ -314,36 +315,10 @@ function ChatIndex() {
       ? t("chat.landing.pinnedMatters")
       : t("chat.landing.lastAccessedMatters");
 
-  const recentChats = useMemo(() => {
-    const threads: RecentChat[] = [];
-    for (const thread of groupedThreads.global) {
-      threads.push({
-        scope: "global",
-        id: thread.id,
-        title: thread.title,
-        updatedAt: thread.updatedAt,
-      });
-    }
-    for (const workspace of groupedThreads.workspaces) {
-      for (const thread of workspace.threads) {
-        threads.push({
-          scope: "workspace",
-          id: thread.id,
-          title: thread.title,
-          updatedAt: thread.updatedAt,
-          workspaceId: workspace.workspaceId,
-          workspaceName: workspace.workspaceName,
-        });
-      }
-    }
-    return threads
-      .toSorted(
-        (left, right) =>
-          new Date(right.updatedAt).getTime() -
-          new Date(left.updatedAt).getTime(),
-      )
-      .slice(0, 5);
-  }, [groupedThreads]);
+  const recentChats = useMemo(
+    () => listChatHistoryItems(groupedThreads).slice(0, 5),
+    [groupedThreads],
+  );
 
   const selectPrompt = (prompt: ChatPrompt) => {
     controller.setContent(prompt.body);
@@ -687,22 +662,6 @@ type PinnedMatter = {
   /** Drives the right-click menu's add-member affordance and header. */
   client: { displayName: string } | null;
 };
-
-type RecentChat =
-  | {
-      scope: "global";
-      id: string;
-      title: string;
-      updatedAt: string | Date;
-    }
-  | {
-      scope: "workspace";
-      id: string;
-      title: string;
-      updatedAt: string | Date;
-      workspaceId: string;
-      workspaceName: string;
-    };
 
 type LandingSectionProps = {
   children: ReactNode;
