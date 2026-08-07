@@ -49,6 +49,19 @@ describe("fitHeadline", () => {
     expect(fontSize).toBe(104);
   });
 
+  // The last kept line can be truncated for width and then marked again for
+  // the lines dropped after it. One marker says both things; two look broken.
+  test("never doubles the dropped-content marker", () => {
+    // Wide characters: the cut leaves enough slack for a second marker to fit
+    // where a narrower run would have had it trimmed back off again.
+    const tooWideToWrap = "m".repeat(30);
+    const { lines } = fitHeadline(
+      Array.from({ length: 4 }, () => tooWideToWrap).join(" "),
+    );
+    expect(lines.filter((line) => line.includes("……"))).toEqual([]);
+    expect(lines.at(-1)).toEndWith("…");
+  });
+
   test("marks dropped content on the last line it keeps", () => {
     const { lines } = fitHeadline(
       Array.from({ length: 40 }, () => "workspace").join(" "),

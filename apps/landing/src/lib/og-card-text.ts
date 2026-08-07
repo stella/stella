@@ -79,7 +79,13 @@ const clampToBox = (lines: string[], fontSize: number): string[] => {
   if (lines.length <= HEADLINE_MAX_LINES || last === undefined) {
     return kept;
   }
-  // Lines were dropped, so the last kept one has to show that it is not the end.
+  // Lines were dropped, so the last kept one has to show that it is not the
+  // end — unless truncating it for width already did. One marker covers both;
+  // appending regardless can leave "……", since the cut can leave enough slack
+  // for a second one to fit rather than be trimmed back off.
+  if (last.endsWith(ELLIPSIS)) {
+    return kept;
+  }
   return [
     ...kept.slice(0, -1),
     truncateToWidth(`${last}${ELLIPSIS}`, fontSize),
