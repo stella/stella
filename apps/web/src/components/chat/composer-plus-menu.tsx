@@ -1,5 +1,4 @@
-import { useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { Ref } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
@@ -61,10 +60,15 @@ import {
 import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
+import {
+  COMPOSER_MENU_SHORTCUT,
+  resolveComposerMenuShortcut,
+} from "@/components/chat/composer-plus-menu.logic";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
@@ -129,25 +133,6 @@ type ComposerPlusMenuProps = {
   /** Positioning for the trigger button, differing per slot: absolute on the
    *  empty placeholder line, `me-auto` at the start of the bottom action row. */
   triggerClassName?: string | undefined;
-  /**
-   * Fired when the menu closes (Escape, outside click, or a selection) after
-   * having been opened programmatically via the imperative handle's
-   * `openSkills()`/`openContext()` — the "/" and "@" triggers on chat
-   * surfaces with a Skills/Context submenu. Never fired for a menu opened
-   * through the ordinary (+) click/hover path. Lets the caller return focus
-   * to the editor instead of Base UI's default post-close focus target (the
-   * trigger button).
-   */
-  onProgrammaticMenuClose?: (() => void) | undefined;
-  ref?: Ref<ComposerPlusMenuHandle>;
-};
-
-/** Imperative handle exposing the "/" and "@" trigger entry points: opens
- *  the (+) menu with the Skills or Context submenu already open and its
- *  search input focused, without requiring a real hover/click sequence. */
-export type ComposerPlusMenuHandle = {
-  openSkills: () => void;
-  openContext: () => void;
 };
 
 // The composer's (+) affordance: a single Menu rendered into whichever slot the
@@ -166,32 +151,68 @@ export const ComposerPlusMenu = ({
   context,
   mcp,
   triggerClassName,
-  onProgrammaticMenuClose,
-  ref,
 }: ComposerPlusMenuProps) => {
   const t = useTranslations();
   const [menuOpen, setMenuOpen] = useState(false);
   const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false);
   const [contextSubmenuOpen, setContextSubmenuOpen] = useState(false);
-  // Set only by `openSkills()`/`openContext()` below; consulted (and
-  // cleared) the next time the root menu closes, so only a "/" or "@"
-  // triggered open reroutes focus back to the editor on close — an
-  // ordinary (+) click/Escape still falls back to Base UI's default
-  // (return focus to the trigger button).
+  // Set only by the editor shortcut listener below; consulted (and cleared)
+  // the next time the root menu closes, so only a "/" or "@"-triggered open
+  // reroutes focus back to the editor. An ordinary (+) click/Escape keeps
+  // Base UI's default of returning focus to the trigger button.
   const openedProgrammaticallyRef = useRef(false);
+  const shortcutEditor = skills?.editor ?? context?.editor ?? null;
+  const hasSkillsShortcut = skills !== undefined;
+  const hasContextShortcut = context !== undefined;
 
-  useImperativeHandle(ref, () => ({
-    openSkills: () => {
+  // The menu owns its editor shortcuts. Any composer that renders a Skills
+  // submenu therefore gets the same blank-composer "/" behavior without a
+  // second surface-level flag or key handler that can drift. Capture runs
+  // before TipTap's legacy slash/mention suggestion plugins on the editor DOM.
+  useExternalSyncEffect(() => {
+    if (!shortcutEditor || shortcutEditor.isDestroyed) {
+      return undefined;
+    }
+
+    const editorElement = shortcutEditor.view.dom;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (disabled) {
+        return;
+      }
+
+      const shortcut = resolveComposerMenuShortcut({
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        hasContext: hasContextShortcut,
+        hasSkills: hasSkillsShortcut,
+        isAltGraph: event.getModifierState("AltGraph"),
+        isComposing: event.isComposing,
+        isEditorEmpty: shortcutEditor.isEmpty,
+        key: event.key,
+        metaKey: event.metaKey,
+      });
+      if (!shortcut) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
       openedProgrammaticallyRef.current = true;
       setMenuOpen(true);
-      setSkillsSubmenuOpen(true);
-    },
-    openContext: () => {
-      openedProgrammaticallyRef.current = true;
-      setMenuOpen(true);
-      setContextSubmenuOpen(true);
-    },
-  }));
+      if (shortcut === COMPOSER_MENU_SHORTCUT.skills) {
+        setSkillsSubmenuOpen(true);
+      } else {
+        setContextSubmenuOpen(true);
+      }
+    };
+
+    editorElement.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => {
+      editorElement.removeEventListener("keydown", handleKeyDown, {
+        capture: true,
+      });
+    };
+  }, [disabled, hasContextShortcut, hasSkillsShortcut, shortcutEditor]);
 
   const handleMenuOpenChange = (open: boolean) => {
     setMenuOpen(open);
@@ -202,7 +223,9 @@ export const ComposerPlusMenu = ({
     setContextSubmenuOpen(false);
     if (openedProgrammaticallyRef.current) {
       openedProgrammaticallyRef.current = false;
-      onProgrammaticMenuClose?.();
+      if (shortcutEditor && !shortcutEditor.isDestroyed) {
+        shortcutEditor.commands.focus();
+      }
     }
   };
 
@@ -308,6 +331,22 @@ const ComposerSubmenuEmpty = ({ children }: { children: React.ReactNode }) => (
  *  submenu opens, so a plain `autoFocus` on the input loses the race. */
 const focusSearchOnOpen = (ref: React.RefObject<HTMLInputElement | null>) => {
   setTimeout(() => ref.current?.focus(), 0);
+};
+
+const useFocusSearchOnOpen = (
+  open: boolean,
+  ref: React.RefObject<HTMLInputElement | null>,
+) => {
+  useExternalSyncEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => ref.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [open, ref]);
 };
 
 const ComposerModelsSubmenu = ({
@@ -451,7 +490,7 @@ const ComposerSkillsSubmenu = ({
 }: {
   enabled: boolean;
   /** Controlled open state so the "/" trigger can force this specific
-   *  submenu open alongside the root menu (see `ComposerPlusMenuHandle`). */
+   *  submenu open alongside the root menu. */
   onOpenChange: (open: boolean) => void;
   open: boolean;
   skills: ComposerSkillsMenuProps;
@@ -461,6 +500,7 @@ const ComposerSkillsSubmenu = ({
   const { activeOrganizationId, editor } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  useFocusSearchOnOpen(open, searchRef);
   const {
     data,
     fetchNextPage,
@@ -535,9 +575,7 @@ const ComposerSkillsSubmenu = ({
     <MenuSub
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
-        if (nextOpen) {
-          focusSearchOnOpen(searchRef);
-        } else {
+        if (!nextOpen) {
           setSearch("");
         }
       }}
@@ -609,7 +647,7 @@ const ComposerContextSubmenu = ({
   context: ComposerContextMenuProps;
   enabled: boolean;
   /** Controlled open state so the "@" trigger can force this specific
-   *  submenu open alongside the root menu (see `ComposerPlusMenuHandle`). */
+   *  submenu open alongside the root menu. */
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) => {
@@ -617,6 +655,7 @@ const ComposerContextSubmenu = ({
   const { activeOrganizationId, editor, threadRef } = context;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  useFocusSearchOnOpen(open, searchRef);
   // Same navigation list `ChatMatterPicker` and the "@" popover's workspace
   // mentions read from — no dedicated endpoint for this submenu.
   const { data } = useQuery({
@@ -634,9 +673,7 @@ const ComposerContextSubmenu = ({
     <MenuSub
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
-        if (nextOpen) {
-          focusSearchOnOpen(searchRef);
-        } else {
+        if (!nextOpen) {
           setSearch("");
         }
       }}

@@ -105,7 +105,6 @@ function ChatIndex() {
     threadId: draftThreadId,
   };
   const controller = useChatEditor({
-    disableSlashSuggestion: true,
     reservedCommands: true,
     threadRef,
   });
