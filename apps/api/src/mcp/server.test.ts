@@ -14,6 +14,7 @@ import type {
   ReadResourceResult,
   Resource,
 } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -343,7 +344,7 @@ describe("handleMcpHttpRequest", () => {
       ),
     );
     if (definitions.length !== 2) {
-      throw new Error("Canonical upload tool definitions are missing");
+      panic("Canonical upload and picker tool definitions are missing");
     }
 
     authenticateMcpRequestMock.mockResolvedValue({

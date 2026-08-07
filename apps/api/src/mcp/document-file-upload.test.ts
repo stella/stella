@@ -2,7 +2,7 @@ import {
   getToolUiResourceUri,
   McpUiToolMetaSchema,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 
@@ -62,7 +62,7 @@ describe("document file upload surface", () => {
       ({ name }) => name === "open_document_version_upload",
     );
     if (!uploadDefinition || !pickerDefinition) {
-      throw new Error("upload_document_version definition is missing");
+      panic("Canonical upload and picker tool definitions are missing");
     }
 
     const listedUpload = toMcpTools([uploadDefinition]).at(0);
@@ -89,7 +89,7 @@ describe("document file upload surface", () => {
     const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
     expect(parsedUi.success).toBe(true);
     if (!parsedUi.success) {
-      throw new Error("upload picker UI metadata is invalid");
+      panic("Upload picker UI metadata is invalid");
     }
     expect(getToolUiResourceUri({ _meta: { ui: parsedUi.data } })).toBe(
       DOCUMENT_UPLOAD_APP_RESOURCE_URI,
@@ -114,7 +114,7 @@ describe("document file upload surface", () => {
 
     expect(result).toMatchObject({ isError: true });
     if (!("content" in result)) {
-      throw new Error("Expected a structured MCP validation error");
+      panic("Expected a structured MCP validation error");
     }
     expect(result.content.at(0)).toMatchObject({
       type: "text",
