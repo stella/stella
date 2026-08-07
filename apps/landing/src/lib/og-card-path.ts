@@ -24,9 +24,8 @@ const BRAND = "stella";
  * the page on a word the reader can see above it.
  */
 export const ogCardHeadline = (title: string): string => {
-  const topic = title
-    .replace(new RegExp(String.raw`^\s*${BRAND}\s*\|\s*`, "iu"), "")
-    .replace(new RegExp(String.raw`\s*\|\s*${BRAND}\s*$`, "iu"), "")
+  const topic = withoutBrandEdges(title.split(BRAND_SEPARATOR))
+    .join(` ${BRAND_SEPARATOR} `)
     // Typographic spaces collapse to a plain one: French sets a narrow no-break
     // space before its colons, which the display face has no glyph for, and a
     // card cannot carry the line-breaking guarantee the character exists for
@@ -35,6 +34,29 @@ export const ogCardHeadline = (title: string): string => {
     .trim();
   return topic.replace(/^./u, (first) => first.toUpperCase());
 };
+
+/** What titles put between the topic and the brand ("stella | security"). */
+const BRAND_SEPARATOR = "|";
+
+/**
+ * Drops the brand from either end, by segment rather than by pattern: the
+ * regex form of this ("\s*\|\s*stella\s*$") is the super-linear shape the
+ * ratchet bans, and splitting says the same thing without one. Never drops
+ * the last segment, so a title that is only the brand still has a headline.
+ */
+const withoutBrandEdges = (segments: string[]): string[] => {
+  const kept = segments.map((segment) => segment.trim());
+  while (kept.length > 1 && isBrand(kept.at(0))) {
+    kept.shift();
+  }
+  while (kept.length > 1 && isBrand(kept.at(-1))) {
+    kept.pop();
+  }
+  return kept;
+};
+
+const isBrand = (segment: string | undefined): boolean =>
+  segment?.toLowerCase() === BRAND;
 
 type OgCardPathOptions = {
   pathname: string;
@@ -70,7 +92,10 @@ export const ogCardSlug = (pathname: string): string => {
   const flattened = pathname
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "");
+    // Single dashes, not runs: the line above already collapsed every run of
+    // separators into one, so there is at most one dash at each end. `-+`
+    // here would be the super-linear shape the ratchet bans, for no gain.
+    .replaceAll(/^-|-$/gu, "");
   return flattened === "" ? "index" : flattened;
 };
 

@@ -49,6 +49,14 @@ describe("ogCardHeadline", () => {
       "Revue tabulaire : analyse",
     );
   });
+
+  test("keeps a separator that belongs to the topic", () => {
+    expect(ogCardHeadline("stella | search | filter")).toBe("Search | filter");
+  });
+
+  test("leaves a headline behind when the title is only the brand", () => {
+    expect(ogCardHeadline("stella")).toBe("Stella");
+  });
 });
 
 describe("card face coverage", () => {
