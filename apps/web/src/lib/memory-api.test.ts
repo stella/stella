@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("memory API boundary", () => {
-  test("validates memory pages and sends the opaque cursor", async () => {
+  test("reads memory pages and sends the opaque cursor", async () => {
     const fetchMock = setFetch(async () =>
       Response.json({
         items: [
@@ -57,7 +57,7 @@ describe("memory API boundary", () => {
     expect(url.searchParams.get("workspaceId")).toBe("workspace_1");
   });
 
-  test("validates navigation pages and restores Date values", async () => {
+  test("reads navigation pages and restores Date values", async () => {
     setFetch(async () =>
       Response.json({
         items: [workspaceNavigationItem],
@@ -76,24 +76,18 @@ describe("memory API boundary", () => {
     expect(page.items.at(0)?.lastActivityAt).toBeInstanceOf(Date);
   });
 
-  test("rejects malformed successes and sends update bodies", async () => {
-    const fetchMock = setFetch(async () => Response.json({ id: null }));
+  test("sends update bodies through the typed route", async () => {
+    const memoryId = "00000000-0000-0000-0000-000000000001";
+    const fetchMock = setFetch(async () => Response.json({ id: memoryId }));
 
-    const result = await Result.tryPromise({
-      try: async () =>
-        await updateMemory({
-          body: { status: "active" },
-          memoryId: "memory/1",
-        }),
-      catch: (cause) => cause,
+    const result = await updateMemory({
+      body: { status: "active" },
+      memoryId,
     });
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ _tag: "ApiError", status: 502 });
-    }
+    expect(String(result.id)).toBe(memoryId);
     const [input, init] = fetchMock.mock.calls.at(0) ?? [];
-    expect(requestUrl(input).pathname).toBe("/v1/memories/memory%2F1");
+    expect(requestUrl(input).pathname).toBe(`/v1/memories/${memoryId}`);
     expect(init).toMatchObject({
       body: JSON.stringify({ status: "active" }),
       credentials: "include",

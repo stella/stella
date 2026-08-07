@@ -1,10 +1,6 @@
-import * as v from "valibot";
-
-import { apiUrl } from "@/lib/api-url";
-import { toAPIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
-
-const REQUEST_TIMEOUT_MS = 15_000;
+import { api, memoriesApi } from "@/lib/api";
+import { unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 
 export const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",
@@ -14,132 +10,14 @@ export const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
 export type WorkspaceNavigationStatusScope =
   (typeof WORKSPACE_NAVIGATION_STATUS_SCOPE)[keyof typeof WORKSPACE_NAVIGATION_STATUS_SCOPE];
 
-const memoryScopeSchema = v.picklist(["organization", "user", "workspace"]);
-const memoryStatusSchema = v.picklist([
-  "suggested",
-  "active",
-  "stale",
-  "archived",
-]);
-const memoryKindSchema = v.picklist([
-  "preference",
-  "instruction",
-  "fact",
-  "decision",
-  "relationship",
-]);
-
-const memoryListItemSchema = v.object({
-  id: v.string(),
-  scope: memoryScopeSchema,
-  kind: memoryKindSchema,
-  content: v.string(),
-  language: v.nullable(v.string()),
-  status: memoryStatusSchema,
-  pinned: v.boolean(),
-  source: v.picklist(["user", "tool", "extracted"]),
-  workspaceId: v.nullable(v.string()),
-  sourceDataWorkspaceIds: v.array(v.string()),
-  createdAt: v.pipe(v.string(), v.isoTimestamp()),
-  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
-});
-
-const memoriesPageSchema = v.object({
-  items: v.array(memoryListItemSchema),
-  nextCursor: v.nullable(v.string()),
-  limit: v.number(),
-});
-
-const persistedMemoryResultSchema = v.object({
-  id: v.string(),
-  type: v.picklist(["created", "existing", "reactivated"]),
-});
-
-const updatedMemoryResultSchema = v.object({ id: v.string() });
-
-const workspaceNavigationItemSchema = v.object({
-  client: v.nullable(
-    v.object({
-      displayName: v.string(),
-      id: v.string(),
-    }),
-  ),
-  clientId: v.nullable(v.string()),
-  color: v.nullable(v.string()),
-  id: v.string(),
-  lastActivityAt: v.pipe(
-    v.string(),
-    v.isoTimestamp(),
-    v.transform((value) => new Date(value)),
-  ),
-  name: v.string(),
-  reference: v.string(),
-  status: v.picklist(["active", "archived", "deleting"]),
-});
-
-const workspaceNavigationPageSchema = v.object({
-  items: v.array(workspaceNavigationItemSchema),
-  limit: v.number(),
-  nextCursor: v.nullable(v.string()),
-  workspaces: v.array(workspaceNavigationItemSchema),
-  workspacesCountLimit: v.number(),
-});
-
-export type MemoryScope = v.InferOutput<typeof memoryScopeSchema>;
-export type MemoryStatus = v.InferOutput<typeof memoryStatusSchema>;
-export type MemoryKind = v.InferOutput<typeof memoryKindSchema>;
-export type MemoryListItem = v.InferOutput<typeof memoryListItemSchema>;
-export type MemoriesPage = v.InferOutput<typeof memoriesPageSchema>;
-export type PersistedMemoryResult = v.InferOutput<
-  typeof persistedMemoryResultSchema
->;
-export type WorkspaceNavigationItem = v.InferOutput<
-  typeof workspaceNavigationItemSchema
->;
-export type WorkspaceNavigationPage = v.InferOutput<
-  typeof workspaceNavigationPageSchema
->;
-
-type MemoryRequestOptions = {
-  body?: object | undefined;
-  method?: "GET" | "PATCH" | "POST" | undefined;
-  path: `/${string}`;
-  signal?: AbortSignal | undefined;
-};
-
-const requestMemoryApi = async ({
-  body,
-  method = "GET",
-  path,
-  signal,
-}: MemoryRequestOptions): Promise<unknown> => {
-  const response = await fetchWithTimeout(apiUrl(path), {
-    ...(body !== undefined && {
-      body: JSON.stringify(body),
-      headers: { "content-type": "application/json" },
-    }),
-    credentials: "include",
-    method,
-    signal,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-  });
-  if (!response.ok) {
-    throw toAPIError({ status: response.status, value: null });
-  }
-
-  return await response.json();
-};
-
-const parseMemoryResponse = <TSchema extends v.GenericSchema>(
-  schema: TSchema,
-  payload: unknown,
-): v.InferOutput<TSchema> => {
-  const parsed = v.safeParse(schema, payload);
-  if (!parsed.success) {
-    throw toAPIError({ status: 502, value: null });
-  }
-  return parsed.output;
-};
+export type MemoryScope = "organization" | "user" | "workspace";
+export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
+export type MemoryKind =
+  | "preference"
+  | "instruction"
+  | "fact"
+  | "decision"
+  | "relationship";
 
 type FetchMemoriesPageOptions = {
   cursor: string | null;
@@ -157,27 +35,24 @@ export const fetchMemoriesPage = async ({
   signal,
   status,
   workspaceId,
-}: FetchMemoriesPageOptions): Promise<MemoriesPage> => {
-  const searchParams = new URLSearchParams({ limit: String(limit) });
-  if (cursor !== null) {
-    searchParams.set("cursor", cursor);
-  }
-  if (scope !== undefined) {
-    searchParams.set("scope", scope);
-  }
-  if (status !== undefined) {
-    searchParams.set("status", status);
-  }
-  if (workspaceId !== undefined) {
-    searchParams.set("workspaceId", workspaceId);
-  }
-
-  const payload = await requestMemoryApi({
-    path: `/memories?${searchParams.toString()}`,
-    signal,
+}: FetchMemoriesPageOptions) => {
+  const response = await memoriesApi.get({
+    ...(signal ? { fetch: { signal } } : {}),
+    query: {
+      limit,
+      ...(cursor !== null ? { cursor } : {}),
+      ...(scope !== undefined ? { scope } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(workspaceId !== undefined
+        ? { workspaceId: toSafeId<"workspace">(workspaceId) }
+        : {}),
+    },
   });
-  return parseMemoryResponse(memoriesPageSchema, payload);
+  return unwrapEden(response);
 };
+
+export type MemoriesPage = Awaited<ReturnType<typeof fetchMemoriesPage>>;
+export type MemoryListItem = MemoriesPage["items"][number];
 
 type CreateMemoryOptions =
   | {
@@ -193,31 +68,28 @@ type CreateMemoryOptions =
       workspaceId: string;
     };
 
-export const createMemory = async (
-  options: CreateMemoryOptions,
-): Promise<PersistedMemoryResult> => {
-  const payload = await requestMemoryApi({
-    body: options,
-    method: "POST",
-    path: "/memories",
-  });
-  return parseMemoryResponse(persistedMemoryResultSchema, payload);
+export const createMemory = async (options: CreateMemoryOptions) => {
+  const response = await memoriesApi.post(
+    options.scope === "workspace"
+      ? {
+          ...options,
+          workspaceId: toSafeId<"workspace">(options.workspaceId),
+        }
+      : options,
+  );
+  return unwrapEden(response);
 };
+
+export type PersistedMemoryResult = Awaited<ReturnType<typeof createMemory>>;
 
 type CreateFirmMemoryOptions = {
   content: string;
   kind: "preference" | "instruction";
 };
 
-export const createFirmMemory = async (
-  options: CreateFirmMemoryOptions,
-): Promise<PersistedMemoryResult> => {
-  const payload = await requestMemoryApi({
-    body: options,
-    method: "POST",
-    path: "/memories/firm",
-  });
-  return parseMemoryResponse(persistedMemoryResultSchema, payload);
+export const createFirmMemory = async (options: CreateFirmMemoryOptions) => {
+  const response = await memoriesApi.firm.post(options);
+  return unwrapEden(response);
 };
 
 type UpdateMemoryOptions = {
@@ -229,16 +101,15 @@ type UpdateMemoryOptions = {
   memoryId: string;
 };
 
-export const updateMemory = async ({
-  body,
-  memoryId,
-}: UpdateMemoryOptions): Promise<{ id: string }> => {
-  const payload = await requestMemoryApi({
-    body,
-    method: "PATCH",
-    path: `/memories/${encodeURIComponent(memoryId)}`,
+export const updateMemory = async ({ body, memoryId }: UpdateMemoryOptions) => {
+  const response = await memoriesApi({
+    memoryId: toSafeId<"aiMemory">(memoryId),
+  }).patch({
+    ...(body.content !== undefined ? { content: body.content } : {}),
+    ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
+    ...(body.status !== undefined ? { status: body.status } : {}),
   });
-  return parseMemoryResponse(updatedMemoryResultSchema, payload);
+  return unwrapEden(response);
 };
 
 type FetchWorkspaceNavigationPageArgs = {
@@ -253,18 +124,28 @@ export const fetchWorkspaceNavigationPage = async ({
   limit,
   signal,
   statusScope,
-}: FetchWorkspaceNavigationPageArgs): Promise<WorkspaceNavigationPage> => {
-  const searchParams = new URLSearchParams({ statusScope });
-  if (cursor !== undefined) {
-    searchParams.set("cursor", cursor);
-  }
-  if (limit !== undefined) {
-    searchParams.set("limit", String(limit));
-  }
-
-  const payload = await requestMemoryApi({
-    path: `/workspaces/navigation?${searchParams.toString()}`,
-    signal,
+}: FetchWorkspaceNavigationPageArgs) => {
+  const response = await api.workspaces.navigation.get({
+    ...(signal ? { fetch: { signal } } : {}),
+    query: {
+      statusScope,
+      ...(cursor !== undefined ? { cursor } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+    },
   });
-  return parseMemoryResponse(workspaceNavigationPageSchema, payload);
+  const page = unwrapEden(response);
+  const restoreDates = (item: (typeof page.items)[number]) => ({
+    ...item,
+    lastActivityAt: new Date(item.lastActivityAt),
+  });
+  return {
+    ...page,
+    items: page.items.map(restoreDates),
+    workspaces: page.workspaces.map(restoreDates),
+  };
 };
+
+export type WorkspaceNavigationPage = Awaited<
+  ReturnType<typeof fetchWorkspaceNavigationPage>
+>;
+export type WorkspaceNavigationItem = WorkspaceNavigationPage["items"][number];
