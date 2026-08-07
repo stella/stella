@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import {
+  ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
+import type {
+  ChatTerminalError,
+  HandlerErrorStatusCode,
+} from "@/api/lib/errors/tagged-errors";
 
 const apiCallError = (statusCode: number) =>
   ({
@@ -132,6 +136,19 @@ type UncoveredStatusCode = Exclude<
   (typeof CLIENT_STATUS_CODES)[number] | (typeof SERVER_STATUS_CODES)[number]
 >;
 
+// One instance per member of the union, bound to it in both directions: the
+// annotation rejects anything that is not a terminal error, and the alias
+// below stops compiling while a member has no instance here.
+const CHAT_TERMINAL_ERRORS = [
+  new ChatEmptyCompletionError({ message: "finished with zero output" }),
+  new ChatLoopDetectedError({ message: "repeated the same work" }),
+] as const satisfies readonly ChatTerminalError[];
+
+type UncoveredChatTerminalErrorTag = Exclude<
+  ChatTerminalError["_tag"],
+  (typeof CHAT_TERMINAL_ERRORS)[number]["_tag"]
+>;
+
 describe("isAnticipatedAIFailure", () => {
   test("exercises every HandlerError status", () => {
     // The guard is the annotation, which stops compiling while a status is
@@ -166,6 +183,25 @@ describe("isAnticipatedAIFailure", () => {
       const kind = classifyAIError(error);
 
       expect(isAnticipatedAIFailure(error, kind)).toBe(kind !== "unknown");
+    }
+  });
+
+  test("exercises every chat terminal error", () => {
+    const everyTerminalErrorCovered: [UncoveredChatTerminalErrorTag] extends [
+      never,
+    ]
+      ? true
+      : false = true;
+
+    expect(everyTerminalErrorCovered).toBe(true);
+  });
+
+  test("anticipates every terminal outcome the chat stream raises itself", () => {
+    // The stream models each of these and recovers from it, so none is a
+    // defect, including the ones the classifier cannot name: an error this
+    // service constructed carries no provider status to classify by.
+    for (const error of CHAT_TERMINAL_ERRORS) {
+      expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(true);
     }
   });
 

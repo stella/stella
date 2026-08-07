@@ -7,10 +7,14 @@
  * (and `chat-thread-messages.tsx`) together.
  */
 import {
+  ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
+import type {
+  ChatTerminalError,
+  HandlerErrorStatusCode,
+} from "@/api/lib/errors/tagged-errors";
 
 export const AI_ERROR_KINDS = [
   "quota_exhausted",
@@ -121,6 +125,21 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   return "unknown";
 };
 
+// Total over `ChatTerminalError`, so a new terminal outcome cannot be added to
+// that union without deciding how a failure sink grades it. Each guard is
+// wrapped because `is` reads the class off its receiver.
+const CHAT_TERMINAL_ERROR_GUARDS = {
+  ChatEmptyCompletionError: (error: unknown) =>
+    ChatEmptyCompletionError.is(error),
+  ChatLoopDetectedError: (error: unknown) => ChatLoopDetectedError.is(error),
+} as const satisfies Record<
+  ChatTerminalError["_tag"],
+  (error: unknown) => boolean
+>;
+
+const isChatTerminalError = (error: unknown): boolean =>
+  Object.values(CHAT_TERMINAL_ERROR_GUARDS).some((is) => is(error));
+
 /**
  * Whether a failure is one this service anticipated, so a telemetry sink can
  * record it as an operational state rather than a defect.
@@ -135,6 +154,13 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
  * statuses, and falls through to `unknown`: "a shape this code does not
  * anticipate", the exact opposite of what it is.
  *
+ * A `ChatTerminalError` is invisible to the classifier for the same reason,
+ * and carries no status at all to fall back on: the chat stream constructs it
+ * for an outcome it models and recovers from, so it is anticipated whatever
+ * kind it classifies as. `ChatLoopDetectedError` already reaches
+ * `loop_detected`; without the union, its sibling empty completion would be
+ * the one modelled outcome graded as a defect.
+ *
  * The request layer already draws this line: `runSafeHandler` reports a
  * handler failure from 500 up and answers a 4xx as an ordinary response.
  */
@@ -143,6 +169,7 @@ export const isAnticipatedAIFailure = (
   kind: AIErrorKind,
 ): boolean =>
   kind !== "unknown" ||
+  isChatTerminalError(error) ||
   (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
 type AIHandlerErrorFallback = {

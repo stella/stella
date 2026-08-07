@@ -108,6 +108,7 @@ import {
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
@@ -473,7 +474,7 @@ export const recordChatAttemptFinish = ({
 
 const chatAttemptTerminalError = (
   state: ChatAttemptState,
-): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
+): ChatTerminalError | null =>
   state.finalLoopDetection ?? state.emptyCompletion;
 
 const projectServerToolsForProvider = ({
