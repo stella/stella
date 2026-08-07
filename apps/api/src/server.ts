@@ -126,6 +126,8 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
+import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
+import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
@@ -668,6 +670,12 @@ const startServer = async (): Promise<void> => {
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
   });
 
+  // Filled in after the handlers below are attached, so a signal arriving
+  // during scheduler registration still finds a shutdown path. A holder rather
+  // than a binding because the shutdown closure is created before the loop
+  // exists and has to observe it once it does.
+  const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
+
   // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
   // workers on SIGTERM/SIGINT (deploy, container stop, or a local
   // `bun --watch` restart) so an in-flight job is not abandoned mid-write.
@@ -689,8 +697,13 @@ const startServer = async (): Promise<void> => {
       });
     });
     stopSse();
+    // Stop claiming new jobs before draining, so a tick in flight finishes
+    // and releases its lease rather than leaving it to expire. Undefined when
+    // the signal beat registration; there is nothing claimed to drain.
+    scheduler.loop?.stop();
     await Promise.race([
       Promise.allSettled([
+        scheduler.loop?.drained,
         workflowWorkers.close(),
         flowRunWorker.close(),
         fileDerivativeWorker.close(),
@@ -709,6 +722,26 @@ const startServer = async (): Promise<void> => {
   });
   process.once("SIGINT", () => {
     detached(shutdownWorkers("SIGINT"), "server.shutdown");
+  });
+
+  // Scheduled jobs run here rather than in a process of their own. A separate
+  // deployment unit has to be remembered, and when it is forgotten nothing
+  // says so: the jobs simply never run, which is indistinguishable from having
+  // no work to do. Hosting the loop in a service that must exist for the
+  // product to work at all removes that failure mode instead of monitoring it.
+  // Each job is leased individually (`locked_by`/`locked_until`), so running
+  // this in every replica is safe.
+  //
+  // Last on purpose. After `listen`, because readiness must not wait on
+  // background-job setup: registration touches the database and the first tick
+  // can reach Redis and object storage, none of which the health endpoint
+  // depends on. After the signal handlers, because registration is awaited,
+  // and a deploy landing inside that window would otherwise find no shutdown
+  // path for the SSE loop, the S3 refresh loop and the listening socket.
+  await ensureDefaultSchedulerJobs();
+  scheduler.loop = startSchedulerLoop();
+  logger.info("scheduler.started", {
+    "scheduler.runner_id": scheduler.loop.runnerId,
   });
 };
 
