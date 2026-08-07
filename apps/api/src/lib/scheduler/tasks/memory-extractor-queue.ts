@@ -72,7 +72,7 @@ export const buildClaimMemoryExtractionQueueQuery = ({
     FROM organization_settings AS settings
     WHERE settings.memory_extraction_enabled = true
       AND settings.memory_extraction_enabled_at IS NOT NULL
-      AND settings.memory_extraction_scheduled_at <= ${now}
+      AND settings.memory_extraction_scheduled_at <= ${now}::timestamptz
     ORDER BY
       settings.memory_extraction_scheduled_at,
       settings.organization_id
@@ -167,7 +167,7 @@ export const buildSettleMemoryExtractionQueueQuery = ({
   WHERE settings.organization_id = ${organizationId}
     AND settings.memory_extraction_enabled = true
     AND settings.memory_extraction_enabled_at IS NOT NULL
-    AND settings.memory_extraction_scheduled_at = ${leaseExpiresAt}
+    AND settings.memory_extraction_scheduled_at = ${leaseExpiresAt}::timestamptz
 `;
 
 export const groupClaimedMemoryExtractionRows = (

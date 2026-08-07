@@ -14,7 +14,7 @@
  * before the prompt constructor escapes it at the trust boundary.
  */
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
@@ -46,28 +46,6 @@ export const loadCompactionTranscript = async ({
   firstSummarizedMessageId,
   lastSummarizedMessageId,
 }: LoadCompactionTranscriptOptions): Promise<string> => {
-  // Resolve both endpoint tuples in one bounded query. `created_at` alone is
-  // not a stable boundary because messages inserted in one transaction can
-  // share it; UUID id is the same tie-breaker used by chat history.
-  const bounds = await rootDb
-    .select({ id: chatMessages.id, createdAt: chatMessages.createdAt })
-    .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, threadId),
-        inArray(chatMessages.id, [
-          firstSummarizedMessageId,
-          lastSummarizedMessageId,
-        ]),
-      ),
-    );
-
-  const first = bounds.find(({ id }) => id === firstSummarizedMessageId);
-  const last = bounds.find(({ id }) => id === lastSummarizedMessageId);
-  if (!first || !last) {
-    return "";
-  }
-
   const rows = await rootDb
     .select({
       role: chatMessages.role,
@@ -77,8 +55,23 @@ export const loadCompactionTranscript = async ({
     .where(
       and(
         eq(chatMessages.threadId, threadId),
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${first.createdAt}, ${first.id})`,
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (${last.createdAt}, ${last.id})`,
+        // Resolve each boundary tuple inside PostgreSQL. Round-tripping its
+        // timestamptz through JS Date would truncate microseconds and could
+        // re-admit or skip a message sharing the same millisecond.
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (
+          SELECT boundary.created_at, boundary.id
+          FROM chat_messages AS boundary
+          WHERE boundary.thread_id = ${threadId}
+            AND boundary.id = ${firstSummarizedMessageId}
+          LIMIT 1
+        )`,
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (
+          SELECT boundary.created_at, boundary.id
+          FROM chat_messages AS boundary
+          WHERE boundary.thread_id = ${threadId}
+            AND boundary.id = ${lastSummarizedMessageId}
+          LIMIT 1
+        )`,
       ),
     )
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
