@@ -19,11 +19,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -55,6 +50,7 @@ import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import { UNKNOWN_USER_LABEL, UserAvatar } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
 import { AddMemberDialog } from "@/components/workspaces/members-section";
@@ -78,6 +74,7 @@ import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { getDisplayName } from "@/lib/get-display-name";
 import { routeQueryOptions } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
@@ -401,7 +398,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
         return {
           userId: member.userId,
-          name: member.user.name,
+          // `user.name` is empty for accounts created before signup started
+          // defaulting it to the email local-part, so fall back to the email
+          // rather than rendering a nameless row. The row shows this name in
+          // four places (label, avatar initials, cell aria-label, popover
+          // header), so resolve it once here.
+          name:
+            getDisplayName(member.user.name, member.user.email) ??
+            UNKNOWN_USER_LABEL,
           image: member.user.image,
           daily,
           dailyEntries,
@@ -798,17 +802,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       key={member.userId}
                     >
                       <div className="flex min-w-0 items-center gap-2">
-                        <Avatar className="size-5 text-[0.5rem]">
-                          {member.image && <AvatarImage src={member.image} />}
-                          <AvatarFallback>
-                            {member.name
-                              .split(" ")
-                              .map((w) => w.at(0))
-                              .join("")
-                              .toUpperCase()
-                              .slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar
+                          className="size-5 shrink-0 text-[0.5rem]"
+                          image={member.image}
+                          name={member.name}
+                        />
                         <span className="min-w-0 truncate text-sm">
                           {member.name}
                         </span>

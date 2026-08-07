@@ -6,7 +6,15 @@ import {
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getDisplayName } from "@/lib/get-display-name";
 import { getInitials } from "@/lib/get-initials";
+
+/**
+ * Shown when a user has neither a name nor an email to fall back on.
+ * Not translated, matching the label this component has always rendered
+ * for that state; every identity surface in the app shows the same string.
+ */
+export const UNKNOWN_USER_LABEL = "Unknown user";
 
 type UserAvatarProps = {
   image?: string | null | undefined;
@@ -23,7 +31,7 @@ export const UserAvatar = ({
   className,
   fallbackClassName,
 }: UserAvatarProps) => {
-  const displayName = name?.trim() || "Unknown user";
+  const displayName = getDisplayName(name) ?? UNKNOWN_USER_LABEL;
 
   return (
     <Avatar className={cn(className, deleted && "opacity-60 grayscale")}>
@@ -63,7 +71,7 @@ export const UserIdentity = ({
   nameClassName,
   secondaryClassName,
 }: UserIdentityProps) => {
-  const displayName = name?.trim() || secondaryText?.trim() || "Unknown user";
+  const displayName = getDisplayName(name, secondaryText) ?? UNKNOWN_USER_LABEL;
 
   return (
     <div className={cn("flex min-w-0 items-center gap-2", className)}>

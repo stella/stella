@@ -424,24 +424,42 @@ const authCookiePrefix = env.isDev
   : undefined;
 
 /**
- * Validates a timezone identifier via the Intl API.
- * Throws an APIError if the value is present and not a
- * recognised IANA timezone.
+ * Keeps `user.name` from ever persisting as an empty string.
+ *
+ * Email-OTP and some social providers leave `name` blank, and the column's
+ * `notNull` constraint still admits `""`, which renders as a nameless
+ * identity everywhere the user is shown. Blank input resolves to the email
+ * local-part instead.
+ *
+ * On update the payload carries only the changed fields, so `email` is
+ * usually absent and no fallback can be derived. There the blank `name` is
+ * dropped from the payload rather than written, leaving the stored value
+ * intact: no caller has a legitimate reason to clear a display name, and
+ * silently keeping the old one cannot break a provider-driven profile sync
+ * the way rejecting the write would.
  */
-const ensureDisplayName = <T extends Record<string, unknown>>(user: T): T => {
+export const ensureDisplayName = <T extends Record<string, unknown>>(
+  user: T,
+) => {
   const name = typeof user["name"] === "string" ? user["name"].trim() : "";
   if (name.length > 0) {
     return user;
   }
-  const email = typeof user["email"] === "string" ? user["email"] : "";
+  const email = typeof user["email"] === "string" ? user["email"].trim() : "";
   const localPart = email.split("@").at(0)?.trim() ?? "";
   const fallback = localPart.length > 0 ? localPart : email;
-  if (fallback.length === 0) {
-    return user;
+  if (fallback.length > 0) {
+    return { ...user, name: fallback };
   }
-  return { ...user, name: fallback };
+  const { name: _blankName, ...withoutName } = user;
+  return withoutName;
 };
 
+/**
+ * Validates a timezone identifier via the Intl API.
+ * Throws an APIError if the value is present and not a
+ * recognised IANA timezone.
+ */
 const validateTimezoneId = (timezoneId: unknown): void => {
   if (typeof timezoneId === "string" && timezoneId !== "UTC") {
     try {
