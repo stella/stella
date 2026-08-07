@@ -64,6 +64,13 @@ const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
       });
 
 /**
+ * Ids a delete term can carry verbatim. `SafeId` is a compile-time brand over
+ * `string` and asserts nothing about the characters, so the quoted term needs
+ * its own guarantee.
+ */
+const DELETABLE_DOCUMENT_ID = /^[A-Za-z0-9_-]+$/u;
+
+/**
  * Delete-task query selecting every search document a batch of rows projects
  * to. Keyed on the stable Postgres id, which every one of a row's documents
  * carries, so it is exactly as correct for a passage-split row as for a whole
@@ -76,7 +83,19 @@ const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
  */
 export const corpusDocumentsDeleteQuery = (
   entityIds: readonly string[],
-): string => entityIds.map((id) => `document_id:"${id}"`).join(" OR ");
+): string =>
+  entityIds
+    .map((id) =>
+      DELETABLE_DOCUMENT_ID.test(id)
+        ? `document_id:"${id}"`
+        : // Not escaped, rejected: these ids come from `uuid` columns, so one
+          // that could alter the query is a defect upstream, not input to
+          // sanitize. Escaping would let the defect through silently, and the
+          // OR-join means a single crafted term changes what the whole task
+          // deletes.
+          panic(`corpus delete query received an unusable document id: ${id}`),
+    )
+    .join(" OR ");
 
 /** Single-row delete query; the batch of one. */
 export const corpusDocumentDeleteQuery = (entityId: string): string =>

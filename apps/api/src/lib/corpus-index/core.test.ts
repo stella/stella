@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusJobInput } from "@/api/lib/corpus-index/core";
 import {
+  corpusDocumentsDeleteQuery,
   createCorpusIndexer,
   deleteQueryChunks,
   settleAll,
@@ -1087,6 +1088,18 @@ describe("delete-task amplification", () => {
     for (let seq = 0; seq < 40; seq += 1) {
       expect(queried).toContain(`document_id:"dec-${seq}"`);
     }
+  });
+
+  test("an id that could alter the query is rejected, not escaped", () => {
+    // The terms are OR-joined, so one id that breaks out of its quotes
+    // changes what the whole task deletes. Ids come from `uuid` columns; one
+    // that reaches here in another shape is a defect upstream.
+    expect(() =>
+      corpusDocumentsDeleteQuery(['a" OR document_id:"b']),
+    ).toThrow();
+    expect(corpusDocumentsDeleteQuery(["a1b2-c3", "d4e5_f6"])).toBe(
+      'document_id:"a1b2-c3" OR document_id:"d4e5_f6"',
+    );
   });
 
   test("chunking bounds one task's query without dropping ids", () => {
