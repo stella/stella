@@ -686,6 +686,7 @@ export const ChatThreadPage = ({
                   autoFocus
                   context={{ activeOrganizationId, threadRef }}
                   controller={controller}
+                  guideAnchorsEnabled
                   isGenerating={isGenerating}
                   mcpOrganizationId={activeOrganizationId}
                   models={{
@@ -698,6 +699,7 @@ export const ChatThreadPage = ({
                   dock={
                     <ChatComposerDock
                       data={data}
+                      guideAnchorsEnabled
                       models={{
                         activeOrganizationId,
                         threadRef,

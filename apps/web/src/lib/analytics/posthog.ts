@@ -12,11 +12,12 @@ import type {
 } from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
 
+const WEB_ANALYTICS_EVENT_VALUES: ReadonlySet<string> = new Set(
+  Object.values(WEB_ANALYTICS_EVENTS),
+);
+
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
-  event === WEB_ANALYTICS_EVENTS.exception ||
-  event === WEB_ANALYTICS_EVENTS.identify ||
-  event === WEB_ANALYTICS_EVENTS.pageViewed ||
-  event === WEB_ANALYTICS_EVENTS.guideStepSkipped;
+  WEB_ANALYTICS_EVENT_VALUES.has(event);
 
 // Browser-noise patterns we drop client-side before they hit
 // PostHog ingest. PostHog has no built-in `ignoreErrors` analogue

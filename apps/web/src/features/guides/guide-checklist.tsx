@@ -12,6 +12,62 @@ import {
 } from "@/features/guides/guide-types";
 import type { OnboardingProgress } from "@/features/guides/use-onboarding-progress";
 
+type GuideChecklistProps = {
+  tours: readonly GuideTour[];
+  progress: OnboardingProgress;
+  activeTourId: GuideTourId | null;
+  onStart: (tour: GuideTour) => void;
+};
+
+export const GuideChecklist = ({
+  tours,
+  progress,
+  activeTourId,
+  onStart,
+}: GuideChecklistProps) => {
+  const t = useTranslations();
+  const { resolvedCount, totalCount } = progress;
+  const fraction = totalCount > 0 ? resolvedCount / totalCount : 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <p className="text-muted-foreground text-sm">
+          {t("guides.checklist.progress", {
+            completed: String(resolvedCount),
+            total: String(totalCount),
+          })}
+        </p>
+        <div
+          aria-hidden="true"
+          className="bg-border h-1.5 w-full overflow-hidden rounded-full"
+        >
+          <div
+            className="bg-foreground h-full rounded-full transition-[width]"
+            style={{ width: `${Math.round(fraction * 100)}%` }}
+          />
+        </div>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {tours.map((tour) => (
+          <GuideTourCard
+            key={tour.id}
+            disabled={
+              activeTourId !== null || progress.isSaving || !progress.isReady
+            }
+            onSkip={() =>
+              progress.setTourStatus(tour.id, GUIDE_TOUR_STATUSES.skipped)
+            }
+            onStart={() => onStart(tour)}
+            status={progress.statusFor(tour.id)}
+            tour={tour}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 type GuideTourCardProps = {
   tour: GuideTour;
   status: GuideTourStatus;
@@ -117,59 +173,5 @@ const GuideTourCard = ({
         <div className="flex items-center gap-2">{cta}</div>
       </div>
     </li>
-  );
-};
-
-type GuideChecklistProps = {
-  tours: readonly GuideTour[];
-  progress: OnboardingProgress;
-  activeTourId: GuideTourId | null;
-  onStart: (tour: GuideTour) => void;
-};
-
-export const GuideChecklist = ({
-  tours,
-  progress,
-  activeTourId,
-  onStart,
-}: GuideChecklistProps) => {
-  const t = useTranslations();
-  const { resolvedCount, totalCount } = progress;
-  const fraction = totalCount > 0 ? resolvedCount / totalCount : 0;
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-sm">
-          {t("guides.checklist.progress", {
-            completed: String(resolvedCount),
-            total: String(totalCount),
-          })}
-        </p>
-        <div
-          aria-hidden="true"
-          className="bg-border h-1.5 w-full overflow-hidden rounded-full"
-        >
-          <div
-            className="bg-foreground h-full rounded-full transition-[width]"
-            style={{ width: `${Math.round(fraction * 100)}%` }}
-          />
-        </div>
-      </div>
-      <ul className="flex flex-col gap-2">
-        {tours.map((tour) => (
-          <GuideTourCard
-            key={tour.id}
-            disabled={activeTourId !== null}
-            onSkip={() =>
-              progress.setTourStatus(tour.id, GUIDE_TOUR_STATUSES.skipped)
-            }
-            onStart={() => onStart(tour)}
-            status={progress.statusFor(tour.id)}
-            tour={tour}
-          />
-        ))}
-      </ul>
-    </div>
   );
 };

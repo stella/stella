@@ -1680,7 +1680,7 @@
     "community": {
       "body": "Obtenez de l'aide auprès d'autres utilisateurs et des développeurs dans notre chat communautaire.",
       "directLinkLabel": "Parlons-en",
-      "directPrompt": "Besoin de délais de réponse garantis ?",
+      "directPrompt": "Vous souhaitez parler directement à l’équipe ?",
       "linkLabel": "Ouvrir le forum communautaire"
     },
     "help": {

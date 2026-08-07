@@ -13,13 +13,15 @@ import {
   type GuideTourId,
   type GuideTourStatus,
 } from "@/features/guides/guide-types";
+import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { unwrapEden } from "@/lib/errors/api";
 import { readStoredJson } from "@/lib/stored-json";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
 // (`user.guideProgress`, a serialized JSON map), so reads add no request and it
-// follows the user across devices. Writes go through `authClient.updateUser`.
+// follows the user across devices. Writes patch one key atomically through the
+// authenticated API so concurrent tabs/devices cannot overwrite each other.
 
 // Read as an open record and validated entry by entry, deliberately: the blob
 // is written by whichever build the user last ran, so a newer release adding a
@@ -36,9 +38,7 @@ const guideTourStatusSchema = v.picklist([
 
 type StoredGuideProgress = Partial<Record<GuideTourId, GuideTourStatus>>;
 
-// Every key/value pair the current build understands, and nothing else. Entries
-// this build cannot read are dropped from the parsed view but survive a write,
-// because `setTourStatus` merges over the raw blob rather than over this.
+// Every key/value pair the current build understands, and nothing else.
 export const parseGuideProgress = (
   raw: string | null | undefined,
 ): StoredGuideProgress => {
@@ -59,13 +59,6 @@ export const parseGuideProgress = (
 const isGuideTourId = (value: string): value is GuideTourId =>
   Object.values(GUIDE_TOUR_IDS).some((id) => id === value);
 
-// The blob as stored, unvalidated. Merged under a write so an entry this build
-// cannot read round-trips through it intact instead of being erased.
-const readRawProgress = (
-  raw: string | null | undefined,
-): Record<string, unknown> =>
-  readStoredJson(raw ?? null, storedBlobSchema) ?? {};
-
 export const countResolvedTours = (
   tours: readonly GuideTour[],
   stored: StoredGuideProgress,
@@ -81,6 +74,7 @@ export type OnboardingProgress = {
   resolvedCount: number;
   totalCount: number;
   setTourStatus: (tourId: GuideTourId, status: GuideTourStatus) => void;
+  isReady: boolean;
   isSaving: boolean;
 };
 
@@ -95,38 +89,28 @@ export const useOnboardingProgress = (
     () => parseGuideProgress(data?.user.guideProgress),
     [data?.user.guideProgress],
   );
-  const storedRaw = useMemo(
-    () => readRawProgress(data?.user.guideProgress),
-    [data?.user.guideProgress],
-  );
-
   const mutation = useMutation({
-    mutationFn: async (next: Record<string, unknown>) => {
-      const { authClient } = await import("@/lib/auth");
-      const { error } = await authClient.updateUser({
-        guideProgress: JSON.stringify(next),
+    mutationFn: async ({
+      tourId,
+      status,
+    }: {
+      tourId: GuideTourId;
+      status: GuideTourStatus;
+    }) => {
+      const response = await api.me["guide-progress"].patch({
+        tourId,
+        status,
       });
-      if (error) {
-        throw toAuthClientError(error);
-      }
+      return unwrapEden(response);
     },
-    onMutate: async (next) => {
-      await queryClient.cancelQueries({ queryKey: sessionOptions.queryKey });
-      const previous = queryClient.getQueryData(sessionOptions.queryKey);
-      const serialized = JSON.stringify(next);
+    onSuccess: ({ guideProgress }) => {
       queryClient.setQueryData(sessionOptions.queryKey, (current) =>
         current
-          ? { ...current, user: { ...current.user, guideProgress: serialized } }
+          ? { ...current, user: { ...current.user, guideProgress } }
           : current,
       );
-      return { previous };
     },
-    onError: (_error, _next, context) => {
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(sessionOptions.queryKey, context.previous);
-      }
-      // The optimistic tick has just disappeared from the card. Say why, rather
-      // than let the checklist look like it silently refused the click.
+    onError: () => {
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
     onSettled: async () => {
@@ -139,10 +123,8 @@ export const useOnboardingProgress = (
   const statusFor = (tourId: GuideTourId): GuideTourStatus =>
     stored[tourId] ?? GUIDE_TOUR_STATUSES.notStarted;
 
-  // Merged over the raw blob, not the parsed view: a status this build does not
-  // recognize stays in the map instead of being dropped by the round trip.
   const setTourStatus = (tourId: GuideTourId, status: GuideTourStatus) => {
-    mutation.mutate({ ...storedRaw, [tourId]: status });
+    mutation.mutate({ tourId, status });
   };
 
   return {
@@ -150,6 +132,7 @@ export const useOnboardingProgress = (
     resolvedCount: countResolvedTours(tours, stored),
     totalCount: tours.length,
     setTourStatus,
+    isReady: data !== undefined,
     isSaving: mutation.isPending,
   };
 };

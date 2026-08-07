@@ -33,18 +33,37 @@ const STEP_POLL_INTERVAL_MS = 100;
 const isPendingAnchor = (anchorId: GuideAnchorId): boolean =>
   PENDING_GUIDE_ANCHOR_IDS.includes(anchorId);
 
-const delay = async (ms: number): Promise<void> => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+const delay = async (ms: number, signal: AbortSignal): Promise<boolean> =>
+  await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const settle = (elapsedNormally: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      signal.removeEventListener("abort", handleAbort);
+      resolve(elapsedNormally);
+    };
+    const handleAbort = () => {
+      clearTimeout(timeout);
+      settle(false);
+    };
+    const timeout = setTimeout(() => {
+      settle(true);
+    }, ms);
+    signal.addEventListener("abort", handleAbort, { once: true });
   });
-};
 
 const waitForAnchor = async (
   anchorId: GuideAnchorId,
+  deadline: number,
+  signal: AbortSignal,
 ): Promise<Element | null> => {
   const selector = guideAnchorSelector(anchorId);
-  const deadline = Date.now() + STEP_POLL_TIMEOUT_MS;
   for (;;) {
+    if (signal.aborted) {
+      return null;
+    }
     const element = document.querySelector(selector);
     if (element) {
       return element;
@@ -53,7 +72,10 @@ const waitForAnchor = async (
       return null;
     }
     // eslint-disable-next-line no-await-in-loop -- sequential by design: poll the DOM until the anchor mounts or the bounded deadline passes
-    await delay(STEP_POLL_INTERVAL_MS);
+    const elapsedNormally = await delay(STEP_POLL_INTERVAL_MS, signal);
+    if (!elapsedNormally) {
+      return null;
+    }
   }
 };
 
@@ -79,12 +101,13 @@ type ResolvedGuideStep = {
 };
 
 // What the user did with the popover.
-type GuideStepOutcome = "next" | "back" | "leave";
+type GuideStepOutcome = "next" | "back" | "leave" | "cancelled";
 
 // How the run ended. Only `completed` marks the tour done.
 type GuideRunExit =
   | { type: "completed" }
   | { type: "left" }
+  | { type: "cancelled" }
   // Not one step resolved against the live surface: the tour has diverged
   // from the app entirely.
   | { type: "tour-empty" }
@@ -111,18 +134,24 @@ export const useGuideRunner = ({
   const analytics = useAnalytics();
   const [state, setState] = useState<GuideRunnerState>({ status: "idle" });
   const engineRef = useRef<GuideEngine | null>(null);
+  const runAbortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
   // Set synchronously in `runTour`, before its first await. The engine handle
   // only exists once the dynamic import resolves, so guarding on that instead
   // would let a second start slip through the import window and stack two
   // overlays over the app.
   const runActiveRef = useRef(false);
 
-  useMountEffect(() => () => {
-    // A run parks on a popover click that can no longer arrive once this
-    // unmounts, so its own teardown never reaches the overlay. Drop it here
-    // rather than leave a spotlight over the app.
-    engineRef.current?.destroy();
-    engineRef.current = null;
+  useMountEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      // A run can be awaiting the engine chunk, an anchor, or a popover click
+      // when its owner unmounts. Abort every await and remove any live overlay.
+      mountedRef.current = false;
+      runAbortRef.current?.abort();
+      engineRef.current?.destroy();
+      engineRef.current = null;
+    };
   });
 
   const applySeed = (seed: GuideSeed | undefined) => {
@@ -156,6 +185,9 @@ export const useGuideRunner = ({
       return;
     }
     runActiveRef.current = true;
+    const runAbort = new AbortController();
+    runAbortRef.current = runAbort;
+    const isRunAborted = () => runAbort.signal.aborted;
     setState({ status: "running", tourId: tour.id });
 
     const total = tour.steps.length;
@@ -170,9 +202,8 @@ export const useGuideRunner = ({
       }
       surfaceOpen = false;
       // Escape is the disclosure-agnostic close: a menu or popover honours it,
-      // and one that is already closed ignores it. The tour itself no longer
-      // reacts to Escape at all (`allowClose: false`), so this cannot end the
-      // run either.
+      // and one that is already closed ignores it. Dispatching from the body
+      // does not hit the guide's focused-popover Escape handler.
       document.body.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
@@ -213,7 +244,11 @@ export const useGuideRunner = ({
     const resolveStepElement = async (
       index: number,
       anchorId: GuideAnchorId,
+      deadline: number,
     ): Promise<Element | null> => {
+      if (isRunAborted()) {
+        return null;
+      }
       const mounted = document.querySelector(guideAnchorSelector(anchorId));
       if (mounted) {
         return mounted;
@@ -221,7 +256,7 @@ export const useGuideRunner = ({
       const revealingAnchor = revealingAnchorFor(index);
       const revealed =
         revealingAnchor !== undefined && revealSurface(revealingAnchor);
-      const element = await waitForAnchor(anchorId);
+      const element = await waitForAnchor(anchorId, deadline, runAbort.signal);
       if (!element && revealed) {
         // The reveal did not produce this anchor after all, so put the surface
         // back rather than leave a menu open that no step is explaining.
@@ -246,7 +281,14 @@ export const useGuideRunner = ({
       from: number,
       direction: GuideDirection,
     ): Promise<ResolvedGuideStep | null> => {
+      // One navigation attempt gets one bounded resolution budget. Without a
+      // shared deadline, a diverged tour could spend the full timeout on every
+      // remaining step and hold the user in a frozen run for minutes.
+      const deadline = Date.now() + STEP_POLL_TIMEOUT_MS;
       for (let index = from; index >= 0 && index < total; index += direction) {
+        if (isRunAborted() || Date.now() >= deadline) {
+          return null;
+        }
         const step = tour.steps.at(index);
         if (!step) {
           continue;
@@ -264,9 +306,15 @@ export const useGuideRunner = ({
         if (step.route) {
           // eslint-disable-next-line no-await-in-loop -- sequential by design: each candidate navigates then waits before the next is tried
           await navigate({ to: step.route });
+          if (isRunAborted()) {
+            return null;
+          }
         }
         // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this candidate's anchor before trying the next
-        const element = await resolveStepElement(index, step.anchor);
+        const element = await resolveStepElement(index, step.anchor, deadline);
+        if (isRunAborted()) {
+          return null;
+        }
         if (!element) {
           analytics.captureGuideStepSkipped({
             reason: "anchor-missing",
@@ -294,6 +342,21 @@ export const useGuideRunner = ({
       applySeed(step.seed);
 
       return await new Promise<GuideStepOutcome>((resolve) => {
+        let settled = false;
+        const settle = (outcome: GuideStepOutcome) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          runAbort.signal.removeEventListener("abort", handleAbort);
+          resolve(outcome);
+        };
+        const handleAbort = () => settle("cancelled");
+        runAbort.signal.addEventListener("abort", handleAbort, { once: true });
+        if (isRunAborted()) {
+          settle("cancelled");
+          return;
+        }
         engine.showStep({
           element,
           title: t(step.titleKey),
@@ -317,9 +380,9 @@ export const useGuideRunner = ({
           nextLabel: t("common.next"),
           doneLabel: t("common.done"),
           leaveLabel: t("guides.leave"),
-          onBack: () => resolve("back"),
-          onNext: () => resolve("next"),
-          onLeave: () => resolve("leave"),
+          onBack: () => settle("back"),
+          onNext: () => settle("next"),
+          onLeave: () => settle("leave"),
         });
       });
     };
@@ -327,7 +390,7 @@ export const useGuideRunner = ({
     const drive = async (engine: GuideEngine): Promise<GuideRunExit> => {
       const first = await resolveFrom(0, 1);
       if (!first) {
-        return { type: "tour-empty" };
+        return isRunAborted() ? { type: "cancelled" } : { type: "tour-empty" };
       }
       let current = first;
       // The earliest step this run has shown. Tracked so the back control is
@@ -340,6 +403,8 @@ export const useGuideRunner = ({
         const outcome = await showStep(engine, current, firstIndex);
 
         switch (outcome) {
+          case "cancelled":
+            return { type: "cancelled" };
           case "leave":
             return { type: "left" };
           case "back": {
@@ -354,16 +419,23 @@ export const useGuideRunner = ({
               // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
               previous ?? (await resolveFrom(current.index, 1));
             if (!restored) {
-              return { type: "exhausted" };
+              return isRunAborted()
+                ? { type: "cancelled" }
+                : { type: "exhausted" };
             }
             current = restored;
             break;
           }
           case "next": {
+            if (current.index === total - 1) {
+              return { type: "completed" };
+            }
             // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const next = await resolveFrom(current.index + 1, 1);
             if (!next) {
-              return { type: "completed" };
+              return isRunAborted()
+                ? { type: "cancelled" }
+                : { type: "exhausted" };
             }
             current = next;
             break;
@@ -376,6 +448,7 @@ export const useGuideRunner = ({
 
     const reportExit = (exit: GuideRunExit) => {
       switch (exit.type) {
+        case "cancelled":
         case "left":
           return;
         case "tour-empty": {
@@ -403,6 +476,9 @@ export const useGuideRunner = ({
     try {
       const { createGuideEngine } =
         await import("@/features/guides/guide-engine");
+      if (isRunAborted()) {
+        return;
+      }
       const engine = createGuideEngine();
       engineRef.current = engine;
 
@@ -421,7 +497,12 @@ export const useGuideRunner = ({
       // Also covers a failed engine import, which would otherwise leave the
       // checklist disabled with no way back.
       runActiveRef.current = false;
-      setState({ status: "idle" });
+      if (runAbortRef.current === runAbort) {
+        runAbortRef.current = null;
+      }
+      if (mountedRef.current) {
+        setState({ status: "idle" });
+      }
     }
   };
 

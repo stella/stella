@@ -14,6 +14,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 
 type ChatComposerActionButtonProps = ChatComposerActionState & {
   className?: string;
+  guideAnchorsEnabled?: boolean;
   iconClassName?: string;
   size?: ComponentProps<typeof Button>["size"];
   variant?: ComponentProps<typeof Button>["variant"];
@@ -64,7 +65,10 @@ export const ChatComposerActionButton = (
 
   return (
     <Button
-      {...guideAnchor(GUIDE_ANCHORS.chatSend)}
+      {...guideAnchor(
+        GUIDE_ANCHORS.chatSend,
+        props.guideAnchorsEnabled ?? false,
+      )}
       aria-label={label}
       // Canonical composer send/stop/retry look, baked in so every chat
       // surface renders the identical round, foreground-filled button

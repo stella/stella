@@ -1683,7 +1683,7 @@ type Messages = {
     "community": {
       "body": "Get help from other users and the developers in our community chat.";
       "directLinkLabel": "Talk to us";
-      "directPrompt": "Need guaranteed response times?";
+      "directPrompt": "Want to talk directly with the team?";
       "linkLabel": "Open the community forum";
     };
     "help": {

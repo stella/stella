@@ -2,7 +2,9 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
+import { guideAnchor } from "@/features/guides/guide-anchor";
 import {
   GUIDE_ANCHORS,
   type GuideAnchorId,
@@ -19,12 +21,46 @@ import {
 // masquerade as a live registration.
 const WEB_SRC_DIR = path.resolve(import.meta.dir, "../..");
 const GUIDES_SLICE_SEGMENT = `${path.sep}features${path.sep}guides${path.sep}`;
-const GUIDE_ANCHOR_CALL =
-  /\bguideAnchor\(\s*GUIDE_ANCHORS\.([A-Za-z0-9_]+)\s*\)/gu;
-
 const anchorIdByKey = new Map<string, GuideAnchorId>(
   Object.entries(GUIDE_ANCHORS),
 );
+
+const anchorIdsInSource = (
+  source: string,
+  fileName: string,
+): ReadonlySet<GuideAnchorId> => {
+  const ids = new Set<GuideAnchorId>();
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    fileName.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "guideAnchor"
+    ) {
+      const argument = node.arguments.at(0);
+      if (
+        argument &&
+        ts.isPropertyAccessExpression(argument) &&
+        ts.isIdentifier(argument.expression) &&
+        argument.expression.text === "GUIDE_ANCHORS"
+      ) {
+        const id = anchorIdByKey.get(argument.name.text);
+        if (id) {
+          ids.add(id);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return ids;
+};
 
 // Static scan: which anchors are actually marked on a live element somewhere in
 // the app (outside the guides slice)? Deleting a component's `guideAnchor`
@@ -37,11 +73,8 @@ const registeredAnchorIds: ReadonlySet<GuideAnchorId> = (() => {
       continue;
     }
     const source = readFileSync(file, "utf-8");
-    for (const match of source.matchAll(GUIDE_ANCHOR_CALL)) {
-      const id = anchorIdByKey.get(match[1] ?? "");
-      if (id) {
-        registered.add(id);
-      }
+    for (const id of anchorIdsInSource(source, file)) {
+      registered.add(id);
     }
   }
   return registered;
@@ -53,6 +86,24 @@ const PENDING_ANCHOR_IDS: ReadonlySet<GuideAnchorId> = new Set(
 );
 
 describe("guide anchor registration", () => {
+  test("shared surfaces opt in before registering an anchor", () => {
+    expect(guideAnchor(GUIDE_ANCHORS.chatComposer, false)).toEqual({});
+    expect(guideAnchor(GUIDE_ANCHORS.chatComposer, true)).toEqual({
+      "data-guide-anchor": GUIDE_ANCHORS.chatComposer,
+    });
+  });
+
+  test("ignores anchor-like text outside executable calls", () => {
+    const source = `
+      // guideAnchor(GUIDE_ANCHORS.chatComposer)
+      const example = "guideAnchor(GUIDE_ANCHORS.chatSend)";
+      const props = guideAnchor(GUIDE_ANCHORS.chatToolsButton, enabled);
+    `;
+    expect([...anchorIdsInSource(source, "fixture.tsx")]).toEqual([
+      GUIDE_ANCHORS.chatToolsButton,
+    ]);
+  });
+
   test("every non-pending anchor is registered on a live element", () => {
     const missing = ALL_ANCHOR_IDS.filter(
       (id) => !PENDING_ANCHOR_IDS.has(id) && !registeredAnchorIds.has(id),

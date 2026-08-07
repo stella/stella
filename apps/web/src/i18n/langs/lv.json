@@ -1680,7 +1680,7 @@
     "community": {
       "body": "Saņemiet palīdzību no citiem lietotājiem un izstrādātājiem mūsu kopienas tērzēšanā.",
       "directLinkLabel": "Sazinieties ar mums",
-      "directPrompt": "Nepieciešams garantēts atbildes laiks?",
+      "directPrompt": "Vai vēlaties runāt tieši ar komandu?",
       "linkLabel": "Atvērt kopienas forumu"
     },
     "help": {

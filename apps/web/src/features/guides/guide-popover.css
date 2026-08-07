@@ -78,7 +78,8 @@
   background-color: var(--stella-guide-surface);
   border: 1px solid var(--stella-guide-border);
   border-radius: var(--stella-guide-radius);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+  box-shadow: 0 10px 30px
+    color-mix(in srgb, var(--stella-guide-text) 18%, transparent);
 }
 
 .stella-guide-popover .driver-popover-arrow {

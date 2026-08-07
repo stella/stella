@@ -66,6 +66,37 @@ const buildDescription = ({ body, when }: GuideEngineStep): string => {
   )}</span> ${escapeHtml(when.text)}</p>`;
 };
 
+const PRESERVED_TARGET_ATTRIBUTES = [
+  "aria-controls",
+  "aria-expanded",
+  "aria-haspopup",
+] as const;
+
+type PreservedTargetAttributes = Map<string, string | null>;
+
+const preserveTargetAttributes = (
+  element: Element,
+): PreservedTargetAttributes =>
+  new Map(
+    PRESERVED_TARGET_ATTRIBUTES.map((attribute) => [
+      attribute,
+      element.getAttribute(attribute),
+    ]),
+  );
+
+const restoreTargetAttributes = (
+  element: Element,
+  attributes: PreservedTargetAttributes,
+) => {
+  for (const [attribute, value] of attributes) {
+    if (value === null) {
+      element.removeAttribute(attribute);
+    } else {
+      element.setAttribute(attribute, value);
+    }
+  }
+};
+
 // driver.js renders its close control as a bare "×" pinned to the popover's
 // top corner, with no option to relabel or reposition it. Both are wrong for a
 // control that ends the tour: it has to say what it does, and it has to sit
@@ -84,14 +115,32 @@ const renderLeaveControl =
   };
 
 export const createGuideEngine = (): GuideEngine => {
+  let activeLeave: (() => void) | undefined;
+  let activeTarget:
+    | { element: Element; attributes: PreservedTargetAttributes }
+    | undefined;
+  let destroyed = false;
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    const popover = document.querySelector(".stella-guide-popover");
+    const target = event.target;
+    if (
+      !(popover instanceof HTMLElement) ||
+      !(target instanceof Node) ||
+      !popover.contains(target)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    activeLeave?.();
+  };
+  document.addEventListener("keydown", handleKeyDown);
+
   const instance: Driver = driver({
-    // A stray click on the backdrop or a reflexive Escape must never cost the
-    // user a half-finished tour. driver gates every teardown path it owns —
-    // escape press, close click, overlay click — on this flag, so turning it
-    // off makes the run un-losable by accident. The explicit, labelled leave
-    // control in the footer is the single way out: it is wired through the
-    // popover's own `onCloseClick` hook, which driver invokes directly instead
-    // of through the flag-gated event, so it keeps working here.
+    // Backdrop clicks stay inert. Escape is handled above only while focus is
+    // in the popover, and the labelled leave control remains the pointer path.
     allowClose: false,
     // Stated rather than inherited: the backdrop stays inert on its own terms,
     // not as a side effect of `allowClose`.
@@ -104,6 +153,15 @@ export const createGuideEngine = (): GuideEngine => {
 
   return {
     showStep: (step) => {
+      const previousTarget = activeTarget;
+      const isSameTarget = previousTarget?.element === step.element;
+      const nextTarget = isSameTarget
+        ? previousTarget
+        : {
+            element: step.element,
+            attributes: preserveTargetAttributes(step.element),
+          };
+      activeLeave = step.onLeave;
       instance.highlight({
         element: step.element,
         popover: {
@@ -124,9 +182,26 @@ export const createGuideEngine = (): GuideEngine => {
           // around the viewport, so per-step placement has nothing to say.
         },
       });
+      if (previousTarget && !isSameTarget) {
+        restoreTargetAttributes(
+          previousTarget.element,
+          previousTarget.attributes,
+        );
+      }
+      activeTarget = nextTarget;
     },
     destroy: () => {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      document.removeEventListener("keydown", handleKeyDown);
+      activeLeave = undefined;
       instance.destroy();
+      if (activeTarget) {
+        restoreTargetAttributes(activeTarget.element, activeTarget.attributes);
+        activeTarget = undefined;
+      }
     },
   };
 };

@@ -1680,7 +1680,7 @@
     "community": {
       "body": "Kérjen segítséget más felhasználóktól és a fejlesztőktől a közösségi csevegésünkben.",
       "directLinkLabel": "Írjon nekünk",
-      "directPrompt": "Garantált válaszidőre van szüksége?",
+      "directPrompt": "Közvetlenül a csapattal szeretne beszélni?",
       "linkLabel": "Közösségi fórum megnyitása"
     },
     "help": {
