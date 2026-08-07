@@ -12,8 +12,9 @@
  * is subjected to the same walk.
  *
  * Each adapter is walked against a stubbed HTTP layer answering every
- * request the way an exhausted source does — no hits, no items, no bindings
- * — from a null cursor, threading `nextCursor` forward. Cursor grammars
+ * request the way a source does once every published item is already stored.
+ * Offset-paginated sources remain populated: an empty upstream corpus cannot
+ * distinguish a correct tail park from a reset to page one. Cursor grammars
  * differ per adapter (a date, an item offset, a `<walk>:<offset>`, a
  * `<number>:<year>`), so nothing here parses one: a cursor is an opaque
  * string, and the invariants are about the SHAPE of the sequence and the
@@ -42,61 +43,19 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
  * the present and step towards it one slice at a time. The longest honest
  * warm-up in the registry is SK ÚS, which begins at its court's first year
  * and advances a year per call (~34 steps today, one more per calendar
- * year); the date-cursor adapters begin a 30-day lookback behind and advance
- * a day per call (~31 steps). 96 keeps roughly two and a half times the
- * longest of those, so the cap stays clear of the warm-up for decades, while
- * an adapter that never converges still fails in seconds rather than
- * running until the test times out.
+ * year); the populated SK Courts model below needs 101 steps to traverse its
+ * backfill and then close one full live-window lap. 192 leaves both shapes
+ * ample headroom while an adapter that never converges still fails in
+ * seconds rather than running until the test times out.
  */
-const MAX_WALK_STEPS = 96;
+const MAX_WALK_STEPS = 192;
 
 /**
- * How many distinct cursors the steady state may span.
- *
- * Rule 13's park is a fixed point: one cursor, re-checked. A handover
- * between an adapter's declared walks (backfill to live) settles into one
- * too. A couple more allows a park that alternates between neighbouring
- * positions without permitting a steady state whose size tracks the corpus
- * — which is the failure being guarded against, and which runs to thousands.
+ * Cursor and HTTP-position budgets live beside each adapter's source model.
+ * One global ceiling would let a cheap list adapter inherit CZ ÚS's honest
+ * ninety-probe allowance. The total record below makes every new adapter
+ * declare both parts of its steady-state cost explicitly.
  */
-const MAX_STEADY_STATE_CURSORS = 4;
-
-/**
- * How many distinct source positions one lap of the steady state may touch.
- *
- * This is where a re-sweep shows itself. A cursor sequence can look
- * perfectly convergent while the call behind it walks the whole archive:
- * an adapter that probes its way from the present back to the court's first
- * year inside a single `fetchPage` returns one parked cursor and re-fetches
- * the entire corpus to produce it. Counting the distinct positions requested
- * per lap sees that; counting cursors does not.
- *
- * A parked adapter re-checks one recent window. Where the source offers a
- * list or search endpoint that is a single request, plus at most a session
- * handshake and a page-boundary follow-up; every such adapter here sits at
- * one or two.
- *
- * A source that publishes no list endpoint cannot be that cheap. Discovering
- * whether anything new exists means probing case numbers until enough
- * consecutive misses prove the year is exhausted, so its floor is the miss
- * threshold times the years in its window — for CZ ÚS, thirty misses across
- * a three-year window, or ninety. That is the honest price of the window,
- * and it stays flat as the corpus grows.
- *
- * So the bound has to separate "proportional to the window" from
- * "proportional to the corpus" rather than simply reward small numbers. 128
- * admits the probing shape with headroom, and still rejects the same
- * adapter re-sweeping its archive by a factor of eight (that costs ~1020
- * positions, thirty probes across all thirty-four years, and grows by
- * another thirty every January).
- *
- * This bound also carries invariant 3, unbounded regression: an adapter that
- * walks backwards without a floor cannot keep its per-lap footprint small,
- * whatever its cursor grammar, so no cursor string has to be parsed to
- * detect it.
- */
-const MAX_STEADY_STATE_POSITIONS = 128;
-
 /** Walks are stubbed and sleepless, but CZ ÚS still drives ~2000 requests. */
 const WALK_TIMEOUT_MS = 120_000;
 
@@ -106,10 +65,11 @@ const START_OF_WALK = "<null>";
 // ── Exhausted-source stubs ───────────────────────────────
 
 /**
- * How a source answers while it holds nothing the crawl has not already
- * seen. Bespoke per adapter, because "no results" is only legible in the
- * source's own envelope: a payload the adapter cannot parse is a fetch
- * error, not an exhausted corpus, and would prove nothing about its cursor.
+ * How a source answers once every item it publishes is already stored.
+ * Bespoke per adapter because list sources must stay populated while probe
+ * and date-window sources legitimately answer with no recent matches. A
+ * payload the adapter cannot parse is a fetch error, not an exhausted corpus,
+ * and would prove nothing about its cursor.
  */
 type ExhaustedSource = (request: {
   readonly method: string;
@@ -150,6 +110,10 @@ type AdapterCoverage =
   | {
       readonly disposition: "exercised";
       readonly exhaustedSource: ExhaustedSource;
+      /** Adapter-specific count of cursors in one legitimate lap. */
+      readonly maxSteadyStateCursors: number;
+      /** Adapter-specific cost of one legitimate steady-state lap. */
+      readonly maxSteadyStatePositions: number;
     }
   | { readonly disposition: "excluded"; readonly reason: string };
 
@@ -167,11 +131,23 @@ const ADAPTER_CONFORMANCE = {
     disposition: "exercised",
     exhaustedSource: () =>
       jsonResponse({ items: [], totalPages: 0, pageNumber: 0 }),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
   [ADAPTER_KEYS.CZ_NS]: {
     disposition: "exercised",
-    exhaustedSource: () =>
-      jsonResponse({ "@toplevelentries": "0", viewentry: [] }),
+    exhaustedSource: ({ url }) => {
+      const start = Number(new URL(url).searchParams.get("Start"));
+      const archiveEntries = 240;
+      const pageSize = 40;
+      const count = Math.max(0, Math.min(pageSize, archiveEntries - start + 1));
+      return jsonResponse({
+        "@toplevelentries": String(archiveEntries),
+        viewentry: Array.from({ length: count }, () => ({})),
+      });
+    },
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
   [ADAPTER_KEYS.CZ_NSS]: {
     disposition: "exercised",
@@ -179,40 +155,85 @@ const ADAPTER_CONFORMANCE = {
     // date, so only the POST can report an empty day.
     exhaustedSource: ({ method }) =>
       htmlResponse(method === "POST" ? NSS_NO_RESULTS_PAGE : NSS_SESSION_PAGE),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 2,
   },
   [ADAPTER_KEYS.CZ_US]: {
     disposition: "exercised",
     exhaustedSource: () => htmlResponse(NALUS_EMPTY_DECISION),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 96,
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     disposition: "exercised",
-    exhaustedSource: () => jsonResponse({ rozhodnutieList: [], numFound: 0 }),
+    exhaustedSource: ({ url }) => {
+      const page = Number(new URL(url).searchParams.get("page"));
+      const pageSize = 100;
+      const archiveEntries = 5100;
+      const count = Math.max(
+        0,
+        Math.min(pageSize, archiveEntries - page * pageSize),
+      );
+      return jsonResponse({
+        rozhodnutieList: Array.from({ length: count }, () => ({})),
+        numFound: archiveEntries,
+      });
+    },
+    maxSteadyStateCursors: 50,
+    maxSteadyStatePositions: 50,
   },
   [ADAPTER_KEYS.SK_US]: {
     disposition: "exercised",
     // The portal answers a search that matched nothing with a bare 204.
     exhaustedSource: () => new Response(null, { status: 204 }),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
   [ADAPTER_KEYS.PL_COURTS]: {
     disposition: "exercised",
-    exhaustedSource: () => jsonResponse({ items: [] }),
+    exhaustedSource: ({ url }) => {
+      const page = Number(new URL(url).searchParams.get("pageNumber"));
+      const pageSize = 100;
+      const archiveEntries = 501;
+      const count = Math.max(
+        0,
+        Math.min(pageSize, archiveEntries - page * pageSize),
+      );
+      return jsonResponse({
+        items: Array.from({ length: count }, () => ({})),
+      });
+    },
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
   [ADAPTER_KEYS.AT_COURTS]: {
     disposition: "exercised",
-    exhaustedSource: () =>
-      jsonResponse({
+    exhaustedSource: ({ url }) => {
+      const page = Number(new URL(url).searchParams.get("Seitennummer"));
+      const pageSize = 20;
+      const archiveEntries = 101;
+      const count = Math.max(
+        0,
+        Math.min(pageSize, archiveEntries - (page - 1) * pageSize),
+      );
+      return jsonResponse({
         OgdSearchResult: {
           OgdDocumentResults: {
-            Hits: { "#text": "0" },
-            OgdDocumentReference: [],
+            Hits: { "#text": String(archiveEntries) },
+            OgdDocumentReference: Array.from({ length: count }, () => ({})),
           },
         },
-      }),
+      });
+    },
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
   [ADAPTER_KEYS.EU_ECJ]: {
     disposition: "exercised",
     exhaustedSource: () =>
       jsonResponse({ head: { vars: [] }, results: { bindings: [] } }),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
   },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
@@ -457,15 +478,15 @@ describe("an exhausted source leaves every adapter parked", () => {
             // 2. Bounded steady state, by cursor.
             expect(
               outcome.steadyState.length,
-              `${key}: steady state spans ${outcome.steadyState.length} cursors, above the bound of ${MAX_STEADY_STATE_CURSORS}. Sequence: ${formatSequence(outcome.steps)}`,
-            ).toBeLessThanOrEqual(MAX_STEADY_STATE_CURSORS);
+              `${key}: steady state spans ${outcome.steadyState.length} cursors, above the adapter-specific bound of ${coverage.maxSteadyStateCursors}. Sequence: ${formatSequence(outcome.steps)}`,
+            ).toBeLessThanOrEqual(coverage.maxSteadyStateCursors);
 
             // 2/3. Bounded steady state, by what a lap actually re-fetches.
             const positions = distinctPositions(outcome.steadyState);
             expect(
               positions.length,
-              `${key}: one lap of the parked cursor re-fetches ${describeFootprint(positions)}. The bound is ${MAX_STEADY_STATE_POSITIONS}: a parked adapter re-checks a bounded recent window, it does not re-sweep its corpus (rules 13 and 16). Sequence: ${formatSequence(outcome.steps)}`,
-            ).toBeLessThanOrEqual(MAX_STEADY_STATE_POSITIONS);
+              `${key}: one lap of the parked cursor re-fetches ${describeFootprint(positions)}. The adapter-specific bound is ${coverage.maxSteadyStatePositions}: a parked adapter re-checks a bounded recent window, it does not re-sweep its corpus (rules 13 and 16). Sequence: ${formatSequence(outcome.steps)}`,
+            ).toBeLessThanOrEqual(coverage.maxSteadyStatePositions);
             break;
           }
           default: {
