@@ -168,9 +168,14 @@ const hasCorpusJurisdiction = sql`${caseLawDecisions.country} ~ '^[A-Za-z]{2,8}$
  * corpus read, a delete task and an ingest apiece.
  *
  * A row with no projection row reads null here and still selects, as does one
- * whose content moved past what the projection committed.
+ * whose content moved past what the projection committed. A queued action also
+ * selects: metadata-only refreshes retain the content hash but still need to
+ * replace the generation's document.
  */
-const projectionMissesCurrentContent = sql`${caseLawCorpusIndexProjections.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}`;
+const projectionNeedsCurrentContent = sql`(
+  ${caseLawCorpusIndexProjections.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}
+  OR ${caseLawCorpusIndexProjections.pendingAction} IS NOT NULL
+)`;
 
 const settleReservedGenerationProjections = async (
   tx: Transaction,
@@ -692,7 +697,7 @@ export const caseLawCorpusIndexAdapter = {
             hasCorpusJurisdiction,
             redistributableCaseLawSource,
             isNull(caseLawDecisions.indexedHash),
-            projectionMissesCurrentContent,
+            projectionNeedsCurrentContent,
           ),
         )
         .limit(limit),

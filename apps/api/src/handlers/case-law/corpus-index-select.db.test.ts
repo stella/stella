@@ -33,6 +33,7 @@ const sourceId = createSafeId<"caseLawSource">();
 const neverIndexedId = createSafeId<"caseLawDecision">();
 const rebuiltId = createSafeId<"caseLawDecision">();
 const rebuiltThenChangedId = createSafeId<"caseLawDecision">();
+const rebuiltThenRefreshedId = createSafeId<"caseLawDecision">();
 
 // Annotated rather than asserted, so the callback parameter is typed from the
 // adapter's own signature instead of being widened by a cast.
@@ -41,7 +42,7 @@ const scopedDb: Parameters<
 >[0] = async (callback) =>
   // SAFETY: pglite stands in for the transaction the adapter expects; the
   // adapter only issues reads here.
-  // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
+  // eslint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 beforeAll(
@@ -65,7 +66,7 @@ beforeAll(
       language: "cs",
       fulltext: "text",
       decisionDate: "2020-01-01",
-      // The serving marker is null on all three: that is exactly the state a
+      // The serving marker is null on all four: that is exactly the state a
       // generation rebuild leaves behind, and the state this scan keys on.
       indexedHash: null,
     };
@@ -94,10 +95,19 @@ beforeAll(
         languageGroupKey: "changed",
         contentHash: "hash-new",
       },
+      {
+        ...base,
+        id: rebuiltThenRefreshedId,
+        caseNumber: "4 T 4/2020",
+        slug: "refreshed",
+        languageGroupKey: "refreshed",
+        contentHash: "hash-refreshed",
+      },
     ]);
 
-    // Only the last two were placed by the rebuild. The third's content moved
-    // on afterwards, so the engine holds a stale copy of it.
+    // Only the last three were placed by the rebuild. The third's content
+    // moved on afterwards; the fourth had a metadata-only refresh, so its
+    // durable replacement remains queued despite an unchanged content hash.
     await db.insert(caseLawCorpusIndexProjections).values([
       {
         generation: GENERATION,
@@ -110,6 +120,16 @@ beforeAll(
         decisionId: rebuiltThenChangedId,
         indexId: INDEX_ID,
         indexedHash: "hash-old",
+      },
+      {
+        generation: GENERATION,
+        decisionId: rebuiltThenRefreshedId,
+        indexId: INDEX_ID,
+        indexedHash: "hash-refreshed",
+        pendingAction: "index",
+        pendingHash: "hash-refreshed",
+        pendingIndexIds: [INDEX_ID],
+        pendingRevision: 1,
       },
     ]);
   },
@@ -131,6 +151,9 @@ test("a row the rebuild already committed is not offered again", async () => {
   expect(ids.has(neverIndexedId)).toBe(true);
   // Content moved past what the projection committed: still needs indexing.
   expect(ids.has(rebuiltThenChangedId)).toBe(true);
+  // Metadata moved while content stayed the same: the queued replacement must
+  // still run so fields outside the content hash reach the engine.
+  expect(ids.has(rebuiltThenRefreshedId)).toBe(true);
   // Already in the engine at this exact content. Re-offering it is the defect.
   expect(ids.has(rebuiltId)).toBe(false);
 });
@@ -146,6 +169,11 @@ test("the scan still empties once every row is committed", async () => {
     indexId: INDEX_ID,
     indexedHash: "hash-never",
   });
+  await db.execute(
+    sql`UPDATE ${caseLawCorpusIndexProjections}
+        SET pending_action = null, pending_hash = null, pending_index_ids = '{}'
+        WHERE decision_id = ${rebuiltThenRefreshedId}`,
+  );
 
   const rows = await caseLawCorpusIndexAdapter.selectMissing(scopedDb, {
     generation: GENERATION,
