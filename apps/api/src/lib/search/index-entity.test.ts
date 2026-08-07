@@ -17,9 +17,16 @@ const semanticUpdatedAtToken =
   // renders as `COALESCE(updated_at, created_at)::text`.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   "2026-04-30 08:00:00.000123" as TimestampCasToken;
+const extractedAt = new Date("2026-04-30T08:01:00.000Z");
+const extractedAtToken =
+  // SAFETY: tests fabricate the branded token the token select normally
+  // renders as `extracted_content.extracted_at::text`. The microsecond tail
+  // is the point: a JS Date carrying the same instant loses it.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  "2026-04-30 08:01:00.000982" as TimestampCasToken;
 // The token select chain: rootDb.select({...}).from(...).where(...).limit(1)
 const selectLimitMock = mock(async (_limit: number) => [
-  { semanticUpdatedAtToken },
+  { semanticUpdatedAtToken, extractedAtToken },
 ]);
 const selectMock = mock((_fields: unknown) => ({
   from: (_table: unknown) => ({
@@ -58,7 +65,6 @@ const entityRow = {
   createdAt: new Date("2026-04-01T08:00:00.000Z"),
   extractedContent: null as {
     ciphertext: Buffer;
-    extractedAt: Date;
     iv: Buffer;
     language: string | null;
     sourceEntityVersionId: SafeId<"entityVersion"> | null;
@@ -110,7 +116,9 @@ beforeEach(() => {
   executeMock.mockClear();
   selectMock.mockClear();
   selectLimitMock.mockClear();
-  selectLimitMock.mockResolvedValue([{ semanticUpdatedAtToken }]);
+  selectLimitMock.mockResolvedValue([
+    { semanticUpdatedAtToken, extractedAtToken },
+  ]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
   decryptContentMock.mockClear();
@@ -222,7 +230,6 @@ test("keeps the last complete projection when extracted content cannot decrypt",
     },
     extractedContent: {
       ciphertext: Buffer.from("ciphertext"),
-      extractedAt: new Date("2026-04-30T08:01:00.000Z"),
       iv: Buffer.from("iv"),
       language: "en",
       sourceEntityVersionId: entityRow.currentVersion.id,
@@ -254,7 +261,6 @@ test("excludes stale extracted text and fences its observed provenance", async (
   const staleVersionId = toSafeId<"entityVersion">(
     "019864b8-48d0-7f37-94d5-948e3bcf3f48",
   );
-  const extractedAt = new Date("2026-04-30T08:01:00.000Z");
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -263,7 +269,6 @@ test("excludes stale extracted text and fences its observed provenance", async (
     },
     extractedContent: {
       ciphertext: Buffer.from("stale ciphertext"),
-      extractedAt,
       iv: Buffer.from("stale iv"),
       language: "en",
       sourceEntityVersionId: staleVersionId,
@@ -288,11 +293,17 @@ test("excludes stale extracted text and fences its observed provenance", async (
   expect(compiled.sql).toContain("ec.source_entity_version_id");
   expect(compiled.sql).toContain("ec.extracted_at");
   expect(compiled.params).toContain(staleVersionId);
-  expect(compiled.params).toContain(extractedAt);
+  // `extracted_at` defaults to now(), so the provenance fence must compare
+  // the database's own text rendering. Binding the JS `Date` instead drops
+  // the microseconds and makes every re-index of this entity a silent no-op.
+  expect(compiled.params).toContain(extractedAtToken);
+  expect(compiled.params).not.toContain(extractedAt);
+  expect(compiled.sql).toMatch(
+    /ec\.extracted_at\s+IS NOT DISTINCT FROM \$\d+::timestamptz/u,
+  );
 });
 
 test("preserves pre-provenance extracted text until a fenced writer replaces it", async () => {
-  const extractedAt = new Date("2026-04-30T08:01:00.000Z");
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -301,7 +312,6 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
     },
     extractedContent: {
       ciphertext: Buffer.from("legacy ciphertext"),
-      extractedAt,
       iv: Buffer.from("legacy iv"),
       language: "cs",
       sourceEntityVersionId: null,
@@ -326,7 +336,8 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
     return;
   }
   const compiled = new PgDialect().sqlToQuery(query);
-  expect(compiled.params).toContain(extractedAt);
+  expect(compiled.params).toContain(extractedAtToken);
+  expect(compiled.params).not.toContain(extractedAt);
   expect(
     compiled.params.filter((parameter) => parameter === null),
   ).not.toHaveLength(0);

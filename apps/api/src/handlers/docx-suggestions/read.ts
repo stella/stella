@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { docxSuggestions } from "@/api/db/schema";
@@ -8,10 +8,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 
-import {
-  decodeDocxSuggestionCursor,
-  encodeDocxSuggestionCursor,
-} from "./cursor";
+import { docxSuggestionCursor } from "./cursor";
 import {
   DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
@@ -54,19 +51,57 @@ const listDocxSuggestions = createSafeHandler(
       conditions.push(eq(docxSuggestions.status, query.status));
     }
     if (query.cursor !== undefined) {
-      const cursor = decodeDocxSuggestionCursor(query.cursor);
-      if (cursor === null) {
+      const decodedCursor = docxSuggestionCursor.decode(query.cursor);
+      if (decodedCursor === null) {
         return Result.err(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
       }
-      const keyset = or(
-        gt(docxSuggestions.createdAt, cursor.createdAt),
-        and(
-          eq(docxSuggestions.createdAt, cursor.createdAt),
-          gt(docxSuggestions.id, cursor.id),
-        ),
-      );
+
+      let cursor = decodedCursor;
+      if (cursor.timestamp.precision === "milliseconds") {
+        // The legacy timestamp cannot order rows inside its millisecond. Its
+        // id can: resolve that row's exact timestamp without leaving the DB's
+        // precision, scoped to the same entity and workspace as the list.
+        const [boundary] = yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({
+                createdAtCursor:
+                  docxSuggestionCursor.cursorValue.as("created_at_cursor"),
+              })
+              .from(docxSuggestions)
+              .where(
+                and(
+                  eq(docxSuggestions.workspaceId, workspaceId),
+                  eq(docxSuggestions.entityId, params.entityId),
+                  eq(docxSuggestions.id, cursor.id),
+                ),
+              )
+              .limit(1),
+          ),
+        );
+        if (boundary === undefined) {
+          return Result.ok({ items: [], limit, nextCursor: null });
+        }
+        const exactCursor = docxSuggestionCursor.decode(
+          docxSuggestionCursor.encode(boundary.createdAtCursor, cursor.id),
+        );
+        if (exactCursor === null) {
+          return Result.err(
+            new HandlerError({
+              status: 500,
+              message: "Could not resolve suggestion cursor boundary",
+            }),
+          );
+        }
+        cursor = exactCursor;
+      }
+      const keyset = docxSuggestionCursor.keysetAfter({
+        cursor,
+        idColumn: docxSuggestions.id,
+        direction: "ascending",
+      });
       if (keyset !== undefined) {
         conditions.push(keyset);
       }
@@ -84,6 +119,8 @@ const listDocxSuggestions = createSafeHandler(
             status: docxSuggestions.status,
             appliedMode: docxSuggestions.appliedMode,
             createdAt: docxSuggestions.createdAt,
+            createdAtCursor:
+              docxSuggestionCursor.cursorValue.as("created_at_cursor"),
           })
           .from(docxSuggestions)
           .where(and(...conditions))
@@ -92,17 +129,28 @@ const listDocxSuggestions = createSafeHandler(
       ),
     );
 
-    return Result.ok(
-      createCursorPage({
-        rows,
-        limit,
-        cursorForItem: (item) =>
-          encodeDocxSuggestionCursor({
-            createdAt: item.createdAt,
-            id: item.id,
-          }),
-      }),
-    );
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) =>
+        docxSuggestionCursor.encode(item.createdAtCursor, item.id),
+    });
+
+    // `createdAtCursor` is the serialization projection, not part of the
+    // response contract; drop it after the page is cut.
+    return Result.ok({
+      ...page,
+      items: page.items.map((item) => ({
+        id: item.id,
+        opPayload: item.opPayload,
+        comment: item.comment,
+        severity: item.severity,
+        area: item.area,
+        status: item.status,
+        appliedMode: item.appliedMode,
+        createdAt: item.createdAt,
+      })),
+    });
   },
 );
 

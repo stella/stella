@@ -1,4 +1,4 @@
-import { and, eq, gt, lt, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, lt, or, sql } from "drizzle-orm";
 import type { Column, SQL, SQLWrapper } from "drizzle-orm";
 
 import {
@@ -22,11 +22,10 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * `microseconds-naive` is the same six-digit value without the `Z`, issued
  * before the UTC-anchored rendering; its boundary keeps the old
  * session-zone interpretation, which matches how the timestamptz migration
- * converted the rows it was cut from. `milliseconds` marks the oldest
- * `date_trunc('milliseconds', ...)` cursor (ISO `…​.123Z`); keyset
- * comparisons truncate the column to match it so a page cut before the
- * microsecond migration resumes without duplicating or skipping the rows
- * that shared its truncated millisecond.
+ * converted the rows it was cut from. `milliseconds` marks the oldest ISO
+ * `…​.123Z` cursor. It cannot identify a position inside that millisecond;
+ * callers that can resolve its row by id replace it with the exact database
+ * timestamp, while the generic fallback skips the ambiguous interval.
  */
 export type PgTimestampCursorPrecision =
   | "microseconds"
@@ -154,8 +153,8 @@ export type TimestampIdCursor<Id> = {
 /**
  * `ascending` pages forward (`ORDER BY column, id`, keyset `>`); `descending`
  * pages backward (`ORDER BY column DESC, id DESC`, keyset `<`). The codec owns
- * the whole keyset predicate so no handler can mismatch the boundary column,
- * the tie-break, or the legacy-millisecond truncation across the two clauses.
+ * the whole keyset predicate so no handler can mismatch the boundary column
+ * or tie-break across the two clauses.
  */
 export type KeysetCursorDirection = "ascending" | "descending";
 
@@ -176,9 +175,9 @@ export type TimestampIdCursorCodec<Id> = {
   /**
    * Full keyset predicate selecting the rows strictly after `cursor` in
    * `direction`, on the codec's timestamp column plus `idColumn`. Canonical
-   * microsecond cursors compare the raw column; a legacy millisecond cursor
-   * compares `date_trunc('milliseconds', column)` on both sides of the
-   * comparison so the page it was cut from resumes exactly.
+   * microsecond cursors compare the raw column. A legacy millisecond cursor
+   * cannot order rows inside its truncated interval, so the generic fallback
+   * skips that interval without returning a possible prefix duplicate.
    */
   keysetAfter: (options: KeysetAfterOptions<Id>) => SQL | undefined;
   encode: (timestampValue: string, id: string) => string;
@@ -222,17 +221,19 @@ export const createTimestampIdCursorCodec = <Id>({
   cursorValue: pgTimestampCursorValue(column),
   keysetAfter: ({ cursor, idColumn, direction }) => {
     const boundary = pgTimestampCursorBoundary(cursor.timestamp);
+    if (cursor.timestamp.precision === "milliseconds") {
+      // The lost microseconds may order rows opposite to their ids. The id
+      // tie-break is therefore not a safe approximation inside this interval.
+      // Skip it unless the caller first resolves the cursor row's exact
+      // timestamp in-database and replaces this legacy timestamp.
+      return direction === "ascending"
+        ? gte(column, sql`${boundary} + interval '1 millisecond'`)
+        : lt(column, boundary);
+    }
     const compare = direction === "ascending" ? gt : lt;
-    // A legacy millisecond cursor was cut from a page ordered on the
-    // millisecond-truncated timestamp, so compare the truncated column against
-    // it; a canonical microsecond cursor compares the raw column directly.
-    const timestampExpr =
-      cursor.timestamp.precision === "milliseconds"
-        ? sql`date_trunc('milliseconds', ${column})`
-        : column;
     return or(
-      compare(timestampExpr, boundary),
-      and(eq(timestampExpr, boundary), compare(idColumn, cursor.id)),
+      compare(column, boundary),
+      and(eq(column, boundary), compare(idColumn, cursor.id)),
     );
   },
   encode: (timestampValue, id) => encodePaginationCursor([timestampValue, id]),

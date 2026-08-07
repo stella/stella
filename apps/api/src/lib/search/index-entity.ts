@@ -2,17 +2,14 @@ import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { entities } from "@/api/db/schema";
-import type {
-  extractedContent,
-  LinkMetadata,
-  searchDocuments,
-} from "@/api/db/schema";
+import { entities, extractedContent } from "@/api/db/schema";
+import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
@@ -26,12 +23,17 @@ import { fileNameSearchText } from "@/api/lib/search/query";
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
 type ExtractedContentSource = Pick<
   typeof extractedContent.$inferSelect,
-  | "extractedAt"
-  | "sourceEntityVersionId"
-  | "sourceFieldId"
-  | "sourceFileId"
-  | "sourceSha256Hex"
->;
+  "sourceEntityVersionId" | "sourceFieldId" | "sourceFileId" | "sourceSha256Hex"
+> & {
+  /**
+   * `extracted_at` rendered by Postgres, never a JS `Date`. The column
+   * defaults to `now()`, so a `Date` round-trip drops its microseconds and
+   * the upsert's provenance fence would then never match — making every
+   * re-index of the entity a silent no-op. `null` when the row was created
+   * after the token was read, which fails the fence closed.
+   */
+  extractedAtToken: TimestampCasToken | null;
+};
 
 type BuiltSearchDocument = Omit<
   SearchDocumentRow,
@@ -92,19 +94,28 @@ const extractFieldText = (content: FieldContent): string => {
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
 ): Promise<BuiltSearchDocument | null> => {
-  // The CAS token must be rendered to text by Postgres: a JS Date round-trip
+  // The CAS tokens must be rendered to text by Postgres: a JS Date round-trip
   // truncates microseconds and the upsert's compare-at-full-precision guard
   // would then never match. A core select is used because the relational
   // builder's `extras` emits the column into SQL but drops it from the mapped
   // row (and its object form emits an unaliased reference the database
-  // rejects). Reading the token in a separate query is safe: the upsert
-  // re-checks version and token under FOR UPDATE, so a concurrent update
+  // rejects). Reading the tokens in a separate query is safe: the upsert
+  // re-checks version and tokens under FOR UPDATE, so a concurrent update
   // makes the CAS miss and the follow-up index event re-runs the build.
+  // Both tokens are read BEFORE the projection they fence, so extraction
+  // landing in between can only make the fence miss, never let stale text
+  // through. `extracted_content.entity_id` is the primary key, so the
+  // correlated read is scalar by construction.
   const [tokenRow] = await rootDb
     .select({
       semanticUpdatedAtToken: sql<TimestampCasToken>`
         COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
       `,
+      extractedAtToken: sql<TimestampCasToken | null>`(
+        SELECT ${timestampCasToken(extractedContent.extractedAt)}
+        FROM extracted_content
+        WHERE ${extractedContent.entityId} = ${entities.id}
+      )`,
     })
     .from(entities)
     .where(eq(entities.id, entityId))
@@ -139,7 +150,6 @@ const buildSearchDocument = async (
       extractedContent: {
         columns: {
           ciphertext: true,
-          extractedAt: true,
           iv: true,
           language: true,
           sourceEntityVersionId: true,
@@ -235,7 +245,7 @@ const buildSearchDocument = async (
     entityId: entity.id,
     extractedContentSource: extractedContentRow
       ? {
-          extractedAt: extractedContentRow.extractedAt,
+          extractedAtToken: tokenRow.extractedAtToken,
           sourceEntityVersionId: extractedContentRow.sourceEntityVersionId,
           sourceFieldId: extractedContentRow.sourceFieldId,
           sourceFileId: extractedContentRow.sourceFileId,
@@ -336,7 +346,7 @@ export const upsertSearchDocument = async (
                 AND ec.source_sha256_hex
                   IS NOT DISTINCT FROM ${observedSource?.sourceSha256Hex ?? null}
                 AND ec.extracted_at
-                  IS NOT DISTINCT FROM ${observedSource?.extractedAt ?? null}
+                  IS NOT DISTINCT FROM ${observedSource?.extractedAtToken ?? null}::timestamptz
             )
           )
         )
