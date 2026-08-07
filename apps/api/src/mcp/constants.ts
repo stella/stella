@@ -97,16 +97,26 @@ export const MCP_ALLOWED_HEADERS = [
   "MCP-Protocol-Version",
 ] as const;
 
-// Public compatibility contract advertised by protected-resource discovery.
-// Deploy support for a CLI version before publishing it: the production
-// canary checks these inclusive bounds against the exact packed CLI version.
-export const STELLA_MCP_API_CONTRACT_VERSION = 1;
-// Declared as one validated band: `declareCliSupportBand` panics at import
-// time on an incoherent ordering, so bumping a subset of these can no longer
-// ship an inverted contract (see cli-support-band.ts).
+// Public protocol/revision contract advertised by protected-resource
+// discovery. CLI package versions are deliberately absent: compatibility is a
+// property of the wire protocol and capabilities, not release numbering.
+export const STELLA_API_CONTRACT = {
+  protocol: 1,
+  revision: 1,
+  capabilities: {
+    "document-version-upload": 1,
+    "mcp-v2-transport": 1,
+  },
+} as const;
+
+// Retained as a response header and in the legacy discovery object for clients
+// published before `stella_contract` existed.
+export const STELLA_MCP_API_CONTRACT_VERSION = STELLA_API_CONTRACT.protocol;
+
+// Legacy package-version band. Freeze the ceiling at the transition CLI:
+// future CLIs negotiate `STELLA_API_CONTRACT` and never require another bump.
 const CLI_SUPPORT_BAND = declareCliSupportBand({
   minimum: "0.3.0",
-  latest: "0.3.0",
   maximum: "0.4.3",
 });
 
@@ -114,15 +124,6 @@ export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;
 export const STELLA_CLI_MAXIMUM_VERSION = CLI_SUPPORT_BAND.maximum;
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
-
-// Feeds the @stll/cli update nudge: the CLI reads `x-stella-cli-latest` off its
-// runtime `tools/list` fetch and, if this is newer than the running CLI, prints
-// one stderr hint. Keep this at the latest version already published to npm;
-// the maximum may move ahead in the API release that deliberately precedes a
-// CLI publication. The header name is mirrored (by design, no shared module)
-// in `packages/cli/src/cli-version-nudge.ts`.
-export const STELLA_CLI_LATEST_VERSION = CLI_SUPPORT_BAND.latest;
-export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 // Identity of the authenticated session, echoed back to the caller on every
 // authenticated MCP response so `stella auth whoami` can confirm which org and
@@ -142,7 +143,6 @@ export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_MCP_API_CONTRACT_HEADER,
   STELLA_CLI_MINIMUM_HEADER,
-  STELLA_CLI_LATEST_HEADER,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
   STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,

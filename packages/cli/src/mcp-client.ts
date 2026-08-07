@@ -257,14 +257,12 @@ export const listTools = async ({
   return Result.ok({ tools: result.value.value.tools });
 };
 
-/** Header names carrying the advertised/minimum CLI version (spec 051 addendum). */
-const CLI_LATEST_HEADER = "x-stella-cli-latest";
+/** Header carrying the server-owned minimum CLI policy. */
 const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 
-/** The raw `tools/list` body plus the CLI-version headers riding on it. */
+/** The raw `tools/list` body plus server policy and scope-evidence headers. */
 export type RawToolsList = {
   rawBody: string;
-  cliLatest?: string;
   cliMinimum?: string;
   /** Effective scopes echoed by the authenticated server response. */
   grantedScopes?: readonly string[];
@@ -276,7 +274,7 @@ export type RawToolsList = {
  * Fetch the raw `tools/list` response body (spec S5.5). The runtime trust
  * boundary hashes and validates the exact bytes the server returned, so this
  * returns the unparsed text rather than a decoded envelope, plus the advertised
- * CLI-version headers (spec 051 addendum) for the update nudge.
+ * minimum-version policy and scope evidence.
  */
 const runObservedToolsList = async ({
   serverUrl,
@@ -323,10 +321,6 @@ export const fetchToolsListRaw = async ({
     );
   }
   const out: RawToolsList = { rawBody: evidence.rawBody };
-  const cliLatest = evidence.headers.get(CLI_LATEST_HEADER);
-  if (cliLatest !== null) {
-    out.cliLatest = cliLatest;
-  }
   const cliMinimum = evidence.headers.get(CLI_MINIMUM_HEADER);
   if (cliMinimum !== null) {
     out.cliMinimum = cliMinimum;

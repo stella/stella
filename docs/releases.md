@@ -42,7 +42,7 @@ should lag the release that stopped using the old data.
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
 3. Run `bun run marketing:stale`; if anything is stale, `bun run
-   marketing:reshoot` re-records only the stale captures (see
+marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
 4. In one commit, bump `VERSION` and optionally add the matching manual
    changelog note:
@@ -71,32 +71,50 @@ should lag the release that stopped using the old data.
 
 Changing `packages/cli/package.json` on `main` does not publish the CLI by
 itself. This ordering is deliberate: the API must advertise support for the
-packed CLI version and all of its resource scopes before the client becomes
-public. A manual CLI publish is recovery-only and requires `release_ref` to
-name the stable release currently served by production.
+packed CLI's generated protocol contract, capabilities, and resource scopes
+before the client becomes public. A manual CLI publish is recovery-only and
+requires `release_ref` to name the stable release currently served by
+production.
 
 ## API and CLI Compatibility
 
-MCP protected-resource discovery publishes the versioned
-`stella_compatibility` contract. It contains the API contract version and the
-inclusive CLI version range supported by that server; `scopes_supported`
-remains the authoritative OAuth resource-scope list.
+MCP protected-resource discovery publishes `stella_contract`, containing a
+wire-protocol number, an additive server revision, and versioned capabilities.
+The CLI bakes its supported protocols, minimum server revision, and required
+capabilities into a generated snapshot. Package versions are deliberately not
+part of that contract. `scopes_supported` remains the authoritative OAuth
+resource-scope list.
+
+Evolve the contract with these rules:
+
+- Increment the revision only for additive server behavior. An older CLI must
+  continue to work against every newer revision of its protocol.
+- Increment a capability version only when the newer implementation still
+  satisfies the older capability contract. Use a new capability name for a
+  breaking feature change.
+- Increment the protocol only for a breaking wire change. A CLI may list more
+  than one supported protocol during a migration.
 
 Before expanding the CLI contract:
 
-1. Add the API behavior and scopes, then raise the server's maximum supported
-   CLI version.
-2. Ship that API in a stable release.
-3. Let the post-release exact-tarball canary publish the CLI.
+1. Add the API behavior and scopes, then update the API revision or capability.
+2. Regenerate and commit the CLI contract snapshot.
+3. Ship that API in a stable release.
+4. Let the post-release exact-tarball canary publish the CLI.
+
+The legacy `stella_compatibility` package-version range remains frozen for
+clients published before protocol negotiation. New CLIs prefer
+`stella_contract`, so routine package bumps need no corresponding API edit.
+Update notices resolve npm's `latest` release directly; the API owns only its
+independent minimum-supported-version policy.
 
 The CLI intersects ordinary login requests with the authorization server's
 advertised scopes, so an older server remains usable for capabilities it
 actually supports. Explicitly requested scopes remain requirements and fail
 before browser authorization when unavailable.
 
-CI enforces the cross-boundary invariants as one contract: the API contract
-number must match the CLI implementation, the API's maximum CLI version must
-equal the package version, the published-version hint must remain within the
-advertised range, and every packaged CLI scope must exist in the API's OAuth
-and MCP scope sets. The canaried tarball's SHA-256 checksum is verified again
-in the isolated OIDC publishing job, so npm receives those exact bytes.
+CI enforces the cross-boundary invariants as one contract: the API must satisfy
+the CLI's generated protocol, revision, and capability requirements, and every
+packaged CLI scope must exist in the API's OAuth and MCP scope sets. The
+canaried tarball's SHA-256 checksum is verified again in the isolated OIDC
+publishing job, so npm receives those exact bytes.

@@ -20,6 +20,7 @@ import { readFile } from "node:fs/promises";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
@@ -186,6 +187,7 @@ export type RefreshOutcome =
   | { status: "refreshed"; deltaEmpty: boolean; nudge?: string };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
+type FetchLatestVersion = () => Promise<string | undefined>;
 
 /**
  * Refresh the per-origin cache (spec S5.3). Force-refreshes on `auth login`;
@@ -202,6 +204,7 @@ export const refreshRegistryCache = async ({
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
   fetchRaw,
+  fetchLatestVersion,
   bakedListings,
 }: {
   serverOrigin: string;
@@ -212,6 +215,7 @@ export const refreshRegistryCache = async ({
   ttlSeconds?: number;
   currentVersion?: string;
   fetchRaw?: FetchRaw;
+  fetchLatestVersion?: FetchLatestVersion;
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
   const filePath = cachePathFor(serverOrigin, env);
@@ -229,7 +233,13 @@ export const refreshRegistryCache = async ({
   const fetcher: FetchRaw =
     fetchRaw ??
     (async () => await fetchToolsListRaw({ serverUrl: serverOrigin, token }));
-  const raw = await fetcher();
+  const latestFetcher = fetchLatestVersion ?? fetchLatestCliVersion;
+  const [raw, latestVersion] = await Promise.all([
+    fetcher(),
+    Result.tryPromise(async () => await latestFetcher()).then((result) =>
+      Result.isOk(result) ? result.value : undefined,
+    ),
+  ]);
   if (Result.isError(raw)) {
     return {
       status: "failed",
@@ -248,11 +258,11 @@ export const refreshRegistryCache = async ({
   const baked = bakedListings ?? (await loadBakedListings());
   const delta = computeDelta(baked, trust.listings);
 
-  // CLI update nudge (spec 051 addendum): evaluate the advertised version headers
-  // against this build; anti-nag on the version last nudged for this origin.
+  // Resolve the update channel from npm, the publication source of truth. The
+  // server still supplies only its independently-owned minimum-version policy.
   const nudge = buildVersionNudge({
     current: currentVersion,
-    latest: raw.value.cliLatest,
+    latest: latestVersion,
     minimum: raw.value.cliMinimum,
     lastNudged: existing?.lastNudgedVersion,
   });

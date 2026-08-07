@@ -9,6 +9,7 @@ import {
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
+  STELLA_API_CONTRACT,
   STELLA_CLI_MAXIMUM_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -42,6 +43,11 @@ describe("MCP protected resource discovery routes", () => {
     expect(response.status).toBe(200);
     expect(metadata).toMatchObject({
       scopes_supported: expect.arrayContaining(["stella:read"]),
+      stella_contract: {
+        capabilities: STELLA_API_CONTRACT.capabilities,
+        protocol: STELLA_API_CONTRACT.protocol,
+        revision: STELLA_API_CONTRACT.revision,
+      },
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {

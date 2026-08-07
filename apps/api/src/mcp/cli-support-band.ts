@@ -3,22 +3,18 @@ import { panic } from "better-result";
 /**
  * The CLI compatibility contract the API advertises, as one validated value.
  *
- * The three versions are deliberately independent — `latest` tracks what is
- * published to npm, while `maximum` may move ahead of it in the API release
- * that precedes a CLI publication — but they are bound by one invariant:
+ * This is the legacy compatibility shape consumed by CLIs published before
+ * contract-revision negotiation. New CLIs use `stella_contract` instead, so
+ * this band is frozen after the transition release and no longer follows each
+ * package version. Its only invariant is:
  *
- *   minimum <= latest <= maximum
+ *   minimum <= maximum
  *
- * Previously these were three loose string constants, so bumping a subset left
- * the band inverted (a `latest` below `minimum`) and nothing failed until a
- * single drift test happened to run. Constructing the band through
- * `declareCliSupportBand` moves that from "a test might catch it" to "the API
- * refuses to boot", which is the correct severity: an inverted band means the
- * compatibility contract served to every client is nonsense.
+ * Construction still validates the frozen shim at API boot, so an accidental
+ * edit cannot expose an inverted transition range to legacy clients.
  */
 export type CliSupportBand = {
   readonly minimum: string;
-  readonly latest: string;
   readonly maximum: string;
 };
 
@@ -54,14 +50,9 @@ export const compareSemver = (a: string, b: string): number => {
  * contract. Called at module scope so a bad edit fails at import time.
  */
 export const declareCliSupportBand = (band: CliSupportBand): CliSupportBand => {
-  if (compareSemver(band.minimum, band.latest) > 0) {
+  if (compareSemver(band.minimum, band.maximum) > 0) {
     return panic(
-      `cli-support-band: minimum ${band.minimum} is newer than latest ${band.latest}`,
-    );
-  }
-  if (compareSemver(band.latest, band.maximum) > 0) {
-    return panic(
-      `cli-support-band: latest ${band.latest} is newer than maximum ${band.maximum}`,
+      `cli-support-band: minimum ${band.minimum} is newer than maximum ${band.maximum}`,
     );
   }
   return band;
