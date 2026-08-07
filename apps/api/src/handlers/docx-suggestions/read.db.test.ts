@@ -50,6 +50,10 @@ const MAX_PAGES = 40;
 const TWIN_COUNT = 12;
 const twinTimestamp = (index: number): string =>
   `2026-05-01 09:00:00.100${String(index + 1).padStart(3, "0")}+00`;
+const twinId = (index: number): SafeId<"docxSuggestion"> =>
+  toSafeId<"docxSuggestion">(
+    `00000000-0000-7000-8000-${String(TWIN_COUNT - index).padStart(12, "0")}`,
+  );
 
 /**
  * Ten rows on distinct milliseconds, each still carrying microseconds. A
@@ -73,14 +77,16 @@ const seedSuggestions = async ({
   entityId,
   count,
   timestampAt,
+  idAt,
 }: {
   entityId: SafeId<"entity">;
   count: number;
   timestampAt: (index: number) => string;
+  idAt?: ((index: number) => SafeId<"docxSuggestion">) | undefined;
 }): Promise<SafeId<"docxSuggestion">[]> => {
   const seeded: SafeId<"docxSuggestion">[] = [];
   for (let index = 0; index < count; index += 1) {
-    const id = toSafeId<"docxSuggestion">(Bun.randomUUIDv7());
+    const id = idAt?.(index) ?? toSafeId<"docxSuggestion">(Bun.randomUUIDv7());
     // The microsecond digits are the whole point of the fixture, so
     // `created_at` is written as a literal instead of being bound from a
     // `Date` (which cannot carry them).
@@ -120,6 +126,7 @@ beforeAll(async () => {
     entityId: twinEntityId,
     count: TWIN_COUNT,
     timestampAt: twinTimestamp,
+    idAt: twinId,
   });
   await seedSuggestions({
     entityId: distinctEntityId,
@@ -276,27 +283,24 @@ describe("docx suggestion cursors issued before the microsecond fix", () => {
     expect(visited).toEqual(expected.slice(boundaryIndex + 1));
   });
 
-  test("an in-flight millisecond cursor over microsecond twins still decodes and terminates", async () => {
+  test("an in-flight millisecond cursor over microsecond twins resumes the exact tail", async () => {
     const expected = await orderedIds(twinEntityId);
-    const boundaryId = expected.at(5);
+    const boundaryIndex = 5;
+    const boundaryId = expected.at(boundaryIndex);
     expect(boundaryId).toBeDefined();
     if (boundaryId === undefined) {
       return;
     }
 
-    // Every twin truncates to the same millisecond, so this cursor is
-    // genuinely lossy and can only fall back to its id tie-break. What it
-    // must never do is 500 or stall: it decodes, and the walk terminates
-    // without repeating a row.
+    // Timestamps increase while ids decrease, so an id fallback would return
+    // the already-consumed prefix. Resolving this id in-DB must recover the
+    // actual timestamp and return only the true ordered tail.
     const visited = await walk(
       twinEntityId,
       legacyCursor("2026-05-01T09:00:00.100Z", boundaryId),
     );
 
-    expect(new Set(visited).size).toBe(visited.length);
-    for (const id of visited) {
-      expect(expected).toContain(id);
-    }
+    expect(visited).toEqual(expected.slice(boundaryIndex + 1));
   });
 
   test("a malformed cursor is rejected rather than silently restarting page one", async () => {

@@ -14,7 +14,8 @@ import { brandPersistedDocxSuggestionId } from "@/api/lib/safe-id-boundaries";
  * page was cut at: it is re-emitted as the first row of every following
  * page and the cursor never advances. Cursors issued in that older ISO form
  * keep decoding; the codec tags them millisecond-precision and truncates
- * the column on both sides so the page they were cut from resumes exactly.
+ * the list resolves their boundary row by id before applying this codec, so
+ * they resume on the row's exact database timestamp too.
  */
 export const docxSuggestionCursor = createTimestampIdCursorCodec({
   column: docxSuggestions.createdAt,

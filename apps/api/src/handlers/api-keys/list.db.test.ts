@@ -32,19 +32,20 @@ const MAX_PAGES = 40;
 
 /**
  * Nine keys inside one millisecond, separated only by microseconds; every one
- * collapses onto the same JS `Date`. The last three share an exact timestamp
- * so the id tie-break is exercised too.
+ * collapses onto the same JS `Date`. Timestamps mostly descend as ids ascend,
+ * so a legacy id fallback returns the already-consumed prefix. The first three
+ * share an exact timestamp so the canonical id tie-break is exercised too.
  */
 const KEY_TIMESTAMPS = [
-  "2026-06-02 08:00:00.250001+00",
-  "2026-06-02 08:00:00.250002+00",
-  "2026-06-02 08:00:00.250003+00",
-  "2026-06-02 08:00:00.250004+00",
-  "2026-06-02 08:00:00.250005+00",
+  "2026-06-02 08:00:00.250007+00",
+  "2026-06-02 08:00:00.250007+00",
+  "2026-06-02 08:00:00.250007+00",
   "2026-06-02 08:00:00.250006+00",
-  "2026-06-02 08:00:00.250007+00",
-  "2026-06-02 08:00:00.250007+00",
-  "2026-06-02 08:00:00.250007+00",
+  "2026-06-02 08:00:00.250005+00",
+  "2026-06-02 08:00:00.250004+00",
+  "2026-06-02 08:00:00.250003+00",
+  "2026-06-02 08:00:00.250002+00",
+  "2026-06-02 08:00:00.250001+00",
 ] as const;
 
 /** Distinct milliseconds, so a millisecond truncation stays order-preserving. */
@@ -220,20 +221,17 @@ test("a cursor issued before the fix still decodes and resumes", async () => {
   expect(visited).toEqual(expected.slice(boundaryIndex + 1));
 });
 
-test("a legacy cursor inside a shared millisecond decodes and terminates", async () => {
+test("a legacy cursor inside a shared millisecond resumes the exact tail", async () => {
   const expected = expectedOrder();
+  const boundaryId = "machine-key-004";
+  const boundaryIndex = expected.indexOf(boundaryId);
+  expect(boundaryIndex).toBeGreaterThan(-1);
 
-  // Every key in this group truncates to the same millisecond, so the cursor
-  // is genuinely lossy and can only fall back to its id tie-break. What it
-  // must not do is 500 or stall.
   const visited = await walk(
-    encodePaginationCursor(["2026-06-02T08:00:00.250Z", "machine-key-004"]),
+    encodePaginationCursor(["2026-06-02T08:00:00.250Z", boundaryId]),
   );
 
-  expect(new Set(visited).size).toBe(visited.length);
-  for (const id of visited) {
-    expect(expected).toContain(id);
-  }
+  expect(visited).toEqual(expected.slice(boundaryIndex + 1));
 });
 
 test("a malformed cursor is rejected rather than silently restarting page one", async () => {

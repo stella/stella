@@ -55,8 +55,8 @@ const isMachineApiKeyIdCursorPart = (value: unknown): value is string =>
  * excludes every key inside the truncated sliver: a machine credential
  * silently missing from page two is one nobody can see, and therefore one
  * nobody can revoke. Cursors issued in the older ISO form keep decoding; the
- * codec tags them millisecond-precision and truncates the column on both
- * sides of the comparison so the page they were cut from resumes exactly.
+ * codec tags them millisecond-precision; the list resolves the boundary key's
+ * exact timestamp under the same organization scope before comparing it.
  */
 export const machineApiKeyCursor = createTimestampIdCursorCodec({
   column: apikey.createdAt,
@@ -123,8 +123,29 @@ export const listOrganizationMachineApiKeys = async ({
   cursor,
   limit,
   organizationId,
-}: ListOptions): Promise<MachineApiKeyPageRow[]> =>
-  await rootDb
+}: ListOptions): Promise<MachineApiKeyPageRow[]> => {
+  let exactCursor = cursor;
+  if (cursor?.timestamp.precision === "milliseconds") {
+    const [boundary] = await rootDb
+      .select({
+        createdAtCursor:
+          machineApiKeyCursor.cursorValue.as("created_at_cursor"),
+      })
+      .from(apikey)
+      .where(and(organizationScope(organizationId), eq(apikey.id, cursor.id)))
+      .limit(1);
+    if (boundary === undefined) {
+      return [];
+    }
+    exactCursor = machineApiKeyCursor.decode(
+      machineApiKeyCursor.encode(boundary.createdAtCursor, cursor.id),
+    );
+    if (exactCursor === null) {
+      return [];
+    }
+  }
+
+  return await rootDb
     .select({
       ...machineApiKeyColumns,
       createdAtCursor: machineApiKeyCursor.cursorValue.as("created_at_cursor"),
@@ -133,10 +154,10 @@ export const listOrganizationMachineApiKeys = async ({
     .where(
       and(
         organizationScope(organizationId),
-        cursor === null
+        exactCursor === null
           ? undefined
           : machineApiKeyCursor.keysetAfter({
-              cursor,
+              cursor: exactCursor,
               idColumn: apikey.id,
               direction: "descending",
             }),
@@ -144,6 +165,7 @@ export const listOrganizationMachineApiKeys = async ({
     )
     .orderBy(desc(apikey.createdAt), desc(apikey.id))
     .limit(limit + 1);
+};
 
 /**
  * A single machine key, scoped to the organization in the same query.

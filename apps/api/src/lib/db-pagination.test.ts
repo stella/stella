@@ -209,26 +209,16 @@ describe("createTimestampIdCursorCodec keysetAfter", () => {
     expect(rendered).toContain("::timestamptz");
   });
 
-  test("INVARIANT: legacy millisecond cursor truncates the column on both sides", () => {
-    // A page issued before the microsecond migration truncated created_at to the
-    // millisecond and ordered on that; resuming it must compare the truncated
-    // column so a row at `…​.123456` is not re-emitted (asc) or skipped (desc)
-    // against a `…​.123` boundary. Both the range and tie-break clauses must
-    // truncate, so require two date_trunc occurrences.
-    const cases = [
-      { direction: "ascending", op: ">" },
-      { direction: "descending", op: "<" },
-    ] as const;
-    for (const { direction, op } of cases) {
-      const rendered = renderAfter("2026-07-10T08:15:30.123Z", direction);
-      const truncation = `date_trunc('milliseconds', "invoices"."created_at")`;
-      // Both the range clause and the tie-break clause truncate the column.
-      const truncations = rendered.match(
-        /date_trunc\('milliseconds', "invoices"\."created_at"\)/gu,
-      );
-      expect(truncations?.length).toBe(2);
-      expect(rendered).toContain(`${truncation} ${op}`);
-      expect(rendered).toContain(`${truncation} =`);
-    }
+  test("INVARIANT: an unresolved millisecond cursor skips its ambiguous interval", () => {
+    const ascending = renderAfter("2026-07-10T08:15:30.123Z", "ascending");
+    expect(ascending).toContain('"created_at" >=');
+    expect(ascending).toContain("interval '1 millisecond'");
+    expect(ascending).not.toContain('"id"');
+    expect(ascending).not.toContain("date_trunc");
+
+    const descending = renderAfter("2026-07-10T08:15:30.123Z", "descending");
+    expect(descending).toContain('"created_at" <');
+    expect(descending).not.toContain('"id"');
+    expect(descending).not.toContain("date_trunc");
   });
 });

@@ -51,11 +51,51 @@ const listDocxSuggestions = createSafeHandler(
       conditions.push(eq(docxSuggestions.status, query.status));
     }
     if (query.cursor !== undefined) {
-      const cursor = docxSuggestionCursor.decode(query.cursor);
-      if (cursor === null) {
+      const decodedCursor = docxSuggestionCursor.decode(query.cursor);
+      if (decodedCursor === null) {
         return Result.err(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
+      }
+
+      let cursor = decodedCursor;
+      if (cursor.timestamp.precision === "milliseconds") {
+        // The legacy timestamp cannot order rows inside its millisecond. Its
+        // id can: resolve that row's exact timestamp without leaving the DB's
+        // precision, scoped to the same entity and workspace as the list.
+        const [boundary] = yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({
+                createdAtCursor:
+                  docxSuggestionCursor.cursorValue.as("created_at_cursor"),
+              })
+              .from(docxSuggestions)
+              .where(
+                and(
+                  eq(docxSuggestions.workspaceId, workspaceId),
+                  eq(docxSuggestions.entityId, params.entityId),
+                  eq(docxSuggestions.id, cursor.id),
+                ),
+              )
+              .limit(1),
+          ),
+        );
+        if (boundary === undefined) {
+          return Result.ok({ items: [], limit, nextCursor: null });
+        }
+        const exactCursor = docxSuggestionCursor.decode(
+          docxSuggestionCursor.encode(boundary.createdAtCursor, cursor.id),
+        );
+        if (exactCursor === null) {
+          return Result.err(
+            new HandlerError({
+              status: 500,
+              message: "Could not resolve suggestion cursor boundary",
+            }),
+          );
+        }
+        cursor = exactCursor;
       }
       const keyset = docxSuggestionCursor.keysetAfter({
         cursor,
