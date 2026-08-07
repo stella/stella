@@ -5,6 +5,7 @@ import {
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -29,6 +30,7 @@ const registryEnumOf = (
   )?.inputSchema.properties?.["registry"];
   if (
     registry !== undefined &&
+    registry !== null &&
     typeof registry === "object" &&
     "enum" in registry &&
     Array.isArray(registry.enum)
@@ -103,6 +105,26 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
   });
 });
 
+describe("listGatewayMcpToolDefinitions restricted surfaces", () => {
+  test("keeps documents discovery static even when dynamic scopes are granted", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "documents",
+      scopes: [
+        "stella:read",
+        "stella:documents_write",
+        "stella:matters_write",
+        "stella:external_mcps",
+        "stella:skills",
+      ],
+    });
+
+    expect(definitions.map(({ name }) => name)).toEqual(
+      DOCUMENTS_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
+  });
+});
+
 describe("listGatewayMcpToolDefinitions compound scope discovery", () => {
   test("keeps compound tools discoverable when an additional grant is missing", async () => {
     const withoutTemplateConsent = await listGatewayMcpToolDefinitions({
@@ -172,7 +194,9 @@ describe("toMcpTools input schema conversion", () => {
     } as const satisfies McpToolDefinition["inputSchema"];
 
     expect(
-      toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
-    ).toEqual(inputSchema);
+      JSON.stringify(
+        toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
+      ),
+    ).toBe(JSON.stringify(inputSchema));
   });
 });

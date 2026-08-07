@@ -34,6 +34,15 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
 const DB_TEST_BATCH_SIZE = 3;
+// Some protocol conformance tests intentionally load an independent client
+// implementation alongside the API server graph, while sandbox tests exercise
+// hard memory limits. Keep both classes in fresh processes so their retained
+// graphs/allocations cannot inflate an ordinary 50-file logic batch.
+const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
+const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
+const HEAVY_LOGIC_PATH_MARKERS = [
+  "handlers/chat/tools/execute/sandbox/",
+] as const;
 const DB_TEST_MARKERS = [
   "tests/security/rls-helpers",
   "tests/security/rls-fixture",
@@ -64,6 +73,10 @@ const TYPE_ONLY_IMPORT_RE =
 // recalibrate from the peak-RSS lines the runner prints on CI.
 const MAX_DB_BATCH_PEAK_RSS_MB = 2560;
 const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
+// The sandbox's deliberate exponential-allocation test expands QuickJS/WASM
+// before the 1 MB guest limit aborts it. Its dedicated process may peak above
+// the ordinary logic ceiling, but remains bounded below the hosted 4 GB limit.
+const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
 const BYTES_PER_MB = 1024 * 1024;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -147,6 +160,7 @@ const isDbTest = (testPath: string, source: string): boolean => {
 };
 
 const regularTests: string[] = [];
+const heavyLogicTests: string[] = [];
 const dbTests: string[] = [];
 const moduleMockTests: ModuleMockTest[] = [];
 for (const { source, testPath } of classifiedTests) {
@@ -164,6 +178,14 @@ for (const { source, testPath } of classifiedTests) {
 
   if (isDbTest(testPath, source)) {
     dbTests.push(testPath);
+    continue;
+  }
+
+  if (
+    HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
+    HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker))
+  ) {
+    heavyLogicTests.push(testPath);
     continue;
   }
 
@@ -367,6 +389,17 @@ const regularExitCode = await runTestBatches({
 });
 if (regularExitCode !== 0) {
   process.exit(regularExitCode);
+}
+
+const heavyLogicExitCode = await runTestBatches({
+  batchSize: HEAVY_LOGIC_TEST_BATCH_SIZE,
+  batchStart: 0,
+  isolate: false,
+  maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+  testFiles: heavyLogicTests,
+});
+if (heavyLogicExitCode !== 0) {
+  process.exit(heavyLogicExitCode);
 }
 
 const dbExitCode = await runTestBatches({

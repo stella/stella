@@ -49,6 +49,10 @@ const OXC_PROJECT_PROXIES = [
     target: "apps/api/tsconfig.scripts.json",
   },
   {
+    config: "apps/api/src/mcp/apps/tsconfig.json",
+    target: "apps/api/tsconfig.mcp-apps.json",
+  },
+  {
     config: "apps/desktop/tests/tsconfig.json",
     target: "apps/desktop/tsconfig.test.json",
   },

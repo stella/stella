@@ -33,6 +33,16 @@ describe("extractMcpSession", () => {
     });
   });
 
+  test("uses the documents MCP resource audience for document verification", () => {
+    expect(getMcpAccessTokenVerificationOptions("documents")).toEqual({
+      jwksUrl: `${getAuthIssuerUrl()}/jwks`,
+      verifyOptions: {
+        audience: getMcpResourceUrl("documents"),
+        issuer: getAuthIssuerUrl(),
+      },
+    });
+  });
+
   test("builds an MCP session from OAuth resource token claims", () => {
     expect(
       extractMcpSession({

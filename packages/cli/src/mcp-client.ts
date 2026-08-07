@@ -1,13 +1,21 @@
-// Minimal hand-rolled JSON-RPC 2.0 client for the stella MCP endpoint (spec 051
-// S0). The server runs the SDK transport in stateless JSON mode
-// (`enableJsonResponse: true`) with no `initialize` handshake required, so a
-// bare `tools/call`/`tools/list` POST works. We do not depend on
-// `@modelcontextprotocol/sdk`: the client only ever plumbs these two methods.
-//
+// The CLI deliberately uses the official MCP client and Streamable HTTP
+// transport. This keeps protocol negotiation, JSON-RPC envelopes, errors, and
+// resource/tool semantics aligned with the same standard used by hosted MCP
+// clients. Stella-specific code below is limited to auth headers and observing
+// the exact tools/list response bytes used by the registry trust boundary.
 // The bearer token is NEVER logged or embedded in an error message.
 
+import {
+  Client,
+  ProtocolError,
+  SdkError,
+  SdkHttpError,
+  StreamableHTTPClientTransport,
+  type FetchLike,
+} from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
+import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
 // Most `tools/call` requests keep the default bounded client ceiling. A
@@ -72,125 +80,117 @@ export class McpClientError extends McpClientErrorBase<{
   rpcCode?: number;
 }> {}
 
-type JsonRpcRequest = {
-  jsonrpc: "2.0";
-  id: number;
-  method: string;
-  params: Record<string, unknown>;
-};
-
 const mcpUrl = (serverUrl: string): string =>
   new URL(MCP_HTTP_PATH, `${serverUrl.replace(/\/$/u, "")}/`).toString();
 
-const callRpc = async ({
+type ResponseEvidence = {
+  rawBody: string;
+  headers: Headers;
+};
+
+const requestMethod = (init: RequestInit | undefined): string | undefined => {
+  const body = init?.body;
+  if (typeof body !== "string") {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return undefined;
+  }
+  return typeof parsed.value["method"] === "string"
+    ? parsed.value["method"]
+    : undefined;
+};
+
+const toClientError = (cause: unknown): McpClientError => {
+  if (cause instanceof SdkHttpError) {
+    return new McpClientError({
+      kind: "http",
+      httpStatus: cause.status,
+      message: cause.message,
+    });
+  }
+  if (cause instanceof ProtocolError) {
+    return new McpClientError({
+      kind: "rpc",
+      rpcCode: cause.code,
+      message: cause.message,
+    });
+  }
+  if (cause instanceof SdkError) {
+    return new McpClientError({
+      kind: "transport",
+      message: cause.message,
+    });
+  }
+  return new McpClientError({
+    kind: "transport",
+    message: `Request to the MCP server failed: ${
+      cause instanceof Error ? cause.message : "network error"
+    }`,
+  });
+};
+
+const runMcpOperation = async <T>({
   serverUrl,
   token,
-  method,
-  params,
   timeoutMs,
+  observeMethod,
+  operation,
 }: {
   serverUrl: string;
   token: string;
-  method: string;
-  params: Record<string, unknown>;
   timeoutMs?: number;
-}): Promise<Result<unknown, McpClientError>> => {
-  const body: JsonRpcRequest = { jsonrpc: "2.0", id: 1, method, params };
-  const signal = AbortSignal.timeout(timeoutMs ?? REQUEST_TIMEOUT_MS);
-
-  const response = await Result.tryPromise({
-    try: async () =>
-      await fetch(mcpUrl(serverUrl), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Both required or the streamable-HTTP transport answers 406.
-          Accept: "application/json, text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        signal,
-      }),
+  observeMethod?: string;
+  operation: (client: Client, timeoutMs: number) => Promise<T>;
+}): Promise<
+  Result<{ value: T; evidence?: ResponseEvidence }, McpClientError>
+> => {
+  let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
+  const observedFetch: FetchLike = async (input, init) => {
+    const response = await fetch(input, init);
+    if (observeMethod !== undefined && requestMethod(init) === observeMethod) {
+      const headers = new Headers(response.headers);
+      evidencePromise = headers
+        .get("content-type")
+        ?.toLowerCase()
+        .includes("application/json")
+        ? response
+            .clone()
+            .text()
+            .then((rawBody) => ({ headers, rawBody }))
+        : Promise.resolve(undefined);
+    }
+    return response;
+  };
+  const transport = new StreamableHTTPClientTransport(
+    new URL(mcpUrl(serverUrl)),
+    {
+      fetch: observedFetch,
+      requestInit: { headers: { Authorization: `Bearer ${token}` } },
+    },
+  );
+  const client = new Client({ name: "stella-cli", version: CLI_VERSION });
+  const result = await Result.tryPromise({
+    try: async () => {
+      const timeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
+      await client.connect(transport, {
+        signal: AbortSignal.timeout(timeout),
+        timeout,
+      });
+      try {
+        const value = await operation(client, timeout);
+        const evidence = await evidencePromise;
+        return { value, ...(evidence === undefined ? {} : { evidence }) };
+      } finally {
+        await client.close();
+      }
+    },
     catch: (cause) => cause,
   });
-  if (Result.isError(response)) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: `Request to the MCP server failed: ${
-          response.error instanceof Error
-            ? response.error.message
-            : "network error"
-        }`,
-      }),
-    );
-  }
-
-  const httpResponse = response.value;
-  const rawText = await Result.tryPromise({
-    try: async () => await httpResponse.text(),
-    catch: (cause) => cause,
-  });
-  const text = Result.isOk(rawText) ? rawText.value : "";
-
-  if (!httpResponse.ok) {
-    return Result.err(
-      new McpClientError({
-        kind: "http",
-        httpStatus: httpResponse.status,
-        message: `MCP server returned HTTP ${httpResponse.status}${
-          text ? `: ${text.slice(0, 500)}` : ""
-        }`,
-      }),
-    );
-  }
-
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  if (Result.isError(parsed)) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "MCP server returned a non-JSON response body",
-      }),
-    );
-  }
-
-  const envelope = parsed.value;
-  if (!isRecord(envelope)) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "MCP server returned an unexpected response envelope",
-      }),
-    );
-  }
-
-  const errorField = envelope["error"];
-  if (isRecord(errorField)) {
-    const rawCode = errorField["code"];
-    const code = typeof rawCode === "number" ? rawCode : undefined;
-    const rawMessage = errorField["message"];
-    const message =
-      typeof rawMessage === "string" ? rawMessage : "MCP protocol error";
-    return Result.err(
-      new McpClientError({
-        kind: "rpc",
-        ...(code === undefined ? {} : { rpcCode: code }),
-        message,
-      }),
-    );
-  }
-
-  if (!("result" in envelope)) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "MCP response envelope had neither result nor error",
-      }),
-    );
-  }
-
-  return Result.ok(envelope["result"]);
+  return Result.isError(result)
+    ? Result.err(toClientError(result.error))
+    : Result.ok(result.value);
 };
 
 const isCallToolResult = (value: unknown): value is CallToolResult =>
@@ -213,17 +213,17 @@ export const callTool = async ({
   args: Record<string, unknown>;
   timeoutMs?: number;
 }): Promise<Result<CallToolResult, McpClientError>> => {
-  const result = await callRpc({
+  const result = await runMcpOperation({
     serverUrl,
     token,
-    method: "tools/call",
-    params: { name, arguments: args },
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.callTool({ name, arguments: args }, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
-  if (!isCallToolResult(result.value)) {
+  if (!isCallToolResult(result.value.value)) {
     return Result.err(
       new McpClientError({
         kind: "transport",
@@ -231,36 +231,30 @@ export const callTool = async ({
       }),
     );
   }
-  return Result.ok(result.value);
+  return Result.ok(result.value.value);
 };
 
 /** Enumerate the server's tools via `tools/list`. */
 export const listTools = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<ListToolsResult, McpClientError>> => {
-  const result = await callRpc({
+  const result = await runMcpOperation({
     serverUrl,
     token,
-    method: "tools/list",
-    params: {},
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.listTools(undefined, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
-  const value = result.value;
-  if (!isRecord(value) || !Array.isArray(value["tools"])) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "tools/list returned an unexpected result shape",
-      }),
-    );
-  }
-  return Result.ok({ tools: value["tools"] });
+  return Result.ok({ tools: result.value.value.tools });
 };
 
 /** Header names carrying the advertised/minimum CLI version (spec 051 addendum). */
@@ -284,75 +278,65 @@ export type RawToolsList = {
  * returns the unparsed text rather than a decoded envelope, plus the advertised
  * CLI-version headers (spec 051 addendum) for the update nudge.
  */
-export const fetchToolsListRaw = async ({
+const runObservedToolsList = async ({
   serverUrl,
   token,
+  timeoutMs = LIST_REQUEST_TIMEOUT_MS,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
+}) =>
+  await runMcpOperation({
+    serverUrl,
+    token,
+    timeoutMs,
+    observeMethod: "tools/list",
+    operation: async (client, timeout) =>
+      await client.listTools(undefined, { timeout }),
+  });
+
+export const fetchToolsListRaw = async ({
+  serverUrl,
+  token,
+  timeoutMs,
+}: {
+  serverUrl: string;
+  token: string;
+  timeoutMs?: number;
 }): Promise<Result<RawToolsList, McpClientError>> => {
-  const body: JsonRpcRequest = {
-    jsonrpc: "2.0",
-    id: 1,
-    method: "tools/list",
-    params: {},
-  };
-  const response = await Result.tryPromise({
-    try: async () =>
-      await fetch(mcpUrl(serverUrl), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(LIST_REQUEST_TIMEOUT_MS),
-      }),
-    catch: (cause) => cause,
+  const response = await runObservedToolsList({
+    serverUrl,
+    token,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(response)) {
+    return Result.err(response.error);
+  }
+  const evidence = response.value.evidence;
+  if (evidence === undefined) {
     return Result.err(
       new McpClientError({
         kind: "transport",
-        message: `Request to the MCP server failed: ${
-          response.error instanceof Error
-            ? response.error.message
-            : "network error"
-        }`,
+        message: "Official MCP transport did not expose tools/list evidence",
       }),
     );
   }
-  const httpResponse = response.value;
-  if (!httpResponse.ok) {
-    return Result.err(
-      new McpClientError({
-        kind: "http",
-        httpStatus: httpResponse.status,
-        message: `MCP server returned HTTP ${httpResponse.status}`,
-      }),
-    );
-  }
-  const rawText = await Result.tryPromise({
-    try: async () => await httpResponse.text(),
-    catch: (cause) => cause,
-  });
-  const text = Result.isOk(rawText) ? rawText.value : "";
-  const out: RawToolsList = { rawBody: text };
-  const cliLatest = httpResponse.headers.get(CLI_LATEST_HEADER);
+  const out: RawToolsList = { rawBody: evidence.rawBody };
+  const cliLatest = evidence.headers.get(CLI_LATEST_HEADER);
   if (cliLatest !== null) {
     out.cliLatest = cliLatest;
   }
-  const cliMinimum = httpResponse.headers.get(CLI_MINIMUM_HEADER);
+  const cliMinimum = evidence.headers.get(CLI_MINIMUM_HEADER);
   if (cliMinimum !== null) {
     out.cliMinimum = cliMinimum;
   }
-  const scopesHeader = httpResponse.headers.get(STELLA_SCOPES_HEADER);
+  const scopesHeader = evidence.headers.get(STELLA_SCOPES_HEADER);
   if (scopesHeader !== null) {
     out.grantedScopes =
       scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [];
   }
-  const omittedToolsHeader = httpResponse.headers.get(
+  const omittedToolsHeader = evidence.headers.get(
     STELLA_SCOPE_OMITTED_TOOLS_HEADER,
   );
   if (omittedToolsHeader !== null) {
@@ -385,55 +369,32 @@ export type MachineIdentity = {
 export const fetchMachineIdentity = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<MachineIdentity, McpClientError>> => {
-  const body: JsonRpcRequest = {
-    jsonrpc: "2.0",
-    id: 1,
-    method: "tools/list",
-    params: {},
-  };
-  const response = await Result.tryPromise({
-    try: async () =>
-      await fetch(mcpUrl(serverUrl), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(LIST_REQUEST_TIMEOUT_MS),
-      }),
-    catch: (cause) => cause,
+  const response = await runObservedToolsList({
+    serverUrl,
+    token,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(response)) {
+    return Result.err(response.error);
+  }
+  const headers = response.value.evidence?.headers;
+  if (headers === undefined) {
     return Result.err(
       new McpClientError({
         kind: "transport",
-        message: `Request to the MCP server failed: ${
-          response.error instanceof Error
-            ? response.error.message
-            : "network error"
-        }`,
+        message: "Official MCP transport did not expose identity evidence",
       }),
     );
   }
-  const httpResponse = response.value;
-  if (!httpResponse.ok) {
-    return Result.err(
-      new McpClientError({
-        kind: "http",
-        httpStatus: httpResponse.status,
-        message: `MCP server returned HTTP ${httpResponse.status}`,
-      }),
-    );
-  }
-  const scopesHeader = httpResponse.headers.get(STELLA_SCOPES_HEADER);
+  const scopesHeader = headers.get(STELLA_SCOPES_HEADER);
   return Result.ok({
-    organizationId: httpResponse.headers.get(STELLA_ORGANIZATION_HEADER) ?? "",
+    organizationId: headers.get(STELLA_ORGANIZATION_HEADER) ?? "",
     scopes:
       scopesHeader && scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [],
   });
@@ -443,29 +404,23 @@ export const fetchMachineIdentity = async ({
 export const listResources = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<{ resources: readonly unknown[] }, McpClientError>> => {
-  const result = await callRpc({
+  const result = await runMcpOperation({
     serverUrl,
     token,
-    method: "resources/list",
-    params: {},
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.listResources(undefined, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
-  const value = result.value;
-  if (!isRecord(value) || !Array.isArray(value["resources"])) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "resources/list returned an unexpected result shape",
-      }),
-    );
-  }
-  return Result.ok({ resources: value["resources"] });
+  return Result.ok({ resources: result.value.value.resources });
 };
 
 /** Read one resource by URI via `resources/read`. */
@@ -473,44 +428,39 @@ export const readResource = async ({
   serverUrl,
   token,
   uri,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
   uri: string;
+  timeoutMs?: number;
 }): Promise<Result<ReadResourceResult, McpClientError>> => {
-  const result = await callRpc({
+  const result = await runMcpOperation({
     serverUrl,
     token,
-    method: "resources/read",
-    params: { uri },
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.readResource({ uri }, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
-  const value = result.value;
-  if (!isRecord(value) || !Array.isArray(value["contents"])) {
-    return Result.err(
-      new McpClientError({
-        kind: "transport",
-        message: "resources/read returned an unexpected result shape",
-      }),
-    );
-  }
   const contents: ResourceContent[] = [];
-  for (const entry of value["contents"]) {
-    if (isRecord(entry)) {
-      const content: ResourceContent = {};
-      if (typeof entry["uri"] === "string") {
-        content.uri = entry["uri"];
-      }
-      if (typeof entry["mimeType"] === "string") {
-        content.mimeType = entry["mimeType"];
-      }
-      if (typeof entry["text"] === "string") {
-        content.text = entry["text"];
-      }
-      contents.push(content);
+  for (const entry of result.value.value.contents) {
+    const content: ResourceContent = { uri: entry.uri };
+    if (entry.mimeType !== undefined) {
+      content.mimeType = entry.mimeType;
     }
+    if (!("text" in entry)) {
+      return Result.err(
+        new McpClientError({
+          kind: "transport",
+          message: `Binary MCP resource ${entry.uri} is not supported by this CLI`,
+        }),
+      );
+    }
+    content.text = entry.text;
+    contents.push(content);
   }
   return Result.ok({ contents });
 };

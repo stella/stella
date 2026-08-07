@@ -5,6 +5,7 @@ import {
   MCP_INSTRUCTIONS,
   MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
+  MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
 } from "@/api/mcp/instructions";
 
 // The server `instructions` ride on every initialize response, so they are a
@@ -23,14 +24,22 @@ describe("MCP server instructions", () => {
     );
   });
 
-  test("both surfaces are non-empty and selected by mode", () => {
-    expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
-    expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
-    expect(getMcpInstructions("default")).toBe(MCP_INSTRUCTIONS.default);
-    expect(getMcpInstructions("anonymized")).toBe(MCP_INSTRUCTIONS.anonymized);
+  test("documents instructions stay within the tighter budget", () => {
+    expect(MCP_INSTRUCTIONS.documents.length).toBeLessThanOrEqual(
+      MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
+    );
   });
 
-  test("both surfaces provide canonical product identity without inference", () => {
+  test("all surfaces are non-empty and selected by mode", () => {
+    expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
+    expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
+    expect(MCP_INSTRUCTIONS.documents.length).toBeGreaterThan(0);
+    expect(getMcpInstructions("default")).toBe(MCP_INSTRUCTIONS.default);
+    expect(getMcpInstructions("anonymized")).toBe(MCP_INSTRUCTIONS.anonymized);
+    expect(getMcpInstructions("documents")).toBe(MCP_INSTRUCTIONS.documents);
+  });
+
+  test("all surfaces provide canonical product identity without inference", () => {
     for (const instructions of Object.values(MCP_INSTRUCTIONS)) {
       expect(instructions).toContain("stella (always lowercase");
       expect(instructions).toContain("https://stll.app");

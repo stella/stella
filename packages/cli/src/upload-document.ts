@@ -5,18 +5,26 @@ import path from "node:path";
 
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";
+import {
+  buildDocumentVersionUploadReservationInput,
+  buildUploadAbortInput,
+  buildUploadFinalizeInput,
+  DOCUMENT_VERSION_UPLOAD_TRANSPORT,
+} from "./generated/document-version-upload-transport.js";
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 
 const INVOKE_CAPABILITY_TOOL = "invoke_capability";
 const UPLOAD_CAPABILITIES = {
-  abort: "uploads.delete",
-  create: "uploads.create",
-  finalize: "uploads.update",
+  abort: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
+  create: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+  finalize: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
   listProperties: "properties.list",
 } as const;
-const ENTITY_CREATE_PURPOSE = "entity_create";
+const UPLOAD_PURPOSE = {
+  createEntity: "entity_create",
+} as const;
 export const DOCUMENT_UPLOAD_POLICY = {
   maxBytes: 52_428_800, // 50 MiB
   minimumBytesPerSecond: 32_768, // 32 KiB/s
@@ -33,14 +41,22 @@ type LocalFile = {
   sha256Hex: string;
 };
 
-export type UploadDocumentInput = {
+type UploadDocumentBaseInput = {
   filePath: string;
   mimeType: string | undefined;
   name: string | undefined;
-  parentId: string | undefined;
-  propertyId: string | undefined;
   workspaceId: string;
 };
+
+export type UploadDocumentInput = UploadDocumentBaseInput &
+  (
+    | {
+        target: "new_document";
+        parentId: string | undefined;
+        propertyId: string | undefined;
+      }
+    | { target: "new_version"; entityId: string }
+  );
 
 export type UploadFailure =
   | { type: "local"; message: string }
@@ -317,7 +333,7 @@ const abortUpload = async ({
 }): Promise<string | undefined> => {
   const aborted = await dependencies.invoke(
     UPLOAD_CAPABILITIES.abort,
-    { params: { uploadId, workspaceId } },
+    buildUploadAbortInput({ uploadId, workspaceId }),
     true,
   );
   return aborted.status === "ok"
@@ -343,33 +359,54 @@ export const uploadDocument = async ({
     return Result.err({ type: "local", message: localFile.error });
   }
 
-  const propertyId =
-    input.propertyId === undefined
-      ? await resolveFilePropertyId({
-          dependencies,
-          workspaceId: input.workspaceId,
-        })
-      : Result.ok(input.propertyId);
-  if (Result.isError(propertyId)) {
-    return propertyId;
-  }
-
-  const body: Record<string, unknown> = {
-    purpose: ENTITY_CREATE_PURPOSE,
-    propertyId: propertyId.value,
-    name: input.name ?? localFile.value.name,
-    mimeType: input.mimeType ?? localFile.value.mimeType,
-    size: localFile.value.bytes.byteLength,
-    sha256Hex: localFile.value.sha256Hex,
+  let reservationInput: {
+    body: Record<string, unknown>;
+    params: { workspaceId: string };
   };
-  if (input.parentId !== undefined) {
-    body["parentId"] = input.parentId;
+  if (input.target === "new_version") {
+    reservationInput = buildDocumentVersionUploadReservationInput({
+      entityId: input.entityId,
+      file: {
+        name: input.name ?? localFile.value.name,
+        mimeType: input.mimeType ?? localFile.value.mimeType,
+        size: localFile.value.bytes.byteLength,
+        sha256Hex: localFile.value.sha256Hex,
+      },
+      workspaceId: input.workspaceId,
+    });
+  } else {
+    const propertyId =
+      input.propertyId === undefined
+        ? await resolveFilePropertyId({
+            dependencies,
+            workspaceId: input.workspaceId,
+          })
+        : Result.ok(input.propertyId);
+    if (Result.isError(propertyId)) {
+      return propertyId;
+    }
+
+    const body: Record<string, unknown> = {
+      purpose: UPLOAD_PURPOSE.createEntity,
+      propertyId: propertyId.value,
+      name: input.name ?? localFile.value.name,
+      mimeType: input.mimeType ?? localFile.value.mimeType,
+      size: localFile.value.bytes.byteLength,
+      sha256Hex: localFile.value.sha256Hex,
+    };
+    if (input.parentId !== undefined) {
+      body["parentId"] = input.parentId;
+    }
+    reservationInput = {
+      body,
+      params: { workspaceId: input.workspaceId },
+    };
   }
 
-  const created = await dependencies.invoke(UPLOAD_CAPABILITIES.create, {
-    body,
-    params: { workspaceId: input.workspaceId },
-  });
+  const created = await dependencies.invoke(
+    UPLOAD_CAPABILITIES.create,
+    reservationInput,
+  );
   if (created.status !== "ok") {
     return Result.err(invocationFailure(created));
   }
@@ -416,12 +453,13 @@ export const uploadDocument = async ({
     });
   }
 
-  const finalized = await dependencies.invoke(UPLOAD_CAPABILITIES.finalize, {
-    params: {
+  const finalized = await dependencies.invoke(
+    UPLOAD_CAPABILITIES.finalize,
+    buildUploadFinalizeInput({
       uploadId: reservation.uploadId,
       workspaceId: input.workspaceId,
-    },
-  });
+    }),
+  );
   if (finalized.status !== "ok") {
     return Result.err({
       type: "finalize",

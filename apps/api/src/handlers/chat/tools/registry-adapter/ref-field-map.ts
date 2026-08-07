@@ -339,6 +339,11 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     ],
     projection: SAVE_DOCUMENT_PROJECTION,
   },
+  // In-app chat already owns the active-document edit/version flow, including
+  // its file overlay and approval UI. The MCP App is a host transport adapter,
+  // not a second in-app tool; keeping this explicit false still makes every new
+  // registry write take a compile-time projection decision.
+  upload_document_version: { chatProjectable: false },
   delete_document: {
     chatProjectable: true,
     // `version_id` is an entity-version handle: passes through.

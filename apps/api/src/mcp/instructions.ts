@@ -12,6 +12,7 @@ import type { McpMode } from "@/api/mcp/constants";
  */
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1600;
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 900;
+export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 900;
 
 const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
@@ -33,10 +34,19 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 Static reference documents are available via \`resources/list\` then \`resources/read\`.`;
 
-export const MCP_INSTRUCTIONS: Record<McpMode, string> = {
+const DOCUMENTS_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this least-privilege surface reads and updates documents, including uploading new file versions. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
+
+Pagination: list tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page.
+
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.
+
+Destructive tools refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.`;
+
+export const MCP_INSTRUCTIONS = {
   default: DEFAULT_INSTRUCTIONS,
+  documents: DOCUMENTS_INSTRUCTIONS,
   anonymized: ANONYMIZED_INSTRUCTIONS,
-};
+} as const satisfies Record<McpMode, string>;
 
 export const getMcpInstructions = (mode: McpMode): string =>
   MCP_INSTRUCTIONS[mode];

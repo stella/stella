@@ -4,7 +4,12 @@ import type {
   Resource,
 } from "@modelcontextprotocol/server";
 
+import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
+
+import { envBase } from "@/api/env-base";
+import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
+import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
 /**
@@ -14,7 +19,7 @@ import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
  * previously a `passthrough` tool (`template_marker_reference`) that carried no
  * tenant data. Both belong off the tool ceiling.
  *
- * The set is identical across both MCP modes. `tools/list` projects a different
+ * The set is identical across all MCP modes. `tools/list` projects a different
  * tool set per mode because tools touch tenant data under mode-specific scopes;
  * these resources are public, static, and tenant-independent, so there is
  * nothing to project — an anonymized-mode client that could previously call the
@@ -28,7 +33,9 @@ type StaticResource = {
   title: string;
   description: string;
   mimeType: string;
-  read: () => string;
+  listed: boolean;
+  read: () => string | Promise<string>;
+  resourceMeta?: () => Record<string, unknown>;
 };
 
 const TEMPLATE_MARKER_REFERENCE_URI = "stella://reference/template-markers";
@@ -58,6 +65,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "Canonical product identity for stella: preferred casing, official " +
       "website, documentation, source code, support, and description.",
     mimeType: "application/json",
+    listed: true,
     read: buildProductIdentity,
   },
   {
@@ -69,23 +77,62 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "and repeating blocks, clause slots, and numbering inside a DOCX. Read " +
       "this before authoring a DOCX for save_template.",
     mimeType: "text/markdown",
+    listed: true,
     read: buildMarkerReference,
+  },
+  {
+    uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+    name: "document-version-upload",
+    title: "Upload document version",
+    description:
+      "Portable MCP App file picker for uploading a new version through stella's canonical file-transport capabilities.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    // A text import makes Bun embed the generated app in the compiled API
+    // binary. Reading from the source tree at runtime would work in dev but
+    // fail in the production image, which ships only the compiled server.
+    read: () => documentUploadAppHtml,
+    resourceMeta: () => documentUploadResourceMeta(),
   },
 ];
 
-export const listMcpResources = (_mode: McpMode): Resource[] =>
-  STATIC_RESOURCES.map(({ description, mimeType, name, title, uri }) => ({
-    uri,
-    name,
-    title,
-    description,
-    mimeType,
-  }));
+const uploadStorageOrigins = (): string[] => {
+  const endpoint = new URL(envBase.S3_ENDPOINT);
+  if (
+    endpoint.hostname.includes("s3") &&
+    endpoint.hostname.endsWith(".amazonaws.com") &&
+    envBase.S3_BUCKET.length > 0
+  ) {
+    endpoint.hostname = `${envBase.S3_BUCKET}.${endpoint.hostname}`;
+  }
+  return [endpoint.origin];
+};
 
-export const readMcpResource = (
+const documentUploadResourceMeta = (): Record<string, unknown> => {
+  const connectDomains = uploadStorageOrigins();
+  return {
+    ui: {
+      csp: { connectDomains, resourceDomains: [] },
+      prefersBorder: true,
+    },
+  };
+};
+
+export const listMcpResources = (_mode: McpMode): Resource[] =>
+  STATIC_RESOURCES.filter(({ listed }) => listed).map(
+    ({ description, mimeType, name, title, uri }) => ({
+      uri,
+      name,
+      title,
+      description,
+      mimeType,
+    }),
+  );
+
+export const readMcpResource = async (
   uri: string,
   _mode: McpMode,
-): ReadResourceResult => {
+): Promise<ReadResourceResult> => {
   const resource = STATIC_RESOURCES.find((entry) => entry.uri === uri);
   if (!resource) {
     throw new ProtocolError(
@@ -95,7 +142,14 @@ export const readMcpResource = (
   }
   return {
     contents: [
-      { uri: resource.uri, mimeType: resource.mimeType, text: resource.read() },
+      {
+        uri: resource.uri,
+        mimeType: resource.mimeType,
+        text: await resource.read(),
+        ...(resource.resourceMeta === undefined
+          ? {}
+          : { _meta: resource.resourceMeta() }),
+      },
     ],
   };
 };

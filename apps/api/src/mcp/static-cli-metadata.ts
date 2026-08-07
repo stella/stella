@@ -62,6 +62,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["document", "save"],
       scope: "documents_write",
     },
+    upload_document_version: {
+      command: ["document", "upload-version"],
+      // This tool adapts host-provided temporary URLs/MCP Apps. The CLI's
+      // hand-wired `upload --entity-id` command accepts local bytes and compiles
+      // from the same generated transport contract instead of exposing the
+      // host adapter as a second, unusable CLI workflow.
+      excluded: true,
+      scope: "documents_write",
+      inputOnly: ["file"],
+    },
     delete_document: {
       command: ["document", "delete"],
       scope: "documents_write",

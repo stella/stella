@@ -7,6 +7,7 @@ import {
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  DOCUMENTS_MCP_TOOL_DEFINITIONS,
   MCP_ANONYMIZED_PROJECTED_SCOPES,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
@@ -87,6 +88,19 @@ describe("MCP tool registry", () => {
         }
       }
     }
+  });
+
+  test("documents projection contains only canonical document and app transport tools", () => {
+    expect(DOCUMENTS_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
+      "list_documents",
+      "read_document",
+      "save_document",
+      "upload_document_version",
+      "delete_document",
+      "list_properties",
+      "set_field_value",
+      "invoke_capability",
+    ]);
   });
 
   test("tool names are unique across the registry", () => {

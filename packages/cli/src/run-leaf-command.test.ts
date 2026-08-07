@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
+import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import type { Context } from "./context.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -330,9 +331,17 @@ const startConfirmGateServer = () => {
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
+      if (req.method === "GET") {
+        return new Response(null, { status: 405 });
+      }
       const body: {
+        method?: string;
         params: { name: string; arguments?: Record<string, unknown> };
       } = JSON.parse(await req.text());
+      const lifecycle = respondToMcpLifecycle(body);
+      if (lifecycle !== null) {
+        return lifecycle;
+      }
       const args = body.params.arguments ?? {};
       calls.push({ name: body.params.name, args });
       const confirmed = args["confirm"] === true;

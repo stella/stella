@@ -22,6 +22,18 @@ export type {
   ApiValidationErrorValue,
   NormalizedApiError,
 } from "./error";
+export {
+  buildDocumentVersionUploadReservationInput,
+  buildUploadAbortInput,
+  buildUploadFinalizeInput,
+  DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
+  DOCUMENT_VERSION_UPLOAD_TRANSPORT,
+} from "./document-version-upload";
+export type {
+  DocumentVersionUploadFileMetadata,
+  DocumentVersionUploadReservationInput,
+  UploadLifecycleInput,
+} from "./document-version-upload";
 
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;

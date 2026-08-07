@@ -153,6 +153,15 @@ run_cli_registry_snapshot() {
   git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 }
 
+run_mcp_app_bundle() {
+  # The API serves the committed single-file MCP App rather than its TypeScript
+  # source. Rebuild it and fail on any diff so tests and production cannot
+  # silently exercise different app code.
+  (cd apps/api && bun run build:mcp-apps) || return 1
+  git diff --exit-code -- \
+    apps/api/src/mcp/apps/document-upload/generated/app.html.txt
+}
+
 run_capability_catalog() {
   # The committed capability catalog (every `tool`/`covered` safe handler,
   # projected to id + input schema + permissions + scope + access) must match
@@ -214,6 +223,7 @@ run_step "Documentation source dependency guard" bun run check:docs-sources
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot
+run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
 run_step "Knip production deps" run_knip
 run_step "Test" run_test

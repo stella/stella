@@ -38,6 +38,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import {
+  OAUTH_UI_CONSENT_PATH,
+  OAUTH_UI_LOGIN_PATH,
+  OAUTH_UI_ORGANIZATION_PATH,
+} from "@/api/lib/auth-paths";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -99,7 +104,7 @@ import {
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
-  getMcpResourceUrl,
+  getMcpResourceUrls,
   MCP_ALL_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
@@ -1034,10 +1039,10 @@ const createAuth = () => {
       // is still slightly too wide for Better Auth's plugin type here.
       // The runtime plugin value is valid for betterAuth().
       oauthProvider({
-        loginPage: "/auth",
-        consentPage: "/consent",
+        loginPage: OAUTH_UI_LOGIN_PATH,
+        consentPage: OAUTH_UI_CONSENT_PATH,
         scopes: [...MCP_OAUTH_SCOPES],
-        validAudiences: [getMcpResourceUrl(), getMcpResourceUrl("anonymized")],
+        validAudiences: getMcpResourceUrls(),
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
@@ -1045,7 +1050,7 @@ const createAuth = () => {
         clientReference: ({ session }) =>
           getSessionActiveOrganizationId(session),
         postLogin: {
-          page: "/auth/organization",
+          page: OAUTH_UI_ORGANIZATION_PATH,
           shouldRedirect: async ({
             headers,
             scopes,

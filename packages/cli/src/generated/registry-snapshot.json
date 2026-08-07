@@ -1040,6 +1040,57 @@
   },
   {
     "cli": {
+      "command": ["document", "upload-version"],
+      "excluded": true,
+      "scope": "documents_write",
+      "inputOnly": ["file"]
+    },
+    "name": "upload_document_version",
+    "description": "Upload a file as a new version of an existing document. Pass entity_id and attach file when the host supports MCP file parameters. When file is omitted, opens a portable MCP App file picker in compatible hosts. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": ["entity_id"],
+      "properties": {
+        "entity_id": {
+          "minLength": 1,
+          "description": "Existing document entity ID that will receive a new version",
+          "type": "string"
+        },
+        "file": {
+          "additionalProperties": false,
+          "description": "File reference supplied by a compatible MCP host",
+          "type": "object",
+          "required": ["download_url", "file_id"],
+          "properties": {
+            "download_url": {
+              "description": "Temporary URL supplied by the host for downloading the file",
+              "type": "string"
+            },
+            "file_id": {
+              "description": "Host-assigned identifier for the attached file",
+              "type": "string"
+            },
+            "mime_type": {
+              "description": "MIME type reported by the host",
+              "type": "string"
+            },
+            "file_name": {
+              "description": "Original file name reported by the host",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "annotations": {
+      "title": "Upload document version",
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "cli": {
       "command": ["document", "delete"],
       "scope": "documents_write"
     },

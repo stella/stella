@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
@@ -59,6 +60,18 @@ describe("API and CLI release contract", () => {
   test("the server advertises the contract version implemented by the CLI", () => {
     expect(STELLA_MCP_API_CONTRACT_VERSION).toBe(
       CLI_SUPPORTED_API_CONTRACT_VERSION,
+    );
+  });
+
+  test("the API and CLI use matching official MCP v2 packages", () => {
+    expect(apiPackage.dependencies["@modelcontextprotocol/server"]).toBe(
+      "2.0.0",
+    );
+    expect(apiPackage.devDependencies["@modelcontextprotocol/client"]).toBe(
+      apiPackage.dependencies["@modelcontextprotocol/server"],
+    );
+    expect(cliPackage.dependencies["@modelcontextprotocol/client"]).toBe(
+      apiPackage.dependencies["@modelcontextprotocol/server"],
     );
   });
 

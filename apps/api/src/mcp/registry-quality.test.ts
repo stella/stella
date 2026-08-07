@@ -46,8 +46,10 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // server-side persistence tool that removes raw PUT/base64 transport from agent
 // workflows while keeping fill_template least-privileged. Further additions
 // should recover a slot through consolidation before expanding this ceiling.
+// default bumped 46 -> 47 for upload_document_version, the canonical
+// host-file/MCP-App entry point backed by the existing version-upload pipeline.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 46,
+  default: 47,
   anonymized: 21,
 };
 

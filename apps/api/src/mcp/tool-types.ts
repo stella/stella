@@ -16,8 +16,18 @@ import type { TextWindowResult } from "@/api/mcp/tool-utils";
  */
 export type JsonSchema = JsonSchemaType;
 
-/** Every MCP tool accepts one named-argument object, never a scalar root. */
-export type McpToolInputSchema = JsonSchema & { type: "object" };
+/**
+ * Every MCP tool accepts one named-argument object, never a scalar root. The
+ * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
+ * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
+ * and validate the enumerable JSON recursively, so those symbols never enter
+ * the protocol payload.
+ */
+export type McpToolInputSchema = {
+  type: "object";
+  properties?: Record<string, unknown>;
+  [key: string]: unknown;
+};
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
@@ -100,6 +110,12 @@ export const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
 export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
 
 export type McpToolDefinition = {
+  /**
+   * Host-extension metadata served verbatim through `tools/list`. Keep it on
+   * the canonical definition so MCP Apps and host-specific transports cannot
+   * grow a second registry beside the in-app chat and CLI projections.
+   */
+  _meta?: McpTool["_meta"];
   access: McpToolAccess;
   /**
    * Extra grants required in addition to the primary `scope`. Discovery and

@@ -258,6 +258,7 @@ const {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
+  isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } = await import("@/api/mcp/tools");
 const { caseLawPublicReadDb } =
@@ -3033,6 +3034,31 @@ describe("OpenAI-compatible MCP tools", () => {
       code: "unknown_tool",
       message: "Unknown tool: not_a_real_tool",
       hint: "Call tools/list for the tools available to this session.",
+    });
+  });
+
+  test("documents mode admits only the canonical version-upload lifecycle", async () => {
+    for (const capability of [
+      "uploads.create",
+      "uploads.update",
+      "uploads.delete",
+    ]) {
+      expect(isDocumentsMcpCapabilityAllowed({ capability })).toBe(true);
+    }
+    expect(
+      isDocumentsMcpCapabilityAllowed({ capability: "workspaces.create" }),
+    ).toBe(false);
+
+    const result = await handleMcpToolCall({
+      args: { capability: "workspaces.create", input: {} },
+      context: createContext(),
+      mode: "documents",
+      toolName: "invoke_capability",
+    });
+    expectErrorEnvelope(result, {
+      code: "feature_disabled",
+      message: "This capability is not available on the documents MCP surface",
+      hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
     });
   });
 });

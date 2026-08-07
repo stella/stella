@@ -14,6 +14,65 @@ describe("vite config", () => {
     expect(pluginNames).toContain("vite:react-babel");
     expect(pluginNames).toContain("@rolldown/plugin-babel");
   });
+
+  test("proxies every public API surface through one dev origin when requested", () => {
+    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
+    process.env["DEV_API_PROXY_TARGET"] = "http://localhost:3001";
+
+    try {
+      const resolvedConfig = resolveConfig("test");
+
+      expect(resolvedConfig.server?.proxy).toEqual({
+        "/.well-known": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/api": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/dev-public": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/health": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/mcp": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/oauth-ui": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+        "/v1": {
+          changeOrigin: true,
+          target: "http://localhost:3001",
+        },
+      });
+    } finally {
+      if (previousTarget === undefined) {
+        delete process.env["DEV_API_PROXY_TARGET"];
+      } else {
+        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
+      }
+    }
+  });
+
+  test("does not install a dev API proxy without an explicit target", () => {
+    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
+    delete process.env["DEV_API_PROXY_TARGET"];
+
+    try {
+      expect(resolveConfig("test").server?.proxy).toBeUndefined();
+    } finally {
+      if (previousTarget !== undefined) {
+        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
+      }
+    }
+  });
 });
 
 const resolveConfig = (mode: string): UserConfig => {

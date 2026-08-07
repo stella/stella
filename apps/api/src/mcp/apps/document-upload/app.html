@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload document version</title>
+  </head>
+  <body>
+    <main id="app" aria-labelledby="title">
+      <h1 id="title">Upload a new version</h1>
+      <p id="target">Connecting to stella…</p>
+      <label class="picker">
+        <span>File</span>
+        <input id="file" type="file" />
+      </label>
+      <button id="upload" type="button" disabled>Upload version</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="./app.ts"></script>
+  </body>
+</html>

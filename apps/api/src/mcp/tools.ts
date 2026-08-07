@@ -3,6 +3,8 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 
+import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   isExternalMcpToolName,
@@ -39,6 +41,20 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>(
   DEFAULT_MCP_TOOL_SETS.flatMap((toolSet) => Object.entries(toolSet.handlers)),
 );
 
+const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
+  DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
+);
+
+export const isDocumentsMcpCapabilityAllowed = (
+  args: Record<string, unknown>,
+): boolean => {
+  const capability = args["capability"];
+  return (
+    typeof capability === "string" &&
+    DOCUMENTS_MCP_CAPABILITY_IDS.has(capability)
+  );
+};
+
 export const getMcpToolDefinition = async (
   toolName: string,
   context: McpRequestContext,
@@ -58,7 +74,7 @@ export const getMcpToolRequiredScopesHint = (
     return [staticTool.scope, ...staticTool.additionalScopes];
   }
 
-  if (mode === "anonymized") {
+  if (mode !== "default") {
     return undefined;
   }
 
@@ -114,6 +130,18 @@ export const handleMcpToolCall = async ({
       code: "unknown_tool",
       message: `Unknown tool: ${toolName}`,
       hint: "Call tools/list for the tools available to this session.",
+    });
+  }
+
+  if (
+    mode === "documents" &&
+    toolName === "invoke_capability" &&
+    !isDocumentsMcpCapabilityAllowed(args)
+  ) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "This capability is not available on the documents MCP surface",
+      hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
     });
   }
 

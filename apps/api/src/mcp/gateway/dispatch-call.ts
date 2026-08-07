@@ -26,7 +26,7 @@ export const dispatchGatewayToolCall = async ({
   mode: McpMode;
   toolName: string;
 }): Promise<CallToolResult | null> => {
-  if (mode === "anonymized") {
+  if (mode !== "default") {
     return null;
   }
 

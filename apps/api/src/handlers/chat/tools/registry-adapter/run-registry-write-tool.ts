@@ -44,6 +44,7 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   save_task: MATTER_TOOL_HANDLERS.save_task,
   link_matter_contact: MATTER_TOOL_HANDLERS.link_matter_contact,
   save_document: DOCUMENT_TOOL_HANDLERS.save_document,
+  upload_document_version: DOCUMENT_TOOL_HANDLERS.upload_document_version,
   delete_document: DOCUMENT_TOOL_HANDLERS.delete_document,
   set_field_value: DOCUMENT_TOOL_HANDLERS.set_field_value,
   save_time_entry: BILLING_TOOL_HANDLERS.save_time_entry,
