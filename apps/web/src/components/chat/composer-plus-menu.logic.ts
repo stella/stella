@@ -1,4 +1,10 @@
-export type ComposerMenuShortcut = "context" | "skills";
+export const COMPOSER_MENU_SHORTCUT = {
+  context: "context",
+  skills: "skills",
+} as const;
+
+export type ComposerMenuShortcut =
+  (typeof COMPOSER_MENU_SHORTCUT)[keyof typeof COMPOSER_MENU_SHORTCUT];
 
 type ResolveComposerMenuShortcutOptions = {
   altKey: boolean;
@@ -28,10 +34,10 @@ export const resolveComposerMenuShortcut = ({
     return null;
   }
   if (hasSkills && key === "/") {
-    return "skills";
+    return COMPOSER_MENU_SHORTCUT.skills;
   }
   if (hasContext && key === "@") {
-    return "context";
+    return COMPOSER_MENU_SHORTCUT.context;
   }
   return null;
 };

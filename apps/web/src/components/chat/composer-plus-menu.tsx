@@ -60,7 +60,10 @@ import {
 import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
-import { resolveComposerMenuShortcut } from "@/components/chat/composer-plus-menu.logic";
+import {
+  COMPOSER_MENU_SHORTCUT,
+  resolveComposerMenuShortcut,
+} from "@/components/chat/composer-plus-menu.logic";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
@@ -196,7 +199,7 @@ export const ComposerPlusMenu = ({
       event.stopImmediatePropagation();
       openedProgrammaticallyRef.current = true;
       setMenuOpen(true);
-      if (shortcut === "skills") {
+      if (shortcut === COMPOSER_MENU_SHORTCUT.skills) {
         setSkillsSubmenuOpen(true);
       } else {
         setContextSubmenuOpen(true);

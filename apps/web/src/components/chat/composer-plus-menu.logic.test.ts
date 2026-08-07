@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveComposerMenuShortcut } from "@/components/chat/composer-plus-menu.logic";
+import {
+  COMPOSER_MENU_SHORTCUT,
+  resolveComposerMenuShortcut,
+} from "@/components/chat/composer-plus-menu.logic";
 
 const baseOptions = {
   altKey: false,
@@ -16,13 +19,13 @@ const baseOptions = {
 describe("resolveComposerMenuShortcut", () => {
   test("opens Skills for slash in a blank skills-enabled composer", () => {
     expect(resolveComposerMenuShortcut({ ...baseOptions, key: "/" })).toBe(
-      "skills",
+      COMPOSER_MENU_SHORTCUT.skills,
     );
   });
 
   test("opens Context for at-sign in a blank context-enabled composer", () => {
     expect(resolveComposerMenuShortcut({ ...baseOptions, key: "@" })).toBe(
-      "context",
+      COMPOSER_MENU_SHORTCUT.context,
     );
   });
 
@@ -72,6 +75,6 @@ describe("resolveComposerMenuShortcut", () => {
         isAltGraph: true,
         key: "@",
       }),
-    ).toBe("context");
+    ).toBe(COMPOSER_MENU_SHORTCUT.context);
   });
 });
