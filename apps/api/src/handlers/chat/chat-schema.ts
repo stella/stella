@@ -9,7 +9,11 @@ import type { Static } from "elysia";
 import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_RUN_MODE,
+  CHAT_TURN_INTENT,
+  type ChatRunMode,
+} from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -42,6 +46,9 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
+
+export { CHAT_RUN_MODE };
+export type { ChatRunMode };
 
 const rawMessageSchema = t.Object(
   {
@@ -203,6 +210,16 @@ export const sendMessageBodySchema = t.Object({
    * but never widen the turn's tool surface.
    */
   toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+  /**
+   * Execution mode for this turn. Absent (the default) runs the normal
+   * server-side chat model with the user's selected model, tools, and MCP.
+   * `"agent"` explicitly requests an agent-sandbox run; the request
+   * fails when the deployment has not enabled and fully configured that
+   * engine. Making this an explicit opt-in means a normal, BYOK, or
+   * model-selected chat is never silently rerouted into a sandbox just because
+   * the engine is enabled.
+   */
+  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
   userContext: t.Optional(userContextSchema),
   activeDraft: t.Optional(activeDraftSchema),
   activeFile: t.Optional(activeFileSchema),

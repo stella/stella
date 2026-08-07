@@ -7932,7 +7932,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "contacts_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -8302,7 +8302,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: true,
-                scope: "matters_write",
+                scope: "contacts_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -8548,7 +8548,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "contacts_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,

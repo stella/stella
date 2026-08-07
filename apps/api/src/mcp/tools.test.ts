@@ -57,7 +57,9 @@ const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
 const s3DeleteMock = mock(async () => undefined);
 const s3WriteMock = mock(async () => undefined);
 
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3ObjectWithSignal: async () => await s3ArrayBufferMock(),
   getS3: () => ({ file: s3FileMock }),
@@ -705,6 +707,15 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       (await getMcpToolDefinition("search_case_law", createContext()))?.scope,
     ).toBe("stella:search");
+  });
+
+  test("separates organization-wide contact mutations from matter writes", async () => {
+    expect(
+      (await getMcpToolDefinition("save_contact", createContext()))?.scope,
+    ).toBe("stella:contacts_write");
+    expect(
+      (await getMcpToolDefinition("delete_contact", createContext()))?.scope,
+    ).toBe("stella:contacts_write");
   });
 
   test("hints dynamic tool scopes from names before resolving definitions", () => {

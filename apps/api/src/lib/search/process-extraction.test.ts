@@ -73,6 +73,8 @@ const requestAutomaticDocumentOcrMock = mock(async () => undefined);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/db/root", () => ({
   rootDb: {
     execute: executeMock,
@@ -91,6 +93,7 @@ void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3ObjectWithSignal: getS3ObjectWithSignalMock,
   putS3ObjectWithSignal: s3WriteMock,

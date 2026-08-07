@@ -54,6 +54,29 @@ describe("resolveAgentAuditExecution", () => {
     expect(selectMock).not.toHaveBeenCalled();
   });
 
+  test("binds an agent run to its human owner and run id", async () => {
+    const execution = await resolveAgentAuditExecution({
+      credential: { runId: "run-1", type: "agent_run" },
+      organizationId,
+      userId,
+    });
+
+    expect(execution).toEqual({
+      performer: {
+        id: "stella-assistant",
+        name: "Stella AI",
+        type: "agent",
+      },
+      runId: "run-1",
+      trigger: {
+        ownerUserId: userId,
+        source: "mcp",
+        sourceId: "run-1",
+        type: "credential",
+      },
+    });
+  });
+
   test("promotes a claimed agent registration to agent activity", async () => {
     registrationRows = [{ id: "agent-registration-1" }];
 

@@ -1,0 +1,103 @@
+name: Agent sandbox canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/agent-sandbox-canary.yml"
+      - "packages/agent-engine/**"
+      - "package.json"
+      - "bun.lock"
+      - "scripts/bun-ci-retry.sh"
+  schedule:
+    # Off the top of the hour to reduce GitHub-hosted runner scheduling delay.
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: agent-sandbox-canary
+  cancel-in-progress: true
+
+jobs:
+  real-model-mcp-canary:
+    name: Real Codex to MCP canary
+    # A manual run selected on a feature branch must not enter the protected
+    # environment. Scheduled runs always use the default branch by definition.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: agent-sandbox-canary
+    permissions:
+      contents: read
+    env:
+      AGENT_SANDBOX_IMAGE: stella/agent-sandbox:canary
+      AGENT_SANDBOX_NETWORK: stella-agent-canary-${{ github.run_id }}-${{ github.run_attempt }}
+      AGENT_SANDBOX_MODEL: gpt-5.6-luna
+    steps:
+      # Never replace this with pull_request_target or a PR-head checkout. The
+      # model credential may execute only code from the protected default branch.
+      - name: Checkout default branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Require protected model credential
+        env:
+          AGENT_CANARY_OPENAI_API_KEY: ${{ secrets.AGENT_SANDBOX_CANARY_OPENAI_API_KEY }}
+        run: |
+          if [[ -z "$AGENT_CANARY_OPENAI_API_KEY" ]]; then
+            echo "::error title=Missing canary credential::Configure AGENT_SANDBOX_CANARY_OPENAI_API_KEY only in the agent-sandbox-canary environment."
+            exit 1
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run canary protocol tests
+        run: bun test packages/agent-engine/scripts/mcp-canary-server.test.ts
+
+      - name: Build pinned sandbox image
+        run: >-
+          docker build
+          --file packages/agent-engine/docker/sandbox.Dockerfile
+          --tag "$AGENT_SANDBOX_IMAGE"
+          packages/agent-engine/docker
+
+      # This network permits the Codex harness to reach the model API. Codex's
+      # inner workspace-write sandbox still has network access disabled for
+      # model-authored shell commands; the draft-safe job separately proves an
+      # internal Docker network blocks arbitrary container egress.
+      - name: Create canary network
+        run: docker network create "$AGENT_SANDBOX_NETWORK"
+
+      - name: Run real harness and authenticated MCP canary
+        env:
+          OPENAI_API_KEY: ${{ secrets.AGENT_SANDBOX_CANARY_OPENAI_API_KEY }}
+        run: bun --filter @stll/agent-engine e2e:mcp-canary
+
+      - name: Assert all canary containers were removed
+        run: |
+          mapfile -t container_ids < <(
+            docker ps --all --quiet --filter "ancestor=$AGENT_SANDBOX_IMAGE"
+          )
+          if [[ "${#container_ids[@]}" -ne 0 ]]; then
+            echo "::error title=Canary cleanup failed::A canary container survived successful completion."
+            docker ps --all --filter "ancestor=$AGENT_SANDBOX_IMAGE"
+            exit 1
+          fi
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          docker ps --all --quiet --filter "ancestor=$AGENT_SANDBOX_IMAGE" | xargs --no-run-if-empty docker rm --force
+          docker network rm "$AGENT_SANDBOX_NETWORK" 2>/dev/null || true

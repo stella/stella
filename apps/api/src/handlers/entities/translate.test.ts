@@ -50,7 +50,11 @@ void mock.module("@/api/lib/content-encryption", () => ({
   decryptContent: mock(async () => "deepl-key"),
 }));
 
+// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
     write: s3WriteMock,

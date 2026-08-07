@@ -8,6 +8,7 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
+import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -102,7 +103,8 @@ void mock.module("./send-message-side-effects", () => ({
   uploadMessageFilesWithRollback: uploadMessageFilesWithRollbackMock,
 }));
 
-const sendMessage = (await import("./send-message")).default;
+const { default: sendMessage, shouldLoadExternalMcpToolsForStreaming } =
+  await import("./send-message");
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 
@@ -156,6 +158,7 @@ const createContext = ({
   },
   request = new Request("http://localhost/v1/chat/send"),
   onSafeDbTransaction,
+  runMode,
   truncateAfterMessageId,
   turnIntent,
   transaction = {
@@ -170,6 +173,7 @@ const createContext = ({
   message?: SendMessageCtx["body"]["message"];
   request?: Request;
   onSafeDbTransaction?: (() => void) | undefined;
+  runMode?: SendMessageCtx["body"]["runMode"];
   truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
   turnIntent?: SendMessageCtx["body"]["turnIntent"];
   transaction?: unknown;
@@ -190,6 +194,7 @@ const createContext = ({
         ? {}
         : { truncateAfterMessageId }),
       ...(turnIntent === undefined ? {} : { turnIntent }),
+      ...(runMode === undefined ? {} : { runMode }),
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -233,6 +238,88 @@ describe("send message context-matter authorization", () => {
       code: 403,
       response: { message: "contextMatterIds includes inaccessible matter" },
     });
+  });
+});
+
+describe("agent sandbox preflight", () => {
+  test("fails before persisting the incoming message when sandbox runs are disabled", async () => {
+    const insertValues = mock(async () => undefined);
+    const deleteReturning = mock(async () => [{ id: threadId }]);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        runMode: CHAT_RUN_MODE.agent,
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 422,
+      response: {
+        message: "Agent sandbox runs are not enabled for this deployment.",
+      },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("agent connector isolation", () => {
+  test("rejects external tool parts without discovering connectors", async () => {
+    loadExternalMcpToolsForUserMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        message: {
+          id: messageId,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "external-1",
+              name: "mcp__test__lookup",
+              arguments: "{}",
+              input: {},
+              state: "input-complete",
+            },
+          ],
+        },
+        runMode: CHAT_RUN_MODE.agent,
+        transaction: {
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid chat message" },
+    });
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test("does not load external MCP clients for agent streaming", () => {
+    expect(shouldLoadExternalMcpToolsForStreaming(CHAT_RUN_MODE.agent)).toBe(
+      false,
+    );
+    expect(shouldLoadExternalMcpToolsForStreaming(undefined)).toBe(true);
   });
 });
 

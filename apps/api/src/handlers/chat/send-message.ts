@@ -29,6 +29,7 @@ import type {
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
   IncomingActiveDecision,
@@ -40,6 +41,7 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
@@ -589,16 +591,17 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      // Only load external MCP tools for validation when the incoming
-      // message actually carries a part that needs them — an ordinary
-      // message never triggers connector discovery here. The streaming
-      // pass below always needs the full set and reuses this same load via
-      // the memoized loader instead of running discovery again.
+      // Agent runs cannot use per-user external connectors. Keep them out of
+      // validation too, so an invalid external-tool part is rejected by the
+      // tool schema without starting connector discovery. Normal streaming
+      // still reuses a validation-triggered load through the memoized loader.
       const externalToolsForValidation =
-        await resolveExternalToolsForValidation(
-          body.message,
-          externalMcpToolsLoader,
-        );
+        body.runMode === CHAT_RUN_MODE.agent
+          ? undefined
+          : await resolveExternalToolsForValidation(
+              body.message,
+              externalMcpToolsLoader,
+            );
 
       if (isClientConnectionAborted()) {
         return Result.err(
@@ -998,6 +1001,41 @@ const sendMessage = createSafeRootHandler(
         mentions: parsedMessage.mentions,
         message: parsedMessage.message,
       }).filter((id) => accessibleSet.has(id));
+
+      // Resolve the opaque sandbox boundary before persisting or claiming the
+      // turn. A disabled or incomplete deployment must reject the explicit
+      // agent request without leaving a durable incoming message behind.
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
+      const sandboxRunResult =
+        body.runMode === CHAT_RUN_MODE.agent
+          ? await Result.tryPromise({
+              try: async () =>
+                await resolveChatSandboxPlan({
+                  organizationId: session.activeOrganizationId,
+                  runId: Bun.randomUUIDv7(),
+                  userId: user.id,
+                  workspaceIds: toolWorkspaceIds,
+                }),
+              catch: (cause) =>
+                cause instanceof HandlerError
+                  ? cause
+                  : new HandlerError({
+                      cause,
+                      message: "Failed to prepare agent sandbox run",
+                      status: 500,
+                    }),
+            })
+          : Result.ok(undefined);
+      if (Result.isError(sandboxRunResult)) {
+        // The enclosing finally owns rollback of the created thread and any
+        // uploaded files, preserving the original sandbox preflight error.
+        return yield* Result.err(sandboxRunResult.error);
+      }
+      const sandboxRun = sandboxRunResult.value;
+
       const turnAcceptance =
         parsedMessage.message.role === "user" &&
         latestMessagePlan.persistencePlan.type !== "none"
@@ -1226,10 +1264,6 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const toolWorkspaceIds = resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      });
       const registeredDocxEditMode = resolveRegisteredDocxEditMode({
         activeFile: activeFileForTools,
         editApplyMode,
@@ -1294,24 +1328,22 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      // The streaming pass always needs the external MCP tool set (for the
-      // tool map, the connector system hint, and the `externalMcpToolSource`
-      // handed to `streamChat` below). This is the point where discovery
-      // actually runs for a message that didn't already trigger it during
-      // validation — deferred this far so a request that fails or aborts
-      // earlier (malformed parts, thread scope mismatch, upload/compaction
-      // failure, client disconnect) never contacts a single connector.
-      // `getExternalMcpTools` reuses the validation-triggered load instead
-      // of loading again when one already happened.
-      const externalMcpToolsResult = await Result.tryPromise({
-        try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to discover chat connectors",
-            cause,
-          }),
-      });
+      // Normal streaming needs external MCP tools. Agent runs reach tools only
+      // through their workspace-scoped Stella MCP binding, so loading per-user
+      // external connectors here would create unused clients.
+      const externalMcpToolsResult = shouldLoadExternalMcpToolsForStreaming(
+        body.runMode,
+      )
+        ? await Result.tryPromise({
+            try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Failed to discover chat connectors",
+                cause,
+              }),
+          })
+        : Result.ok(undefined);
       if (Result.isError(externalMcpToolsResult)) {
         await failCurrentTurn("connector-discovery", true);
         return Result.err(externalMcpToolsResult.error);
@@ -1353,7 +1385,7 @@ const sendMessage = createSafeRootHandler(
         docxEditRepresentation,
         webSearchEnabled: thread.data.webSearchEnabled,
         webSearchProviders,
-        externalTools: externalMcpTools.tools,
+        externalTools: externalMcpTools?.tools ?? {},
         disabledNativeToolSlugs,
         skillMetadata: chatContext.skillMetadata,
         activeSkillContext: chatContext.activeSkillContext,
@@ -1392,7 +1424,7 @@ const sendMessage = createSafeRootHandler(
           : restrictChatToolsToScope(chatTools, body.toolScope);
 
       const externalMcpSystemHint = buildExternalMcpSystemHint(
-        externalMcpTools.connectors,
+        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
       );
       // The "safe" half is whatever the prompt builder declared
       // safe. The anonymized-mode hint is a fixed assembler-owned
@@ -1409,13 +1441,9 @@ const sendMessage = createSafeRootHandler(
         [externalMcpSystemHint],
       );
 
-      // From here, the try/catch below owns closing `externalMcpTools` (on a
-      // non-streaming response or a thrown error) or hands it to `streamChat`
-      // to close once the actual token stream finishes; the outer `finally`
-      // must not close it again. `externalMcpTools` is guaranteed loaded at
-      // this point (the `await` above), so `externalMcpToolsLoader.closeIfLoaded`
-      // in the outer `finally` would otherwise close the same clients again.
-      externalMcpToolsHandedOffToStreaming = true;
+      // A normal chat hands loaded clients to the stream. Agent runs leave
+      // this false so the outer finally closes any validation-only load.
+      externalMcpToolsHandedOffToStreaming = externalMcpTools !== undefined;
       const response = yield* Result.await(
         Result.tryPromise({
           try: async () => {
@@ -1513,6 +1541,10 @@ const sendMessage = createSafeRootHandler(
                   // that delta matters for subagent reads.
                   const assistantWorkspaceIds =
                     computeAssistantTurnWorkspaceIds({
+                      opaqueReadWorkspaceIds:
+                        body.runMode === CHAT_RUN_MODE.agent
+                          ? toolWorkspaceIds
+                          : [],
                       responseParts: resolvedResponseMessage.parts,
                       workspaceIdsBeforeStream,
                       registeredWorkspaceIdsAfterStream:
@@ -1603,6 +1635,8 @@ const sendMessage = createSafeRootHandler(
                 reasoningEffort: chatReasoningEffort,
                 promptCacheKey: chatContext.promptCacheKey,
                 promptCachingEnabled,
+                runMode: body.runMode,
+                sandboxRun,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
                 resolveAssistantValueRefs:
                   refRegistry.resolveAssistantValueRefs,
@@ -1611,14 +1645,17 @@ const sendMessage = createSafeRootHandler(
                 thirdPartyBoundary,
                 threadId: body.threadId,
                 tools: streamingTools,
-                externalMcpToolSource: externalMcpTools.source,
+                externalMcpToolSource: externalMcpTools?.source,
                 systemSafe,
                 systemUntrusted,
                 userId: user.id,
                 workspaceId,
               });
 
-              if (!isChatStreamResponse(chatResponse)) {
+              if (
+                externalMcpTools !== undefined &&
+                !isChatStreamResponse(chatResponse)
+              ) {
                 await externalMcpTools.close();
                 // streamChat can reject before it creates an SSE stream (for
                 // example an anonymization-boundary or attachment-modality
@@ -1632,7 +1669,9 @@ const sendMessage = createSafeRootHandler(
 
               return chatResponse;
             } catch (error) {
-              await externalMcpTools.close();
+              if (externalMcpTools !== undefined) {
+                await externalMcpTools.close();
+              }
               await failCurrentTurn("internal", true);
               throw error;
             }
@@ -2018,6 +2057,10 @@ const resolveExternalToolsForValidation = async (
   const loaded = await loader.getExternalMcpTools();
   return loaded.tools;
 };
+
+export const shouldLoadExternalMcpToolsForStreaming = (
+  runMode: ChatSendRequest["runMode"],
+): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;

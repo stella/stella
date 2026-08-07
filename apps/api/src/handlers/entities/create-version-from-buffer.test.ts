@@ -20,6 +20,8 @@ const broadcastMock = mock();
 let persistenceEvents: string[] = [];
 let intentStatuses: string[] = [];
 
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
   writeFileVersion: writeFileVersionMock,
 }));
@@ -30,6 +32,7 @@ void mock.module("@/api/lib/files/utils", () => ({
   createFileKey: () => "org_1/ws_1/file_1.docx",
 }));
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
   putS3ObjectWithSignal: s3WriteMock,
   // `mock.module` replaces the module, so every named export a consumer

@@ -392,6 +392,10 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
 
   test("scope maps stella:* to a ToolScope, else undefined", () => {
     expect(
+      deriveCapabilityLeaf(entry({ id: "a.b", scope: "stella:contacts_write" }))
+        .spec.scope,
+    ).toBe("contacts_write");
+    expect(
       deriveCapabilityLeaf(entry({ id: "a.b", scope: "stella:matters_write" }))
         .spec.scope,
     ).toBe("matters_write");
