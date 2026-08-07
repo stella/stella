@@ -30,9 +30,16 @@ import { Slot } from "@/lib/slot";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const SIDEBAR_LS_NAME = "sidebar_state";
-const SIDEBAR_WIDTH = "16rem";
+// Numeric source of truth for the desktop sidebar's rendered widths. The
+// CSS custom properties below are derived from these, so layout code that
+// must reserve the sidebar's space in JS (the inspector pane's width
+// clamp) cannot drift from what the sidebar actually renders.
+const SIDEBAR_WIDTH_PX = 256;
+const SIDEBAR_WIDTH_ICON_PX = 48;
+const REM_PX = 16;
+const SIDEBAR_WIDTH = `${SIDEBAR_WIDTH_PX / REM_PX}rem`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = `${SIDEBAR_WIDTH_ICON_PX / REM_PX}rem`;
 const DEFAULT_SIDEBAR_OPEN = true;
 
 type SidebarContextProps = {
@@ -54,6 +61,21 @@ function useSidebar() {
   }
 
   return context;
+}
+
+/**
+ * Inline size the app sidebar takes out of the layout row, in CSS pixels.
+ * Panes docked to the opposite edge need this to know how much room is
+ * actually left for the content column. Mobile reports 0: there the
+ * sidebar is an overlay sheet and occupies no layout width.
+ */
+function useSidebarInlineSize(): number {
+  const { isMobile, state } = useSidebar();
+
+  if (isMobile) {
+    return 0;
+  }
+  return state === "expanded" ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX;
 }
 
 function SidebarProvider({
@@ -722,4 +744,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  useSidebarInlineSize,
 };
