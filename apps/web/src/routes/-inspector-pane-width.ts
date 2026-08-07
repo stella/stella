@@ -8,6 +8,8 @@
  * leaves the content column a few dozen pixels wide instead of folding.
  */
 
+import { SIDEBAR_WIDTH_PX } from "@/components/sidebar-sizing";
+
 export const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 export const INSPECTOR_PANE_MIN_WIDTH = 320;
 export const INSPECTOR_PANE_MAX_WIDTH = 800;
@@ -17,6 +19,25 @@ export const INSPECTOR_PANE_MAX_WIDTH = 800;
  * space first.
  */
 export const INSPECTOR_CONTENT_MIN_WIDTH = 400;
+
+type ForceSidebarCollapsedInput = {
+  inspectorPaneOpen: boolean;
+  viewportWidth: number;
+};
+
+/**
+ * The expanded sidebar yields its optional width before either docked pane
+ * can violate its minimum. The collapsed rail plus both minimums fit at the
+ * desktop breakpoint, so this policy keeps every desktop width usable.
+ */
+export const shouldForceSidebarCollapsed = ({
+  inspectorPaneOpen,
+  viewportWidth,
+}: ForceSidebarCollapsedInput) =>
+  inspectorPaneOpen &&
+  viewportWidth > 0 &&
+  viewportWidth <
+    SIDEBAR_WIDTH_PX + INSPECTOR_CONTENT_MIN_WIDTH + INSPECTOR_PANE_MIN_WIDTH;
 
 type InspectorPaneWidthInput = {
   /** Width the user dragged the pane to. */
@@ -37,7 +58,7 @@ type InspectorPaneWidthInput = {
 export const resolveInspectorPaneMaxWidth = ({
   sidebarWidth,
   viewportWidth,
-}: Omit<InspectorPaneWidthInput, "desiredWidth">): number => {
+}: Omit<InspectorPaneWidthInput, "desiredWidth">) => {
   if (viewportWidth <= 0) {
     return INSPECTOR_PANE_MIN_WIDTH;
   }
@@ -54,7 +75,7 @@ export const resolveInspectorPaneWidth = ({
   desiredWidth,
   sidebarWidth,
   viewportWidth,
-}: InspectorPaneWidthInput): number =>
+}: InspectorPaneWidthInput) =>
   Math.min(
     Math.max(desiredWidth, INSPECTOR_PANE_MIN_WIDTH),
     resolveInspectorPaneMaxWidth({ sidebarWidth, viewportWidth }),

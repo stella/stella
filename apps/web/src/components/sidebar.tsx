@@ -26,16 +26,14 @@ import {
 import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  SIDEBAR_WIDTH_ICON_PX,
+  SIDEBAR_WIDTH_PX,
+} from "@/components/sidebar-sizing";
 import { Slot } from "@/lib/slot";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const SIDEBAR_LS_NAME = "sidebar_state";
-// Numeric source of truth for the desktop sidebar's rendered widths. The
-// CSS custom properties below are derived from these, so layout code that
-// must reserve the sidebar's space in JS (the inspector pane's width
-// clamp) cannot drift from what the sidebar actually renders.
-const SIDEBAR_WIDTH_PX = 256;
-const SIDEBAR_WIDTH_ICON_PX = 48;
 const REM_PX = 16;
 const SIDEBAR_WIDTH = `${SIDEBAR_WIDTH_PX / REM_PX}rem`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -69,7 +67,7 @@ function useSidebar() {
  * actually left for the content column. Mobile reports 0: there the
  * sidebar is an overlay sheet and occupies no layout width.
  */
-function useSidebarInlineSize(): number {
+function useSidebarInlineSize() {
   const { isMobile, state } = useSidebar();
 
   if (isMobile) {
@@ -80,6 +78,7 @@ function useSidebarInlineSize(): number {
 
 function SidebarProvider({
   defaultOpen,
+  forceCollapsed = false,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -88,6 +87,7 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
+  forceCollapsed?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -110,9 +110,11 @@ function SidebarProvider({
       ? DEFAULT_SIDEBAR_OPEN
       : storedState === "expanded";
   });
-  const open = openProp ?? _open;
+  const requestedOpen = openProp ?? _open;
+  const open = requestedOpen && !forceCollapsed;
   const setOpen = (value: boolean | ((v: boolean) => boolean)) => {
-    const openState = typeof value === "function" ? value(open) : value;
+    const openState =
+      typeof value === "function" ? value(requestedOpen) : value;
     if (setOpenProp) {
       setOpenProp(openState);
     } else {

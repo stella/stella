@@ -1,32 +1,35 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  SIDEBAR_WIDTH_ICON_PX,
+  SIDEBAR_WIDTH_PX,
+} from "@/components/sidebar-sizing";
+import {
   INSPECTOR_CONTENT_MIN_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
   resolveInspectorPaneWidth,
+  shouldForceSidebarCollapsed,
 } from "@/routes/-inspector-pane-width";
-
-const SIDEBAR_EXPANDED = 256;
-const SIDEBAR_COLLAPSED = 48;
 
 describe("resolveInspectorPaneWidth", () => {
   // The regression this guards: the pane kept its dragged width while the
   // viewport shrank, so the content column got whatever pixels were left.
-  test("never starves the content column while the pane can still shrink", () => {
+  test("never starves the content column across desktop widths", () => {
     for (let viewportWidth = 768; viewportWidth <= 2560; viewportWidth += 1) {
-      for (const sidebarWidth of [SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED]) {
-        const width = resolveInspectorPaneWidth({
-          desiredWidth: INSPECTOR_PANE_MAX_WIDTH,
-          sidebarWidth,
-          viewportWidth,
-        });
-        const content = viewportWidth - sidebarWidth - width;
-        expect(
-          content >= INSPECTOR_CONTENT_MIN_WIDTH ||
-            width === INSPECTOR_PANE_MIN_WIDTH,
-        ).toBe(true);
-      }
+      const sidebarWidth = shouldForceSidebarCollapsed({
+        inspectorPaneOpen: true,
+        viewportWidth,
+      })
+        ? SIDEBAR_WIDTH_ICON_PX
+        : SIDEBAR_WIDTH_PX;
+      const width = resolveInspectorPaneWidth({
+        desiredWidth: INSPECTOR_PANE_MAX_WIDTH,
+        sidebarWidth,
+        viewportWidth,
+      });
+      const content = viewportWidth - sidebarWidth - width;
+      expect(content).toBeGreaterThanOrEqual(INSPECTOR_CONTENT_MIN_WIDTH);
     }
   });
 
@@ -34,7 +37,7 @@ describe("resolveInspectorPaneWidth", () => {
     for (const desiredWidth of [-500, 0, 120, 512, 5000]) {
       const width = resolveInspectorPaneWidth({
         desiredWidth,
-        sidebarWidth: SIDEBAR_COLLAPSED,
+        sidebarWidth: SIDEBAR_WIDTH_ICON_PX,
         viewportWidth: 2560,
       });
       expect(width).toBeGreaterThanOrEqual(INSPECTOR_PANE_MIN_WIDTH);
@@ -46,7 +49,7 @@ describe("resolveInspectorPaneWidth", () => {
     expect(
       resolveInspectorPaneWidth({
         desiredWidth: 640,
-        sidebarWidth: SIDEBAR_EXPANDED,
+        sidebarWidth: SIDEBAR_WIDTH_PX,
         viewportWidth: 1920,
       }),
     ).toBe(640);
@@ -59,11 +62,11 @@ describe("resolveInspectorPaneWidth", () => {
     };
     const expanded = resolveInspectorPaneWidth({
       ...args,
-      sidebarWidth: SIDEBAR_EXPANDED,
+      sidebarWidth: SIDEBAR_WIDTH_PX,
     });
     const collapsed = resolveInspectorPaneWidth({
       ...args,
-      sidebarWidth: SIDEBAR_COLLAPSED,
+      sidebarWidth: SIDEBAR_WIDTH_ICON_PX,
     });
     expect(collapsed).toBeGreaterThan(expanded);
   });
@@ -76,5 +79,35 @@ describe("resolveInspectorPaneWidth", () => {
         viewportWidth: 0,
       }),
     ).toBe(INSPECTOR_PANE_MIN_WIDTH);
+  });
+});
+
+describe("shouldForceSidebarCollapsed", () => {
+  test("collapses only while an open pane needs the expanded sidebar's space", () => {
+    expect(
+      shouldForceSidebarCollapsed({
+        inspectorPaneOpen: true,
+        viewportWidth:
+          SIDEBAR_WIDTH_PX +
+          INSPECTOR_CONTENT_MIN_WIDTH +
+          INSPECTOR_PANE_MIN_WIDTH -
+          1,
+      }),
+    ).toBe(true);
+    expect(
+      shouldForceSidebarCollapsed({
+        inspectorPaneOpen: true,
+        viewportWidth:
+          SIDEBAR_WIDTH_PX +
+          INSPECTOR_CONTENT_MIN_WIDTH +
+          INSPECTOR_PANE_MIN_WIDTH,
+      }),
+    ).toBe(false);
+    expect(
+      shouldForceSidebarCollapsed({
+        inspectorPaneOpen: false,
+        viewportWidth: 768,
+      }),
+    ).toBe(false);
   });
 });

@@ -83,6 +83,7 @@ import { loadAuthContext } from "@/routes/-auth-context";
 import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   resolveInspectorPaneWidth,
+  shouldForceSidebarCollapsed,
 } from "@/routes/-inspector-pane-width";
 
 const LazyInspectorPanel = lazy(
@@ -298,6 +299,14 @@ function ProtectedComponent() {
     shouldThrow: false,
   });
   const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const inspectorPaneOpen = useInspectorTabsStore(
+    (state) => state.tabs.length > 0 && !state.minimized,
+  );
+  const viewportWidth = useViewportWidth();
+  const forceSidebarCollapsed = shouldForceSidebarCollapsed({
+    inspectorPaneOpen,
+    viewportWidth,
+  });
 
   useExternalSyncEffect(
     () =>
@@ -331,7 +340,7 @@ function ProtectedComponent() {
 
   return (
     <AuthenticatedUserProvider user={analyticsUser}>
-      <SidebarProvider>
+      <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
         <ChatMentionProviders>
           <AIAvailabilityProvider>
             <ChatEditorProvider>
