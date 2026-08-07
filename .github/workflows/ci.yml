@@ -323,8 +323,20 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bash .ai/shared/scripts/sync-ai-skills.sh --check .
 
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # Must follow Setup Bun so the shims land ahead of the real binary. This
+      # job installs the whole workspace from the lockfile, so a malicious
+      # package anywhere in the graph is caught here and blocks the PR.
+      - name: Install Safe Chain
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: ./.github/actions/safe-chain
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'

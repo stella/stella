@@ -49,43 +49,14 @@ minimumReleaseAgeExcludes = [
   "@tanstack/ai-react",
   "@tanstack/ai-utils",
   "@tanstack/react-ai-devtools",
-  # TanStack Table v9 beta: opted in ahead of stable to adopt the
-  # tree-shakable feature/plugin model, granular re-render control,
-  # and table devtools. Remove once v9 ships stable and clears the
-  # 5-day quarantine on its own.
-  "@tanstack/react-table",
-  "@tanstack/table-core",
-  "@tanstack/react-table-devtools",
-  "@tanstack/table-devtools",
+  # TanStack Table 9 stable was adopted before its release-age window. These
+  # exact times are publication time plus the five-day quarantine.
+  "@tanstack/react-table", # quarantine-expires: 2026-08-09T06:29:16.564Z
+  "@tanstack/table-core", # quarantine-expires: 2026-08-09T06:25:20.965Z
+  "@tanstack/react-table-devtools", # quarantine-expires: 2026-08-09T06:22:11.882Z
+  "@tanstack/table-devtools", # quarantine-expires: 2026-08-09T06:22:12.725Z
   "@tanstack/openai-base",
-  # TypeScript 7 stable: opted in immediately for the native compiler
-  # migration. Remove once the release family clears quarantine.
-  "typescript",
-  "@typescript/native",
-  "@typescript/typescript-aix-ppc64",
-  "@typescript/typescript-darwin-arm64",
-  "@typescript/typescript-darwin-x64",
-  "@typescript/typescript-freebsd-arm64",
-  "@typescript/typescript-freebsd-x64",
-  "@typescript/typescript-linux-arm",
-  "@typescript/typescript-linux-arm64",
-  "@typescript/typescript-linux-loong64",
-  "@typescript/typescript-linux-mips64el",
-  "@typescript/typescript-linux-ppc64",
-  "@typescript/typescript-linux-riscv64",
-  "@typescript/typescript-linux-s390x",
-  "@typescript/typescript-linux-x64",
-  "@typescript/typescript-netbsd-arm64",
-  "@typescript/typescript-netbsd-x64",
-  "@typescript/typescript-openbsd-arm64",
-  "@typescript/typescript-openbsd-x64",
-  "@typescript/typescript-sunos-x64",
-  "@typescript/typescript-win32-arm64",
-  "@typescript/typescript-win32-x64",
-  # Security patches for dependency-audit findings. Publisher and repository
-  # ownership match the preceding releases; remove after quarantine expiry.
-  # better-result 3: opted in immediately for migration evaluation.
-  # 3.0.0 was published at 2026-08-01T21:35:30.036Z.
-  "drizzle-kit",
-  "drizzle-orm",
+  # First patched nanoid 3.x release for GHSA-2v37-7h3g-55p8. Remove after
+  # the normal release-age quarantine admits it.
+  "nanoid", # quarantine-expires: 2026-08-08T10:39:22.487Z
 ]
