@@ -1,5 +1,14 @@
 # @stll/anonymize-cli
 
+## 2.7.5
+
+### Patch Changes
+
+- Updated dependencies [[`c0b4bcf`](https://github.com/stella/anonymize/commit/c0b4bcf140f4edb15797d1928d727dc5ce3a2b3f)]:
+  - @stll/anonymize@2.7.5
+  - @stll/anonymize-pdf@2.7.5
+  - @stll/anonymize-docx@2.7.5
+
 ## 2.7.4
 
 ### Patch Changes

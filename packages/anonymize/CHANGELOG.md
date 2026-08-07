@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.5
+
+### Patch Changes
+
+- [#444](https://github.com/stella/anonymize/pull/444) [`c0b4bcf`](https://github.com/stella/anonymize/commit/c0b4bcf140f4edb15797d1928d727dc5ce3a2b3f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect checksum-valid ICAO TD1/TD3 machine-readable zones and payment card track records.
+
 ## 2.7.4
 
 ### Patch Changes

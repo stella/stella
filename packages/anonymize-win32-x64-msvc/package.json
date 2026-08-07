@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-win32-x64-msvc",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "Windows x64 MSVC native binding for @stll/anonymize",
   "keywords": [
     "anonymization",
