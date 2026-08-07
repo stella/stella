@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import {
@@ -43,8 +43,10 @@ const COMMON_HEADERS = {
  * Empty pages (non-existent numbers) return HTTP 200 with
  * no "ze dne" in the registry sign.
  *
- * Cursor format: "number:year" (e.g. "100:2025").
- * A null cursor starts from the current year.
+ * Cursor format: "number:year:phase" (e.g. "100:2025:historical").
+ * The phase segment is optional: a stored "number:year" predates it
+ * and is read as a historical descent. A null cursor starts the
+ * historical descent at the current year.
  */
 
 const BASE_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
@@ -65,6 +67,53 @@ const PROBE_CONCURRENCY = 5;
 
 /** First year of the Constitutional Court's existence. */
 const FIRST_YEAR = 1993;
+
+/**
+ * Which sweep the cursor is in.
+ *
+ * NALUS has no list endpoint, so decisions are discovered by probing case
+ * numbers. The first pass has to walk every year back to FIRST_YEAR; once
+ * it has, descending through those years again re-fetches the whole corpus
+ * to store nothing (rule 13). Holes the descent left behind belong to a
+ * reconciliation pass, not to the live cursor (rule 16).
+ */
+const SWEEP_PHASE = {
+  /** First pass: walking years backward toward FIRST_YEAR. */
+  HISTORICAL: "historical",
+  /** Descent done: only the recent window is swept, repeatedly. */
+  RECENT: "recent",
+} as const;
+
+type SweepPhase = (typeof SWEEP_PHASE)[keyof typeof SWEEP_PHASE];
+
+const SWEEP_PHASES: readonly SweepPhase[] = Object.values(SWEEP_PHASE);
+
+/**
+ * Years the steady-state sweep covers, counting the current one.
+ *
+ * A case number carries the year the case was filed, not the year it was
+ * decided, and the Court often rules a year or two after filing. A window
+ * of one year would therefore never see those decisions at all.
+ */
+const RECENT_WINDOW_YEARS = 3;
+
+/** Oldest year the steady-state sweep may reach. */
+export const recentWindowFloor = (currentYear: number): number =>
+  Math.max(FIRST_YEAR, currentYear - RECENT_WINDOW_YEARS + 1);
+
+/** Oldest year the given phase may descend to. */
+const sweepFloor = (phase: SweepPhase, currentYear: number): number => {
+  switch (phase) {
+    case SWEEP_PHASE.HISTORICAL:
+      return FIRST_YEAR;
+    case SWEEP_PHASE.RECENT:
+      return recentWindowFloor(currentYear);
+    default: {
+      const unhandled: never = phase;
+      return panic(`Unhandled cz-us sweep phase: ${String(unhandled)}`);
+    }
+  }
+};
 
 /** Zero-pad 2-digit year suffix for NALUS URLs. */
 const toYearSuffix = (year: number): string =>
@@ -330,7 +379,23 @@ const parseDecisionPage = (
   };
 };
 
-type CursorState = { number: number; year: number };
+type CursorState = { number: number; year: number; phase: SweepPhase };
+
+/**
+ * Read the phase segment. Cursors stored before it existed are bare
+ * "number:year" and are mid-descent by definition; an unrecognised
+ * segment is a corrupt cursor and must not silently restart a sweep.
+ */
+const parsePhase = (segment: string | undefined): SweepPhase => {
+  if (segment === undefined) {
+    return SWEEP_PHASE.HISTORICAL;
+  }
+  const phase = SWEEP_PHASES.find((candidate) => candidate === segment);
+  if (!phase) {
+    throw new TypeError("Invalid cz-us cursor phase");
+  }
+  return phase;
+};
 
 const parseCursor = (cursor: string): CursorState => {
   const parts = cursor.split(":");
@@ -344,10 +409,11 @@ const parseCursor = (cursor: string): CursorState => {
     throw new TypeError("Invalid cz-us cursor format");
   }
 
-  return { number, year };
+  return { number, year, phase: parsePhase(parts.at(2)) };
 };
 
-const makeCursor = (s: CursorState): string => `${s.number}:${s.year}`;
+const makeCursor = (s: CursorState): string =>
+  `${s.number}:${s.year}:${s.phase}`;
 
 export const czUsAdapter: SourceAdapter = {
   key: ADAPTER_KEYS.CZ_US,
@@ -355,10 +421,20 @@ export const czUsAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 100,
-  // Each fetchPage probes numbers in batches of PROBE_CONCURRENCY.
-  // ~50 hits + 30 miss gap = ~80 probes ÷ 5 = 16 batches × ~2s = 32s.
+  // Each fetchPage probes numbers in batches of PROBE_CONCURRENCY and
+  // then fetches one abstract per hit, serially:
+  // ~50 hits + 30 miss gap = ~80 probes ÷ 5 = 16 batches × ~2s = ~32s,
+  // plus ~50 abstract fetches × ~0.5s = ~25s, so ~55s per page.
+  //
+  // maxSyncPages × pageTimeoutMs (10 × 120s) is below maxCycleMs, so the
+  // page budget is reachable even when every page runs to its timeout.
+  // A cycle that cannot reach it always ends as TIMEOUT, and the runner
+  // only backs off (cycle-progress `cycleWasIdle`) on a COMPLETED cycle
+  // that inserted nothing, so an unreachable budget pins a caught-up
+  // adapter to the 5s cadence and starves the other adapters.
   pageTimeoutMs: 120_000,
-  maxSyncPages: 20,
+  maxSyncPages: 10,
+  maxCycleMs: 30 * 60 * 1000,
 
   /**
    * NALUS reports its total only on a search result page, and a search
@@ -449,7 +525,7 @@ export const czUsAdapter: SourceAdapter = {
 
         const state: CursorState = cursor
           ? parseCursor(cursor)
-          : { number: 1, year: currentYear };
+          : { number: 1, year: currentYear, phase: SWEEP_PHASE.HISTORICAL };
 
         const decisions: IngestionResult[] = [];
         let consecutiveMisses = 0;
@@ -584,13 +660,23 @@ export const czUsAdapter: SourceAdapter = {
             await Bun.sleep(backoffMs(0, 2000));
           }
 
-          // Too many consecutive numbers with no decisions:
-          // year exhausted, move to previous year (or park).
+          // Too many consecutive numbers with no decisions: year
+          // exhausted, move to the previous year within the phase's
+          // range. Below that range the sweep restarts at the top of
+          // the recent window; the historical descent hands over to the
+          // recent phase there and never walks the completed years again.
           if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
-            if (state.year <= FIRST_YEAR || state.year > currentYear) {
+            if (
+              state.year <= sweepFloor(state.phase, currentYear) ||
+              state.year > currentYear
+            ) {
               return {
                 decisions,
-                nextCursor: `1:${currentYear}`,
+                nextCursor: makeCursor({
+                  number: 1,
+                  year: currentYear,
+                  phase: SWEEP_PHASE.RECENT,
+                }),
               };
             }
             state.number = 1;

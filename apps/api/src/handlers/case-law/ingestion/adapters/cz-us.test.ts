@@ -2,7 +2,10 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import {
+  czUsAdapter,
+  recentWindowFloor,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Helpers ──────────────────────────────────────────────
@@ -208,10 +211,11 @@ describe("czUsAdapter.fetchPage", () => {
     expect(caseNumbers).toContain("III.ÚS 3/24");
   });
 
-  test("parks cursor at current year after reaching 1993", async () => {
+  test("hands the exhausted descent over to the recent sweep", async () => {
     // Only year 1993 (93): n=1 has a decision.
-    // After 30 misses at FIRST_YEAR, cursor should park at
-    // the current year (not null) to avoid re-scanning history.
+    // After 30 misses at FIRST_YEAR the descent is complete, so the
+    // cursor parks at the top of the recent window in the recent
+    // phase (never null, and never another lap over history).
     globalThis.fetch = asFetchMock(
       mock((input: string | URL | Request) => {
         const url = resolveUrl(input);
@@ -239,9 +243,115 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(result.value.decisions).toHaveLength(1);
     expect(result.value.decisions[0]?.caseNumber).toBe("I.ÚS 1/93");
-    // Must NOT be null — parks at current year
     const currentYear = new Date().getFullYear();
-    expect(result.value.nextCursor).toBe(`1:${currentYear}`);
+    expect(result.value.nextCursor).toBe(`1:${currentYear}:recent`);
+  });
+
+  test("the parked sweep stays inside the recent window", async () => {
+    // Every year back to 1993 holds decisions, so a sweep that fell
+    // back into the descent would be visible twice over: in the years
+    // it probes, and in the cursors it returns. Neither may leave the
+    // window, however many times the adapter is driven from the park.
+    const currentYear = new Date().getFullYear();
+    const floor = recentWindowFloor(currentYear);
+    const suffix = (year: number): string =>
+      String(year % 100).padStart(2, "0");
+    const windowSuffixes = new Set(
+      Array.from({ length: currentYear - floor + 1 }, (_, i) =>
+        suffix(floor + i),
+      ),
+    );
+
+    const probedSuffixes = new Set<string>();
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
+        const n = Number(match?.groups?.["n"]);
+        const yr = match?.groups?.["yr"];
+        if (yr === undefined) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        probedSuffixes.add(yr);
+        // Every year of the court's existence has decisions at n=1..2.
+        return Promise.resolve(
+          new Response(
+            n <= 2
+              ? makeTextPage(`I.ÚS ${n}/${yr}`, `1. 1. 20${yr}`)
+              : makeEmptyPage(),
+          ),
+        );
+      }),
+    );
+
+    let cursor = `1:${currentYear}:recent`;
+    let collected = 0;
+    for (let lap = 0; lap < 12; lap++) {
+      // oxlint-disable-next-line no-await-in-loop -- each lap resumes from the cursor the previous one returned
+      const result = await czUsAdapter.fetchPage(cursor, {});
+      expect(Result.isOk(result)).toBe(true);
+      if (!Result.isOk(result)) {
+        return;
+      }
+      collected += result.value.decisions.length;
+
+      const next = result.value.nextCursor;
+      expect(next).not.toBeNull();
+      const [, year, phase] = (next ?? "").split(":");
+      expect(phase).toBe("recent");
+      expect(Number(year)).toBeGreaterThanOrEqual(floor);
+      expect(Number(year)).toBeLessThanOrEqual(currentYear);
+      cursor = next ?? cursor;
+    }
+
+    expect(collected).toBeGreaterThan(0);
+    expect([...probedSuffixes].sort()).toEqual([...windowSuffixes].sort());
+  });
+
+  test("a legacy cursor without a phase resumes the historical descent", async () => {
+    // Stored cursors predating the phase segment are bare "number:year".
+    // 2001 holds two decisions, 2000 holds a full page of them: a
+    // descent below the recent window, which the recent phase never does.
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
+        const yr = match ? Number(match.groups?.["yr"]) : -1;
+        if (yr === 1 && n <= 2) {
+          return Promise.resolve(
+            new Response(makeTextPage(`I.ÚS ${n}/01`, "1. 1. 2001")),
+          );
+        }
+        if (yr === 0) {
+          return Promise.resolve(
+            new Response(makeTextPage(`II.ÚS ${n}/00`, "1. 1. 2000")),
+          );
+        }
+        return Promise.resolve(new Response(makeEmptyPage()));
+      }),
+    );
+
+    const result = await czUsAdapter.fetchPage("1:2001", {});
+
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      return;
+    }
+
+    const caseNumbers = result.value.decisions.map((d) => d.caseNumber);
+    expect(caseNumbers).toContain("I.ÚS 1/01");
+    expect(caseNumbers).toContain("II.ÚS 1/00");
+
+    const [, year, phase] = (result.value.nextCursor ?? "").split(":");
+    expect(year).toBe("2000");
+    expect(phase).toBe("historical");
   });
 
   test("respects PAGE_SIZE limit", async () => {
@@ -267,7 +377,7 @@ describe("czUsAdapter.fetchPage", () => {
     }
 
     expect(result.value.decisions).toHaveLength(50);
-    expect(result.value.nextCursor).toBe("51:2025");
+    expect(result.value.nextCursor).toBe("51:2025:historical");
   });
 
   test("abstract failure does not drop the decision", async () => {
