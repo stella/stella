@@ -60,6 +60,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterActivityRow } from "@/components/matter-activity-row";
 import { MatterIcon } from "@/components/matter-icon";
 import { SearchDialog } from "@/components/search-dialog";
 import {
@@ -1316,9 +1317,6 @@ const MatterItem = ({
   );
 };
 
-const ACTIVITY_ROW_CLASS =
-  "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 text-xs outline-hidden focus-visible:ring-2";
-
 type MatterActivityListProps = {
   activeOrganizationId: string;
   id: string;
@@ -1406,16 +1404,16 @@ const MatterActivityList = ({
     return (
       <SidebarMenuSub className="border-0" id={id}>
         <SidebarMenuSubItem>
-          <Button
-            className={ACTIVITY_ROW_CLASS}
-            onClick={() => {
-              detached(refetch(), "MatterActivityList");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {t("common.tryAgain")}
-          </Button>
+          <MatterActivityRow>
+            <button
+              onClick={() => {
+                detached(refetch(), "MatterActivityList");
+              }}
+              type="button"
+            >
+              {t("common.tryAgain")}
+            </button>
+          </MatterActivityRow>
         </SidebarMenuSubItem>
       </SidebarMenuSub>
     );
@@ -1470,45 +1468,43 @@ const MatterActivityList = ({
         return (
           <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
             {item.type === "thread" ? (
-              <Link
-                activeProps={{ "data-active": true }}
-                className={ACTIVITY_ROW_CLASS}
-                params={{ threadId: item.id, workspaceId }}
-                to="/chat/workspaces/$workspaceId/$threadId"
-              >
-                {content}
-              </Link>
+              <MatterActivityRow>
+                <Link
+                  activeProps={{ "data-active": true }}
+                  params={{ threadId: item.id, workspaceId }}
+                  to="/chat/workspaces/$workspaceId/$threadId"
+                >
+                  {content}
+                </Link>
+              </MatterActivityRow>
             ) : (
-              <Button
-                className={ACTIVITY_ROW_CLASS}
-                onClick={() => {
-                  detached(openEntity(item), "MatterActivityList");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {content}
-              </Button>
+              <MatterActivityRow>
+                <button
+                  onClick={() => {
+                    detached(openEntity(item), "MatterActivityList");
+                  }}
+                  type="button"
+                >
+                  {content}
+                </button>
+              </MatterActivityRow>
             )}
           </SidebarMenuSubItem>
         );
       })}
       {hasNextPage ? (
         <SidebarMenuSubItem>
-          <Button
-            className={cn(
-              ACTIVITY_ROW_CLASS,
-              "text-muted-foreground justify-start",
-            )}
-            disabled={isFetchingNextPage}
-            onClick={() => {
-              detached(fetchNextPage(), "MatterActivityList");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
-          </Button>
+          <MatterActivityRow className="text-muted-foreground justify-start">
+            <button
+              disabled={isFetchingNextPage}
+              onClick={() => {
+                detached(fetchNextPage(), "MatterActivityList");
+              }}
+              type="button"
+            >
+              {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
+            </button>
+          </MatterActivityRow>
         </SidebarMenuSubItem>
       ) : null}
     </SidebarMenuSub>
