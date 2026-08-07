@@ -27,18 +27,18 @@ export const referenceRows = collectLeaves(generatedRouteMap).map((node) => {
     };
   }
 
-  const tool = registryByName.get(node.spec.toolName);
-  return {
-    access: node.spec.destructive
-      ? "destructive"
-      : tool?.annotations?.readOnlyHint
-        ? "read"
-        : "write",
-    command: node.spec.commandPath,
-    description: tool?.description ?? `Invoke ${node.spec.toolName}.`,
-    name: node.spec.toolName,
-    title: tool?.annotations?.title ?? tool?.name ?? node.spec.toolName,
-  };
+const tool = registryByName.get(node.spec.toolName);
+return {
+access: node.spec.destructive
+? "destructive"
+: tool?.annotations?.readOnlyHint
+? "read"
+: "write",
+command: node.spec.commandPath,
+description: tool?.description ?? `Invoke ${node.spec.toolName}.`,
+name: node.spec.toolName,
+title: tool?.annotations?.title ?? tool?.name ?? node.spec.toolName,
+};
 });
 
 This page is generated from the committed CLI route tree and tool-registry
@@ -71,9 +71,7 @@ confirmation based on their target.
         <td>
           <code>stella {tool.command.join(" ")}</code>
         </td>
-        <td>
-          {tool.access}
-        </td>
+        <td>{tool.access}</td>
         <td>{tool.description}</td>
       </tr>
     ))}

@@ -1,0 +1,34 @@
+---
+import { ogCardPath } from "../lib/og-card-path";
+
+const { dir, entry, head, isFallback } = Astro.locals.starlightRoute;
+// The marketing site is multilingual, so Starlight creates locale fallback
+// routes for these English-only docs. Do not advertise those fallback copies
+// as translated hreflang alternatives.
+const documentationHead = head.filter(
+  ({ tag, attrs }) => !(tag === "link" && attrs?.rel === "alternate"),
+);
+const renderedTitle =
+  head.find(({ tag }) => tag === "title")?.content ?? entry.data.title;
+const socialImagePath = ogCardPath({
+  pathname: Astro.url.pathname,
+  title: renderedTitle,
+  direction: dir,
+});
+const socialImageUrl = new URL(
+  socialImagePath,
+  Astro.site ?? Astro.url.origin,
+);
+---
+
+{
+  documentationHead.map(({ tag: Tag, attrs, content }) => (
+    <Tag {...attrs} set:html={content} />
+  ))
+}
+{isFallback && <meta name="robots" content="noindex, follow" />}
+<meta property="og:image" content={socialImageUrl.href} />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={renderedTitle} />

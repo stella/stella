@@ -62,6 +62,9 @@ export default defineConfig({
     starlight({
       title: "stella docs",
       disable404Route: true,
+      components: {
+        Head: "./src/components/docs-head.astro",
+      },
       social: [
         {
           icon: "github",
@@ -91,8 +94,20 @@ export default defineConfig({
     sitemap({
       changefreq: "weekly",
       // The /changelog/<release> stubs are noindex link-preview redirect pages;
-      // keep them (and nothing else under /changelog/…) out of the sitemap.
-      filter: (page) => !/\/changelog\/.+/u.test(new URL(page).pathname),
+      // Starlight also emits fallback copies of the English-only docs under
+      // every configured locale. Keep both classes of noindex page out of the
+      // sitemap rather than advertising untranslated fallback URLs.
+      filter: (page) => {
+        const pathname = new URL(page).pathname;
+        return (
+          !/\/changelog\/.+/u.test(pathname) &&
+          !UI_LOCALES.some(
+            (tag) =>
+              tag !== "en" &&
+              pathname.startsWith(`/${tag.toLowerCase()}/docs/`),
+          )
+        );
+      },
       // Emit localized URLs + hreflang alternates in the sitemap. Keys are the
       // URL path segments (default locale at root keyed "en"); values are the
       // hreflang codes.
