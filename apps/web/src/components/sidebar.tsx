@@ -26,13 +26,18 @@ import {
 import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  SIDEBAR_WIDTH_ICON_PX,
+  SIDEBAR_WIDTH_PX,
+} from "@/components/sidebar-sizing";
 import { Slot } from "@/lib/slot";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const SIDEBAR_LS_NAME = "sidebar_state";
-const SIDEBAR_WIDTH = "16rem";
+const REM_PX = 16;
+const SIDEBAR_WIDTH = `${SIDEBAR_WIDTH_PX / REM_PX}rem`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = `${SIDEBAR_WIDTH_ICON_PX / REM_PX}rem`;
 const DEFAULT_SIDEBAR_OPEN = true;
 
 type SidebarContextProps = {
@@ -56,8 +61,24 @@ function useSidebar() {
   return context;
 }
 
+/**
+ * Inline size the app sidebar takes out of the layout row, in CSS pixels.
+ * Panes docked to the opposite edge need this to know how much room is
+ * actually left for the content column. Mobile reports 0: there the
+ * sidebar is an overlay sheet and occupies no layout width.
+ */
+function useSidebarInlineSize() {
+  const { isMobile, state } = useSidebar();
+
+  if (isMobile) {
+    return 0;
+  }
+  return state === "expanded" ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX;
+}
+
 function SidebarProvider({
   defaultOpen,
+  forceCollapsed = false,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -66,6 +87,7 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
+  forceCollapsed?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -88,9 +110,11 @@ function SidebarProvider({
       ? DEFAULT_SIDEBAR_OPEN
       : storedState === "expanded";
   });
-  const open = openProp ?? _open;
+  const requestedOpen = openProp ?? _open;
+  const open = requestedOpen && !forceCollapsed;
   const setOpen = (value: boolean | ((v: boolean) => boolean)) => {
-    const openState = typeof value === "function" ? value(open) : value;
+    const openState =
+      typeof value === "function" ? value(requestedOpen) : value;
     if (setOpenProp) {
       setOpenProp(openState);
     } else {
@@ -722,4 +746,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  useSidebarInlineSize,
 };

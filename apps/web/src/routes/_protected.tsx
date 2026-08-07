@@ -32,6 +32,7 @@ import {
 } from "@stll/ui/components/sheet";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
+import { useViewportWidth } from "@stll/ui/hooks/use-viewport-width";
 import { cn } from "@stll/ui/lib/utils";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
@@ -55,6 +56,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
+  useSidebarInlineSize,
 } from "@/components/sidebar";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
@@ -78,6 +80,11 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
+import {
+  INSPECTOR_PANE_DEFAULT_WIDTH,
+  resolveInspectorPaneWidth,
+  shouldForceSidebarCollapsed,
+} from "@/routes/-inspector-pane-width";
 
 const LazyInspectorPanel = lazy(
   async () =>
@@ -292,6 +299,14 @@ function ProtectedComponent() {
     shouldThrow: false,
   });
   const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const inspectorPaneOpen = useInspectorTabsStore(
+    (state) => state.tabs.length > 0 && !state.minimized,
+  );
+  const viewportWidth = useViewportWidth();
+  const forceSidebarCollapsed = shouldForceSidebarCollapsed({
+    inspectorPaneOpen,
+    viewportWidth,
+  });
 
   useExternalSyncEffect(
     () =>
@@ -325,7 +340,7 @@ function ProtectedComponent() {
 
   return (
     <AuthenticatedUserProvider user={analyticsUser}>
-      <SidebarProvider>
+      <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
         <ChatMentionProviders>
           <AIAvailabilityProvider>
             <ChatEditorProvider>
@@ -547,9 +562,6 @@ function ProtectedContent() {
   );
 }
 
-const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
-const INSPECTOR_PANE_MIN_WIDTH = 320;
-const INSPECTOR_PANE_MAX_WIDTH = 800;
 // Matches SIDE_RAIL_WIDTH (`w-12` = 48px) so the wrapper width
 // equals the rail's actual rendered width. Earlier this was 40,
 // leaving the rail 8px wider than its wrapper and pushing the
@@ -646,7 +658,20 @@ function WorkspaceInspectorSidePanel() {
     routeWorkspaceId,
     tabs,
   });
-  const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
+  // The width the user dragged to. What actually renders is this clamped
+  // against the room left beside the sidebar, so shrinking the window or
+  // expanding the sidebar takes space back from the pane instead of
+  // crushing the content column.
+  const [desiredWidth, setDesiredWidth] = useState(
+    INSPECTOR_PANE_DEFAULT_WIDTH,
+  );
+  const sidebarWidth = useSidebarInlineSize();
+  const viewportWidth = useViewportWidth();
+  const width = resolveInspectorPaneWidth({
+    desiredWidth,
+    sidebarWidth,
+    viewportWidth,
+  });
   const isDragging = useRef(false);
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not
   // `lang`) is what flips document.documentElement.dir, so depending on it
@@ -668,13 +693,7 @@ function WorkspaceInspectorSidePanel() {
     // distance from the left). Without the RTL branch the delta is
     // inverted and the drag oscillates.
     const isRtl = document.documentElement.dir === "rtl";
-    const newWidth = isRtl ? e.clientX : window.innerWidth - e.clientX;
-    setWidth(
-      Math.min(
-        INSPECTOR_PANE_MAX_WIDTH,
-        Math.max(INSPECTOR_PANE_MIN_WIDTH, newWidth),
-      ),
-    );
+    setDesiredWidth(isRtl ? e.clientX : window.innerWidth - e.clientX);
   };
 
   const handlePointerUp = () => {

@@ -432,9 +432,12 @@ function ChatIndex() {
         />
         <ThreadsSheet />
       </ChromeHeaderActions>
-      <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-16">
+      {/* The landing folds against its own width, not the viewport's: the
+          inspector pane can leave this column far narrower than a viewport
+          breakpoint would suggest. */}
+      <div className="@container flex flex-1 flex-col items-center overflow-y-auto px-4 pb-16">
         <div className="flex min-h-[22rem] w-full max-w-2xl shrink-0 flex-col items-center justify-center gap-8">
-          <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex w-full flex-col items-center gap-4 text-center">
             <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
               <StellaMark className="size-7" />
             </div>
@@ -498,7 +501,7 @@ function ChatIndex() {
             />
           </div>
         </div>
-        <div className="grid min-h-52 w-full gap-8 md:grid-cols-3">
+        <div className="grid min-h-52 w-full gap-8 @2xl:grid-cols-3">
           <LandingSection
             heading={
               <Link
