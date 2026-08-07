@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.4.3
+
+### Patch Changes
+
+- [#1777](https://github.com/stella/stella/pull/1777) [`55c409f`](https://github.com/stella/stella/commit/55c409f6c273e6e8cfdcfb2af4dd6e5ae5792df5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep attached-file document uploads separate from the interactive MCP App picker.
+
 ## 0.4.2
 
 ### Patch Changes
