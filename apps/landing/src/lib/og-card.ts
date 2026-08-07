@@ -12,17 +12,13 @@ import {
   type CardDirection,
   resolveLandingPath,
 } from "./og-card-path";
+import { fitHeadline } from "./og-card-text";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
 const MARGIN_X = 84;
-const TEXT_MAX_WIDTH = 1000;
 /** Baseline of the last headline line; earlier lines stack upward from it. */
 const HEADLINE_BASELINE = 450;
-const HEADLINE_MAX_LINES = 3;
-const HEADLINE_MAX_FONT_SIZE = 104;
-const HEADLINE_MIN_FONT_SIZE = 60;
-const HEADLINE_FONT_STEP = 8;
 
 /**
  * Colour count for the palette encoding below. resvg emits 24-bit PNG, which
@@ -64,7 +60,7 @@ const cardSvg = ({
   // right edge, so the wordmark and the headline both anchor there.
   const textX = rtl ? WIDTH - MARGIN_X : MARGIN_X;
   const anchor = rtl ? "end" : "start";
-  const { fontSize, lines } = fitLines(headline);
+  const { fontSize, lines } = fitHeadline(headline);
   // Arabic sets taller than Latin at the same size: its ascenders, descenders
   // and marks collide at the tight leading the display face is drawn for.
   const lineHeight = Math.round(fontSize * (rtl ? 1.2 : 0.9));
@@ -109,106 +105,6 @@ const cardSvg = ({
 };
 
 const WORDMARK_WIDTH = 236;
-
-type FittedHeadline = { fontSize: number; lines: string[] };
-
-/** Largest size at which the headline fits the box without being cut short. */
-const fitLines = (headline: string): FittedHeadline => {
-  for (
-    let fontSize = HEADLINE_MAX_FONT_SIZE;
-    fontSize > HEADLINE_MIN_FONT_SIZE;
-    fontSize -= HEADLINE_FONT_STEP
-  ) {
-    const lines = wrapText(headline, fontSize);
-    if (!lines.some((line) => line.endsWith(ELLIPSIS))) {
-      return { fontSize, lines };
-    }
-  }
-  return {
-    fontSize: HEADLINE_MIN_FONT_SIZE,
-    lines: wrapText(headline, HEADLINE_MIN_FONT_SIZE),
-  };
-};
-
-const ELLIPSIS = "…";
-
-const wrapText = (text: string, fontSize: number): string[] => {
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of text.trim().split(/\s+/u)) {
-    const candidate = current === "" ? word : `${current} ${word}`;
-    if (measureText(candidate, fontSize) <= TEXT_MAX_WIDTH) {
-      current = candidate;
-      continue;
-    }
-    if (current !== "") {
-      lines.push(current);
-    }
-    current = word;
-    if (lines.length === HEADLINE_MAX_LINES) {
-      return truncateLastLine(lines, fontSize);
-    }
-  }
-
-  if (current !== "") {
-    lines.push(current);
-  }
-  return lines.length <= HEADLINE_MAX_LINES
-    ? lines
-    : truncateLastLine(lines.slice(0, HEADLINE_MAX_LINES), fontSize);
-};
-
-const truncateLastLine = (lines: string[], fontSize: number): string[] => {
-  let last = lines.at(-1) ?? "";
-  while (
-    last.length > 0 &&
-    measureText(`${last}${ELLIPSIS}`, fontSize) > TEXT_MAX_WIDTH
-  ) {
-    last = last.slice(0, -1).trimEnd();
-  }
-  return [...lines.slice(0, -1), `${last}${ELLIPSIS}`];
-};
-
-/**
- * Advance-width estimate for Cabinet Grotesk, which resvg does not expose
- * before rendering. Deliberately generous: it ignores the negative tracking
- * the card applies, so a line that measures as fitting always does.
- */
-const measureText = (text: string, fontSize: number): number => {
-  let width = 0;
-  for (const character of text) {
-    width += fontSize * characterWidthRatio(character);
-  }
-  return width;
-};
-
-const characterWidthRatio = (character: string): number => {
-  if (character === " ") {
-    return 0.28;
-  }
-  // Arabic joins, so a run is far narrower than its character count suggests;
-  // the marks above and below add no advance at all.
-  if (/\p{Mn}/u.test(character)) {
-    return 0;
-  }
-  if (/\p{Script=Arabic}/u.test(character)) {
-    return 0.42;
-  }
-  if (/[,.:;|!]/u.test(character)) {
-    return 0.22;
-  }
-  if (/[ijlI]/u.test(character)) {
-    return 0.28;
-  }
-  if (/[mwMW]/u.test(character)) {
-    return 0.78;
-  }
-  if (/\p{Lu}/u.test(character)) {
-    return 0.62;
-  }
-  return 0.52;
-};
 
 let background: string | undefined;
 

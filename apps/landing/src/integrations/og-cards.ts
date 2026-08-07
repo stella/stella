@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { renderOgCard } from "../lib/og-card";
 import {
+  type CardDirection,
   isGeneratedOgCard,
   OG_CARD_DIR,
   ogCardHeadline,
@@ -36,9 +37,12 @@ export const ogCards = (): AstroIntegration => ({
           continue;
         }
         const claimed = cards.get(request.cardPath);
-        if (claimed !== undefined && claimed.headline !== request.headline) {
+        // Compared whole: two pages may share a card only if they would draw
+        // the same one. Matching on the headline alone would let a difference
+        // in direction through, and the second page's card would silently win.
+        if (claimed !== undefined && !sameCard(claimed, request)) {
           panic(
-            `two pages flatten onto the card ${request.cardPath}: "${claimed.headline}" and "${request.headline}"`,
+            `two pages flatten onto the card ${request.cardPath}: ${describe(claimed)} and ${describe(request)}`,
           );
         }
         cards.set(request.cardPath, request);
@@ -66,7 +70,7 @@ const RENDER_LANES = 8;
 type CardRequest = {
   cardPath: string;
   headline: string;
-  direction: "ltr" | "rtl";
+  direction: CardDirection;
 };
 
 /** What a built page asks for, or nothing if its card is a static asset. */
@@ -93,6 +97,12 @@ const cardRequest = async (
     ),
   };
 };
+
+const sameCard = (a: CardRequest, b: CardRequest): boolean =>
+  a.headline === b.headline && a.direction === b.direction;
+
+const describe = ({ direction, headline }: CardRequest): string =>
+  `"${headline}" (${direction})`;
 
 /** One render lane: takes the next card off the shared queue until it is empty. */
 const drain = async (dir: URL, pending: CardRequest[]): Promise<void> => {
@@ -121,18 +131,25 @@ const required = (html: string, pattern: RegExp, what: string): string =>
   pattern.exec(html)?.[1] ?? panic(`${what} not found in the built page`);
 
 /** Astro escapes these five when interpolating a title into markup. */
-const ENTITIES: Record<string, string> = {
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&#39;": "'",
-};
+const ENTITIES = new Map([
+  ["&amp;", "&"],
+  ["&lt;", "<"],
+  ["&gt;", ">"],
+  ["&quot;", '"'],
+  ["&#39;", "'"],
+]);
+
+/**
+ * Derived from the map rather than written beside it: a pattern and a table
+ * that have to list the same five strings are a pair that drifts, and an
+ * entity matched but unmapped would be substituted with nothing.
+ */
+const ENTITY_PATTERN = new RegExp([...ENTITIES.keys()].join("|"), "gu");
 
 const decodeEntities = (value: string): string =>
   value.replaceAll(
-    /&(?:amp|lt|gt|quot|#39);/gu,
-    (entity) => ENTITIES[entity] ?? entity,
+    ENTITY_PATTERN,
+    (entity) => ENTITIES.get(entity) ?? panic(`unmapped entity ${entity}`),
   );
 
 /**
