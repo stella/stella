@@ -15,8 +15,11 @@ import {
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 const tempDirs: string[] = [];
+const hasOlderPositiveRevision = (minimumRevision: number): boolean =>
+  minimumRevision > 1;
 
 type CompatibilityOverrides = {
+  readonly additionalContractFields?: Readonly<Record<string, unknown>>;
   readonly capabilities?: Readonly<Record<string, number>>;
   readonly contract?: boolean;
   readonly legacy?: boolean;
@@ -44,6 +47,7 @@ const startCompatibilityServer = (overrides: CompatibilityOverrides = {}) =>
           ? {}
           : {
               stella_contract: {
+                ...overrides.additionalContractFields,
                 protocol: overrides.protocol ?? CLI_SUPPORTED_API_PROTOCOLS[0],
                 revision: overrides.revision ?? CLI_MINIMUM_SERVER_REVISION,
                 capabilities:
@@ -124,6 +128,28 @@ describe("deployed API compatibility", () => {
     }
   });
 
+  test("accepts additive fields from a newer contract revision", async () => {
+    const server = startCompatibilityServer({
+      additionalContractFields: {
+        future_addition: { description: "ignored by older CLIs" },
+      },
+      revision: CLI_MINIMUM_SERVER_REVISION + 1,
+    });
+    try {
+      const result = await checkServerCompatibility(server.url.origin);
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        expect(result.value).toMatchObject({
+          compatibilitySource: "contract",
+          serverRevision: CLI_MINIMUM_SERVER_REVISION + 1,
+        });
+      }
+    } finally {
+      await server.stop();
+    }
+  });
+
   test("falls back to the legacy package-version band for older servers", async () => {
     const server = startCompatibilityServer({ contract: false });
     try {
@@ -132,7 +158,7 @@ describe("deployed API compatibility", () => {
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
         expect(result.value.compatibilitySource).toBe("legacy");
-        expect(result.value.serverRevision).toBeUndefined();
+        expect(result.value).not.toHaveProperty("serverRevision");
       }
     } finally {
       await server.stop();
@@ -155,44 +181,67 @@ describe("deployed API compatibility", () => {
     }
   });
 
-  test("rejects an unsupported protocol or malformed server revision", async () => {
+  test("rejects an unsupported protocol", async () => {
     const unsupportedProtocol = startCompatibilityServer({ protocol: 999 });
-    const staleRevision = startCompatibilityServer({ revision: 0 });
     try {
       const protocolResult = await checkServerCompatibility(
         unsupportedProtocol.url.origin,
       );
-      const revisionResult = await checkServerCompatibility(
-        staleRevision.url.origin,
-      );
 
       expect(Result.isError(protocolResult)).toBe(true);
-      expect(Result.isError(revisionResult)).toBe(true);
       if (Result.isError(protocolResult)) {
         expect(protocolResult.error.message).toContain("API protocol 999");
       }
-      if (Result.isError(revisionResult)) {
-        // Revision zero is rejected by the metadata schema before negotiation.
-        expect(revisionResult.error.message).toContain("absent or malformed");
-      }
     } finally {
-      await Promise.all([unsupportedProtocol.stop(), staleRevision.stop()]);
+      await unsupportedProtocol.stop();
     }
   });
 
-  test("rejects missing required capabilities", async () => {
-    const [requiredName, requiredVersion] = Object.entries(
-      CLI_REQUIRED_CAPABILITIES,
-    )[0] ?? ["missing", 1];
+  test("rejects a non-positive server revision as malformed", async () => {
+    const server = startCompatibilityServer({ revision: 0 });
+    try {
+      const result = await checkServerCompatibility(server.url.origin);
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("absent or malformed");
+      }
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test.if(hasOlderPositiveRevision(CLI_MINIMUM_SERVER_REVISION))(
+    "rejects a schema-valid revision below the CLI minimum",
+    async () => {
+      const server = startCompatibilityServer({
+        revision: CLI_MINIMUM_SERVER_REVISION - 1,
+      });
+      try {
+        const result = await checkServerCompatibility(server.url.origin);
+
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error.message).toContain("is too old");
+        }
+      } finally {
+        await server.stop();
+      }
+    },
+  );
+
+  test("rejects every missing required capability", async () => {
     const server = startCompatibilityServer({ capabilities: {} });
     try {
       const result = await checkServerCompatibility(server.url.origin);
 
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
-        expect(result.error.message).toContain(
-          `${requiredName}>=${requiredVersion}`,
-        );
+        for (const [name, version] of Object.entries(
+          CLI_REQUIRED_CAPABILITIES,
+        )) {
+          expect(result.error.message).toContain(`${name}>=${version}`);
+        }
       }
     } finally {
       await server.stop();

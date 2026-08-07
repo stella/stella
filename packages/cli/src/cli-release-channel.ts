@@ -29,7 +29,7 @@ export const fetchLatestCliVersion = async ({
     catch: (cause) => cause,
     try: async () => {
       const response = await fetcher(NPM_LATEST_URL, {
-        headers: { Accept: "application/vnd.npm.install-v1+json" },
+        headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) {

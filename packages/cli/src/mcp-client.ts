@@ -15,6 +15,7 @@ import {
 } from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
+import { CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
@@ -256,9 +257,6 @@ export const listTools = async ({
   }
   return Result.ok({ tools: result.value.value.tools });
 };
-
-/** Header carrying the server-owned minimum CLI policy. */
-const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 
 /** The raw `tools/list` body plus server policy and scope-evidence headers. */
 export type RawToolsList = {

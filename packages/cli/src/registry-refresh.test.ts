@@ -476,6 +476,17 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     }
   });
 
+  test("an unsupported version still warns when npm is unreachable", async () => {
+    const { outcome } = await refreshWith({
+      currentVersion: "0.1.0",
+      cliMinimum: "0.2.0",
+    });
+    expect(outcome.status).toBe("refreshed");
+    if (outcome.status === "refreshed") {
+      expect(outcome.nudge).toContain("no longer supported");
+    }
+  });
+
   test("anti-nag: the version already nudged is not nudged again within TTL", async () => {
     const { outcome } = await refreshWith({
       currentVersion: "0.1.0",

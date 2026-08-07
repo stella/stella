@@ -22,7 +22,7 @@ const compatibilityMetadataSchema = v.looseObject({
   resource: v.pipe(v.string(), v.url()),
   scopes_supported: v.array(v.string()),
   stella_contract: v.optional(
-    v.strictObject({
+    v.looseObject({
       protocol: positiveIntegerSchema,
       revision: positiveIntegerSchema,
       capabilities: v.record(v.string(), positiveIntegerSchema),
@@ -40,26 +40,11 @@ const compatibilityMetadataSchema = v.looseObject({
   ),
 });
 
-type StellaContract = {
-  readonly protocol: number;
-  readonly revision: number;
-  readonly capabilities: Readonly<Record<string, number>>;
-};
-
-type LegacyCompatibility = {
-  readonly api_contract_version: number;
-  readonly cli_version: {
-    readonly minimum: string;
-    readonly maximum: string;
-  };
-};
-
-type CompatibilityMetadata = {
-  readonly resource: string;
-  readonly scopes_supported: readonly string[];
-  readonly stella_contract?: StellaContract | undefined;
-  readonly stella_compatibility?: LegacyCompatibility | undefined;
-};
+type CompatibilityMetadata = v.InferOutput<typeof compatibilityMetadataSchema>;
+type StellaContract = NonNullable<CompatibilityMetadata["stella_contract"]>;
+type LegacyCompatibility = NonNullable<
+  CompatibilityMetadata["stella_compatibility"]
+>;
 
 type SemverIdentifier =
   | { readonly type: "numeric"; readonly value: number }
@@ -72,13 +57,18 @@ type ParsedSemver = {
   readonly prerelease: readonly SemverIdentifier[];
 };
 
-type NegotiatedContract = {
-  readonly apiProtocolVersion: number;
-  readonly compatibilitySource: "contract" | "legacy";
-  readonly legacyCliMaximumVersion?: string | undefined;
-  readonly legacyCliMinimumVersion?: string | undefined;
-  readonly serverRevision?: number | undefined;
-};
+type NegotiatedContract =
+  | {
+      readonly apiProtocolVersion: number;
+      readonly compatibilitySource: "contract";
+      readonly serverRevision: number;
+    }
+  | {
+      readonly apiProtocolVersion: number;
+      readonly compatibilitySource: "legacy";
+      readonly legacyCliMaximumVersion: string;
+      readonly legacyCliMinimumVersion: string;
+    };
 
 export type CompatibilityReport = NegotiatedContract & {
   readonly cliVersion: string;
