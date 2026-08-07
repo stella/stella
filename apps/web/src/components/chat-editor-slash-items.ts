@@ -44,7 +44,7 @@ type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
   /**
-   * Reserved `/new` and `/model` commands only have submit handling on the chat
+   * The reserved `/new` command only has submit handling on the chat
    * composers, so they stay off by default to keep them out of other editors
    * (workspace property prompts, template studio) that reuse this builder.
    */

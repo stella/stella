@@ -1,3 +1,5 @@
+import { REASONING_EFFORTS } from "@stll/ai-catalog";
+
 import {
   CHAT_TURN_CANCELLATION_REASONS,
   CHAT_TURN_FAILURE_CODES,
@@ -117,6 +119,14 @@ export const chatThreads = p.pgTable(
      */
     chatModel: p.text("chat_model"),
     /**
+     * Explicit effort for a manual `chatModel` selection. Null keeps Stella's
+     * adapter default and is always required while `chatModel` is null (Auto).
+     * The database migration adds the matching value/pair CHECK.
+     */
+    chatReasoningEffort: p.text("chat_reasoning_effort", {
+      enum: REASONING_EFFORTS,
+    }),
+    /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
      * a gap (see RECAP_STALENESS_THRESHOLD_MS). Derived from the
@@ -149,6 +159,10 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    p.check(
+      "chat_threads_reasoning_effort_selection_check",
+      sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'))`,
+    ),
     ...chatThreadPolicies(),
   ],
 );

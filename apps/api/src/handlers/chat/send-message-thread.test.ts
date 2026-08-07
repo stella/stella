@@ -29,6 +29,7 @@ describe("send-message thread loading", () => {
     const insert = mock(() => ({ values: async () => undefined }));
     const findFirst = mock(async () => ({
       chatModel: null,
+      chatReasoningEffort: null,
       contextMatterIds: [],
       dataWorkspaceIds: [otherWorkspaceId],
       id: threadId,
@@ -119,6 +120,7 @@ describe("send-message thread loading", () => {
             }
             return {
               chatModel: null,
+              chatReasoningEffort: null,
               contextMatterIds: [],
               dataWorkspaceIds: [workspaceId],
               id: threadId,

@@ -16,7 +16,7 @@ import type {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
@@ -156,6 +156,8 @@ type StreamChatProps = {
    * through to the org/instance chat-role default.
    */
   devModelId?: string | undefined;
+  /** Explicit effort for a validated manual model selection. */
+  reasoningEffort?: ReasoningEffort | undefined;
   latestMessageId: string;
   messages: ChatMessage[];
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
@@ -226,6 +228,7 @@ export const streamChat = async ({
   orgAIConfig,
   promptCacheKey,
   promptCachingEnabled,
+  reasoningEffort,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
   safeDb,
@@ -280,6 +283,7 @@ export const streamChat = async ({
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    reasoningEffort,
     role: "chat",
   });
 

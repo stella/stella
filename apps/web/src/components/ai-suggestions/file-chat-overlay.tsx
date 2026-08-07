@@ -144,7 +144,6 @@ import {
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -1430,9 +1429,10 @@ const FileChatOverlayInner = ({
   // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
   // menu keeps the same functionality as the main chat's.
   const modelSelection = useChatModelSelection({
-    onPersisted: (model) => {
+    onPersisted: ({ model, reasoningEffort }) => {
       applyChatModelChange({
         model,
+        reasoningEffort,
         queryClient,
         queryKey: threadQueryOptions.queryKey,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -2258,6 +2258,7 @@ const FileChatOverlayInner = ({
             activeOrganizationId,
             threadRef,
             selectedModel: data.model,
+            selectedReasoningEffort: data.reasoningEffort,
             selectModel: modelSelection.selectModel,
           }}
           skillsOrganizationId={activeOrganizationId}
@@ -2297,12 +2298,6 @@ const FileChatOverlayInner = ({
               editorController.setContent("");
               return;
             }
-            if (reservedCommand?.id === "model") {
-              editorController.setContent("");
-              useModelSelectorStore.getState().open();
-              return;
-            }
-
             detached(
               handlePromptSubmit({ prompt, files }),
               "FileChatOverlayInner",
@@ -2319,6 +2314,7 @@ const FileChatOverlayInner = ({
                 activeOrganizationId,
                 threadRef,
                 selectedModel: data.model,
+                selectedReasoningEffort: data.reasoningEffort,
                 selectModel: modelSelection.selectModel,
               }}
               onNewThread={

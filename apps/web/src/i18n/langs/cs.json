@@ -503,19 +503,22 @@
       },
       "loadError": "Nepodařilo se načíst entity"
     },
-    "modelMode": {
-      "deepThinking": "Hloubkové myšlení",
-      "deepThinkingDescription": "Složitá argumentace a analýza",
-      "exactModels": "Konkrétní model",
-      "fastDescription": "Rychlé každodenní dotazy",
-      "select": "Vybrat režim odpovědi",
-      "standard": "Standardní",
-      "standardDescription": "Nejlepší pro většinu úkolů"
-    },
     "modelSelector": {
-      "defaultLabel": "Výchozí (role chatu)",
-      "description": "Vyberte model AI používaný pro aktivní relaci chatu.",
-      "title": "Vybrat model chatu"
+      "autoDescription": "Automaticky vybere model a úroveň uvažování.",
+      "autoLabel": "Automaticky",
+      "effortLabel": "Úroveň uvažování",
+      "effortValues": {
+        "high": "Vysoká",
+        "low": "Nízká",
+        "max": "Maximální",
+        "medium": "Střední",
+        "minimal": "Minimální",
+        "none": "Vypnuto",
+        "providerDefault": "Výchozí",
+        "xhigh": "Velmi vysoká"
+      },
+      "title": "Vybrat model chatu",
+      "viaProvider": "přes {provider}"
     },
     "moveToMain": "Přesunout do hlavního zobrazení",
     "moveToSide": "Přesunout do bočního panelu",

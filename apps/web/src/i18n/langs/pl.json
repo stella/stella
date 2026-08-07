@@ -503,19 +503,22 @@
       },
       "loadError": "Nie udało się załadować elementów"
     },
-    "modelMode": {
-      "deepThinking": "Głębokie myślenie",
-      "deepThinkingDescription": "Złożone rozumowanie i analiza",
-      "exactModels": "Konkretny model",
-      "fastDescription": "Szybkie, codzienne pytania",
-      "select": "Wybierz tryb odpowiedzi",
-      "standard": "Standardowy",
-      "standardDescription": "Najlepszy do większości zadań"
-    },
     "modelSelector": {
-      "defaultLabel": "Domyślny (rola czatu)",
-      "description": "Wybierz model AI używany dla aktywnej sesji czatu.",
-      "title": "Wybierz model czatu"
+      "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
+      "autoLabel": "Automatycznie",
+      "effortLabel": "Poziom rozumowania",
+      "effortValues": {
+        "high": "Wysoki",
+        "low": "Niski",
+        "max": "Maksymalny",
+        "medium": "Średni",
+        "minimal": "Minimalny",
+        "none": "Wyłączony",
+        "providerDefault": "Domyślny",
+        "xhigh": "Bardzo wysoki"
+      },
+      "title": "Wybierz model czatu",
+      "viaProvider": "przez {provider}"
     },
     "moveToMain": "Przenieś do widoku głównego",
     "moveToSide": "Przenieś do panelu bocznego",

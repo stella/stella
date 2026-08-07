@@ -503,19 +503,22 @@
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
-    "modelMode": {
-      "deepThinking": "Süvamõtlemine",
-      "deepThinkingDescription": "Keerukas arutlus ja analüüs",
-      "exactModels": "Konkreetne mudel",
-      "fastDescription": "Kiired igapäevased küsimused",
-      "select": "Vali vastamisrežiim",
-      "standard": "Standardne",
-      "standardDescription": "Parim enamiku ülesannete jaoks"
-    },
     "modelSelector": {
-      "defaultLabel": "Vaikimisi (vestluse roll)",
-      "description": "Valige aktiivse vestlusseansi jaoks kasutatav tehisintellekti mudel.",
-      "title": "Vali vestlusmudel"
+      "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
+      "autoLabel": "Automaatne",
+      "effortLabel": "Arutlustase",
+      "effortValues": {
+        "high": "Kõrge",
+        "low": "Madal",
+        "max": "Maksimaalne",
+        "medium": "Keskmine",
+        "minimal": "Minimaalne",
+        "none": "Väljas",
+        "providerDefault": "Vaikimisi",
+        "xhigh": "Väga kõrge"
+      },
+      "title": "Vali vestlusmudel",
+      "viaProvider": "teenuse {provider} kaudu"
     },
     "moveToMain": "Vii põhivaatesse",
     "moveToSide": "Vii külgpaneeli",

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
@@ -99,6 +101,7 @@ type ChatThreadRecord = {
   dataWorkspaceIds: SafeId<"workspace">[];
   webSearchEnabled: boolean;
   chatModel: string | null;
+  chatReasoningEffort: ReasoningEffort | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -177,6 +180,7 @@ const loadThreadAttempt = async ({
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
       chatModel: string | null;
+      chatReasoningEffort: ReasoningEffort | null;
       rollbackToken: string | null;
     };
 
@@ -196,6 +200,7 @@ const loadThreadAttempt = async ({
             dataWorkspaceIds: true,
             webSearchEnabled: true,
             chatModel: true,
+            chatReasoningEffort: true,
             rollbackToken: true,
           },
         }),
@@ -228,6 +233,7 @@ const loadThreadAttempt = async ({
           dataWorkspaceIds: existing.dataWorkspaceIds,
           webSearchEnabled: existing.webSearchEnabled,
           chatModel: existing.chatModel,
+          chatReasoningEffort: existing.chatReasoningEffort,
           messages: [],
         },
       });
@@ -441,6 +447,7 @@ const loadThreadAttempt = async ({
         dataWorkspaceIds: initialThreadDataWorkspaceIds,
         webSearchEnabled: false,
         chatModel: null,
+        chatReasoningEffort: null,
         messages: [],
       },
     });

@@ -506,19 +506,22 @@ type Messages = {
       };
       "loadError": "Failed to load entities";
     };
-    "modelMode": {
-      "deepThinking": "Deep Thinking";
-      "deepThinkingDescription": "Complex reasoning and analysis";
-      "exactModels": "Exact model";
-      "fastDescription": "Quick, everyday questions";
-      "select": "Select response mode";
-      "standard": "Standard";
-      "standardDescription": "Best for most tasks";
-    };
     "modelSelector": {
-      "defaultLabel": "Default (chat role)";
-      "description": "Choose the AI model used for the active chat session.";
-      "title": "Select Chat Model";
+      "autoDescription": "Automatically chooses the model and effort.";
+      "autoLabel": "Auto";
+      "effortLabel": "Reasoning effort";
+      "effortValues": {
+        "high": "High";
+        "low": "Low";
+        "max": "Maximum";
+        "medium": "Medium";
+        "minimal": "Minimal";
+        "none": "Off";
+        "providerDefault": "Default";
+        "xhigh": "Extra high";
+      };
+      "title": "Select chat model";
+      "viaProvider": "via {provider}";
     };
     "moveToMain": "Move to main view";
     "moveToSide": "Move to side panel";

@@ -556,7 +556,7 @@ export const useChatEditor = ({
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   /**
-   * Surface the reserved `/new` and `/model` commands in the slash menu. Only
+   * Surface the reserved `/new` command in the slash menu. Only
    * the chat surfaces that intercept them on submit may opt in; other consumers
    * of this hook (e.g. Template Studio) must leave it off or the commands would
    * be sent to the model as literal text.

@@ -25,13 +25,28 @@ import type { RoleModelSelections } from "@/components/ai-config-role-models.log
 describe("BYOK provider and model configuration", () => {
   test("creates role defaults from the first configured provider", () => {
     expect(createDefaultRoleModels(["anthropic", "openai"])).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
-      fast: {
-        provider: "anthropic",
-        modelId: "claude-haiku-4-5-20251001",
+      chat: { provider: "anthropic", modelId: "claude-opus-5" },
+      fast: { provider: "anthropic", modelId: "claude-opus-5" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
+    });
+  });
+
+  test("uses the provider-specific recommendations for Google and OpenRouter", () => {
+    expect(createDefaultRoleModels(["google"])).toEqual({
+      chat: { provider: "google", modelId: "gemini-3.6-flash" },
+      fast: { provider: "google", modelId: "gemini-3.6-flash" },
+      reasoning: { provider: "google", modelId: "gemini-3.6-flash" },
+      pdf: { provider: "google", modelId: "gemini-3.6-flash" },
+    });
+    expect(createDefaultRoleModels(["openrouter"])).toEqual({
+      chat: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
+      fast: { provider: "openrouter", modelId: "openai/gpt-5.6-luna" },
+      reasoning: {
+        provider: "openrouter",
+        modelId: "openai/gpt-5.6-terra",
       },
-      reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
-      pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      pdf: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
     });
   });
 
@@ -171,10 +186,10 @@ describe("BYOK provider and model configuration", () => {
         roleModels,
       }),
     ).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      chat: { provider: "anthropic", modelId: "claude-opus-5" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
-      pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
     });
   });
 
@@ -258,8 +273,8 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual({
       chat: { provider: "anthropic", modelId: "claude-opus-4-5" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
-      pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
     });
   });
 
@@ -378,7 +393,7 @@ describe("BYOK provider and model configuration", () => {
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",
-      modelId: "claude-sonnet-4-6",
+      modelId: "claude-opus-5",
     });
     expect(rows.at(1)?.value).toBe("openai::gpt-5.4-nano");
     expect(rows.at(0)?.modelOptions).toContainEqual({

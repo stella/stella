@@ -503,19 +503,22 @@
       },
       "loadError": "Entitäten konnten nicht geladen werden"
     },
-    "modelMode": {
-      "deepThinking": "Tiefes Denken",
-      "deepThinkingDescription": "Komplexe Argumentation und Analyse",
-      "exactModels": "Konkretes Modell",
-      "fastDescription": "Schnelle, alltägliche Fragen",
-      "select": "Antwortmodus auswählen",
-      "standard": "Normal",
-      "standardDescription": "Am besten für die meisten Aufgaben"
-    },
     "modelSelector": {
-      "defaultLabel": "Standard (Chat-Rolle)",
-      "description": "Wählen Sie das KI-Modell aus, das für die aktive Chat-Sitzung verwendet werden soll.",
-      "title": "Chat-Modell auswählen"
+      "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
+      "autoLabel": "Automatisch",
+      "effortLabel": "Denkaufwand",
+      "effortValues": {
+        "high": "Hoch",
+        "low": "Niedrig",
+        "max": "Maximal",
+        "medium": "Mittel",
+        "minimal": "Sehr gering",
+        "none": "Aus",
+        "providerDefault": "Standard",
+        "xhigh": "Sehr hoch"
+      },
+      "title": "Chat-Modell auswählen",
+      "viaProvider": "über {provider}"
     },
     "moveToMain": "In Hauptansicht verschieben",
     "moveToSide": "In Seitenleiste verschieben",

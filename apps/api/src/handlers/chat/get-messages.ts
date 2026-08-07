@@ -140,6 +140,7 @@ const getMessages = createSafeRootHandler(
             webSearchEnabled: true,
             usedAnonymization: true,
             chatModel: true,
+            chatReasoningEffort: true,
             updatedAt: true,
           },
         });
@@ -252,6 +253,7 @@ const getMessages = createSafeRootHandler(
           webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
           model: null,
+          reasoningEffort: null,
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -318,6 +320,7 @@ const getMessages = createSafeRootHandler(
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
+      reasoningEffort: thread.chatReasoningEffort,
       context,
     });
   },

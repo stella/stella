@@ -503,19 +503,22 @@
       },
       "loadError": "Falha ao carregar entidades"
     },
-    "modelMode": {
-      "deepThinking": "Raciocínio profundo",
-      "deepThinkingDescription": "Raciocínio e análise complexos",
-      "exactModels": "Modelo específico",
-      "fastDescription": "Perguntas rápidas do dia a dia",
-      "select": "Selecionar modo de resposta",
-      "standard": "Padrão",
-      "standardDescription": "Ideal para a maioria das tarefas"
-    },
     "modelSelector": {
-      "defaultLabel": "Padrão (função de chat)",
-      "description": "Escolha o modelo de IA usado para a sessão de chat ativa.",
-      "title": "Selecionar modelo de chat"
+      "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
+      "autoLabel": "Automático",
+      "effortLabel": "Nível de raciocínio",
+      "effortValues": {
+        "high": "Alto",
+        "low": "Baixo",
+        "max": "Máximo",
+        "medium": "Médio",
+        "minimal": "Mínimo",
+        "none": "Desativado",
+        "providerDefault": "Padrão",
+        "xhigh": "Muito alto"
+      },
+      "title": "Selecionar modelo de chat",
+      "viaProvider": "pelo provedor {provider}"
     },
     "moveToMain": "Mover para a visualização principal",
     "moveToSide": "Mover para o painel lateral",

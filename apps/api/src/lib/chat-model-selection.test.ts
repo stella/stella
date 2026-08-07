@@ -22,11 +22,13 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 const {
   decodeChatModelSelection,
   encodeChatModelSelection,
-  getChatModeModelValue,
+  getChatModelReasoningEfforts,
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
+  isChatModelReasoningEffortAvailable,
   isChatModelSelectionAvailable,
   resolveEffectiveChatModelId,
+  resolveEffectiveChatModelSelection,
 } = await import("@/api/lib/chat-model-selection");
 
 const orgConfigForProviders = (providers: BYOKProvider[]): OrgAIConfig => ({
@@ -170,6 +172,23 @@ describe("getConfiguredChatModelOptions", () => {
       [],
     );
   });
+
+  test("every row has friendly display metadata and only adapter-supported efforts", () => {
+    const options = getConfiguredChatModelOptions(
+      orgConfigForProviders([...TANSTACK_AI_PROVIDERS]),
+    );
+    for (const option of options) {
+      expect(option.displayName.length).toBeGreaterThan(0);
+      expect(option.iconProvider.length).toBeGreaterThan(0);
+      expect(option.displayName).not.toContain("/");
+      expect(option.reasoningEfforts).toEqual(
+        getChatModelReasoningEfforts(option),
+      );
+      if (option.provider === "bedrock" || option.provider === "mistral") {
+        expect(option.reasoningEfforts).toBeNull();
+      }
+    }
+  });
 });
 
 describe("getDefaultChatModelValue", () => {
@@ -190,46 +209,6 @@ describe("getDefaultChatModelValue", () => {
       getDefaultChatModelValue({
         orgAIConfig: orgConfigForProviders([]),
         organizationId: null,
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("getChatModeModelValue", () => {
-  test("resolves configured fast and reasoning role models", () => {
-    const orgAIConfig = orgConfigForProviders(["anthropic"]);
-    orgAIConfig.overrideModels.fast = {
-      provider: "anthropic",
-      modelId: "claude-haiku-4-5-20251001",
-    };
-    orgAIConfig.overrideModels.reasoning = {
-      provider: "anthropic",
-      modelId: "claude-opus-4-7",
-    };
-
-    expect(
-      getChatModeModelValue({
-        orgAIConfig,
-        organizationId: null,
-        role: "fast",
-      }),
-    ).toBe("anthropic::claude-haiku-4-5-20251001");
-    expect(
-      getChatModeModelValue({
-        orgAIConfig,
-        organizationId: null,
-        role: "reasoning",
-      }),
-    ).toBe("anthropic::claude-opus-4-7");
-  });
-
-  test("omits a mode whose configured model is outside the chat catalog", () => {
-    const orgAIConfig = orgConfigForProviders(["anthropic"]);
-    expect(
-      getChatModeModelValue({
-        orgAIConfig,
-        organizationId: null,
-        role: "fast",
       }),
     ).toBeNull();
   });
@@ -306,5 +285,64 @@ describe("resolveEffectiveChatModelId", () => {
         orgAIConfig,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("resolveEffectiveChatModelSelection", () => {
+  const orgAIConfig = orgConfigForProviders(["openai"]);
+  const model = encodeChatModelSelection({
+    provider: "openai",
+    modelId: "gpt-5.5",
+  });
+
+  test("keeps an available manual model and effort together", () => {
+    expect(
+      resolveEffectiveChatModelSelection({
+        devModelId: undefined,
+        threadChatModel: model,
+        threadReasoningEffort: "high",
+        orgAIConfig,
+      }),
+    ).toEqual({ modelId: model, reasoningEffort: "high" });
+    expect(
+      isChatModelReasoningEffortAvailable({
+        provider: "openai",
+        modelId: "gpt-5.5",
+        reasoningEffort: "high",
+      }),
+    ).toBe(true);
+  });
+
+  test("drops stale effort without dropping an available model", () => {
+    expect(
+      resolveEffectiveChatModelSelection({
+        devModelId: undefined,
+        threadChatModel: model,
+        threadReasoningEffort: "max",
+        orgAIConfig,
+      }),
+    ).toEqual({ modelId: model, reasoningEffort: undefined });
+  });
+
+  test("Auto and dev overrides never inherit a thread effort", () => {
+    expect(
+      resolveEffectiveChatModelSelection({
+        devModelId: undefined,
+        threadChatModel: null,
+        threadReasoningEffort: null,
+        orgAIConfig,
+      }),
+    ).toEqual({ modelId: undefined, reasoningEffort: undefined });
+    expect(
+      resolveEffectiveChatModelSelection({
+        devModelId: "openai::gpt-5.4",
+        threadChatModel: model,
+        threadReasoningEffort: "high",
+        orgAIConfig,
+      }),
+    ).toEqual({
+      modelId: "openai::gpt-5.4",
+      reasoningEffort: undefined,
+    });
   });
 });

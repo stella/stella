@@ -503,19 +503,22 @@
       },
       "loadError": "Nepodarilo sa načítať entity"
     },
-    "modelMode": {
-      "deepThinking": "Hĺbkové myslenie",
-      "deepThinkingDescription": "Zložité uvažovanie a analýza",
-      "exactModels": "Konkrétny model",
-      "fastDescription": "Rýchle každodenné otázky",
-      "select": "Vybrať režim odpovede",
-      "standard": "Štandardný",
-      "standardDescription": "Najlepší pre väčšinu úloh"
-    },
     "modelSelector": {
-      "defaultLabel": "Predvolené (rola chatu)",
-      "description": "Vyberte model AI používaný pre aktívnu reláciu chatu.",
-      "title": "Vybrať model chatu"
+      "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
+      "autoLabel": "Automaticky",
+      "effortLabel": "Úroveň uvažovania",
+      "effortValues": {
+        "high": "Vysoké",
+        "low": "Nízke",
+        "max": "Maximálne",
+        "medium": "Stredné",
+        "minimal": "Minimálne",
+        "none": "Vypnuté",
+        "providerDefault": "Predvolené",
+        "xhigh": "Veľmi vysoké"
+      },
+      "title": "Vybrať model chatu",
+      "viaProvider": "cez {provider}"
     },
     "moveToMain": "Presunúť do hlavného zobrazenia",
     "moveToSide": "Presunúť do bočného panela",

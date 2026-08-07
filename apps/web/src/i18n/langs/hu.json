@@ -503,19 +503,22 @@
       },
       "loadError": "Az entitások betöltése sikertelen"
     },
-    "modelMode": {
-      "deepThinking": "Mély gondolkodás",
-      "deepThinkingDescription": "Összetett érvelés és elemzés",
-      "exactModels": "Konkrét modell",
-      "fastDescription": "Gyors, mindennapi kérdések",
-      "select": "Válaszmód kiválasztása",
-      "standard": "Általános",
-      "standardDescription": "A legtöbb feladathoz ideális"
-    },
     "modelSelector": {
-      "defaultLabel": "Alapértelmezett (csevegési szerepkör)",
-      "description": "Válassza ki az aktív csevegési munkamenethez használt AI-modellt.",
-      "title": "Csevegési modell kiválasztása"
+      "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
+      "autoLabel": "Automatikus",
+      "effortLabel": "Gondolkodási szint",
+      "effortValues": {
+        "high": "Magas",
+        "low": "Alacsony",
+        "max": "Maximális",
+        "medium": "Közepes",
+        "minimal": "Minimális",
+        "none": "Kikapcsolva",
+        "providerDefault": "Alapértelmezett",
+        "xhigh": "Nagyon magas"
+      },
+      "title": "Csevegési modell kiválasztása",
+      "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
     },
     "moveToMain": "Áthelyezés a fő nézetbe",
     "moveToSide": "Áthelyezés az oldalsó panelbe",

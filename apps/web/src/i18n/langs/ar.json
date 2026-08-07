@@ -503,19 +503,22 @@
       },
       "loadError": "تعذّر تحميل الكيانات"
     },
-    "modelMode": {
-      "deepThinking": "تفكير عميق",
-      "deepThinkingDescription": "استدلال وتحليل معقدان",
-      "exactModels": "نموذج محدد",
-      "fastDescription": "أسئلة يومية سريعة",
-      "select": "اختيار وضع الإجابة",
-      "standard": "قياسي",
-      "standardDescription": "الأفضل لمعظم المهام"
-    },
     "modelSelector": {
-      "defaultLabel": "الافتراضي (دور المحادثة)",
-      "description": "اختر نموذج الذكاء الاصطناعي المُستخدَم لجلسة المحادثة النشطة.",
-      "title": "اختر نموذج المحادثة"
+      "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
+      "autoLabel": "تلقائي",
+      "effortLabel": "مستوى الاستدلال",
+      "effortValues": {
+        "high": "مرتفع",
+        "low": "منخفض",
+        "max": "أقصى",
+        "medium": "متوسط",
+        "minimal": "أدنى",
+        "none": "متوقف",
+        "providerDefault": "الافتراضي",
+        "xhigh": "مرتفع جدًا"
+      },
+      "title": "اختر نموذج المحادثة",
+      "viaProvider": "عبر {provider}"
     },
     "moveToMain": "النقل إلى العرض الرئيسي",
     "moveToSide": "النقل إلى اللوحة الجانبية",

@@ -8,7 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import type { ChatComposerDockData } from "@/components/chat/chat-composer-dock-controls";
 import { resolveChatComposerDockControls } from "@/components/chat/chat-composer-dock-controls";
 import { ChatContextMeter } from "@/components/chat/chat-context-meter";
-import { ChatModelModeSelector } from "@/components/chat/chat-model-mode-selector";
+import { ChatModelSelector } from "@/components/chat/chat-model-selector";
 import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
@@ -104,7 +104,7 @@ export const ChatComposerDock = ({
               }
             />
           )}
-          {models && <ChatModelModeSelector models={models} />}
+          {models && <ChatModelSelector models={models} />}
           {/* The meter renders on every surface: it shows an empty 0% ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}

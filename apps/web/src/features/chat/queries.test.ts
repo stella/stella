@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
@@ -210,18 +211,31 @@ describe("applyChatModelChange", () => {
           ? { scope: "global", threadId }
           : { scope: "workspace", threadId, workspaceId: "ws-1" },
       ),
-      queryFn: async () => ({ model: null as string | null, other: "keep" }),
+      queryFn: async () => ({
+        model: null as string | null,
+        reasoningEffort: null as ReasoningEffort | null,
+        other: "keep",
+      }),
     }).queryKey;
 
   test("updates the cache entry's model and invalidates the thread across scopes", () => {
     const queryClient = new QueryClient();
     const globalKey = buildKey("global");
     const workspaceKey = buildKey("workspace");
-    queryClient.setQueryData(globalKey, { model: null, other: "keep" });
-    queryClient.setQueryData(workspaceKey, { model: null, other: "keep" });
+    queryClient.setQueryData(globalKey, {
+      model: null,
+      reasoningEffort: null,
+      other: "keep",
+    });
+    queryClient.setQueryData(workspaceKey, {
+      model: null,
+      reasoningEffort: null,
+      other: "keep",
+    });
 
     applyChatModelChange({
       model: "anthropic::claude-x",
+      reasoningEffort: "high",
       queryClient,
       queryKey: globalKey,
       threadId,
@@ -230,6 +244,7 @@ describe("applyChatModelChange", () => {
     const updated: unknown = queryClient.getQueryData(globalKey);
     expect(updated).toEqual({
       model: "anthropic::claude-x",
+      reasoningEffort: "high",
       other: "keep",
     });
     // Every cached entry for the thread is invalidated, not just the one
@@ -245,6 +260,7 @@ describe("applyChatModelChange", () => {
 
     applyChatModelChange({
       model: "anthropic::claude-x",
+      reasoningEffort: "high",
       queryClient,
       queryKey: key,
       threadId,
@@ -1492,6 +1508,7 @@ describe("acquireChatRuntime reconcile", () => {
     webSearchEnabled: false,
     context: null,
     model: null,
+    reasoningEffort: null,
     ...overrides,
   });
 

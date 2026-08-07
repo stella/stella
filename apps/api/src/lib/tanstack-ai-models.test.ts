@@ -420,6 +420,21 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter).toBeInstanceOf(StellaOpenRouterTextAdapter);
   });
 
+  test("keeps the Google provider default for a manual model without an effort", () => {
+    const originalKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
+    env.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
+    try {
+      const model = getTanStackTextModelById("google::gemini-3.6-flash", null, {
+        role: "chat",
+        organizationId: null,
+      });
+
+      expect(looseOptions(model.modelOptions).thinkingConfig).toBeUndefined();
+    } finally {
+      env.GOOGLE_GENERATIVE_AI_API_KEY = originalKey;
+    }
+  });
+
   test("resolves Mistral BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("mistral");
 
@@ -684,6 +699,52 @@ describe("tanStackModelOptionsForRole", () => {
       reasoning: { effort: "high" },
       temperature: 0,
     });
+  });
+
+  test("manual chat effort reaches each supported provider adapter", () => {
+    expect(
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "chat",
+          provider: "google",
+          modelId: "gemini-3.6-flash",
+          organizationId: null,
+          reasoningEffort: "medium",
+        }),
+      ),
+    ).toMatchObject({ thinkingConfig: { thinkingLevel: "MEDIUM" } });
+    expect(
+      tanStackModelOptionsForRole({
+        role: "chat",
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+        organizationId: null,
+        reasoningEffort: "high",
+      }),
+    ).toMatchObject({
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+    });
+    expect(
+      tanStackModelOptionsForRole({
+        role: "chat",
+        provider: "openai",
+        modelId: "gpt-5.5",
+        organizationId: null,
+        reasoningEffort: "xhigh",
+      }),
+    ).toMatchObject({ reasoning: { effort: "xhigh" } });
+    expect(
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "chat",
+          provider: "openrouter",
+          modelId: "openai/gpt-5.5",
+          organizationId: null,
+          reasoningEffort: "low",
+        }),
+      ),
+    ).toMatchObject({ reasoning: { effort: "low" } });
   });
 
   test("never emits a reasoning control outside the model's declared capability", () => {
