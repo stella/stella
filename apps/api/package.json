@@ -45,6 +45,7 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
+    "@firecrawl/anydoc": "0.1.2",
     "@google/genai": "^2.13.0",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "^0.7.0",

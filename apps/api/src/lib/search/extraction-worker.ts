@@ -1,12 +1,13 @@
 /**
- * Sandboxed extraction worker.
+ * Isolated extraction worker.
  *
  * Runs as a standalone Bun subprocess. Receives the MIME type
  * as a CLI argument and raw file bytes on stdin; writes
  * extracted plain text to stdout.
  *
- * If the parser crashes or hangs, the parent process kills this
- * subprocess via timeout; the main API server is unaffected.
+ * Process isolation keeps parser crashes and hangs out of the API
+ * event loop. This is not an OS security sandbox: parsers retain the
+ * worker process's permissions. The parent enforces a hard timeout.
  *
  * Usage:  bun run extraction-worker.ts <mimeType>
  *   stdin  → raw file bytes
@@ -15,6 +16,7 @@
  *   exit 0 = success, exit 1 = extraction error
  */
 
+import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { PDF } from "@libpdf/core";
 import { load } from "cheerio";
 
@@ -30,26 +32,41 @@ import {
   type EmailAttachment,
 } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import {
+  canExtractMimeType,
+  isDirectTextMimeType,
+  isOfficeDocumentMimeType,
+  normalizeMimeType,
+} from "@/api/lib/search/extractable-mime-types";
+import {
+  DOC_MIME_TYPE,
+  DOCM_MIME_TYPE,
+  DOCX_MIME_TYPE,
+  EPUB_MIME_TYPE,
+  ODP_MIME_TYPE,
+  ODS_MIME_TYPE,
+  ODT_MIME_TYPE,
+  PDF_MIME_TYPE,
+  PPSX_MIME_TYPE,
+  PPT_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  RTF_MIME_TYPE,
+  XLS_MIME_TYPE,
+  XLSB_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
 const EMAIL_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 const EMAIL_MAX_NESTING_DEPTH = 2;
 
-const DIRECT_TEXT_MIME_TYPES = new Set<string>([
-  "application/json",
-  "text/calendar",
-  "text/csv",
-  "text/html",
-  "text/markdown",
-  "text/plain",
-  "text/tab-separated-values",
-]);
-
 const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   csv: "text/csv",
+  doc: DOC_MIME_TYPE,
+  docm: DOCM_MIME_TYPE,
   docx: DOCX_MIME_TYPE,
   eml: EML_MIME_TYPE,
+  epub: EPUB_MIME_TYPE,
   htm: "text/html",
   html: "text/html",
   ics: "text/calendar",
@@ -57,9 +74,19 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   markdown: "text/markdown",
   md: "text/markdown",
   msg: MSG_MIME_TYPE,
+  odp: ODP_MIME_TYPE,
+  ods: ODS_MIME_TYPE,
+  odt: ODT_MIME_TYPE,
   pdf: PDF_MIME_TYPE,
+  ppsx: PPSX_MIME_TYPE,
+  ppt: PPT_MIME_TYPE,
+  pptx: PPTX_MIME_TYPE,
+  rtf: RTF_MIME_TYPE,
   text: "text/plain",
   txt: "text/plain",
+  xls: XLS_MIME_TYPE,
+  xlsb: XLSB_MIME_TYPE,
+  xlsx: XLSX_MIME_TYPE,
 };
 
 const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
@@ -82,6 +109,21 @@ const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
 
   return parts.join("\n\n");
 };
+
+/**
+ * Office formats go through anydoc, which parses each format into a
+ * shared document model and serializes Markdown from it.
+ *
+ * The MIME type is not forwarded as a format hint: it originates
+ * from the upload and is routinely generic or wrong, while anydoc
+ * detects the format from content markers in the bytes themselves.
+ * Detection failure surfaces as a throw, which the caller reports
+ * as an extraction error.
+ */
+const extractOfficeDocumentMarkdown = async (
+  fileBytes: Uint8Array,
+): Promise<string> =>
+  normalizeExtractedText(await toMarkdownBytes(Buffer.from(fileBytes)));
 
 const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
   const text = new TextDecoder().decode(fileBytes);
@@ -220,6 +262,8 @@ const extract = async (
       .join("\n");
     const notes = reviewer.getNotesAsText();
     text = joinDocxContentWithReservedNotes({ content, maxChars, notes });
+  } else if (isOfficeDocumentMimeType(normalizedMimeType)) {
+    text = await extractOfficeDocumentMarkdown(fileBytes);
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
@@ -253,25 +297,9 @@ const resolveAttachmentMimeType = (
   return ATTACHMENT_EXTENSION_MIME_TYPES[extension] ?? null;
 };
 
-const canExtractMimeType = (mimeType: string): boolean => {
-  const normalized = normalizeMimeType(mimeType);
-  return (
-    normalized === PDF_MIME_TYPE ||
-    normalized === DOCX_MIME_TYPE ||
-    isDirectTextMimeType(normalized) ||
-    normalized in EMAIL_MIME_TYPES
-  );
-};
-
-const isDirectTextMimeType = (mimeType: string): boolean =>
-  DIRECT_TEXT_MIME_TYPES.has(normalizeMimeType(mimeType));
-
 const isSkippedInlineImage = (attachment: EmailAttachment): boolean =>
   attachment.contentId !== null &&
   normalizeMimeType(attachment.mimeType ?? "").startsWith("image/");
-
-const normalizeMimeType = (mimeType: string): string =>
-  mimeType.split(";").at(0)?.trim().toLowerCase() ?? "";
 
 const normalizeExtractedText = (value: string): string =>
   value

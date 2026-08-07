@@ -31,7 +31,6 @@
   "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": 25,
   "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts::useWorkspaceChatMentionRegistration": 4,
   "apps/web/src/features/guides/use-guide-runner.ts::useGuideRunner": 0,
-  "apps/web/src/features/guides/use-onboarding-progress.ts::useOnboardingProgress": 1,
   "apps/web/src/hooks/use-effect.ts::useExternalSyncEffect": 0,
   "apps/web/src/hooks/use-effect.ts::useMountEffect": 0,
   "apps/web/src/lib/pdf/pdf-viewport.tsx::PDFViewerContent": 2,

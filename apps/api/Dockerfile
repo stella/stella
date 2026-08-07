@@ -79,6 +79,11 @@ RUN bun build \
     --target bun \
     --outfile /app/apps/api/src/db/migrate.js \
     apps/api/src/db/migrate.ts
+# The extraction worker builds with `--outdir`, not `--outfile`: it pulls in a
+# native addon, which the bundler emits as a sidecar `.node` asset next to the
+# entry point and references relatively. `--outfile` refuses to write more than
+# one output. The whole directory is copied into the runtime image below, so the
+# sidecar travels with the bundle.
 RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
@@ -86,7 +91,7 @@ RUN mkdir -p /app/runtime-workers && \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --target bun \
-      --outfile /app/runtime-workers/extraction-worker.js \
+      --outdir /app/runtime-workers \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --target bun \
