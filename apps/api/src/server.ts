@@ -658,19 +658,6 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
-  // Scheduled jobs run here rather than in a process of their own. A separate
-  // deployment unit has to be remembered, and when it is forgotten nothing
-  // says so: the jobs simply never run, which is indistinguishable from having
-  // no work to do. Hosting the loop in a service that must exist for the
-  // product to work at all removes that failure mode instead of monitoring it.
-  // Each job is leased individually (`locked_by`/`locked_until`), so running
-  // this in every replica is safe.
-  await ensureDefaultSchedulerJobs();
-  const schedulerLoop = startSchedulerLoop();
-  logger.info("scheduler.started", {
-    "scheduler.runner_id": schedulerLoop.runnerId,
-  });
-
   api.listen({
     port: getApiPort(),
     // Longer than the load balancer's 60 s idle timeout (Bun defaults to
@@ -681,6 +668,24 @@ const startServer = async (): Promise<void> => {
     // server-side log line. The SSE keep-alive heartbeat (20 s) stays
     // well inside this window.
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
+  });
+
+  // Scheduled jobs run here rather than in a process of their own. A separate
+  // deployment unit has to be remembered, and when it is forgotten nothing
+  // says so: the jobs simply never run, which is indistinguishable from having
+  // no work to do. Hosting the loop in a service that must exist for the
+  // product to work at all removes that failure mode instead of monitoring it.
+  // Each job is leased individually (`locked_by`/`locked_until`), so running
+  // this in every replica is safe.
+  //
+  // Deliberately after `listen`: readiness must not wait on background-job
+  // setup. Registration touches the database and the first tick can reach
+  // Redis and object storage, none of which the health endpoint depends on,
+  // and a boot that blocks on them reports unhealthy for the whole outage.
+  await ensureDefaultSchedulerJobs();
+  const schedulerLoop = startSchedulerLoop();
+  logger.info("scheduler.started", {
+    "scheduler.runner_id": schedulerLoop.runnerId,
   });
 
   // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ

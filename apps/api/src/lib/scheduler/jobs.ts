@@ -222,15 +222,16 @@ export const DECLARED_SCHEDULER_JOBS = [
  * registered" loud instead of silent.
  */
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
-  // Each upsert targets its own row and none depends on another's result, so
-  // they go out together rather than serialising the boot path.
-  await Promise.all(
-    DECLARED_SCHEDULER_JOBS.map(async ({ mode, ...definition }) =>
-      mode === "oneShot"
-        ? await ensureOneShotSchedulerJob(definition)
-        : await ensureSchedulerJob(definition),
-    ),
-  );
+  for (const { mode, ...definition } of DECLARED_SCHEDULER_JOBS) {
+    // Sequential on purpose: each upsert is a read followed by a write, so
+    // issuing all of them at once puts more concurrent statements in flight
+    // than the root pool holds, and registration is on no latency path.
+    // Bounded by the declared list.
+    // oxlint-disable-next-line no-await-in-loop -- one upsert per declared job, sequential to stay inside the root pool
+    await (mode === "oneShot"
+      ? ensureOneShotSchedulerJob(definition)
+      : ensureSchedulerJob(definition));
+  }
 
   const registered = new Set(
     (await rootDb.select({ id: schedulerJobs.id }).from(schedulerJobs)).map(
