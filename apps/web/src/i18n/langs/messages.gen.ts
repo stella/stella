@@ -864,6 +864,7 @@ type Messages = {
     "description": "Description";
     "details": "Details";
     "disconnect": "Disconnect";
+    "displayName": "Display name";
     "document": "Document";
     "documentation": "Documentation";
     "done": "Done";
@@ -1139,7 +1140,6 @@ type Messages = {
       "billingAddressState": "State";
       "color": "Color";
       "defaultHourlyRate": "Default hourly rate";
-      "displayName": "Display name";
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
@@ -2468,6 +2468,9 @@ type Messages = {
       "desktopDownloadWindows": "Download for Windows";
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.";
       "desktopSelfHostTitle": "Self-hosted desktop editing";
+      "displayNameDescription": "How your colleagues see you across matters, comments, and activity.";
+      "displayNameRequired": "Enter a display name.";
+      "displayNameSaved": "Display name updated";
       "enterOtp": "Verification code";
       "otpSentSuccess": "Verification code sent to your email.";
       "preferredName": "Preferred name";

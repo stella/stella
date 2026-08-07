@@ -232,7 +232,7 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="displayName"
-                label={t("contacts.fields.displayName")}
+                label={t("common.displayName")}
                 value={contact.displayName}
               />
               <EditableRow
@@ -272,7 +272,7 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="displayName"
-                label={t("contacts.fields.displayName")}
+                label={t("common.displayName")}
                 value={contact.displayName}
               />
               <EditableRow

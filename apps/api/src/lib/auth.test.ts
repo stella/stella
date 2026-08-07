@@ -12,6 +12,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   assertNewAccountEmailAllowedForCreation,
+  ensureDisplayName,
   getEmailOtpMinimumResponseDuration,
   getAuth,
   getNewAccountEmailOtpAction,
@@ -404,6 +405,70 @@ describe("isSixDigitOtpBody", () => {
     expect(isSixDigitOtpBody({ otp: "12345" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "1234567" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "12a456" })).toBe(false);
+  });
+});
+
+describe("ensureDisplayName", () => {
+  // The hook feeds the adapter a payload, not a typed user row; widening here
+  // keeps the assertions on the shape that actually gets persisted rather than
+  // on the union the generic infers per call.
+  const resolved = (
+    payload: Record<string, unknown>,
+  ): Record<string, unknown> => ensureDisplayName(payload);
+
+  test("keeps a name that has content", () => {
+    expect(resolved({ name: "Eva Schmidt", email: "eva@example.com" })).toEqual(
+      { name: "Eva Schmidt", email: "eva@example.com" },
+    );
+  });
+
+  test("defaults a blank name to the email local-part on create", () => {
+    // Email-OTP signup and some social providers send no name.
+    for (const name of ["", "   ", undefined]) {
+      expect(resolved({ name, email: "eva@example.com" })).toEqual({
+        name: "eva",
+        email: "eva@example.com",
+      });
+    }
+  });
+
+  test("falls back to the whole address when it has no local part", () => {
+    expect(resolved({ name: "", email: "@example.com" })).toEqual({
+      name: "@example.com",
+      email: "@example.com",
+    });
+  });
+
+  test("drops a blank name when no email is available to derive one", () => {
+    // Update payloads carry only the changed fields, so `email` is usually
+    // absent. Writing the blank through would clear a stored display name;
+    // omitting the key leaves the existing value in place.
+    expect(resolved({ name: "", timezoneId: "Europe/Prague" })).toEqual({
+      timezoneId: "Europe/Prague",
+    });
+  });
+
+  test("leaves an update payload that does not touch the name alone", () => {
+    expect(resolved({ timezoneId: "Europe/Prague" })).toEqual({
+      timezoneId: "Europe/Prague",
+    });
+  });
+
+  // The invariant the column needs: whatever is handed to the adapter must
+  // never carry an empty `name`, since `notNull` alone still admits "".
+  test("never emits a blank name", () => {
+    const names = ["", " ", "\t\n", undefined, null, 42, "Eva"];
+    const emails = ["", "   ", undefined, null, "eva@example.com", "@x.com"];
+    for (const name of names) {
+      for (const email of emails) {
+        const result = resolved({ name, email });
+        if (!("name" in result)) {
+          continue;
+        }
+        expect(typeof result["name"]).toBe("string");
+        expect(String(result["name"]).trim()).not.toBe("");
+      }
+    }
   });
 });
 

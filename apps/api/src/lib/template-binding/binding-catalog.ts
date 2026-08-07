@@ -62,7 +62,7 @@ export type BindingCatalog = { sources: CatalogSource[] };
 // Labels reuse the canonical contact/common/party-role keys wherever an
 // equivalent exists; only genuinely new concepts mint `templates.binding.*`.
 const CONTACT_FIELD_LABELS = {
-  displayName: "contacts.fields.displayName",
+  displayName: "common.displayName",
   firstName: "contacts.fields.firstName",
   lastName: "contacts.fields.lastName",
   organizationName: "common.organizationName",
