@@ -137,17 +137,20 @@ type UncoveredStatusCode = Exclude<
 >;
 
 // One instance per member of the union, bound to it in both directions: the
-// annotation rejects anything that is not a terminal error, and the alias
-// below stops compiling while a member has no instance here.
-const CHAT_TERMINAL_ERRORS = [
-  new ChatEmptyCompletionError({ message: "finished with zero output" }),
-  new ChatLoopDetectedError({ message: "repeated the same work" }),
-] as const satisfies readonly ChatTerminalError[];
-
-type UncoveredChatTerminalErrorTag = Exclude<
-  ChatTerminalError["_tag"],
-  (typeof CHAT_TERMINAL_ERRORS)[number]["_tag"]
->;
+// mapped type stops compiling when a member has no matching instance here.
+const CHAT_TERMINAL_ERRORS = {
+  ChatEmptyCompletionError: new ChatEmptyCompletionError({
+    message: "finished with zero output",
+  }),
+  ChatLoopDetectedError: new ChatLoopDetectedError({
+    message: "repeated the same work",
+  }),
+} as const satisfies {
+  readonly [Tag in ChatTerminalError["_tag"]]: Extract<
+    ChatTerminalError,
+    { readonly _tag: Tag }
+  >;
+};
 
 describe("isAnticipatedAIFailure", () => {
   test("exercises every HandlerError status", () => {
@@ -186,21 +189,12 @@ describe("isAnticipatedAIFailure", () => {
     }
   });
 
-  test("exercises every chat terminal error", () => {
-    const everyTerminalErrorCovered: [UncoveredChatTerminalErrorTag] extends [
-      never,
-    ]
-      ? true
-      : false = true;
-
-    expect(everyTerminalErrorCovered).toBe(true);
-  });
-
   test("anticipates every terminal outcome the chat stream raises itself", () => {
     // The stream models each of these and recovers from it, so none is a
     // defect, including the ones the classifier cannot name: an error this
     // service constructed carries no provider status to classify by.
-    for (const error of CHAT_TERMINAL_ERRORS) {
+    for (const error of Object.values(CHAT_TERMINAL_ERRORS)) {
+      expect(isAnticipatedAIFailure(error, "unknown")).toBe(true);
       expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(true);
     }
   });
