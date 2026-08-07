@@ -173,6 +173,10 @@ export const ComposerPlusMenu = ({
 
     const editorElement = shortcutEditor.view.dom;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (disabled) {
+        return;
+      }
+
       const shortcut = resolveComposerMenuShortcut({
         altKey: event.altKey,
         ctrlKey: event.ctrlKey,
@@ -205,7 +209,7 @@ export const ComposerPlusMenu = ({
         capture: true,
       });
     };
-  }, [hasContextShortcut, hasSkillsShortcut, shortcutEditor]);
+  }, [disabled, hasContextShortcut, hasSkillsShortcut, shortcutEditor]);
 
   const handleMenuOpenChange = (open: boolean) => {
     setMenuOpen(open);
