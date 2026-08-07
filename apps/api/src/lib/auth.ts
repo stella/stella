@@ -33,16 +33,16 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import {
-  OAUTH_UI_CONSENT_PATH,
-  OAUTH_UI_LOGIN_PATH,
-  OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/handlers/auth/ui-routes";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import {
+  OAUTH_UI_CONSENT_PATH,
+  OAUTH_UI_LOGIN_PATH,
+  OAUTH_UI_ORGANIZATION_PATH,
+} from "@/api/lib/auth-paths";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";

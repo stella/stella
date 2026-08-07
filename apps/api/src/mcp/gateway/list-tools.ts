@@ -132,11 +132,11 @@ export const listGatewayMcpToolDefinitions = async ({
       hasGrantedScope(scopes, definition.scope) &&
       isMcpToolFeatureEnabled(definition.feature),
   );
-  // The anonymized tools/list is a tenant-neutral pure projection (see
-  // mcp/README.md): keep every tool's schema intact. Per-org registry
-  // narrowing runs only on the default surface, or the anonymized schema
-  // would leak the org's practice-jurisdiction / native-tool settings.
-  if (mode === "anonymized") {
+  // Every restricted surface is a pure static projection. Per-org registry
+  // narrowing and dynamic connector/skill discovery run only on the default
+  // surface, so a restricted client never discovers a tool its dispatcher
+  // rejects and never receives tenant-specific connector metadata.
+  if (mode !== "default") {
     return staticDefinitions;
   }
   const definitions = narrowBusinessRegistryTool(context, staticDefinitions);

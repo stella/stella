@@ -14,6 +14,7 @@ import {
 import { fetchWithTimeout } from "@stll/fetch";
 
 import "./style.css";
+import { createUploadTargetController } from "./upload-target";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
 
@@ -29,25 +30,8 @@ if (!fileInput || !uploadButton || !statusElement || !targetElement) {
   throw new TypeError("Document upload app markup is incomplete");
 }
 
-type UploadTarget = { entityId: string; workspaceId: string };
-let target: UploadTarget | undefined;
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const parseTarget = (value: unknown): UploadTarget | undefined => {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-  const { entityId, workspaceId } = value;
-  if (typeof entityId !== "string" || typeof workspaceId !== "string") {
-    return undefined;
-  }
-  return {
-    entityId,
-    workspaceId,
-  };
-};
 
 type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
@@ -60,21 +44,21 @@ const parsePayload = (result: AppToolResult): unknown => {
     return undefined;
   }
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }
 };
 
-const setTarget = (value: unknown): void => {
-  const next = parseTarget(value);
-  if (!next) {
-    return;
-  }
-  target = next;
-  targetElement.textContent = `Document ${next.entityId}`;
-  uploadButton.disabled = fileInput.files?.item(0) === null;
-};
+const targetController = createUploadTargetController({
+  hasSelectedFile: () => Boolean(fileInput.files?.item(0)),
+  setLabel: (label) => {
+    targetElement.textContent = label;
+  },
+  setUploadEnabled: (enabled) => {
+    uploadButton.disabled = !enabled;
+  },
+});
 
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
   statusElement.textContent = message;
@@ -159,23 +143,21 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
 app.addEventListener("hostcontextchanged", applyHostContext);
 app.addEventListener("toolinput", ({ arguments: toolArguments }) => {
   const { entity_id: entityId } = toolArguments ?? {};
-  if (typeof entityId === "string") {
-    targetElement.textContent = `Document ${entityId}`;
-  }
+  targetController.handleToolInput(entityId);
 });
 app.addEventListener("toolresult", (result) =>
-  setTarget(result.structuredContent),
+  targetController.handleToolResult(result.structuredContent),
 );
 
 fileInput.addEventListener("change", () => {
-  uploadButton.disabled =
-    target === undefined || fileInput.files?.item(0) === null;
+  targetController.handleFileChange();
   setStatus("", "idle");
 });
 
 const uploadSelectedFile = async (): Promise<void> => {
   const file = fileInput.files?.item(0);
-  if (!file || !target) {
+  const uploadTarget = targetController.snapshot();
+  if (!file || !uploadTarget) {
     return;
   }
   uploadButton.disabled = true;
@@ -187,14 +169,14 @@ const uploadSelectedFile = async (): Promise<void> => {
         app,
         DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
         buildDocumentVersionUploadReservationInput({
-          entityId: target.entityId,
+          entityId: uploadTarget.entityId,
           file: {
             name: file.name,
             mimeType: file.type || "application/octet-stream",
             size: file.size,
             sha256Hex: await sha256Hex(file),
           },
-          workspaceId: target.workspaceId,
+          workspaceId: uploadTarget.workspaceId,
         }),
       ),
     );
@@ -216,25 +198,37 @@ const uploadSelectedFile = async (): Promise<void> => {
     await callCapability(
       app,
       DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
-      buildUploadFinalizeInput({ uploadId, workspaceId: target.workspaceId }),
+      buildUploadFinalizeInput({
+        uploadId,
+        workspaceId: uploadTarget.workspaceId,
+      }),
     );
     uploadId = undefined;
     fileInput.value = "";
     setStatus("New version uploaded.", "success");
   } catch (error) {
+    let message = error instanceof Error ? error.message : "Upload failed";
     if (uploadId !== undefined) {
-      await callCapability(
-        app,
-        DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
-        buildUploadAbortInput({ uploadId, workspaceId: target.workspaceId }),
-        true,
-      ).catch(() => undefined);
+      try {
+        await callCapability(
+          app,
+          DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
+          buildUploadAbortInput({
+            uploadId,
+            workspaceId: uploadTarget.workspaceId,
+          }),
+          true,
+        );
+      } catch (cleanupError) {
+        const cleanupMessage =
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : "reserved upload cleanup failed";
+        message = `${message} Cleanup also failed: ${cleanupMessage}`;
+      }
     }
-    setStatus(
-      error instanceof Error ? error.message : "Upload failed",
-      "error",
-    );
-    uploadButton.disabled = false;
+    setStatus(message, "error");
+    targetController.handleFileChange();
   }
 };
 

@@ -15,6 +15,7 @@ import {
 } from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
+import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
 // Most `tools/call` requests keep the default bounded client ceiling. A
@@ -141,18 +142,24 @@ const runMcpOperation = async <T>({
   token: string;
   timeoutMs?: number;
   observeMethod?: string;
-  operation: (client: Client) => Promise<T>;
+  operation: (client: Client, timeoutMs: number) => Promise<T>;
 }): Promise<
   Result<{ value: T; evidence?: ResponseEvidence }, McpClientError>
 > => {
-  let evidence: ResponseEvidence | undefined;
+  let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
     const response = await fetch(input, init);
-    if (requestMethod(init) === observeMethod) {
-      evidence = {
-        rawBody: await response.clone().text(),
-        headers: new Headers(response.headers),
-      };
+    if (observeMethod !== undefined && requestMethod(init) === observeMethod) {
+      const headers = new Headers(response.headers);
+      evidencePromise = headers
+        .get("content-type")
+        ?.toLowerCase()
+        .includes("application/json")
+        ? response
+            .clone()
+            .text()
+            .then((rawBody) => ({ headers, rawBody }))
+        : Promise.resolve(undefined);
     }
     return response;
   };
@@ -163,7 +170,7 @@ const runMcpOperation = async <T>({
       requestInit: { headers: { Authorization: `Bearer ${token}` } },
     },
   );
-  const client = new Client({ name: "stella-cli", version: "0.4.1" });
+  const client = new Client({ name: "stella-cli", version: CLI_VERSION });
   const result = await Result.tryPromise({
     try: async () => {
       const timeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
@@ -172,7 +179,8 @@ const runMcpOperation = async <T>({
         timeout,
       });
       try {
-        const value = await operation(client);
+        const value = await operation(client, timeout);
+        const evidence = await evidencePromise;
         return { value, ...(evidence === undefined ? {} : { evidence }) };
       } finally {
         await client.close();
@@ -209,13 +217,8 @@ export const callTool = async ({
     serverUrl,
     token,
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
-    operation: async (client) =>
-      await client.callTool(
-        { name, arguments: args },
-        {
-          timeout: timeoutMs ?? REQUEST_TIMEOUT_MS,
-        },
-      ),
+    operation: async (client, timeout) =>
+      await client.callTool({ name, arguments: args }, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
@@ -235,14 +238,18 @@ export const callTool = async ({
 export const listTools = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<ListToolsResult, McpClientError>> => {
   const result = await runMcpOperation({
     serverUrl,
     token,
-    operation: async (client) => await client.listTools(),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.listTools(undefined, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
@@ -271,19 +278,37 @@ export type RawToolsList = {
  * returns the unparsed text rather than a decoded envelope, plus the advertised
  * CLI-version headers (spec 051 addendum) for the update nudge.
  */
-export const fetchToolsListRaw = async ({
+const runObservedToolsList = async ({
   serverUrl,
   token,
+  timeoutMs = LIST_REQUEST_TIMEOUT_MS,
 }: {
   serverUrl: string;
   token: string;
-}): Promise<Result<RawToolsList, McpClientError>> => {
-  const response = await runMcpOperation({
+  timeoutMs?: number;
+}) =>
+  await runMcpOperation({
     serverUrl,
     token,
-    timeoutMs: LIST_REQUEST_TIMEOUT_MS,
+    timeoutMs,
     observeMethod: "tools/list",
-    operation: async (client) => await client.listTools(),
+    operation: async (client, timeout) =>
+      await client.listTools(undefined, { timeout }),
+  });
+
+export const fetchToolsListRaw = async ({
+  serverUrl,
+  token,
+  timeoutMs,
+}: {
+  serverUrl: string;
+  token: string;
+  timeoutMs?: number;
+}): Promise<Result<RawToolsList, McpClientError>> => {
+  const response = await runObservedToolsList({
+    serverUrl,
+    token,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(response)) {
     return Result.err(response.error);
@@ -344,16 +369,16 @@ export type MachineIdentity = {
 export const fetchMachineIdentity = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<MachineIdentity, McpClientError>> => {
-  const response = await runMcpOperation({
+  const response = await runObservedToolsList({
     serverUrl,
     token,
-    timeoutMs: LIST_REQUEST_TIMEOUT_MS,
-    observeMethod: "tools/list",
-    operation: async (client) => await client.listTools(),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(response)) {
     return Result.err(response.error);
@@ -379,14 +404,18 @@ export const fetchMachineIdentity = async ({
 export const listResources = async ({
   serverUrl,
   token,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
+  timeoutMs?: number;
 }): Promise<Result<{ resources: readonly unknown[] }, McpClientError>> => {
   const result = await runMcpOperation({
     serverUrl,
     token,
-    operation: async (client) => await client.listResources(),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.listResources(undefined, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
@@ -399,15 +428,19 @@ export const readResource = async ({
   serverUrl,
   token,
   uri,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
   uri: string;
+  timeoutMs?: number;
 }): Promise<Result<ReadResourceResult, McpClientError>> => {
   const result = await runMcpOperation({
     serverUrl,
     token,
-    operation: async (client) => await client.readResource({ uri }),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    operation: async (client, timeout) =>
+      await client.readResource({ uri }, { timeout }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
@@ -418,9 +451,15 @@ export const readResource = async ({
     if (entry.mimeType !== undefined) {
       content.mimeType = entry.mimeType;
     }
-    if ("text" in entry) {
-      content.text = entry.text;
+    if (!("text" in entry)) {
+      return Result.err(
+        new McpClientError({
+          kind: "transport",
+          message: `Binary MCP resource ${entry.uri} is not supported by this CLI`,
+        }),
+      );
     }
+    content.text = entry.text;
     contents.push(content);
   }
   return Result.ok({ contents });

@@ -524,6 +524,15 @@ jobs:
           (cd packages/cli && bun run codegen)
           git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 
+      - name: MCP App bundle guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The API serves the committed single-file bundle, not the TypeScript
+        # source. Regenerate it and fail on any diff so source tests and the
+        # production resource cannot silently exercise different app code.
+        run: |
+          (cd apps/api && bun run build:mcp-apps)
+          git diff --exit-code -- apps/api/src/mcp/apps/document-upload/generated/app.html.txt
+
       - name: Documentation source dependency guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every documentation source exposed to coding agents must correspond

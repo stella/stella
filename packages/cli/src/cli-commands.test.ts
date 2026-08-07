@@ -9,8 +9,8 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { EXIT_CODES } from "./mcp-constants.js";
-import { respondToMcpLifecycle } from "./mcp-test-lifecycle.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 

@@ -117,31 +117,37 @@ describe("MCP protected resource discovery routes", () => {
     ]);
   });
 
-  test("leaves the JSON-RPC request body unread for the MCP SDK transport", async () => {
+  test("leaves each JSON-RPC request body unread for the MCP SDK transport", async () => {
     const jsonRpcBody = JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
       params: {},
     });
-    let forwardedBody: string | undefined;
+    const forwarded: { body: string; mode: string | undefined }[] = [];
     const route = createMcpRoute({
-      handleMcpHttpRequest: async (request) => {
-        forwardedBody = await request.text();
+      handleMcpHttpRequest: async (request, options) => {
+        forwarded.push({ body: await request.text(), mode: options?.mode });
         return new Response("ok");
       },
     });
 
-    const response = await route.handle(
-      new Request(`http://localhost${MCP_HTTP_PATH}`, {
-        body: jsonRpcBody,
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-    );
+    for (const path of [MCP_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential: the assertion below pins route order and mode
+      const response = await route.handle(
+        new Request(`http://localhost${path}`, {
+          body: jsonRpcBody,
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        }),
+      );
 
-    expect(response.status).toBe(200);
-    expect(forwardedBody).toBe(jsonRpcBody);
+      expect(response.status).toBe(200);
+    }
+    expect(forwarded).toEqual([
+      { body: jsonRpcBody, mode: undefined },
+      { body: jsonRpcBody, mode: "documents" },
+    ]);
   });
 
   test("forwards anonymized MCP HTTP methods with anonymized mode", async () => {

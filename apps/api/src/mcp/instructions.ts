@@ -42,11 +42,11 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 Destructive tools refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.`;
 
-export const MCP_INSTRUCTIONS: Record<McpMode, string> = {
+export const MCP_INSTRUCTIONS = {
   default: DEFAULT_INSTRUCTIONS,
   documents: DOCUMENTS_INSTRUCTIONS,
   anonymized: ANONYMIZED_INSTRUCTIONS,
-};
+} as const satisfies Record<McpMode, string>;
 
 export const getMcpInstructions = (mode: McpMode): string =>
   MCP_INSTRUCTIONS[mode];

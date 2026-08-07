@@ -20,7 +20,10 @@ const canonicalizeGeneratedApp = (): Plugin => ({
     handler: (_options, bundle) => {
       for (const output of Object.values(bundle)) {
         if (output.type === "asset" && typeof output.source === "string") {
-          output.source = output.source.replace(/[\t ]+$/gmu, "");
+          output.source = output.source
+            .split("\n")
+            .map((line) => line.trimEnd())
+            .join("\n");
           if (output.fileName.endsWith(".html")) {
             // Bun's bundler treats .html imports as HTML entry points even
             // with a text import attribute. A .txt suffix makes the compiled

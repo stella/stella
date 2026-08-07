@@ -5,6 +5,7 @@ import {
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -101,6 +102,26 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     const registryEnum = registryEnumOf(definitions);
     expect(registryEnum).toContain("ares");
     expect(registryEnum).toContain("vies");
+  });
+});
+
+describe("listGatewayMcpToolDefinitions restricted surfaces", () => {
+  test("keeps documents discovery static even when dynamic scopes are granted", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "documents",
+      scopes: [
+        "stella:read",
+        "stella:documents_write",
+        "stella:matters_write",
+        "stella:external_mcps",
+        "stella:skills",
+      ],
+    });
+
+    expect(definitions.map(({ name }) => name)).toEqual(
+      DOCUMENTS_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
   });
 });
 

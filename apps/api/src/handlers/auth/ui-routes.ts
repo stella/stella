@@ -1,13 +1,20 @@
 import Elysia from "elysia";
 
 import { env } from "@/api/env";
+import {
+  OAUTH_UI_CONSENT_PATH,
+  OAUTH_UI_LOGIN_PATH,
+  OAUTH_UI_ORGANIZATION_PATH,
+} from "@/api/lib/auth-paths";
+
+export {
+  OAUTH_UI_CONSENT_PATH,
+  OAUTH_UI_LOGIN_PATH,
+  OAUTH_UI_ORGANIZATION_PATH,
+} from "@/api/lib/auth-paths";
 
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
-
-export const OAUTH_UI_LOGIN_PATH = "/oauth-ui/auth";
-export const OAUTH_UI_ORGANIZATION_PATH = "/oauth-ui/auth/organization";
-export const OAUTH_UI_CONSENT_PATH = "/oauth-ui/consent";
 
 const redirectToFrontend = ({
   path,

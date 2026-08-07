@@ -19,7 +19,7 @@ import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
  * previously a `passthrough` tool (`template_marker_reference`) that carried no
  * tenant data. Both belong off the tool ceiling.
  *
- * The set is identical across both MCP modes. `tools/list` projects a different
+ * The set is identical across all MCP modes. `tools/list` projects a different
  * tool set per mode because tools touch tenant data under mode-specific scopes;
  * these resources are public, static, and tenant-independent, so there is
  * nothing to project — an anonymized-mode client that could previously call the

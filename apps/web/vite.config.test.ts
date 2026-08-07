@@ -60,6 +60,19 @@ describe("vite config", () => {
       }
     }
   });
+
+  test("does not install a dev API proxy without an explicit target", () => {
+    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
+    delete process.env["DEV_API_PROXY_TARGET"];
+
+    try {
+      expect(resolveConfig("test").server?.proxy).toBeUndefined();
+    } finally {
+      if (previousTarget !== undefined) {
+        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
+      }
+    }
+  });
 });
 
 const resolveConfig = (mode: string): UserConfig => {

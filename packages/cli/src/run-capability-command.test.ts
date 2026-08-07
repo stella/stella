@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
+import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import type { Context } from "./context.js";
 import { EXIT_CODES } from "./mcp-constants.js";
-import { respondToMcpLifecycle } from "./mcp-test-lifecycle.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 

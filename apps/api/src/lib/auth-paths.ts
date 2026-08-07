@@ -2,6 +2,11 @@ import { env } from "@/api/env";
 
 export const AUTH_API_PATH = "/api/auth" as const;
 
+export const OAUTH_UI_LOGIN_PATH = "/oauth-ui/auth" as const;
+export const OAUTH_UI_ORGANIZATION_PATH =
+  "/oauth-ui/auth/organization" as const;
+export const OAUTH_UI_CONSENT_PATH = "/oauth-ui/consent" as const;
+
 export const ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH =
   "/.well-known/oauth-authorization-server" as const;
 

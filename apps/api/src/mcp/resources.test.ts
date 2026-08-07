@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { DIRECTIVE_KINDS } from "@stll/template-conditions";
 
+import { envBase } from "@/api/env-base";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
@@ -18,8 +19,8 @@ describe("MCP resources", () => {
     expect(MCP_APP_RESOURCE_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
   });
 
-  test("lists the public static resources in both modes", () => {
-    for (const mode of ["default", "anonymized"] as const) {
+  test("lists the public static resources in every mode", () => {
+    for (const mode of ["default", "documents", "anonymized"] as const) {
       const resources = listMcpResources(mode);
       const uris = resources.map((resource) => resource.uri);
       expect(uris).toContain(PRODUCT_IDENTITY_URI);
@@ -99,9 +100,20 @@ describe("MCP resources", () => {
     expect(
       McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
     ).toBe(true);
-    expect(content._meta).toMatchObject({
+    const storageEndpoint = new URL(envBase.S3_ENDPOINT);
+    if (
+      storageEndpoint.hostname.includes("s3") &&
+      storageEndpoint.hostname.endsWith(".amazonaws.com") &&
+      envBase.S3_BUCKET.length > 0
+    ) {
+      storageEndpoint.hostname = `${envBase.S3_BUCKET}.${storageEndpoint.hostname}`;
+    }
+    expect(content._meta).toEqual({
       ui: {
-        csp: { connectDomains: expect.any(Array) },
+        csp: {
+          connectDomains: [storageEndpoint.origin],
+          resourceDomains: [],
+        },
         prefersBorder: true,
       },
     });

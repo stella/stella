@@ -104,7 +104,11 @@ describe("document file upload surface", () => {
       },
       workspaceId: "00000000-0000-4000-8000-000000000001",
       dependencies: {
-        abort: mock(async () => undefined),
+        abort: mock(async () => ({
+          status: "ok" as const,
+          payload: { aborted: true },
+        })),
+        captureCleanupFailure: mock(() => undefined),
         download: mock(async () =>
           Result.ok({
             body: bytes.buffer,
@@ -164,7 +168,10 @@ describe("document file upload surface", () => {
 
   test("aborts the canonical reservation when the storage PUT fails", async () => {
     const capabilities: string[] = [];
-    const aborted = mock(async () => undefined);
+    const aborted = mock(async () => ({
+      status: "ok" as const,
+      payload: { aborted: true },
+    }));
     const result = await uploadRemoteDocumentVersion({
       context: createContext(),
       entityId: "00000000-0000-4000-8000-000000000010",
@@ -175,6 +182,7 @@ describe("document file upload surface", () => {
       workspaceId: "00000000-0000-4000-8000-000000000001",
       dependencies: {
         abort: aborted,
+        captureCleanupFailure: mock(() => undefined),
         download: mock(async () =>
           Result.ok({
             body: new TextEncoder().encode("bytes").buffer,
@@ -200,6 +208,105 @@ describe("document file upload surface", () => {
 
     expect(capabilities).toEqual(["uploads.create"]);
     expect(aborted).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ isError: true });
+  });
+
+  test("reports a failed reservation cleanup without hiding the transfer failure", async () => {
+    const captureCleanupFailure = mock(
+      (_error: unknown, _context?: Record<string, string>) => undefined,
+    );
+    const result = await uploadRemoteDocumentVersion({
+      context: createContext(),
+      entityId: "00000000-0000-4000-8000-000000000010",
+      file: {
+        download_url: "https://files.example/agreement.docx",
+        file_id: "file_123",
+      },
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      dependencies: {
+        abort: mock(async () => ({
+          status: "error" as const,
+          result: {
+            content: [{ type: "text" as const, text: "abort failed" }],
+            isError: true,
+          },
+        })),
+        captureCleanupFailure,
+        download: mock(async () =>
+          Result.ok({
+            body: new TextEncoder().encode("bytes").buffer,
+            headers: new Headers(),
+            ok: true,
+            status: 200,
+          }),
+        ),
+        invoke: mock(async () => ({
+          status: "ok" as const,
+          payload: {
+            headers: {},
+            uploadId: "upload_123",
+            url: "https://storage.example/upload",
+          },
+        })),
+        put: mock(async () => Result.ok(new Response(null, { status: 500 }))),
+      },
+    });
+
+    expect(result).toMatchObject({
+      isError: true,
+      content: [
+        {
+          text: expect.stringContaining(
+            "could not be transferred, and its reserved upload could not be cleaned up",
+          ),
+        },
+      ],
+    });
+    expect(captureCleanupFailure).toHaveBeenCalledTimes(1);
+    expect(captureCleanupFailure).toHaveBeenCalledWith(expect.any(Error), {
+      source: "mcp_document_upload",
+      uploadId: "upload_123",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    });
+  });
+
+  test("abandons a malformed reservation when the upload id is recoverable", async () => {
+    const aborted = mock(async () => ({
+      status: "ok" as const,
+      payload: { aborted: true },
+    }));
+    const result = await uploadRemoteDocumentVersion({
+      context: createContext(),
+      entityId: "00000000-0000-4000-8000-000000000010",
+      file: {
+        download_url: "https://files.example/agreement.docx",
+        file_id: "file_123",
+      },
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      dependencies: {
+        abort: aborted,
+        captureCleanupFailure: mock(() => undefined),
+        download: mock(async () =>
+          Result.ok({
+            body: new TextEncoder().encode("bytes").buffer,
+            headers: new Headers(),
+            ok: true,
+            status: 200,
+          }),
+        ),
+        invoke: mock(async () => ({
+          status: "ok" as const,
+          payload: { uploadId: "upload_123" },
+        })),
+        put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
+      },
+    });
+
+    expect(aborted).toHaveBeenCalledWith({
+      context: expect.any(Object),
+      uploadId: "upload_123",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    });
     expect(result).toMatchObject({ isError: true });
   });
 });

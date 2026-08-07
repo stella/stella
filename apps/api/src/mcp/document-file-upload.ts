@@ -9,6 +9,7 @@ import {
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
@@ -136,7 +137,7 @@ const abortReservation = async ({
   context: McpRequestContext;
   uploadId: string;
   workspaceId: string;
-}): Promise<void> => {
+}): Promise<CapabilityResult> =>
   await invokeCapability({
     context,
     args: {
@@ -145,7 +146,6 @@ const abortReservation = async ({
       input: buildUploadAbortInput({ uploadId, workspaceId }),
     },
   });
-};
 
 const putPresignedFile = async ({
   bytes,
@@ -171,6 +171,7 @@ const putPresignedFile = async ({
 
 type DocumentFileUploadDependencies = {
   abort: typeof abortReservation;
+  captureCleanupFailure: typeof captureError;
   download: typeof safeOutboundFetchBytes;
   invoke: typeof invokeCapability;
   put: typeof putPresignedFile;
@@ -178,10 +179,52 @@ type DocumentFileUploadDependencies = {
 
 const DEFAULT_DOCUMENT_FILE_UPLOAD_DEPENDENCIES = {
   abort: abortReservation,
+  captureCleanupFailure: captureError,
   download: safeOutboundFetchBytes,
   invoke: invokeCapability,
   put: putPresignedFile,
 } satisfies DocumentFileUploadDependencies;
+
+const abortCreatedReservation = async ({
+  context,
+  dependencies,
+  uploadId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  dependencies: DocumentFileUploadDependencies;
+  uploadId: string;
+  workspaceId: string;
+}): Promise<boolean> => {
+  const aborted = await Result.tryPromise({
+    try: async () =>
+      await dependencies.abort({ context, uploadId, workspaceId }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(aborted)) {
+    dependencies.captureCleanupFailure(aborted.error, {
+      source: "mcp_document_upload",
+      uploadId,
+      workspaceId,
+    });
+    return false;
+  }
+  if (aborted.value.status === "ok") {
+    return true;
+  }
+
+  dependencies.captureCleanupFailure(
+    new Error("Document upload reservation cleanup failed", {
+      cause: aborted.value.result,
+    }),
+    {
+      source: "mcp_document_upload",
+      uploadId,
+      workspaceId,
+    },
+  );
+  return false;
+};
 
 const normalizedMimeType = (
   file: UploadDocumentVersionInput["file"] & object,
@@ -253,6 +296,17 @@ export const uploadRemoteDocumentVersion = async ({
   }
   const reservation = parseReservation(created.payload);
   if (reservation === null) {
+    if (
+      isRecord(created.payload) &&
+      typeof created.payload["uploadId"] === "string"
+    ) {
+      await abortCreatedReservation({
+        context,
+        dependencies,
+        uploadId: created.payload["uploadId"],
+        workspaceId,
+      });
+    }
     return internalFailureResult(
       new Error("uploads.create returned an invalid reservation"),
     );
@@ -260,14 +314,17 @@ export const uploadRemoteDocumentVersion = async ({
 
   const put = await dependencies.put({ bytes, reservation });
   if (Result.isError(put) || !put.value.ok) {
-    await dependencies.abort({
+    const cleanedUp = await abortCreatedReservation({
       context,
+      dependencies,
       uploadId: reservation.uploadId,
       workspaceId,
     });
     return structuredErrorResult({
       code: "internal_error",
-      message: "The attached file could not be transferred to stella storage",
+      message: cleanedUp
+        ? "The attached file could not be transferred to stella storage"
+        : "The attached file could not be transferred, and its reserved upload could not be cleaned up",
       retryable: true,
     });
   }

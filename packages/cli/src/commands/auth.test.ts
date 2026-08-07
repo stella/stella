@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { respondToMcpLifecycle } from "../../tests/mcp-test-lifecycle.js";
 import type { Context } from "../context.js";
-import { respondToMcpLifecycle } from "../mcp-test-lifecycle.js";
 import { runWhoami } from "./auth.js";
 
 // Guards the "identity command whose --help promises a server-verified result
