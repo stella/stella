@@ -12,7 +12,7 @@ set for you to approve or reject as a whole.
 
 ## Server address
 
-```
+```text
 https://api.stll.app/mcp
 ```
 

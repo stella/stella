@@ -7,7 +7,7 @@ sidebar:
 
 Besides the standard server, stella serves a second, read-only surface:
 
-```
+```text
 https://api.stll.app/mcp-anonymized
 ```
 

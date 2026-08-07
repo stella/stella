@@ -7,16 +7,21 @@ const { dir, entry, head, isFallback } = Astro.locals.starlightRoute;
 // as translated hreflang alternatives, and canonicalize them to the original
 // English document so crawlers consolidate rather than duplicate the content.
 const fallbackCanonicalUrl = new URL(`/${entry.id}/`, Astro.site ?? Astro.url.origin);
-const documentationHead = head
-  .filter(({ tag, attrs }) => !(tag === "link" && attrs?.rel === "alternate"))
-  .map((item) =>
-    isFallback && item.tag === "link" && item.attrs?.rel === "canonical"
-      ? {
-          ...item,
-          attrs: { ...item.attrs, href: fallbackCanonicalUrl.href },
-        }
-      : item,
+const documentationHead = head.filter(
+  ({ tag, attrs }) => !(tag === "link" && attrs?.rel === "alternate"),
+);
+if (isFallback) {
+  const canonicalIndex = documentationHead.findIndex(
+    ({ tag, attrs }) => tag === "link" && attrs?.rel === "canonical",
   );
+  const canonicalHead = documentationHead[canonicalIndex];
+  if (canonicalHead) {
+    documentationHead[canonicalIndex] = {
+      ...canonicalHead,
+      attrs: { ...canonicalHead.attrs, href: fallbackCanonicalUrl.href },
+    };
+  }
+}
 const renderedTitle =
   head.find(({ tag }) => tag === "title")?.content ?? entry.data.title;
 const socialImagePath = ogCardPath({
