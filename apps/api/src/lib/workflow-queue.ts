@@ -763,13 +763,14 @@ const STALE_ACTIVE_RUN_SCAN_LIMIT = 1000;
 const RECONCILE_SETTLE_MS = 5 * 1000;
 // Non-terminal BullMQ states. A job in any of these means the workspace
 // still has reclaimable work in flight, so its run-state is legitimate.
+// BullMQ 6 dropped the separate `paused` state: a paused queue's jobs are
+// reported as `waiting`, which this list already covers.
 const LIVE_JOB_STATES = [
   "active",
   "waiting",
   "delayed",
   "prioritized",
   "waiting-children",
-  "paused",
 ] as const;
 // Upper bound on the live-job snapshot. If the queue holds more in-flight
 // jobs than this, skip the cycle rather than risk treating a busy
