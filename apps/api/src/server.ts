@@ -126,6 +126,8 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
+import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
+import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
@@ -656,6 +658,19 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
+  // Scheduled jobs run here rather than in a process of their own. A separate
+  // deployment unit has to be remembered, and when it is forgotten nothing
+  // says so: the jobs simply never run, which is indistinguishable from having
+  // no work to do. Hosting the loop in a service that must exist for the
+  // product to work at all removes that failure mode instead of monitoring it.
+  // Each job is leased individually (`locked_by`/`locked_until`), so running
+  // this in every replica is safe.
+  await ensureDefaultSchedulerJobs();
+  const schedulerLoop = startSchedulerLoop();
+  logger.info("scheduler.started", {
+    "scheduler.runner_id": schedulerLoop.runnerId,
+  });
+
   api.listen({
     port: getApiPort(),
     // Longer than the load balancer's 60 s idle timeout (Bun defaults to
@@ -689,8 +704,12 @@ const startServer = async (): Promise<void> => {
       });
     });
     stopSse();
+    // Stop claiming new jobs before draining, so a tick in flight finishes
+    // and releases its lease rather than leaving it to expire.
+    schedulerLoop.stop();
     await Promise.race([
       Promise.allSettled([
+        schedulerLoop.drained,
         workflowWorkers.close(),
         flowRunWorker.close(),
         fileDerivativeWorker.close(),

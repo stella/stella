@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -114,73 +115,77 @@ const sameSchedule = (
   );
 };
 
-export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
-  await ensureSchedulerJob({
+/**
+ * How a declared job is registered. `oneShot` jobs retire themselves once
+ * their backfill completes, so a missing row is expected for them and only
+ * `recurring` ids are asserted present after registration.
+ */
+type SchedulerJobMode = "recurring" | "oneShot";
+
+type DeclaredSchedulerJob = SchedulerJobDefinition & { mode: SchedulerJobMode };
+
+/**
+ * Every job this deployment is expected to run, as data rather than as a
+ * sequence of calls.
+ *
+ * The declaration being a value is what lets boot compare it against what is
+ * actually registered. A job that exists only as code nobody runs produces no
+ * error, no log and no metric — the failure is indistinguishable from "there
+ * was no work to do" — so the set has to be checkable from outside the loop.
+ */
+export const DECLARED_SCHEDULER_JOBS = [
+  {
     description: "Release queued PDFs to the searchable-text worker",
     id: "documentProcessing.dispatchOcr.configuredInterval",
+    mode: "recurring",
     schedule: {
       type: "interval",
       everyMs: envBase.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES * 60_000,
     },
     task: DISPATCH_DOCUMENT_OCR_TASK,
-  });
-
-  await ensureSchedulerJob({
+  },
+  {
     description:
       "Reconcile abandoned server-generated entity and version objects",
     id: "entityBuffers.reconcileIntents.minutely",
-    schedule: {
-      type: "interval",
-      everyMs: 60 * 1000,
-    },
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_BUFFER_INTENTS_TASK,
-  });
-
-  await ensureSchedulerJob({
+  },
+  {
     description: "Delete corpus objects from cancelled case-law uploads",
     id: "caseLaw.reconcileCorpusUploadIntents.minutely",
-    schedule: {
-      type: "interval",
-      everyMs: 60 * 1000,
-    },
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
-  });
-
-  await ensureOneShotSchedulerJob({
+  },
+  {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
     id: "caseLaw.backfillRedactionTombstones.v2",
-    schedule: {
-      type: "interval",
-      everyMs: 60 * 1000,
-    },
+    mode: "oneShot",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-  });
-
-  await ensureSchedulerJob({
+  },
+  {
     description: "Repair stale chat search projections",
     id: "search.repairChatIndex.fiveMinute",
-    schedule: {
-      type: "interval",
-      everyMs: 5 * 60 * 1000,
-    },
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: REPAIR_CHAT_SEARCH_INDEX_TASK,
-  });
-
-  await ensureOneShotSchedulerJob({
+  },
+  {
     description:
       "Repair entity search timestamps and persisted preview passages",
     id: "search.repairSemanticTimestamps.v2",
-    schedule: {
-      type: "interval",
-      everyMs: 60_000,
-    },
+    mode: "oneShot",
+    schedule: { type: "interval", everyMs: 60_000 },
     task: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
-  });
-
-  await ensureSchedulerJob({
+  },
+  {
     description: "Sync tracked InfoSoud cases into matter agenda",
     id: "infosoud.syncTrackedCases.nightly",
+    mode: "recurring",
     schedule: {
       type: "daily",
       hour: 3,
@@ -188,29 +193,55 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
-  });
-
-  await ensureSchedulerJob({
+  },
+  {
     description: "Expire abandoned desktop edit sessions past their token TTL",
     id: "desktopEditSessions.expire.hourly",
-    schedule: {
-      type: "interval",
-      everyMs: 60 * 60 * 1000,
-    },
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
-  });
-
-  // Every 15 minutes rather than nightly: the queue grows with each
-  // ingested page, and a decision sitting in it has no readable text.
-  // One batch is ~40 PDFs, so this keeps pace with the crawl without
-  // ever putting a burst on the court's site.
-  await ensureSchedulerJob({
+  },
+  {
+    // Every 15 minutes rather than nightly: the queue grows with each
+    // ingested page, and a decision sitting in it has no readable text.
     description: "Fetch and parse PDFs for Slovak court decisions",
     id: "caseLaw.backfillSkDocuments.quarterHourly",
-    schedule: {
-      type: "interval",
-      everyMs: 15 * 60 * 1000,
-    },
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 15 * 60 * 1000 },
     task: BACKFILL_SK_DOCUMENTS_TASK,
-  });
+  },
+] as const satisfies readonly DeclaredSchedulerJob[];
+
+/**
+ * Register every declared job, then verify the registration actually landed.
+ *
+ * The verification is the point. An empty `scheduler_jobs` table is exactly
+ * what a deployment with no scheduler process looks like, and a staleness
+ * check over its rows passes vacuously in that state: zero rows means zero
+ * stale rows. Comparing against the declared set is what makes "nothing is
+ * registered" loud instead of silent.
+ */
+export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
+  // Each upsert targets its own row and none depends on another's result, so
+  // they go out together rather than serialising the boot path.
+  await Promise.all(
+    DECLARED_SCHEDULER_JOBS.map(async ({ mode, ...definition }) =>
+      mode === "oneShot"
+        ? await ensureOneShotSchedulerJob(definition)
+        : await ensureSchedulerJob(definition),
+    ),
+  );
+
+  const registered = new Set(
+    (await rootDb.select({ id: schedulerJobs.id }).from(schedulerJobs)).map(
+      ({ id }) => id,
+    ),
+  );
+  const missing = DECLARED_SCHEDULER_JOBS.filter(
+    ({ id, mode }) => mode === "recurring" && !registered.has(id),
+  ).map(({ id }) => id);
+
+  if (missing.length > 0) {
+    panic(`scheduler jobs declared but not registered: ${missing.join(", ")}`);
+  }
 };
