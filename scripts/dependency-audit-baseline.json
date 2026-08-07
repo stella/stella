@@ -1,5 +1,20 @@
 {
   "note": "Accepted high/critical advisories from `bun audit` at the time the guard was introduced. The guard (scripts/dependency-audit.ts --check) fails CI on any NEW high/critical advisory not listed here, while these known ones are tracked for resolution via the weekly dependency sweep. All current entries are transitive (build tooling, the MCP SDK's HTTP stack, websocket/undici in deps) with no direct reachable exploit path in the API's own runtime. Remove an entry once the dependency is bumped past the fix; the guard warns when a listed advisory is no longer present so the baseline can be ratcheted down.",
   "auditLevel": "high",
-  "accepted": []
+  "accepted": [
+    {
+      "id": "GHSA-5p2g-fcmc-qvqq",
+      "severity": "high",
+      "package": "image-size",
+      "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+    },
+    {
+      "id": "GHSA-w3rx-r6r6-pgpr",
+      "severity": "high",
+      "package": "image-size",
+      "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+    }
+  ]
 }
