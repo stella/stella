@@ -131,10 +131,7 @@ const deleteWorkspaceOcrDerivatives = async ({
       const result = await safeDb(
         async (tx) =>
           await tx
-            .select({
-              createdAt: documentProcessingRuns.createdAt,
-              id: documentProcessingRuns.id,
-            })
+            .select({ id: documentProcessingRuns.id })
             .from(documentProcessingRuns)
             .where(
               and(

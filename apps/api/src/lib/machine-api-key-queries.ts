@@ -1,8 +1,10 @@
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { apikey } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { machineApiKeyOrganizationScope as organizationScope } from "@/api/lib/machine-api-key-scope";
 
 /**
@@ -40,6 +42,30 @@ import { machineApiKeyOrganizationScope as organizationScope } from "@/api/lib/m
  * cannot reach the tenant predicate.
  */
 
+/** Better Auth api-key ids are text (not UUIDs); mirror `text` column bounds. */
+const isMachineApiKeyIdCursorPart = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 1 && value.length <= 128;
+
+/**
+ * `(created_at, id)` keyset codec for the newest-first key list.
+ *
+ * The timestamp half is projected and compared at the column's microsecond
+ * precision. `created_at` defaults to `now()`, so reading it into a JS `Date`
+ * truncates it to the millisecond, and the descending `<` boundary then
+ * excludes every key inside the truncated sliver: a machine credential
+ * silently missing from page two is one nobody can see, and therefore one
+ * nobody can revoke. Cursors issued in the older ISO form keep decoding; the
+ * codec tags them millisecond-precision and truncates the column on both
+ * sides of the comparison so the page they were cut from resumes exactly.
+ */
+export const machineApiKeyCursor = createTimestampIdCursorCodec({
+  column: apikey.createdAt,
+  brandId: (id: string) => id,
+  isIdPart: isMachineApiKeyIdCursorPart,
+});
+
+type MachineApiKeyCursor = TimestampIdCursor<string>;
+
 const machineApiKeyColumns = {
   createdAt: apikey.createdAt,
   enabled: apikey.enabled,
@@ -72,9 +98,17 @@ export type MachineApiKeyRow = {
 };
 
 type ListOptions = {
-  cursor: { createdAt: Date; id: string } | null;
+  cursor: MachineApiKeyCursor | null;
   limit: number;
   organizationId: SafeId<"organization">;
+};
+
+/**
+ * A listed key plus the microsecond-precision `created_at` projection the
+ * caller encodes into the next cursor. Ordering stays on the raw column.
+ */
+export type MachineApiKeyPageRow = MachineApiKeyRow & {
+  createdAtCursor: string;
 };
 
 /**
@@ -89,23 +123,24 @@ export const listOrganizationMachineApiKeys = async ({
   cursor,
   limit,
   organizationId,
-}: ListOptions): Promise<MachineApiKeyRow[]> =>
+}: ListOptions): Promise<MachineApiKeyPageRow[]> =>
   await rootDb
-    .select(machineApiKeyColumns)
+    .select({
+      ...machineApiKeyColumns,
+      createdAtCursor: machineApiKeyCursor.cursorValue.as("created_at_cursor"),
+    })
     .from(apikey)
     .where(
-      cursor === null
-        ? organizationScope(organizationId)
-        : and(
-            organizationScope(organizationId),
-            or(
-              lt(apikey.createdAt, cursor.createdAt),
-              and(
-                eq(apikey.createdAt, cursor.createdAt),
-                lt(apikey.id, cursor.id),
-              ),
-            ),
-          ),
+      and(
+        organizationScope(organizationId),
+        cursor === null
+          ? undefined
+          : machineApiKeyCursor.keysetAfter({
+              cursor,
+              idColumn: apikey.id,
+              direction: "descending",
+            }),
+      ),
     )
     .orderBy(desc(apikey.createdAt), desc(apikey.id))
     .limit(limit + 1);
