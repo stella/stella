@@ -1,9 +1,12 @@
 /**
- * How an ingestion cycle ended, and whether that counts as forward progress.
+ * How an ingestion cycle ended, whether that counts as forward progress, and
+ * what cadence the next cycle deserves.
  *
  * Kept free of the runner's DB and env imports so the classification can be
  * exercised on its own.
  */
+
+import { panic } from "better-result";
 
 export const CYCLE_OUTCOME = {
   COMPLETED: "completed",
@@ -15,7 +18,10 @@ export type CycleOutcome = (typeof CYCLE_OUTCOME)[keyof typeof CYCLE_OUTCOME];
 
 export type CycleResult = {
   outcome: CycleOutcome;
+  /** Decisions written: inserts and updates both. */
   inserted: number;
+  /** Decisions the dedup short-circuit dropped as already stored, unchanged. */
+  skipped: number;
   pagesProcessed: number;
 };
 
@@ -50,13 +56,204 @@ export const cycleMadeProgress = ({
   outcome === CYCLE_OUTCOME.COMPLETED || pagesProcessed > 0;
 
 /**
- * Whether a cycle is evidence the source is caught up, which drives the idle
- * (daily) polling cadence.
+ * What a cycle says about the source's productivity, independent of how the
+ * cycle ended.
  *
- * Only a clean cycle that found nothing qualifies. A halt or a timeout means
- * the cycle stopped partway through a source that still has work, so it must
- * not read as quiet: an adapter already on the idle cadence would otherwise
- * stay there, taking a day per page.
+ * The outcome alone cannot answer this. An adapter whose page budget does not
+ * fit its cycle deadline ends every cycle on a timeout, so any classification
+ * keyed on `CYCLE_OUTCOME.COMPLETED` reads a source that re-fetches its whole
+ * stored corpus every cycle, writing nothing, as indistinguishable from a
+ * source that is keeping up.
  */
-export const cycleWasIdle = ({ outcome, inserted }: CycleResult): boolean =>
-  outcome === CYCLE_OUTCOME.COMPLETED && inserted === 0;
+export const CYCLE_PRODUCTIVITY = {
+  /** Rows written. The source is moving, however the cycle ended. */
+  PRODUCTIVE: "productive",
+  /** Nothing fetched and nothing written: the source is caught up. */
+  QUIET: "quiet",
+  /**
+   * Decisions fetched, none written: the adapter re-read ground it already
+   * holds. Sustained, this is work without progress.
+   */
+  UNPRODUCTIVE_RESCAN: "unproductive_rescan",
+  /**
+   * Ended before a decision was fetched, and not cleanly. Evidence of neither
+   * quiet nor re-scan; a stall of this shape is what `cycleMadeProgress`
+   * covers.
+   */
+  INCONCLUSIVE: "inconclusive",
+} as const;
+
+export type CycleProductivity =
+  (typeof CYCLE_PRODUCTIVITY)[keyof typeof CYCLE_PRODUCTIVITY];
+
+/**
+ * Decisions the pipeline handled this cycle.
+ *
+ * The pipeline counts every decision it reaches as either written
+ * (`inserted`, covering inserts and updates) or `skipped` (already stored and
+ * unchanged, or failed), so the sum separates "fetched decisions and wrote
+ * none" from "found nothing to fetch".
+ */
+export const cycleDecisionsProcessed = ({
+  inserted,
+  skipped,
+}: CycleResult): number => inserted + skipped;
+
+export const classifyCycleProductivity = (
+  cycle: CycleResult,
+): CycleProductivity => {
+  if (cycle.inserted > 0) {
+    return CYCLE_PRODUCTIVITY.PRODUCTIVE;
+  }
+  if (cycleDecisionsProcessed(cycle) > 0) {
+    return CYCLE_PRODUCTIVITY.UNPRODUCTIVE_RESCAN;
+  }
+  return cycle.outcome === CYCLE_OUTCOME.COMPLETED
+    ? CYCLE_PRODUCTIVITY.QUIET
+    : CYCLE_PRODUCTIVITY.INCONCLUSIVE;
+};
+
+/** How often the adapter loop should start the next cycle. */
+export const CYCLE_CADENCE = {
+  FAST: "fast",
+  /** Caught up: poll once a day instead of hammering court servers. */
+  CAUGHT_UP: "caught_up",
+  /** Re-fetching stored decisions: hold the slot for adapters with work. */
+  UNPRODUCTIVE_BACKOFF: "unproductive_backoff",
+} as const;
+
+export type CycleCadence = (typeof CYCLE_CADENCE)[keyof typeof CYCLE_CADENCE];
+
+const FAST_DELAY_MS = 5000;
+const DAILY_DELAY_MS = 24 * 60 * 60 * 1000;
+
+const HOURLY_DELAY_MS = 60 * 60 * 1000;
+
+/**
+ * Being caught up is a conclusion; re-fetching stored decisions is only
+ * evidence, so the two do not earn the same delay.
+ *
+ * A source with nothing left to give has told us so, and daily is the right
+ * cadence for asking again. A source writing nothing while it fetches is
+ * either the pathology this classifier exists to catch or a re-ingest walking
+ * forward through ground it already holds, and those two look identical from
+ * here: both fetch, neither writes. Only the second is harmed by waiting, and
+ * it is harmed badly, since it advances no further than one cycle per delay
+ * and a long stored stretch would take months at a daily cadence.
+ *
+ * So the backoff is hourly. Against the pathology that is still a 720-fold
+ * reduction on the fast cadence and the telemetry below names it either way;
+ * against a legitimate catch-up walk it costs a day rather than a season.
+ * Either way a cycle that writes returns to the fast cadence immediately.
+ */
+export const CYCLE_CADENCE_DELAY_MS = {
+  [CYCLE_CADENCE.FAST]: FAST_DELAY_MS,
+  [CYCLE_CADENCE.CAUGHT_UP]: DAILY_DELAY_MS,
+  [CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]: HOURLY_DELAY_MS,
+} as const satisfies Record<CycleCadence, number>;
+
+/**
+ * Consecutive cycles an adapter has spent caught up, and consecutive cycles it
+ * has spent re-fetching stored decisions. Separate counters: only one can be
+ * running at a time, and each escalates on its own evidence.
+ */
+export type CadenceStreaks = {
+  quietCycles: number;
+  unproductiveCycles: number;
+};
+
+export const INITIAL_CADENCE_STREAKS = {
+  quietCycles: 0,
+  unproductiveCycles: 0,
+} as const satisfies CadenceStreaks;
+
+/** Consecutive cycles of a kind before the cadence escalates. */
+export const QUIET_THRESHOLD = 3;
+export const UNPRODUCTIVE_THRESHOLD = 3;
+
+const advanceStreaks = (
+  streaks: CadenceStreaks,
+  productivity: CycleProductivity,
+): CadenceStreaks => {
+  switch (productivity) {
+    case CYCLE_PRODUCTIVITY.PRODUCTIVE:
+      return { quietCycles: 0, unproductiveCycles: 0 };
+    case CYCLE_PRODUCTIVITY.QUIET:
+      // Nothing left to fetch ends a re-scan as surely as a written row does.
+      return { quietCycles: streaks.quietCycles + 1, unproductiveCycles: 0 };
+    case CYCLE_PRODUCTIVITY.UNPRODUCTIVE_RESCAN:
+      return {
+        quietCycles: 0,
+        unproductiveCycles: streaks.unproductiveCycles + 1,
+      };
+    case CYCLE_PRODUCTIVITY.INCONCLUSIVE:
+      // No evidence either way, so it is not evidence against: a cycle that
+      // dies before its first fetch must not silently clear a running
+      // re-scan. It does clear the quiet streak, because a cycle that ended
+      // early left a source with work outstanding.
+      return { quietCycles: 0, unproductiveCycles: streaks.unproductiveCycles };
+    default:
+      return panic(
+        `Unhandled cycle productivity: ${productivity satisfies never}`,
+      );
+  }
+};
+
+const cadenceForStreaks = ({
+  quietCycles,
+  unproductiveCycles,
+}: CadenceStreaks): CycleCadence => {
+  if (unproductiveCycles >= UNPRODUCTIVE_THRESHOLD) {
+    return CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF;
+  }
+  return quietCycles >= QUIET_THRESHOLD
+    ? CYCLE_CADENCE.CAUGHT_UP
+    : CYCLE_CADENCE.FAST;
+};
+
+/** Telemetry payload for a re-scan that has crossed the threshold. */
+export type UnproductiveRescanSignal = {
+  unproductiveCycles: number;
+  decisionsProcessed: number;
+  decisionsWritten: number;
+};
+
+export type CadenceStep = {
+  productivity: CycleProductivity;
+  streaks: CadenceStreaks;
+  cadence: CycleCadence;
+  /**
+   * Non-null on every cycle at or past the threshold, not only the one that
+   * crosses it: the escalated cadence means at most one signal a day, and a
+   * condition that stops being reported looks identical to one that cleared.
+   */
+  unproductiveRescan: UnproductiveRescanSignal | null;
+};
+
+/**
+ * Fold one cycle into an adapter's cadence state.
+ *
+ * Pure so the escalation can be exercised over whole cycle sequences: the
+ * production defect this replaces was a streak that never reached its
+ * threshold, which no single-cycle assertion can catch.
+ */
+export const stepCadence = (
+  streaks: CadenceStreaks,
+  cycle: CycleResult,
+): CadenceStep => {
+  const productivity = classifyCycleProductivity(cycle);
+  const next = advanceStreaks(streaks, productivity);
+  return {
+    productivity,
+    streaks: next,
+    cadence: cadenceForStreaks(next),
+    unproductiveRescan:
+      next.unproductiveCycles >= UNPRODUCTIVE_THRESHOLD
+        ? {
+            unproductiveCycles: next.unproductiveCycles,
+            decisionsProcessed: cycleDecisionsProcessed(cycle),
+            decisionsWritten: cycle.inserted,
+          }
+        : null,
+  };
+};
