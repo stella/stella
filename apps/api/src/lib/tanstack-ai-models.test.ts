@@ -420,6 +420,21 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter).toBeInstanceOf(StellaOpenRouterTextAdapter);
   });
 
+  test("keeps the Google provider default for a manual model without an effort", () => {
+    const originalKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
+    env.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
+    try {
+      const model = getTanStackTextModelById("google::gemini-3.6-flash", null, {
+        role: "chat",
+        organizationId: null,
+      });
+
+      expect(looseOptions(model.modelOptions).thinkingConfig).toBeUndefined();
+    } finally {
+      env.GOOGLE_GENERATIVE_AI_API_KEY = originalKey;
+    }
+  });
+
   test("resolves Mistral BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("mistral");
 

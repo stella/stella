@@ -159,6 +159,10 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    p.check(
+      "chat_threads_reasoning_effort_selection_check",
+      sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'))`,
+    ),
     ...chatThreadPolicies(),
   ],
 );

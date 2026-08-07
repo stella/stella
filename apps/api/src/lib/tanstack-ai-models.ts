@@ -1110,6 +1110,7 @@ type TanStackModelOptionsForRoleInput<TProvider extends TanStackTextProvider> =
     modelId: string;
     organizationId: SafeId<"organization"> | null;
     reasoningEffort?: ReasoningEffort | undefined;
+    useRoleReasoningDefault?: boolean | undefined;
   };
 
 const GOOGLE_THINKING_LEVEL_BY_EFFORT: Record<
@@ -1149,15 +1150,21 @@ const tanStackGoogleModelOptionsForRole = ({
   role,
   modelId,
   reasoningEffort,
+  useRoleReasoningDefault = true,
 }: TanStackModelOptionsForRoleInput<"google">): StellaGeminiTextProviderOptions => {
   // Clamped into the model's declared capability: Flash models turn a
   // "none" request into MINIMAL, Pro (whose floor is "low") into LOW.
   // Unknown models (env overrides, custom IDs) get no thinkingConfig
   // at all — the provider default is the only universally safe choice.
-  const effort = resolveReasoningEffort({
-    modelId,
-    requested: reasoningEffort ?? GOOGLE_REASONING_EFFORT_BY_ROLE[role],
-  });
+  const requested =
+    reasoningEffort ??
+    (useRoleReasoningDefault
+      ? GOOGLE_REASONING_EFFORT_BY_ROLE[role]
+      : undefined);
+  const effort =
+    requested === undefined
+      ? null
+      : resolveReasoningEffort({ modelId, requested });
   return {
     ...deterministicSamplingForModel(modelId),
     ...(effort === null
@@ -1286,6 +1293,7 @@ export function tanStackModelOptionsForRole(
         modelId: input.modelId,
         organizationId: input.organizationId,
         reasoningEffort: input.reasoningEffort,
+        useRoleReasoningDefault: input.useRoleReasoningDefault,
       });
     case "anthropic":
       return tanStackAnthropicModelOptionsForRole({
@@ -1373,6 +1381,7 @@ const buildResolvedTextModel = ({
   reasoningEffort,
   region,
   role,
+  useRoleReasoningDefault = true,
 }: {
   adapter: AnyTextAdapter;
   keySource: "byok" | "instance";
@@ -1382,6 +1391,7 @@ const buildResolvedTextModel = ({
   reasoningEffort?: ReasoningEffort | undefined;
   region?: DataRegion | undefined;
   role: ModelRole;
+  useRoleReasoningDefault?: boolean | undefined;
 }): ResolvedTanStackTextModel => {
   switch (provider) {
     case "google":
@@ -1397,6 +1407,7 @@ const buildResolvedTextModel = ({
           modelId,
           organizationId,
           reasoningEffort,
+          useRoleReasoningDefault,
         }),
         ...(region === undefined ? {} : { region }),
         role,
@@ -1487,12 +1498,14 @@ const resolveByokTextModel = ({
   modelId,
   organizationId,
   reasoningEffort,
+  useRoleReasoningDefault,
 }: {
   role: ModelRole;
   providerConfig: OrgAIProviderConfig;
   modelId: string;
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
+  useRoleReasoningDefault?: boolean | undefined;
 }): ResolvedTanStackTextModel => {
   const region = providerRegion(providerConfig);
   const provider = resolveTanStackTextProvider({
@@ -1512,6 +1525,7 @@ const resolveByokTextModel = ({
     role,
     organizationId,
     reasoningEffort,
+    useRoleReasoningDefault,
   });
 };
 
@@ -1521,12 +1535,14 @@ const resolveInstanceTextModel = ({
   provider,
   organizationId,
   reasoningEffort,
+  useRoleReasoningDefault,
 }: {
   role: ModelRole;
   modelId: string;
   provider: AIProvider;
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
+  useRoleReasoningDefault?: boolean | undefined;
 }): ResolvedTanStackTextModel => {
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
@@ -1539,6 +1555,7 @@ const resolveInstanceTextModel = ({
     role,
     organizationId,
     reasoningEffort,
+    useRoleReasoningDefault,
   });
 };
 
@@ -1638,6 +1655,7 @@ export const getTanStackTextModelById = (
       modelId: override.modelId,
       organizationId: options.organizationId,
       reasoningEffort: options.reasoningEffort,
+      useRoleReasoningDefault: false,
     });
   }
 
@@ -1660,6 +1678,7 @@ export const getTanStackTextModelById = (
       role: options.role,
       organizationId: options.organizationId,
       reasoningEffort: options.reasoningEffort,
+      useRoleReasoningDefault: false,
     });
   }
 
@@ -1669,5 +1688,6 @@ export const getTanStackTextModelById = (
     provider: supportedProvider,
     organizationId: options.organizationId,
     reasoningEffort: options.reasoningEffort,
+    useRoleReasoningDefault: false,
   });
 };
