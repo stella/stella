@@ -53,7 +53,6 @@ import {
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { LegacyTodosPage } from "@/routes/_protected.todos/-legacy-page";
-import { myTasksOptions } from "@/routes/_protected.todos/-legacy-queries";
 import type {
   MyWorkItem,
   MyWorkQueue,
@@ -69,7 +68,6 @@ const TodosPage = () =>
 export const Route = createFileRoute("/_protected/todos/")({
   loader: async ({ context }) => {
     if (!env.VITE_FEATURE_GOVERNED_WORKFLOW) {
-      await ensureRouteQueryData(context.queryClient, myTasksOptions);
       return;
     }
 
