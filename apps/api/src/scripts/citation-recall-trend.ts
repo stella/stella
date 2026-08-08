@@ -33,7 +33,11 @@ const argValue = (name: string): string | undefined => {
   return idx !== -1 ? args[idx + 1] : undefined;
 };
 
-const fail = (message: string): never => {
+// The annotation on the binding is load-bearing, not decoration: control-flow
+// analysis only treats a call as terminating when the callee is a plain
+// function declaration or a const with an explicit type, so without it every
+// argument stays possibly-undefined after its own guard.
+const fail: (message: string) => never = (message) => {
   console.error(`citation-recall-trend: ${message}`);
   process.exit(2);
 };
@@ -111,6 +115,7 @@ type RecallTotals = {
   missed: number;
   unparsed: number;
   cappedEvents: number;
+  replays: number;
 };
 
 const totals: RecallTotals = {
@@ -119,8 +124,18 @@ const totals: RecallTotals = {
   missed: 0,
   unparsed: 0,
   cappedEvents: 0,
+  replays: 0,
 };
 const missedCounts = new Map<string, number>();
+/**
+ * The producer emits before the write commits, so an ambiguous timeout can
+ * commit the row and still throw, and the replay re-measures the same
+ * decision. It nominates the source hash as the identity to deduplicate
+ * retries on, so aggregation is idempotent over replays: counting a replay
+ * would weight one decision several times in both the totals and the
+ * missed-spelling ranking.
+ */
+const seenSourceHashes = new Set<string>();
 
 for (const rawEvent of rawEvents) {
   const message = isRecord(rawEvent) ? rawEvent["message"] : undefined;
@@ -147,6 +162,16 @@ for (const rawEvent of rawEvents) {
   if (typeof cited !== "number" || typeof missedCount !== "number") {
     totals.unparsed += 1;
     continue;
+  }
+  // A record without a usable hash cannot be shown to be a replay, so it
+  // counts once rather than being dropped on suspicion.
+  const sourceHash = parsed["sourceHash"];
+  if (typeof sourceHash === "string" && sourceHash.length > 0) {
+    if (seenSourceHashes.has(sourceHash)) {
+      totals.replays += 1;
+      continue;
+    }
+    seenSourceHashes.add(sourceHash);
   }
   totals.events += 1;
   totals.cited += cited;
@@ -192,6 +217,11 @@ if (totals.events === 0) {
 if (totals.cappedEvents > 0) {
   console.log(
     `NOTE ${String(totals.cappedEvents)} event(s) missed more than ${String(MISSED_PER_EVENT_CAP)} citations; their MISSED strings are truncated at the emitter`,
+  );
+}
+if (totals.replays > 0) {
+  console.log(
+    `NOTE ${String(totals.replays)} replayed event(s) collapsed by source hash`,
   );
 }
 if (totals.unparsed > 0) {
