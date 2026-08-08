@@ -1270,57 +1270,66 @@ const loadDocumentProcessingStates = async ({
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }): Promise<DocumentProcessingStates> => {
-  const [extracted, runs, searchDocument, settings] = await context.scopedDb(
-    async (tx) =>
-      await Promise.all([
-        tx.query.extractedContent.findFirst({
-          where: {
-            entityId: { eq: entityId },
-            organizationId: { eq: context.organizationId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            charCount: true,
-            extractedAt: true,
-            sourceEntityVersionId: true,
-            sourceFieldId: true,
-            sourceFileId: true,
-            sourceSha256Hex: true,
-          },
-        }),
-        tx.query.documentProcessingRuns.findMany({
-          where: {
-            entityId: { eq: entityId },
-            entityVersionId: { eq: current.currentVersionId },
-            organizationId: { eq: context.organizationId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            errorCode: true,
-            finishedAt: true,
-            id: true,
-            kind: true,
-            sourceFileId: true,
-            sourceSha256Hex: true,
-            status: true,
-          },
-          orderBy: { createdAt: "desc" },
-          limit: 4,
-        }),
-        tx.query.searchDocuments.findFirst({
-          where: {
-            entityId: { eq: entityId },
-            organizationId: { eq: context.organizationId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { updatedAt: true },
-        }),
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: context.organizationId } },
-          columns: { documentProcessingMode: true },
-        }),
-      ]),
-  );
+  const [extracted, runs, searchDocument, settings, latestVersion] =
+    await context.scopedDb(
+      async (tx) =>
+        await Promise.all([
+          tx.query.extractedContent.findFirst({
+            where: {
+              entityId: { eq: entityId },
+              organizationId: { eq: context.organizationId },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: {
+              charCount: true,
+              extractedAt: true,
+              sourceEntityVersionId: true,
+              sourceFieldId: true,
+              sourceFileId: true,
+              sourceSha256Hex: true,
+            },
+          }),
+          tx.query.documentProcessingRuns.findMany({
+            where: {
+              entityId: { eq: entityId },
+              entityVersionId: { eq: current.currentVersionId },
+              organizationId: { eq: context.organizationId },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: {
+              errorCode: true,
+              finishedAt: true,
+              id: true,
+              kind: true,
+              sourceFileId: true,
+              sourceSha256Hex: true,
+              status: true,
+            },
+            orderBy: { createdAt: "desc" },
+            limit: 4,
+          }),
+          tx.query.searchDocuments.findFirst({
+            where: {
+              entityId: { eq: entityId },
+              organizationId: { eq: context.organizationId },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: { updatedAt: true },
+          }),
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: context.organizationId } },
+            columns: { documentProcessingMode: true },
+          }),
+          tx.query.entityVersions.findFirst({
+            where: {
+              entityId: { eq: entityId },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: { id: true },
+            orderBy: { versionNumber: "desc", id: "desc" },
+          }),
+        ]),
+    );
 
   const sourceFile = findExtractionFileField(current.fields);
   if (!sourceFile) {
@@ -1343,6 +1352,7 @@ const loadDocumentProcessingStates = async ({
 
   const currentExtracted = selectCurrentExtractedContent({
     extracted,
+    allowLegacy: latestVersion?.id === current.currentVersionId,
     currentVersionCreatedAt: current.currentVersionCreatedAt,
     currentVersionId: current.currentVersionId,
     fields: current.fields,
@@ -1370,7 +1380,22 @@ const loadDocumentProcessingStates = async ({
     });
 
   let contentState: DocumentContentState;
-  if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
+  if (
+    !sourceFile.encrypted &&
+    sourceFile.mimeType === DOCX_MIME_TYPE &&
+    currentExtracted === null &&
+    nativeRun?.status === "failed" &&
+    nativeRun.errorCode !== "search_index_failed"
+  ) {
+    contentState = {
+      status: "failed",
+      processingKind: "native-extraction",
+      runId: nativeRun.id,
+      sourceVersionId: current.currentVersionId,
+      errorCode: nativeRun.errorCode,
+      retryable: true,
+    };
+  } else if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
     contentState = {
       status: "ready",
       source: "direct_docx",

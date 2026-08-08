@@ -1403,26 +1403,37 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     document: currentDocument,
   });
 
-  const row =
+  const projection =
     docxOutcome.kind === "markdown"
       ? null
-      : await context.scopedDb((tx) =>
-          tx.query.extractedContent.findFirst({
-            where: {
-              entityId: { eq: entityId },
-              organizationId: { eq: context.organizationId },
-              workspaceId: { eq: currentDocument.workspaceId },
-            },
-            columns: {
-              ciphertext: true,
-              extractedAt: true,
-              iv: true,
-              sourceEntityVersionId: true,
-              sourceFieldId: true,
-              sourceFileId: true,
-              sourceSha256Hex: true,
-            },
-          }),
+      : await context.scopedDb(
+          async (tx) =>
+            await Promise.all([
+              tx.query.extractedContent.findFirst({
+                where: {
+                  entityId: { eq: entityId },
+                  organizationId: { eq: context.organizationId },
+                  workspaceId: { eq: currentDocument.workspaceId },
+                },
+                columns: {
+                  ciphertext: true,
+                  extractedAt: true,
+                  iv: true,
+                  sourceEntityVersionId: true,
+                  sourceFieldId: true,
+                  sourceFileId: true,
+                  sourceSha256Hex: true,
+                },
+              }),
+              tx.query.entityVersions.findFirst({
+                where: {
+                  entityId: { eq: entityId },
+                  workspaceId: { eq: currentDocument.workspaceId },
+                },
+                columns: { id: true },
+                orderBy: { versionNumber: "desc", id: "desc" },
+              }),
+            ]),
         );
 
   if (docxOutcome.kind === "unavailable" && cursor !== undefined) {
@@ -1436,7 +1447,8 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   }
 
   const currentExtracted = selectCurrentExtractedContent({
-    extracted: row,
+    extracted: projection?.[0],
+    allowLegacy: projection?.[1]?.id === currentDocument.currentVersion.id,
     currentVersionCreatedAt: currentDocument.currentVersion.createdAt,
     currentVersionId: currentDocument.currentVersion.id,
     fields: currentDocument.currentVersion.fields,

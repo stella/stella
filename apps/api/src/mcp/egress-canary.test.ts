@@ -644,6 +644,9 @@ describe("MCP anonymization canary corpus", () => {
             sourceSha256Hex: null,
           }),
         },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
       },
     };
     const context = buildContext({ tx });
@@ -762,6 +765,9 @@ describe("MCP anonymization canary corpus", () => {
           }),
         },
         documentProcessingRuns: { findMany: async () => [] },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
         extractedContent: { findFirst: async () => null },
         organizationSettings: {
           findFirst: async () => ({ documentProcessingMode: "off" }),

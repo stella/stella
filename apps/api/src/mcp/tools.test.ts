@@ -461,6 +461,9 @@ type MockMcpTransaction = {
     documentProcessingRuns: {
       findMany: () => Promise<unknown[]>;
     };
+    entityVersions: {
+      findFirst: () => Promise<{ id: string } | null>;
+    };
     extractedContent: {
       findFirst: () => Promise<ExtractedContentRow | null>;
     };
@@ -477,7 +480,7 @@ type MockMcpTransaction = {
       findFirst: () => Promise<{ documentProcessingMode: string }>;
     };
     searchDocuments: {
-      findFirst: () => Promise<{ updatedAt: Date } | null>;
+      findFirst: () => Promise<{ updatedAt: Date } | undefined>;
     };
   };
   select: () => ReturnType<typeof createSelectBuilder>;
@@ -543,6 +546,7 @@ const createScopedDb = (
     : null,
   processingState: {
     documentProcessingMode?: "off" | "searchable-text";
+    latestVersionId?: string;
     runs?: unknown[];
     searchUpdatedAt?: Date | null;
   } = {},
@@ -594,6 +598,11 @@ const createScopedDb = (
             documentProcessingRuns: {
               findMany: async () => processingState.runs ?? [],
             },
+            entityVersions: {
+              findFirst: async () => ({
+                id: processingState.latestVersionId ?? "entity_version_1",
+              }),
+            },
             fields: {
               findMany: async () => [
                 {
@@ -613,7 +622,7 @@ const createScopedDb = (
               findFirst: async () =>
                 processingState.searchUpdatedAt === undefined ||
                 processingState.searchUpdatedAt === null
-                  ? null
+                  ? undefined
                   : { updatedAt: processingState.searchUpdatedAt },
             },
           },
@@ -1718,6 +1727,44 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(decryptContentMock).not.toHaveBeenCalled();
   });
 
+  test("read_content_across_matters rejects legacy text after a version rollback", async () => {
+    const context = createContext({
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow(),
+        [
+          {
+            type: "file",
+            id: "file_current",
+            fileName: "promoted-version.pdf",
+            mimeType: "application/pdf",
+          },
+        ],
+        {
+          entityId: "entity_1",
+          kind: "document",
+          name: "Promoted Version",
+          workspaceId: "ws_1",
+        },
+        { latestVersionId: "entity_version_deleted_newer" },
+      ),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "conflict",
+      message: "Current document content is not ready",
+      hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
+      retryable: true,
+    });
+    expect(decryptContentMock).not.toHaveBeenCalled();
+  });
+
   test("read_content_across_matters selects the SAME file the extraction pipeline indexed, not just any DOCX field", async () => {
     // The current version's first file field (the one `processExtraction`
     // would extract `extractedContentRow`'s plaintext from) is a non-DOCX
@@ -2335,6 +2382,61 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_document does not advertise a failed DOCX source as readable", async () => {
+    const sha256Hex = "a".repeat(64);
+    const currentDocx = {
+      encrypted: false,
+      fileName: "corrupt.docx",
+      id: "file_1",
+      mimeType: DOCX_MIME_TYPE,
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          null,
+          [currentDocx],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Corrupt Agreement",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: "processing_failed",
+                finishedAt: new Date("2026-01-02T00:00:00.000Z"),
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+            ],
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "failed",
+        processingKind: "native-extraction",
+        runId: "run_native",
+        errorCode: "processing_failed",
+        retryable: true,
+      },
+    });
+  });
+
   test("read_document returns the exact OCR action for a textless PDF when automatic OCR is off", async () => {
     const textlessProjection = createExtractedContentRow({ charCount: 0 });
     const currentPdf = {
@@ -2704,6 +2806,9 @@ describe("OpenAI-compatible MCP tools", () => {
               }),
             },
             documentProcessingRuns: { findMany: async () => [] },
+            entityVersions: {
+              findFirst: async () => ({ id: "ver_current" }),
+            },
             extractedContent: { findFirst: async () => null },
             fields: {
               findMany: async () => [],

@@ -34,6 +34,7 @@ describe("selectCurrentExtractedContent", () => {
     expect(
       selectCurrentExtractedContent({
         extracted: projection,
+        allowLegacy: true,
         currentVersionCreatedAt,
         currentVersionId,
         fields,
@@ -53,6 +54,7 @@ describe("selectCurrentExtractedContent", () => {
       expect(
         selectCurrentExtractedContent({
           extracted,
+          allowLegacy: true,
           currentVersionCreatedAt,
           currentVersionId,
           fields,
@@ -73,6 +75,7 @@ describe("selectCurrentExtractedContent", () => {
     expect(
       selectCurrentExtractedContent({
         extracted: legacy,
+        allowLegacy: true,
         currentVersionCreatedAt,
         currentVersionId,
         fields,
@@ -84,6 +87,25 @@ describe("selectCurrentExtractedContent", () => {
           ...legacy,
           extractedAt: new Date("2026-01-01T00:00:00.000Z"),
         },
+        allowLegacy: true,
+        currentVersionCreatedAt,
+        currentVersionId,
+        fields,
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a legacy row when a newer version proves the current version is a rollback", () => {
+    expect(
+      selectCurrentExtractedContent({
+        extracted: {
+          ...projection,
+          sourceEntityVersionId: null,
+          sourceFieldId: null,
+          sourceFileId: null,
+          sourceSha256Hex: null,
+        },
+        allowLegacy: false,
         currentVersionCreatedAt,
         currentVersionId,
         fields,
