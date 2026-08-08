@@ -1703,8 +1703,10 @@ const remapChunkMessageId = ({
       ),
     };
   }
-  const remapMessageId = (messageId: string): SafeId<"chatMessage"> =>
-    snapshotMessageIds.get(messageId) ?? mapMessageId(messageId);
+  const remapMessageId = (messageId: string): string =>
+    existingMessageIds.has(messageId)
+      ? messageId
+      : (snapshotMessageIds.get(messageId) ?? mapMessageId(messageId));
   const remappedChunk = hasMessageId(chunk)
     ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
     : chunk;

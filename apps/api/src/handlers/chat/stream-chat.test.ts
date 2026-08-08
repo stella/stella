@@ -387,6 +387,25 @@ describe("outgoing chat stream message ids", () => {
               },
             ],
           },
+          {
+            type: EventType.TOOL_CALL_RESULT,
+            content: '{"approved":true}',
+            messageId: "assistant-previous",
+            toolCallId: "tool-existing",
+          },
+          {
+            type: EventType.TOOL_CALL_START,
+            parentMessageId: "assistant-previous",
+            toolCallId: "tool-follow-up",
+            toolCallName: "web_search",
+            // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+            toolName: "web_search",
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "application-event",
+            value: { messageId: "assistant-previous" },
+          },
         ]),
       }),
     );
@@ -415,6 +434,25 @@ describe("outgoing chat stream message ids", () => {
             content: "Waiting for approval",
           },
         ],
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        content: '{"approved":true}',
+        messageId: "assistant-previous",
+        toolCallId: "tool-existing",
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: "assistant-previous",
+        toolCallId: "tool-follow-up",
+        toolCallName: "web_search",
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+        toolName: "web_search",
+      },
+      {
+        type: EventType.CUSTOM,
+        name: "application-event",
+        value: { messageId: "assistant-previous" },
       },
     ]);
     const snapshot = chunks.at(0);
