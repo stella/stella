@@ -36,7 +36,8 @@ const KEEP_ALIVE_CMD = ["sh", "-c", "tail -f /dev/null"];
  * Capabilities of the bun-native Docker provider. `writableStdin` is false by
  * design: exec output streams over a plain (non-hijacked) response body, which
  * has no host→process stdin, so harness adapters deliver the prompt via a file
- * (they already branch on this flag). Ports/fork are out of scope for v1.
+ * (they already branch on this flag). Spawned processes are killable because
+ * abort tears down the whole ephemeral container. Ports/fork are out of scope.
  * Snapshots stay disabled because Docker image commit would persist injected
  * credential environment variables. `networkPolicy` is false because Docker's
  * `HostConfig` cannot express per-connection egress allowlisting; egress is
@@ -50,6 +51,7 @@ const BUN_DOCKER_CAPS: SandboxCapabilities = {
   ports: false,
   backgroundProcesses: true,
   writableStdin: false,
+  killableProcesses: true,
   snapshots: false,
   networkPolicy: false,
   durableFilesystem: true,

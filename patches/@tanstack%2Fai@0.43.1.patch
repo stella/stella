@@ -1,0 +1,34 @@
+diff --git a/dist/esm/activities/chat/tools/tool-definition.d.ts b/dist/esm/activities/chat/tools/tool-definition.d.ts
+index be00a104924052aebbac5c9d1a85b3669b4c94f3..625b032719664072e5afa69ccc8a95d604d2c05f 100644
+--- a/dist/esm/activities/chat/tools/tool-definition.d.ts
++++ b/dist/esm/activities/chat/tools/tool-definition.d.ts
+@@ -105,7 +105,7 @@ export type InferToolName<T> = T extends {
+  */
+ export type InferToolInput<T> = T extends {
+     inputSchema?: infer TInput;
+-} ? TInput extends JSONSchema ? unknown : InferSchemaType<TInput> : unknown;
++} ? TInput extends StandardJSONSchemaV1<any, any> ? InferSchemaType<TInput> : TInput extends StandardSchemaV1<any, any> ? InferSchemaType<TInput> : TInput extends JSONSchema ? unknown : InferSchemaType<TInput> : unknown;
+ /**
+  * Extract the output type from a tool (inferred from Standard JSON Schema, or `unknown` for plain JSONSchema)
+  */
+diff --git a/src/activities/chat/tools/tool-definition.ts b/src/activities/chat/tools/tool-definition.ts
+index cbe4db76ca85eb131c41da1234760e7e50c186ca..6458bd6cf682da5429bb1a2bf0347a39655d01a2 100644
+--- a/src/activities/chat/tools/tool-definition.ts
++++ b/src/activities/chat/tools/tool-definition.ts
+@@ -187,9 +187,13 @@ export type InferToolName<T> = T extends { name: infer N } ? N : never
+  * Extract the input type from a tool (inferred from Standard JSON Schema, or `unknown` for plain JSONSchema)
+  */
+ export type InferToolInput<T> = T extends { inputSchema?: infer TInput }
+-  ? TInput extends JSONSchema
+-    ? unknown
+-    : InferSchemaType<TInput>
++  ? TInput extends StandardJSONSchemaV1<any, any>
++    ? InferSchemaType<TInput>
++    : TInput extends StandardSchemaV1<any, any>
++      ? InferSchemaType<TInput>
++      : TInput extends JSONSchema
++        ? unknown
++        : InferSchemaType<TInput>
+   : unknown
+ 
+ /**

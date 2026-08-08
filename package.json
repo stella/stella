@@ -137,8 +137,8 @@
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/ai": "0.43.1",
     "@tanstack/ai-anthropic": "0.16.4",
-    "@tanstack/ai-codex": "0.2.2",
-    "@tanstack/ai-sandbox": "0.2.3",
+    "@tanstack/ai-codex": "0.3.0",
+    "@tanstack/ai-sandbox": "0.3.0",
     "@tanstack/ai-bedrock": "0.1.6",
     "@tanstack/ai-client": "0.23.1",
     "@tanstack/ai-code-mode": "0.3.10",
@@ -186,6 +186,7 @@
   "patchedDependencies": {
     "@tanstack/ai-anthropic@0.16.4": "patches/@tanstack%2Fai-anthropic@0.16.4.patch",
     "@tanstack/openai-base@0.9.10": "patches/@tanstack%2Fopenai-base@0.9.10.patch",
-    "@tanstack/ai-mistral@0.2.4": "patches/@tanstack%2Fai-mistral@0.2.4.patch"
+    "@tanstack/ai-mistral@0.2.4": "patches/@tanstack%2Fai-mistral@0.2.4.patch",
+    "@tanstack/ai@0.43.1": "patches/@tanstack%2Fai@0.43.1.patch"
   }
 }

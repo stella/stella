@@ -1,7 +1,7 @@
+import type { StandardTypedV1 } from "@standard-schema/spec";
 import type {
   AnyTool,
   ClientTool,
-  InferSchemaType,
   InputSchemaOf,
   OutputSchemaOf,
   SchemaInput,
@@ -22,14 +22,22 @@ export type ChatToolMap = Record<string, ChatTool | undefined>;
 // schema inference because its collection boundary intentionally uses `any`.
 type DefinedChatTool<TTool> = Exclude<TTool, undefined>;
 
+type InferSchemaInput<TSchema> = TSchema extends StandardTypedV1
+  ? StandardTypedV1.InferInput<TSchema>
+  : unknown;
+
+type InferSchemaOutput<TSchema> = TSchema extends StandardTypedV1
+  ? StandardTypedV1.InferOutput<TSchema>
+  : unknown;
+
 export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   [TName in keyof TTools & string as DefinedChatTool<
     TTools[TName]
   > extends never
     ? never
     : TName]: {
-    input: InferSchemaType<InputSchemaOf<DefinedChatTool<TTools[TName]>>>;
-    output: InferSchemaType<OutputSchemaOf<DefinedChatTool<TTools[TName]>>>;
+    input: InferSchemaInput<InputSchemaOf<DefinedChatTool<TTools[TName]>>>;
+    output: InferSchemaOutput<OutputSchemaOf<DefinedChatTool<TTools[TName]>>>;
   };
 };
 
@@ -46,12 +54,8 @@ type ChatClientToolFor<
   TTool extends ChatTool,
   TApprovalNames extends string,
 > = ClientTool<
-  TTool extends { inputSchema?: infer TInput extends SchemaInput }
-    ? TInput
-    : SchemaInput,
-  TTool extends { outputSchema?: infer TOutput extends SchemaInput }
-    ? TOutput
-    : SchemaInput,
+  InputSchemaOf<TTool> extends SchemaInput ? InputSchemaOf<TTool> : undefined,
+  OutputSchemaOf<TTool> extends SchemaInput ? OutputSchemaOf<TTool> : undefined,
   TName,
   unknown,
   TName extends TApprovalNames ? true : InferToolNeedsApproval<TTool>
