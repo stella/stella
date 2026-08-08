@@ -38,6 +38,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { authCookiePrefixOverride } from "@/api/lib/auth-cookie-name";
 import {
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
@@ -419,9 +420,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-const authCookiePrefix = env.isDev
-  ? (env.BETTER_AUTH_COOKIE_PREFIX ?? "stella-dev")
-  : undefined;
+const authCookiePrefix = authCookiePrefixOverride();
 
 /**
  * Keeps `user.name` from ever persisting as an empty string.
