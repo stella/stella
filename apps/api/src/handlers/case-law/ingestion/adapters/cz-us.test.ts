@@ -9,6 +9,7 @@ type ResultRow = {
   id: string;
   sz: string;
   caseNumber: string;
+  listedCaseNumber?: string | undefined;
   date: string;
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
@@ -75,7 +76,7 @@ const makeResultsPage = (
       return `
 <tr class='resultData${index % 2}'>
   <td></td>
-  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${index % 2}' valign="top">
   <td>${textUrl ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />` : ""}</td>
@@ -120,7 +121,7 @@ type MockSearchOptions = {
   detailStatus?: number;
   unparseableDetail?: boolean;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
-  onDetail?: (url: URL) => void;
+  onDetail?: (url: URL, init?: RequestInit) => void;
 };
 
 const installSearchMock = ({
@@ -168,7 +169,7 @@ const installSearchMock = ({
         );
       }
       if (url.pathname.endsWith("/Search/GetText.aspx")) {
-        onDetail?.(url);
+        onDetail?.(url, init);
         const row = bySz.get(url.searchParams.get("sz") ?? "");
         const counterText =
           row === undefined
@@ -608,6 +609,7 @@ describe("czUsAdapter.fetchPage", () => {
 
   test("rebuilds text URLs from the trusted NALUS origin", async () => {
     let requestedDetail: URL | undefined;
+    let detailRedirect: RequestInit["redirect"];
     installSearchMock({
       rows: [
         {
@@ -618,8 +620,9 @@ describe("czUsAdapter.fetchPage", () => {
           textUrl: "http://169.254.169.254/latest/GetText.aspx?sz=1-78-24_1",
         },
       ],
-      onDetail: (url) => {
+      onDetail: (url, init) => {
         requestedDetail = url;
+        detailRedirect = init?.redirect;
       },
     });
 
@@ -628,6 +631,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     expect(requestedDetail?.origin).toBe("https://nalus.usoud.cz");
+    expect(detailRedirect).toBe("manual");
     expect(page.decisions[0]?.sourceUrl).toBe(
       "https://nalus.usoud.cz/Search/GetText.aspx?sz=1-78-24_1",
     );
@@ -640,6 +644,7 @@ describe("czUsAdapter.fetchPage", () => {
           id: "7201",
           sz: "withdrawn-action-is-not-listed",
           caseNumber: "Pl.ÚS 9/24",
+          listedCaseNumber: "",
           date: "3. 1. 2024",
           textUrl: null,
         },
@@ -651,16 +656,41 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     expect(page.decisions[0]).toMatchObject({
-      caseNumber: "Pl.ÚS 9/24",
+      caseNumber: "NALUS record 7201",
       sourceDocumentId: "nalus-record:7201",
       sourceUrl: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=7201",
       metadata: {
         nalusRecordId: "7201",
+        listingDocketMissing: true,
         listedOnly: true,
         listedOnlyReason: "missing-text-action",
       },
     });
     expect(page.coverage?.collected).toBe(1);
+  });
+
+  test("recovers a missing listed docket from the decision detail", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "7301",
+          sz: "3-81-24_1",
+          caseNumber: "III.ÚS 81/24",
+          listedCaseNumber: "",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions[0]).toMatchObject({
+      caseNumber: "III.ÚS 81/24",
+      sourceDocumentId: "nalus-record:7301",
+      metadata: { listingDocketMissing: true },
+    });
   });
 
   test("persists a listed identity when its detail is permanently unparseable", async () => {

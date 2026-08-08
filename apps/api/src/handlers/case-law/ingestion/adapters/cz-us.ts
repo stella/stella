@@ -423,6 +423,7 @@ type CursorState = HistoricalCursor | RecentCursor;
 type ListedDecision = {
   caseNumber: string;
   counter?: number | undefined;
+  listingDocketMissing?: true | undefined;
   sourceDocumentId: string;
   nalusRecordId: string;
   sourceUrl: string;
@@ -769,14 +770,13 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       "counter"
     ];
     const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
-    const caseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
-    if (!caseNumber) {
-      throw new TypeError("NALUS result row is missing its docket");
-    }
+    const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
+    const caseNumber = listedCaseNumber || `NALUS record ${nalusRecordId}`;
     const sourceUrl = new URL(sz ? TEXT_URL : RESULT_DETAIL_URL);
     sourceUrl.searchParams.set(sz ? "sz" : "id", sz ?? nalusRecordId);
     listed.push({
       caseNumber,
+      ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
       counter:
         counterText === undefined && szCounter === undefined
           ? 1
@@ -806,6 +806,7 @@ const fetchSearchPage = async (
 ): Promise<SearchPage | null> => {
   const first = await fetchWithTimeout(SEARCH_URL, {
     headers: COMMON_HEADERS,
+    redirect: "manual",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
@@ -871,6 +872,7 @@ const fetchSearchPage = async (
     state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
   const results = await fetchWithTimeout(pageUrl, {
     headers: { ...COMMON_HEADERS, Cookie: cookies },
+    redirect: "manual",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
@@ -889,6 +891,7 @@ const fetchListedDecision = async (
   }
   const response = await fetchWithTimeout(listed.sourceUrl, {
     headers: COMMON_HEADERS,
+    redirect: "manual",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
@@ -913,6 +916,9 @@ const fetchListedDecision = async (
   if (!decision) {
     return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
   }
+  if (listed.listingDocketMissing) {
+    decision.metadata["listingDocketMissing"] = true;
+  }
 
   try {
     const abstractQuery = new URLSearchParams({ sz: listed.sz });
@@ -920,6 +926,7 @@ const fetchListedDecision = async (
       `${ABSTRACT_URL}?${abstractQuery.toString()}`,
       {
         headers: COMMON_HEADERS,
+        redirect: "manual",
         signal,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
@@ -967,6 +974,7 @@ const listedOnlyDecision = (
     court: "Ústavní soud",
     nalusRecordId: listed.nalusRecordId,
     nalusSz: listed.sz,
+    listingDocketMissing: listed.listingDocketMissing,
     listedOnly: true,
     listedOnlyReason: reason,
   },
@@ -1025,6 +1033,7 @@ export const czUsAdapter: SourceAdapter = {
     try {
       const searchUrl = "https://nalus.usoud.cz/Search/Search.aspx";
       const first = await fetchWithTimeout(searchUrl, {
+        redirect: "manual",
         signal,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       });
@@ -1076,6 +1085,7 @@ export const czUsAdapter: SourceAdapter = {
       const results = await fetchWithTimeout(
         "https://nalus.usoud.cz/Search/Results.aspx",
         {
+          redirect: "manual",
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           headers: { Cookie: cookies },
