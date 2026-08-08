@@ -342,6 +342,63 @@ describe("processDecision — canonical storage mode", () => {
     });
   });
 
+  test("repairs a pending mirror from a listing-only replay without degrading detail", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    existingDecision = {
+      id: decisionId,
+      ecli: "ECLI:CZ:TEST:2026:1",
+      metadata: { recoveredDetail: true },
+      sourceHash: "recovered-detail-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "first-listing-hash",
+      sourceObservationOrder: 1n,
+      corpusMirrorStatus: "pending",
+      redactedAt: null,
+      sourceRawS3Key: "raw/recovered-detail.html",
+      sourceRawContentType: "text/html",
+      sourceUrl: "https://publisher.example/detail/1",
+      fulltext: "Recovered decision text.",
+      sections: null,
+      documentAst: {},
+    };
+
+    const outcome = await processDecision({
+      input: {
+        ...decision,
+        fulltext: undefined,
+        isListingOnly: true,
+        metadata: { listedOnly: true },
+        rawHash: "listing-only-replay-hash",
+        sourceRaw: "<tr>listing only</tr>",
+        sourceRawContentType: "text/html",
+      },
+      observationOrder: 2n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(outcome).toEqual({
+      status: "complete",
+      inserted: true,
+      searchVectorFailed: false,
+    });
+    expect(writeCorpusDocumentMock).toHaveBeenCalledTimes(1);
+    expect(updatedDecisionRows[0]).toMatchObject({
+      fulltext: "Recovered decision text.",
+      sourceHash: "recovered-detail-hash",
+      sourceObservationHash: "listing-only-replay-hash",
+      sourceObservationOrder: 2n,
+    });
+    expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
+    expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
+    expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
+    expect(updatedDecisionRows.at(-1)).toMatchObject({
+      corpusMirrorStatus: "settled",
+      fulltext: null,
+    });
+  });
+
   test("keeps the objects when the failed write was a refresh", async () => {
     // A refresh derives the same content-addressed keys from the existing
     // id, so when only metadata or the raw source moved they are the

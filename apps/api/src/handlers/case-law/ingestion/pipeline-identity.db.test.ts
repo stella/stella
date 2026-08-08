@@ -485,6 +485,62 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test("preserves recovered detail on a listing-only refresh with a valid docket", async () => {
+      const publisherId = "listing-only-preserves-detail";
+      const recovered = decisionAt("Recovered detail court", publisherId);
+      await processDecision({
+        input: recovered,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...recovered,
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "degraded-listing-hash",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{
+          court: string;
+          fulltext: string;
+          metadata: Record<string, unknown>;
+          observationHash: string;
+          sourceHash: string;
+        }>`
+          SELECT court,
+                 fulltext,
+                 metadata,
+                 source_observation_hash AS "observationHash",
+                 source_hash AS "sourceHash"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(row).toMatchObject({
+        court: recovered.court,
+        fulltext: recovered.fulltext,
+        observationHash: "degraded-listing-hash",
+        sourceHash: recovered.rawHash,
+      });
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["court"]
+          : undefined,
+      ).toBe(recovered.court);
+    });
+
     test("an older overlapping observation cannot overwrite a newer winner", async () => {
       const publisherId = "observed-order";
       const newer = decisionAt("Newest observation", publisherId);

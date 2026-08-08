@@ -385,10 +385,15 @@ If the preferred list identity is malformed but the row exposes another exact
 publisher key (for example, a retrieval identifier), persist a namespaced
 fallback identity rather than poisoning the page, and expose it as an alias
 when the preferred identity recovers so the pipeline migrates the same row.
-If the list lacks a real docket, mark the durable label with
-`caseNumberIsPlaceholder`; a later partial refresh must advance only the
-observation watermark, never replace any previously recovered detail metadata,
-dates, raw payload pointers, docket or derived citation key.
+If a counted row exposes no publisher identity at all, durably quarantine its
+verbatim listing payload under a content-addressed audit identity; do not let
+one poison row pin every later record in the slice. Mark every listing-only
+result with `isListingOnly`, and, if the list also lacks a real docket, mark
+the durable label with `caseNumberIsPlaceholder`. A later partial refresh must
+advance only the observation watermark, never replace any previously recovered
+detail metadata, dates, raw payload pointers, docket or derived citation key.
+If the existing row has a pending corpus mirror, replay its stored payload to
+settlement before allowing the source page to advance.
 
 Likewise, an HTTP 200 search response is not an empty result unless the
 publisher's exact no-results state is present. Fail closed on unknown markup.
@@ -464,9 +469,10 @@ When adding a new country adapter:
     withdrawn saved page plus an outage longer than the rolling window cannot
     leave a date gap (rule 19)
 13. **Preserve listed-only records** — test a permanent missing/unparseable
-    detail, a malformed primary identity with an exact fallback, a placeholder
-    refresh after docket recovery, fallback-to-canonical identity migration,
-    archived listing HTML, and an unrecognised HTTP 200 search response (rule 20)
+    detail, a malformed primary identity with an exact fallback, a counted row
+    with no identity, partial refresh after detail recovery, pending-mirror
+    replay, fallback-to-canonical identity migration, archived listing HTML,
+    and an unrecognised HTTP 200 search response (rule 20)
 14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
     test every publisher-declared origin against an explicit allowlist (rule 21)
 

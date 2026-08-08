@@ -438,6 +438,7 @@ type CursorState = HistoricalCursor | RecentCursor;
 type ListedDecision = {
   caseNumber: string;
   counter?: number | undefined;
+  identityQuarantined?: true | undefined;
   listingDocketMissing?: true | undefined;
   listingHtml: string;
   sourceDocumentId: string;
@@ -761,7 +762,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     if (primary.attr("valign") === "top") {
       return;
     }
-    const detail = primary.find("a[href*='ResultDetail.aspx?id=']").first();
+    const detail = primary.find("a[href*='ResultDetail.aspx']").first();
     const detailHref = detail.attr("href");
     const nalusRecordId = /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.[
       "id"
@@ -784,9 +785,15 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         // ResultDetail record identity exposed by the listing.
       }
     }
-    if (!nalusRecordId && !sz) {
-      throw new TypeError("NALUS result row is missing its record identity");
-    }
+    const listingHtml = `${primary.toString()}${actions.toString()}`;
+    // The count banner says this is a publisher record even if a malformed or
+    // withdrawn row exposes neither of NALUS's normal identities. Give that
+    // terminal listing payload a content-addressed quarantine identity so one
+    // poison row cannot pin the entire immutable reconciliation slice.
+    const quarantineId =
+      nalusRecordId === undefined && sz === undefined
+        ? hashContent(listingHtml)
+        : undefined;
     const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
     const registrySign = detail.text();
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
@@ -794,13 +801,26 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     ];
     const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
     const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
-    const caseNumber =
-      listedCaseNumber || `NALUS record ${nalusRecordId ?? sz}`;
-    const sourceUrl = new URL(sz ? TEXT_URL : RESULT_DETAIL_URL);
-    sourceUrl.searchParams.set(
-      sz ? "sz" : "id",
-      sz ?? nalusRecordId ?? panic("NALUS listing identity disappeared"),
-    );
+    const fallbackCaseNumber =
+      quarantineId === undefined
+        ? `NALUS record ${nalusRecordId ?? sz}`
+        : `NALUS listing ${quarantineId}`;
+    const caseNumber = listedCaseNumber || fallbackCaseNumber;
+    let sourceDocumentId: string;
+    let sourceUrl: URL;
+    if (sz !== undefined) {
+      sourceDocumentId = `nalus-sz:${sz}`;
+      sourceUrl = new URL(TEXT_URL);
+      sourceUrl.searchParams.set("sz", sz);
+    } else if (nalusRecordId !== undefined) {
+      sourceDocumentId = `nalus-record:${nalusRecordId}`;
+      sourceUrl = new URL(RESULT_DETAIL_URL);
+      sourceUrl.searchParams.set("id", nalusRecordId);
+    } else {
+      sourceDocumentId = `nalus-quarantine:${quarantineId}`;
+      sourceUrl = new URL(RESULTS_URL);
+      sourceUrl.hash = `listing-${quarantineId}`;
+    }
     listed.push({
       caseNumber,
       ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
@@ -808,11 +828,9 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         counterText === undefined && szCounter === undefined
           ? 1
           : Number.parseInt(counterText ?? szCounter ?? "1", 10),
-      sourceDocumentId:
-        nalusRecordId === undefined
-          ? `nalus-sz:${sz}`
-          : `nalus-record:${nalusRecordId}`,
-      listingHtml: `${primary.toString()}${actions.toString()}`,
+      sourceDocumentId,
+      listingHtml,
+      ...(quarantineId === undefined ? {} : { identityQuarantined: true }),
       ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
       sourceUrl: sourceUrl.href,
       ...(sz === undefined ? {} : { sz }),
@@ -917,6 +935,9 @@ const fetchListedDecision = async (
   listed: ListedDecision,
   signal: AbortSignal | undefined,
 ): Promise<IngestionResult> => {
+  if (listed.identityQuarantined) {
+    return listedOnlyDecision(listed, "missing-record-identity");
+  }
   if (listed.sz === undefined) {
     return listedOnlyDecision(listed, "missing-text-action");
   }
@@ -993,6 +1014,7 @@ const listedOnlyDecision = (
 ): IngestionResult => ({
   caseNumber: listed.caseNumber,
   caseNumberIsPlaceholder: listed.listingDocketMissing === true,
+  isListingOnly: true,
   sourceDocumentId: listed.sourceDocumentId,
   sourceDocumentIdAliases:
     listed.nalusRecordId === undefined || listed.sz === undefined
@@ -1017,6 +1039,7 @@ const listedOnlyDecision = (
       : { nalusRecordId: listed.nalusRecordId }),
     nalusSz: listed.sz,
     listingDocketMissing: listed.listingDocketMissing,
+    identityQuarantined: listed.identityQuarantined,
     listedOnly: true,
     listedOnlyReason: reason,
   },

@@ -674,11 +674,20 @@ const processDecisionAttempt = async ({
     };
   }
 
-  if (existing && result.caseNumberIsPlaceholder === true) {
-    // A listing-only placeholder carries less information than an identified
-    // row that was previously enriched from detail. Advance only the source
+  const preservesExistingDetail =
+    result.caseNumberIsPlaceholder === true || result.isListingOnly === true;
+
+  if (
+    existing &&
+    preservesExistingDetail &&
+    existing.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+  ) {
+    // A listing-only result carries less information than an identified row
+    // that was previously enriched from detail. Advance only the source
     // observation watermark: replacing metadata, dates, raw-source pointers
     // or payload fields would make a temporary publisher regression durable.
+    // A pending corpus mirror deliberately continues below: it must replay
+    // the stored payload before this source page is allowed to advance.
     await scopedDb(async (tx) => {
       // audit: skip — background case-law observation watermark; public data
       await tx
@@ -809,13 +818,19 @@ const processDecisionAttempt = async ({
 
   // Upload sourceRaw to S3 — best-effort; failure must not
   // prevent the decision from being inserted.
-  const rawPayload = result.sourceRawBytes ?? result.sourceRaw;
+  const rawPayload =
+    preservesExistingDetail && existing
+      ? undefined
+      : (result.sourceRawBytes ?? result.sourceRaw);
   const rawContentType = result.sourceRawContentType ?? "text/plain";
 
   let sourceRawS3Key: string | null = null;
   let sourceRawContentType: string | null = null;
   let s3UploadFailed = false;
-  if (rawPayload !== undefined) {
+  if (preservesExistingDetail && existing) {
+    sourceRawS3Key = existing.sourceRawS3Key;
+    sourceRawContentType = existing.sourceRawContentType;
+  } else if (rawPayload !== undefined) {
     try {
       sourceRawS3Key = await uploadSourceRaw(
         sourceId,
@@ -903,12 +918,13 @@ const processDecisionAttempt = async ({
   const astBlocks = hasUsableAst(result.documentAst)
     ? result.documentAst.blocks.length
     : 0;
-  const signal = preserveStoredDocument
-    ? undefined
-    : storedDecisionSignal({
-        hasFulltext: Boolean(result.fulltext),
-        astBlocks,
-      });
+  const signal =
+    preserveStoredDocument || pendingMirrorPayload !== null
+      ? undefined
+      : storedDecisionSignal({
+          hasFulltext: Boolean(result.fulltext),
+          astBlocks,
+        });
   if (signal) {
     const subject = {
       sourceId,
@@ -1070,36 +1086,41 @@ const processDecisionAttempt = async ({
         const updated = await tx
           .update(caseLawDecisions)
           .set({
-            caseNumber: result.caseNumber,
-            citationKey: citationKeyOf(result.caseNumber),
-            sourceDocumentId: result.sourceDocumentId,
-            ecli: result.ecli,
-            court: result.court,
-            country: result.country,
-            language: result.language,
-            sheetNumber: result.sheetNumber,
-            languageGroupKey,
-            decisionDate: result.decisionDate,
-            decisionType: result.decisionType,
+            ...(preservesExistingDetail
+              ? {}
+              : {
+                  caseNumber: result.caseNumber,
+                  citationKey: citationKeyOf(result.caseNumber),
+                  sourceDocumentId: result.sourceDocumentId,
+                  ecli: result.ecli,
+                  court: result.court,
+                  country: result.country,
+                  language: result.language,
+                  sheetNumber: result.sheetNumber,
+                  languageGroupKey,
+                  decisionDate: result.decisionDate,
+                  decisionType: result.decisionType,
+                  sourceUrl: result.sourceUrl,
+                  documentUrl: result.documentUrl,
+                  metadata: result.metadata,
+                  sourceRaw: null,
+                  sourceRawS3Key,
+                  sourceRawContentType,
+                  parserVersion: result.parserVersion ?? 0,
+                  // Re-pick metadata-only changes in the corpus indexer.
+                  indexedHash: null,
+                }),
             ...(payloadNeedsGuard ? {} : payloadColumns),
-            sourceUrl: result.sourceUrl,
-            documentUrl: result.documentUrl,
-            metadata: result.metadata,
-            sourceRaw: null,
-            sourceRawS3Key,
-            sourceRawContentType,
-            parserVersion: result.parserVersion ?? 0,
-            // When S3 upload failed, keep the old sourceHash so the
-            // next ingestion cycle sees a hash mismatch and retries
-            // the upload instead of permanently skipping the decision.
-            sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
+            // Partial observations preserve the authoritative detail hash.
+            // When S3 upload failed, keeping the old hash also makes the next
+            // cycle retry instead of permanently accepting a stale raw source.
+            sourceHash:
+              preservesExistingDetail || s3UploadFailed
+                ? existing.sourceHash
+                : result.rawHash,
             sourceObservedAt: observedAt,
             sourceObservationOrder: observationOrder,
             sourceObservationHash: result.rawHash,
-            // Clear indexedHash so the corpus indexer re-picks this row even
-            // when only metadata changed (its staleness check compares
-            // indexedHash to contentHash, which only tracks the payload).
-            indexedHash: null,
             updatedAt: new Date(),
           })
           .where(
@@ -1353,9 +1374,10 @@ const processDecisionAttempt = async ({
     // The sourceHash this call just persisted: corpus-key and retry
     // updates only apply while the row still carries it. The upload helper
     // holds the same row fence as redaction across the bounded object write.
-    const persistedSourceHash = s3UploadFailed
-      ? (existing?.sourceHash ?? null)
-      : result.rawHash;
+    const persistedSourceHash =
+      preservesExistingDetail || s3UploadFailed
+        ? (existing?.sourceHash ?? null)
+        : result.rawHash;
     try {
       const intent = await reserveCaseLawCorpusUploadIntent({
         contentHash: corpusContentHash(corpusPayload),

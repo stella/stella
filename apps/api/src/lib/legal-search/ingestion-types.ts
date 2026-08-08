@@ -21,6 +21,13 @@ export type IngestionResult = {
    */
   caseNumberIsPlaceholder?: boolean | undefined;
   /**
+   * True when the publisher listing proves this document exists but the
+   * adapter could not recover its detail payload. The first observation is
+   * still durable; a later listing-only refresh must not replace detail state
+   * that an earlier fetch or repair already recovered.
+   */
+  isListingOnly?: boolean | undefined;
+  /**
    * The publisher's own identifier for this document. Supply it whenever the
    * source has one: it is what makes a decision identifiable. A case number
    * does not, because courts number dockets per court and one source often

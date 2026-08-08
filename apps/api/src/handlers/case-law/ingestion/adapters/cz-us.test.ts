@@ -746,6 +746,7 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "NALUS record 7201",
+      isListingOnly: true,
       sourceDocumentId: "nalus-record:7201",
       sourceUrl: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=7201",
       metadata: {
@@ -780,6 +781,46 @@ describe("czUsAdapter.fetchPage", () => {
       caseNumber: "II.ÚS 91/24",
       sourceDocumentId: "nalus-sz:2-91-24_1",
       sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=2-91-24_1",
+    });
+  });
+
+  test("quarantines a counted row that exposes neither NALUS identity", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 10/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    expect(page.decisions[0]).toMatchObject({
+      caseNumber: "Pl.ÚS 10/24",
+      isListingOnly: true,
+      metadata: {
+        identityQuarantined: true,
+        listedOnly: true,
+        listedOnlyReason: "missing-record-identity",
+      },
+    });
+    expect(page.decisions[0]?.sourceDocumentId).toMatch(
+      /^nalus-quarantine:[a-f0-9]+$/u,
+    );
+    expect(page.decisions[0]?.sourceUrl).toMatch(
+      /^https:\/\/nalus\.usoud\.cz\/Search\/Results\.aspx#listing-[a-f0-9]+$/u,
+    );
+    expect(page.decisions[0]?.sourceRaw).toContain("Pl.ÚS 10/24");
+
+    const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
+    expect(verified.coverage).toEqual({
+      slice: "decision-year:2024",
+      reported: 1,
+      collected: 1,
     });
   });
 
@@ -825,6 +866,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "I.ÚS 77/24",
+      isListingOnly: true,
       sourceDocumentId: "nalus-record:7001",
       metadata: {
         listedOnly: true,
