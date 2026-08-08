@@ -689,6 +689,14 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions).toHaveLength(1);
     expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
+    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
+    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
+      listingHtml: expect.stringContaining("ResultDetail.aspx?id=4001"),
+      textHtml: expect.stringContaining("lblRegistrySign"),
+    });
+    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).not.toHaveProperty(
+      "abstractHtml",
+    );
   });
 
   test("enriches listed decisions with abstracts and legal sentences", async () => {
@@ -714,6 +722,12 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions[0]?.metadata["abstract"]).toBe(abstract);
     expect(page.decisions[0]?.metadata["legalSentence"]).toBe(legalSentence);
+    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
+    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
+      listingHtml: expect.stringContaining("ResultDetail.aspx?id=5001"),
+      textHtml: expect.stringContaining("lblRegistrySign"),
+      abstractHtml: expect.stringContaining(abstract),
+    });
   });
 
   test("preserves decision-page metadata while taking identity from search", async () => {

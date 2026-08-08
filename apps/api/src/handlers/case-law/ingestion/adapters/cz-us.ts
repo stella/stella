@@ -1103,6 +1103,7 @@ const fetchListedDecision = async (
     decision.metadata["listingDocketMissing"] = true;
   }
 
+  let abstractHtml: string | undefined;
   try {
     const abstractQuery = new URLSearchParams({ sz: listed.sz });
     const abstractResponse = await fetchWithTimeout(
@@ -1115,7 +1116,7 @@ const fetchListedDecision = async (
       },
     );
     if (abstractResponse.ok) {
-      const abstractHtml = await abstractResponse.text();
+      abstractHtml = await abstractResponse.text();
       const { abstract, legalSentence } = extractAbstract(abstractHtml);
       if (abstract) {
         decision.metadata["abstract"] = abstract;
@@ -1123,10 +1124,6 @@ const fetchListedDecision = async (
       if (legalSentence) {
         decision.metadata["legalSentence"] = legalSentence;
       }
-      decision.sourceRaw = JSON.stringify({
-        textHtml: decision.sourceRaw,
-        abstractHtml,
-      });
     }
   } catch (error) {
     if (signal?.aborted) {
@@ -1135,6 +1132,12 @@ const fetchListedDecision = async (
     // Abstracts are optional enrichment; the listed decision is complete
     // enough to ingest without one.
   }
+  decision.sourceRaw = JSON.stringify({
+    listingHtml: listed.listingHtml,
+    textHtml: responseHtml,
+    ...(abstractHtml === undefined ? {} : { abstractHtml }),
+  });
+  decision.sourceRawContentType = "application/json";
   return decision;
 };
 

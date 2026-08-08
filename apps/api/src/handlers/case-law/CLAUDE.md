@@ -380,6 +380,11 @@ metadata. Archive the verbatim listing row as `sourceRaw` when no detail
 payload exists, so future parsers can repair historical metadata without
 depending on a steady-state cursor rediscovering that slice. Transient network
 and server failures must fail the page so its cursor is retried.
+When several publisher responses form one observation, archive all of them —
+listing, detail, abstract, export or equivalent — in a structured raw payload
+with the matching content type. Keeping only the preferred detail response
+silently discards listing-only fields and prevents future parser improvements
+from being replayed across courts without another historical crawl.
 
 If the preferred list identity is malformed but the row exposes another exact
 publisher key (for example, a retrieval identifier), persist a namespaced
