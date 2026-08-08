@@ -37,3 +37,10 @@ export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
   ...fileMetadataByFieldQueryRoot(key),
   key.purpose ?? "display",
 ];
+
+export const documentPropertiesQueryKey = (key: FileMetadataQueryKey) => [
+  ...filesQueryRoot(),
+  "document-properties",
+  key.workspaceId,
+  key.fieldId,
+];

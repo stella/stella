@@ -8,6 +8,7 @@ import {
   CopyIcon,
   DownloadIcon,
   EllipsisVerticalIcon,
+  EraserIcon,
   EyeIcon,
   FileOutputIcon,
   FileTextIcon,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { hasDocumentProperties } from "@stll/api-contract";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -337,12 +339,18 @@ export const RowActions = ({
   } else if (!isBulk && !isCellContext) {
     exportableOcrSources = ocrSources.filter(hasOcrExport);
   }
+  // Only formats whose embedded metadata the API can actually strip; offering
+  // the action on a file it would refuse is worse than not offering it.
+  const canScrub =
+    !isBulk && file !== null && hasDocumentProperties(file.mimeType);
   const hasDownloadVariants =
-    !isBulk && (hasPdfConversion || exportableOcrSources.length > 0);
+    !isBulk &&
+    (hasPdfConversion || canScrub || exportableOcrSources.length > 0);
 
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
     failed: t("errors.actionFailed"),
+    scrubFailed: t("workspaces.files.scrubFailed"),
   };
 
   const showDesktopOpenResult = async (result: OpenFileInDesktopResult) => {
@@ -401,20 +409,20 @@ export const RowActions = ({
     await downloadEntityAsZip(workspaceId, entity, msg);
   };
 
-  const handleDownload = async (asPdf?: boolean) => {
+  const handleDownload = async (variant: DownloadVariant = "original") => {
     if (isBulk) {
       for (const e of selectedEntities) {
         const f = getFirstFile(e);
         if (f) {
           // oxlint-disable-next-line no-await-in-loop -- sequential by design: each iteration triggers a browser download; parallelizing would fire many concurrent downloads and lose ordering
-          await downloadSingleFile(workspaceId, f, asPdf, msg);
+          await downloadSingleFile(workspaceId, f, variant, msg);
         }
       }
       return;
     }
 
     if (file) {
-      await downloadSingleFile(workspaceId, file, asPdf, msg);
+      await downloadSingleFile(workspaceId, file, variant, msg);
     }
   };
 
@@ -998,12 +1006,27 @@ export const RowActions = ({
                   {hasPdfConversion && (
                     <MenuItem
                       onClick={() => {
-                        detached(handleDownload(true), "RowActions");
+                        detached(handleDownload("pdf"), "RowActions");
                       }}
                     >
                       <FileOutputIcon />
                       {t("workspaces.files.downloadPdf")}
                     </MenuItem>
+                  )}
+                  {canScrub && (
+                    <Tooltip
+                      content={t("workspaces.files.downloadScrubbedHint")}
+                      render={
+                        <MenuItem
+                          onClick={() => {
+                            detached(handleDownload("scrubbed"), "RowActions");
+                          }}
+                        >
+                          <EraserIcon />
+                          {t("workspaces.files.downloadScrubbed")}
+                        </MenuItem>
+                      }
+                    />
                   )}
                   {exportableOcrSources.length === 1 &&
                     exportableOcrSources.map((source) => (
@@ -1229,7 +1252,7 @@ const toCopyToMatterEntities = (
 };
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
-type Msg = { downloading: string; failed: string };
+type Msg = { downloading: string; failed: string; scrubFailed: string };
 
 const downloadEntityAsZip = async (
   workspaceId: string,
@@ -1314,12 +1337,60 @@ const downloadOcrExport = async ({
   downloadFile(blobResult.value, getOcrExportFileName(source.fileName, format));
 };
 
+/**
+ * Which copy of the file to hand the user. Not an `asPdf` boolean: the answer
+ * is "which rendition", and `scrubbed` is served by the API rather than by a
+ * presigned storage URL because the bytes are cleaned per request.
+ */
+type DownloadVariant = "original" | "pdf" | "scrubbed";
+
+/**
+ * Fetched directly rather than through the treaty client: Eden text-decodes
+ * every non-JSON body except `application/octet-stream`, which would mangle the
+ * DOCX or PDF bytes this endpoint returns.
+ */
+const downloadScrubbedFile = async (
+  workspaceId: string,
+  file: FileRef,
+  msg: Msg,
+) => {
+  const responseResult = await Result.tryPromise(
+    async () =>
+      await fetchWithTimeout(
+        apiUrl(
+          `/files/${encodeURIComponent(workspaceId)}/scrubbed/${encodeURIComponent(file.fieldId)}`,
+        ),
+        { credentials: "include", timeoutMs: 60_000 },
+      ),
+  );
+  if (Result.isError(responseResult) || !responseResult.value.ok) {
+    stellaToast.add({ title: msg.scrubFailed, type: "error" });
+    return;
+  }
+
+  const blobResult = await Result.tryPromise(
+    async () => await responseResult.value.blob(),
+  );
+  if (Result.isError(blobResult)) {
+    stellaToast.add({ title: msg.scrubFailed, type: "error" });
+    return;
+  }
+
+  downloadFile(blobResult.value, file.fileName);
+};
+
 const downloadSingleFile = async (
   workspaceId: string,
   file: FileRef,
-  asPdf: boolean | undefined,
+  variant: DownloadVariant,
   msg: Msg,
 ) => {
+  if (variant === "scrubbed") {
+    await downloadScrubbedFile(workspaceId, file, msg);
+    return;
+  }
+
+  const asPdf = variant === "pdf";
   const response = await api
     .files({ workspaceId })
     .url({ fieldId: file.fieldId })

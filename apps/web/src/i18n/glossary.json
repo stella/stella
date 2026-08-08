@@ -1313,6 +1313,101 @@
         "fr": "auto-hébergement",
         "pt-BR": "auto-hospedagem"
       }
+    },
+    {
+      "id": "item",
+      "en": "Item",
+      "note": "Whatever a matter holds: a document, folder, task, message or link. \"Entity\" is the database's word for the row, never the user's; it tells a lawyer nothing and reads as software jargon in every language. Name the concrete thing (\"document\", \"file\", \"task\") wherever the string allows and fall back to this generic term only when the string really is about any of them. The bans are `forbiddenAlways`: the calque is wrong wherever it appears, including in a translation whose English source has already been reworded, which a concept-gated ban would miss. Anonymization was the one place the word did real work, and there it meant a detected name or identifier rather than a row; those strings say \"match\" instead. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbiddenAlways": {
+        "en": ["entity", "entities"],
+        "ar": ["كيان", "كيانات", "الكيان", "الكيانات", "كيانًا"],
+        "cs": [
+          "entita",
+          "entity",
+          "entitu",
+          "entitě",
+          "entitou",
+          "entit",
+          "entitám",
+          "entitami",
+          "entitách"
+        ],
+        "sk": [
+          "entita",
+          "entity",
+          "entitu",
+          "entite",
+          "entitou",
+          "entít",
+          "entitám",
+          "entitami",
+          "entitách"
+        ],
+        "pl": [
+          "encja",
+          "encji",
+          "encję",
+          "encją",
+          "encje",
+          "encjami",
+          "encjach"
+        ],
+        "de": [
+          "Entität",
+          "Entitäten",
+          "Entitätenlimit",
+          "Entitätstyp",
+          "Entitätstypen",
+          "Entitätsdetails",
+          "Entitätsbezeichnung",
+          "Entitätsname"
+        ],
+        "et": [
+          "olem",
+          "olemi",
+          "olemit",
+          "olemid",
+          "olemeid",
+          "olemite",
+          "entiteet",
+          "entiteedi",
+          "entiteeti",
+          "entiteete",
+          "entiteedid"
+        ],
+        "hu": [
+          "entitás",
+          "entitást",
+          "entitása",
+          "entitások",
+          "entitásokat",
+          "entitáshoz",
+          "entitáscímke",
+          "entitástípus",
+          "entitástípusa",
+          "entitásszám",
+          "entitásszámot"
+        ],
+        "lt": ["esybė", "esybės", "esybę", "esybių", "esybes", "esybėje"],
+        "lv": ["entītija", "entītijas", "entītiju", "entītijām", "entītijās"],
+        "es": ["entidad", "entidades"],
+        "fr": ["entité", "entités"],
+        "pt-BR": ["entidade", "entidades"]
+      },
+      "translations": {
+        "ar": "عنصر",
+        "cs": "položka",
+        "sk": "položka",
+        "pl": "element",
+        "de": "Element",
+        "et": "üksus",
+        "hu": "elem",
+        "lt": "elementas",
+        "lv": "vienums",
+        "es": "elemento",
+        "fr": "élément",
+        "pt-BR": "item"
+      }
     }
   ]
 }

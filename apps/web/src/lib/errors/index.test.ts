@@ -126,7 +126,7 @@ describe("toAPIError", () => {
   test.each([
     [
       "legal_source_entity_limit_reached",
-      "This matter has reached the entity limit, so the document could not be created.",
+      "This matter has reached its item limit, so the document could not be created.",
     ],
     [
       "legal_source_file_property_missing",

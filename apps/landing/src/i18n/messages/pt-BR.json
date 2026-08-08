@@ -110,7 +110,7 @@
         "title": "Um agente de IA que atua nos seus casos, arquivos e ferramentas."
       },
       "anonymization": {
-        "blurb": "Remova nomes, entidades e dados identificadores antes que o material chegue à IA, direto do chat e da revisão de documentos, com um resultado tarjado que você confere antes de qualquer coisa seguir adiante.",
+        "blurb": "Remova nomes, organizações e dados identificadores antes que o material chegue à IA, direto do chat e da revisão de documentos, com um resultado tarjado que você confere antes de qualquer coisa seguir adiante.",
         "discover": "Descubra a Anonimização",
         "eyebrow": "Anonimização",
         "title": "Prepare o material para a IA sem expor dados identificadores."
@@ -263,7 +263,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Remove nomes, entidades e dados identificadores antes que o material chegue a uma etapa de IA.",
+          "body": "Remove nomes, organizações e dados identificadores antes que o material chegue a uma etapa de IA.",
           "title": "Sem dados identificadores"
         },
         "1": {
@@ -288,20 +288,20 @@
           "question": "A anonimização já está disponível?"
         },
         "1": {
-          "answer": "Para preparar material para fluxos de IA sem expor nomes, entidades ou dados identificadores, mantendo o resultado tarjado disponível para conferência.",
+          "answer": "Para preparar material para fluxos de IA sem expor nomes, organizações ou dados identificadores, mantendo o resultado tarjado disponível para conferência.",
           "question": "Para que ela serve?"
         }
       },
-      "metaDescription": "Remova nomes, entidades e dados identificadores antes que o material chegue à IA, direto do chat e da revisão, com um resultado tarjado para conferir.",
+      "metaDescription": "Remova nomes, organizações e dados identificadores antes que o material chegue à IA, direto do chat e da revisão, com um resultado tarjado para conferir.",
       "metaTitle": "Anonimização de documentos para IA jurídica | stella",
       "quickAnswer": {
-        "answer": "Ela remove nomes, entidades e dados identificadores antes que o material entre em um fluxo de IA e mostra o resultado tarjado, para você confirmar o que sai do caso. Está integrada diretamente ao chat e à revisão de documentos.",
+        "answer": "Ela remove nomes, organizações e dados identificadores antes que o material entre em um fluxo de IA e mostra o resultado tarjado, para você confirmar o que sai do caso. Está integrada diretamente ao chat e à revisão de documentos.",
         "question": "O que é a anonimização na stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Nomes, entidades e dados identificadores ficam fora das etapas de IA",
+            "0": "Nomes, organizações e dados identificadores ficam fora das etapas de IA",
             "1": "Feita para fluxos jurídicos de IA, não para mascaramento genérico",
             "2": "Deixa um documento tarjado para conferir antes da etapa seguinte"
           },

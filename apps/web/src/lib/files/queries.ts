@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 import type { EmailTextAttachmentCharset } from "@stll/api-contract";
 
+import type { DocumentPropertiesResult } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
@@ -13,6 +15,7 @@ import type {
 } from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
+  documentPropertiesQueryKey,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -104,6 +107,7 @@ export const filesKeys = {
     key.workspaceId,
     key.fieldId,
   ],
+  documentPropertiesByFieldId: documentPropertiesQueryKey,
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
@@ -279,6 +283,25 @@ export const saveEmailAttachment = async ({
   }
   return parsed.output;
 };
+
+/**
+ * The file's own embedded properties (DOCX Author and Company, PDF Producer,
+ * ...). The server parses them per request from the stored bytes, so this is
+ * deliberately lazy: it runs when the metadata panel is on screen, and the
+ * answer then stays cached for the session.
+ */
+export const documentPropertiesOptions = (props: FileOptionsProps) =>
+  queryOptions({
+    queryKey: filesKeys.documentPropertiesByFieldId(props),
+    queryFn: async ({ signal }): Promise<DocumentPropertiesResult> => {
+      const response = await api
+        .files({ workspaceId: props.workspaceId })
+        ["document-properties"]({ fieldId: props.fieldId })
+        .get({ fetch: { signal } });
+
+      return unwrapEden(response);
+    },
+  });
 
 export const textFileOptions = (props: FileOptionsProps) =>
   queryOptions({

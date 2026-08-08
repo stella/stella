@@ -95,6 +95,11 @@ export type Term = {
   // Renderings banned wherever the concept is mentioned (English source
   // contains the trigger word, or a key matches `keyTriggers`).
   forbidden?: Record<string, string[]>;
+  // Renderings banned in every string, with no concept gate. Reserve this for
+  // wording that is wrong wherever it appears — internal jargon that leaked
+  // into user-facing copy, say — because a concept-gated ban cannot catch a
+  // translation whose English source no longer names the concept.
+  forbiddenAlways?: Record<string, string[]>;
   // Renderings banned on `keyTriggers`-matched keys, and on the English word
   // trigger unless the source matches `sourceExempt`. Use for forms too
   // ambiguous to ban unconditionally (e.g. Slavic "organizace"/"organizáciu",
@@ -202,6 +207,15 @@ const parseTerm = (value: unknown, where: string): Term => {
   const forbidden = parseForbidden(value["forbidden"], "forbidden", where, id);
   if (forbidden) {
     term.forbidden = forbidden;
+  }
+  const forbiddenAlways = parseForbidden(
+    value["forbiddenAlways"],
+    "forbiddenAlways",
+    where,
+    id,
+  );
+  if (forbiddenAlways) {
+    term.forbiddenAlways = forbiddenAlways;
   }
   const forbiddenOnKey = parseForbidden(
     value["forbiddenOnKey"],

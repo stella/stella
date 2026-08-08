@@ -1160,7 +1160,7 @@ const FlowStepEditor = ({
       {step.kind === "create-document" && (
         <div className="grid gap-1.5">
           <Label htmlFor={`flow-step-doctitle-${index}`}>
-            {t("flows.steps.documentTitle")}
+            {t("common.documentTitle")}
           </Label>
           <Input
             id={`flow-step-doctitle-${index}`}
