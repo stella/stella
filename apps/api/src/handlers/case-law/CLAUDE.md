@@ -389,6 +389,10 @@ identity and every exact alias to one decision UUID before inserting the row;
 this mapping must work in both directions and remain atomic when canonical and
 fallback observations overlap. A sequential lookup-and-migrate hint is not
 sufficient: two workers can otherwise insert under different uniqueness keys.
+Rolling deployments add a second race: a new worker can reserve an identity,
+then an older worker can insert the unique decision row without that registry.
+If a reservation points to no decision, resolve the exact identity against the
+decision table and repoint the reservation to that winner so replay converges.
 Validate canonical and alternate identities against the shared persistence
 limit at the publisher boundary. Normalize an invalid component before it can
 be used in a retrieval URL, metadata field or fallback path; dropping only its
@@ -417,9 +421,12 @@ synthesize an exact alias, or reject it unless it is a safe bounded integer;
 rounding two counters to one JavaScript number silently merges documents.
 Mark every listing-only result with
 `isListingOnly`, and, if the list also lacks a real docket, mark the durable
-label with `caseNumberIsPlaceholder`. A later partial refresh must never replace
-previously recovered detail metadata, dates, raw payload pointers, docket or
-derived citation key. It may enrich an earlier partial row;
+label with `caseNumberIsPlaceholder`. Persist every discriminator already
+parsed from the listing, including sibling counters, even when detail retrieval
+fails; raw HTML is an audit fallback, not the only durable representation. A
+later partial refresh must never replace previously recovered detail metadata,
+dates, raw payload pointers, docket or derived citation key. It may enrich an
+earlier partial row;
 the pipeline persists adapter-neutral observation quality so that rule applies
 to every court without depending on court-specific metadata keys.
 If the existing row has a pending corpus mirror, replay its stored payload to

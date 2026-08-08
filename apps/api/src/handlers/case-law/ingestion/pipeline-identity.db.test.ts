@@ -6,6 +6,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawSources,
   relations,
@@ -15,6 +16,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -138,6 +140,64 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       expect(await storedCourts()).toEqual(before);
+    });
+
+    test("repoints an abandoned rollout reservation to the stored winner", async () => {
+      const publisherId = "publisher-id-won-by-stale-task";
+      const decision = decisionAt("Rolling deployment winner", publisherId);
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const winner = await db.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          sourceDocumentId: { eq: publisherId },
+        },
+        columns: { id: true },
+      });
+      if (winner === undefined) {
+        throw new Error("expected rollout winner");
+      }
+      const abandonedId = createSafeId<"caseLawDecision">();
+      await db
+        .update(caseLawDecisionSourceIdentities)
+        .set({ decisionId: abandonedId })
+        .where(
+          and(
+            eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+            eq(caseLawDecisionSourceIdentities.sourceDocumentId, publisherId),
+          ),
+        );
+
+      await processDecision({
+        input: decision,
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const reservation =
+        await db.query.caseLawDecisionSourceIdentities.findFirst({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { eq: publisherId },
+          },
+          columns: { decisionId: true },
+        });
+      const rows = await db.execute(sql<{ count: number }>`
+        SELECT count(*)::int AS count
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND source_document_id = ${publisherId}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(reservation?.decisionId).toBe(winner.id);
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
     });
 
     test("uses publisher identity when a replay also carries a sheet number", async () => {

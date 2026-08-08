@@ -1181,6 +1181,7 @@ const listedOnlyDecision = (
     nalusSz: listed.sz,
     listingDocketMissing: listed.listingDocketMissing,
     identityQuarantined: listed.identityQuarantined,
+    ecliCounter: listed.counter,
     listedOnly: true,
     listedOnlyReason: reason,
   },

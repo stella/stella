@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -606,7 +606,7 @@ const processDecisionAttempt = async ({
     if (exactClaimedDecisionIds.length > 1) {
       panic("Publisher identities have conflicting decision owners");
     }
-    const exactClaimedDecisionId = exactClaimedDecisionIds.at(0);
+    let exactClaimedDecisionId = exactClaimedDecisionIds.at(0);
     const repairClaimedDecisionIds = [
       ...new Set(
         claims
@@ -620,7 +620,7 @@ const processDecisionAttempt = async ({
       repairClaimedDecisionIds.length === 1
         ? repairClaimedDecisionIds.at(0)
         : undefined;
-    const provisionalClaimedDecisionId =
+    let provisionalClaimedDecisionId =
       exactClaimedDecisionId ?? repairClaimedDecisionId;
     const identityColumns = {
       id: true,
@@ -636,7 +636,7 @@ const processDecisionAttempt = async ({
       sourceRawContentType: true,
       sourceUrl: true,
     } as const;
-    const provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
+    let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
       where:
         provisionalClaimedDecisionId === undefined
           ? caseLawDecisionIdentityWhere({
@@ -648,6 +648,52 @@ const processDecisionAttempt = async ({
           : { id: { eq: provisionalClaimedDecisionId } },
       columns: identityColumns,
     });
+    if (
+      exactClaimedDecisionId !== undefined &&
+      provisionalIdentified === undefined
+    ) {
+      // A task from the previous rollout can insert the decision after a new
+      // task reserved its identities but before that reservation produced a
+      // row. Reconcile the durable reservation to the decision-table winner;
+      // otherwise every replay targets the abandoned UUID and loses the same
+      // publisher-identity uniqueness race forever.
+      const rolloutWinners = await tx.query.caseLawDecisions.findMany({
+        where: {
+          sourceId: { eq: sourceId },
+          sourceDocumentId: { in: exactSourceIdentityCandidates },
+        },
+        columns: identityColumns,
+        limit: MAX_SOURCE_IDENTITY_CANDIDATES,
+      });
+      const rolloutWinnerIds = [...new Set(rolloutWinners.map(({ id }) => id))];
+      if (rolloutWinnerIds.length > 1) {
+        panic("Publisher identities have conflicting decision rows");
+      }
+      const rolloutWinner = rolloutWinners.at(0);
+      if (rolloutWinner !== undefined) {
+        const abandonedDecisionId = exactClaimedDecisionId;
+        // audit: skip — rolling-deployment identity convergence; public data
+        await tx
+          .update(caseLawDecisionSourceIdentities)
+          .set({ decisionId: rolloutWinner.id })
+          .where(
+            and(
+              eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+              eq(
+                caseLawDecisionSourceIdentities.decisionId,
+                abandonedDecisionId,
+              ),
+              inArray(
+                caseLawDecisionSourceIdentities.sourceDocumentId,
+                exactSourceIdentityCandidates,
+              ),
+            ),
+          );
+        exactClaimedDecisionId = rolloutWinner.id;
+        provisionalClaimedDecisionId = rolloutWinner.id;
+        provisionalIdentified = rolloutWinner;
+      }
+    }
     // A repair-only claim is consumable only while the decision is still
     // stored under that degraded identity. Once upgraded, the retained audit
     // mapping must not let an unrelated row reuse the heuristic fingerprint.

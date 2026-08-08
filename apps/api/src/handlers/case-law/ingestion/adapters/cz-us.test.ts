@@ -798,6 +798,7 @@ describe("czUsAdapter.fetchPage", () => {
       sourceDocumentId: "nalus-record:7201",
       sourceUrl: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=7201",
       metadata: {
+        ecliCounter: 1,
         nalusRecordId: "7201",
         listingDocketMissing: true,
         listedOnly: true,
