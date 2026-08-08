@@ -170,7 +170,11 @@ describe("lookupByIco optional VR enrichment", () => {
   });
 
   test("fails the required RES lookup without waiting for stalled optional VR", async () => {
-    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+    let optionalVrSignal: AbortSignal | null | undefined;
+    const stub = async (
+      input: URL | RequestInfo,
+      init?: RequestInit,
+    ): Promise<Response> => {
       let url: string;
       if (typeof input === "string") {
         url = input;
@@ -180,9 +184,18 @@ describe("lookupByIco optional VR enrichment", () => {
         url = input.url;
       }
       if (url.includes("ekonomicke-subjekty-vr")) {
-        return await new Promise<Response>(() => {
-          // Deliberately never settles: the required RES request must still
-          // reject without awaiting this optional enrichment request.
+        optionalVrSignal = init?.signal;
+        return await new Promise<Response>((_resolve, reject) => {
+          optionalVrSignal?.addEventListener(
+            "abort",
+            () =>
+              reject(
+                new Error("Optional VR request aborted", {
+                  cause: optionalVrSignal?.reason,
+                }),
+              ),
+            { once: true },
+          );
         });
       }
       throw new TypeError("temporary RES outage");
@@ -200,6 +213,7 @@ describe("lookupByIco optional VR enrichment", () => {
     ]);
 
     expect(outcome).toBeInstanceOf(AresRequestError);
+    expect(optionalVrSignal?.aborted).toBe(true);
   });
 });
 

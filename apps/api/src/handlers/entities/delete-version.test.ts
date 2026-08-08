@@ -405,6 +405,13 @@ describe("delete-version chain-of-custody guard", () => {
     expect(source.indexOf("isNull(entityVersions.deletedAt)")).toBeGreaterThan(
       txStart,
     );
+    // Restoring creates a new current-version timestamp. It must also queue
+    // extraction/indexing after the transaction so freshness-filtered search
+    // does not hide the document forever.
+    const restoredCheck = source.indexOf("if (!restoreOutcome.restored)");
+    expect(
+      source.indexOf("processExtraction(params.entityId)"),
+    ).toBeGreaterThan(restoredCheck);
   });
 
   test("every entityVersions UPDATE gates on deletedAt or is a reviewed write", () => {

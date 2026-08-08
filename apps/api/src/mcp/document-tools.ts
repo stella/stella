@@ -1410,6 +1410,12 @@ const loadDocumentProcessingStates = async ({
     latestIndexRun.errorCode === "search_index_failed"
       ? latestIndexRun
       : undefined;
+  // A later optional OCR attempt can fail before producing a replacement
+  // projection. In that case the successful native projection and its index
+  // remain valid for this exact source file.
+  const completedIndexRun = sourceRuns.find(
+    (run) => run.status === "succeeded",
+  );
   const extractionMimeType = resolveExtractionMimeType({
     fileName: sourceFile.fileName,
     mimeType: sourceFile.mimeType,
@@ -1453,6 +1459,13 @@ const loadDocumentProcessingStates = async ({
       source: "direct_docx",
       sourceVersionId: current.currentVersionId,
       updatedAt: current.currentVersionCreatedAt.toISOString(),
+    };
+  } else if (currentExtracted && currentExtracted.charCount > 0) {
+    contentState = {
+      status: "ready",
+      source: "extracted_text",
+      sourceVersionId: current.currentVersionId,
+      updatedAt: currentExtracted.extractedAt.toISOString(),
     };
   } else if (
     ocrRun?.status === "failed" &&
@@ -1558,7 +1571,7 @@ const loadDocumentProcessingStates = async ({
       retryable: true,
     };
   } else {
-    const sourceRunCompleted = latestIndexRun?.status === "succeeded";
+    const sourceRunCompleted = completedIndexRun !== undefined;
     const freshUntrackedProjection =
       latestIndexRun === undefined &&
       searchDocument !== undefined &&
@@ -1569,7 +1582,7 @@ const loadDocumentProcessingStates = async ({
         status: "ready",
         sourceVersionId: current.currentVersionId,
         updatedAt: (
-          latestIndexRun?.finishedAt ?? searchDocument.updatedAt
+          completedIndexRun?.finishedAt ?? searchDocument.updatedAt
         ).toISOString(),
       };
     } else {

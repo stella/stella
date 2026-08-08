@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,6 +13,7 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
@@ -220,6 +222,16 @@ export default createSafeHandler(
         new HandlerError({ status: 404, message: "Version not found" }),
       );
     }
+
+    // The restore creates a brand-new current version. Queue extraction (or a
+    // metadata-only index for entities without an extractable file) so the
+    // search freshness fence does not hide the restored entity indefinitely.
+    await processExtraction(params.entityId).catch((error: unknown) =>
+      captureError(error, {
+        entityId: params.entityId,
+        versionId: nextVersionId,
+      }),
+    );
 
     broadcast(workspaceId, {
       type: "invalidate-query",
