@@ -261,6 +261,7 @@ type PromptBarProps = {
    */
   models?: ComposerModelsMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
+  reservedCommands?: boolean | undefined;
   context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
   mcpOrganizationId?: string | undefined;
   /**
@@ -603,6 +604,7 @@ export function PromptBar(props: PromptBarProps) {
     attachmentsEnabled = false,
     models,
     skillsOrganizationId,
+    reservedCommands,
     context,
     mcpOrganizationId,
     minimizedThreadAction,
@@ -936,7 +938,11 @@ export function PromptBar(props: PromptBarProps) {
                 onOpenFilePicker={openFilePicker}
                 skills={
                   skillsOrganizationId
-                    ? { activeOrganizationId: skillsOrganizationId, editor }
+                    ? {
+                        activeOrganizationId: skillsOrganizationId,
+                        editor,
+                        includeReservedCommands: reservedCommands,
+                      }
                     : undefined
                 }
               />

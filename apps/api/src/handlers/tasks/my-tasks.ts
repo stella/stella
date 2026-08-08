@@ -1,29 +1,47 @@
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage, encodePaginationCursor } from "@/api/lib/pagination";
 
 type MyTasksProps = {
+  cursorEntityId: SafeId<"entity"> | null;
+  limit: number;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
 };
 
-export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
+export const myTasksHandler = async ({
+  cursorEntityId,
+  limit,
+  userId,
+  scopedDb,
+}: MyTasksProps) => {
   const assignments = await scopedDb((tx) =>
     tx.query.taskAssignees.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(cursorEntityId ? { entityId: { gt: cursorEntityId } } : {}),
+      },
       columns: { entityId: true, role: true },
-      limit: LIMITS.myTasksAssignmentScanLimit,
+      orderBy: { entityId: "asc" },
+      limit: limit + 1,
     }),
   );
 
-  if (assignments.length === 0) {
-    return [];
+  const assignmentPage = createCursorPage({
+    rows: assignments,
+    limit,
+    cursorForItem: ({ entityId }) => encodePaginationCursor([entityId]),
+  });
+
+  const entityIds = assignmentPage.items.map(
+    (assignment) => assignment.entityId,
+  );
+  if (entityIds.length === 0) {
+    return { items: [], limit, nextCursor: null };
   }
 
-  const entityIds = assignments.map((a) => a.entityId);
-
-  return scopedDb((tx) =>
+  const tasks = await scopedDb((tx) =>
     tx.query.entities.findMany({
       where: {
         id: { in: entityIds },
@@ -77,10 +95,17 @@ export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
           },
         },
       },
-      orderBy: {
-        dueDate: "asc",
-      },
-      limit: LIMITS.myTasksMax,
+      limit,
     }),
   );
+
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  return {
+    items: entityIds.flatMap((entityId) => {
+      const task = tasksById.get(entityId);
+      return task ? [task] : [];
+    }),
+    limit,
+    nextCursor: assignmentPage.nextCursor,
+  };
 };

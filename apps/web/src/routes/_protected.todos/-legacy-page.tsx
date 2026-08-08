@@ -1,6 +1,11 @@
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
@@ -32,6 +37,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { localISODate } from "@/lib/local-iso-date";
@@ -80,6 +86,13 @@ const SKELETON_ROW_NAME_WIDTHS: Record<string, string> = {
   three: "w-40",
 };
 
+const compareStableStrings = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
 type ValidTask = TaskItem & {
   workspace: NonNullable<TaskItem["workspace"]>;
 };
@@ -119,21 +132,34 @@ export function LegacyTodosPage() {
     }),
   });
   const [filter, setFilter] = useState<TaskFilter>("all");
-  const { data: tasks, isLoading } = useQuery(
-    myTasksOptions(activeOrganizationId),
-  );
+  const {
+    data,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery(myTasksOptions(activeOrganizationId));
   const { data: workspaces } = useQuery(
     workspacesOptions(activeOrganizationId),
   );
 
+  const tasks = data ? data.pages.flatMap((page) => page.items) : [];
   const filtered = (() => {
-    if (!tasks) {
-      return [];
-    }
-
-    const valid = tasks.filter(
-      (task): task is ValidTask => task.workspace !== null,
-    );
+    const valid = tasks
+      .filter((task): task is ValidTask => task.workspace !== null)
+      .toSorted((left, right) => {
+        if (left.dueDate === right.dueDate) {
+          return compareStableStrings(left.id, right.id);
+        }
+        if (left.dueDate === null) {
+          return 1;
+        }
+        if (right.dueDate === null) {
+          return -1;
+        }
+        return compareStableStrings(left.dueDate, right.dueDate);
+      });
 
     if (filter === "all") {
       return valid;
@@ -142,6 +168,16 @@ export function LegacyTodosPage() {
   })();
 
   const groups = groupByWorkspace(filtered);
+
+  useExternalSyncEffect(() => {
+    if (!queryError) {
+      return;
+    }
+    analytics.captureError(queryError);
+    stellaToast.error(
+      userErrorFromThrown(queryError, t("common.unexpectedError")),
+    );
+  }, [analytics, queryError, t]);
 
   const createTaskMutation = useMutation({
     mutationFn: async (wsId: string) => {
@@ -172,7 +208,7 @@ export function LegacyTodosPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h1 className="me-auto text-lg font-semibold">
           {t("tasks.myTasksTitle")}
         </h1>
@@ -196,7 +232,7 @@ export function LegacyTodosPage() {
             </MenuPopup>
           </Menu>
         )}
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <FilterButton
             active={filter === "all"}
             label={t("common.all")}
@@ -222,7 +258,7 @@ export function LegacyTodosPage() {
 
       {isLoading && <TasksLoadingSkeleton />}
 
-      {!isLoading && groups.length === 0 && (
+      {!isLoading && !queryError && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
           <EntityKindIcon className="size-10 opacity-40" kind="task" />
           <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
@@ -265,6 +301,26 @@ export function LegacyTodosPage() {
           </div>
         </div>
       ))}
+
+      {queryError && groups.length === 0 && (
+        <p className="text-destructive py-16 text-center text-sm" role="alert">
+          {userErrorFromThrown(queryError, t("common.unexpectedError"))}
+        </p>
+      )}
+
+      {hasNextPage && (
+        <Button
+          className="self-center"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "LegacyTodosPage");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+        </Button>
+      )}
     </div>
   );
 }

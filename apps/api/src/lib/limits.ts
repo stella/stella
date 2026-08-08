@@ -55,10 +55,10 @@ export const LIMITS = {
    *  (versionsPerEntity * propertiesCount). */
   versionFieldsScanLimit: 20_000,
   calendarTasksMax: 200,
-  /** Max tasks returned by the "my tasks" listing. */
-  myTasksMax: 200,
-  /** Max task-assignment rows scanned to resolve the caller's tasks. */
-  myTasksAssignmentScanLimit: 500,
+  /** Default page size for the signed-in user's assigned tasks. */
+  myTasksPageSizeDefault: 50,
+  /** Max page size for the signed-in user's assigned tasks. */
+  myTasksPageSizeMax: 100,
   /** Max active task assignments that account deletion will reassign in one pass. */
   accountDeletionTaskAssignmentsMax: 500,
   /** Max workspace member candidates returned for account-deletion task handoff. */

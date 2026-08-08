@@ -6,6 +6,31 @@ import {
 } from "@/components/chat-editor-slash-items";
 
 describe("buildChatSlashItems", () => {
+  test("includes reserved commands only for chat composers that support them", () => {
+    const withoutReserved = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [],
+    });
+    const withReserved = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [],
+      includeReservedCommands: true,
+    });
+
+    expect(withoutReserved).toEqual([]);
+    expect(withReserved).toEqual([
+      {
+        kind: "command",
+        command: {
+          command: "/new",
+          descriptionKey: "chat.newChat",
+          id: "new",
+          name: "new",
+        },
+      },
+    ]);
+  });
+
   test("includes built-in skills when no installed skill shadows them", () => {
     const items = buildChatSlashItems({
       shortcuts: [],

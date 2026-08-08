@@ -551,6 +551,7 @@ export const ChatTabPanel = ({
             }}
             pendingCount={0}
             queueWhileGenerating
+            reservedCommands
             skillsOrganizationId={activeOrganizationId}
             status={isGenerating ? "generating" : "idle"}
             dock={

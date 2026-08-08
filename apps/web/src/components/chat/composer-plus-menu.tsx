@@ -110,6 +110,7 @@ export type ComposerModelsMenuProps = {
 export type ComposerSkillsMenuProps = {
   activeOrganizationId: string;
   editor: Editor | null;
+  includeReservedCommands?: boolean | undefined;
 };
 
 /** Enables and drives the Context submenu: reference a matter, or a file
@@ -531,12 +532,8 @@ const itemKey = (item: SlashItem): string => {
   return `command-${item.command.id}`;
 };
 
-/** Secondary, muted line under an item's name — mirrors the `/`-suggestion
- *  list's row shape (prompt body / skill description) so both surfaces
- *  read as one consistent picker. This submenu's items never include
- *  reserved commands (`buildChatSlashItems` is called without
- *  `includeReservedCommands`), so the command branch is unreachable here
- *  but kept for exhaustiveness with `SlashItem`. */
+/** Secondary, muted line under an item's name, mirroring the former
+ *  `/`-suggestion list's row shape (prompt body / skill description). */
 const itemSecondary = (item: SlashItem): string => {
   if (item.kind === "prompt") {
     return item.prompt.body;
@@ -564,7 +561,7 @@ const ComposerSkillsSubmenu = ({
 }) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const { activeOrganizationId, editor } = skills;
+  const { activeOrganizationId, editor, includeReservedCommands } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -583,12 +580,16 @@ const ComposerSkillsSubmenu = ({
     () => commandShortcutRowsFromSkillPages(data?.pages),
     [data?.pages],
   );
-  // `includeReservedCommands` defaults to false, so `/new`
-  // never appear here — only saved prompts and enabled skills.
   const items = useMemo(
     () =>
-      buildChatSlashItems({ shortcuts: shortcutRows, skillPages: data?.pages }),
-    [shortcutRows, data?.pages],
+      buildChatSlashItems({
+        shortcuts: shortcutRows,
+        skillPages: data?.pages,
+        ...(includeReservedCommands === undefined
+          ? {}
+          : { includeReservedCommands }),
+      }),
+    [includeReservedCommands, shortcutRows, data?.pages],
   );
 
   const query = search.trim().toLowerCase();

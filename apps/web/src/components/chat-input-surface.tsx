@@ -284,7 +284,11 @@ export const ChatInputSurface = ({
                 onOpenFilePicker={openFilePicker}
                 skills={
                   skillsOrganizationId
-                    ? { activeOrganizationId: skillsOrganizationId, editor }
+                    ? {
+                        activeOrganizationId: skillsOrganizationId,
+                        editor,
+                        includeReservedCommands: true,
+                      }
                     : undefined
                 }
               />
