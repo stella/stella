@@ -24,12 +24,16 @@ import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
+import { sessionCookieNameForDevPort } from "@/api/lib/auth-cookie-name";
+
 const CORPUS_REPOSITORY = "https://github.com/harveyai/harvey-labs.git";
 const CORPUS_SUBPATH = "tasks/firm-knowledge/dms/matters";
 const CACHE_DIRECTORY = ".cache/firm-knowledge";
 const STORAGE_STATE = ".playwright/storage-state.json";
 const DEFAULT_API_PORT = 3001;
 const DEFAULT_MATTER_COUNT = 15;
+const REQUEST_TIMEOUT_MS = 60_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 /** What the web client names a new matter's file property. */
 const FILE_PROPERTY_NAME = "Documents";
@@ -102,14 +106,26 @@ const discoverApiOrigin = async (): Promise<string> => {
     return `http://127.0.0.1:${String(DEFAULT_API_PORT)}`;
   }
 
-  const listening = Bun.spawnSync(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN"]);
+  // lsof is not guaranteed to exist; without it we cannot enumerate ports, so
+  // say so rather than dying on a missing executable.
+  const listing = ((): string | null => {
+    try {
+      const result = Bun.spawnSync(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN"]);
+      return result.exitCode === 0 ? result.stdout.toString() : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (listing === null) {
+    return fail(
+      `No API on port ${String(DEFAULT_API_PORT)} and no way to scan for one. ` +
+        "Pass --api http://127.0.0.1:<port>.",
+    );
+  }
+
   const ports = [
     ...new Set(
-      [
-        ...listening.stdout
-          .toString()
-          .matchAll(/:(?<port>\d{4,5})\s*\(LISTEN\)/gu),
-      ]
+      [...listing.matchAll(/:(?<port>\d{4,5})\s*\(LISTEN\)/gu)]
         .flatMap((match) => {
           const port = Number(match.groups?.["port"]);
           return Number.isInteger(port) ? [port] : [];
@@ -259,13 +275,9 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
 };
 
 /**
- * `seed-test-user` writes the storage state with a fixed cookie name, but the
- * dev runner derives the auth cookie prefix from the API port
- * (`BETTER_AUTH_COOKIE_PREFIX = stella-dev-<port>`), which differs per worktree.
- * Sending the stored name against a worktree's API is a silent 401.
- *
- * The signature covers the token alone, so the stored value is reused verbatim
- * and only the label is rebuilt from the target origin.
+ * The stored state carries a fixed cookie name, which a worktree's API rejects
+ * with a silent 401. The signature covers the token alone, so reuse the value
+ * and relabel it for the target port.
  */
 const readSessionCookie = async (apiOrigin: string): Promise<string> => {
   const statePath = path.join(process.cwd(), "..", "..", STORAGE_STATE);
@@ -288,7 +300,7 @@ const readSessionCookie = async (apiOrigin: string): Promise<string> => {
   if (!port) {
     fail(`--api origin '${apiOrigin}' must include a port.`);
   }
-  return `stella-dev-${port}${SESSION_COOKIE_SUFFIX}=${sessionCookie.value}`;
+  return `${sessionCookieNameForDevPort(port)}=${sessionCookie.value}`;
 };
 
 const createApiClient = (apiOrigin: string, cookie: string) => {
@@ -301,6 +313,7 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
     const url = `${apiOrigin}${STELLA_API_VERSION_PREFIX}${route}`;
     const response = await fetch(url, {
       body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: {
         cookie,
         ...(init?.body === undefined
@@ -334,10 +347,14 @@ const main = async () => {
   ).filter((entry) => entry.isDirectory());
 
   // The API suffixes duplicate names "(1)", "(2)", so re-runs would stack copies.
-  const existing = await api.request<{ workspaces: { name: string }[] }>(
-    "/workspaces",
+  const existing = await api.request<{
+    workspaces: { entityCount: number; name: string }[];
+  }>("/workspaces");
+  // Keyed on entity count, not name: a run interrupted mid-upload leaves the
+  // matter present but short, and skipping on name alone would strand it.
+  const seededCounts = new Map(
+    existing.workspaces.map(({ entityCount, name }) => [name, entityCount]),
   );
-  const seededNames = new Set(existing.workspaces.map(({ name }) => name));
 
   let seededFiles = 0;
   let skipped = 0;
@@ -350,7 +367,12 @@ const main = async () => {
     if (manifest.files.length === 0) {
       continue;
     }
-    if (seededNames.has(matterName(manifest.reference))) {
+    const expectedEntities =
+      manifest.files.length + manifest.directories.length;
+    if (
+      (seededCounts.get(matterName(manifest.reference)) ?? 0) >=
+      expectedEntities
+    ) {
       skipped += 1;
       continue;
     }
@@ -409,6 +431,7 @@ const main = async () => {
         body,
         headers: { ...headers, "content-type": file.mimeType },
         method: "PUT",
+        signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
       });
       if (!put.ok) {
         fail(`Upload of ${file.name} failed: ${put.status}`);

@@ -55,6 +55,14 @@ export const authCookiePolicy = (): AuthCookiePolicy => ({
   useSecureCookies: !env.isDev,
 });
 
+/**
+ * The cookie name an API on `port` uses. The dev runner sets a per-port prefix
+ * and injects it only into its own children, so a script started outside it
+ * cannot read the value from its own environment.
+ */
+export const sessionCookieNameForDevPort = (port: string): string =>
+  `${STELLA_DEV_PREFIX}-${port}${SESSION_COOKIE_SUFFIX}`;
+
 /** The session cookie name that {@link authCookiePolicy} produces. */
 export const sessionCookieName = (): string => {
   const { cookiePrefix, useSecureCookies } = authCookiePolicy();
