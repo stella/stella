@@ -17,6 +17,8 @@ import {
 } from "@/api/lib/flows/start-flow-run";
 
 const config = {
+  description:
+    "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
   access: "write",
   mcp: { type: "capability", reason: "workflow_orchestration" },

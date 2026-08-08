@@ -50,6 +50,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "./contacts";
+import { documentProcessingRuns } from "./document-processing";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
@@ -163,6 +164,7 @@ export const relations = defineRelations(
     invoices,
     matterCounters,
     documentCounters,
+    documentProcessingRuns,
     organizationSettings,
     anonymizationAllowlistEntries,
     anonymizationBlacklistEntries,
@@ -1059,6 +1061,7 @@ export const relations = defineRelations(
         to: r.entities.id,
       }),
     },
+    documentProcessingRuns: {},
     caseLawSources: {},
     caseLawDecisionSourceIdentities: {
       source: r.one.caseLawSources({

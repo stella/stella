@@ -33,6 +33,11 @@ import type {
 
 const REINDEX_BATCH_SIZE = 100;
 
+/** Never expose a projection older than the live entity metadata/version. */
+const freshEntityProjectionFilter = sql`
+  AND sd.updated_at >= COALESCE(e.updated_at, e.created_at)
+`;
+
 type RawRow = Record<string, unknown>;
 
 const mapHitRow = (row: RawRow): SearchHit => ({
@@ -107,11 +112,13 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       ts_rank(sd.tsv, ${tsQuery})::float8 AS score,
       sd.updated_at
     FROM search_documents sd
+    JOIN entities e ON e.id = sd.entity_id
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
       ${kindFilter}
       ${cursorFilter}
+      ${freshEntityProjectionFilter}
       AND sd.tsv @@ ${tsQuery}
     ORDER BY score DESC, sd.entity_id DESC
     LIMIT ${limit + 1}
@@ -120,9 +127,11 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const countQuery = sql`
     SELECT count(*)::int AS total
     FROM search_documents sd
+    JOIN entities e ON e.id = sd.entity_id
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
       ${kindFilter}
+      ${freshEntityProjectionFilter}
       AND sd.tsv @@ ${tsQuery}
   `;
 
@@ -132,8 +141,10 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const kindFacetQuery = sql`
     SELECT sd.kind AS value, count(*)::int AS count
     FROM search_documents sd
+    JOIN entities e ON e.id = sd.entity_id
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
+      ${freshEntityProjectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -145,10 +156,12 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       w.name AS label,
       count(*)::int AS count
     FROM search_documents sd
+    JOIN entities e ON e.id = sd.entity_id
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
       ${workspaceAccessFilter}
       ${kindFilter}
+      ${freshEntityProjectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.workspace_id, w.name
     ORDER BY count DESC
@@ -225,8 +238,10 @@ const searchContent = async (
         ) AS passage,
         ts_rank(sd.tsv, ${tsQuery})::float8 AS score
       FROM search_documents sd
+      JOIN entities e ON e.id = sd.entity_id
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
+        ${freshEntityProjectionFilter}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -234,8 +249,10 @@ const searchContent = async (
     rootDb.execute(sql`
       SELECT count(*)::int AS total
       FROM search_documents sd
+      JOIN entities e ON e.id = sd.entity_id
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
+        ${freshEntityProjectionFilter}
         AND sd.tsv @@ ${tsQuery}
     `),
   ]);

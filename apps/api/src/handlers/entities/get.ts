@@ -42,12 +42,14 @@ export const readEntityByIdHandler = async function* ({
           },
         },
         columns: {
+          createdAt: true,
           kind: true,
           name: true,
+          updatedAt: true,
         },
         with: {
           currentVersion: {
-            columns: { id: true },
+            columns: { createdAt: true, id: true },
             with: {
               // Fields of one entity version: at most one row per property
               // (fields_property_id_entity_version_id_key), so this is
@@ -87,9 +89,13 @@ export const readEntityByIdHandler = async function* ({
   }
 
   return Result.ok({
+    createdAt: entity.createdAt,
     entityId,
     kind: entity.kind,
     name: entity.name,
+    updatedAt: entity.updatedAt,
+    currentVersionId: entity.currentVersion.id,
+    currentVersionCreatedAt: entity.currentVersion.createdAt,
     fields: entity.currentVersion.fields,
   });
 };

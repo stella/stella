@@ -42,6 +42,8 @@ const templateRefSchema = t.Union([
 ]);
 
 const config = {
+  description:
+    "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
   permissions: { workspace: ["read"], entity: ["create"] },
   mcp: { type: "capability", reason: "reporting_export" },
   params: workspaceParams({}),

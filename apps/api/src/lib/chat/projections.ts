@@ -397,6 +397,71 @@ const documentVersionEntryProjection = v.strictObject({
 const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
+const documentContentStateProjection = v.variant("status", [
+  v.strictObject({ status: v.literal("not_applicable") }),
+  v.strictObject({
+    status: v.literal("ready"),
+    source: v.picklist(["direct_docx", "extracted_text"]),
+    sourceVersionId: passthroughId(),
+    updatedAt: v.string(),
+  }),
+  v.strictObject({
+    status: v.literal("pending"),
+    processingKind: v.picklist(["native-extraction", "ocr"]),
+    runId: v.nullable(passthroughId()),
+    sourceVersionId: passthroughId(),
+  }),
+  v.strictObject({
+    status: v.literal("requires_ocr"),
+    sourceVersionId: passthroughId(),
+    action: v.strictObject({
+      tool: v.literal("manage_organization"),
+      arguments: v.strictObject({
+        action: v.literal("update_org_settings"),
+        document_processing_mode: v.literal("searchable-text"),
+      }),
+    }),
+  }),
+  v.strictObject({
+    status: v.literal("failed"),
+    processingKind: v.picklist(["native-extraction", "ocr"]),
+    runId: passthroughId(),
+    sourceVersionId: passthroughId(),
+    errorCode: v.nullable(v.string()),
+    retryable: v.literal(true),
+  }),
+  v.strictObject({
+    status: v.literal("unsupported"),
+    sourceVersionId: passthroughId(),
+    reason: v.string(),
+  }),
+]);
+
+const documentSearchIndexStateProjection = v.variant("status", [
+  v.strictObject({ status: v.literal("not_applicable") }),
+  v.strictObject({
+    status: v.literal("ready"),
+    sourceVersionId: passthroughId(),
+    updatedAt: v.string(),
+  }),
+  v.strictObject({
+    status: v.literal("pending"),
+    sourceVersionId: passthroughId(),
+  }),
+  v.strictObject({
+    status: v.literal("failed"),
+    runId: passthroughId(),
+    sourceVersionId: passthroughId(),
+    errorCode: v.literal("search_index_failed"),
+    retryable: v.literal(true),
+  }),
+  v.strictObject({
+    status: v.literal("unsupported"),
+    sourceVersionId: passthroughId(),
+    reason: v.string(),
+  }),
+]);
+
 /**
  * read_document, default branch: current version metadata + field values,
  * plus the version-history page when `include_versions` was requested.
@@ -406,6 +471,8 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   kind: v.string(),
   name: v.string(),
   fields: v.array(documentFieldProjection),
+  contentState: documentContentStateProjection,
+  searchIndexState: documentSearchIndexStateProjection,
   versions: v.optional(v.array(documentVersionEntryProjection)),
   // Opaque `[versionNumber, entityVersionId]` cursor, not UUID-formatted.
   versionsNextCursor: v.optional(v.nullable(passthroughId())),
@@ -470,7 +537,7 @@ export const READ_DOCUMENT_PROJECTION = v.union([
 /**
  * list_properties. Source of truth: `handleListPropertiesTool`
  * (`document-tools.ts`) — selected property columns mapped to
- * `{ id, name, valueType, status }`.
+ * `{ id, name, valueType, status, writeMethod }`.
  */
 export const LIST_PROPERTIES_PROJECTION = v.strictObject({
   properties: v.array(
@@ -479,6 +546,7 @@ export const LIST_PROPERTIES_PROJECTION = v.strictObject({
       name: v.string(),
       valueType: v.string(),
       status: v.string(),
+      writeMethod: v.picklist(["set_field_value", "upload_document_version"]),
     }),
   ),
   // Opaque `[createdAt, id]` cursor; not UUID-formatted.

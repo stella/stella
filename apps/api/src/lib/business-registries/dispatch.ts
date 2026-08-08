@@ -124,6 +124,7 @@ import {
 } from "@stll/business-registries/vies";
 import type { CountryCode } from "@stll/country-codes";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // ---------------------------------------------------------------------------
@@ -361,14 +362,18 @@ const mapAresError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof AresAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
-      message: `ARES API error: ${error.message}`,
+      message: "ARES is temporarily unavailable",
+      cause: error,
     });
   }
   if (error instanceof AresRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
-      message: `ARES request failed: ${error.message}`,
+      message: "ARES is temporarily unavailable",
+      cause: error,
     });
   }
   return null;
@@ -380,7 +385,14 @@ const ARES_HANDLER: RegistryHandler = {
   nativeToolSlug: "ares",
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
   lookup: async (input) => {
-    const company = await lookupByIco(input);
+    const company = await lookupByIco(input, {
+      onVrError: (error) =>
+        captureError(error, {
+          operation: "vr-enrichment",
+          registry: "ares",
+          source: "business-registry",
+        }),
+    });
     return company ? aresCompanyToHit(company) : null;
   },
   search: async (input, options) => {

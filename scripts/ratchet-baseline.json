@@ -395,10 +395,10 @@
     }
   },
   "capabilities-without-description": {
-    "count": 558,
+    "count": 538,
     "files": {
-      "apps/api/src/mcp/generated/capability-catalog.json": 279,
-      "packages/cli/src/generated/capability-catalog.json": 279
+      "apps/api/src/mcp/generated/capability-catalog.json": 269,
+      "packages/cli/src/generated/capability-catalog.json": 269
     }
   },
   "capability-file-transport-suppressed": {

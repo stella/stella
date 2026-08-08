@@ -41,6 +41,8 @@ export const MCP_ERROR_CODES = [
   "conflict",
   /** The caller exceeded a rate limit; retry after the window. */
   "rate_limited",
+  /** A named external dependency is temporarily unavailable; retry is safe. */
+  "upstream_unavailable",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

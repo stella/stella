@@ -40,6 +40,7 @@ const company: AresCompany = {
     },
   ],
   actingClause: "Two members act jointly.",
+  vrEnrichmentStatus: "complete",
 };
 
 describe("ARES normalized projection", () => {

@@ -84,6 +84,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   // is the model correcting its input, not a defect or a bare retry.
   conflict: "invalid-input",
   rate_limited: "transient",
+  upstream_unavailable: "transient",
   unknown_tool: "unavailable",
   internal_error: "server-defect",
 } as const satisfies Record<McpErrorCode, ChatToolErrorKind>;

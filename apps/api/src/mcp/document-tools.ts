@@ -17,8 +17,16 @@ import * as v from "valibot";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
-import { entities, entityVersions, properties } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import {
+  DEFAULT_DOCUMENT_PROCESSING_MODE,
+  entities,
+  entityVersions,
+  properties,
+} from "@/api/db/schema";
+import type {
+  FieldContent,
+  PropertyContentType,
+} from "@/api/db/schema-validators";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/delete-version";
@@ -49,6 +57,7 @@ import type {
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { isUuid } from "@/api/lib/custom-schema";
+import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -61,6 +70,7 @@ import {
   brandPersistedEntityVersionId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
+import { findExtractionFileField } from "@/api/lib/search/types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
 import { includes } from "@/api/lib/type-guards";
@@ -102,6 +112,7 @@ import {
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
   | "list_documents"
@@ -124,6 +135,18 @@ const SETTABLE_VALUE_TYPES = [
   "date",
   "int",
 ] as const;
+
+const PROPERTY_WRITE_METHODS = {
+  file: "upload_document_version",
+  text: "set_field_value",
+  "single-select": "set_field_value",
+  "multi-select": "set_field_value",
+  date: "set_field_value",
+  int: "set_field_value",
+} as const satisfies Record<
+  PropertyContentType,
+  "set_field_value" | "upload_document_version"
+>;
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
 
@@ -522,6 +545,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     description:
       "Read a document's metadata and field values by entity ID. By default " +
       "returns the current version's name, kind, and field/property values. " +
+      "The default response also reports contentState and searchIndexState, " +
+      "including an exact OCR-enablement action when searchable-text OCR is required. " +
       "Pass version_id to inspect a specific version instead. Pass version_id " +
       "and compare_with_version_id to get a plain-text line diff between two " +
       "versions. Pass include_versions to also return the version history. To " +
@@ -691,8 +716,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     description:
       "List the property (column) definitions of a matter. Returns each " +
       "property's id, name, value type (text, single-select, multi-select, " +
-      "date, or int), and status. Use the returned property id with " +
-      "set_field_value to set a document's value for that property.",
+      "date, int, or file), status, and writeMethod. Use set_field_value for " +
+      "scalar properties; file properties are managed through document upload/version tools.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1155,6 +1180,291 @@ const loadVersionHistory = async ({
   };
 };
 
+type CurrentDocumentForState = {
+  createdAt: Date;
+  currentVersionCreatedAt: Date;
+  currentVersionId: SafeId<"entityVersion">;
+  fields: {
+    content: FieldContent;
+    id: SafeId<"field">;
+    propertyId: SafeId<"property">;
+  }[];
+  updatedAt: Date | null;
+};
+
+type DocumentContentState =
+  | { status: "not_applicable" }
+  | {
+      status: "ready";
+      source: "direct_docx" | "extracted_text";
+      sourceVersionId: SafeId<"entityVersion">;
+      updatedAt: string;
+    }
+  | {
+      status: "pending";
+      processingKind: "native-extraction" | "ocr";
+      runId: SafeId<"documentProcessingRun"> | null;
+      sourceVersionId: SafeId<"entityVersion">;
+    }
+  | {
+      status: "requires_ocr";
+      sourceVersionId: SafeId<"entityVersion">;
+      action: {
+        tool: "manage_organization";
+        arguments: {
+          action: "update_org_settings";
+          document_processing_mode: "searchable-text";
+        };
+      };
+    }
+  | {
+      status: "failed";
+      processingKind: "native-extraction" | "ocr";
+      runId: SafeId<"documentProcessingRun">;
+      sourceVersionId: SafeId<"entityVersion">;
+      errorCode: string | null;
+      retryable: true;
+    }
+  | {
+      status: "unsupported";
+      sourceVersionId: SafeId<"entityVersion">;
+      reason: string;
+    };
+
+type DocumentSearchIndexState =
+  | { status: "not_applicable" }
+  | {
+      status: "ready";
+      sourceVersionId: SafeId<"entityVersion">;
+      updatedAt: string;
+    }
+  | { status: "pending"; sourceVersionId: SafeId<"entityVersion"> }
+  | {
+      status: "failed";
+      runId: SafeId<"documentProcessingRun">;
+      sourceVersionId: SafeId<"entityVersion">;
+      errorCode: "search_index_failed";
+      retryable: true;
+    }
+  | {
+      status: "unsupported";
+      sourceVersionId: SafeId<"entityVersion">;
+      reason: string;
+    };
+
+type DocumentProcessingStates = {
+  contentState: DocumentContentState;
+  searchIndexState: DocumentSearchIndexState;
+};
+
+const loadDocumentProcessingStates = async ({
+  context,
+  current,
+  entityId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  current: CurrentDocumentForState;
+  entityId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<DocumentProcessingStates> => {
+  const [extracted, runs, searchDocument, settings] = await context.scopedDb(
+    async (tx) =>
+      await Promise.all([
+        tx.query.extractedContent.findFirst({
+          where: {
+            entityId: { eq: entityId },
+            organizationId: { eq: context.organizationId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: {
+            charCount: true,
+            extractedAt: true,
+            sourceEntityVersionId: true,
+            sourceFieldId: true,
+            sourceFileId: true,
+            sourceSha256Hex: true,
+          },
+        }),
+        tx.query.documentProcessingRuns.findMany({
+          where: {
+            entityId: { eq: entityId },
+            entityVersionId: { eq: current.currentVersionId },
+            organizationId: { eq: context.organizationId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: {
+            errorCode: true,
+            id: true,
+            kind: true,
+            sourceFileId: true,
+            sourceSha256Hex: true,
+            status: true,
+          },
+          orderBy: { createdAt: "desc" },
+          limit: 4,
+        }),
+        tx.query.searchDocuments.findFirst({
+          where: {
+            entityId: { eq: entityId },
+            organizationId: { eq: context.organizationId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { updatedAt: true },
+        }),
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: context.organizationId } },
+          columns: { documentProcessingMode: true },
+        }),
+      ]),
+  );
+
+  const sourceFile = findExtractionFileField(current.fields);
+  if (!sourceFile) {
+    const semanticUpdatedAt = current.updatedAt ?? current.createdAt;
+    return {
+      contentState: { status: "not_applicable" },
+      searchIndexState:
+        searchDocument && searchDocument.updatedAt >= semanticUpdatedAt
+          ? {
+              status: "ready",
+              sourceVersionId: current.currentVersionId,
+              updatedAt: searchDocument.updatedAt.toISOString(),
+            }
+          : {
+              status: "pending",
+              sourceVersionId: current.currentVersionId,
+            },
+    };
+  }
+
+  const currentExtracted = selectCurrentExtractedContent({
+    extracted,
+    currentVersionCreatedAt: current.currentVersionCreatedAt,
+    currentVersionId: current.currentVersionId,
+    fields: current.fields,
+  });
+  const sourceRuns = runs.filter(
+    (run) =>
+      run.sourceFileId === sourceFile.id &&
+      run.sourceSha256Hex === sourceFile.sha256Hex,
+  );
+  const nativeRun = sourceRuns.find((run) => run.kind === "native-extraction");
+  const ocrRun = sourceRuns.find((run) => run.kind === "ocr");
+  const searchFailure = sourceRuns.find(
+    (run) => run.status === "failed" && run.errorCode === "search_index_failed",
+  );
+
+  let contentState: DocumentContentState;
+  if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
+    contentState = {
+      status: "ready",
+      source: "direct_docx",
+      sourceVersionId: current.currentVersionId,
+      updatedAt: current.currentVersionCreatedAt.toISOString(),
+    };
+  } else if (ocrRun?.status === "failed") {
+    contentState = {
+      status: "failed",
+      processingKind: "ocr",
+      runId: ocrRun.id,
+      sourceVersionId: current.currentVersionId,
+      errorCode: ocrRun.errorCode,
+      retryable: true,
+    };
+  } else if (ocrRun?.status === "queued" || ocrRun?.status === "running") {
+    contentState = {
+      status: "pending",
+      processingKind: "ocr",
+      runId: ocrRun.id,
+      sourceVersionId: current.currentVersionId,
+    };
+  } else if (
+    currentExtracted?.charCount === 0 &&
+    sourceFile.mimeType === PDF_MIME_TYPE &&
+    (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
+      "off"
+  ) {
+    contentState = {
+      status: "requires_ocr",
+      sourceVersionId: current.currentVersionId,
+      action: {
+        tool: "manage_organization",
+        arguments: {
+          action: "update_org_settings",
+          document_processing_mode: "searchable-text",
+        },
+      },
+    };
+  } else if (currentExtracted) {
+    contentState = {
+      status: "ready",
+      source: "extracted_text",
+      sourceVersionId: current.currentVersionId,
+      updatedAt: currentExtracted.extractedAt.toISOString(),
+    };
+  } else if (nativeRun?.status === "failed") {
+    contentState = {
+      status: "failed",
+      processingKind: "native-extraction",
+      runId: nativeRun.id,
+      sourceVersionId: current.currentVersionId,
+      errorCode: nativeRun.errorCode,
+      retryable: true,
+    };
+  } else if (sourceFile.encrypted) {
+    contentState = {
+      status: "unsupported",
+      sourceVersionId: current.currentVersionId,
+      reason: "Encrypted document content cannot be extracted.",
+    };
+  } else {
+    contentState = {
+      status: "pending",
+      processingKind: "native-extraction",
+      runId:
+        nativeRun?.status === "queued" || nativeRun?.status === "running"
+          ? nativeRun.id
+          : null,
+      sourceVersionId: current.currentVersionId,
+    };
+  }
+
+  let searchIndexState: DocumentSearchIndexState;
+  if (searchFailure) {
+    searchIndexState = {
+      status: "failed",
+      runId: searchFailure.id,
+      sourceVersionId: current.currentVersionId,
+      errorCode: "search_index_failed",
+      retryable: true,
+    };
+  } else if (
+    currentExtracted &&
+    searchDocument &&
+    searchDocument.updatedAt >= currentExtracted.extractedAt
+  ) {
+    searchIndexState = {
+      status: "ready",
+      sourceVersionId: current.currentVersionId,
+      updatedAt: searchDocument.updatedAt.toISOString(),
+    };
+  } else if (contentState.status === "unsupported") {
+    searchIndexState = {
+      status: "unsupported",
+      sourceVersionId: current.currentVersionId,
+      reason: contentState.reason,
+    };
+  } else {
+    searchIndexState = {
+      status: "pending",
+      sourceVersionId: current.currentVersionId,
+    };
+  }
+
+  return { contentState, searchIndexState };
+};
+
 const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
     workspace: ["read"],
@@ -1295,6 +1605,12 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
     return internalFailureResult(currentResult.error);
   }
   const current = currentResult.value;
+  const processingStates = await loadDocumentProcessingStates({
+    context,
+    current,
+    entityId,
+    workspaceId,
+  });
 
   let versionHistory: VersionHistoryPage | undefined;
   if (parsed.output.include_versions === true) {
@@ -1315,6 +1631,8 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
     kind: current.kind,
     name: current.name,
     fields: current.fields,
+    contentState: processingStates.contentState,
+    searchIndexState: processingStates.searchIndexState,
     ...(versionHistory
       ? {
           versions: versionHistory.versions,
@@ -2014,6 +2332,7 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
     name: property.name,
     valueType: property.content.type,
     status: property.status,
+    writeMethod: PROPERTY_WRITE_METHODS[property.content.type],
   }));
 
   const payload = {
@@ -2084,6 +2403,26 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
   });
   if (!hasPermission.success) {
     return errorResult("Forbidden");
+  }
+
+  const rawContent = args["content"];
+  if (
+    typeof rawContent === "object" &&
+    rawContent !== null &&
+    "type" in rawContent &&
+    rawContent.type === "file"
+  ) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "File properties are managed through document uploads",
+      issues: [
+        {
+          path: "content.type",
+          message: "Use upload_document_version for file content",
+        },
+      ],
+      hint: "Call open_document_version_upload or upload_document_version for this document.",
+    });
   }
 
   const parsed = v.safeParse(setFieldValueArgsSchema, args);

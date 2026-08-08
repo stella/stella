@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByIco, searchByName } from "./client.js";
-import { AresValidationError } from "./errors.js";
+import { AresRequestError, AresValidationError } from "./errors.js";
 
 const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
@@ -100,6 +100,73 @@ describe("lookupByIco validation", () => {
 
   test("rejects short IČO without leading zeros", async () => {
     expect(lookupByIco("27383")).rejects.toBeInstanceOf(AresValidationError);
+  });
+});
+
+describe("lookupByIco optional VR enrichment", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("returns the RES company with an unavailable status when VR is temporarily down", async () => {
+    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      if (url.includes("ekonomicke-subjekty-vr")) {
+        throw new TypeError("temporary VR outage");
+      }
+      return new Response(
+        JSON.stringify({
+          icoId: "27082440",
+          zaznamy: [
+            {
+              ico: "27082440",
+              obchodniJmeno: "Example a.s.",
+              primarniZaznam: true,
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    let observedError: AresRequestError | undefined;
+    const result = await lookupByIco("27082440", {
+      onVrError: (error) => {
+        if (error instanceof AresRequestError) {
+          observedError = error;
+        }
+      },
+    });
+
+    expect(result).toMatchObject({
+      ico: "27082440",
+      name: "Example a.s.",
+      vrEnrichmentStatus: "unavailable",
+    });
+    expect(observedError).toBeInstanceOf(AresRequestError);
+  });
+
+  test("still fails when the required RES lookup is unavailable", async () => {
+    const stub = async (): Promise<Response> => {
+      throw new TypeError("temporary RES outage");
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    expect(lookupByIco("27082440")).rejects.toBeInstanceOf(AresRequestError);
   });
 });
 

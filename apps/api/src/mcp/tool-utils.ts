@@ -286,6 +286,15 @@ export const notFoundResult = (
  */
 export const internalFailureResult = (error: unknown): CallToolResult => {
   if (HandlerError.is(error)) {
+    if (error.code === "upstream_unavailable") {
+      captureError(error, { source: "mcp" });
+      return structuredErrorResult({
+        code: "upstream_unavailable",
+        message: error.message,
+        hint: "Retry the same request. If the service remains unavailable, report the request ID with send_feedback.",
+        retryable: true,
+      });
+    }
     const code = statusCodeToErrorCode(error.status);
     if (code !== "internal_error") {
       return structuredErrorResult({ code, message: error.message });

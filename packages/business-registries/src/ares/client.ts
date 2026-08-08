@@ -250,6 +250,8 @@ export type LookupOptions = RegistryClientOptions & {
    * @default true
    */
   includeVr?: boolean;
+  /** Observe a recoverable failure of the optional VR enrichment request. */
+  onVrError?: (error: AresAPIError | AresRequestError) => void;
 };
 
 /**
@@ -289,10 +291,15 @@ export const lookupByIco = async (
       })
     : null;
 
-  const [resData, vrData] = await Promise.all([
+  const [resResult, vrResult] = await Promise.allSettled([
     resPromise,
     vrPromise ?? Promise.resolve(null),
   ]);
+
+  if (resResult.status === "rejected") {
+    throw resResult.reason;
+  }
+  const resData = resResult.value;
 
   if (!resData) {
     return null;
@@ -303,13 +310,28 @@ export const lookupByIco = async (
     return null;
   }
 
-  let company = parseResRecord(primaryRecord);
+  const company = parseResRecord(primaryRecord);
 
-  if (vrData) {
-    company = enrichWithVr(company, vrData);
+  if (!includeVr) {
+    return company;
   }
 
-  return company;
+  if (vrResult.status === "rejected") {
+    if (
+      vrResult.reason instanceof AresAPIError ||
+      vrResult.reason instanceof AresRequestError
+    ) {
+      options?.onVrError?.(vrResult.reason);
+      return { ...company, vrEnrichmentStatus: "unavailable" };
+    }
+    throw vrResult.reason;
+  }
+
+  if (!vrResult.value) {
+    return { ...company, vrEnrichmentStatus: "not_found" };
+  }
+
+  return enrichWithVr(company, vrResult.value);
 };
 
 export type SearchOptions = RegistryClientOptions & {

@@ -45,6 +45,27 @@ describe("search provider workspace scoping", () => {
       // Workspace scope present and bound to the authorized workspace.
       expect(serialized).toContain("workspace_id");
       expect(serialized).toContain(workspaceId);
+      // A newly committed version updates the live entity before its async
+      // projection. Every query must hide that stale row until reindexing.
+      expect(serialized).toContain("updated_at");
+      expect(serialized).toContain("created_at");
+      expect(serialized).toContain("entities");
+    }
+  });
+
+  test("content search also excludes projections older than the live entity", async () => {
+    await pgFtsProvider.searchContent({
+      query: "closing memo",
+      organizationId,
+      workspaceId,
+      limit: 10,
+    });
+
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(2);
+    for (const serialized of serializedCalls()) {
+      expect(serialized).toContain("updated_at");
+      expect(serialized).toContain("created_at");
+      expect(serialized).toContain("entities");
     }
   });
 
