@@ -24,6 +24,13 @@ export type IngestionResult = {
    */
   sourceDocumentId?: string | undefined;
   /**
+   * Exact source URLs emitted by an older adapter version for this same
+   * publisher document. This is a narrowly scoped identity-migration hint:
+   * the pipeline may use it to attach a newly learned `sourceDocumentId` to
+   * the right legacy null-id row without guessing from a shared docket.
+   */
+  legacySourceUrls?: readonly string[] | undefined;
+  /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
    * `caseNumber`: a citation names the docket alone, so a number carrying a

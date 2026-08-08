@@ -547,6 +547,7 @@ const processDecisionAttempt = async ({
       }),
       columns: {
         id: true,
+        ecli: true,
         metadata: true,
         sourceHash: true,
         sourceObservedAt: true,
@@ -555,6 +556,7 @@ const processDecisionAttempt = async ({
         corpusMirrorStatus: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
+        sourceUrl: true,
       },
     });
     if (identified || !result.sourceDocumentId) {
@@ -562,10 +564,10 @@ const processDecisionAttempt = async ({
     }
 
     // Adapters that learned the publisher's document id after their first
-    // release must adopt the legacy null-id row instead of duplicating it.
-    // The first document seen for a docket claims that row; later documents
-    // under the same docket then insert under their own publisher ids.
-    return await tx.query.caseLawDecisions.findFirst({
+    // release may adopt a legacy null-id row, but only after proving which
+    // publisher document produced it. A docket can publish siblings, so
+    // encounter order is not identity.
+    const legacy = await tx.query.caseLawDecisions.findFirst({
       where: {
         sourceId: { eq: sourceId },
         caseNumber: result.caseNumber,
@@ -574,6 +576,7 @@ const processDecisionAttempt = async ({
       },
       columns: {
         id: true,
+        ecli: true,
         metadata: true,
         sourceHash: true,
         sourceObservedAt: true,
@@ -582,8 +585,37 @@ const processDecisionAttempt = async ({
         corpusMirrorStatus: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
+        sourceUrl: true,
       },
     });
+    const legacyMatches =
+      legacy !== undefined &&
+      ((result.ecli !== undefined && legacy.ecli === result.ecli) ||
+        (legacy.sourceUrl !== null &&
+          result.legacySourceUrls?.includes(legacy.sourceUrl) === true));
+    if (!legacyMatches) {
+      return undefined;
+    }
+
+    if (legacy.redactedAt) {
+      // Preserve the tombstone and all of its payload fields. Binding only
+      // the verified publisher identity prevents this null-id row from
+      // swallowing every sibling under the same docket on later replays.
+      // audit: skip — background identity repair for public case-law data
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          sourceDocumentId: result.sourceDocumentId,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, legacy.id),
+            isNull(caseLawDecisions.sourceDocumentId),
+          ),
+        );
+    }
+    return legacy;
   });
 
   if (existing?.redactedAt) {

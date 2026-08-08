@@ -86,9 +86,16 @@ const htmlResponse = (body: string): Response =>
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 
-/** NALUS serves a decision page with no registry sign for a free number. */
-const NALUS_EMPTY_DECISION = `<html><body>
-  <span id="lblRegistrySign" class="DocRegistrySign"></span>
+const NALUS_SEARCH_FORM = `<html><body>
+  <input id="__VIEWSTATE" value="view-state" />
+  <input id="__EVENTVALIDATION" value="validation" />
+</body></html>`;
+
+const NALUS_NO_RESULTS = `<html><body>
+  <span id="ctl00_MainContent_lbError">
+    Pro zadaná kritéria nebyly nalezeny žádné záznamy.
+  </span>
+  <input id="ctl00_bResults" disabled="disabled" />
 </body></html>`;
 
 /** NSS hands out an antiforgery token before it will accept a search. */
@@ -160,7 +167,8 @@ const ADAPTER_CONFORMANCE = {
   },
   [ADAPTER_KEYS.CZ_US]: {
     disposition: "exercised",
-    exhaustedSource: () => htmlResponse(NALUS_EMPTY_DECISION),
+    exhaustedSource: ({ method }) =>
+      htmlResponse(method === "POST" ? NALUS_NO_RESULTS : NALUS_SEARCH_FORM),
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 96,
   },

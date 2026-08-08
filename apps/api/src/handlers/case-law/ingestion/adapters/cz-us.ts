@@ -42,8 +42,8 @@ const COMMON_HEADERS = {
  * distinctions.
  *
  * Cursor formats:
- *   search:historical:<decision-year>:<zero-based-page>
- *   search:recent:<available-from>:<available-to>:<zero-based-page>
+ *   search:historical:<decision-year>:<pass>:<page>:<digest>:<expected>
+ *   search:recent:<available-from>:<available-to>:<pass>:<page>:<digest>:<expected>
  *
  * A null or legacy probe cursor starts the search-based historical repair at
  * FIRST_YEAR. This intentionally re-enumerates history once: it migrates the
@@ -76,6 +76,18 @@ const SWEEP_PHASE = {
  * keeping steady-state work bounded.
  */
 const RECENT_WINDOW_DAYS = 45;
+
+const CRAWL_PASS = {
+  COLLECT: "collect",
+  VERIFY: "verify",
+} as const;
+
+type CrawlPass = (typeof CRAWL_PASS)[keyof typeof CRAWL_PASS];
+
+/** Seed for the rolling identity digest stored in the cursor. */
+const DIGEST_SEED = "0";
+
+const NO_RESULTS_MESSAGE = "Pro zadaná kritéria nebyly nalezeny žádné záznamy.";
 
 const REGISTRY_SIGN_PATTERN =
   /^(?<caseNumber>\S+(?:\s\S+)*?)\s+ze\s+dne\s+(?<date>\S.*)$/u;
@@ -188,6 +200,29 @@ const extractEcliCounter = (html: string): number | undefined => {
   return counter ? Number.parseInt(counter, 10) : undefined;
 };
 
+/** URL identity emitted by the pre-search adapter for counter-one records. */
+const legacySourceUrlsFor = (
+  caseNumber: string,
+  counter: number | undefined,
+): readonly string[] | undefined => {
+  if (counter !== 1) {
+    return undefined;
+  }
+  const legacyDocket =
+    /^(?:[IVX]+|Pl)\.ÚS\s+(?<number>\d+)\/(?<year>\d+)$/u.exec(
+      caseNumber,
+    )?.groups;
+  if (!legacyDocket?.["number"] || !legacyDocket["year"]) {
+    return undefined;
+  }
+  const legacyYear = String(
+    Number.parseInt(legacyDocket["year"], 10) % 100,
+  ).padStart(2, "0");
+  return [
+    `https://nalus.usoud.cz/Search/GetText.aspx?sz=I-${legacyDocket["number"]}-${legacyYear}_1`,
+  ];
+};
+
 /** Plain text of the DocContent table, the decision body. */
 const extractDocContentText = (html: string): string | undefined => {
   const body = DOC_CONTENT_PATTERN.exec(html)?.groups?.["body"];
@@ -254,6 +289,7 @@ const parseDecisionPage = (
   sourceUrl: string,
   sourceDocumentId: string,
   listedEcli: string | undefined,
+  listedCounter: number | undefined,
   nalusRecordId: string,
 ): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
@@ -279,7 +315,7 @@ const parseDecisionPage = (
   const decisionYear = parsed.decisionDate
     ? Number.parseInt(parsed.decisionDate.slice(0, 4), 10)
     : undefined;
-  const ecliCounter = extractEcliCounter(html);
+  const ecliCounter = extractEcliCounter(html) ?? listedCounter;
   const ecli =
     listedEcli ??
     (decisionYear !== undefined && ecliCounter !== undefined
@@ -312,6 +348,7 @@ const parseDecisionPage = (
   return {
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
+    legacySourceUrls: legacySourceUrlsFor(parsed.caseNumber, ecliCounter),
     ecli,
     court: "Ústavní soud",
     country: "CZE",
@@ -343,19 +380,27 @@ const parseDecisionPage = (
 type HistoricalCursor = {
   phase: typeof SWEEP_PHASE.HISTORICAL;
   year: number;
+  pass: CrawlPass;
   page: number;
+  digest: string;
+  expectedDigest?: string | undefined;
 };
 
 type RecentCursor = {
   phase: typeof SWEEP_PHASE.RECENT;
   availableFrom: string;
   availableTo: string;
+  pass: CrawlPass;
   page: number;
+  digest: string;
+  expectedDigest?: string | undefined;
 };
 
 type CursorState = HistoricalCursor | RecentCursor;
 
 type ListedDecision = {
+  caseNumber: string;
+  counter?: number | undefined;
   sourceDocumentId: string;
   nalusRecordId: string;
   sourceUrl: string;
@@ -373,7 +418,9 @@ type SearchPage = {
 const historicalStart = (): HistoricalCursor => ({
   phase: SWEEP_PHASE.HISTORICAL,
   year: FIRST_YEAR,
+  pass: CRAWL_PASS.COLLECT,
   page: 0,
+  digest: DIGEST_SEED,
 });
 
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -391,8 +438,16 @@ const recentStart = (now: Date): RecentCursor => {
     phase: SWEEP_PHASE.RECENT,
     availableFrom: isoDay(from),
     availableTo: isoDay(now),
+    pass: CRAWL_PASS.COLLECT,
     page: 0,
+    digest: DIGEST_SEED,
   };
+};
+
+const addUtcDays = (day: string, days: number): string => {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return isoDay(date);
 };
 
 const parseNonNegativeInteger = (
@@ -420,26 +475,49 @@ const parseCursor = (cursor: string): CursorState => {
   }
 
   const phase = parts.at(1);
-  if (phase === SWEEP_PHASE.HISTORICAL && parts.length === 4) {
+  if (phase === SWEEP_PHASE.HISTORICAL && parts.length === 7) {
     const year = parseNonNegativeInteger(parts.at(2), "year");
     if (year < FIRST_YEAR) {
       throw new TypeError("Invalid cz-us cursor year");
     }
+    const pass = parts.at(3);
+    const digest = parts.at(5);
+    const expectedDigest = parts.at(6);
+    if (
+      (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
+      !digest ||
+      (pass === CRAWL_PASS.VERIFY &&
+        (!expectedDigest || expectedDigest === "-")) ||
+      (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
+    ) {
+      throw new TypeError("Invalid cz-us historical pass");
+    }
     return {
       phase,
       year,
-      page: parseNonNegativeInteger(parts.at(3), "page"),
+      pass,
+      page: parseNonNegativeInteger(parts.at(4), "page"),
+      digest,
+      ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
   }
-  if (phase === SWEEP_PHASE.RECENT && parts.length === 5) {
+  if (phase === SWEEP_PHASE.RECENT && parts.length === 8) {
     const availableFrom = parts.at(2);
     const availableTo = parts.at(3);
+    const pass = parts.at(4);
+    const digest = parts.at(6);
+    const expectedDigest = parts.at(7);
     if (
       !availableFrom ||
       !availableTo ||
       !ISO_DAY_PATTERN.test(availableFrom) ||
       !ISO_DAY_PATTERN.test(availableTo) ||
-      availableFrom > availableTo
+      availableFrom > availableTo ||
+      (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
+      !digest ||
+      (pass === CRAWL_PASS.VERIFY &&
+        (!expectedDigest || expectedDigest === "-")) ||
+      (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
     ) {
       throw new TypeError("Invalid cz-us availability window");
     }
@@ -447,7 +525,10 @@ const parseCursor = (cursor: string): CursorState => {
       phase,
       availableFrom,
       availableTo,
-      page: parseNonNegativeInteger(parts.at(4), "page"),
+      pass,
+      page: parseNonNegativeInteger(parts.at(5), "page"),
+      digest,
+      ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
   }
   throw new TypeError("Invalid cz-us cursor phase");
@@ -456,9 +537,9 @@ const parseCursor = (cursor: string): CursorState => {
 const makeCursor = (state: CursorState): string => {
   switch (state.phase) {
     case SWEEP_PHASE.HISTORICAL:
-      return `search:${state.phase}:${state.year}:${state.page}`;
+      return `search:${state.phase}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     case SWEEP_PHASE.RECENT:
-      return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.page}`;
+      return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     default: {
       const unhandled: never = state;
       return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
@@ -470,16 +551,53 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
   switch (state.phase) {
     case SWEEP_PHASE.HISTORICAL:
       return state.year < now.getUTCFullYear()
-        ? { phase: state.phase, year: state.year + 1, page: 0 }
+        ? {
+            phase: state.phase,
+            year: state.year + 1,
+            pass: CRAWL_PASS.COLLECT,
+            page: 0,
+            digest: DIGEST_SEED,
+          }
         : recentStart(now);
-    case SWEEP_PHASE.RECENT:
+    case SWEEP_PHASE.RECENT: {
+      const today = isoDay(now);
+      if (state.availableTo < today) {
+        const availableFrom = addUtcDays(state.availableTo, 1);
+        return {
+          phase: state.phase,
+          availableFrom,
+          availableTo:
+            [addUtcDays(availableFrom, RECENT_WINDOW_DAYS - 1), today]
+              .sort()
+              .at(0) ?? today,
+          pass: CRAWL_PASS.COLLECT,
+          page: 0,
+          digest: DIGEST_SEED,
+        };
+      }
       return recentStart(now);
+    }
     default: {
       const unhandled: never = state;
       return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
     }
   }
 };
+
+const restartSlice = (state: CursorState): CursorState => ({
+  ...state,
+  pass: CRAWL_PASS.COLLECT,
+  page: 0,
+  digest: DIGEST_SEED,
+  expectedDigest: undefined,
+});
+
+const rollingPageDigest = (digest: string, page: SearchPage): string =>
+  hashContent(
+    `${digest}|${page.reported}|${page.listed
+      .map(({ sourceDocumentId }) => sourceDocumentId)
+      .join("|")}`,
+  );
 
 const coverageSlice = (state: CursorState): string => {
   switch (state.phase) {
@@ -598,7 +716,21 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       throw new TypeError("NALUS result row is missing its sz identifier");
     }
     const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
+    const registrySign = detail.text();
+    const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
+      "counter"
+    ];
+    const szCounter = /_(?<counter>\d+)$/u.exec(sz)?.groups?.["counter"];
+    const caseNumber = registrySign.replace(/\s+#\d+\s*$/u, "").trim();
+    if (!caseNumber) {
+      throw new TypeError("NALUS result row is missing its docket");
+    }
     listed.push({
+      caseNumber,
+      counter:
+        counterText === undefined && szCounter === undefined
+          ? 1
+          : Number.parseInt(counterText ?? szCounter ?? "1", 10),
       sourceDocumentId: `nalus:${sz}`,
       nalusRecordId,
       sourceUrl: url.href,
@@ -672,7 +804,14 @@ const fetchSearchPage = async (
   });
   if (submit.status !== 302) {
     if (submit.ok) {
-      return null;
+      const $ = cheerio.load(await submit.text());
+      const noResults = $("#ctl00_MainContent_lbError").text().trim();
+      const resultsDisabled =
+        $("#ctl00_bResults").attr("disabled") === "disabled";
+      if (noResults === NO_RESULTS_MESSAGE && resultsDisabled) {
+        return null;
+      }
+      throw new TypeError("NALUS search did not confirm an empty result set");
     }
     throw new TypeError(`NALUS search returned HTTP ${submit.status}`);
   }
@@ -701,21 +840,24 @@ const fetchListedDecision = async (
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
   if (!response.ok) {
+    if (response.status === 404 || response.status === 410) {
+      return listedOnlyDecision(listed, `http-${response.status}`);
+    }
     throw new TypeError(
       `NALUS decision ${listed.sourceDocumentId} returned HTTP ${response.status}`,
     );
   }
+  const responseHtml = await response.text();
   const decision = parseDecisionPage(
-    await response.text(),
+    responseHtml,
     listed.sourceUrl,
     listed.sourceDocumentId,
     listed.ecli,
+    listed.counter,
     listed.nalusRecordId,
   );
   if (!decision) {
-    throw new TypeError(
-      `NALUS listed ${listed.sourceDocumentId} without a parseable decision`,
-    );
+    return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
   }
 
   try {
@@ -751,6 +893,36 @@ const fetchListedDecision = async (
   }
   return decision;
 };
+
+const listedOnlyDecision = (
+  listed: ListedDecision,
+  reason: string,
+  sourceRaw?: string,
+): IngestionResult => ({
+  caseNumber: listed.caseNumber,
+  sourceDocumentId: listed.sourceDocumentId,
+  legacySourceUrls: legacySourceUrlsFor(listed.caseNumber, listed.counter),
+  ecli: listed.ecli,
+  court: "Ústavní soud",
+  country: "CZE",
+  language: "cs",
+  sourceUrl: listed.sourceUrl,
+  metadata: {
+    caseNumber: listed.caseNumber,
+    ecli: listed.ecli,
+    court: "Ústavní soud",
+    nalusRecordId: listed.nalusRecordId,
+    listedOnly: true,
+    listedOnlyReason: reason,
+  },
+  rawHash: hashContent(
+    `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
+  ),
+  parserVersion: PARSER_VERSION,
+  documentAst: EMPTY_AST,
+  sourceRaw,
+  ...(sourceRaw === undefined ? {} : { sourceRawContentType: "text/html" }),
+});
 
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],
@@ -875,6 +1047,12 @@ export const czUsAdapter: SourceAdapter = {
         const state = cursor ? parseCursor(cursor) : historicalStart();
         const page = await fetchSearchPage(state, signal);
         if (page === null) {
+          if (state.pass === CRAWL_PASS.VERIFY) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
+          }
           return {
             decisions: [],
             nextCursor: makeCursor(nextSlice(state, now)),
@@ -886,14 +1064,55 @@ export const czUsAdapter: SourceAdapter = {
           };
         }
 
-        const decisions = await fetchListedDecisions(page.listed, signal);
+        const digest = rollingPageDigest(state.digest, page);
         const sliceComplete = page.rangeTo === page.reported;
+        if (state.pass === CRAWL_PASS.VERIFY) {
+          if (!sliceComplete) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor({
+                ...state,
+                page: state.page + 1,
+                digest,
+              }),
+            };
+          }
+          if (digest !== state.expectedDigest) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
+          }
+          return {
+            decisions: [],
+            nextCursor: makeCursor(nextSlice(state, now)),
+            coverage: {
+              slice: coverageSlice(state),
+              reported: page.reported,
+              collected: page.reported,
+            },
+          };
+        }
+
+        const decisions = await fetchListedDecisions(page.listed, signal);
+        if (sliceComplete && state.page > 0) {
+          return {
+            decisions,
+            nextCursor: makeCursor({
+              ...state,
+              pass: CRAWL_PASS.VERIFY,
+              page: 0,
+              digest: DIGEST_SEED,
+              expectedDigest: digest,
+            }),
+          };
+        }
         return {
           decisions,
           nextCursor: makeCursor(
             sliceComplete
               ? nextSlice(state, now)
-              : { ...state, page: state.page + 1 },
+              : { ...state, page: state.page + 1, digest },
           ),
           ...(sliceComplete
             ? {

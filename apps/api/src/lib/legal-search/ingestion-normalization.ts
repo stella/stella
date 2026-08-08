@@ -62,6 +62,9 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
     sourceDocumentId: strip(result.sourceDocumentId),
+    legacySourceUrls: result.legacySourceUrls
+      ?.map((url) => strip(url))
+      .filter((url): url is string => url !== undefined),
     sheetNumber: strip(result.sheetNumber),
     fulltext: result.fulltext
       ? collapseSpacedLetters(strip(result.fulltext) ?? "")

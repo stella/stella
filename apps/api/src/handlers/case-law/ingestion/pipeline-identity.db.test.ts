@@ -172,8 +172,12 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? row["sheetNumber"] : undefined).toBe("42");
     });
 
-    test("adopts a legacy null-id row without collapsing later documents", async () => {
-      const legacy = decisionAt("Legacy identity", undefined);
+    test("adopts only the matching legacy row when a sibling arrives first", async () => {
+      const legacyUrl = "https://publisher.test/legacy-document";
+      const legacy = {
+        ...decisionAt("Legacy identity", undefined),
+        sourceUrl: legacyUrl,
+      };
       await processDecision({
         input: legacy,
         observationOrder: 1n,
@@ -182,55 +186,127 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
 
-      const identified = {
-        ...legacy,
-        sourceDocumentId: "publisher-id-learned-later",
-        rawHash: "hash-with-publisher-id",
-      };
+      const [legacyBefore] = await db.execute(sql<{ id: string }>`
+        SELECT id
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND source_document_id IS NULL
+      `);
+
       await processDecision({
-        input: identified,
+        input: {
+          ...legacy,
+          sourceDocumentId: "second-document-under-the-docket",
+          sourceUrl: "https://publisher.test/sibling-document",
+          rawHash: "hash-second-document",
+        },
         observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:01.000Z"),
       });
 
+      const identified = {
+        ...legacy,
+        sourceDocumentId: "publisher-id-learned-later",
+        legacySourceUrls: [legacyUrl],
+        rawHash: "hash-with-publisher-id",
+      };
+      await processDecision({
+        input: identified,
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
       const rows = await db.execute(sql<{
         count: number;
-        sourceDocumentId: string;
+        learnedId: string;
       }>`
         SELECT count(*)::int AS count,
-               min(source_document_id) AS "sourceDocumentId"
+               min(id::text) FILTER (
+                 WHERE source_document_id = 'publisher-id-learned-later'
+               ) AS "learnedId"
         FROM case_law_decisions
         WHERE source_id = ${sourceId}
           AND case_number = ${legacy.caseNumber}
           AND court = ${legacy.court}
       `);
       const row = Array.isArray(rows) ? rows.at(0) : undefined;
-      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
-      expect(isRecord(row) ? row["sourceDocumentId"] : undefined).toBe(
-        "publisher-id-learned-later",
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? row["learnedId"] : undefined).toBe(
+        isRecord(legacyBefore) ? legacyBefore["id"] : undefined,
       );
+    });
+
+    test("binds a redacted legacy tombstone before inserting siblings", async () => {
+      const legacyUrl = "https://publisher.test/redacted-legacy";
+      const legacy = {
+        ...decisionAt("Redacted legacy identity", undefined),
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await db
+        .update(caseLawDecisions)
+        .set({ redactedAt: new Date("2026-07-31T12:00:01.000Z") })
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.caseNumber, legacy.caseNumber),
+            eq(caseLawDecisions.court, legacy.court),
+          ),
+        );
 
       await processDecision({
         input: {
           ...legacy,
-          sourceDocumentId: "second-document-under-the-docket",
-          rawHash: "hash-second-document",
+          sourceDocumentId: "redacted-publisher-id",
+          legacySourceUrls: [legacyUrl],
         },
-        observationOrder: 3n,
+        observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:02.000Z"),
       });
-      const [afterSecond] = await db.execute(sql<{ count: number }>`
-        SELECT count(*)::int AS count
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "redacted-docket-sibling",
+          sourceUrl: "https://publisher.test/redacted-sibling",
+          rawHash: "hash-redacted-sibling",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:03.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        redactedIdentity: string;
+      }>`
+        SELECT count(*)::int AS count,
+               min(source_document_id) FILTER (
+                 WHERE redacted_at IS NOT NULL
+               ) AS "redactedIdentity"
         FROM case_law_decisions
         WHERE source_id = ${sourceId}
           AND case_number = ${legacy.caseNumber}
           AND court = ${legacy.court}
       `);
-      expect(isRecord(afterSecond) ? Number(afterSecond["count"]) : 0).toBe(2);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? row["redactedIdentity"] : undefined).toBe(
+        "redacted-publisher-id",
+      );
     });
 
     test("an older overlapping observation cannot overwrite a newer winner", async () => {

@@ -20,6 +20,14 @@ const makeSearchForm = (): string => `
   <input id="__EVENTVALIDATION" value="validation" />
 </body></html>`;
 
+const makeNoResultsPage = (): string => `
+<html><body>
+  <span id="ctl00_MainContent_lbError" class="labelError">
+    Pro zadaná kritéria nebyly nalezeny žádné záznamy.
+  </span>
+  <input id="ctl00_bResults" disabled="disabled" />
+</body></html>`;
+
 const makeTextPage = (
   caseNumber: string,
   date: string,
@@ -103,6 +111,8 @@ type MockSearchOptions = {
   abstract?: string;
   legalSentence?: string;
   abstractStatus?: number;
+  detailStatus?: number;
+  unparseableDetail?: boolean;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
 };
 
@@ -114,6 +124,8 @@ const installSearchMock = ({
   abstract = "",
   legalSentence = "",
   abstractStatus = 200,
+  detailStatus = 200,
+  unparseableDetail = false,
   onPost,
 }: MockSearchOptions): void => {
   const bySz = new Map(rows.map((row) => [row.sz, row]));
@@ -135,7 +147,7 @@ const installSearchMock = ({
         );
         return Promise.resolve(
           empty
-            ? new Response(makeSearchForm())
+            ? new Response(makeNoResultsPage())
             : new Response(null, {
                 status: 302,
                 headers: { Location: "/Search/Results.aspx" },
@@ -156,13 +168,16 @@ const installSearchMock = ({
         return Promise.resolve(
           row
             ? new Response(
-                makeTextPage(
-                  row.caseNumber,
-                  row.date,
-                  counterText === undefined
-                    ? {}
-                    : { counter: Number(counterText) },
-                ),
+                unparseableDetail
+                  ? "<html><body>detail unavailable</body></html>"
+                  : makeTextPage(
+                      row.caseNumber,
+                      row.date,
+                      counterText === undefined
+                        ? {}
+                        : { counter: Number(counterText) },
+                    ),
+                { status: detailStatus },
               )
             : new Response("missing", { status: 404 }),
         );
@@ -178,6 +193,12 @@ const installSearchMock = ({
     }),
   );
 };
+
+const historicalCursor = (year: number): string =>
+  `search:historical:${year}:collect:0:0:-`;
+
+const recentCursor = (availableFrom: string, availableTo: string): string =>
+  `search:recent:${availableFrom}:${availableTo}:collect:0:0:-`;
 
 describe("czUsAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
@@ -235,7 +256,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["nalus:1-1-1993", "nalus:2-1-1993", "nalus:Pl-1-1993"]);
-    expect(page.nextCursor).toBe("search:historical:1994:0");
+    expect(page.nextCursor).toBe(historicalCursor(1994));
     expect(page.coverage).toEqual({
       slice: "decision-year:1993",
       reported: 3,
@@ -263,7 +284,7 @@ describe("czUsAdapter.fetchPage", () => {
     installSearchMock({ rows });
 
     const page = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
 
     expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
@@ -288,9 +309,11 @@ describe("czUsAdapter.fetchPage", () => {
     }));
     installSearchMock({ rows: firstRows, reported: 42 });
     const first = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(first.nextCursor).toBe("search:historical:2024:1");
+    expect(first.nextCursor).toMatch(
+      /^search:historical:2024:collect:1:[a-f0-9]+:-$/u,
+    );
     expect(first.coverage).toBeUndefined();
 
     installSearchMock({
@@ -311,10 +334,38 @@ describe("czUsAdapter.fetchPage", () => {
       rangeFrom: 41,
       reported: 42,
     });
-    const last = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:1", {}),
+    const last = unwrap(await czUsAdapter.fetchPage(first.nextCursor, {}));
+    expect(last.coverage).toBeUndefined();
+    expect(last.nextCursor).toMatch(
+      /^search:historical:2024:verify:0:0:[a-f0-9]+$/u,
     );
-    expect(last.coverage).toEqual({
+
+    installSearchMock({ rows: firstRows, reported: 42 });
+    const verifyFirst = unwrap(
+      await czUsAdapter.fetchPage(last.nextCursor, {}),
+    );
+    installSearchMock({
+      rows: [
+        {
+          id: "3040",
+          sz: "1-41-24_1",
+          caseNumber: "I.ÚS 41/24",
+          date: "2. 1. 2024",
+        },
+        {
+          id: "3041",
+          sz: "1-42-24_1",
+          caseNumber: "I.ÚS 42/24",
+          date: "2. 1. 2024",
+        },
+      ],
+      rangeFrom: 41,
+      reported: 42,
+    });
+    const verified = unwrap(
+      await czUsAdapter.fetchPage(verifyFirst.nextCursor, {}),
+    );
+    expect(verified.coverage).toEqual({
       slice: "decision-year:2024",
       reported: 42,
       collected: 42,
@@ -333,7 +384,7 @@ describe("czUsAdapter.fetchPage", () => {
     const page = unwrap(await czUsAdapter.fetchPage("3510:2024:recent", {}));
 
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
-    expect(page.nextCursor).toBe("search:historical:1994:0");
+    expect(page.nextCursor).toBe(historicalCursor(1994));
     expect(page.coverage).toEqual({
       slice: "decision-year:1993",
       reported: 0,
@@ -346,11 +397,11 @@ describe("czUsAdapter.fetchPage", () => {
     const currentYear = new Date().getUTCFullYear();
 
     const page = unwrap(
-      await czUsAdapter.fetchPage(`search:historical:${currentYear}:0`, {}),
+      await czUsAdapter.fetchPage(historicalCursor(currentYear), {}),
     );
 
     expect(page.nextCursor).toMatch(
-      /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:0$/u,
+      /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
     );
   });
 
@@ -364,7 +415,7 @@ describe("czUsAdapter.fetchPage", () => {
     });
 
     const page = unwrap(
-      await czUsAdapter.fetchPage("search:recent:2026-06-25:2026-08-08:0", {}),
+      await czUsAdapter.fetchPage(recentCursor("2026-06-25", "2026-08-08"), {}),
     );
 
     expect(submitted?.get("ctl00$MainContent$dle_data_zpristupneni")).toBe(
@@ -394,7 +445,7 @@ describe("czUsAdapter.fetchPage", () => {
     });
 
     const page = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     expect(page.decisions).toHaveLength(1);
     expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
@@ -419,7 +470,7 @@ describe("czUsAdapter.fetchPage", () => {
     });
 
     const page = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     expect(page.decisions[0]?.metadata["abstract"]).toBe(abstract);
     expect(page.decisions[0]?.metadata["legalSentence"]).toBe(legalSentence);
@@ -454,10 +505,13 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     const page = unwrap(
-      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     const decision = page.decisions[0];
     expect(decision?.sourceDocumentId).toBe("nalus:Pl-14-24_1");
+    expect(decision?.legacySourceUrls).toEqual([
+      "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-14-24_1",
+    ]);
     expect(decision?.decisionType).toBe("usnesení");
     expect(decision?.metadata).toMatchObject({
       judge: "amet. Jan Novák",
@@ -472,5 +526,66 @@ describe("czUsAdapter.fetchPage", () => {
     installSearchMock({ empty: true });
     const result = await czUsAdapter.fetchPage("search:future:2026:0", {});
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("does not advance on an unconfirmed HTTP 200 search response", async () => {
+    installSearchMock({ empty: true });
+    const originalFetchForSearch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(resolveUrl(input));
+        if (
+          url.pathname.endsWith("/Search/Search.aspx") &&
+          requestMethod(input, init) === "POST"
+        ) {
+          return Promise.resolve(new Response(makeSearchForm()));
+        }
+        return originalFetchForSearch(input, init);
+      }),
+    );
+
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("persists a listed identity when its detail is permanently unparseable", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "7001",
+          sz: "1-77-24_1",
+          caseNumber: "I.ÚS 77/24",
+          date: "1. 1. 2024",
+        },
+      ],
+      unparseableDetail: true,
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    expect(page.decisions[0]).toMatchObject({
+      caseNumber: "I.ÚS 77/24",
+      sourceDocumentId: "nalus:1-77-24_1",
+      legacySourceUrls: [
+        "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-77-24_1",
+      ],
+      metadata: {
+        listedOnly: true,
+        listedOnlyReason: "unparseable-detail",
+      },
+    });
+    expect(page.coverage?.collected).toBe(1);
+  });
+
+  test("catches up recent availability in contiguous bounded windows", async () => {
+    installSearchMock({ empty: true });
+    const page = unwrap(
+      await czUsAdapter.fetchPage(recentCursor("2025-01-01", "2025-02-14"), {}),
+    );
+
+    expect(page.nextCursor).toBe(
+      "search:recent:2025-02-15:2025-03-31:collect:0:0:-",
+    );
   });
 });
