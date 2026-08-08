@@ -12,12 +12,13 @@
  * nothing for the AI pipeline, so the queue this drains should stay
  * short rather than merely bounded.
  *
- * Two callers share the per-decision unit below: this queue, and the
- * read path when a reader opens a decision the queue has not reached
- * (`decisions/document-on-demand.ts`). The queue therefore orders by
- * what readers have asked for before falling back to the newest
- * decisions, and the unit itself is idempotent, because either caller
- * may reach a decision first.
+ * Two callers share the per-decision unit below: the worker that walks
+ * the queue, and the read path when a reader opens a decision the walk
+ * has not reached (`decisions/document-on-demand.ts`). This module
+ * defines the two tiers the queue is ordered by — what readers have
+ * asked for, then the newest of the rest — while the ordering between
+ * them lives in `sk-document-queue.ts`. The unit itself is idempotent,
+ * because either caller may reach a decision first.
  */
 
 import type { SQL } from "drizzle-orm";
@@ -68,6 +69,7 @@ import {
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
+import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -433,34 +435,63 @@ export const loadRemainingDocuments = async ({
   });
 
 /**
- * Load the head of the queue: decisions a reader asked for first, then
- * the newest of the rest. Both tiers are keyset-ordered against a
- * partial index and bounded by `limit`, so neither scans the backlog.
+ * Bind both tiers to a database handle.
+ *
+ * The source id is resolved on first use and kept: it never changes for
+ * the life of a process, and both tier queries filter on it so they hit
+ * the partial indexes instead of joining the backlog against the source
+ * table. An unresolved source (the adapter has not ingested anything
+ * yet) reads as an empty queue rather than an error, so a worker started
+ * before the first crawl idles instead of failing.
+ */
+export const scopedPendingDocumentTierLoaders = (
+  scopedDb: ScopedDb,
+): PendingDocumentTierLoaders => {
+  let sourceId: SafeId<"caseLawSource"> | undefined;
+
+  const resolveSourceId = async (): Promise<
+    SafeId<"caseLawSource"> | undefined
+  > => {
+    sourceId ??= await loadDeferredDocumentSourceId(scopedDb);
+    return sourceId;
+  };
+
+  return {
+    loadRequested: async (limit) => {
+      const id = await resolveSourceId();
+      return id === undefined
+        ? []
+        : await loadRequestedDocuments({ scopedDb, sourceId: id, limit });
+    },
+    loadRemaining: async (limit) => {
+      const id = await resolveSourceId();
+      return id === undefined
+        ? []
+        : await loadRemainingDocuments({ scopedDb, sourceId: id, limit });
+    },
+  };
+};
+
+/**
+ * One page of the queue: decisions a reader asked for first, then the
+ * newest of the rest. Both tiers are keyset-ordered against a partial
+ * index and bounded by `limit`, so neither scans the backlog. The
+ * worker walks the same two tiers as a stream; see
+ * `sk-document-queue.ts`.
  */
 export const loadPendingDocuments = async (
   scopedDb: ScopedDb,
   limit: number,
 ): Promise<PendingDocument[]> => {
-  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
-  if (!sourceId) {
-    return [];
-  }
+  const { loadRemaining, loadRequested } =
+    scopedPendingDocumentTierLoaders(scopedDb);
 
-  const requested = await loadRequestedDocuments({
-    scopedDb,
-    sourceId,
-    limit,
-  });
+  const requested = await loadRequested(limit);
   if (requested.length >= limit) {
     return requested;
   }
 
-  const remaining = await loadRemainingDocuments({
-    scopedDb,
-    sourceId,
-    limit: limit - requested.length,
-  });
-
+  const remaining = await loadRemaining(limit - requested.length);
   return [...requested, ...remaining];
 };
 
@@ -546,7 +577,7 @@ export const storeBackfilledDocument = async ({
     tx: Transaction,
     written: WriteCorpusResult | null,
   ): Promise<boolean> => {
-    // audit: skip — scheduler backfill of public case-law text; no user action
+    // audit: skip — queue backfill of public case-law text; no user action
     const applied = await tx
       .update(caseLawDecisions)
       .set({
@@ -728,7 +759,7 @@ export const markDocumentUnavailable = async (
   scopedDb: ScopedDb,
 ): Promise<void> => {
   await scopedDb(async (tx) => {
-    // audit: skip — scheduler backfill of public case-law text; no user action
+    // audit: skip — queue backfill of public case-law text; no user action
     await tx
       .update(caseLawDecisions)
       .set({

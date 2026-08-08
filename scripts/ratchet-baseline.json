@@ -55,7 +55,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 602,
+    "count": 601,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -200,7 +200,6 @@
       "apps/api/src/lib/sanitize-filename.ts": 1,
       "apps/api/src/lib/scheduler/jobs.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 4,
-      "apps/api/src/lib/scheduler/tasks/case-law-sk-documents.ts": 1,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 3,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 5,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 10,

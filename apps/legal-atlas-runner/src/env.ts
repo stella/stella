@@ -30,6 +30,30 @@ const readIntegerEnv = ({ name, fallback, min }: IntegerEnvOptions): number => {
   return parsed;
 };
 
+type BooleanEnvOptions = {
+  name: string;
+  fallback: boolean;
+};
+
+/**
+ * Strict on purpose: a loop gated on a misspelt value would read as
+ * "off" and stay silent, which is the state the flag exists to make
+ * deliberate.
+ */
+const readBooleanEnv = ({ name, fallback }: BooleanEnvOptions): boolean => {
+  const raw = Bun.env[name]?.trim();
+
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+
+  if (raw !== "true" && raw !== "false") {
+    panic(`${name} must be "true" or "false"`);
+  }
+
+  return raw === "true";
+};
+
 export const LEGAL_ATLAS_RUNNER_ENV = {
   disabledAdapters: Bun.env["DISABLED_ADAPTERS"] ?? "",
   maxConcurrentDbWrites: readIntegerEnv({
@@ -63,6 +87,25 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     name: "DB_BACKFILL_TRANSACTION_TIMEOUT_MS",
     fallback: 960_000,
     min: 0,
+  }),
+  // The deferred Slovak document walk. Off unless a deployment turns it
+  // on: it is the only loop here that fetches from a publisher outside
+  // the adapter crawl, so starting it is a decision about outbound load,
+  // made where it can be reverted without a build.
+  skDocumentBackfillEnabled: readBooleanEnv({
+    name: "SK_DOCUMENT_BACKFILL_ENABLED",
+    fallback: false,
+  }),
+  // Gap between two document fetches, and therefore the entire
+  // throughput of that walk. 500ms is what the crawl has always paced
+  // itself at; it is a manners default, not a rate the publisher has
+  // confirmed, so it is configurable and should be moved in steps while
+  // the walk's failure tallies are watched. The floor keeps a typo from
+  // turning the walk into a stampede.
+  skDocumentFetchDelayMs: readIntegerEnv({
+    name: "SK_DOCUMENT_FETCH_DELAY_MS",
+    fallback: 500,
+    min: 100,
   }),
   // Root-pool reads/writes (source lookup + one-time seed insert) are tiny;
   // a short ceiling fails fast on a dead connection at cycle start.

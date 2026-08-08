@@ -12,10 +12,6 @@ import {
   backfillCaseLawRedactionTombstones,
 } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import {
-  BACKFILL_SK_DOCUMENTS_TASK,
-  backfillSkDocuments,
-} from "@/api/lib/scheduler/tasks/case-law-sk-documents";
-import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -68,7 +64,6 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [DISPATCH_DOCUMENT_OCR_TASK, dispatchDocumentOcr],
     [FLOW_RUN_TASK, runScheduledFlow],
-    [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
     [
       BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
       backfillCaseLawRedactionTombstones,
