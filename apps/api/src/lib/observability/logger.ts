@@ -100,13 +100,22 @@ const emit = ({
     otelLogger.emit(record);
   }
 
-  // Stdout backstop for ERROR records. The OTel pipeline above
-  // can be wired to a remote exporter later; until it is, this
-  // mirrors ERROR records to stdout so incidents are debuggable
-  // from the runtime's standard log stream. ERROR-only by
-  // default keeps volume small and avoids surfacing request
-  // payloads that might appear at lower severities.
-  if (severityNumber === SeverityNumber.ERROR) {
+  // Backstop for every structured record above DEBUG. The OTel pipeline
+  // above deliberately has no exporter (see `otel.ts`), so this stream is
+  // the only place a record is readable at all.
+  //
+  // Severity answers how bad a record is. It must not also decide whether
+  // anyone can ever read it: an INFO or WARN record that reaches no sink is
+  // indistinguishable from one that was never emitted, and a consumer built
+  // on it silently measures nothing. This previously mirrored ERROR alone,
+  // which made every structured non-error event invisible in the deployed
+  // runtime while looking healthy in the source.
+  //
+  // Payload exposure is handled one layer down: `sanitizeLogAttributes`
+  // drops payload- and credential-shaped keys from every record regardless
+  // of severity, so severity was never what kept payloads out. DEBUG stays
+  // unmirrored as the escape hatch for hot loops.
+  if (severityNumber >= SeverityNumber.INFO) {
     process.stderr.write(
       `${JSON.stringify({
         severity: severityText,
