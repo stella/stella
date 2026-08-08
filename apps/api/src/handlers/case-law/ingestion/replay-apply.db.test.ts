@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -35,6 +35,10 @@ import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 // other than the payload's own hash would move the row's pointer.
 
 const uploads: { key: string; contentType: string }[] = [];
+
+beforeEach(() => {
+  uploads.length = 0;
+});
 
 // The real module is spread back in: `mock.module` is process-global, so a
 // partial mock would delete the other exports for every later test file.

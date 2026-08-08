@@ -64,7 +64,15 @@ const USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <k
 
 const flagValue = (name: string): string | undefined => {
   const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
+  if (index === -1) {
+    return undefined;
+  }
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith("--")) {
+    console.error(`--${name} requires a value`);
+    process.exit(1);
+  }
+  return value;
 };
 
 const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
