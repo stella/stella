@@ -23,8 +23,15 @@
  */
 
 import { TaggedError } from "better-result";
+import type { Static } from "elysia";
 import * as v from "valibot";
 
+import type {
+  agUiSendMessageBodySchema,
+  ChatSendRequest,
+} from "@/api/handlers/chat/chat-schema";
+import type { ChatPart } from "@/api/handlers/chat/types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
@@ -55,16 +62,6 @@ const smokeSessionSchema = v.strictObject({
 });
 
 type SmokeSession = v.InferOutput<typeof smokeSessionSchema>;
-
-type ChatSmokeBody = {
-  threadId: string;
-  sendMode: "rawOverride";
-  message: {
-    id: string;
-    role: "user";
-    parts: { type: "text"; text: string }[];
-  };
-};
 
 const CHECK_MODE = {
   /** Pass only on a 2xx status (used for the auth precondition). */
@@ -314,21 +311,45 @@ const parseSmokeSession = (value: unknown): SmokeSession => {
   });
 };
 
+type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
+
 /**
- * Minimal valid `POST /v1/chat/` body that triggers a real chat turn: a
- * fresh global thread (the handler creates it) plus one user text
- * message. No workspace is referenced, so no matter provisioning is
- * needed for the synthetic org.
+ * Minimal valid AG-UI `POST /v1/chat/` envelope that triggers a real chat
+ * turn: a fresh global thread (the handler creates it) plus one user text
+ * message. No workspace is referenced, so no matter provisioning is needed
+ * for the synthetic org.
  */
-export const buildChatSmokeBody = (): ChatSmokeBody => ({
-  threadId: Bun.randomUUIDv7(),
-  sendMode: "rawOverride",
-  message: {
-    id: Bun.randomUUIDv7(),
+export const buildChatSmokeBody = (): ChatSmokeBody => {
+  const threadId = createSafeId<"chatThread">();
+  const runId = Bun.randomUUIDv7();
+  const message = {
+    id: createSafeId<"chatMessage">(),
     role: "user",
-    parts: [{ type: "text", text: "ping" }],
-  },
-});
+    parts: [
+      {
+        type: "text",
+        content: "ping",
+      } satisfies Extract<ChatPart, { type: "text" }>,
+    ],
+  } as const satisfies ChatSendRequest["message"];
+  const forwardedProps = {
+    threadId,
+    runId,
+    sendMode: "rawOverride",
+    message,
+  } as const satisfies ChatSendRequest;
+
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [message],
+    tools: [],
+    context: [],
+    forwardedProps,
+    data: forwardedProps,
+  } satisfies ChatSmokeBody;
+};
 
 const mintSmokeSession = async (
   baseUrl: string,
