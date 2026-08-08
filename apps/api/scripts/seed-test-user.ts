@@ -26,6 +26,7 @@ import path from "node:path";
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 
@@ -70,9 +71,7 @@ const now = new Date();
 const DEFAULT_MEMBER_ROLE = "member" as const;
 const OWNER_MEMBER_ROLE = "owner" as const;
 
-const AUTH_COOKIE_NAME = `${
-  env.BETTER_AUTH_COOKIE_PREFIX ?? (env.isDev ? "stella-dev" : "better-auth")
-}.session_token`;
+const AUTH_COOKIE_NAME = sessionCookieName();
 
 const getSeedOrganizationIdentity = (organizationId: string) => {
   if (organizationId === TEST_ORG.id) {

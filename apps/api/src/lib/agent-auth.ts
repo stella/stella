@@ -17,6 +17,7 @@ import { oauthClient, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
+import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
@@ -474,13 +475,7 @@ export class AuthorizeCodeError extends Error {
   override name = "AuthorizeCodeError";
 }
 
-/** better-auth's session-token cookie name, mirroring its cookie getter. */
-const getSessionCookieName = (): string => {
-  if (env.isDev) {
-    return `${env.BETTER_AUTH_COOKIE_PREFIX ?? "stella-dev"}.session_token`;
-  }
-  return "__Secure-better-auth.session_token";
-};
+const getSessionCookieName = sessionCookieName;
 
 /** How long an internally-minted agent session row stays valid. */
 const INTERNAL_SESSION_TTL_MS = 15 * 60 * 1000;
