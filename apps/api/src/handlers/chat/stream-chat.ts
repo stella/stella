@@ -71,6 +71,7 @@ import {
   prepareMcpToolSourceForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
+  prepareUnknownForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
@@ -240,6 +241,45 @@ export const pruneOrphanedToolParts = (
       : { ...message, parts };
   });
 
+export const prepareResumeForThirdParty = async ({
+  boundary,
+  resume,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  resume: RunAgentResumeItem[] | undefined;
+}): Promise<
+  Result<RunAgentResumeItem[] | undefined, HandlerError<422 | 500>>
+> => {
+  if (resume === undefined || boundary.type === "raw") {
+    return Result.ok(resume);
+  }
+
+  const resumePayloads: unknown[] = resume.map((item) => {
+    const payload: unknown = item.payload;
+    return payload;
+  });
+  const payloads = await prepareUnknownForThirdParty({
+    boundary,
+    value: resumePayloads,
+  });
+  if (Result.isError(payloads)) {
+    return Result.err(payloads.error);
+  }
+  const preparedPayloads: unknown = payloads.value;
+  if (!Array.isArray(preparedPayloads)) {
+    return panic("Resume payload preparation changed the batch shape");
+  }
+  return Result.ok(
+    resume.map((item, index) => {
+      if (item.payload === undefined) {
+        return item;
+      }
+      const payload: unknown = preparedPayloads.at(index);
+      return { ...item, payload };
+    }),
+  );
+};
+
 export const streamChat = async ({
   abortSignal,
   devModelId,
@@ -304,6 +344,14 @@ export const streamChat = async ({
   if (Result.isError(rawPreparedMessages)) {
     return thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error);
   }
+  const preparedResumeResult = await prepareResumeForThirdParty({
+    boundary: thirdPartyBoundary,
+    resume,
+  });
+  if (Result.isError(preparedResumeResult)) {
+    return thirdPartyBoundaryRefusalResponse(preparedResumeResult.error);
+  }
+  const preparedResume = preparedResumeResult.value;
   // Messages carry user-authored and historical text (mention hrefs from
   // before ref hydration covered user text, pasted workspace URLs), so hits
   // are redacted rather than refused: old threads keep working, telemetry
@@ -410,7 +458,7 @@ export const streamChat = async ({
     sandboxRun,
     runId,
     parentRunId,
-    resume,
+    resume: preparedResume,
     safeDb,
     surfaces: {
       messages: preparedMessageList,

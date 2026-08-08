@@ -50,6 +50,7 @@ import {
   normalizeFinalAssistantMessageId,
   processServerChatStream,
   pruneOrphanedToolParts,
+  prepareResumeForThirdParty,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
   toChatMessage,
@@ -1825,6 +1826,58 @@ const streamChunksThenAbort = async function* ({
   abortController.abort(error);
   throw error;
 };
+
+describe("native continuation third-party boundary", () => {
+  test("anonymizes resolved payload text while preserving protocol fields", async () => {
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      ...createBoundary([]),
+      anonymizeFields: async ({ fields }) => ({
+        entityCount: fields.filter((field) => field.includes("Jan Novak"))
+          .length,
+        fields: fields.map((field) =>
+          field.replaceAll("Jan Novak", "[PERSON_1]"),
+        ),
+        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+      }),
+    };
+
+    const prepared = await prepareResumeForThirdParty({
+      boundary,
+      resume: [
+        {
+          interruptId: "interrupt-1",
+          status: "resolved",
+          payload: {
+            answer: "Jan Novak approves the filing.",
+            nested: ["Notify Jan Novak"],
+            toolCallId: "tool_1",
+          },
+        },
+        { interruptId: "interrupt-2", status: "cancelled" },
+      ],
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual([
+      {
+        interruptId: "interrupt-1",
+        status: "resolved",
+        payload: {
+          answer: "[PERSON_1] approves the filing.",
+          nested: ["Notify [PERSON_1]"],
+          toolCallId: "tool_1",
+        },
+      },
+      { interruptId: "interrupt-2", status: "cancelled" },
+    ]);
+    expect(boundary.redactionMap).toEqual(
+      new Map([["[PERSON_1]", "Jan Novak"]]),
+    );
+  });
+});
 
 describe("chat stream refs", () => {
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
