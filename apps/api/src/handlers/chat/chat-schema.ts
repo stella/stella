@@ -24,7 +24,6 @@ import {
   hasServerOwnedChatPartType,
   isIncomingChatPart,
   isChatTextPart,
-  restoreServerOwnedChatParts,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
@@ -483,7 +482,7 @@ export const validateMessage = async ({
       return Result.err(metadataResult.error);
     }
 
-    const metadata = restoreServerOwnedChatMetadata({
+    const metadata = resolveValidatedChatMetadata({
       incomingMetadata: metadataResult.value,
       message,
       persistedMessage,
@@ -560,7 +559,7 @@ export const validateMessage = async ({
     });
   });
 
-const restoreServerOwnedChatMetadata = ({
+const resolveValidatedChatMetadata = ({
   incomingMetadata,
   message,
   persistedMessage,
@@ -573,27 +572,11 @@ const restoreServerOwnedChatMetadata = ({
     return incomingMetadata;
   }
 
-  const persistedMetadata = chatMessageFromPersisted({
+  return chatMessageFromPersisted({
     id: message.id,
     role: persistedMessage.role,
     content: persistedMessage.content,
   }).metadata;
-  const restored: ChatMessageMetadata = {
-    ...incomingMetadata,
-    ...(persistedMetadata?.serverProvenance === undefined
-      ? {}
-      : { serverProvenance: persistedMetadata.serverProvenance }),
-    ...(persistedMetadata?.activeDraftContext === undefined
-      ? {}
-      : { activeDraftContext: persistedMetadata.activeDraftContext }),
-    ...(persistedMetadata?.sourceDocuments === undefined
-      ? {}
-      : { sourceDocuments: persistedMetadata.sourceDocuments }),
-    ...(persistedMetadata?.turnOutcome === undefined
-      ? {}
-      : { turnOutcome: persistedMetadata.turnOutcome }),
-  };
-  return isChatMessageMetadataEmpty(restored) ? undefined : restored;
 };
 
 const validateIncomingChatParts = ({
@@ -642,13 +625,72 @@ const validateIncomingChatParts = ({
     if (Result.isError(continuationIntegrityResult)) {
       return Result.err(continuationIntegrityResult.error);
     }
+    return Result.ok(
+      applyValidatedContinuationTransitions({
+        incomingParts: validatedParts,
+        persistedParts,
+      }),
+    );
   }
-  return Result.ok(
-    restoreServerOwnedChatParts({
-      incomingParts: validatedParts,
-      persistedParts,
-    }),
+  return Result.ok(validatedParts);
+};
+
+const applyValidatedContinuationTransitions = ({
+  incomingParts,
+  persistedParts,
+}: {
+  incomingParts: readonly ChatPart[];
+  persistedParts: readonly ChatPart[];
+}): ChatPart[] => {
+  const incomingCalls = new Map(
+    incomingParts.flatMap((part) =>
+      part.type === "tool-call" ? [[part.id, part] as const] : [],
+    ),
   );
+  const transitionedCallIds = new Set<string>();
+  const mergedParts = persistedParts.map((part) => {
+    if (part.type !== "tool-call") {
+      return part;
+    }
+    const incomingCall = incomingCalls.get(part.id);
+    if (incomingCall === undefined || deepEquals(incomingCall, part)) {
+      return part;
+    }
+    transitionedCallIds.add(part.id);
+    return incomingCall;
+  });
+  const resultCallIds = new Set(
+    persistedParts.flatMap((part) =>
+      part.type === "tool-result" ? [part.toolCallId] : [],
+    ),
+  );
+
+  for (const part of incomingParts) {
+    if (
+      part.type !== "tool-result" ||
+      resultCallIds.has(part.toolCallId) ||
+      !transitionedCallIds.has(part.toolCallId)
+    ) {
+      continue;
+    }
+    const callIndex = mergedParts.findIndex(
+      (candidate) =>
+        candidate.type === "tool-call" && candidate.id === part.toolCallId,
+    );
+    if (callIndex === -1) {
+      continue;
+    }
+    mergedParts.splice(callIndex + 1, 0, {
+      type: "tool-result",
+      toolCallId: part.toolCallId,
+      content: part.content,
+      state: part.state,
+      ...(part.error === undefined ? {} : { error: part.error }),
+    });
+    resultCallIds.add(part.toolCallId);
+  }
+
+  return mergedParts;
 };
 
 /**
@@ -791,6 +833,31 @@ const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
     }),
   );
 
+const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
+  "approval",
+  "state",
+]);
+const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
+
+const hasOnlyPermittedToolCallChanges = ({
+  canonicalCall,
+  incomingCall,
+  mutableProperties,
+}: {
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+  mutableProperties: ReadonlySet<string>;
+}): boolean => {
+  const immutableProperties = (call: ChatToolCallPart) =>
+    Object.fromEntries(
+      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
+    );
+  return deepEquals(
+    immutableProperties(incomingCall),
+    immutableProperties(canonicalCall),
+  );
+};
+
 const isPermittedContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
@@ -827,6 +894,11 @@ const isPermittedContinuationToolCallTransition = ({
       return false;
     }
     return (
+      hasOnlyPermittedToolCallChanges({
+        canonicalCall,
+        incomingCall,
+        mutableProperties: APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES,
+      }) &&
       incomingCall.approval.id === canonicalCall.approval.id &&
       incomingCall.approval.needsApproval ===
         canonicalCall.approval.needsApproval &&
@@ -839,11 +911,11 @@ const isPermittedContinuationToolCallTransition = ({
     canonicalCall.state === "input-complete" &&
     (incomingCall.state === "complete" || incomingCall.state === "error")
   ) {
-    const canonicalApproval =
-      "approval" in canonicalCall ? canonicalCall.approval : undefined;
-    const incomingApproval =
-      "approval" in incomingCall ? incomingCall.approval : undefined;
-    return deepEquals(incomingApproval, canonicalApproval);
+    return hasOnlyPermittedToolCallChanges({
+      canonicalCall,
+      incomingCall,
+      mutableProperties: TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES,
+    });
   }
   return false;
 };

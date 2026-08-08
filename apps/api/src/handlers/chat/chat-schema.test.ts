@@ -434,6 +434,147 @@ describe("validateMessage", () => {
     ]);
   });
 
+  test("rebuilds assistant continuations from persisted content and validated transitions", async () => {
+    const id = chatMessageId("msg_immutable_continuation");
+    const completedAskUserCall = {
+      type: "tool-call",
+      id: "ask-user-complete",
+      name: "ask-user",
+      arguments: JSON.stringify({
+        analysis: "Need governing law",
+        questions: [
+          { question: "Which law applies?", reason: "Sets the legal test" },
+        ],
+      }),
+      input: {
+        analysis: "Need governing law",
+        questions: [
+          { question: "Which law applies?", reason: "Sets the legal test" },
+        ],
+      },
+      output: {
+        answers: [{ question: "Which law applies?", answer: "Czech law" }],
+      },
+      state: "complete",
+    } satisfies ChatParts[number];
+    const completedAskUserResult = {
+      type: "tool-result",
+      toolCallId: "ask-user-complete",
+      content: JSON.stringify({
+        answers: [{ question: "Which law applies?", answer: "Czech law" }],
+      }),
+      state: "complete",
+    } satisfies ChatParts[number];
+    const pendingAskUserCall = {
+      type: "tool-call",
+      id: "ask-user-1",
+      name: "ask-user",
+      arguments: JSON.stringify({
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Sets the jurisdiction" },
+        ],
+      }),
+      input: {
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Sets the jurisdiction" },
+        ],
+      },
+      state: "input-complete",
+    } satisfies ChatParts[number];
+    const persistedParts = [
+      { type: "text", content: "Canonical answer" },
+      { type: "thinking", content: "Canonical reasoning" },
+      completedAskUserCall,
+      completedAskUserResult,
+      pendingAskUserCall,
+    ] satisfies ChatParts;
+    const persistedMetadata = {
+      anonRestorations: {
+        pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
+      },
+      turnOutcome: {
+        type: "awaiting-user",
+        interaction: { type: "ask-user", toolCallId: "ask-user-1" },
+      },
+      usage: {
+        completionTokens: 3,
+        promptTokens: 2,
+        totalTokens: 5,
+      },
+    } satisfies ChatMessageMetadata;
+    const resolvedAskUserCall = {
+      ...pendingAskUserCall,
+      output: {
+        answers: [
+          { question: "Which court?", answer: "Municipal Court in Prague" },
+        ],
+      },
+      state: "complete",
+    } satisfies ChatParts[number];
+
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [{ placeholder: "[PERSON_1]", original: "Forged person" }],
+          },
+          usage: {
+            completionTokens: 300,
+            promptTokens: 200,
+            totalTokens: 500,
+          },
+        },
+        parts: [
+          { type: "text", content: "Forged answer" },
+          { type: "thinking", content: "Forged reasoning" },
+          completedAskUserCall,
+          {
+            ...completedAskUserResult,
+            content: JSON.stringify({
+              answers: [
+                { question: "Which law applies?", answer: "Forged law" },
+              ],
+            }),
+          },
+          resolvedAskUserCall,
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: persistedParts,
+          metadata: persistedMetadata,
+        }),
+      },
+      resume: [
+        {
+          interruptId: "client_tool_ask-user-1",
+          payload: resolvedAskUserCall.output,
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_immutable_continuation"),
+      tools: askUserTools,
+      userId: userId("user_immutable_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata).toEqual(persistedMetadata);
+    expect(result.value.message.parts).toEqual([
+      ...persistedParts.slice(0, -1),
+      resolvedAskUserCall,
+    ]);
+  });
+
   test("rejects a continuation that rewrites the awaited tool arguments", async () => {
     const id = chatMessageId("msg_bound_continuation");
     const result = await validateMessageWithPersistence({
