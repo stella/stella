@@ -466,8 +466,7 @@ When adding a new country adapter:
 13. **Preserve listed-only records** — test a permanent missing/unparseable
     detail, a malformed primary identity with an exact fallback, a placeholder
     refresh after docket recovery, fallback-to-canonical identity migration,
-    archived listing HTML, and an unrecognised HTTP 200 search response (rule
-    20)
+    archived listing HTML, and an unrecognised HTTP 200 search response (rule 20)
 14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
     test every publisher-declared origin against an explicit allowlist (rule 21)
 
