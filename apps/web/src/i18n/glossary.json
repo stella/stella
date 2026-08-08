@@ -1068,6 +1068,40 @@
   ],
   "nouns": [
     {
+      "id": "activity-log",
+      "en": "Activity log",
+      "note": "The organization-settings record of who did what and when (`settings.*.auditLogs*`). English deliberately says \"Activity log\" rather than \"Audit log\", and translations must follow that register: a reader is looking for a history of what people did, not a compliance artefact. The Czech bans are the two renderings the catalog actually drifted to and a native reader rejected — \"protokoly aktivit\" is a calque that reads as machine output, and \"záznamy činnosti\" is stiff officialese. Czech is native-settled as \"Záznam všech aktivit\"; the other locales use each language's ordinary software term for a log and are pending native review. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "cs": [
+          "protokol aktivit",
+          "protokoly aktivit",
+          "protokolu aktivit",
+          "protokolů aktivit",
+          "protokolům aktivit",
+          "protokolech aktivit",
+          "záznam činnosti",
+          "záznamy činnosti",
+          "záznamů činnosti",
+          "záznamům činnosti",
+          "záznamech činnosti"
+        ]
+      },
+      "translations": {
+        "ar": "سجل النشاط",
+        "cs": "Záznam všech aktivit",
+        "sk": "Záznam všetkých aktivít",
+        "pl": "Rejestr aktywności",
+        "de": "Aktivitätsprotokoll",
+        "et": "Tegevuslogi",
+        "hu": "Tevékenységnapló",
+        "lt": "Veiklos žurnalas",
+        "lv": "Darbību žurnāls",
+        "es": "Registro de actividad",
+        "fr": "Journal d'activité",
+        "pt-BR": "Registro de atividades"
+      }
+    },
+    {
       "id": "guide",
       "en": "Guide",
       "note": "Names the in-app help section holding the interactive walkthroughs (`guides.*`). Czech and Slovak must use the SINGULAR noun: the nominative plural (cs \"průvodci\", sk \"sprievodcovia\") denotes human tour guides rather than a help section, which is the drift these bans catch. Other locales may use the plural freely. Lint-only entry (nouns are not tabulated in TERMINOLOGY.md).",

@@ -73,7 +73,9 @@ export const TemplateCheckDialog = ({
       />
       <DialogPopup className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("templates.checkTemplate")}</DialogTitle>
+          {/* A noun, not the trigger's imperative: the dialog reports a result
+              rather than asking to perform the action again. */}
+          <DialogTitle>{t("templates.checkResultsTitle")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="grid gap-4">
           <CheckResults
