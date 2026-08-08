@@ -1215,16 +1215,22 @@ type DocumentContentState =
       remediation:
         | {
             type: "action";
-            tool: "manage_organization";
+            tool: "invoke_capability";
             arguments: {
-              action: "update_org_settings";
-              document_processing_mode: "searchable-text";
+              capability: "entities.ocr.create";
+              input: {
+                params: {
+                  workspaceId: SafeId<"workspace">;
+                  entityId: SafeId<"entity">;
+                };
+                body: { fieldId: SafeId<"field"> };
+              };
             };
           }
         | {
             type: "escalation";
-            requiredScope: "stella:admin_write";
-            requiredPermission: "organizationSettings:update";
+            requiredScope: "stella:matters_write";
+            requiredPermission: "entity:update";
             instruction: string;
           };
     }
@@ -1280,6 +1286,11 @@ const loadDocumentProcessingStates = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<DocumentProcessingStates> => {
   const sourceFile = findExtractionFileField(current.fields);
+  const sourceFieldId =
+    sourceFile === null
+      ? null
+      : (current.fields.find(({ content }) => content === sourceFile)?.id ??
+        panic("Extraction source file is not backed by a current field"));
   const [extracted, runs, searchDocument, settings, latestVersion] =
     await context.scopedDb(
       async (tx) =>
@@ -1410,12 +1421,15 @@ const loadDocumentProcessingStates = async ({
       encrypted: sourceFile.encrypted,
       mimeType: sourceFile.mimeType,
     });
-  const canEnableDocumentProcessing =
+  // Manual OCR deliberately bypasses the organization's automatic-processing
+  // policy, so this action fixes the current PDF without requiring an admin to
+  // change an organization-wide setting first.
+  const canQueueManualOcr =
     roles[context.memberRole].authorize({
-      organizationSettings: ["update"],
+      entity: ["update"],
     }).success &&
     (context.request === undefined ||
-      context.grantedScopes.includes("stella:admin_write"));
+      context.grantedScopes.includes("stella:matters_write"));
 
   let contentState: DocumentContentState;
   if (
@@ -1469,21 +1483,29 @@ const loadDocumentProcessingStates = async ({
     contentState = {
       status: "requires_ocr",
       sourceVersionId: current.currentVersionId,
-      remediation: canEnableDocumentProcessing
+      remediation: canQueueManualOcr
         ? {
             type: "action",
-            tool: "manage_organization",
+            tool: "invoke_capability",
             arguments: {
-              action: "update_org_settings",
-              document_processing_mode: "searchable-text",
+              capability: "entities.ocr.create",
+              input: {
+                params: { workspaceId, entityId },
+                body: {
+                  // A source file is present in this branch by construction.
+                  fieldId:
+                    sourceFieldId ??
+                    panic("OCR remediation requires a source field"),
+                },
+              },
             },
           }
         : {
             type: "escalation",
-            requiredScope: "stella:admin_write",
-            requiredPermission: "organizationSettings:update",
+            requiredScope: "stella:matters_write",
+            requiredPermission: "entity:update",
             instruction:
-              "Ask an organization owner or admin with stella:admin_write to enable searchable-text document processing.",
+              "Ask a matter editor with stella:matters_write to invoke entities.ocr.create for this document field.",
           },
     };
   } else if (currentExtracted) {

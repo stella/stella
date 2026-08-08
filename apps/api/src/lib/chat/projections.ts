@@ -417,16 +417,22 @@ const documentContentStateProjection = v.variant("status", [
     remediation: v.variant("type", [
       v.strictObject({
         type: v.literal("action"),
-        tool: v.literal("manage_organization"),
+        tool: v.literal("invoke_capability"),
         arguments: v.strictObject({
-          action: v.literal("update_org_settings"),
-          document_processing_mode: v.literal("searchable-text"),
+          capability: v.literal("entities.ocr.create"),
+          input: v.strictObject({
+            params: v.strictObject({
+              workspaceId: passthroughId(),
+              entityId: passthroughId(),
+            }),
+            body: v.strictObject({ fieldId: passthroughId() }),
+          }),
         }),
       }),
       v.strictObject({
         type: v.literal("escalation"),
-        requiredScope: v.literal("stella:admin_write"),
-        requiredPermission: v.literal("organizationSettings:update"),
+        requiredScope: v.literal("stella:matters_write"),
+        requiredPermission: v.literal("entity:update"),
         instruction: v.string(),
       }),
     ]),

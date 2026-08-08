@@ -2464,7 +2464,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("read_document returns the exact OCR action for an authorized caller when automatic OCR is off", async () => {
+  test("read_document returns the exact manual OCR action for an authorized caller when automatic OCR is off", async () => {
     const textlessProjection = createExtractedContentRow({ charCount: 0 });
     const currentPdf = {
       encrypted: false,
@@ -2491,10 +2491,13 @@ describe("OpenAI-compatible MCP tools", () => {
         sourceVersionId: "entity_version_1",
         remediation: {
           type: "action",
-          tool: "manage_organization",
+          tool: "invoke_capability",
           arguments: {
-            action: "update_org_settings",
-            document_processing_mode: "searchable-text",
+            capability: "entities.ocr.create",
+            input: {
+              params: { workspaceId: "ws_1", entityId: "entity_1" },
+              body: { fieldId: "field_1" },
+            },
           },
         },
       },
@@ -2503,14 +2506,14 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test.each([
     {
-      label: "missing admin scope",
+      label: "missing matter-write scope",
       memberRole: "owner" as const,
       grantedScopes: ["stella:read"],
     },
     {
-      label: "missing organization permission",
-      memberRole: "member" as const,
-      grantedScopes: ["stella:read", "stella:admin_write"],
+      label: "missing entity permission",
+      memberRole: "intern" as const,
+      grantedScopes: ["stella:read", "stella:matters_write"],
     },
   ])(
     "read_document returns an OCR escalation for a caller $label",
@@ -2547,8 +2550,8 @@ describe("OpenAI-compatible MCP tools", () => {
           sourceVersionId: "entity_version_1",
           remediation: {
             type: "escalation",
-            requiredScope: "stella:admin_write",
-            requiredPermission: "organizationSettings:update",
+            requiredScope: "stella:matters_write",
+            requiredPermission: "entity:update",
           },
         },
       });
@@ -2609,7 +2612,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("read_document treats policy-disabled OCR as requiring enablement without masking native indexing", async () => {
+  test("read_document treats policy-disabled OCR as manually retryable without masking native indexing", async () => {
     const sha256Hex = "a".repeat(64);
     const nativeIndexedAt = new Date("2026-01-02T00:00:00.000Z");
     const currentPdf = {
