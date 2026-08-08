@@ -1568,7 +1568,7 @@
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/chat/threads",
-      "GET /v1/my-work",
+      "GET /v1/my-tasks",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/workspaces",
       "GET /v1/workspaces/navigation"
@@ -1579,7 +1579,7 @@
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/chat/threads": 1,
-      "GET /v1/my-work": 1,
+      "GET /v1/my-tasks": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/workspaces": 1,
       "GET /v1/workspaces/navigation": 1
@@ -1590,7 +1590,7 @@
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
-      "GET /v1/my-work": 6,
+      "GET /v1/my-tasks": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces": 10,
       "GET /v1/workspaces/navigation": 6
@@ -1601,7 +1601,7 @@
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,
       "GET /v1/chat/threads": 4096,
-      "GET /v1/my-work": 1024,
+      "GET /v1/my-tasks": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/workspaces": 87040,
       "GET /v1/workspaces/navigation": 20480
