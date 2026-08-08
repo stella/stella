@@ -807,17 +807,22 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         : `NALUS listing ${quarantineId}`;
     const caseNumber = listedCaseNumber || fallbackCaseNumber;
     let sourceDocumentId: string;
+    if (nalusRecordId !== undefined) {
+      sourceDocumentId = `nalus-record:${nalusRecordId}`;
+    } else if (sz !== undefined) {
+      sourceDocumentId = `nalus-sz:${sz}`;
+    } else {
+      sourceDocumentId = `nalus-quarantine:${quarantineId}`;
+    }
+
     let sourceUrl: URL;
     if (sz !== undefined) {
-      sourceDocumentId = `nalus-sz:${sz}`;
       sourceUrl = new URL(TEXT_URL);
       sourceUrl.searchParams.set("sz", sz);
     } else if (nalusRecordId !== undefined) {
-      sourceDocumentId = `nalus-record:${nalusRecordId}`;
       sourceUrl = new URL(RESULT_DETAIL_URL);
       sourceUrl.searchParams.set("id", nalusRecordId);
     } else {
-      sourceDocumentId = `nalus-quarantine:${quarantineId}`;
       sourceUrl = new URL(RESULTS_URL);
       sourceUrl.hash = `listing-${quarantineId}`;
     }
