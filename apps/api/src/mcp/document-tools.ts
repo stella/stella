@@ -549,7 +549,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "Read a document's metadata and field values by entity ID. By default " +
       "returns the current version's name, kind, and field/property values. " +
       "The default response also reports contentState and searchIndexState, " +
-      "including an exact OCR-enablement action when searchable-text OCR is required. " +
+      "including an actionable remediation or escalation requirement when " +
+      "searchable-text OCR is required. " +
       "Pass version_id to inspect a specific version instead. Pass version_id " +
       "and compare_with_version_id to get a plain-text line diff between two " +
       "versions. Pass include_versions to also return the version history. To " +
@@ -1211,13 +1212,21 @@ type DocumentContentState =
   | {
       status: "requires_ocr";
       sourceVersionId: SafeId<"entityVersion">;
-      action: {
-        tool: "manage_organization";
-        arguments: {
-          action: "update_org_settings";
-          document_processing_mode: "searchable-text";
-        };
-      };
+      remediation:
+        | {
+            type: "action";
+            tool: "manage_organization";
+            arguments: {
+              action: "update_org_settings";
+              document_processing_mode: "searchable-text";
+            };
+          }
+        | {
+            type: "escalation";
+            requiredScope: "stella:admin_write";
+            requiredPermission: "organizationSettings:update";
+            instruction: string;
+          };
     }
   | {
       status: "failed";
@@ -1320,6 +1329,8 @@ const loadDocumentProcessingStates = async ({
             where: { organizationId: { eq: context.organizationId } },
             columns: { documentProcessingMode: true },
           }),
+          // Provenance fence: include tombstones so a rollback cannot make a
+          // withdrawn version's legacy extraction appear current again.
           tx.query.entityVersions.findFirst({
             where: {
               entityId: { eq: entityId },
@@ -1378,6 +1389,12 @@ const loadDocumentProcessingStates = async ({
       encrypted: sourceFile.encrypted,
       mimeType: sourceFile.mimeType,
     });
+  const canEnableDocumentProcessing =
+    roles[context.memberRole].authorize({
+      organizationSettings: ["update"],
+    }).success &&
+    (context.request === undefined ||
+      context.grantedScopes.includes("stella:admin_write"));
 
   let contentState: DocumentContentState;
   if (
@@ -1431,13 +1448,22 @@ const loadDocumentProcessingStates = async ({
     contentState = {
       status: "requires_ocr",
       sourceVersionId: current.currentVersionId,
-      action: {
-        tool: "manage_organization",
-        arguments: {
-          action: "update_org_settings",
-          document_processing_mode: "searchable-text",
-        },
-      },
+      remediation: canEnableDocumentProcessing
+        ? {
+            type: "action",
+            tool: "manage_organization",
+            arguments: {
+              action: "update_org_settings",
+              document_processing_mode: "searchable-text",
+            },
+          }
+        : {
+            type: "escalation",
+            requiredScope: "stella:admin_write",
+            requiredPermission: "organizationSettings:update",
+            instruction:
+              "Ask an organization owner or admin with stella:admin_write to enable searchable-text document processing.",
+          },
     };
   } else if (currentExtracted) {
     contentState = {

@@ -414,13 +414,22 @@ const documentContentStateProjection = v.variant("status", [
   v.strictObject({
     status: v.literal("requires_ocr"),
     sourceVersionId: passthroughId(),
-    action: v.strictObject({
-      tool: v.literal("manage_organization"),
-      arguments: v.strictObject({
-        action: v.literal("update_org_settings"),
-        document_processing_mode: v.literal("searchable-text"),
+    remediation: v.variant("type", [
+      v.strictObject({
+        type: v.literal("action"),
+        tool: v.literal("manage_organization"),
+        arguments: v.strictObject({
+          action: v.literal("update_org_settings"),
+          document_processing_mode: v.literal("searchable-text"),
+        }),
       }),
-    }),
+      v.strictObject({
+        type: v.literal("escalation"),
+        requiredScope: v.literal("stella:admin_write"),
+        requiredPermission: v.literal("organizationSettings:update"),
+        instruction: v.string(),
+      }),
+    ]),
   }),
   v.strictObject({
     status: v.literal("failed"),

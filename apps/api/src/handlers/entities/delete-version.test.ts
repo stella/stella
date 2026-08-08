@@ -281,6 +281,20 @@ describe("delete-version chain-of-custody guard", () => {
             "Collab finalize: reads the base version to build the merge target on a write path, gated by an open collab session.",
         },
       ],
+      "mcp/document-tools.ts": [
+        {
+          anchor: "Provenance fence: include tombstones",
+          reason:
+            "MCP processing-state provenance reads only the latest version ID across tombstones so a rollback cannot expose stale extracted text.",
+        },
+      ],
+      "mcp/stella-tools.ts": [
+        {
+          anchor: "Provenance fence: include tombstones",
+          reason:
+            "MCP content provenance reads only the latest version ID across tombstones so a rollback cannot expose withdrawn extracted text.",
+        },
+      ],
     };
 
     const toPosix = (file: string) =>

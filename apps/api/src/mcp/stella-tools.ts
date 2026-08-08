@@ -1425,6 +1425,8 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
                   sourceSha256Hex: true,
                 },
               }),
+              // Provenance fence: include tombstones so a rollback cannot make
+              // a withdrawn version's legacy extraction readable again.
               tx.query.entityVersions.findFirst({
                 where: {
                   entityId: { eq: entityId },

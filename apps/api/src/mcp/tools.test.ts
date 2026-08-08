@@ -2437,7 +2437,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("read_document returns the exact OCR action for a textless PDF when automatic OCR is off", async () => {
+  test("read_document returns the exact OCR action for an authorized caller when automatic OCR is off", async () => {
     const textlessProjection = createExtractedContentRow({ charCount: 0 });
     const currentPdf = {
       encrypted: false,
@@ -2462,7 +2462,8 @@ describe("OpenAI-compatible MCP tools", () => {
       contentState: {
         status: "requires_ocr",
         sourceVersionId: "entity_version_1",
-        action: {
+        remediation: {
+          type: "action",
           tool: "manage_organization",
           arguments: {
             action: "update_org_settings",
@@ -2472,6 +2473,60 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     });
   });
+
+  test.each([
+    {
+      label: "missing admin scope",
+      memberRole: "owner" as const,
+      grantedScopes: ["stella:read"],
+    },
+    {
+      label: "missing organization permission",
+      memberRole: "member" as const,
+      grantedScopes: ["stella:read", "stella:admin_write"],
+    },
+  ])(
+    "read_document returns an OCR escalation for a caller $label",
+    async ({ grantedScopes, memberRole }) => {
+      const textlessProjection = createExtractedContentRow({ charCount: 0 });
+      const currentPdf = {
+        encrypted: false,
+        fileName: "scan.pdf",
+        id: "file_1",
+        mimeType: "application/pdf",
+        pdfFileId: null,
+        sha256Hex: "a".repeat(64),
+        sizeBytes: 128,
+        type: "file",
+        version: 1,
+      };
+      const context = createContext({
+        scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
+      });
+      const result = await handleMcpToolCall({
+        args: { entity_id: "entity_1" },
+        context: {
+          ...context,
+          grantedScopes,
+          memberRole,
+          request: new Request("https://example.test/mcp"),
+        },
+        toolName: "read_document",
+      });
+
+      expect(parseToolPayload(result)).toMatchObject({
+        contentState: {
+          status: "requires_ocr",
+          sourceVersionId: "entity_version_1",
+          remediation: {
+            type: "escalation",
+            requiredScope: "stella:admin_write",
+            requiredPermission: "organizationSettings:update",
+          },
+        },
+      });
+    },
+  );
 
   test("read_document keeps extracted OCR content ready when only indexing failed", async () => {
     const sha256Hex = "a".repeat(64);
