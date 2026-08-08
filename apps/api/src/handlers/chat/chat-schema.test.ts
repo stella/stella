@@ -587,6 +587,23 @@ describe("validateMessage", () => {
     });
     expect(Result.isError(rejectedCancelledTransition)).toBe(true);
 
+    const rejectedMismatchedPayload = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-2",
+          payload: { approved: false },
+          status: "resolved",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedMismatchedPayload)).toBe(true);
+
     const rejectedUnknownInterrupt = await validateMessageWithPersistence({
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },

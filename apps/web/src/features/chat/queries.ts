@@ -2,6 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type {
   ChatClientState,
+  ChatInterruptState,
   ConnectConnectionAdapter,
   MultimodalContent,
   RunAgentInputContext,
@@ -824,6 +825,39 @@ export const createChatRuntime = ({
     captureRuntimeError(error);
   };
 
+  type InterruptSubmissionWaiter = {
+    reject: (error: Error) => void;
+    resolve: () => void;
+    sawResuming: boolean;
+  };
+  let interruptSubmissionWaiter: InterruptSubmissionWaiter | undefined;
+  const observeInterruptSubmission = (
+    state: ChatInterruptState<ChatClientTools>,
+  ): void => {
+    const waiter = interruptSubmissionWaiter;
+    if (waiter === undefined) {
+      return;
+    }
+    if (state.resuming) {
+      waiter.sawResuming = true;
+      return;
+    }
+    const errors = [
+      ...state.interruptErrors,
+      ...state.interrupts.flatMap((interrupt) => interrupt.errors),
+    ];
+    const firstError = errors.at(0);
+    if (firstError !== undefined) {
+      interruptSubmissionWaiter = undefined;
+      waiter.reject(new Error(firstError.message));
+      return;
+    }
+    if (waiter.sawResuming) {
+      interruptSubmissionWaiter = undefined;
+      waiter.resolve();
+    }
+  };
+
   const chatFetchClient = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const { signal, ...requestInit } = init ?? {};
@@ -879,6 +913,7 @@ export const createChatRuntime = ({
     onFinish: () => {
       onFinish();
     },
+    onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) =>
       setSnapshot({
         isLoading,
@@ -905,6 +940,33 @@ export const createChatRuntime = ({
       if (options?.body !== undefined) {
         client.updateOptions({ forwardedProps: {} });
       }
+    }
+  };
+
+  const resolveNativeInterrupt = async (
+    resolveInterrupt: () => void,
+  ): Promise<void> => {
+    if (interruptSubmissionWaiter !== undefined) {
+      return panic("Native interrupt submission is already active");
+    }
+    let waiter: InterruptSubmissionWaiter | undefined;
+    const submission = new Promise<void>((resolve, reject) => {
+      waiter = {
+        reject,
+        resolve,
+        sawResuming: false,
+      };
+      interruptSubmissionWaiter = waiter;
+    });
+    try {
+      resolveInterrupt();
+      observeInterruptSubmission(client.getInterruptState());
+      await submission;
+    } catch (error) {
+      if (interruptSubmissionWaiter === waiter) {
+        interruptSubmissionWaiter = undefined;
+      }
+      throw error;
     }
   };
 
@@ -940,11 +1002,13 @@ export const createChatRuntime = ({
                   candidate.id === response.id)),
           );
         if (interrupt?.kind === "tool-approval") {
-          if (response.approved) {
-            interrupt.resolveInterrupt(true);
-          } else {
-            interrupt.resolveInterrupt(false);
-          }
+          await resolveNativeInterrupt(() => {
+            if (response.approved) {
+              interrupt.resolveInterrupt(true);
+            } else {
+              interrupt.resolveInterrupt(false);
+            }
+          });
           return;
         }
         if (interrupt?.kind === "generic") {
@@ -952,7 +1016,9 @@ export const createChatRuntime = ({
           // runtime tool definitions with which to specialize the binding.
           // TanStack therefore exposes the native descriptor as a generic
           // bound interrupt; its response schema is the strict authority.
-          interrupt.resolveInterrupt({ approved: response.approved });
+          await resolveNativeInterrupt(() => {
+            interrupt.resolveInterrupt({ approved: response.approved });
+          });
           return;
         }
 

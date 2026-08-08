@@ -1245,7 +1245,7 @@ describe("chat tool schemas", () => {
   test("the installed Mistral adapter restores omitted optional tool inputs", async () => {
     const adapter = createMistralText("mistral-large-latest", "test-key");
     const argumentsJson =
-      '{"question":"Which one?","mode":null,"nullableNote":null,"emptyEnumMarker":null,"acceptAnything":null,"rejectAnything":null}';
+      '{"question":"Which one?","mode":null,"nullableNote":null,"emptyEnumMarker":null,"acceptAnything":null,"rejectAnything":null,"typeless":null}';
     let request: unknown;
     Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
       request = payload;
@@ -1316,6 +1316,9 @@ describe("chat tool schemas", () => {
       type: "string",
       enum: [],
     });
+    Reflect.set(inputSchema.properties, "typeless", {
+      description: "An optional typeless value.",
+    });
     const tool = {
       name: "ask_user",
       description: "Ask a question.",
@@ -1349,6 +1352,12 @@ describe("chat tool schemas", () => {
                 rejectAnything: {
                   anyOf: [false, { type: "null" }],
                 },
+                typeless: {
+                  anyOf: [
+                    { description: "An optional typeless value." },
+                    { type: "null" },
+                  ],
+                },
               },
               required: expect.arrayContaining([
                 "question",
@@ -1357,6 +1366,7 @@ describe("chat tool schemas", () => {
                 "emptyEnumMarker",
                 "acceptAnything",
                 "rejectAnything",
+                "typeless",
               ]),
             },
           },

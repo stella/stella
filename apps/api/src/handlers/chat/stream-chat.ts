@@ -1576,8 +1576,17 @@ export const remapOutgoingMessageIds = async function* ({
   mapMessageId,
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
+  const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
+  let primarySnapshotMessageIdAssigned = false;
   for await (const chunk of source) {
-    yield remapChunkMessageId({ chunk, existingMessageIds, mapMessageId });
+    yield remapChunkMessageId({
+      chunk,
+      existingMessageIds,
+      mapMessageId,
+      snapshotMessageIds,
+      primarySnapshotMessageIdAssigned,
+    });
+    primarySnapshotMessageIdAssigned ||= snapshotMessageIds.size > 0;
   }
 };
 
@@ -1652,23 +1661,52 @@ const remapChunkMessageId = ({
   chunk,
   existingMessageIds,
   mapMessageId,
+  primarySnapshotMessageIdAssigned,
+  snapshotMessageIds,
 }: {
   chunk: StreamChunk;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
+  primarySnapshotMessageIdAssigned: boolean;
+  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
 }): StreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const newAssistantIds = chunk.messages
+      .filter(
+        (message) =>
+          message.role === "assistant" &&
+          !existingMessageIds.has(message.id) &&
+          !snapshotMessageIds.has(message.id),
+      )
+      .map(({ id }) => id);
+    const primarySourceId = primarySnapshotMessageIdAssigned
+      ? undefined
+      : newAssistantIds.at(-1);
     return {
       ...chunk,
       messages: chunk.messages.map((message) =>
         message.role !== "assistant" || existingMessageIds.has(message.id)
           ? message
-          : { ...message, id: mapMessageId(message.id) },
+          : {
+              ...message,
+              id:
+                snapshotMessageIds.get(message.id) ??
+                (() => {
+                  const id =
+                    message.id === primarySourceId
+                      ? mapMessageId(message.id)
+                      : createSafeId<"chatMessage">();
+                  snapshotMessageIds.set(message.id, id);
+                  return id;
+                })(),
+            },
       ),
     };
   }
+  const remapMessageId = (messageId: string): SafeId<"chatMessage"> =>
+    snapshotMessageIds.get(messageId) ?? mapMessageId(messageId);
   const remappedChunk = hasMessageId(chunk)
-    ? { ...chunk, messageId: mapMessageId(chunk.messageId) }
+    ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
     : chunk;
 
   const remappedParentChunk =
@@ -1676,7 +1714,7 @@ const remapChunkMessageId = ({
     typeof remappedChunk.parentMessageId === "string"
       ? {
           ...remappedChunk,
-          parentMessageId: mapMessageId(remappedChunk.parentMessageId),
+          parentMessageId: remapMessageId(remappedChunk.parentMessageId),
         }
       : remappedChunk;
 
@@ -1696,7 +1734,7 @@ const remapChunkMessageId = ({
     ...remappedParentChunk,
     value: {
       ...remappedParentChunk.value,
-      messageId: mapMessageId(messageId),
+      messageId: remapMessageId(messageId),
     },
   };
 };
@@ -2294,6 +2332,27 @@ const restoreVisibleStringLeaves = <T extends object>(
   },
 ): T => {
   const restored = structuredClone(value);
+  const controlKeys = new Set([
+    "approvalSchemaHash",
+    "id",
+    "inputSchemaHash",
+    "interruptId",
+    "interruptedRunId",
+    "kind",
+    "messageId",
+    "name",
+    "outputSchemaHash",
+    "parentMessageId",
+    "reason",
+    "responseSchemaHash",
+    "role",
+    "runId",
+    "status",
+    "threadId",
+    "toolCallId",
+    "toolName",
+    "type",
+  ]);
   const restoreString = (text: string): string => {
     const visible =
       boundary.type === "anonymized"
@@ -2325,7 +2384,9 @@ const restoreVisibleStringLeaves = <T extends object>(
     }
     for (const [key, child] of Object.entries(node)) {
       if (typeof child === "string") {
-        node[key] = restoreString(child);
+        if (!controlKeys.has(key)) {
+          node[key] = restoreString(child);
+        }
       } else {
         visit(child);
       }

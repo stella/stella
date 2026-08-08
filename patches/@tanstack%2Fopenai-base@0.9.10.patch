@@ -134,7 +134,7 @@ index 8ba45502a2501720f1c2b61c7ab6457828f10745..bc113492cf7a49c66ba1fd6a21d57b27
  							} catch (parseError) {
  								options.logger.errors(`${this.name}.processStreamChunks tool-args JSON parse failed (response.completed backfill)`, {
  									error: toRunErrorPayload(parseError, `tool ${name} (${item.id}) returned malformed JSON arguments`),
-@@ -1146,6 +1178,22 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+@@ -1146,6 +1178,31 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
  					file_data: audioValue.startsWith("data:") ? audioValue : `data:${audioMime};base64,${audioValue}`
  				};
  			}
@@ -148,10 +148,19 @@ index 8ba45502a2501720f1c2b61c7ab6457828f10745..bc113492cf7a49c66ba1fd6a21d57b27
 +				};
 +				const documentValue = part.source.value;
 +				const documentMime = part.source.mimeType || "application/octet-stream";
++				const documentExtensionByMime = {
++					"application/pdf": "pdf",
++					"application/msword": "doc",
++					"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
++					"text/csv": "csv",
++					"text/markdown": "md",
++					"text/plain": "txt"
++				};
++				const extension = documentExtensionByMime[documentMime] ?? "bin";
 +				return {
 +					type: "input_file",
 +					file_data: documentValue.startsWith("data:") ? documentValue : `data:${documentMime};base64,${documentValue}`,
-+					filename: filename ?? "document.pdf"
++					filename: filename ?? `document.${extension}`
 +				};
 +			}
  			default: throw new Error(`Unsupported content part type: ${part.type}`);

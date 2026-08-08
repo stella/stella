@@ -1493,6 +1493,12 @@ describe("chat runtime", () => {
     const continuationRequested = new Promise<void>((resolve) => {
       markContinuationRequested = resolve;
     });
+    let releaseContinuation: (response: Response) => void = () => {
+      throw new Error("Native interrupt continuation was not awaited");
+    };
+    const continuationResponse = new Promise<Response>((resolve) => {
+      releaseContinuation = resolve;
+    });
 
     globalThis.fetch = createFetchMock(async (_input, init) => {
       const body = parseJsonRequestBody(init);
@@ -1561,16 +1567,7 @@ describe("chat runtime", () => {
       }
 
       markContinuationRequested();
-      return createSseResponse([
-        { type: "RUN_STARTED", threadId, runId },
-        {
-          type: "RUN_FINISHED",
-          threadId,
-          runId,
-          finishReason: "stop",
-          outcome: { type: "success" },
-        },
-      ]);
+      return await continuationResponse;
     });
 
     const runtime = createChatRuntime({
@@ -1587,11 +1584,31 @@ describe("chat runtime", () => {
       runtime,
       createOutgoingMessage("22222222-2222-4222-8222-222222222205"),
     );
-    await runtime.resolveToolApproval({
-      approved: true,
-      id: "approval_tool-A",
-    });
+    let resolutionSettled = false;
+    const resolution = runtime
+      .resolveToolApproval({
+        approved: true,
+        id: "approval_tool-A",
+      })
+      .finally(() => {
+        resolutionSettled = true;
+      });
     await continuationRequested;
+    expect(resolutionSettled).toBe(false);
+    const childRunId = chatRequestRunId(requests.at(1));
+    releaseContinuation(
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: childRunId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: childRunId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]),
+    );
+    await resolution;
 
     const parentRunId = chatRequestRunId(requests.at(0));
     expect(requests.at(1)).toMatchObject({
@@ -1605,7 +1622,7 @@ describe("chat runtime", () => {
       ],
       threadId,
     });
-    expect(requests.at(1)).not.toMatchObject({ runId: parentRunId });
+    expect(childRunId).not.toBe(parentRunId);
   });
 });
 

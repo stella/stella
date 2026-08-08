@@ -102,7 +102,7 @@ index c4df4ff87ac5452595a79cf25e5225f704cfde3b..71d6b5784e008f2ffd6a019b01933036
 +				documentUrl: part.source.type === "data" && !documentValue.startsWith("data:") ? `data:${part.source.mimeType};base64,${documentValue}` : documentValue
 +			};
 +		}
-+		throw new Error(`Mistral text adapter does not support content part of type '${part.type}'. Supported types: text, image, document. Use a vision-capable model (mistral-medium-latest or mistral-small-latest) for images and documents.`);
++		throw new Error(`Mistral text adapter does not support content part of type '${part.type}'. Supported types: text, image, document. Use a vision-capable model (pixtral-large-latest, mistral-medium-latest, or mistral-small-latest) for images and documents.`);
  	}
  	/**
  	* Normalizes message content to an array of ContentPart.
@@ -137,7 +137,7 @@ diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converte
 index 5112eff6003d33f60b86d5f4062eea7f8104660b..a944a72894ec47e6cec63cb8d5f69163456895f2 100644
 --- a/dist/esm/utils/schema-converter.js
 +++ b/dist/esm/utils/schema-converter.js
-@@ -1,77 +1,194 @@
+@@ -1,77 +1,202 @@
 -//#region src/utils/schema-converter.ts
 -/**
 -* Recursively transform null values to undefined in an object.
@@ -256,6 +256,14 @@ index 5112eff6003d33f60b86d5f4062eea7f8104660b..a944a72894ec47e6cec63cb8d5f69163
 +  if (typeof schema.type === "string" && schema.type !== "null") return false;
 +  if (Array.isArray(schema.type) && !schema.type.includes("null")) return false;
 +  if (Array.isArray(schema.anyOf) && !schema.anyOf.some((variant) => acceptsNull(variant))) {
++    return false;
++  }
++  if (
++    schema.type === void 0 &&
++    schema.anyOf === void 0 &&
++    schema.enum === void 0 &&
++    !("const" in schema)
++  ) {
 +    return false;
 +  }
 +  return true;

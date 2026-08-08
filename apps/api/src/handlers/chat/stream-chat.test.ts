@@ -357,36 +357,40 @@ describe("outgoing chat stream message ids", () => {
     );
     const existingMessageIds = new Set(["user-1", "assistant-previous"]);
 
-    expect(
-      await collectChunks(
-        remapOutgoingMessageIds({
-          existingMessageIds,
-          mapMessageId: createChatMessageIdMapper(() => messageId),
-          source: streamChunks([
-            {
-              type: EventType.MESSAGES_SNAPSHOT,
-              messages: [
-                {
-                  id: "user-1",
-                  role: "user",
-                  content: "Please continue",
-                },
-                {
-                  id: "assistant-previous",
-                  role: "assistant",
-                  content: "Earlier answer",
-                },
-                {
-                  id: "provider-message",
-                  role: "assistant",
-                  content: "Waiting for approval",
-                },
-              ],
-            },
-          ]),
-        }),
-      ),
-    ).toEqual([
+    const chunks = await collectChunks(
+      remapOutgoingMessageIds({
+        existingMessageIds,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        source: streamChunks([
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "user-1",
+                role: "user",
+                content: "Please continue",
+              },
+              {
+                id: "assistant-previous",
+                role: "assistant",
+                content: "Earlier answer",
+              },
+              {
+                id: "provider-message-1",
+                role: "assistant",
+                content: "Checking the request",
+              },
+              {
+                id: "provider-message-2",
+                role: "assistant",
+                content: "Waiting for approval",
+              },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(chunks).toEqual([
       {
         type: EventType.MESSAGES_SNAPSHOT,
         messages: [
@@ -401,6 +405,11 @@ describe("outgoing chat stream message ids", () => {
             content: "Earlier answer",
           },
           {
+            id: expect.any(String),
+            role: "assistant",
+            content: "Checking the request",
+          },
+          {
             id: messageId,
             role: "assistant",
             content: "Waiting for approval",
@@ -408,6 +417,12 @@ describe("outgoing chat stream message ids", () => {
         ],
       },
     ]);
+    const snapshot = chunks.at(0);
+    expect(snapshot?.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected a native message snapshot");
+    }
+    expect(snapshot.messages.at(2)?.id).not.toBe(snapshot.messages.at(3)?.id);
   });
 
   test("normalizes tanstack generated final assistant ids before persistence", () => {
@@ -2018,7 +2033,7 @@ describe("anonymized outgoing chat stream", () => {
             type: "interrupt",
             interrupts: [
               {
-                id: "approval_tool-1",
+                id: "[PERSON_1]",
                 reason: "tool_call",
                 metadata: {
                   "tanstack:interruptBinding": {
@@ -2058,7 +2073,7 @@ describe("anonymized outgoing chat stream", () => {
           type: "interrupt",
           interrupts: [
             {
-              id: "approval_tool-1",
+              id: "[PERSON_1]",
               reason: "tool_call",
               metadata: {
                 "tanstack:interruptBinding": {

@@ -286,8 +286,6 @@ const noResumeBodySchema = t.Object(
   {
     ...sendMessageCommonProperties,
     message: rawMessageSchema,
-    parentRunId: t.Optional(t.Undefined()),
-    resume: t.Optional(t.Undefined()),
   },
   { additionalProperties: false },
 );
@@ -302,15 +300,10 @@ const nativeAssistantContinuationBodySchema = t.Object(
   { additionalProperties: false },
 );
 
-export const sendMessageBodySchema = t.Object(
-  {
-    ...sendMessageCommonProperties,
-    message: rawMessageSchema,
-    parentRunId: t.Optional(agUiRunIdSchema),
-    resume: t.Optional(agUiResumeSchema),
-  },
-  { additionalProperties: false },
-);
+export const sendMessageBodySchema = t.Union([
+  noResumeBodySchema,
+  nativeAssistantContinuationBodySchema,
+]);
 
 export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
 
@@ -377,8 +370,6 @@ export const agUiSendMessageBodySchema = t.Union([
       // TanStack mirrors forwardedProps under legacy `data`; validating both
       // prevents an untyped shadow payload from crossing the route boundary.
       data: noResumeBodySchema,
-      parentRunId: t.Optional(t.Undefined()),
-      resume: t.Optional(t.Undefined()),
     },
     { additionalProperties: false },
   ),
@@ -741,24 +732,38 @@ const validateContinuationToolCallIntegrity = ({
         parts: [call],
         role: "assistant",
       });
-      return resumed === null ? [] : [resumed];
+      return resumed === null ? [] : [{ call, interaction: resumed }];
     });
     if (
       awaitedInterrupts.length !== awaitedInteractions.length ||
       resume.length !== awaitedInterrupts.length ||
-      resume.some(({ interruptId, status }) => {
+      resume.some((resolution) => {
         const awaited = awaitedInterrupts.find(
-          (candidate) => candidate.interruptId === interruptId,
+          (candidate) => candidate.interruptId === resolution.interruptId,
         );
         if (awaited === undefined) {
           return true;
         }
-        const transitioned = resumedInteractions.some(
-          (resumed) =>
-            resumed.toolCallId === awaited.interaction.toolCallId &&
-            resumed.type === awaited.interaction.type,
+        const transition = resumedInteractions.find(
+          ({ interaction }) =>
+            interaction.toolCallId === awaited.interaction.toolCallId &&
+            interaction.type === awaited.interaction.type,
         );
-        return status === "resolved" ? !transitioned : transitioned;
+        if (resolution.status === "cancelled") {
+          return transition !== undefined;
+        }
+        if (transition === undefined) {
+          return true;
+        }
+        if (awaited.interaction.type === "approval") {
+          return (
+            !("approval" in transition.call) ||
+            !deepEquals(resolution.payload, {
+              approved: transition.call.approval.approved,
+            })
+          );
+        }
+        return !deepEquals(resolution.payload, transition.call.output);
       })
     ) {
       return invalidContinuationToolCall();
