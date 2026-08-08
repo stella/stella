@@ -1,0 +1,252 @@
+import { Result } from "better-result";
+import { eq } from "drizzle-orm";
+
+import { rlsDb } from "@/api/db/root";
+import { caseLawSources } from "@/api/db/schema";
+/**
+ * Re-parse decisions a source already ingested, from the raw payload stored
+ * with each of them, without fetching anything from the publisher.
+ *
+ * The payload every ingest writes to object storage
+ * (`case_law_decisions.source_raw_s3_key`) is what makes this local: a
+ * parser change can be applied to stored decisions instead of waiting for a
+ * rate-limited re-crawl. Each re-parsed result goes through the ingestion
+ * pipeline's own `processDecision`, so corpus-object storage, the content
+ * hash, the search projection's staleness marker and citation extraction all
+ * behave exactly as they do on a crawl.
+ *
+ *   # what a run would change, writing nothing (the default)
+ *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj --limit 20
+ *
+ *   # one decision, by the publisher id the adapter stored in metadata
+ *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
+ *     --celex 62022CJ0123 --apply
+ *
+ *   # resume where an interrupted run stopped
+ *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
+ *     --after <decisionId> --apply
+ *
+ * Not a scheduled job: it runs when a parser changes, under an operator who
+ * reads the report.
+ */
+import { createIngestionDb } from "@/api/db/scoped";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  countReplayability,
+  REPLAY_ROW_OUTCOME,
+  replayCapability,
+  replayCaseLawSource,
+} from "@/api/handlers/case-law/ingestion/replay";
+import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+// eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
+import { toSafeId } from "@/api/lib/branded-types";
+import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  readS3ObjectIfPresent,
+  refreshCorpusS3,
+  refreshS3,
+} from "@/api/lib/s3";
+
+const DEFAULT_LIMIT = 100;
+const DEFAULT_PAGE_SIZE = 25;
+/** A stored payload is one document; nothing here should take longer. */
+const STORED_RAW_READ_TIMEOUT_MS = 30_000;
+
+const USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <key> [options]
+
+  --adapter <key>   Required. Adapter whose source is replayed.
+  --apply           Write the re-parsed results. Omitted, the run reports
+                    what it would change and writes nothing.
+  --limit <n>       Maximum decisions to visit (default ${DEFAULT_LIMIT}).
+  --celex <value>   Replay only the decision stored under this publisher id
+                    (metadata.celex).
+  --after <id>      Resume strictly after this decision id.
+  --page-size <n>   Rows read per query (default ${DEFAULT_PAGE_SIZE}).`;
+
+const flagValue = (name: string): string | undefined => {
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? undefined : process.argv[index + 1];
+};
+
+const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
+
+const positiveInteger = (
+  raw: string | undefined,
+  fallback: number,
+  name: string,
+): number => {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    console.error(`--${name} must be a positive integer, got: ${raw}`);
+    process.exit(1);
+  }
+  return parsed;
+};
+
+const adapterKey = flagValue("adapter");
+if (adapterKey === undefined || adapterKey.length === 0) {
+  console.error(USAGE);
+  process.exit(1);
+}
+
+const apply = hasFlag("apply");
+const limit = positiveInteger(flagValue("limit"), DEFAULT_LIMIT, "limit");
+const pageSize = positiveInteger(
+  flagValue("page-size"),
+  DEFAULT_PAGE_SIZE,
+  "page-size",
+);
+const celex = flagValue("celex");
+const afterArgument = flagValue("after");
+const after =
+  afterArgument === undefined
+    ? null
+    : toSafeId<"caseLawDecision">(afterArgument);
+
+const adapter = getAdapter(adapterKey);
+if (!adapter) {
+  console.error(`Unknown adapter: ${adapterKey}`);
+  process.exit(1);
+}
+
+// Said out loud, because "nothing replayed" and "this adapter cannot replay"
+// read the same in a summary, and only one of them means the decisions have
+// to be re-fetched from the publisher.
+const UNSUPPORTED_ADAPTER_MESSAGE = (key: string): string =>
+  `Adapter ${key} cannot re-parse a stored payload: its stored raw does not ` +
+  "map one payload to one decision. These decisions can only be re-parsed " +
+  "by re-crawling the source.";
+
+// Refused here as well as inside the run, so an unsupported adapter costs no
+// database connection, no object-store client and no ingestion lease.
+const capability = replayCapability(adapter);
+if (capability.type === "unsupported") {
+  console.error(UNSUPPORTED_ADAPTER_MESSAGE(capability.adapterKey));
+  process.exit(1);
+}
+
+const ingestionDb = createIngestionDb(rlsDb);
+await refreshS3();
+await refreshCorpusS3();
+
+const source = (
+  await ingestionDb((tx) =>
+    tx
+      .select({ id: caseLawSources.id, name: caseLawSources.name })
+      .from(caseLawSources)
+      .where(eq(caseLawSources.adapterKey, adapterKey))
+      .limit(1),
+  )
+).at(0);
+
+if (!source) {
+  console.error(`No case-law source configured for adapter ${adapterKey}`);
+  process.exit(1);
+}
+
+const split = await countReplayability(ingestionDb, source.id);
+console.log(`=== REPLAY ${adapterKey} (${source.name}) ===`);
+console.log(`mode:                ${apply ? "apply" : "dry run"}`);
+console.log(`replayable locally:  ${split.storedLocally}`);
+console.log(`needs a re-fetch:    ${split.needsRefetch}`);
+if (celex !== undefined) {
+  console.log(`targeting celex:     ${celex}`);
+}
+
+// `null` only where the store confirmed it holds no such object, which is a
+// durable fact about that decision. A timeout, a refused credential or a
+// dropped connection is raised instead: it says nothing about the row, and
+// recording it as an absent payload would let a resume step over rows whose
+// payloads are there.
+const readStoredRaw: StoredRawReader = async (key) => {
+  const bytes = await readS3ObjectIfPresent(
+    key,
+    AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+  );
+  return bytes === null ? null : new Uint8Array(bytes);
+};
+
+// A writing run takes the source's ingestion lease: it allocates observation
+// orders from the same counter a crawl does, and the two must not interleave.
+// A dry run writes nothing and takes nothing.
+const sourceLease = apply
+  ? await acquireCaseLawSourceIngestionLease({
+      scopedDb: ingestionDb,
+      sourceId: source.id,
+    })
+  : null;
+
+if (apply && sourceLease === null) {
+  console.error(
+    `Source ${adapterKey} is being ingested right now (lease held). Retry later.`,
+  );
+  process.exit(1);
+}
+
+const replayed = await Result.tryPromise({
+  try: async () =>
+    await replayCaseLawSource({
+      adapter,
+      scopedDb: ingestionDb,
+      sourceId: source.id,
+      readStoredRaw,
+      sourceLease,
+      limit,
+      pageSize,
+      after,
+      celex,
+    }),
+  catch: (cause) => cause,
+});
+
+// Released on both paths: a lease left behind blocks the source's next
+// ingestion cycle until it expires.
+await sourceLease?.release();
+
+if (Result.isError(replayed)) {
+  console.error("Replay failed:", replayed.error);
+  process.exit(1);
+}
+if (replayed.value.type === "unsupported") {
+  console.error(UNSUPPORTED_ADAPTER_MESSAGE(replayed.value.adapterKey));
+  process.exit(1);
+}
+if (replayed.value.type === "unknown-boundary") {
+  console.error(
+    `--after ${replayed.value.after} is not a decision of source ${adapterKey}. ` +
+      "Resume from an id this source's own run reported.",
+  );
+  process.exit(1);
+}
+const { report } = replayed.value;
+
+console.log("--- outcomes ---");
+for (const [outcome, count] of Object.entries(report.outcomes)) {
+  console.log(`${outcome.padEnd(20)} ${count}`);
+}
+if (report.outcomes[REPLAY_ROW_OUTCOME.REJECTED] > 0) {
+  console.log("--- rejections ---");
+  for (const [rejection, count] of Object.entries(report.rejections)) {
+    console.log(`${rejection.padEnd(20)} ${count}`);
+  }
+}
+for (const problem of report.problems) {
+  console.log(
+    `${problem.outcome}: ${problem.caseNumber} (${problem.language}) ${problem.id} ${problem.detail ?? ""}`,
+  );
+}
+console.log(`visited:             ${report.visited} of at most ${limit}`);
+if (report.resumeAfter !== null) {
+  console.log(`resume with:         --after ${report.resumeAfter}`);
+}
+if (report.haltReason !== null) {
+  console.log(`halted:              ${report.haltReason}`);
+}
+if (!apply) {
+  console.log("Dry run: nothing was written. Re-run with --apply.");
+}
+
+process.exit(report.haltReason === null ? 0 : 1);

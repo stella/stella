@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   credentialsFromEnvValues,
   getS3,
+  isMissingS3ObjectError,
   isS3Stale,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
@@ -290,5 +291,48 @@ describe("writeS3ObjectWithRetry", () => {
 
     expect(attempts.count).toBe(3);
     expect(rejection).toBe(failures.at(2));
+  });
+});
+
+describe("isMissingS3ObjectError", () => {
+  // The distinction this draws decides whether a caller may record "this
+  // object is not there" against a key. Only the store's own answer counts;
+  // a failure to reach the store is not an answer.
+  const missing = [
+    Object.assign(new Error("The specified key does not exist."), {
+      name: "NoSuchKey",
+    }),
+    Object.assign(new Error("Not Found"), { name: "NotFound" }),
+    Object.assign(new Error("no such object"), {
+      $metadata: { httpStatusCode: 404 },
+    }),
+  ];
+
+  const unanswered = [
+    new Error("socket hang up"),
+    Object.assign(new Error("Request aborted"), { name: "TimeoutError" }),
+    Object.assign(new Error("The security token is invalid."), {
+      name: "InvalidToken",
+      $metadata: { httpStatusCode: 403 },
+    }),
+    Object.assign(new Error("Service unavailable"), {
+      $metadata: { httpStatusCode: 503 },
+    }),
+    new DOMException("aborted", "AbortError"),
+    null,
+    undefined,
+    "NoSuchKey",
+  ];
+
+  test("a confirmed absence is recognised", () => {
+    expect(missing.map(isMissingS3ObjectError)).toEqual(
+      missing.map(() => true),
+    );
+  });
+
+  test("a failure to reach the store is not an absence", () => {
+    expect(unanswered.map(isMissingS3ObjectError)).toEqual(
+      unanswered.map(() => false),
+    );
   });
 });

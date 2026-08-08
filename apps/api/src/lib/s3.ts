@@ -11,6 +11,7 @@ import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { safeErrorCode } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 type S3Credentials = {
@@ -525,6 +526,49 @@ export const getS3ObjectWithSignal = async (
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+};
+
+/**
+ * Whether the store confirmed the object is not there, as opposed to
+ * failing to answer.
+ *
+ * The distinction decides what a caller may record: an absent object is a
+ * fact about the key, while a timeout, a refused credential or a dropped
+ * connection says nothing about it. Treating the second as the first turns
+ * a transient failure into a durable conclusion. The SDK reports absence as
+ * a `NoSuchKey`/`NotFound` error name or a 404 in the response metadata.
+ */
+export const isMissingS3ObjectError = (error: unknown): boolean => {
+  if (!isRecord(error)) {
+    return false;
+  }
+  const name = error["name"];
+  if (name === "NoSuchKey" || name === "NotFound") {
+    return true;
+  }
+  const metadata = error["$metadata"];
+  return isRecord(metadata) && metadata["httpStatusCode"] === 404;
+};
+
+/**
+ * Read one object, or `null` when the store confirms it holds no such key.
+ * Every other failure is raised: see {@link isMissingS3ObjectError}.
+ */
+export const readS3ObjectIfPresent = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<ArrayBuffer | null> => {
+  const read = await Result.tryPromise({
+    try: async () => await getS3ObjectWithSignal(key, signal),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(read)) {
+    return read.value;
+  }
+  if (isMissingS3ObjectError(read.error)) {
+    return null;
+  }
+  throw read.error;
 };
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */

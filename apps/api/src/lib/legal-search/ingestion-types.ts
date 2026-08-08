@@ -141,6 +141,55 @@ export type SyncPage = {
 };
 
 /**
+ * A stored raw payload plus the persisted fields an adapter needs to rebuild
+ * the ingestion result it once produced from it. Every field comes off the
+ * decision row, so a re-parse reads object storage and the database only.
+ *
+ * `raw` is the object verbatim, as bytes: adapters store XHTML, JSON and PDF
+ * alike, and only the adapter knows how to decode its own.
+ */
+export type StoredRawReparseInput = {
+  raw: Uint8Array;
+  /** Media type recorded with the payload; null on rows stored without one. */
+  contentType: string | null;
+  caseNumber: string;
+  language: string;
+  court: string;
+  ecli: string | null;
+  decisionDate: string | null;
+  decisionType: string | null;
+  sourceUrl: string | null;
+  documentUrl: string | null;
+  metadata: Record<string, unknown>;
+};
+
+/**
+ * Why a stored payload produced no result. Enumerated so a caller can report
+ * each cause separately: "10 rows rejected" hides whether the parser broke or
+ * the rows predate a metadata field.
+ */
+export const STORED_RAW_REPARSE_REJECTION = {
+  /** The row lacks a field the adapter needs to rebuild the result. */
+  INCOMPLETE_METADATA: "incomplete-metadata",
+  /** The stored media type is not one this adapter parses. */
+  UNSUPPORTED_CONTENT: "unsupported-content",
+  /** The payload parsed to nothing that could be stored as a decision. */
+  NO_DOCUMENT: "no-document",
+} as const;
+
+export type StoredRawReparseRejection =
+  (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
+
+export type StoredRawReparseOutcome =
+  | { type: "parsed"; result: IngestionResult }
+  | {
+      type: "rejected";
+      rejection: StoredRawReparseRejection;
+      /** Row-specific context for the operator; safe to print. */
+      detail: string;
+    };
+
+/**
  * Interface for court data source adapters.
  *
  * Each adapter knows how to paginate through a specific
@@ -175,6 +224,24 @@ export type SourceAdapter = {
    * to maximize throughput per cursor persist.
    */
   maxCycleMs?: number | undefined;
+  /**
+   * Re-parse a payload this adapter already stored into the ingestion result
+   * it would produce for that payload today, without contacting the
+   * publisher. The result goes through the same pipeline a crawl feeds, so
+   * whatever the parser now derives (AST, sections, fulltext, keywords, and
+   * the hash over them) is applied by the same writes.
+   *
+   * Optional. It exists only for adapters whose stored payload is one
+   * decision: where the payload is a list endpoint's page covering many
+   * decisions, one blob cannot be mapped back to one row, and the adapter
+   * omits this rather than guessing.
+   *
+   * The outcome may be returned directly by a parser that needs no I/O, or
+   * as a promise by one that does (an office-format extractor, say).
+   */
+  reparseStoredRaw?: (
+    stored: StoredRawReparseInput,
+  ) => StoredRawReparseOutcome | Promise<StoredRawReparseOutcome>;
   /**
    * Fetch the total number of decisions available from
    * the source. Returns null if the source doesn't expose
