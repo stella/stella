@@ -18,7 +18,7 @@ const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https:
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 
-Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\` (validation_error, missing_scope, feature_disabled, not_found, confirmation_required, rate_limited, upstream_unavailable, unknown_tool, internal_error); \`hint\` states the next step. missing_scope means re-run OAuth consent with the complete scope set in the hint.
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\` (validation_error, missing_scope, feature_disabled, not_found, confirmation_required, permission_denied, usage_limited, conflict, rate_limited, upstream_unavailable, unknown_tool, internal_error); \`hint\` states the next step. missing_scope means re-run OAuth consent with the complete scope set in the hint.
 
 Destructive tools (delete_*) refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.
 

@@ -17,7 +17,11 @@ const workspaceIdB = toSafeId<"workspace">("ws_2");
 // query contains both the `organization_id`/`workspace_id` predicate text and
 // the actual ids bound into it.
 const serializedCalls = (): string[] =>
-  rootDbExecuteMock.mock.calls.map(([query]) => JSON.stringify(query));
+  rootDbExecuteMock.mock.calls.map(([query]) =>
+    JSON.stringify(query)
+      .replaceAll(/\\[nrt]/gu, " ")
+      .replaceAll(/\s+/gu, " "),
+  );
 
 describe("search provider workspace scoping", () => {
   beforeEach(() => {
@@ -48,11 +52,10 @@ describe("search provider workspace scoping", () => {
       // A newly committed version exists before its async projection. Compare
       // with that version's creation time, not entities.updated_at: metadata-
       // only mutations such as moving a document must not hide a valid row.
-      expect(serialized).toContain("updated_at");
-      expect(serialized).toContain("created_at");
-      expect(serialized).toContain("entities");
-      expect(serialized).toContain("entity_versions");
-      expect(serialized).toContain("current_version_id");
+      expect(serialized).toContain(
+        "JOIN entity_versions ev ON ev.id = e.current_version_id",
+      );
+      expect(serialized).toContain("AND sd.updated_at >= ev.created_at");
     }
   });
 
@@ -66,11 +69,10 @@ describe("search provider workspace scoping", () => {
 
     expect(rootDbExecuteMock).toHaveBeenCalledTimes(2);
     for (const serialized of serializedCalls()) {
-      expect(serialized).toContain("updated_at");
-      expect(serialized).toContain("created_at");
-      expect(serialized).toContain("entities");
-      expect(serialized).toContain("entity_versions");
-      expect(serialized).toContain("current_version_id");
+      expect(serialized).toContain(
+        "JOIN entity_versions ev ON ev.id = e.current_version_id",
+      );
+      expect(serialized).toContain("AND sd.updated_at >= ev.created_at");
     }
   });
 

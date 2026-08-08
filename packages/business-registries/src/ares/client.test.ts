@@ -168,6 +168,39 @@ describe("lookupByIco optional VR enrichment", () => {
 
     expect(lookupByIco("27082440")).rejects.toBeInstanceOf(AresRequestError);
   });
+
+  test("fails the required RES lookup without waiting for stalled optional VR", async () => {
+    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      if (url.includes("ekonomicke-subjekty-vr")) {
+        return await new Promise<Response>(() => {
+          // Deliberately never settles: the required RES request must still
+          // reject without awaiting this optional enrichment request.
+        });
+      }
+      throw new TypeError("temporary RES outage");
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const outcome = await Promise.race([
+      lookupByIco("27082440").then(
+        () => "resolved" as const,
+        (error: unknown) => error,
+      ),
+      Bun.sleep(100).then(() => "timed_out" as const),
+    ]);
+
+    expect(outcome).toBeInstanceOf(AresRequestError);
+  });
 });
 
 describe.skipIf(SKIP_LIVE)("searchByName live", () => {

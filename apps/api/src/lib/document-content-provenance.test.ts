@@ -63,6 +63,18 @@ describe("selectCurrentExtractedContent", () => {
     }
   });
 
+  test("rejects a partially populated provenance row", () => {
+    expect(
+      selectCurrentExtractedContent({
+        extracted: { ...projection, sourceSha256Hex: null },
+        allowLegacy: true,
+        currentVersionCreatedAt,
+        currentVersionId,
+        fields,
+      }),
+    ).toBeNull();
+  });
+
   test("accepts a legacy row only when it is not older than the current version", () => {
     const legacy = {
       ...projection,

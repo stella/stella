@@ -54,6 +54,11 @@ export const LIMITS = {
   /** Worst-case file fields scanned across one entity's versions
    *  (versionsPerEntity * propertiesCount). */
   versionFieldsScanLimit: 20_000,
+  /** Runs for one immutable document source are unique by processing kind and
+   *  processor version. This cap spans far more processor revisions than a
+   *  document version can realistically survive while keeping state reads
+   *  bounded and retaining the newest run for every kind. */
+  documentProcessingRunsPerSourceMax: 1000,
   calendarTasksMax: 200,
   /** Default page size for the signed-in user's assigned tasks. */
   myTasksPageSizeDefault: 50,

@@ -291,15 +291,13 @@ export const lookupByIco = async (
       })
     : null;
 
-  const [resResult, vrResult] = await Promise.allSettled([
-    resPromise,
-    vrPromise ?? Promise.resolve(null),
-  ]);
-
-  if (resResult.status === "rejected") {
-    throw resResult.reason;
-  }
-  const resData = resResult.value;
+  // Attach both handlers immediately so an optional VR rejection is observed,
+  // while allowing the required RES request to fail without waiting for VR.
+  const vrResultPromise = (vrPromise ?? Promise.resolve(null)).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    (error: unknown) => ({ status: "rejected" as const, reason: error }),
+  );
+  const resData = await resPromise;
 
   if (!resData) {
     return null;
@@ -316,6 +314,7 @@ export const lookupByIco = async (
     return company;
   }
 
+  const vrResult = await vrResultPromise;
   if (vrResult.status === "rejected") {
     if (
       vrResult.reason instanceof AresAPIError ||

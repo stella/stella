@@ -1403,6 +1403,16 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     document: currentDocument,
   });
 
+  if (docxOutcome.kind === "unavailable" && cursor !== undefined) {
+    return structuredErrorResult({
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  }
+
   const projection =
     docxOutcome.kind === "markdown"
       ? null
@@ -1437,16 +1447,6 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
               }),
             ]),
         );
-
-  if (docxOutcome.kind === "unavailable" && cursor !== undefined) {
-    return structuredErrorResult({
-      code: "internal_error",
-      message:
-        "Could not continue reading this document's Markdown conversion.",
-      hint: "Retry the request with the same cursor.",
-      retryable: true,
-    });
-  }
 
   const currentExtracted = selectCurrentExtractedContent({
     extracted: projection?.[0],

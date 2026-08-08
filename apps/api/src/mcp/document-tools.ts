@@ -1279,6 +1279,7 @@ const loadDocumentProcessingStates = async ({
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }): Promise<DocumentProcessingStates> => {
+  const sourceFile = findExtractionFileField(current.fields);
   const [extracted, runs, searchDocument, settings, latestVersion] =
     await context.scopedDb(
       async (tx) =>
@@ -1298,25 +1299,29 @@ const loadDocumentProcessingStates = async ({
               sourceSha256Hex: true,
             },
           }),
-          tx.query.documentProcessingRuns.findMany({
-            where: {
-              entityId: { eq: entityId },
-              entityVersionId: { eq: current.currentVersionId },
-              organizationId: { eq: context.organizationId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: {
-              errorCode: true,
-              finishedAt: true,
-              id: true,
-              kind: true,
-              sourceFileId: true,
-              sourceSha256Hex: true,
-              status: true,
-            },
-            orderBy: { createdAt: "desc" },
-            limit: 4,
-          }),
+          sourceFile
+            ? tx.query.documentProcessingRuns.findMany({
+                where: {
+                  entityId: { eq: entityId },
+                  entityVersionId: { eq: current.currentVersionId },
+                  organizationId: { eq: context.organizationId },
+                  sourceFileId: { eq: sourceFile.id },
+                  sourceSha256Hex: { eq: sourceFile.sha256Hex },
+                  workspaceId: { eq: workspaceId },
+                },
+                columns: {
+                  errorCode: true,
+                  finishedAt: true,
+                  id: true,
+                  kind: true,
+                  sourceFileId: true,
+                  sourceSha256Hex: true,
+                  status: true,
+                },
+                orderBy: { createdAt: "desc" },
+                limit: LIMITS.documentProcessingRunsPerSourceMax,
+              })
+            : Promise.resolve([]),
           tx.query.searchDocuments.findFirst({
             where: {
               entityId: { eq: entityId },
@@ -1342,7 +1347,6 @@ const loadDocumentProcessingStates = async ({
         ]),
     );
 
-  const sourceFile = findExtractionFileField(current.fields);
   if (!sourceFile) {
     return {
       contentState: { status: "not_applicable" },
@@ -1368,6 +1372,9 @@ const loadDocumentProcessingStates = async ({
     currentVersionId: current.currentVersionId,
     fields: current.fields,
   });
+  // Keep this defensive check even though the database query applies the same
+  // source identity fence; test doubles and future query refactors must not let
+  // a superseded file influence current state.
   const sourceRuns = runs.filter(
     (run) =>
       run.sourceFileId === sourceFile.id &&
@@ -1375,11 +1382,23 @@ const loadDocumentProcessingStates = async ({
   );
   const nativeRun = sourceRuns.find((run) => run.kind === "native-extraction");
   const ocrRun = sourceRuns.find((run) => run.kind === "ocr");
-  const searchFailure = sourceRuns.find(
-    (run) => run.status === "failed" && run.errorCode === "search_index_failed",
-  );
   const ocrDisabledByPolicy =
     ocrRun?.status === "cancelled" && ocrRun.errorCode === "policy_disabled";
+  // `sourceRuns` preserves the query's newest-first order. Policy-disabled OCR
+  // is terminal for OCR but did not invalidate the preceding native index.
+  const latestIndexRun = sourceRuns.find(
+    (run) =>
+      !(
+        run.kind === "ocr" &&
+        run.status === "cancelled" &&
+        run.errorCode === "policy_disabled"
+      ),
+  );
+  const searchFailure =
+    latestIndexRun?.status === "failed" &&
+    latestIndexRun.errorCode === "search_index_failed"
+      ? latestIndexRun
+      : undefined;
   const extractionMimeType = resolveExtractionMimeType({
     fileName: sourceFile.fileName,
     mimeType: sourceFile.mimeType,
@@ -1517,14 +1536,9 @@ const loadDocumentProcessingStates = async ({
       retryable: true,
     };
   } else {
-    // A policy-disabled OCR run is terminal for OCR, but it must not hide the
-    // successful native metadata/text projection that preceded it.
-    const latestSourceRun = ocrDisabledByPolicy
-      ? nativeRun
-      : (ocrRun ?? nativeRun);
-    const sourceRunCompleted = latestSourceRun?.status === "succeeded";
+    const sourceRunCompleted = latestIndexRun?.status === "succeeded";
     const freshUntrackedProjection =
-      latestSourceRun === undefined &&
+      latestIndexRun === undefined &&
       searchDocument !== undefined &&
       searchDocument.updatedAt >= current.currentVersionCreatedAt;
 
@@ -1533,7 +1547,7 @@ const loadDocumentProcessingStates = async ({
         status: "ready",
         sourceVersionId: current.currentVersionId,
         updatedAt: (
-          latestSourceRun?.finishedAt ?? searchDocument.updatedAt
+          latestIndexRun?.finishedAt ?? searchDocument.updatedAt
         ).toISOString(),
       };
     } else {

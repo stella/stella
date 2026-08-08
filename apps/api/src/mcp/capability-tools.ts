@@ -1275,8 +1275,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "backend operation (CRUD, exports, processing triggers) reachable through " +
       "invoke_capability. Paginated; filter by domain (the id prefix, e.g. " +
       '"time-entries") or access (read/write). Each item gives the capability ' +
-      "id, description, access/destructive and file-transport flags, and every " +
-      "OAuth scope it needs. Use " +
+      "id, description, access/destructive and file-transport flags, handlerKind " +
+      "(workspace or root), and every OAuth scope it needs. Use " +
       "describe_capability for the full input schema.",
     inputSchema: {
       type: "object",

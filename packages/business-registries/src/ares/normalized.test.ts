@@ -97,6 +97,37 @@ describe("ARES normalized projection", () => {
     expect(entity.actingClause).toEqual({ availability: "not-loaded" });
   });
 
+  test("treats a completed not-found VR lookup as known-empty", () => {
+    const entity = toNormalizedEntity(
+      {
+        ...company,
+        courtFile: null,
+        statutoryBodies: [],
+        shareCapital: null,
+        actingClause: null,
+        vrEnrichmentStatus: "not_found",
+      },
+      { vrLoaded: true },
+    );
+
+    expect(entity.registryRecord).toEqual({
+      availability: "available",
+      value: null,
+    });
+    expect(entity.keyPeople).toEqual({
+      availability: "available",
+      value: [],
+    });
+    expect(entity.shareCapital).toEqual({
+      availability: "available",
+      value: null,
+    });
+    expect(entity.actingClause).toEqual({
+      availability: "available",
+      value: null,
+    });
+  });
+
   test("makes sparse search-result coverage explicit", () => {
     const result = toNormalizedSearchResult({
       ico: company.ico,

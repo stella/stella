@@ -33,7 +33,11 @@ import type {
 
 const REINDEX_BATCH_SIZE = 100;
 
-/** Never expose a projection from before the live current version. */
+/**
+ * Never expose a projection from before the live current version. Consumers
+ * must alias search_documents as `sd` and join the current entity_versions row
+ * as `ev` before interpolating this fragment.
+ */
 const currentVersionProjectionFilter = sql`
   AND sd.updated_at >= ev.created_at
 `;
