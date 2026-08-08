@@ -25,6 +25,7 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { ChatPart } from "@/api/handlers/chat/types";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
@@ -55,30 +56,6 @@ const smokeSessionSchema = v.strictObject({
 });
 
 type SmokeSession = v.InferOutput<typeof smokeSessionSchema>;
-
-type ChatSmokeMessage = {
-  id: string;
-  role: "user";
-  parts: { type: "text"; text: string }[];
-};
-
-type ChatSmokeForwardedProps = {
-  threadId: string;
-  runId: string;
-  sendMode: "rawOverride";
-  message: ChatSmokeMessage;
-};
-
-type ChatSmokeBody = {
-  threadId: string;
-  runId: string;
-  state: Record<string, never>;
-  messages: ChatSmokeMessage[];
-  tools: never[];
-  context: never[];
-  forwardedProps: ChatSmokeForwardedProps;
-  data: ChatSmokeForwardedProps;
-};
 
 const CHECK_MODE = {
   /** Pass only on a 2xx status (used for the auth precondition). */
@@ -328,6 +305,30 @@ const parseSmokeSession = (value: unknown): SmokeSession => {
   });
 };
 
+type ChatSmokeMessage = {
+  id: string;
+  role: "user";
+  parts: Extract<ChatPart, { type: "text" }>[];
+};
+
+type ChatSmokeForwardedProps = {
+  threadId: string;
+  runId: string;
+  sendMode: "rawOverride";
+  message: ChatSmokeMessage;
+};
+
+type ChatSmokeBody = {
+  threadId: string;
+  runId: string;
+  state: Record<string, never>;
+  messages: ChatSmokeMessage[];
+  tools: never[];
+  context: never[];
+  forwardedProps: ChatSmokeForwardedProps;
+  data: ChatSmokeForwardedProps;
+};
+
 /**
  * Minimal valid AG-UI `POST /v1/chat/` envelope that triggers a real chat
  * turn: a fresh global thread (the handler creates it) plus one user text
@@ -340,7 +341,7 @@ export const buildChatSmokeBody = (): ChatSmokeBody => {
   const message: ChatSmokeMessage = {
     id: Bun.randomUUIDv7(),
     role: "user",
-    parts: [{ type: "text", text: "ping" }],
+    parts: [{ type: "text", content: "ping" }],
   };
   const forwardedProps: ChatSmokeForwardedProps = {
     threadId,

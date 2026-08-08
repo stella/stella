@@ -337,7 +337,7 @@ describe("buildChatSmokeBody", () => {
     expect(body.messages).toEqual([message]);
     expect(message.role).toBe("user");
     expect(message.id).toMatch(uuid);
-    expect(message.parts).toEqual([{ type: "text", text: "ping" }]);
+    expect(message.parts).toEqual([{ type: "text", content: "ping" }]);
   });
 
   test("each call uses a distinct thread id", () => {
