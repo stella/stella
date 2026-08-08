@@ -540,14 +540,16 @@ const processDecisionAttempt = async ({
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
   const proposedDecisionId = createSafeId<"caseLawDecision">();
-  const sourceIdentityCandidates = result.sourceDocumentId
-    ? [
-        ...new Set([
-          result.sourceDocumentId,
-          ...(result.sourceDocumentIdAliases ?? []),
-        ]),
-      ].sort()
-    : [];
+  const sourceIdentityCandidates = (() => {
+    if (!result.sourceDocumentId) {
+      return [];
+    }
+    const identities = [result.sourceDocumentId];
+    if (result.sourceDocumentIdAliases !== undefined) {
+      identities.push(...result.sourceDocumentIdAliases);
+    }
+    return [...new Set(identities)].sort();
+  })();
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
