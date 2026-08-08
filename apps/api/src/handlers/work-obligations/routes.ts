@@ -11,7 +11,7 @@ import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 export const workObligationsRoute = new Elysia({
   prefix: "/work-obligations/:workspaceId",
 })
-  .use(deploymentFeatureGate(env.FEATURE_GOVERNED_WORKFLOW))
+  .use(deploymentFeatureGate(env.isDev || env.FEATURE_GOVERNED_WORKFLOW))
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)

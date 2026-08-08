@@ -6,7 +6,7 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const myWorkRoute = new Elysia({ prefix: "/my-work" })
-  .use(deploymentFeatureGate(env.FEATURE_GOVERNED_WORKFLOW))
+  .use(deploymentFeatureGate(env.isDev || env.FEATURE_GOVERNED_WORKFLOW))
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

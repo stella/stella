@@ -26,7 +26,7 @@ import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))
+  .use(deploymentFeatureGate(env.isDev || env.FEATURE_LEGAL_LISTS))
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)
