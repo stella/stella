@@ -37,8 +37,12 @@ afterAll(() => {
 const collectHandlers = () => {
   const calls: ReservedChatCommandId[] = [];
   const handlers: ReservedChatCommandHandlers = {
-    new: () => calls.push("new"),
-    "rename-chat": () => calls.push("rename-chat"),
+    new: () => {
+      calls.push("new");
+    },
+    "rename-chat": () => {
+      calls.push("rename-chat");
+    },
   };
   return { calls, handlers };
 };

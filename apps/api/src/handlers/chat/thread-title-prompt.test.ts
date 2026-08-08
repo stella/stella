@@ -11,8 +11,7 @@ import type { TitleContextMessage } from "@/api/handlers/chat/thread-title-promp
 const textMessage = (
   role: TitleContextMessage["role"],
   content: string,
-): TitleContextMessage =>
-  ({ role, parts: [{ type: "text", content }] }) as TitleContextMessage;
+): TitleContextMessage => ({ role, parts: [{ type: "text", content }] });
 
 describe("buildThreadTitlePrompt", () => {
   // The background generator produced exactly this prompt before the shared
