@@ -376,7 +376,8 @@ const persistTerminalAssistantTurn = async ({
       ...owningAssistantMessage?.metadata,
       turnOutcome: outcome,
     },
-    parts: owningAssistantMessage?.parts ?? [],
+    parts:
+      owningAssistantMessage === undefined ? [] : owningAssistantMessage.parts,
     role: "assistant",
     ...(owningAssistantMessage?.createdAt === undefined
       ? {}
