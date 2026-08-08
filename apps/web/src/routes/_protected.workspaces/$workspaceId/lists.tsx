@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
@@ -33,6 +33,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
 import {
   isListItemType,
@@ -60,6 +61,7 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 const searchSchema = v.object({
   list: v.optional(v.string()),
@@ -72,23 +74,39 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/lists",
 )({
   validateSearch: searchSchema,
-  beforeLoad: ({ params }) => {
-    if (!env.VITE_FEATURE_LEGAL_LISTS) {
-      throw redirect({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: params.workspaceId },
-        replace: true,
-      });
-    }
-  },
   loader: async ({ context, params }) => {
+    if (!env.VITE_FEATURE_LEGAL_LISTS) {
+      return;
+    }
+
     await ensureRouteQueryData(
       context.queryClient,
       legalListsOptions(params.workspaceId),
     );
   },
-  component: LegalListsPage,
+  remountDeps: ({ params }) => params.workspaceId,
+  component: ListsRoutePage,
 });
+
+function ListsRoutePage() {
+  return env.VITE_FEATURE_LEGAL_LISTS ? (
+    <LegalListsPage />
+  ) : (
+    <DisabledListsRedirect />
+  );
+}
+
+function DisabledListsRedirect() {
+  const queryClient = Route.useRouteContext({
+    select: (context) => context.queryClient,
+  });
+  const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
+  });
+  useDefaultWorkspaceViewRedirect({ queryClient, workspaceId });
+
+  return <DefaultPendingComponent />;
+}
 
 function LegalListsPage() {
   const t = useTranslations();
