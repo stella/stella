@@ -15,13 +15,21 @@ const CLEANUP_INTERVAL_MS = 60_000;
  */
 export const scopedGenerator =
   (scope: string): Generator =>
-  (request, server) => {
-    const address = server?.requestIP(request)?.address;
-    if (!address) {
-      return scope;
-    }
-    return `${scope}:${address}`;
-  };
+  (request, server) =>
+    scopedRateLimitKey(scope, request, server);
+
+type RequestIpServer = {
+  requestIP: (request: Request) => { address: string } | null;
+};
+
+export const scopedRateLimitKey = (
+  scope: string,
+  request: Request,
+  server: RequestIpServer | null,
+): string => {
+  const address = server?.requestIP(request)?.address;
+  return address ? `${scope}:${address}` : scope;
+};
 
 /**
  * In-memory rate limiting. Each process maintains its own

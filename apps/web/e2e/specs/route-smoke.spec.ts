@@ -130,6 +130,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/account/beta", { expectation: { kind: "settles" } }),
   staticRoute("/settings/account/connections"),
   staticRoute("/settings/account/desktop"),
+  staticRoute("/settings/account/memory"),
   staticRoute("/settings/account/profile"),
   staticRoute("/settings/organization", {
     expectation: { kind: "redirectsTo", to: "/settings/organization/members" },

@@ -32,6 +32,14 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  MEMORY_CURATOR_TASK,
+  curateAiMemories,
+} from "@/api/lib/scheduler/tasks/memory-curator";
+import {
+  MEMORY_EXTRACTOR_TASK,
+  extractMemoriesFromCompactions,
+} from "@/api/lib/scheduler/tasks/memory-extractor";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -76,4 +84,6 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
       REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
       repairSearchSemanticTimestampsTask,
     ],
+    [MEMORY_CURATOR_TASK, curateAiMemories],
+    [MEMORY_EXTRACTOR_TASK, extractMemoriesFromCompactions],
   ]);

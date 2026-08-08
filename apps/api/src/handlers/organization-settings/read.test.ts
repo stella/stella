@@ -13,6 +13,7 @@ describe("projectOrganizationSettingsRow", () => {
         { countryCode: "SK", isPrimary: false },
       ],
       promptCachingEnabled: true,
+      memoryExtractionEnabled: false,
     });
 
     expect(result.practiceJurisdictions).toEqual([

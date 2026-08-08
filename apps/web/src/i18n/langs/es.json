@@ -134,7 +134,6 @@
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
     "codes": {
-      "active": "Activo",
       "activity": "Actividad",
       "activityCode": "Código de actividad",
       "codeLabel": "Código",
@@ -580,8 +579,7 @@
     },
     "suggestionStatus": {
       "accepted": "Aplicado",
-      "rejected": "Rechazado",
-      "stale": "Obsoleto"
+      "rejected": "Rechazado"
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "thinking": "Trabajando con contexto",
@@ -651,6 +649,7 @@
       "read_changes": "Leyendo cambios con control de cambios",
       "read_comments": "Leyendo comentarios",
       "read_document": "Leyendo documento",
+      "remember": "Guardando en la memoria",
       "reply_comment": "Respondiendo al comentario",
       "resolve_comment": "Resolviendo comentario",
       "run-stella-query": "Leyendo datos del asunto",
@@ -798,6 +797,7 @@
   "common": {
     "accept": "Aceptar",
     "actions": "Acciones",
+    "active": "Activo",
     "add": "Añadir",
     "all": "Todos",
     "and": "And",
@@ -824,6 +824,7 @@
       "socialSecurityNumber": "Número de la seguridad social",
       "taxIdentificationNumber": "NIF / CIF"
     },
+    "archive": "Archivar",
     "back": "Volver",
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudencia",
@@ -979,6 +980,7 @@
     "rename": "Renombrar",
     "required": "Obligatorio",
     "reset": "Restablecer",
+    "restore": "Restaurar",
     "retry": "Reintentar",
     "role": "Rol",
     "run": "Ejecutar",
@@ -988,6 +990,7 @@
     "saveChanges": "Guardar cambios",
     "scrollToTop": "Ir arriba",
     "search": "Buscar...",
+    "selectAMatter": "Selecciona un asunto",
     "selectARole": "Seleccione un rol",
     "selectDate": "Seleccionar fecha…",
     "sessions": "Sesiones",
@@ -1001,6 +1004,7 @@
     "somethingWentWrong": "Algo salió mal",
     "sort": "Ordenar",
     "source": "Fuente",
+    "stale": "Obsoleto",
     "status": "Estado",
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
@@ -1484,7 +1488,6 @@
       "frequency": "Frecuencia",
       "hour": "Hora (UTC)",
       "monthly": "Mensualmente",
-      "selectWorkspace": "Selecciona un asunto",
       "utcHint": "Las horas programadas están en UTC.",
       "weekly": "Semanalmente",
       "workspaceRequired": "Selecciona un asunto para la programación."
@@ -2156,7 +2159,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2253,6 +2255,43 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Añada una nota para que el asistente la recuerde…",
+    "alreadyExistsToast": "Este recuerdo ya está guardado",
+    "archivedEmpty": "No hay recuerdos archivados.",
+    "archivedToast": "Recuerdo archivado",
+    "createdToast": "Guardado en la memoria",
+    "empty": "Aún no hay nada en la memoria.",
+    "kinds": {
+      "decision": "Decisión",
+      "fact": "Hecho",
+      "instruction": "Instrucción",
+      "preference": "Preferencia",
+      "relationship": "Relación"
+    },
+    "matterPicker": {
+      "empty": "Seleccione un asunto para ver su memoria."
+    },
+    "pageDescription": "Notas y contexto que el asistente recuerda entre chats.",
+    "pageTitle": "Memoria",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Recuerdo restaurado",
+    "sources": {
+      "extracted": "Extraído",
+      "tool": "Herramienta",
+      "user": "Añadido por usted"
+    },
+    "suggestionsDescription": "El asistente propuso recordar esto. Acéptelo para conservarlo o recháicelo para descartarlo.",
+    "suggestionsTitle": "Sugerencias",
+    "tabs": {
+      "firm": "Biblioteca del equipo",
+      "matter": "Este asunto",
+      "mine": "Mis notas"
+    },
+    "views": {
+      "archived": "Archivados"
+    }
   },
   "navigation": {
     "chat": "Chat",
@@ -2364,7 +2403,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Activo",
       "addProvider": "Añadir proveedor",
       "addProviderFirst": "Añade primero un proveedor",
       "apiKey": "Clave de API",
@@ -2729,6 +2767,11 @@
       "matterNumbering": "Numeración de asuntos",
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Cuando está activado, stella revisa en segundo plano los hilos de chat resumidos y propone memorias que una persona debe confirmar antes de que influyan en el asistente. Esto se ejecuta con la propia clave del proveedor de IA de su equipo, así que déjelo desactivado a menos que quiera que ese uso de IA en segundo plano se facture a su clave.",
+        "title": "Extracción de memoria",
+        "toggleLabel": "Sugerir memorias del historial de chat en segundo plano"
+      },
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones",
       "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",
@@ -2758,7 +2801,6 @@
       "usageManageError": "No se pudo abrir la gestión de uso alojado",
       "usageManuallyManaged": "Gestionado manualmente",
       "usageSeats": "{count, plural, one {# puesto} other {# puestos}}",
-      "usageStatusActive": "Activo",
       "usageStatusCancelled": "Cancelado",
       "usageStatusPastDue": "Vencido",
       "usageStatusPaused": "En pausa",
@@ -2857,6 +2899,7 @@
     "matterNumberingUpdated": "Numeración de asuntos actualizada",
     "memberAdded": "Miembro añadido",
     "memberRemoved": "Miembro eliminado",
+    "memoryExtractionUpdated": "Preferencia de extracción de memoria actualizada",
     "organizationUpdated": "Organización actualizada",
     "otherSessionsRevoked": "Otras sesiones cerradas",
     "partyAdded": "Parte añadida",
@@ -3336,7 +3379,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivar",
     "copyToMatter": {
       "copied": "Copiado al asunto",
       "copyOption": "Copiar (mantener original)",

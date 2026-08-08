@@ -157,6 +157,23 @@ export const organizationSettings = p.pgTable(
       .boolean("sharepoint_connection_enabled")
       .notNull()
       .default(false),
+    /**
+     * Whether stella may run background memory extraction over this
+     * organization's compacted chat threads. Off by default so the
+     * background AI spend on the organization's own provider key stays
+     * an explicit opt-in (cost attribution, not a paid feature).
+     */
+    memoryExtractionEnabled: p
+      .boolean("memory_extraction_enabled")
+      .notNull()
+      .default(false),
+    /** Start of the current opt-in window; null while extraction is off. */
+    memoryExtractionEnabledAt: timestamptz("memory_extraction_enabled_at"),
+    /**
+     * Durable tenant queue position for background extraction. Null means no
+     * known eligible work; a compaction-insert trigger wakes the organization.
+     */
+    memoryExtractionScheduledAt: timestamptz("memory_extraction_scheduled_at"),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
@@ -164,6 +181,12 @@ export const organizationSettings = p.pgTable(
       "organization_settings_document_processing_mode_check",
       sql`${table.documentProcessingMode} IN ('off', 'searchable-text')`,
     ),
+    p
+      .index("organization_settings_memory_extraction_queue_idx")
+      .on(table.memoryExtractionScheduledAt, table.organizationId)
+      .where(
+        sql`${table.memoryExtractionEnabled} = true AND ${table.memoryExtractionScheduledAt} IS NOT NULL`,
+      ),
     ...orgPolicies(),
   ],
 );

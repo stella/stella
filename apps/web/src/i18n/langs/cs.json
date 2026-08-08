@@ -134,7 +134,6 @@
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",
     "codes": {
-      "active": "Aktivní",
       "activity": "Aktivita",
       "activityCode": "Kód aktivity",
       "codeLabel": "Kód",
@@ -580,8 +579,7 @@
     },
     "suggestionStatus": {
       "accepted": "Použito",
-      "rejected": "Odmítnuto",
-      "stale": "Zastaralé"
+      "rejected": "Odmítnuto"
     },
     "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "thinking": "Pracuji s kontextem",
@@ -651,6 +649,7 @@
       "read_changes": "Čtení sledovaných změn",
       "read_comments": "Čtení komentářů",
       "read_document": "Čtení dokumentu",
+      "remember": "Ukládání do paměti",
       "reply_comment": "Odpovídání na komentář",
       "resolve_comment": "Řešení komentáře",
       "run-stella-query": "Čtu data spisu",
@@ -798,6 +797,7 @@
   "common": {
     "accept": "Přijmout",
     "actions": "Akce",
+    "active": "Aktivní",
     "add": "Přidat",
     "all": "Vše",
     "and": "And",
@@ -824,6 +824,7 @@
       "socialSecurityNumber": "Číslo sociálního pojištění",
       "taxIdentificationNumber": "DIČ"
     },
+    "archive": "Archivovat",
     "back": "Zpět",
     "cancel": "Zrušit",
     "caseLaw": "Judikatura",
@@ -979,6 +980,7 @@
     "rename": "Přejmenovat",
     "required": "Povinné",
     "reset": "Resetovat",
+    "restore": "Obnovit",
     "retry": "Spustit znovu",
     "role": "Role",
     "run": "Spustit",
@@ -988,6 +990,7 @@
     "saveChanges": "Uložit změny",
     "scrollToTop": "Posunout nahoru",
     "search": "Hledat...",
+    "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
     "selectDate": "Vybrat datum…",
     "sessions": "Sezení",
@@ -1001,6 +1004,7 @@
     "somethingWentWrong": "Něco se pokazilo",
     "sort": "Řadit",
     "source": "Zdroj",
+    "stale": "Zastaralé",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
@@ -1484,7 +1488,6 @@
       "frequency": "Frekvence",
       "hour": "Hodina (UTC)",
       "monthly": "Měsíčně",
-      "selectWorkspace": "Vyberte spis",
       "utcHint": "Naplánované časy jsou v UTC.",
       "weekly": "Týdně",
       "workspaceRequired": "Vyberte spis pro plán."
@@ -2156,7 +2159,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2253,6 +2255,43 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Přidejte poznámku, kterou si má asistent zapamatovat…",
+    "alreadyExistsToast": "Tato paměť je již uložená",
+    "archivedEmpty": "Žádné archivované paměti.",
+    "archivedToast": "Paměť byla archivována",
+    "createdToast": "Uloženo do paměti",
+    "empty": "Zatím žádná paměť.",
+    "kinds": {
+      "decision": "Rozhodnutí",
+      "fact": "Fakt",
+      "instruction": "Pokyn",
+      "preference": "Preference",
+      "relationship": "Vztah"
+    },
+    "matterPicker": {
+      "empty": "Vyberte spis, abyste zobrazili jeho paměť."
+    },
+    "pageDescription": "Poznámky a kontext, které si asistent pamatuje napříč chaty.",
+    "pageTitle": "Paměť",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Paměť byla obnovena",
+    "sources": {
+      "extracted": "Extrahováno",
+      "tool": "Nástroj",
+      "user": "Přidáno vámi"
+    },
+    "suggestionsDescription": "Asistent navrhuje zapamatovat si tyto poznámky. Přijetím je uložíte, odmítnutím zahodíte.",
+    "suggestionsTitle": "Návrhy",
+    "tabs": {
+      "firm": "Knihovna týmu",
+      "matter": "Tento spis",
+      "mine": "Moje poznámky"
+    },
+    "views": {
+      "archived": "Archivované"
+    }
   },
   "navigation": {
     "chat": "Chat",
@@ -2364,7 +2403,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Aktivní",
       "addProvider": "Přidat poskytovatele",
       "addProviderFirst": "Nejprve přidejte poskytovatele",
       "apiKey": "API klíč",
@@ -2729,6 +2767,11 @@
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
+      "memoryExtraction": {
+        "description": "Když je zapnuto, stella na pozadí prochází shrnutá vlákna chatů a navrhuje záznamy do paměti, které musí člověk potvrdit, než ovlivní asistenta. Běží to na vlastním klíči poskytovatele AI vašeho týmu, takže to nechte vypnuté, pokud nechcete, aby se toto využití AI na pozadí účtovalo na váš klíč.",
+        "title": "Extrakce paměti",
+        "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
+      },
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
@@ -2758,7 +2801,6 @@
       "usageManageError": "Nepodařilo se otevřít správu hostovaného využití",
       "usageManuallyManaged": "Spravováno ručně",
       "usageSeats": "{count, plural, one {# místo} few {# místa} other {# míst}}",
-      "usageStatusActive": "Aktivní",
       "usageStatusCancelled": "Zrušeno",
       "usageStatusPastDue": "Po splatnosti",
       "usageStatusPaused": "Pozastaveno",
@@ -2857,6 +2899,7 @@
     "matterNumberingUpdated": "Číslování spisů aktualizováno",
     "memberAdded": "Člen přidán",
     "memberRemoved": "Člen odebrán",
+    "memoryExtractionUpdated": "Nastavení extrakce paměti aktualizováno",
     "organizationUpdated": "Organizace aktualizována",
     "otherSessionsRevoked": "Ostatní sezení odhlášena",
     "partyAdded": "Strana přidána",
@@ -3336,7 +3379,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivovat",
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",
       "copyOption": "Kopírovat (ponechat originál)",

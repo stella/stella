@@ -46,6 +46,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   read_comments: "research",
   read_document: "research",
   "read-skill-resource": "research",
+  remember: "mutation",
   reply_comment: "mutation",
   resolve_comment: "mutation",
   run_playbook: "mutation",

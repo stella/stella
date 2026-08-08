@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -19,6 +19,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
+import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
+
 const documentProcessingModeSchema = t.Union([
   t.Literal(DOCUMENT_PROCESSING_MODE.OFF),
   t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
@@ -29,6 +31,7 @@ const updateOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
+  memoryExtractionEnabled: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -85,14 +88,26 @@ export const updateOrganizationSettingsHandler = async function* ({
 
   const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
-      // Only touch promptCachingEnabled when the body carries it;
-      // omitting optional settings from the upsert set keeps a concurrent
-      // toggle request from being clobbered by a stale read.
+      // Only touch optional settings when the body carries them; omission
+      // keeps a concurrent toggle request from being clobbered by a stale read.
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
       const wantsDocumentProcessingUpdate =
         body.documentProcessingMode !== undefined;
+      const wantsMemoryExtractionUpdate =
+        body.memoryExtractionEnabled !== undefined;
       const needsSerializedSettingsRead =
-        wantsPromptCachingUpdate || wantsDocumentProcessingUpdate;
+        wantsPromptCachingUpdate ||
+        wantsDocumentProcessingUpdate ||
+        wantsMemoryExtractionUpdate;
+
+      // Coordinate extraction consent changes with the background worker's
+      // persistence transaction as well as concurrent settings requests.
+      if (wantsMemoryExtractionUpdate) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
+        );
+      }
+
       if (needsSerializedSettingsRead) {
         // Ensure there is a row to lock. Concurrent first-time updates block
         // on the unique organization key here, then read the committed
@@ -113,6 +128,8 @@ export const updateOrganizationSettingsHandler = async function* ({
             .select({
               documentProcessingMode:
                 organizationSettings.documentProcessingMode,
+              memoryExtractionEnabled:
+                organizationSettings.memoryExtractionEnabled,
               promptCachingEnabled: organizationSettings.promptCachingEnabled,
             })
             .from(organizationSettings)
@@ -121,6 +138,14 @@ export const updateOrganizationSettingsHandler = async function* ({
             .for("update")
         : [];
       const existing = existingRows.at(0);
+      const memoryExtractionEnabledAt =
+        body.memoryExtractionEnabled === undefined
+          ? undefined
+          : resolveMemoryExtractionEnabledAt({
+              currentEnabled: existing?.memoryExtractionEnabled ?? false,
+              nextEnabled: body.memoryExtractionEnabled,
+              now: new Date(),
+            });
 
       if (body.documentProcessingMode === DOCUMENT_PROCESSING_MODE.OFF) {
         const runningAutomaticOcrRuns = await tx
@@ -162,6 +187,14 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsDocumentProcessingUpdate
             ? { documentProcessingMode: body.documentProcessingMode }
             : {}),
+          ...(wantsMemoryExtractionUpdate
+            ? {
+                memoryExtractionEnabled: body.memoryExtractionEnabled,
+                ...(memoryExtractionEnabledAt !== undefined
+                  ? { memoryExtractionEnabledAt }
+                  : {}),
+              }
+            : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -177,6 +210,14 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsDocumentProcessingUpdate
               ? { documentProcessingMode: body.documentProcessingMode }
+              : {}),
+            ...(wantsMemoryExtractionUpdate
+              ? {
+                  memoryExtractionEnabled: body.memoryExtractionEnabled,
+                  ...(memoryExtractionEnabledAt !== undefined
+                    ? { memoryExtractionEnabledAt }
+                    : {}),
+                }
               : {}),
             updatedAt: new Date(),
           },
@@ -221,6 +262,16 @@ export const updateOrganizationSettingsHandler = async function* ({
                 },
               }
             : {}),
+          ...(wantsMemoryExtractionUpdate &&
+          body.memoryExtractionEnabled !==
+            (existing?.memoryExtractionEnabled ?? false)
+            ? {
+                memoryExtractionEnabled: {
+                  old: existing?.memoryExtractionEnabled ?? false,
+                  new: body.memoryExtractionEnabled,
+                },
+              }
+            : {}),
         },
       });
       return { type: "updated" } as const;
@@ -248,6 +299,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.documentProcessingMode !== undefined
       ? { documentProcessingMode: body.documentProcessingMode }
+      : {}),
+    ...(body.memoryExtractionEnabled !== undefined
+      ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
       : {}),
   });
 };

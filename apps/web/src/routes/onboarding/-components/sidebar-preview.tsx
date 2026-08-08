@@ -177,6 +177,10 @@ export const SidebarPreview = ({
           {aiProviders.map(({ provider, status }, index) => {
             const ProviderIcon = getProviderIcon(provider);
             const dotShouldPulse = status !== "invalid";
+            const statusLabel =
+              status === "invalid"
+                ? tOrganization("aiConfig.providerKeyInvalidShort")
+                : t("common.active");
             return (
               <div
                 className="animate-flow-in flex items-center gap-2 border-b px-4 py-2 last:border-b-0"
@@ -194,11 +198,7 @@ export const SidebarPreview = ({
                     style={{ opacity: dotShouldPulse && !pulseOn ? 0.3 : 1 }}
                   />
                   <span className="text-foreground-strong-muted text-[10px] tracking-wide uppercase">
-                    {tOrganization(
-                      status === "invalid"
-                        ? "aiConfig.providerKeyInvalidShort"
-                        : "aiConfig.active",
-                    )}
+                    {statusLabel}
                   </span>
                 </span>
               </div>

@@ -6,6 +6,8 @@ import {
 
 export const LIMITS = {
   workspacesCount: 1000,
+  workspaceNavigationPageSizeDefault: 100,
+  workspaceNavigationPageSizeMax: 1000,
   propertiesCount: 20,
   entitiesCount: 10_000,
   entitiesPageSizeDefault: 100,

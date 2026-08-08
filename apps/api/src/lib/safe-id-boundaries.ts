@@ -35,6 +35,10 @@ export const brandPersistedStyleSetId = (
   styleSetId: string,
 ): SafeId<"styleSet"> => toSafeId<"styleSet">(styleSetId);
 
+export const brandPersistedAiMemoryId = (
+  aiMemoryId: string,
+): SafeId<"aiMemory"> => toSafeId<"aiMemory">(aiMemoryId);
+
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 
@@ -89,6 +93,11 @@ export const brandPersistedDesktopEditSessionId = (
 export const brandPersistedChatThreadId = (
   chatThreadId: string,
 ): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
+
+export const brandPersistedChatThreadCompactionId = (
+  chatThreadCompactionId: string,
+): SafeId<"chatThreadCompaction"> =>
+  toSafeId<"chatThreadCompaction">(chatThreadCompactionId);
 
 export const brandPersistedChatMessageId = (
   chatMessageId: string,

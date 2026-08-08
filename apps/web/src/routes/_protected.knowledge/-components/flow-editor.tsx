@@ -703,7 +703,7 @@ const ScheduleConfig = ({
           value={schedule.workspaceId || null}
         >
           <SelectTrigger id="flow-schedule-workspace">
-            <SelectValue placeholder={t("flows.schedule.selectWorkspace")} />
+            <SelectValue placeholder={t("common.selectAMatter")} />
           </SelectTrigger>
           <SelectPopup>
             {workspaces.map((workspace) => (

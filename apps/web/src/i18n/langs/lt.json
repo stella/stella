@@ -134,7 +134,6 @@
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
     "codes": {
-      "active": "Aktyvus",
       "activity": "Veikla",
       "activityCode": "Veiklos kodas",
       "codeLabel": "Kodas",
@@ -580,8 +579,7 @@
     },
     "suggestionStatus": {
       "accepted": "Pritaikyta",
-      "rejected": "Atmesta",
-      "stale": "Pasenusi"
+      "rejected": "Atmesta"
     },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "thinking": "Dirbama su kontekstu",
@@ -651,6 +649,7 @@
       "read_changes": "Skaitomi sekami pakeitimai",
       "read_comments": "Skaitomi komentarai",
       "read_document": "Skaitomas dokumentas",
+      "remember": "Įsimenama",
       "reply_comment": "Atsakoma į komentarą",
       "resolve_comment": "Išsprendžiamas komentaras",
       "run-stella-query": "Skaitomi bylos duomenys",
@@ -798,6 +797,7 @@
   "common": {
     "accept": "Priimti",
     "actions": "Veiksmai",
+    "active": "Aktyvus",
     "add": "Pridėti",
     "all": "Visi",
     "and": "And",
@@ -824,6 +824,7 @@
       "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
+    "archive": "Archyvuoti",
     "back": "Atgal",
     "cancel": "Atšaukti",
     "caseLaw": "Teismų praktika",
@@ -979,6 +980,7 @@
     "rename": "Pervadinti",
     "required": "Privalomas",
     "reset": "Atstatyti",
+    "restore": "Atkurti",
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
     "run": "Paleisti",
@@ -988,6 +990,7 @@
     "saveChanges": "Išsaugoti pakeitimus",
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
+    "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
     "selectDate": "Pasirinkti datą…",
     "sessions": "Sesijos",
@@ -1001,6 +1004,7 @@
     "somethingWentWrong": "Kažkas nepavyko",
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
+    "stale": "Pasenusi",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -1484,7 +1488,6 @@
       "frequency": "Dažnumas",
       "hour": "Valanda (UTC)",
       "monthly": "Kas mėnesį",
-      "selectWorkspace": "Pasirinkite bylą",
       "utcHint": "Suplanuoti laikai nurodyti UTC.",
       "weekly": "Kas savaitę",
       "workspaceRequired": "Pasirinkite bylą tvarkaraščiui."
@@ -2156,7 +2159,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2253,6 +2255,43 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Pridėkite pastabą, kurią asistentas turėtų įsiminti…",
+    "alreadyExistsToast": "Ši atmintis jau išsaugota",
+    "archivedEmpty": "Nėra archyvuotų įrašų.",
+    "archivedToast": "Atmintis suarchyvuota",
+    "createdToast": "Įrašyta į atmintį",
+    "empty": "Atmintyje kol kas nieko nėra.",
+    "kinds": {
+      "decision": "Sprendimas",
+      "fact": "Faktas",
+      "instruction": "Nurodymas",
+      "preference": "Pageidavimas",
+      "relationship": "Ryšys"
+    },
+    "matterPicker": {
+      "empty": "Pasirinkite bylą, kad matytumėte jos atmintį."
+    },
+    "pageDescription": "Pastabos ir kontekstas, kuriuos asistentas įsimena visuose pokalbiuose.",
+    "pageTitle": "Atmintis",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Atmintis atkurta",
+    "sources": {
+      "extracted": "Išgauta",
+      "tool": "Įrankis",
+      "user": "Jūsų pridėta"
+    },
+    "suggestionsDescription": "Asistentas pasiūlė tai įsiminti. Priimkite, kad išsaugotumėte, arba atmeskite, kad atsisakytumėte.",
+    "suggestionsTitle": "Pasiūlymai",
+    "tabs": {
+      "firm": "Komandos biblioteka",
+      "matter": "Ši byla",
+      "mine": "Mano pastabos"
+    },
+    "views": {
+      "archived": "Archyvuoti"
+    }
   },
   "navigation": {
     "chat": "Pokalbis",
@@ -2364,7 +2403,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Aktyvi",
       "addProvider": "Pridėti teikėją",
       "addProviderFirst": "Pirmiausia pridėkite teikėją",
       "apiKey": "API raktas",
@@ -2729,6 +2767,11 @@
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kai įjungta, stella fone peržiūri apibendrintus pokalbius ir siūlo atminties įrašus, kuriuos žmogus turi patvirtinti, kol jie nepaveikė asistento. Tai veikia naudojant jūsų komandos pačios AI tiekėjo raktą, todėl palikite išjungtą, nebent norite, kad šis fone vykstantis AI naudojimas būtų apmokestinamas jūsų raktui.",
+        "title": "Atminties išgavimas",
+        "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
+      },
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
@@ -2758,7 +2801,6 @@
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
       "usageSeats": "{count, plural, one {# vieta} few {# vietos} other {# vietų}}",
-      "usageStatusActive": "Aktyvus",
       "usageStatusCancelled": "Atšaukta",
       "usageStatusPastDue": "Pradelsta",
       "usageStatusPaused": "Pristabdyta",
@@ -2857,6 +2899,7 @@
     "matterNumberingUpdated": "Bylų numeracija atnaujinta",
     "memberAdded": "Narys pridėtas",
     "memberRemoved": "Narys pašalintas",
+    "memoryExtractionUpdated": "Atminties išgavimo nuostata atnaujinta",
     "organizationUpdated": "Organizacija atnaujinta",
     "otherSessionsRevoked": "Kitos sesijos baigtos",
     "partyAdded": "Šalis pridėta",
@@ -3336,7 +3379,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archyvuoti",
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",

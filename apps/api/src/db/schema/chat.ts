@@ -9,6 +9,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-state";
 
 import {
+  aiMemoryPolicies,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatTurnPolicies,
@@ -17,6 +18,7 @@ import {
   chatThreadSearchDocumentPolicies,
   chatThreadPolicies,
   fileChatThreadPolicies,
+  isNotNull,
   jsonb,
   organization,
   p,
@@ -31,10 +33,12 @@ import {
   timestamptz,
 } from "./common";
 import type {
+  AnyPgColumn,
   ChatCompactionSummary,
   ChatMessageRole,
   ChatTitleSource,
   PersistedChatMessageContent,
+  SafeId,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities, fields } from "./entities";
@@ -610,6 +614,32 @@ export const chatThreadCompactions = p.pgTable(
     promptVersion: p.smallint("prompt_version").notNull(),
     modelProvider: p.text("model_provider"),
     modelId: p.text("model_id"),
+    // Set by the memory extractor once it has proposed memories from
+    // this compaction, so the background job stays idempotent.
+    memoryExtractedAt: timestamptz("memory_extracted_at"),
+    // Failed attempts stay eligible, but rotate behind untouched work so a
+    // permanently bad compaction cannot monopolize its tenant's queue slice.
+    memoryExtractionAttemptedAt: timestamptz("memory_extraction_attempted_at"),
+    // Stamped from the owning thread by a database trigger on insert. Keeping
+    // the tenant on the work item lets the extractor seek directly into one
+    // organization's bounded queue slice instead of ranking every tenant's
+    // pending compactions globally.
+    memoryExtractionOrganizationId: safeOrganizationId(
+      "memory_extraction_organization_id",
+    ),
+    // Copies organization_settings.memory_extraction_enabled_at only when
+    // extraction consent is active at insert time. Consent generations are
+    // part of the queue address, so re-enabling never scans an older window.
+    memoryExtractionConsentAt: timestamptz("memory_extraction_consent_at"),
+    // Snapshot of the thread's validated matter-data scope when this
+    // compaction was created. Extraction must never read the thread's later,
+    // mutable scope when deciding where the checkpoint's facts may surface.
+    memoryExtractionDataWorkspaceIds: safeWorkspaceId(
+      "memory_extraction_data_workspace_ids",
+    )
+      .array()
+      .notNull()
+      .default([]),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -620,7 +650,178 @@ export const chatThreadCompactions = p.pgTable(
     p
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
+    p
+      .foreignKey({
+        name: "chat_compactions_memory_extraction_org_fk",
+        columns: [table.memoryExtractionOrganizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("chat_thread_compactions_memory_unmined_org_idx")
+      .on(
+        table.memoryExtractionOrganizationId,
+        table.memoryExtractionConsentAt,
+        sql`${table.memoryExtractionAttemptedAt} ASC NULLS FIRST`,
+        table.createdAt,
+        table.id,
+      )
+      .where(
+        sql`${table.memoryExtractionOrganizationId} IS NOT NULL AND ${table.memoryExtractionConsentAt} IS NOT NULL AND ${table.memoryExtractedAt} IS NULL AND ${table.status} = 'active'`,
+      ),
     ...chatThreadCompactionPolicies(),
+  ],
+);
+
+/**
+ * Persistent AI memory: typed facts and preferences the assistant
+ * recalls across sessions, scoped to the firm (organization), the
+ * lawyer (user), or a matter (workspace). Read precedence is matter
+ * > user > firm. User-managed lifecycle changes are archive-only, while
+ * deleting a source matter erases every memory derived from it. Memories are
+ * tenant-isolated via RLS; matter-derived content is additionally gated by
+ * `sourceDataWorkspaceIds` so it cannot cross matters.
+ */
+export const aiMemories = p.pgTable(
+  "ai_memories",
+  {
+    id: pUuid<"aiMemory">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    scope: p
+      .text("scope", { enum: ["organization", "user", "workspace"] })
+      .notNull(),
+    userId: p
+      .text("user_id")
+      .$type<SafeId<"user">>()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id"),
+    kind: p
+      .text("kind", {
+        enum: ["preference", "instruction", "fact", "decision", "relationship"],
+      })
+      .notNull(),
+    content: p.text("content").notNull(),
+    // SHA-256 over canonical scope, owner, kind, sanitized content, and
+    // provenance. The org-led unique index makes every write path idempotent
+    // under concurrent API/tool/extractor attempts.
+    dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
+    language: p.varchar("language", { length: 10 }),
+    // Workspaces whose content this memory was derived from. Gates RLS
+    // reads (subset of session-accessible workspaces). Empty = not
+    // matter-derived (e.g. an explicit user preference).
+    sourceDataWorkspaceIds: safeWorkspaceId("source_data_workspace_ids")
+      .array()
+      .notNull()
+      .default([]),
+    status: p
+      .text("status", { enum: ["suggested", "active", "stale", "archived"] })
+      .notNull()
+      .default("active"),
+    pinned: p.boolean("pinned").notNull().default(false),
+    source: p.text("source", { enum: ["user", "tool", "extracted"] }).notNull(),
+    sourceMessageId: safeUuid<"chatMessage">("source_message_id").references(
+      () => chatMessages.id,
+      { onDelete: "set null" },
+    ),
+    confidence: p.doublePrecision("confidence"),
+    // Initiating user for explicit writes and extracted suggestions. May become
+    // null after user deletion; lifecycle audit events use a system actor.
+    createdBy: p
+      .text("created_by")
+      .$type<SafeId<"user">>()
+      .references(() => user.id, { onDelete: "set null" }),
+    supersededById: safeUuid<"aiMemory">("superseded_by_id").references(
+      (): AnyPgColumn => aiMemories.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    // Drives the curator lifecycle (active -> stale -> archived).
+    lastUsedAt: timestamptz("last_used_at").notNull().defaultNow(),
+    archivedAt: timestamptz("archived_at"),
+  },
+  (table) => [
+    p
+      .index("ai_memories_org_scope_status_idx")
+      .on(table.organizationId, table.scope, table.status),
+    p
+      .uniqueIndex("ai_memories_org_dedup_uidx")
+      .on(table.organizationId, table.dedupKey),
+    p
+      .index("ai_memories_org_status_created_idx")
+      .on(table.organizationId, table.status, table.createdAt, table.id),
+    p
+      .index("ai_memories_user_status_idx")
+      .on(table.userId, table.status)
+      .where(isNotNull(table.userId)),
+    p
+      .index("ai_memories_workspace_status_idx")
+      .on(table.workspaceId, table.status)
+      .where(isNotNull(table.workspaceId)),
+    p
+      .index("ai_memories_source_message_idx")
+      .on(table.sourceMessageId)
+      .where(isNotNull(table.sourceMessageId)),
+    p
+      .index("ai_memories_source_workspaces_gin_idx")
+      .using("gin", table.sourceDataWorkspaceIds),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "ai_memories_workspace_org_fkey",
+      })
+      .onDelete("cascade"),
+    p
+      .index("ai_memories_active_lifecycle_idx")
+      .on(table.lastUsedAt)
+      .where(sql`${table.status} = 'active' AND ${table.pinned} = false`),
+    p
+      .index("ai_memories_stale_lifecycle_idx")
+      .on(table.lastUsedAt)
+      .where(sql`${table.status} = 'stale' AND ${table.pinned} = false`),
+    p
+      .index("ai_memories_suggested_lifecycle_idx")
+      .on(table.createdAt)
+      .where(sql`${table.status} = 'suggested' AND ${table.pinned} = false`),
+    // Scope/id integrity: exactly the ids for the scope, nothing else.
+    p.check(
+      "ai_memories_scope_ids_check",
+      sql`(
+        (scope = 'organization' AND user_id IS NULL AND workspace_id IS NULL)
+        OR (scope = 'user' AND user_id IS NOT NULL AND workspace_id IS NULL)
+        OR (scope = 'workspace' AND workspace_id IS NOT NULL AND user_id IS NULL)
+      )`,
+    ),
+    // Matter-specific kinds may only live at workspace scope, so a
+    // matter fact can never be stored as user/firm memory.
+    p.check(
+      "ai_memories_kind_scope_check",
+      sql`(kind IN ('preference', 'instruction') OR scope = 'workspace')`,
+    ),
+    p.check(
+      "ai_memories_kind_check",
+      sql`kind IN ('preference', 'instruction', 'fact', 'decision', 'relationship')`,
+    ),
+    p.check(
+      "ai_memories_status_check",
+      sql`status IN ('suggested', 'active', 'stale', 'archived')`,
+    ),
+    p.check(
+      "ai_memories_source_check",
+      sql`source IN ('user', 'tool', 'extracted')`,
+    ),
+    p.check(
+      "ai_memories_confidence_check",
+      sql`confidence IS NULL OR (source = 'extracted' AND confidence >= 0 AND confidence <= 1)`,
+    ),
+    p.check("ai_memories_dedup_key_check", sql`dedup_key ~ '^[0-9a-f]{64}$'`),
+    ...aiMemoryPolicies(),
   ],
 );
 

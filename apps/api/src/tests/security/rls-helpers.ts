@@ -4,6 +4,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { stella, stellaIngestion } from "@/api/db/rls";
 import {
+  aiMemories,
   anonymizationBlacklistEntries,
   billingCodes,
   caseLawDecisions,
@@ -129,6 +130,12 @@ export const createTestIds = () => ({
   chatMessageWorkspaceB1: id<"chatMessage">(),
   fileChatThreadA1: id<"fileChatThread">(),
   templateChatThreadA1: id<"templateChatThread">(),
+  // Firm-scope memory per organization: the cross-tenant matrix lists
+  // memories as workspace A's org and asserts org B's firm row never
+  // appears. Firm scope (not user/workspace) isolates the organization
+  // boundary alone, independent of matter access.
+  aiMemoryFirmA: id<"aiMemory">(),
+  aiMemoryFirmB: id<"aiMemory">(),
   // Additional properties for dependencies
   propertyA1dep: id<"property">(),
   propertyB1dep: id<"property">(),
@@ -916,6 +923,39 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       userId: ids.userB1,
       title: "Workspace thread B1",
       workspaceId: ids.wsA1,
+    },
+  ]);
+
+  // Firm-scope memory, one per organization. `dedupKey` must satisfy the
+  // `ai_memories_dedup_key_check` CHECK (64 lowercase hex chars); the value
+  // is opaque here, so a stable hash of the row id keeps the fixture
+  // deterministic across runs.
+  await db.insert(aiMemories).values([
+    {
+      id: ids.aiMemoryFirmA,
+      organizationId: ids.orgA,
+      scope: "organization" as const,
+      kind: "preference" as const,
+      content: "Firm A cites OSCOLA",
+      dedupKey: new Bun.CryptoHasher("sha256")
+        .update(ids.aiMemoryFirmA)
+        .digest("hex"),
+      source: "user" as const,
+      status: "active" as const,
+      createdBy: ids.userA1,
+    },
+    {
+      id: ids.aiMemoryFirmB,
+      organizationId: ids.orgB,
+      scope: "organization" as const,
+      kind: "preference" as const,
+      content: "Firm B cites Bluebook",
+      dedupKey: new Bun.CryptoHasher("sha256")
+        .update(ids.aiMemoryFirmB)
+        .digest("hex"),
+      source: "user" as const,
+      status: "active" as const,
+      createdBy: ids.userB1,
     },
   ]);
 

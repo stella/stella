@@ -4,6 +4,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import {
+  fetchWorkspaceNavigationPage,
+  WORKSPACE_NAVIGATION_STATUS_SCOPE,
+} from "@/lib/memory-api";
+import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
   type MatterActivityCategory,
@@ -79,15 +84,24 @@ export const workspacesRouteOptions = (activeOrganizationId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
+type WorkspaceNavigationData = {
+  workspaces: WorkspaceNavigationItem[];
+  workspacesCountLimit: number;
+};
+
 export const workspacesNavigationOptions = (activeOrganizationId: string) =>
   queryOptions({
     queryKey: workspacesKeys.navigation(activeOrganizationId),
     queryFn: async ({ signal }) => {
-      const response = await api.workspaces.navigation.get({
-        fetch: { signal },
+      const page = await fetchWorkspaceNavigationPage({
+        signal,
+        statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
       });
 
-      return unwrapEden(response);
+      return {
+        workspaces: page.workspaces,
+        workspacesCountLimit: page.workspacesCountLimit,
+      } satisfies WorkspaceNavigationData;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

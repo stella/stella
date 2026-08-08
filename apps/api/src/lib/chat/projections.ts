@@ -1446,6 +1446,7 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
+  memoryExtractionEnabled: v.optional(v.boolean()),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([

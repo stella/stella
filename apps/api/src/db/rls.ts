@@ -783,6 +783,67 @@ export const chatThreadPolicies = () => [
   }),
 ];
 
+// Memory rows are visible only within their scope: org-wide (firm),
+// the owning user, or a session-accessible workspace (matter). The
+// final clause is the ethical wall — a memory derived from matter
+// content (`source_data_workspace_ids`) disappears once the actor
+// loses access to any contributing matter, even at user scope.
+const aiMemoryWorkspaceCheck = sql`workspace_id IN (
+  SELECT aw.authorized_workspace_id
+  FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+  WHERE aw.workspace_status <> 'deleting'
+)`;
+
+const aiMemorySuggestionCheck = sql`(
+  status <> 'suggested'
+  OR created_by = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))
+)`;
+
+const aiMemoryScopeCheck = sql`(
+  ${organizationCheck} AND
+  ${aiMemorySuggestionCheck} AND
+  (
+    scope = 'organization'
+    OR (scope = 'workspace' AND ${aiMemoryWorkspaceCheck})
+    OR (scope = 'user' AND ${userCheck})
+  ) AND
+  (
+    cardinality(source_data_workspace_ids) = 0
+    OR ${workspaceArrayCheck(sql`source_data_workspace_ids`)}
+  )
+)`;
+
+// Memories are archive-only (status='archived'), never hard-deleted.
+// The RESTRICTIVE `false` DELETE policy makes that durable: a
+// RESTRICTIVE policy is AND-ed with every permissive one, so a later
+// migration adding a permissive DELETE cannot silently unlock removal
+// (same pattern as audit_logs).
+export const aiMemoryPolicies = () => [
+  p.pgPolicy("ai_memory_select", {
+    for: "select",
+    to: stella,
+    using: aiMemoryScopeCheck,
+  }),
+  p.pgPolicy("ai_memory_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: aiMemoryScopeCheck,
+  }),
+  p.pgPolicy("ai_memory_update", {
+    for: "update",
+    to: stella,
+    using: aiMemoryScopeCheck,
+  }),
+  p.pgPolicy("ai_memory_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: denyAllRows,
+  }),
+];
+
 export const chatMessagePolicies = () => [
   p.pgPolicy("chat_message_select", {
     for: "select",

@@ -32,6 +32,7 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { estimateTextTokens } from "@/api/handlers/chat/compaction";
+import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
 import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
@@ -492,6 +493,23 @@ export const buildChatSystemPromptParts = async ({
       }
     }
 
+    // Memory retrieval is RLS-scoped and needs both ids to resolve
+    // firm + own-user + accessible-matter rows. Without an authorized
+    // session (e.g. anonymous prompt-preview builders) there is no
+    // memory to inject.
+    const memorySection =
+      organizationId && userId
+        ? yield* Result.await(
+            buildMemoryPromptParts({
+              contextMatterIds,
+              organizationId,
+              safeDb,
+              userId,
+              workspaceId,
+            }),
+          )
+        : "";
+
     const appendedUntrusted = [
       decisionSection,
       externalSection,
@@ -500,6 +518,7 @@ export const buildChatSystemPromptParts = async ({
       activeDraftSection,
       activeFileSection,
       activeTemplateSection,
+      memorySection,
     ]
       .filter((section) => section.length > 0)
       .map((section) => `\n\n${section}`)
