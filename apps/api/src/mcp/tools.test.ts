@@ -2582,6 +2582,74 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_document treats policy-disabled OCR as requiring enablement without masking native indexing", async () => {
+    const sha256Hex = "a".repeat(64);
+    const nativeIndexedAt = new Date("2026-01-02T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({ charCount: 0 }),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Scan",
+            workspaceId: "ws_1",
+          },
+          {
+            documentProcessingMode: "off",
+            runs: [
+              {
+                errorCode: "policy_disabled",
+                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                id: "run_ocr",
+                kind: "ocr",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "cancelled",
+              },
+              {
+                errorCode: null,
+                finishedAt: nativeIndexedAt,
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+            ],
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        remediation: { type: "action" },
+      },
+      searchIndexState: {
+        status: "ready",
+        updatedAt: nativeIndexedAt.toISOString(),
+      },
+    });
+  });
+
   test("read_document uses successful processing runs as index completion provenance", async () => {
     const sha256Hex = "a".repeat(64);
     const indexedAt = new Date("2026-01-03T00:00:00.000Z");

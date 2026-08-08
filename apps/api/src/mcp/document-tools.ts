@@ -1378,6 +1378,8 @@ const loadDocumentProcessingStates = async ({
   const searchFailure = sourceRuns.find(
     (run) => run.status === "failed" && run.errorCode === "search_index_failed",
   );
+  const ocrDisabledByPolicy =
+    ocrRun?.status === "cancelled" && ocrRun.errorCode === "policy_disabled";
   const extractionMimeType = resolveExtractionMimeType({
     fileName: sourceFile.fileName,
     mimeType: sourceFile.mimeType,
@@ -1440,7 +1442,7 @@ const loadDocumentProcessingStates = async ({
     };
   } else if (
     currentExtracted?.charCount === 0 &&
-    ocrRun === undefined &&
+    (ocrRun === undefined || ocrDisabledByPolicy) &&
     sourceFile.mimeType === PDF_MIME_TYPE &&
     (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
       "off"
@@ -1515,7 +1517,11 @@ const loadDocumentProcessingStates = async ({
       retryable: true,
     };
   } else {
-    const latestSourceRun = ocrRun ?? nativeRun;
+    // A policy-disabled OCR run is terminal for OCR, but it must not hide the
+    // successful native metadata/text projection that preceded it.
+    const latestSourceRun = ocrDisabledByPolicy
+      ? nativeRun
+      : (ocrRun ?? nativeRun);
     const sourceRunCompleted = latestSourceRun?.status === "succeeded";
     const freshUntrackedProjection =
       latestSourceRun === undefined &&
