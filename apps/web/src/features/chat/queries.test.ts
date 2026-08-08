@@ -1485,7 +1485,7 @@ describe("chat runtime", () => {
     await started.stream;
   });
 
-  test("resolves a native AG-UI approval with a correlated child run", async () => {
+  test("batches native AG-UI approvals into one correlated child run", async () => {
     const threadId = toChatThreadId("thread-native-interrupt");
     const requests: unknown[] = [];
     let responseIndex = 0;
@@ -1530,6 +1530,25 @@ describe("chat runtime", () => {
             toolName: "web_search",
           },
           {
+            type: "TOOL_CALL_START",
+            parentMessageId: assistantMessageId,
+            toolCallId: "tool-B",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
+            type: "TOOL_CALL_ARGS",
+            delta: '{"query":"Clement Attlee quotes"}',
+            toolCallId: "tool-B",
+          },
+          {
+            type: "TOOL_CALL_END",
+            input: { query: "Clement Attlee quotes" },
+            toolCallId: "tool-B",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
             type: "RUN_FINISHED",
             threadId,
             runId,
@@ -1562,6 +1581,31 @@ describe("chat runtime", () => {
                     },
                   },
                 },
+                {
+                  id: "approval_tool-B",
+                  reason: "tool_call",
+                  toolCallId: "tool-B",
+                  metadata: {
+                    kind: "approval",
+                    toolName: "web_search",
+                    input: { query: "Clement Attlee quotes" },
+                    "tanstack:interruptBinding": {
+                      v: 1,
+                      kind: "tool-approval",
+                      interruptId: "approval_tool-B",
+                      interruptedRunId: runId,
+                      generation: 0,
+                      toolName: "web_search",
+                      toolCallId: "tool-B",
+                      originalArgs: {
+                        query: "Clement Attlee quotes",
+                      },
+                      inputSchemaHash: "server-owned",
+                      approvalSchemaHash: "server-owned",
+                      responseSchemaHash: "server-owned",
+                    },
+                  },
+                },
               ],
             },
           },
@@ -1587,14 +1631,18 @@ describe("chat runtime", () => {
       createOutgoingMessage("22222222-2222-4222-8222-222222222205"),
     );
     let resolutionSettled = false;
-    const resolution = runtime
-      .resolveToolApproval({
+    const resolution = Promise.all([
+      runtime.resolveToolApproval({
         approved: true,
         id: "approval_tool-A",
-      })
-      .finally(() => {
-        resolutionSettled = true;
-      });
+      }),
+      runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-B",
+      }),
+    ]).finally(() => {
+      resolutionSettled = true;
+    });
     await continuationRequested;
     expect(resolutionSettled).toBe(false);
     const childRunId = chatRequestRunId(requests.at(1));
@@ -1612,12 +1660,18 @@ describe("chat runtime", () => {
     );
     await resolution;
 
+    expect(requests).toHaveLength(2);
     const parentRunId = chatRequestRunId(requests.at(0));
     expect(requests.at(1)).toMatchObject({
       parentRunId,
       resume: [
         {
           interruptId: "approval_tool-A",
+          payload: { approved: true },
+          status: "resolved",
+        },
+        {
+          interruptId: "approval_tool-B",
           payload: { approved: true },
           status: "resolved",
         },

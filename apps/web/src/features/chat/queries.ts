@@ -826,12 +826,18 @@ export const createChatRuntime = ({
     captureRuntimeError(error);
   };
 
-  type InterruptSubmissionWaiter = {
+  type PendingInterruptResolution = {
+    apply: () => void;
     reject: (error: Error) => void;
     resolve: () => void;
+  };
+  type InterruptSubmissionWaiter = {
+    resolutions: PendingInterruptResolution[];
     sawResuming: boolean;
   };
   let interruptSubmissionWaiter: InterruptSubmissionWaiter | undefined;
+  let interruptResolutionFlushScheduled = false;
+  const pendingInterruptResolutions: PendingInterruptResolution[] = [];
   const observeInterruptSubmission = (
     state: ChatInterruptState<ChatClientTools>,
   ): void => {
@@ -850,18 +856,21 @@ export const createChatRuntime = ({
     const firstError = errors.at(0);
     if (firstError !== undefined) {
       interruptSubmissionWaiter = undefined;
-      waiter.reject(
-        new ClientOperationError({
-          action: `submit-chat-interrupt:${firstError.code}`,
-          cause: firstError,
-          message: firstError.message,
-        }),
-      );
+      const error = new ClientOperationError({
+        action: `submit-chat-interrupt:${firstError.code}`,
+        cause: firstError,
+        message: firstError.message,
+      });
+      for (const resolution of waiter.resolutions) {
+        resolution.reject(error);
+      }
       return;
     }
     if (waiter.sawResuming) {
       interruptSubmissionWaiter = undefined;
-      waiter.resolve();
+      for (const resolution of waiter.resolutions) {
+        resolution.resolve();
+      }
     }
   };
 
@@ -950,32 +959,65 @@ export const createChatRuntime = ({
     }
   };
 
-  const resolveNativeInterrupt = async (
-    resolveInterrupt: () => void,
-  ): Promise<void> => {
-    if (interruptSubmissionWaiter !== undefined) {
-      return panic("Native interrupt submission is already active");
+  const flushInterruptResolutions = (): void => {
+    interruptResolutionFlushScheduled = false;
+    const resolutions = pendingInterruptResolutions.splice(0);
+    if (resolutions.length === 0) {
+      return;
     }
-    let waiter: InterruptSubmissionWaiter | undefined;
-    const submission = new Promise<void>((resolve, reject) => {
+    let waiter = interruptSubmissionWaiter;
+    if (waiter?.sawResuming) {
+      const error = new ClientOperationError({
+        action: "submit-chat-interrupt:already-active",
+        message: "Native interrupt submission is already active",
+      });
+      for (const resolution of resolutions) {
+        resolution.reject(error);
+      }
+      return;
+    }
+
+    if (waiter === undefined) {
       waiter = {
-        reject,
-        resolve,
+        resolutions: [],
         sawResuming: false,
       };
       interruptSubmissionWaiter = waiter;
-    });
+    }
+    waiter.resolutions.push(...resolutions);
     try {
-      resolveInterrupt();
+      for (const resolution of resolutions) {
+        resolution.apply();
+        if (interruptSubmissionWaiter !== waiter) {
+          return;
+        }
+      }
       observeInterruptSubmission(client.getInterruptState());
-      await submission;
     } catch (error) {
       if (interruptSubmissionWaiter === waiter) {
         interruptSubmissionWaiter = undefined;
       }
-      throw error;
+      const normalized = toError(error);
+      for (const resolution of waiter.resolutions) {
+        resolution.reject(normalized);
+      }
     }
   };
+
+  const resolveNativeInterrupt = async (
+    resolveInterrupt: () => void,
+  ): Promise<void> =>
+    await new Promise((resolve, reject) => {
+      pendingInterruptResolutions.push({
+        apply: resolveInterrupt,
+        reject,
+        resolve,
+      });
+      if (!interruptResolutionFlushScheduled) {
+        interruptResolutionFlushScheduled = true;
+        queueMicrotask(flushInterruptResolutions);
+      }
+    });
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
     const stream = client.sendMessage(message, options?.body);
