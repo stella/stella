@@ -390,9 +390,11 @@ this mapping must work in both directions and remain atomic when canonical and
 fallback observations overlap. A sequential lookup-and-migrate hint is not
 sufficient: two workers can otherwise insert under different uniqueness keys.
 Validate canonical and alternate identities against the shared persistence
-limit at the publisher boundary. A malformed alternate must be discarded so
-one oversized value cannot pin the page; the shared normalizer enforces the
-same rule for every court as a final safety net.
+limit at the publisher boundary. Normalize an invalid component before it can
+be used in a retrieval URL, metadata field or fallback path; dropping only its
+derived alias still lets an oversized value pin the page or fail persistence.
+The shared normalizer enforces the same rule for every court as a final safety
+net.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
 one poison row pin every later record in the slice. Continue emitting that
@@ -404,11 +406,12 @@ if it were an exact publisher key. Build the repair fingerprint only from
 fields that remain present when identity metadata recovers: exclude the ECLI,
 detail and retrieval-action labels, and any other value that can appear
 together with the new exact identity, or the recovered observation will hash
-differently from its quarantine row. Do not discard a stable discriminator
-such as a docket merely because an older malformed row may lack it: use the
-discriminating fingerprint for the quarantine identity and emit both the
-specific and discriminator-free forms as repair-only aliases after recovery.
-The low-information form must never be reserved as an exact identity.
+differently from its quarantine row. Do not discard stable discriminators such
+as the docket and sibling counter merely because an older malformed row may
+lack one: use their most specific fingerprint for the quarantine identity and
+emit the bounded combinations of present and absent optional discriminators as
+repair-only aliases after recovery. A low-information form must never be
+reserved as an exact identity.
 Likewise, preserve the digit string of any numeric publisher component used to
 synthesize an exact alias, or reject it unless it is a safe bounded integer;
 rounding two counters to one JavaScript number silently merges documents.

@@ -20,6 +20,7 @@ type ResultRow = {
   sz: string;
   caseNumber: string;
   listedCaseNumber?: string | undefined;
+  listedCounter?: string | undefined;
   date: string;
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
@@ -99,7 +100,7 @@ const makeResultsPage = (
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
-  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${row.listedCounter ?? counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
   <td>${textAction}</td>
@@ -854,15 +855,18 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     ).decisions[0];
 
-    expect(decision?.sourceDocumentId).toBe("nalus-record:7392");
+    expect(decision).toMatchObject({
+      sourceDocumentId: "nalus-record:7392",
+      sourceUrl: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=7392",
+      isListingOnly: true,
+      metadata: { listedOnlyReason: "missing-text-action" },
+    });
     expect(
       decision?.sourceDocumentIdAliases?.some((identity) =>
         identity.startsWith("nalus-sz:"),
-      ),
+      ) ?? false,
     ).toBe(false);
-    expect(decision?.sourceDocumentIdAliases).toContain(
-      "nalus-ecli:ECLI:CZ:US:2024:2.US.92.24.1",
-    );
+    expect(decision?.sourceUrl).not.toContain(oversizedSz);
   });
 
   test("discards an empty retrieval identity without merging malformed rows", async () => {
@@ -1039,6 +1043,40 @@ describe("czUsAdapter.fetchPage", () => {
         (identity) => identity?.startsWith("nalus-quarantine:") === true,
       ),
     ).toBe(true);
+  });
+
+  test("keeps identity-less siblings distinct by listing counter", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 15/24",
+          listedCounter: "1",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 15/24",
+          listedCounter: "2",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    const quarantineIds = page.decisions.map(
+      ({ sourceDocumentId }) => sourceDocumentId,
+    );
+
+    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
+      "Pl.ÚS 15/24",
+      "Pl.ÚS 15/24",
+    ]);
+    expect(new Set(quarantineIds).size).toBe(2);
   });
 
   test("keeps the repair identity when ECLI and the detail docket recover", async () => {

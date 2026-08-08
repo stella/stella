@@ -60,6 +60,16 @@ const SEARCH_URL = "https://nalus.usoud.cz/Search/Search.aspx";
 const RESULTS_URL = "https://nalus.usoud.cz/Search/Results.aspx";
 const TEXT_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
 
+const persistableNalusComponent = (
+  namespace: "nalus-record" | "nalus-sz" | "nalus-ecli",
+  value: string | undefined,
+): string | undefined =>
+  value !== undefined &&
+  value.length > 0 &&
+  isPersistableSourceDocumentId(`${namespace}:${value}`)
+    ? value
+    : undefined;
+
 const nalusIdentities = ({
   recordId,
   sz,
@@ -739,10 +749,12 @@ const quarantineFingerprint = ({
   stablePrimaryText,
   stableActionsText,
   stableDetailText,
+  stableCounterText,
 }: {
   stablePrimaryText: string;
   stableActionsText: string;
   stableDetailText: string;
+  stableCounterText: string;
 }): string => {
   const normalize = (value: string): string =>
     value.replace(/\s+/gu, " ").trim();
@@ -751,6 +763,7 @@ const quarantineFingerprint = ({
       stablePrimaryText: normalize(stablePrimaryText),
       stableActionsText: normalize(stableActionsText),
       stableDetailText: normalize(stableDetailText),
+      stableCounterText: normalize(stableCounterText),
     }),
   );
 };
@@ -840,9 +853,10 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     }
     const detail = primary.find("a[href*='ResultDetail.aspx']").first();
     const detailHref = detail.attr("href");
-    const nalusRecordId = /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.[
-      "id"
-    ];
+    const nalusRecordId = persistableNalusComponent(
+      "nalus-record",
+      /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.["id"],
+    );
     const actions = primary.next("tr");
     const linkAction = actions
       .find("[onclick*='GetText.aspx?sz=']")
@@ -855,14 +869,20 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     let sz: string | undefined;
     if (rawUrl) {
       try {
-        sz = new URL(rawUrl).searchParams.get("sz") || undefined;
+        sz = persistableNalusComponent(
+          "nalus-sz",
+          new URL(rawUrl).searchParams.get("sz") || undefined,
+        );
       } catch {
         // A malformed or withdrawn text action does not erase the stable
         // ResultDetail record identity exposed by the listing.
       }
     }
     const listingHtml = `${primary.toString()}${actions.toString()}`;
-    const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
+    const ecli = persistableNalusComponent(
+      "nalus-ecli",
+      /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0),
+    );
     const registrySign = detail.text();
     // The count banner says this is a publisher record even if a malformed or
     // withdrawn row exposes neither of NALUS's normal identities. Give that
@@ -895,16 +915,19 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       stablePrimaryText,
       stableActionsText: stableActions.text(),
     };
-    const quarantineRepairIds = [
-      quarantineFingerprint({
-        ...stableFingerprintFields,
-        stableDetailText: listedCaseNumber,
-      }),
-      quarantineFingerprint({
-        ...stableFingerprintFields,
-        stableDetailText: "",
-      }),
-    ].filter((value, index, values) => values.indexOf(value) === index);
+    const stableDetailTexts = [...new Set([listedCaseNumber, ""])];
+    const stableCounterTexts = [
+      ...new Set([counterText ?? szCounter ?? "", ""]),
+    ];
+    const quarantineRepairIds = stableDetailTexts.flatMap((stableDetailText) =>
+      stableCounterTexts.map((stableCounterText) =>
+        quarantineFingerprint({
+          ...stableFingerprintFields,
+          stableDetailText,
+          stableCounterText,
+        }),
+      ),
+    );
     const quarantineId =
       quarantineRepairIds[0] ?? panic("Missing quarantine id");
     const publisherIdentity = exactPublisherIdentity ?? {
