@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -16,6 +16,11 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
+
+// Advisory-lock namespaces are process-global. Dedicated first keys keep the
+// install caps independent from unrelated org/user locks elsewhere in the API.
+const SKILL_TEAM_CAP_LOCK_NAMESPACE = 0x53_4b_54_4d;
+const SKILL_USER_CAP_LOCK_NAMESPACE = 0x53_4b_55_53;
 
 type InstallSkillProps = {
   // Install as a draft (hidden until the user finishes). Defaults to true so
@@ -72,9 +77,9 @@ type SkillInstallPreflightResult =
 
 /**
  * Reject installs that cannot succeed before a catalogue caller performs
- * remote I/O. The install transaction repeats every count and relies on the
- * partial unique indexes for race safety; this preflight is only an early,
- * bounded read that avoids fetching immutable upstream content unnecessarily.
+ * remote I/O. The install transaction repeats every count under capacity
+ * locks; this preflight is only an early, bounded read that avoids fetching
+ * immutable upstream content unnecessarily.
  */
 export const preflightSkillInstall = async ({
   memberRole,
@@ -245,6 +250,26 @@ export const installSkill = async ({
           const unchangedBeforeInsert = await unchangedSkill();
           if (unchangedBeforeInsert) {
             return { id: unchangedBeforeInsert.id, type: "unchanged" };
+          }
+
+          // Count-and-insert must be one serialized decision. Team installs
+          // take the org-wide team lock first, then every install takes its
+          // per-user lock. A private install never needs the team lock, so this
+          // order cannot form a cycle. The locks release with the surrounding
+          // safeDb transaction, after the inserted row is visible to the next
+          // waiter.
+          if (scope === "team") {
+            await innerTx.execute(
+              sql`select pg_advisory_xact_lock(${SKILL_TEAM_CAP_LOCK_NAMESPACE}, hashtext(${session.activeOrganizationId}))`,
+            );
+          }
+          await innerTx.execute(
+            sql`select pg_advisory_xact_lock(${SKILL_USER_CAP_LOCK_NAMESPACE}, hashtext(${`${session.activeOrganizationId}:${user.id}`}))`,
+          );
+
+          const unchangedAfterLock = await unchangedSkill();
+          if (unchangedAfterLock) {
+            return { id: unchangedAfterLock.id, type: "unchanged" };
           }
 
           const userCount = await innerTx.$count(

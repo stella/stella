@@ -128,7 +128,7 @@ const CLIENT_STATUS_CODES = [
 ] as const satisfies readonly HandlerErrorStatusCode[];
 
 const SERVER_STATUS_CODES = [
-  500, 502,
+  500, 502, 503,
 ] as const satisfies readonly HandlerErrorStatusCode[];
 
 type UncoveredStatusCode = Exclude<
