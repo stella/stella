@@ -4132,7 +4132,7 @@
       "fields": "Väljad:",
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "filter": "Filtreeri",
-      "filterByPlaceholder": "Filtreeri…",
+      "filterByPlaceholder": "Filtreeri välja järgi…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filtrit}}",
       "groupBy": "Rühmita:",
       "groupItemCount": "{count, plural, one {# item} other {# items}}",

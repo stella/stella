@@ -10,7 +10,10 @@ import { leafFromField } from "@/components/conditions/condition-builder-logic";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
 
-import { AdvancedFilterEditor } from "./advanced-filter-editor";
+import {
+  ADVANCED_FILTER_POPUP_CLASS_NAME,
+  AdvancedFilterEditor,
+} from "./advanced-filter-editor";
 
 const FIELD = {
   operand: { type: "property", propertyId: "title" },
@@ -57,6 +60,9 @@ describe("advanced filter editor", () => {
     );
     expect(html).toContain("overflow-auto");
     expect(html).toContain("overscroll-contain");
+    expect(ADVANCED_FILTER_POPUP_CLASS_NAME).toContain(
+      "*:data-[slot=popover-viewport]:p-0!",
+    );
     expect(scrollRegion).toBeGreaterThan(-1);
     expect(footer).toBeGreaterThan(scrollRegion);
   });

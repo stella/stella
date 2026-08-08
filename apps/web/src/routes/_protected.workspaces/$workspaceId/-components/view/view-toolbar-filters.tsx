@@ -71,7 +71,10 @@ import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
-import { AdvancedFilterEditor } from "./advanced-filter-editor";
+import {
+  ADVANCED_FILTER_POPUP_CLASS_NAME,
+  AdvancedFilterEditor,
+} from "./advanced-filter-editor";
 
 type FilterChipsProps = {
   filters: ConditionNode[];
@@ -506,7 +509,7 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-[44rem] max-w-[92vw] p-0">
+      <PopoverPopup align="start" className={ADVANCED_FILTER_POPUP_CLASS_NAME}>
         <AdvancedFilterEditor
           facetContext={facetContext}
           fields={fields}

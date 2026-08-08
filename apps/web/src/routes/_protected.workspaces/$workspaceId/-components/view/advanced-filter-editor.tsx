@@ -54,3 +54,6 @@ export const AdvancedFilterEditor = ({
     </div>
   );
 };
+
+export const ADVANCED_FILTER_POPUP_CLASS_NAME =
+  "w-[44rem] max-w-[92vw] *:data-[slot=popover-viewport]:p-0!";
