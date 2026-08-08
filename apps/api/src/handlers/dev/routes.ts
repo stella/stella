@@ -36,6 +36,12 @@ type SeedStatus =
 let seedInFlight: Promise<void> | null = null;
 let seedStatus: SeedStatus = { status: "idle" };
 
+let firmKnowledgeInFlight: Promise<void> | null = null;
+let firmKnowledgeStatus: SeedStatus = { status: "idle" };
+
+/** Matters to seed from the Dev menu; the CLI's own default. */
+const FIRM_KNOWLEDGE_MATTERS = 15;
+
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Seed failed";
 
@@ -82,6 +88,51 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     }
 
     return seedStatus;
+  })
+  .get("/seed-firm-knowledge", () => firmKnowledgeStatus)
+  // Uploads through this same API as the caller, using the caller's own cookie:
+  // the corpus must travel the real upload path to get derivatives and
+  // extraction, and running as the signed-in user is what puts the matters in
+  // the organization they are actually looking at.
+  .post("/seed-firm-knowledge", (ctx) => {
+    const cookie = ctx.request.headers.get("cookie");
+    if (!cookie) {
+      return new Response("No session cookie", { status: 401 });
+    }
+    const apiOrigin = new URL(ctx.request.url).origin;
+
+    if (!firmKnowledgeInFlight) {
+      const startedAt = new Date().toISOString();
+      firmKnowledgeStatus = { status: "running", startedAt };
+      firmKnowledgeInFlight = (async () => {
+        try {
+          const { seedFirmKnowledge } = await import(
+            "../../../scripts/seed-firm-knowledge"
+          );
+          await seedFirmKnowledge({
+            apiOrigin,
+            cookie,
+            matters: FIRM_KNOWLEDGE_MATTERS,
+          });
+          firmKnowledgeStatus = {
+            status: "succeeded",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          };
+        } catch (error: unknown) {
+          firmKnowledgeStatus = {
+            status: "failed",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            message: getErrorMessage(error),
+          };
+        } finally {
+          firmKnowledgeInFlight = null;
+        }
+      })();
+    }
+
+    return firmKnowledgeStatus;
   })
   .post("/clean", async (ctx) => {
     const orgId = ctx.session.activeOrganizationId;

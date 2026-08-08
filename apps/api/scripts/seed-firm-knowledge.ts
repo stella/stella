@@ -38,6 +38,9 @@ const DEFAULT_MATTER_COUNT = 15;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
 const GIT_TIMEOUT_MS = 600_000;
+const RATE_LIMIT_STATUS = 429;
+const RATE_LIMIT_MAX_RETRIES = 8;
+const RATE_LIMIT_BASE_DELAY_MS = 1000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 /** What the web client names a new matter's file property. */
@@ -332,6 +335,20 @@ const readSessionCookie = async (apiOrigin: string): Promise<string> => {
   return `${sessionCookieNameForDevPort(port)}=${sessionCookie.value}`;
 };
 
+/**
+ * A seed is precisely the burst the upload limiter exists to stop: thousands of
+ * `entity-create/tree` and `finalize` calls back to back. Treating 429 as fatal
+ * abandoned the run mid-matter and left a half-uploaded matter behind, so wait
+ * out the window instead. `Retry-After` is authoritative when the limiter sends
+ * it; the doubling fallback covers replies that do not.
+ */
+const rateLimitDelayMs = (response: Response, attempt: number): number => {
+  const seconds = Number(response.headers.get("retry-after"));
+  return Number.isFinite(seconds) && seconds > 0
+    ? seconds * 1000
+    : RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
+};
+
 const createApiClient = (apiOrigin: string, cookie: string) => {
   const request = async <T>(
     route: string,
@@ -340,17 +357,31 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
     // Every route used here is mounted inside the versioned group, so the
     // prefix is applied once rather than repeated at each call site.
     const url = `${apiOrigin}${STELLA_API_VERSION_PREFIX}${route}`;
-    const response = await fetch(url, {
-      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: {
-        cookie,
-        ...(init?.body === undefined
-          ? {}
-          : { "content-type": "application/json" }),
-      },
-      method: init?.method ?? "GET",
-    });
+    const send = async () =>
+      await fetch(url, {
+        body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        headers: {
+          cookie,
+          ...(init?.body === undefined
+            ? {}
+            : { "content-type": "application/json" }),
+        },
+        method: init?.method ?? "GET",
+      });
+
+    let response = await send();
+    for (
+      let attempt = 0;
+      response.status === RATE_LIMIT_STATUS && attempt < RATE_LIMIT_MAX_RETRIES;
+      attempt++
+    ) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential backoff: each retry must follow the prior wait
+      await Bun.sleep(rateLimitDelayMs(response, attempt));
+      // oxlint-disable-next-line no-await-in-loop -- see above
+      response = await send();
+    }
+
     if (!response.ok) {
       fail(
         `${init?.method ?? "GET"} ${url} -> ${response.status} ${await response.text()}`,
@@ -365,12 +396,41 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
   return { request };
 };
 
-const main = async () => {
-  const { apiOrigin: explicitOrigin, matters: matterCount } = parseArgs();
-  const apiOrigin = explicitOrigin ?? (await discoverApiOrigin());
-  const cookie = await readSessionCookie(apiOrigin);
+export type SeedFirmKnowledgeOptions = {
+  /** Loopback origin of the API to upload through. */
+  apiOrigin: string;
+  /** Session cookie header sent with every request; decides the owning org. */
+  cookie: string;
+  matters: number;
+  /** Progress sink. The CLI prints; the dev endpoint collects. */
+  log?: (message: string) => void;
+};
+
+export type SeedFirmKnowledgeResult = {
+  seededFiles: number;
+  seededMatters: number;
+  skipped: number;
+  /** Matters that were found short from an interrupted run and rebuilt. */
+  reseeded: string[];
+};
+
+/**
+ * Seed matters through the real upload path as whoever owns `cookie`.
+ *
+ * Split out of the CLI so the dev endpoint can pass the caller's own session
+ * instead of a storage-state file: the file belongs to the e2e test user, so
+ * driving this from a browser used to deposit every matter in that user's
+ * organization, invisible to the person who asked for it.
+ */
+export const seedFirmKnowledge = async ({
+  apiOrigin,
+  cookie,
+  matters: matterCount,
+  log = () => undefined,
+}: SeedFirmKnowledgeOptions): Promise<SeedFirmKnowledgeResult> => {
   const api = createApiClient(apiOrigin, cookie);
   const corpusRoot = await ensureCorpus(matterCount);
+  const reseeded: string[] = [];
 
   const matterDirectories = (
     await readdir(corpusRoot, { withFileTypes: true })
@@ -378,12 +438,15 @@ const main = async () => {
 
   // The API suffixes duplicate names "(1)", "(2)", so re-runs would stack copies.
   const existing = await api.request<{
-    workspaces: { entityCount: number; name: string }[];
+    workspaces: { entityCount: number; id: string; name: string }[];
   }>("/workspaces");
   // Keyed on entity count, not name: a run interrupted mid-upload leaves the
   // matter present but short, and skipping on name alone would strand it.
   const seededCounts = new Map(
-    existing.workspaces.map(({ entityCount, name }) => [name, entityCount]),
+    existing.workspaces.map(({ entityCount, id, name }) => [
+      name,
+      { entityCount, id },
+    ]),
   );
 
   let seededFiles = 0;
@@ -401,20 +464,32 @@ const main = async () => {
     }
     const expectedEntities =
       manifest.files.length + manifest.directories.length;
-    const presentEntities = seededCounts.get(matterName(manifest.reference));
-    if (presentEntities !== undefined) {
-      // Seeding again would not fill the existing matter, it would create a
-      // second one beside it, so a short matter is reported rather than
-      // silently duplicated. Recovering in place needs per-file reconciliation.
-      if (presentEntities < expectedEntities) {
-        console.log(
-          `${manifest.reference}: present but incomplete ` +
-            `(${String(presentEntities)}/${String(expectedEntities)} entities). ` +
-            `Delete the matter and re-run to reseed it.`,
-        );
-      }
+    const present = seededCounts.get(matterName(manifest.reference));
+    if (present !== undefined && present.entityCount >= expectedEntities) {
       skipped += 1;
       continue;
+    }
+    if (present !== undefined) {
+      // A run interrupted mid-upload leaves the matter short. Re-running the
+      // tree upload would not fill it, it would build a second copy beside it,
+      // because the API suffixes duplicate names. Grafting only the missing
+      // files onto the existing folders is not expressible either: the tree
+      // endpoint creates its own directories and cannot target existing ones.
+      // So replace the matter outright. Safe precisely because it is a partial
+      // seed of a public synthetic corpus. The lookup is by the generated
+      // name, so a matter someone renamed — one they have adopted and worked
+      // in — is never found here and never deleted; it just gets a fresh
+      // matter alongside it.
+      reseeded.push(manifest.reference);
+      log(
+        `${manifest.reference}: incomplete ` +
+          `(${String(present.entityCount)}/${String(expectedEntities)} entities), reseeding.`,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design
+      await api.request(`/workspaces/${present.id}`, {
+        body: { queryKey: WORKSPACES_QUERY_KEY },
+        method: "DELETE",
+      });
     }
 
     // Minted client-side, as the web app does.
@@ -484,21 +559,40 @@ const main = async () => {
       seededFiles += 1;
     }
 
-    console.log(
+    log(
       `${manifest.reference}: ${manifest.files.length} files, ${manifest.directories.length} folders`,
     );
   }
 
   const seededMatters = matterDirectories.length - skipped - empty;
-  console.log(
+  log(
     `\nSeeded ${seededFiles} files across ${seededMatters} ${
       seededMatters === 1 ? "matter" : "matters"
     }${skipped > 0 ? `; skipped ${skipped} already present.` : "."}`,
   );
-  console.log(
+  log(
     "Derivatives and extraction are queued; spreadsheets and decks stay " +
       "unopenable until Gotenberg finishes converting them.",
   );
+
+  return { seededFiles, seededMatters, skipped, reseeded };
 };
 
-await main();
+/** CLI entry: resolves the origin and session itself, then runs the core. */
+const main = async () => {
+  const { apiOrigin: explicitOrigin, matters } = parseArgs();
+  const apiOrigin = explicitOrigin ?? (await discoverApiOrigin());
+  const cookie = await readSessionCookie(apiOrigin);
+  await seedFirmKnowledge({
+    apiOrigin,
+    cookie,
+    matters,
+    log: (message) => console.log(message),
+  });
+};
+
+// `import.meta.main` is false when the dev endpoint imports this for
+// `seedFirmKnowledge`, so importing the module never starts a run.
+if (import.meta.main) {
+  await main();
+}

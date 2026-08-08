@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseIcon,
+  LibraryBigIcon,
   PlayIcon,
   RotateCcwIcon,
   Trash2Icon,
@@ -64,6 +65,7 @@ const sleep = async (ms: number) =>
 export const DevSidebarGroup = () => {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
+  const [seedingFirmKnowledge, setSeedingFirmKnowledge] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
   const dev = useDevStore(
@@ -131,6 +133,56 @@ export const DevSidebarGroup = () => {
       title: "Seed still running",
       type: "info",
     });
+  };
+
+  // Same start-then-poll shape as handleSeed, against the firm-knowledge job.
+  // Uploads run through the real endpoints, so this is minutes, not seconds.
+  const handleSeedFirmKnowledge = async () => {
+    setSeedingFirmKnowledge(true);
+    const start = await api.dev["seed-firm-knowledge"].post();
+    if (start.error) {
+      setSeedingFirmKnowledge(false);
+      stellaToast.add({ title: "Firm-knowledge seed failed", type: "error" });
+      return;
+    }
+
+    for (let i = 0; i < SEED_STATUS_MAX_POLLS; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
+      const status = await api.dev["seed-firm-knowledge"].get();
+      if (status.error) {
+        setSeedingFirmKnowledge(false);
+        stellaToast.add({ title: "Seed status failed", type: "error" });
+        return;
+      }
+
+      if (status.data.status === "failed") {
+        setSeedingFirmKnowledge(false);
+        stellaToast.add({
+          title: "Firm-knowledge seed failed",
+          description: status.data.message,
+          type: "error",
+        });
+        return;
+      }
+
+      if (status.data.status === "succeeded") {
+        setSeedingFirmKnowledge(false);
+        // oxlint-disable-next-line no-await-in-loop -- terminal poll branch: returns right after, runs at most once
+        await queryClient.invalidateQueries();
+        stellaToast.add({
+          title: "Firm knowledge seeded",
+          description: "Text extraction continues in the background.",
+          type: "success",
+        });
+        return;
+      }
+
+      // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between seed status probes
+      await sleep(SEED_STATUS_POLL_INTERVAL_MS);
+    }
+
+    setSeedingFirmKnowledge(false);
+    stellaToast.add({ title: "Seed still running", type: "info" });
   };
 
   const handleClearCache = async () => {
@@ -240,6 +292,17 @@ export const DevSidebarGroup = () => {
         >
           <DatabaseIcon />
           {seeding ? "Seeding..." : "Seed data"}
+        </MenuItem>
+        <MenuItem
+          disabled={seedingFirmKnowledge}
+          onClick={() => {
+            detached(handleSeedFirmKnowledge(), "DevSidebarGroup");
+          }}
+        >
+          <LibraryBigIcon />
+          {seedingFirmKnowledge
+            ? "Seeding firm knowledge..."
+            : "Seed firm knowledge"}
         </MenuItem>
         <MenuItem
           disabled={cleaning}
