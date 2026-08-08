@@ -18,6 +18,7 @@ import {
   type PersistedDocumentProcessingRun,
 } from "@/api/lib/document-processing-request";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const createOcrParams = workspaceParams({
@@ -125,7 +126,12 @@ const findManualOcrSource = async ({
       new HandlerError({ status: 400, message: "Field is not a file" }),
     );
   }
-  if (row.content.mimeType !== PDF_MIME_TYPE) {
+  if (
+    resolveExtractionMimeType({
+      fileName: row.content.fileName,
+      mimeType: row.content.mimeType,
+    }) !== PDF_MIME_TYPE
+  ) {
     return Result.err(
       new HandlerError({ status: 400, message: "File must be a PDF" }),
     );

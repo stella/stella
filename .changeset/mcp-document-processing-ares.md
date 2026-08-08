@@ -1,5 +1,5 @@
 ---
-"@stll/business-registries": patch
+"@stll/business-registries": minor
 "@stll/cli": patch
 ---
 

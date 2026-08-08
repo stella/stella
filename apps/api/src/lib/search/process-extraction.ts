@@ -405,32 +405,92 @@ export const processExtraction = async (
     })
     .returning({ id: documentProcessingRuns.id });
   const created = inserted.at(0);
-  const queued =
-    created ??
-    (
-      await rootDb
-        .select({ id: documentProcessingRuns.id })
-        .from(documentProcessingRuns)
-        .where(
-          and(
-            eq(documentProcessingRuns.organizationId, organizationId),
-            eq(documentProcessingRuns.workspaceId, workspaceId),
-            eq(documentProcessingRuns.entityId, entityId),
-            eq(documentProcessingRuns.entityVersionId, version.id),
-            eq(documentProcessingRuns.fieldId, fileFieldRow.id),
-            eq(documentProcessingRuns.sourceFileId, fileField.id),
-            eq(documentProcessingRuns.sourceSha256Hex, fileField.sha256Hex),
-            eq(documentProcessingRuns.kind, "native-extraction"),
-            eq(
-              documentProcessingRuns.processorVersion,
-              DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
-            ),
-            eq(documentProcessingRuns.status, "queued"),
+  if (created) {
+    await enqueueDocumentProcessingRun(created.id);
+    return;
+  }
+  const existing = (
+    await rootDb
+      .select({
+        id: documentProcessingRuns.id,
+        status: documentProcessingRuns.status,
+      })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.organizationId, organizationId),
+          eq(documentProcessingRuns.workspaceId, workspaceId),
+          eq(documentProcessingRuns.entityId, entityId),
+          eq(documentProcessingRuns.entityVersionId, version.id),
+          eq(documentProcessingRuns.fieldId, fileFieldRow.id),
+          eq(documentProcessingRuns.sourceFileId, fileField.id),
+          eq(documentProcessingRuns.sourceSha256Hex, fileField.sha256Hex),
+          eq(documentProcessingRuns.kind, "native-extraction"),
+          eq(
+            documentProcessingRuns.processorVersion,
+            DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
           ),
-        )
-        .limit(1)
-    ).at(0);
-  if (queued) {
-    await enqueueDocumentProcessingRun(queued.id);
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (!existing) {
+    return;
+  }
+  if (existing.status === "queued") {
+    await enqueueDocumentProcessingRun(existing.id);
+    return;
+  }
+  if (existing.status !== "succeeded") {
+    return;
+  }
+
+  const projection = await rootDb.query.extractedContent.findFirst({
+    where: {
+      entityId: { eq: entityId },
+      organizationId: { eq: organizationId },
+      sourceEntityVersionId: { eq: version.id },
+      sourceFieldId: { eq: fileFieldRow.id },
+      sourceFileId: { eq: fileField.id },
+      sourceSha256Hex: { eq: fileField.sha256Hex },
+      workspaceId: { eq: workspaceId },
+    },
+    columns: { entityId: true },
+  });
+  if (projection) {
+    // The durable extraction still matches; rebuild a projection that may
+    // have been deliberately removed during version rollback.
+    await getSearchProvider().indexEntity(entityId);
+    return;
+  }
+
+  // The unique run belongs to this immutable source, but its succeeded
+  // projection was replaced by a later version. Requeue it conditionally so
+  // rollback can reconstruct the promoted version without racing a worker.
+  const requeued = await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      claimedAt: null,
+      claimedBy: null,
+      errorAt: null,
+      errorCode: null,
+      finishedAt: null,
+      nextAttemptAt: null,
+      progressCompleted: 0,
+      progressTotal: null,
+      startedAt: null,
+      status: "queued",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.id, existing.id),
+        eq(documentProcessingRuns.status, "succeeded"),
+      ),
+    )
+    .returning({ id: documentProcessingRuns.id });
+  const retry = requeued.at(0);
+  if (retry) {
+    await enqueueDocumentProcessingRun(retry.id);
   }
 };

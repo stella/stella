@@ -215,6 +215,53 @@ describe("lookupByIco optional VR enrichment", () => {
     expect(outcome).toBeInstanceOf(AresRequestError);
     expect(optionalVrSignal?.aborted).toBe(true);
   });
+
+  test("cancels a stalled optional VR body after its headers arrive", async () => {
+    let optionalVrBodyAborted = false;
+    const stub = async (
+      input: URL | RequestInfo,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      if (url.includes("ekonomicke-subjekty-vr")) {
+        const signal = init?.signal;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              signal?.addEventListener(
+                "abort",
+                () => {
+                  optionalVrBodyAborted = true;
+                  controller.error(signal.reason);
+                },
+                { once: true },
+              );
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new TypeError("temporary RES outage");
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const outcome = await lookupByIco("27082440").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toBeInstanceOf(AresRequestError);
+    expect(optionalVrBodyAborted).toBe(true);
+  });
 });
 
 describe.skipIf(SKIP_LIVE)("searchByName live", () => {

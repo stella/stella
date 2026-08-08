@@ -150,7 +150,7 @@ describe("performRegistryRequest", () => {
     expect(await captureThrown(request)).toBe(reason);
   });
 
-  test("removes caller listeners after the request settles", async () => {
+  test("retains caller cancellation after headers settle so stalled bodies abort", async () => {
     const controller = new AbortController();
     let requestSignal: AbortSignal | null | undefined;
     restore = installFetchStub(async (_input, init) => {
@@ -165,7 +165,7 @@ describe("performRegistryRequest", () => {
     });
 
     controller.abort();
-    expect(requestSignal?.aborted).toBe(false);
+    expect(requestSignal?.aborted).toBe(true);
   });
 
   test("retains the timeout and maps it as a transport failure", async () => {

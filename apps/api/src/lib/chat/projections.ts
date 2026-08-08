@@ -418,19 +418,9 @@ const documentContentStateProjection = v.variant("status", [
       v.strictObject({
         type: v.literal("action"),
         tool: v.literal("invoke_capability"),
-        arguments: v.strictObject({
-          capability: v.literal("entities.ocr.create"),
-          input: v.strictObject({
-            params: v.strictObject({
-              workspaceId: chatRef("matter"),
-              entityId: chatEntityRef({
-                from: "inputEntity",
-                param: "entity_id",
-              }),
-            }),
-            body: v.strictObject({ fieldId: passthroughId() }),
-          }),
-        }),
+        // Internal chat cannot invoke generic capabilities. Strip arguments
+        // defensively if this unreachable branch is ever returned.
+        arguments: strippedField(),
       }),
       v.strictObject({
         type: v.literal("escalation"),

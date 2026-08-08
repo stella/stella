@@ -260,6 +260,13 @@ describe("delete-version chain-of-custody guard", () => {
             "Version-number allocator (nextEntityVersionNumber): MAX(versionNumber) deliberately spans tombstones so a new version never reuses a withdrawn number; reads versionNumber only, no content.",
         },
       ],
+      "lib/search/index-entity.ts": [
+        {
+          anchor: "Include tombstones: a deleted newer version",
+          reason:
+            "Search provenance reads only the newest version ID across tombstones so legacy extracted text cannot be attributed to a promoted older version.",
+        },
+      ],
       "handlers/entities/finalize-desktop-edit-session.ts": [
         {
           anchor: "editSession.baseVersionId",

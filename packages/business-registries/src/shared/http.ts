@@ -42,42 +42,22 @@ export type RegistryRequestOptions = {
   wrapRequestError: (cause: unknown) => Error;
 };
 
-type RegistryRequestSignal = {
-  signal: AbortSignal;
-  dispose: () => void;
-};
-
-const noSignalListeners = (): void => undefined;
-
 const createRegistryRequestSignal = (
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
-): RegistryRequestSignal => {
+): AbortSignal => {
   if (callerSignal?.aborted) {
-    return { signal: callerSignal, dispose: noSignalListeners };
+    return callerSignal;
   }
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   if (!callerSignal) {
-    return { signal: timeoutSignal, dispose: noSignalListeners };
+    return timeoutSignal;
   }
-
-  const controller = new AbortController();
-  const dispose = (): void => {
-    callerSignal.removeEventListener("abort", abortFromCaller);
-    timeoutSignal.removeEventListener("abort", abortFromTimeout);
-  };
-  const abortFromCaller = (): void => {
-    controller.abort(callerSignal.reason);
-    dispose();
-  };
-  const abortFromTimeout = (): void => {
-    controller.abort(timeoutSignal.reason);
-    dispose();
-  };
-  callerSignal.addEventListener("abort", abortFromCaller, { once: true });
-  timeoutSignal.addEventListener("abort", abortFromTimeout, { once: true });
-
-  return { signal: controller.signal, dispose };
+  // Keep cancellation connected for the response body's lifetime. Fetch can
+  // resolve as soon as headers arrive, while JSON/text decoding may still be
+  // stalled; AbortSignal.any lets the runtime own listener cleanup without
+  // severing caller cancellation prematurely.
+  return AbortSignal.any([callerSignal, timeoutSignal]);
 };
 
 /**
@@ -97,7 +77,7 @@ export const performRegistryRequest = async (
   try {
     return await fetch(options.url, {
       ...options.init,
-      signal: requestSignal.signal,
+      signal: requestSignal,
     });
   } catch (error) {
     // Caller cancellation is control flow, not a registry transport failure.
@@ -105,8 +85,6 @@ export const performRegistryRequest = async (
     // network errors, which retain the adapter-specific error mapping below.
     options.signal?.throwIfAborted();
     throw options.wrapRequestError(error);
-  } finally {
-    requestSignal.dispose();
   }
 };
 

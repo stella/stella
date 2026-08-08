@@ -8,7 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -440,6 +440,7 @@ type MockFieldContent = { type: string; [key: string]: unknown };
 
 type MockProcessingRunQueryInput = {
   where?: {
+    fieldId?: MockEqFilter;
     sourceFileId?: MockEqFilter;
     sourceSha256Hex?: MockEqFilter;
   };
@@ -613,16 +614,27 @@ const createScopedDb = (
                     "sourceFileId" in run ? run.sourceFileId : undefined;
                   const sourceSha256Hex =
                     "sourceSha256Hex" in run ? run.sourceSha256Hex : undefined;
+                  const fieldId = "fieldId" in run ? run.fieldId : "field_1";
                   return (
+                    (input?.where?.fieldId?.eq === undefined ||
+                      fieldId === input.where.fieldId.eq) &&
                     (input?.where?.sourceFileId?.eq === undefined ||
                       sourceFileId === input.where.sourceFileId.eq) &&
                     (input?.where?.sourceSha256Hex?.eq === undefined ||
                       sourceSha256Hex === input.where.sourceSha256Hex.eq)
                   );
                 });
-                return input?.limit === undefined
-                  ? filtered
-                  : filtered.slice(0, input.limit);
+                const selected =
+                  input?.limit === undefined
+                    ? filtered
+                    : filtered.slice(0, input.limit);
+                return selected.map((run) =>
+                  typeof run === "object" && run !== null && !("fieldId" in run)
+                    ? Object.assign(run, {
+                        fieldId: input?.where?.fieldId?.eq,
+                      })
+                    : run,
+                );
               },
             },
             entityVersions: {
@@ -2479,9 +2491,13 @@ describe("OpenAI-compatible MCP tools", () => {
     };
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
-      context: createContext({
-        scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
-      }),
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
       toolName: "read_document",
     });
 
@@ -2558,6 +2574,39 @@ describe("OpenAI-compatible MCP tools", () => {
     },
   );
 
+  test("read_document returns an OCR escalation to internal chat", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({ charCount: 0 }),
+          [
+            {
+              encrypted: false,
+              fileName: "scan.pdf",
+              id: "file_1",
+              mimeType: PDF_MIME_TYPE,
+              pdfFileId: null,
+              sha256Hex: "a".repeat(64),
+              sizeBytes: 128,
+              type: "file",
+              version: 1,
+            },
+          ],
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        remediation: { type: "escalation" },
+      },
+    });
+  });
+
   test("read_document keeps extracted OCR content ready when only indexing failed", async () => {
     const sha256Hex = "a".repeat(64);
     const currentPdf = {
@@ -2573,32 +2622,36 @@ describe("OpenAI-compatible MCP tools", () => {
     };
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
-      context: createContext({
-        scopedDb: createScopedDb(
-          [],
-          createExtractedContentRow(),
-          [currentPdf],
-          {
-            entityId: "entity_1",
-            kind: "document",
-            name: "Scan",
-            workspaceId: "ws_1",
-          },
-          {
-            runs: [
-              {
-                errorCode: "search_index_failed",
-                finishedAt: null,
-                id: "run_ocr",
-                kind: "ocr",
-                sourceFileId: "file_1",
-                sourceSha256Hex: sha256Hex,
-                status: "failed",
-              },
-            ],
-          },
-        ),
-      }),
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb(
+            [],
+            createExtractedContentRow(),
+            [currentPdf],
+            {
+              entityId: "entity_1",
+              kind: "document",
+              name: "Scan",
+              workspaceId: "ws_1",
+            },
+            {
+              runs: [
+                {
+                  errorCode: "search_index_failed",
+                  finishedAt: null,
+                  id: "run_ocr",
+                  kind: "ocr",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "failed",
+                },
+              ],
+            },
+          ),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
       toolName: "read_document",
     });
 
@@ -2608,6 +2661,55 @@ describe("OpenAI-compatible MCP tools", () => {
         status: "failed",
         errorCode: "search_index_failed",
         runId: "run_ocr",
+      },
+    });
+  });
+
+  test("read_document treats workspace-unavailable OCR cancellation as terminal", async () => {
+    const sha256Hex = "a".repeat(64);
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({ charCount: 0 }),
+          [
+            {
+              encrypted: false,
+              fileName: "scan.pdf",
+              id: "file_1",
+              mimeType: PDF_MIME_TYPE,
+              pdfFileId: null,
+              sha256Hex,
+              sizeBytes: 128,
+              type: "file",
+              version: 1,
+            },
+          ],
+          undefined,
+          {
+            runs: [
+              {
+                errorCode: "workspace_unavailable",
+                fieldId: "field_1",
+                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                id: "run_ocr",
+                kind: "ocr",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "cancelled",
+              },
+            ],
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "unsupported",
+        reason: "OCR is unavailable while the matter is not active.",
       },
     });
   });
@@ -2692,43 +2794,47 @@ describe("OpenAI-compatible MCP tools", () => {
     };
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
-      context: createContext({
-        scopedDb: createScopedDb(
-          [],
-          createExtractedContentRow({ charCount: 0 }),
-          [currentPdf],
-          {
-            entityId: "entity_1",
-            kind: "document",
-            name: "Scan",
-            workspaceId: "ws_1",
-          },
-          {
-            documentProcessingMode: "off",
-            runs: [
-              {
-                errorCode: "policy_disabled",
-                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
-                id: "run_ocr",
-                kind: "ocr",
-                sourceFileId: "file_1",
-                sourceSha256Hex: sha256Hex,
-                status: "cancelled",
-              },
-              {
-                errorCode: null,
-                finishedAt: nativeIndexedAt,
-                id: "run_native",
-                kind: "native-extraction",
-                sourceFileId: "file_1",
-                sourceSha256Hex: sha256Hex,
-                status: "succeeded",
-              },
-            ],
-            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
-          },
-        ),
-      }),
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb(
+            [],
+            createExtractedContentRow({ charCount: 0 }),
+            [currentPdf],
+            {
+              entityId: "entity_1",
+              kind: "document",
+              name: "Scan",
+              workspaceId: "ws_1",
+            },
+            {
+              documentProcessingMode: "off",
+              runs: [
+                {
+                  errorCode: "policy_disabled",
+                  finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                  id: "run_ocr",
+                  kind: "ocr",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "cancelled",
+                },
+                {
+                  errorCode: null,
+                  finishedAt: nativeIndexedAt,
+                  id: "run_native",
+                  kind: "native-extraction",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "succeeded",
+                },
+              ],
+              searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            },
+          ),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
       toolName: "read_document",
     });
 
@@ -2782,6 +2888,16 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           {
             runs: [
+              {
+                errorCode: "search_index_failed",
+                fieldId: "field_2",
+                finishedAt: new Date("2026-01-04T00:00:00.000Z"),
+                id: "run_wrong_field",
+                kind: "native-extraction",
+                sourceFileId: currentPdf.id,
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
               ...supersededRuns,
               {
                 errorCode: null,

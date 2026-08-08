@@ -594,21 +594,9 @@ describe("deriveRefMediationEntry", () => {
 
   test("read_document: derived lists include file strips and processing-state mediation", () => {
     expectDerivedEquals(READ_DOCUMENT_PROJECTION, {
-      outputRefs: [
-        ...READ_DOCUMENT_HAND_LISTS.outputRefs,
-        {
-          kind: "matter",
-          path: "contentState.remediation.arguments.input.params.workspaceId",
-        },
-        {
-          kind: "entity",
-          path: "contentState.remediation.arguments.input.params.entityId",
-          workspace: { from: "inputEntity", param: "entity_id" },
-        },
-      ],
+      outputRefs: READ_DOCUMENT_HAND_LISTS.outputRefs,
       passthroughIdPaths: [
         ...READ_DOCUMENT_HAND_LISTS.passthroughIdPaths,
-        "contentState.remediation.arguments.input.body.fieldId",
         "contentState.runId",
         "contentState.sourceVersionId",
         "searchIndexState.runId",
@@ -617,6 +605,7 @@ describe("deriveRefMediationEntry", () => {
       stripPaths: [
         ...READ_DOCUMENT_HAND_LISTS.stripPaths,
         ...READ_DOCUMENT_CONTENT_STRIPS,
+        "contentState.remediation.arguments",
       ],
     });
   });

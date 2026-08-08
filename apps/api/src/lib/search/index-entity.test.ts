@@ -59,12 +59,14 @@ const currentFileField = {
 const noCurrentFileFields: (typeof currentFileField)[] = [];
 const entityRow = {
   currentVersion: {
+    createdAt: new Date("2026-04-30T08:00:00.000Z"),
     fields: noCurrentFileFields,
     id: toSafeId<"entityVersion">("v_1"),
   },
   createdAt: new Date("2026-04-01T08:00:00.000Z"),
   extractedContent: null as {
     ciphertext: Buffer;
+    extractedAt: Date;
     iv: Buffer;
     language: string | null;
     sourceEntityVersionId: SafeId<"entityVersion"> | null;
@@ -81,6 +83,8 @@ const entityRow = {
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
+let latestVersionId = entityRow.currentVersion.id;
+const latestVersionFindFirstMock = mock(async () => ({ id: latestVersionId }));
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -94,6 +98,9 @@ void mock.module("@/api/db/root", () => ({
       entities: {
         findFirst: findFirstMock,
       },
+      entityVersions: {
+        findFirst: latestVersionFindFirstMock,
+      },
     },
     select: selectMock,
     transaction: transactionMock,
@@ -106,6 +113,10 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 void mock.module("@/api/lib/content-encryption", () => ({
   decryptContent: decryptContentMock,
+  encryptContent: async () => ({
+    ciphertext: Buffer.from("ciphertext"),
+    iv: Buffer.from("iv"),
+  }),
 }));
 
 void mock.module("@/api/lib/search/index-global", () => ({
@@ -121,6 +132,8 @@ beforeEach(() => {
   ]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
+  latestVersionId = entityRow.currentVersion.id;
+  latestVersionFindFirstMock.mockClear();
   decryptContentMock.mockClear();
   decryptContentMock.mockResolvedValue("Extracted text");
   captureErrorMock.mockClear();
@@ -225,11 +238,13 @@ test("keeps the last complete projection when extracted content cannot decrypt",
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
+      createdAt: entityRow.currentVersion.createdAt,
       fields: [currentFileField],
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
       ciphertext: Buffer.from("ciphertext"),
+      extractedAt,
       iv: Buffer.from("iv"),
       language: "en",
       sourceEntityVersionId: entityRow.currentVersion.id,
@@ -264,11 +279,13 @@ test("excludes stale extracted text and fences its observed provenance", async (
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
+      createdAt: entityRow.currentVersion.createdAt,
       fields: [currentFileField],
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
       ciphertext: Buffer.from("stale ciphertext"),
+      extractedAt,
       iv: Buffer.from("stale iv"),
       language: "en",
       sourceEntityVersionId: staleVersionId,
@@ -307,11 +324,13 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
+      createdAt: entityRow.currentVersion.createdAt,
       fields: [currentFileField],
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
       ciphertext: Buffer.from("legacy ciphertext"),
+      extractedAt,
       iv: Buffer.from("legacy iv"),
       language: "cs",
       sourceEntityVersionId: null,
@@ -341,4 +360,37 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
   expect(
     compiled.params.filter((parameter) => parameter === null),
   ).not.toHaveLength(0);
+});
+
+test("excludes legacy extracted text after a deleted-version rollback", async () => {
+  latestVersionId = toSafeId<"entityVersion">("withdrawn_version");
+  findFirstMock.mockResolvedValueOnce({
+    ...entityRow,
+    currentVersion: {
+      createdAt: entityRow.currentVersion.createdAt,
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
+    extractedContent: {
+      ciphertext: Buffer.from("withdrawn text"),
+      extractedAt,
+      iv: Buffer.from("legacy iv"),
+      language: "cs",
+      sourceEntityVersionId: null,
+      sourceFieldId: null,
+      sourceFileId: null,
+      sourceSha256Hex: null,
+    },
+  });
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  expect(decryptContentMock).not.toHaveBeenCalled();
+  expect(latestVersionFindFirstMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      orderBy: { versionNumber: "desc", id: "desc" },
+    }),
+  );
 });

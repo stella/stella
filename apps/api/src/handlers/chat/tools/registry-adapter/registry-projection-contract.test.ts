@@ -633,12 +633,7 @@ const CONTRACT_CORPUS = {
           ],
         ]),
       }),
-      expectRefPaths: [
-        "entityId",
-        "fields[].propertyId",
-        "contentState.remediation.arguments.input.params.workspaceId",
-        "contentState.remediation.arguments.input.params.entityId",
-      ],
+      expectRefPaths: ["entityId", "fields[].propertyId"],
     },
     {
       mode: "specific version",

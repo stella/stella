@@ -1320,6 +1320,11 @@ const loadDocumentProcessingStates = async ({
                 where: {
                   entityId: { eq: entityId },
                   entityVersionId: { eq: current.currentVersionId },
+                  fieldId: {
+                    eq:
+                      sourceFieldId ??
+                      panic("Processing source file requires a field"),
+                  },
                   organizationId: { eq: context.organizationId },
                   sourceFileId: { eq: sourceFile.id },
                   sourceSha256Hex: { eq: sourceFile.sha256Hex },
@@ -1327,6 +1332,7 @@ const loadDocumentProcessingStates = async ({
                 },
                 columns: {
                   errorCode: true,
+                  fieldId: true,
                   finishedAt: true,
                   id: true,
                   kind: true,
@@ -1394,20 +1400,24 @@ const loadDocumentProcessingStates = async ({
   const sourceRuns = runs.filter(
     (run) =>
       run.sourceFileId === sourceFile.id &&
+      run.fieldId === sourceFieldId &&
       run.sourceSha256Hex === sourceFile.sha256Hex,
   );
   const nativeRun = sourceRuns.find((run) => run.kind === "native-extraction");
   const ocrRun = sourceRuns.find((run) => run.kind === "ocr");
-  const ocrDisabledByPolicy =
-    ocrRun?.status === "cancelled" && ocrRun.errorCode === "policy_disabled";
-  // `sourceRuns` preserves the query's newest-first order. Policy-disabled OCR
-  // is terminal for OCR but did not invalidate the preceding native index.
+  const ocrTerminalCancellation =
+    ocrRun?.status === "cancelled" &&
+    (ocrRun.errorCode === "policy_disabled" ||
+      ocrRun.errorCode === "workspace_unavailable");
+  // `sourceRuns` preserves the query's newest-first order. Terminal OCR
+  // cancellations did not invalidate the preceding native index.
   const latestIndexRun = sourceRuns.find(
     (run) =>
       !(
         run.kind === "ocr" &&
         run.status === "cancelled" &&
-        run.errorCode === "policy_disabled"
+        (run.errorCode === "policy_disabled" ||
+          run.errorCode === "workspace_unavailable")
       ),
   );
   const searchFailure =
@@ -1433,14 +1443,14 @@ const loadDocumentProcessingStates = async ({
       mimeType: sourceFile.mimeType,
     });
   // Manual OCR deliberately bypasses the organization's automatic-processing
-  // policy, so this action fixes the current PDF without requiring an admin to
-  // change an organization-wide setting first.
+  // policy. Only an external MCP request can invoke the generic capability;
+  // internal chat deliberately receives an escalation instead.
   const canQueueManualOcr =
+    context.request !== undefined &&
     roles[context.memberRole].authorize({
       entity: ["update"],
     }).success &&
-    (context.request === undefined ||
-      context.grantedScopes.includes("stella:matters_write"));
+    context.grantedScopes.includes("stella:matters_write");
 
   let contentState: DocumentContentState;
   if (
@@ -1492,8 +1502,17 @@ const loadDocumentProcessingStates = async ({
       sourceVersionId: current.currentVersionId,
     };
   } else if (
+    ocrRun?.status === "cancelled" &&
+    ocrRun.errorCode === "workspace_unavailable"
+  ) {
+    contentState = {
+      status: "unsupported",
+      sourceVersionId: current.currentVersionId,
+      reason: "OCR is unavailable while the matter is not active.",
+    };
+  } else if (
     currentExtracted?.charCount === 0 &&
-    (ocrRun === undefined || ocrDisabledByPolicy) &&
+    (ocrRun === undefined || ocrTerminalCancellation) &&
     extractionMimeType === PDF_MIME_TYPE &&
     (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
       "off"
