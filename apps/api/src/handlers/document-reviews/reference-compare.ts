@@ -326,6 +326,7 @@ export const compareReferenceDocuments = async ({
           scopeKey,
         }),
         serviceTier,
+        tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
         prompt: buildReferencePrompt(target, references),
         abortSignal: AbortSignal.any([
