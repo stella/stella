@@ -1,0 +1,85 @@
+import type { ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, expect, test } from "bun:test";
+import { IntlProvider } from "use-intl";
+
+import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
+import { FormattingProvider } from "@/i18n/formatting-context";
+import messages from "@/i18n/langs/en.json";
+import type Messages from "@/i18n/langs/messages.gen";
+import { emailHtmlPreviewOptions } from "@/lib/files/queries";
+
+const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
+  renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider
+        locale="en"
+        // SAFETY: locale catalogs are checked by i18n:check; this mirrors the
+        // app's provider boundary used by the other static component tests.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        messages={messages as Messages}
+        timeZone="UTC"
+      >
+        <FormattingProvider locale="en" timeZone="UTC">
+          {children}
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+describe("email viewer", () => {
+  test("renders native metadata and keeps attachments informational", () => {
+    const queryClient = new QueryClient();
+    const options = emailHtmlPreviewOptions({
+      fieldId: "field-1",
+      workspaceId: "workspace-1",
+    });
+    queryClient.setQueryData(options.queryKey, {
+      attachments: [
+        {
+          fileName: "contract.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 2048,
+        },
+      ],
+      bcc: ["blind@example.org"],
+      bodyHtml: "<p>Message body</p>",
+      cc: ["copy@example.org"],
+      date: "Mon, 02 Jun 2026 10:00:00 +0000",
+      from: "Sender <sender@example.org>",
+      subject: "Contract draft",
+      to: ["client@example.org", "عائشة <aisha@example.ae>"],
+    });
+
+    const html = renderWithProviders(
+      <EmailHtmlViewer fieldId="field-1" workspaceId="workspace-1" />,
+      queryClient,
+    );
+
+    expect(html).toContain(">Contract draft</span></h1>");
+    expect(html).toContain(">Sender &lt;sender@example.org&gt;</bdi>");
+    expect(html).toContain(">client@example.org</bdi>");
+    expect(html).toContain(">عائشة &lt;aisha@example.ae&gt;</bdi>");
+    expect(html).toContain('dateTime="2026-06-02T10:00:00.000Z"');
+    expect(html).toContain("Show details");
+    expect(html).toContain("contract.pdf");
+    expect(html).toContain(">2 kB</span>");
+    expect(html).toContain('sandbox=""');
+    expect(html).toContain("srcDoc=");
+    expect(html).toContain("Message body");
+    expect(html).not.toContain("href=");
+    expect(html).not.toContain('role="button"');
+  });
+
+  test("renders the scoped loading state", () => {
+    const html = renderWithProviders(
+      <EmailHtmlViewer fieldId="field-2" workspaceId="workspace-2" />,
+      new QueryClient(),
+    );
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-label="Loading"');
+  });
+});

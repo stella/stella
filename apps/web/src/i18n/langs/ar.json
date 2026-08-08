@@ -1223,6 +1223,16 @@
     "wordShortcut": "الأحرف الأولى",
     "wordShortcutPlaceholder": "مثال: JK"
   },
+  "emailViewer": {
+    "attachments": "المرفقات",
+    "bcc": "نسخة مخفية",
+    "bodyTitle": "محتوى البريد الإلكتروني",
+    "cc": "نسخة",
+    "from": "المرسل",
+    "noSubject": "(بلا موضوع)",
+    "to": "المستلمون",
+    "unnamedAttachment": "مرفق بلا اسم"
+  },
   "errors": {
     "actionFailed": "فشل الإجراء",
     "api": {

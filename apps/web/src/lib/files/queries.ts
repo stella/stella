@@ -22,11 +22,18 @@ type FileData = {
 };
 
 type EmailHtmlPreviewData = {
-  fileId: string;
-  fileName: string;
-  html: string;
-  mimeType: string;
-  originalMimeType: string;
+  subject: string | null;
+  from: string | null;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  date: string | null;
+  attachments: {
+    fileName: string | null;
+    mimeType: string | null;
+    sizeBytes: number;
+  }[];
+  bodyHtml: string;
 };
 
 type TextFileData = {
@@ -98,11 +105,14 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
       const data = unwrapEden(response);
 
       return {
-        fileId: data.fileId,
-        fileName: data.fileName,
-        html: data.html,
-        mimeType: data.mimeType,
-        originalMimeType: data.originalMimeType,
+        subject: data.subject,
+        from: data.from,
+        to: data.to,
+        cc: data.cc,
+        bcc: data.bcc,
+        date: data.date,
+        attachments: data.attachments,
+        bodyHtml: data.bodyHtml,
       } satisfies EmailHtmlPreviewData;
     },
   });

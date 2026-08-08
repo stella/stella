@@ -1223,6 +1223,16 @@
     "wordShortcut": "Inicialai",
     "wordShortcutPlaceholder": "pvz., JK"
   },
+  "emailViewer": {
+    "attachments": "Priedai",
+    "bcc": "Nematomos kopijos",
+    "bodyTitle": "El. laiško tekstas",
+    "cc": "Kopija",
+    "from": "Siuntėjas",
+    "noSubject": "(Nėra temos)",
+    "to": "Gavėjai",
+    "unnamedAttachment": "Nepavadintas priedas"
+  },
   "errors": {
     "actionFailed": "Veiksmas nepavyko",
     "api": {

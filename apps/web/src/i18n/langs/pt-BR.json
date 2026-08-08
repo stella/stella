@@ -1223,6 +1223,16 @@
     "wordShortcut": "Iniciais",
     "wordShortcutPlaceholder": "por exemplo JK"
   },
+  "emailViewer": {
+    "attachments": "Anexos",
+    "bcc": "Cco",
+    "bodyTitle": "Corpo do e-mail",
+    "cc": "Cópia",
+    "from": "Remetente",
+    "noSubject": "(Sem assunto)",
+    "to": "Destinatários",
+    "unnamedAttachment": "Anexo sem nome"
+  },
   "errors": {
     "actionFailed": "Falha na ação",
     "api": {

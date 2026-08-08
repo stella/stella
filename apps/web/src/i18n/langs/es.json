@@ -1223,6 +1223,16 @@
     "wordShortcut": "Iniciales",
     "wordShortcutPlaceholder": "p. ej. JK"
   },
+  "emailViewer": {
+    "attachments": "Archivos adjuntos",
+    "bcc": "Cco",
+    "bodyTitle": "Cuerpo del correo",
+    "cc": "Copia",
+    "from": "Remitente",
+    "noSubject": "(Sin asunto)",
+    "to": "Destinatarios",
+    "unnamedAttachment": "Archivo adjunto sin nombre"
+  },
   "errors": {
     "actionFailed": "Acción fallida",
     "api": {

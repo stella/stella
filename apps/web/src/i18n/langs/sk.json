@@ -1223,6 +1223,16 @@
     "wordShortcut": "Iniciály",
     "wordShortcutPlaceholder": "napr. JK"
   },
+  "emailViewer": {
+    "attachments": "Prílohy",
+    "bcc": "Skrytá kópia",
+    "bodyTitle": "Telo e-mailu",
+    "cc": "Kópia",
+    "from": "Odosielateľ",
+    "noSubject": "(Bez predmetu)",
+    "to": "Príjemcovia",
+    "unnamedAttachment": "Nepomenovaná príloha"
+  },
   "errors": {
     "actionFailed": "Akcia zlyhala",
     "api": {

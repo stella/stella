@@ -68,6 +68,13 @@ describe("parseOutlookMsg", () => {
         "001f",
         utf16Property("copy@example.org"),
       ),
+      storageProperty("__recip_version1.0_00000002", "0c15", "0003", int32(3)),
+      storageProperty(
+        "__recip_version1.0_00000002",
+        "3003",
+        "001f",
+        utf16Property("blind@example.org"),
+      ),
       storageProperty(
         "__attach_version1.0_00000000",
         "3712",
@@ -131,6 +138,9 @@ describe("parseOutlookMsg", () => {
     expect(message.cc).toEqual([
       { name: null, email: "copy@example.org", type: "cc" },
     ]);
+    expect(message.bcc).toEqual([
+      { name: null, email: "blind@example.org", type: "bcc" },
+    ]);
     expect(message.attachments).toHaveLength(2);
     expect(message.attachments.at(0)).toMatchObject({
       contentId: "logo",
@@ -151,6 +161,7 @@ describe("parseOutlookMsg", () => {
     const text = parsedEmailToText(parsedEmail);
     expect(text).toContain("From: Jane Lawyer <jane@example.com>");
     expect(text).toContain("To: Client One <client@example.org>");
+    expect(text).toContain("Bcc: blind@example.org");
     expect(text).toContain("Subject: Contract draft");
     expect(text).toContain("Hello world");
 

@@ -1223,6 +1223,16 @@
     "wordShortcut": "Iniciāļi",
     "wordShortcutPlaceholder": "piem., JK"
   },
+  "emailViewer": {
+    "attachments": "Pielikumi",
+    "bcc": "Diskrētā kopija",
+    "bodyTitle": "E-pasta pamatteksts",
+    "cc": "Kopija",
+    "from": "Sūtītājs",
+    "noSubject": "(Bez tēmas)",
+    "to": "Saņēmēji",
+    "unnamedAttachment": "Nepārdēvēts pielikums"
+  },
   "errors": {
     "actionFailed": "Darbība neizdevās",
     "api": {

@@ -83,6 +83,7 @@ export type OutlookMsgEmail = {
   fromEmail: string | null;
   to: OutlookMsgRecipient[];
   cc: OutlookMsgRecipient[];
+  bcc: OutlookMsgRecipient[];
   date: string | null;
   html: string | null;
   text: string | null;
@@ -125,6 +126,7 @@ export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
       getString(rootProperties, PROPERTY_ID.senderEmail),
     to: recipients.filter((recipient) => recipient.type === "to"),
     cc: recipients.filter((recipient) => recipient.type === "cc"),
+    bcc: recipients.filter((recipient) => recipient.type === "bcc"),
     date:
       getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
       getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),

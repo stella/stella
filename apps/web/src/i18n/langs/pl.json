@@ -1223,6 +1223,16 @@
     "wordShortcut": "Inicjały",
     "wordShortcutPlaceholder": "np. JK"
   },
+  "emailViewer": {
+    "attachments": "Załączniki",
+    "bcc": "UDW",
+    "bodyTitle": "Treść e-maila",
+    "cc": "DW",
+    "from": "Nadawca",
+    "noSubject": "(Brak tematu)",
+    "to": "Odbiorcy",
+    "unnamedAttachment": "Nienazwany załącznik"
+  },
   "errors": {
     "actionFailed": "Akcja nie powiodła się",
     "api": {

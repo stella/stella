@@ -2,7 +2,9 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildEmailPreview,
   emailToHtml,
+  emailToPreview,
   parsedEmailToText,
   parseEmail,
   type ParsedEmail,
@@ -65,6 +67,7 @@ describe("renderEmailHtml", () => {
     from: "Jane Lawyer <jane@example.com>",
     to: ["client@example.org"],
     cc: [],
+    bcc: [],
     date: "Mon, 02 Jun 2026 10:00:00 +0000",
     body: {
       type: "html",
@@ -254,6 +257,80 @@ describe("renderEmailHtml", () => {
     expect(html).toContain("&lt;not a tag&gt;");
   });
 
+  test("keeps nested message headers while stripping duplicate raw headers and fetch vectors", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        subject: "Návrh smlouvy ⚖️",
+        from: "Žofie Nováková <zofie@example.cz>",
+        to: ["李雷 <li@example.cn>"],
+        cc: ["Renée <renee@example.fr>"],
+        bcc: ["عائشة <aisha@example.ae>"],
+        body: {
+          type: "html",
+          html: [
+            '<div class="postal-email-header">',
+            '<div class="postal-email-header-value">Forwarded message</div>',
+            "</div>",
+            "<div>",
+            "From: Žofie Nováková &lt;zofie@example.cz&gt;<br>",
+            "To: 李雷 &lt;li@example.cn&gt;<br>",
+            "Subject: Návrh smlouvy ⚖️<br><br>",
+            '<p style="background: url(https://attacker.example/style)">Message content</p>',
+            '<img src="https://attacker.example/pixel.gif" onerror="steal()">',
+            '<a href="https://attacker.example/link" ping="https://attacker.example/ping">safe text</a>',
+            '<form action="https://attacker.example/submit"><input value="x"></form>',
+            "<script>steal()</script><style>@import url(https://attacker.example/css)</style>",
+            "</div>",
+          ].join(""),
+        },
+        attachments: [
+          {
+            contentId: "attachment-id",
+            fileName: "evidence.pdf",
+            mimeType: "application/pdf",
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+        ],
+      }),
+    );
+
+    expect(preview).toMatchObject({
+      subject: "Návrh smlouvy ⚖️",
+      from: "Žofie Nováková <zofie@example.cz>",
+      to: ["李雷 <li@example.cn>"],
+      cc: ["Renée <renee@example.fr>"],
+      bcc: ["عائشة <aisha@example.ae>"],
+      attachments: [
+        {
+          fileName: "evidence.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 3,
+        },
+      ],
+    });
+    expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
+      "fileName",
+      "mimeType",
+      "sizeBytes",
+    ]);
+    expect(preview.bodyHtml).toStartWith("<!DOCTYPE html>");
+    expect(preview.bodyHtml).toContain(
+      "Content-Security-Policy\" content=\"default-src 'none'; img-src data:",
+    );
+    expect(preview.bodyHtml).toContain('<body dir="auto">');
+    expect(preview.bodyHtml).toContain("Forwarded message");
+    expect(preview.bodyHtml).toContain("Message content");
+    expect(preview.bodyHtml).not.toContain("Návrh smlouvy ⚖️");
+    expect(preview.bodyHtml).not.toContain("zofie@example.cz");
+    expect(preview.bodyHtml).not.toContain("li@example.cn");
+    expect(preview.bodyHtml).not.toContain("attacker.example");
+    expect(preview.bodyHtml).not.toContain("<script");
+    expect(preview.bodyHtml).not.toContain("@import");
+    expect(preview.bodyHtml).not.toContain('style="');
+    expect(preview.bodyHtml).not.toContain("<form");
+    expect(preview.bodyHtml).not.toContain("onerror");
+  });
+
   test("formats sanitized headers and body text for extraction", () => {
     const text = parsedEmailToText(
       htmlEmail({
@@ -374,5 +451,46 @@ describe("emailToHtml (.eml)", () => {
     expect(new TextDecoder().decode(attachment.bytes).trim()).toBe(
       "Attachment text",
     );
+  });
+
+  test("lists ordinary attachments without duplicating inline CID images", async () => {
+    const result = await emailToPreview(toArrayBuffer(eml), "message/rfc822");
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+
+    expect(result.value.attachments).toEqual([
+      {
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 16,
+      },
+    ]);
+  });
+
+  test("preserves internationalized recipients, Bcc, and a received date in preview metadata", async () => {
+    const unicodeEml = [
+      "From: Žofie Nováková <zofie@example.cz>",
+      "To: 李雷 <li@example.cn>",
+      "Cc: Renée <renee@example.fr>",
+      "Bcc: عائشة <aisha@example.ae>",
+      "Subject: Návrh smlouvy ⚖️",
+      "Date: Tue, 02 Jun 2026 12:30:00 +0200",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Dobrý den",
+    ].join("\r\n");
+
+    const preview = buildEmailPreview(
+      await parseEmail(toArrayBuffer(unicodeEml), "message/rfc822"),
+    );
+
+    expect(preview.from).toBe("Žofie Nováková <zofie@example.cz>");
+    expect(preview.to).toEqual(["李雷 <li@example.cn>"]);
+    expect(preview.cc).toEqual(["Renée <renee@example.fr>"]);
+    expect(preview.bcc).toEqual(["عائشة <aisha@example.ae>"]);
+    expect(preview.date).toBe("2026-06-02T10:30:00.000Z");
+    expect(preview.bodyHtml).toContain("Dobrý den");
   });
 });

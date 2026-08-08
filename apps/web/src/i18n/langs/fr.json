@@ -1223,6 +1223,16 @@
     "wordShortcut": "Initiales",
     "wordShortcutPlaceholder": "ex. JK"
   },
+  "emailViewer": {
+    "attachments": "Pièces jointes",
+    "bcc": "Cci",
+    "bodyTitle": "Corps de l’e-mail",
+    "cc": "Copie",
+    "from": "Expéditeur",
+    "noSubject": "(Sans objet)",
+    "to": "Destinataires",
+    "unnamedAttachment": "Pièce jointe sans nom"
+  },
   "errors": {
     "actionFailed": "Action échouée",
     "api": {

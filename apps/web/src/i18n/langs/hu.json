@@ -1223,6 +1223,16 @@
     "wordShortcut": "Monogram",
     "wordShortcutPlaceholder": "pl. JK"
   },
+  "emailViewer": {
+    "attachments": "Mellékletek",
+    "bcc": "Titkos másolat",
+    "bodyTitle": "E-mail törzse",
+    "cc": "Másolat",
+    "from": "Feladó",
+    "noSubject": "(Nincs tárgy)",
+    "to": "Címzettek",
+    "unnamedAttachment": "Névtelen melléklet"
+  },
   "errors": {
     "actionFailed": "A művelet sikertelen",
     "api": {
