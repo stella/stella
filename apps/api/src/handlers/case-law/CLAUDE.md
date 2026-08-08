@@ -199,6 +199,15 @@ with no language table: headings come from `coj-*` classes and from
 the numbering scheme, paragraph numbers from the publisher's own
 `id="pointN"` anchors.
 
+Where a source also embeds the document in a page of its own — site
+navigation, contact blocks, a footer — bound the parse to the document
+before walking it, and derive the boundary from the same annotation.
+Page furniture is not text the parser failed to classify, so rule 10
+does not apply to it: emitting it as plain paragraphs puts the site's
+own copy into the corpus. A list of phrases to drop is the wrong shape
+for the same reason wording-based headings are; the right shape is the
+deepest element holding every one of the source's own markers.
+
 The same applies downstream: an adapter whose parser recovered the
 document's headings should return `sections` on its
 `IngestionResult`, so the pipeline uses those instead of falling back
