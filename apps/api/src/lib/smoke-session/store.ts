@@ -14,6 +14,7 @@
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
 
 const SMOKE_USER = {
@@ -79,14 +80,7 @@ const ensureSmokePrincipal = async (now: Date): Promise<void> => {
   }
 };
 
-// Mirrors better-auth's createCookieGetter naming: `__Secure-` prefix
-// whenever useSecureCookies is on (auth.ts sets it to !env.isDev).
-const smokeCookieName = (): string => {
-  if (env.isDev) {
-    return `${env.BETTER_AUTH_COOKIE_PREFIX ?? "stella-dev"}.session_token`;
-  }
-  return "__Secure-better-auth.session_token";
-};
+const smokeCookieName = sessionCookieName;
 
 export const mintSmokeSession = async (): Promise<SmokeSession> => {
   const now = new Date();
