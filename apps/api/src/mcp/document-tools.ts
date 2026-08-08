@@ -1274,6 +1274,11 @@ type DocumentProcessingStates = {
   searchIndexState: DocumentSearchIndexState;
 };
 
+// Runs for one immutable source are unique by processing kind and processor
+// version. This spans far more revisions than a document version can
+// realistically survive while keeping the state read bounded.
+const DOCUMENT_PROCESSING_RUNS_PER_SOURCE_MAX = 1000;
+
 const loadDocumentProcessingStates = async ({
   context,
   current,
@@ -1330,7 +1335,7 @@ const loadDocumentProcessingStates = async ({
                   status: true,
                 },
                 orderBy: { createdAt: "desc" },
-                limit: LIMITS.documentProcessingRunsPerSourceMax,
+                limit: DOCUMENT_PROCESSING_RUNS_PER_SOURCE_MAX,
               })
             : Promise.resolve([]),
           tx.query.searchDocuments.findFirst({
