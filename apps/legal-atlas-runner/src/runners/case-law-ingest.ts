@@ -40,6 +40,12 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import {
+  DOCUMENT_FETCH_BUDGET_MS,
+  fetchDecisionDocument,
+  scopedPendingDocumentTierLoaders,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -82,6 +88,10 @@ import {
   type RecomputeOutcome,
   nextRecomputeDelayMs,
 } from "./recompute-schedule";
+import {
+  SK_DOCUMENT_DRAIN_TIMING,
+  runSkDocumentDrain,
+} from "./sk-document-drain";
 
 const formatLogDetail = (detail: unknown): string => {
   if (detail === undefined) {
@@ -210,6 +220,12 @@ const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
 const CORPUS_INDEX_INTERVAL_MS = envBase.CORPUS_INDEX_INTERVAL_MS;
 const CORPUS_INDEX_BATCH_SIZE = envBase.CORPUS_INDEX_BATCH_SIZE;
 const CORPUS_INDEX_READ_CONCURRENCY = envBase.CORPUS_INDEX_READ_CONCURRENCY;
+// Deferred Slovak documents. The page size is how many rows one tier query
+// reads ahead of the walk, and the probe interval is the longest a decision
+// a reader asked for waits behind the bulk tier. Neither touches throughput:
+// that is the fetch gap and nothing else.
+const SK_DOCUMENT_PAGE_SIZE = 20;
+const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
 // Citation authority decays slowly; a periodic full recompute keeps the
 // materialized ranking signal fresh without per-cycle cost. The first
 // recompute runs shortly after startup rather than a full interval in: a
@@ -1343,6 +1359,60 @@ export const runCaseLawIngest = async (
     }
   })();
 
+  // Deferred Slovak document walk: `sk-courts` ingests metadata only, so
+  // every page it stores leaves decisions with nothing readable until this
+  // fetches and parses their PDF. Continuous rather than scheduled, because
+  // the fetch gap is already the constraint and an outer interval could only
+  // hold it below that. Gated: it is the one loop here that fetches from a
+  // publisher outside an adapter crawl.
+  const skDocumentLoop = (async () => {
+    if (!LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled) {
+      return;
+    }
+    const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
+    logInfo(`[sk-documents] Enabled (one fetch per ${fetchDelayMs}ms)`);
+    await runSkDocumentDrain({
+      queue: createPendingDocumentQueue({
+        loaders: scopedPendingDocumentTierLoaders(backfillDb),
+        pageSize: SK_DOCUMENT_PAGE_SIZE,
+        requestedPollIntervalMs: SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
+      }),
+      // The unit bounds itself (download timeout, wall-clock budget) and
+      // the transaction handle bounds its writes; the hard deadline is the
+      // same backstop the other loops carry, for a future await that slips
+      // in unbounded and would otherwise park the walk forever.
+      fetchDocument: async (decision) =>
+        await runWithHardDeadline(
+          "sk-documents",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await fetchDecisionDocument({
+              decision,
+              scopedDb: backfillDb,
+              signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            }),
+        ),
+      isDraining,
+      now: Date.now,
+      report: (summary) => {
+        logInfo(
+          `[sk-documents] case_law.sk_documents.swept ` +
+            `attempted=${summary.attempted} ` +
+            `filled=${summary.filled} ` +
+            `unavailable=${summary.unavailable} ` +
+            `claimed=${summary.claimed} ` +
+            `superseded=${summary.superseded} ` +
+            `failed=${summary.failed} ` +
+            `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)}`,
+        );
+      },
+      sleep: async (ms) => {
+        await Bun.sleep(ms);
+      },
+      timing: { ...SK_DOCUMENT_DRAIN_TIMING, fetchDelayMs },
+    });
+  })();
+
   await Promise.all([
     ...adapterLoops,
     healthLoop,
@@ -1351,6 +1421,7 @@ export const runCaseLawIngest = async (
     corpusIndexLoop,
     legislationSearchIndexLoop,
     legislationCorpusIndexLoop,
+    skDocumentLoop,
   ]);
   return 0;
 };
