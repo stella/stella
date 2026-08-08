@@ -1,8 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import type { DocumentPropertiesResult } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import {
+  documentPropertiesQueryKey,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -53,6 +56,7 @@ export const filesKeys = {
     key.workspaceId,
     key.fieldId,
   ],
+  documentPropertiesByFieldId: documentPropertiesQueryKey,
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
@@ -104,6 +108,25 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         mimeType: data.mimeType,
         originalMimeType: data.originalMimeType,
       } satisfies EmailHtmlPreviewData;
+    },
+  });
+
+/**
+ * The file's own embedded properties (DOCX Author and Company, PDF Producer,
+ * ...). The server parses them per request from the stored bytes, so this is
+ * deliberately lazy: it runs when the metadata panel is on screen, and the
+ * answer then stays cached for the session.
+ */
+export const documentPropertiesOptions = (props: FileOptionsProps) =>
+  queryOptions({
+    queryKey: filesKeys.documentPropertiesByFieldId(props),
+    queryFn: async ({ signal }): Promise<DocumentPropertiesResult> => {
+      const response = await api
+        .files({ workspaceId: props.workspaceId })
+        ["document-properties"]({ fieldId: props.fieldId })
+        .get({ fetch: { signal } });
+
+      return unwrapEden(response);
     },
   });
 

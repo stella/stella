@@ -23,3 +23,10 @@ export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
   key.fieldId,
   key.purpose ?? "display",
 ];
+
+export const documentPropertiesQueryKey = (key: FileMetadataQueryKey) => [
+  ...filesQueryRoot(),
+  "document-properties",
+  key.workspaceId,
+  key.fieldId,
+];

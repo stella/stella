@@ -506,7 +506,7 @@ mechanics, and similar), not gaps in coverage.
 | search_ui              | 5     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 6     |
-| upload_mechanics       | 5     |
+| upload_mechanics       | 7     |
 | url_preview            | 2     |
 
-Total: 108
+Total: 110

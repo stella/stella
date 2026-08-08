@@ -296,6 +296,53 @@ describe("terminology", () => {
   });
 });
 
+describe("terminology: forbiddenAlways", () => {
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [],
+        nouns: [
+          {
+            id: "item",
+            en: "Item",
+            forbiddenAlways: { cs: ["entita", "entity"], en: ["entity"] },
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test("flags the rendering even when the source never names the concept", () => {
+    // The point of an unconditional ban: reword the en source and the stale
+    // translation must still be caught.
+    expect(
+      findForbiddenTerms(
+        "This document has no fields to view",
+        "Tato entita nemá žádná pole k zobrazení",
+        "cs",
+        rules,
+        "workspaces.noFields",
+      ),
+    ).toEqual(["entita"]);
+  });
+
+  test("flags the banned wording in the English source itself", () => {
+    const source = "This entity has no fields to view";
+    expect(findForbiddenTerms(source, source, "en", rules)).toEqual(["entity"]);
+  });
+
+  test("still matches whole words only", () => {
+    expect(
+      findForbiddenTerms("Usage entitlement", "Nárok entitlement", "cs", rules),
+    ).toEqual([]);
+  });
+});
+
 describe("terminology: key triggers and forbiddenOnKey", () => {
   const fill = (value: string): Record<string, string> =>
     Object.fromEntries(LOCALES.map((locale) => [locale, value]));

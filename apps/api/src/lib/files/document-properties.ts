@@ -1,0 +1,567 @@
+/**
+ * Embedded document properties: the metadata a file carries inside itself
+ * (DOCX Author and Company, PDF Producer, ODF generator, ...), as opposed to
+ * what stella records about the document or what AI extracted from its text.
+ *
+ * Reading is derived from the stored bytes on demand and nothing is persisted,
+ * so no copy of the author or company names outlives the request that displayed
+ * them. Scrubbing produces a cleaned copy for export and likewise never touches
+ * the stored version: the file in the matter keeps its metadata, only the
+ * bytes that leave do not.
+ */
+import { PDF } from "@libpdf/core";
+
+import {
+  DOCUMENT_PROPERTY_KEYS,
+  documentContainerFormat,
+} from "@stll/api-contract";
+import type {
+  DocumentPropertiesResult,
+  DocumentProperty,
+  DocumentPropertyKey,
+  DocumentPropertyValue,
+} from "@stll/api-contract";
+
+import { loadDocxArchive } from "@/api/lib/docx-archive";
+
+/**
+ * Largest file whose properties are read inline. The whole object is fetched
+ * to reach a few kilobytes of XML at the end of a zip's central directory, so
+ * the cap keeps one metadata tab from pulling an arbitrarily large object.
+ */
+export const DOCUMENT_PROPERTIES_MAX_BYTES = 100 * 1024 * 1024;
+
+/** Property XML is a few kilobytes; a hostile archive declaring more is not read. */
+const PROPERTY_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
+
+// ── Value builders ──────────────────────────────────────
+
+/**
+ * Accumulates properties in {@link DOCUMENT_PROPERTY_KEYS} order and drops
+ * blanks, so a document that wrote `<Company></Company>` shows no Company row
+ * rather than an empty one.
+ */
+const collector = () => {
+  const values = new Map<DocumentPropertyKey, DocumentPropertyValue>();
+
+  const text = (key: DocumentPropertyKey, raw: string | null | undefined) => {
+    const trimmed = raw?.trim();
+    if (trimmed === undefined || trimmed.length === 0) {
+      return;
+    }
+    values.set(key, { type: "text", value: trimmed });
+  };
+
+  const date = (
+    key: DocumentPropertyKey,
+    raw: string | Date | null | undefined,
+  ) => {
+    if (raw === null || raw === undefined) {
+      return;
+    }
+    const parsed = raw instanceof Date ? raw : new Date(raw.trim());
+    if (Number.isNaN(parsed.getTime())) {
+      return;
+    }
+    values.set(key, { type: "date", value: parsed.toISOString() });
+  };
+
+  const count = (
+    key: DocumentPropertyKey,
+    raw: string | number | null | undefined,
+  ) => {
+    if (raw === null || raw === undefined) {
+      return;
+    }
+    const parsed =
+      typeof raw === "number" ? raw : Number.parseInt(raw.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+    values.set(key, { type: "count", value: parsed });
+  };
+
+  const minutes = (key: DocumentPropertyKey, raw: number | null) => {
+    if (raw === null || !Number.isFinite(raw) || raw <= 0) {
+      return;
+    }
+    values.set(key, { type: "minutes", value: Math.round(raw) });
+  };
+
+  const properties = (): DocumentProperty[] =>
+    DOCUMENT_PROPERTY_KEYS.flatMap((key) => {
+      const value = values.get(key);
+      return value === undefined ? [] : [{ key, value }];
+    });
+
+  return { text, date, count, minutes, properties };
+};
+
+// ── XML reading ─────────────────────────────────────────
+
+const XML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+};
+
+// Capture groups, in order: a named entity, a decimal reference, a hex one.
+const XML_ENTITY_RE = /&(?:([a-z]+)|#(\d+)|#x([\da-f]+));/giu;
+
+const codePointToText = (digits: string, radix: number, fallback: string) => {
+  const code = Number.parseInt(digits, radix);
+  return Number.isFinite(code) && code > 0 && code <= 0x10_ff_ff
+    ? String.fromCodePoint(code)
+    : fallback;
+};
+
+const decodeXmlText = (value: string): string =>
+  value.replace(
+    XML_ENTITY_RE,
+    (match: string, named?: string, dec?: string, hex?: string) => {
+      if (named !== undefined) {
+        return XML_ENTITIES[named.toLowerCase()] ?? match;
+      }
+      if (dec !== undefined) {
+        return codePointToText(dec, 10, match);
+      }
+      return hex === undefined ? match : codePointToText(hex, 16, match);
+    },
+  );
+
+const elementRegexCache = new Map<string, RegExp>();
+
+/**
+ * Text content of the first `<name>` element, or null when absent or empty.
+ * A regex rather than a DOM parse: these documents are untrusted input and the
+ * values wanted are flat leaf text, so there is nothing to gain from building
+ * a tree (and no external-entity surface to defend).
+ */
+const elementText = (xml: string, name: string): string | null => {
+  let regex = elementRegexCache.get(name);
+  if (!regex) {
+    regex = new RegExp(
+      `<${name}(?:\\s[^>]*)?(?:/>|>(?<body>[\\s\\S]*?)</${name}>)`,
+      "u",
+    );
+    elementRegexCache.set(name, regex);
+  }
+  const body = regex.exec(xml)?.groups?.["body"];
+  return body === undefined ? null : decodeXmlText(body);
+};
+
+const attributeRegexCache = new Map<string, RegExp>();
+
+/** Value of `attribute` on the first `<element>`, or null when absent. */
+const elementAttribute = (
+  xml: string,
+  element: string,
+  attribute: string,
+): string | null => {
+  const cacheKey = `${element}/${attribute}`;
+  let regex = attributeRegexCache.get(cacheKey);
+  if (!regex) {
+    regex = new RegExp(
+      `<${element}\\s[^>]*?${attribute}="(?<value>[^"]*)"`,
+      "u",
+    );
+    attributeRegexCache.set(cacheKey, regex);
+  }
+  const value = regex.exec(xml)?.groups?.["value"];
+  return value === undefined ? null : decodeXmlText(value);
+};
+
+const ISO_DURATION_RE =
+  /^P(?:(?<days>\d+)D)?(?:T(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>[\d.]+)S)?)?$/u;
+
+/** ISO-8601 duration (ODF `meta:editing-duration`) as whole minutes. */
+const durationToMinutes = (raw: string | null): number | null => {
+  const groups =
+    raw === null ? undefined : ISO_DURATION_RE.exec(raw.trim())?.groups;
+  if (!groups) {
+    return null;
+  }
+  const total =
+    Number(groups["days"] ?? 0) * 24 * 60 +
+    Number(groups["hours"] ?? 0) * 60 +
+    Number(groups["minutes"] ?? 0) +
+    Number(groups["seconds"] ?? 0) / 60;
+  return Number.isFinite(total) ? Math.round(total) : null;
+};
+
+// ── Per-format readers ──────────────────────────────────
+
+/**
+ * OOXML keeps the standard properties in two parts: `core.xml` (Dublin Core
+ * plus the `cp:` extensions Word's "Summary" tab shows) and `app.xml` (the
+ * producing application's own counters, Company and Manager among them).
+ */
+const readOoxmlProperties = async (
+  bytes: ArrayBuffer,
+): Promise<DocumentProperty[]> => {
+  const archive = await loadDocxArchive(bytes, {
+    maxEntryBytes: PROPERTY_ENTRY_MAX_BYTES,
+    maxTotalBytes: PROPERTY_ENTRY_MAX_BYTES * 2,
+  });
+  const core = (await archive.readEntryString("docProps/core.xml")) ?? "";
+  const app = (await archive.readEntryString("docProps/app.xml")) ?? "";
+
+  const out = collector();
+  out.text("title", elementText(core, "dc:title"));
+  out.text("subject", elementText(core, "dc:subject"));
+  out.text("description", elementText(core, "dc:description"));
+  out.text("keywords", elementText(core, "cp:keywords"));
+  out.text("category", elementText(core, "cp:category"));
+  out.text("contentStatus", elementText(core, "cp:contentStatus"));
+  out.text("author", elementText(core, "dc:creator"));
+  out.text("lastModifiedBy", elementText(core, "cp:lastModifiedBy"));
+  out.text("language", elementText(core, "dc:language"));
+  out.text("revision", elementText(core, "cp:revision"));
+  out.date("createdAt", elementText(core, "dcterms:created"));
+  out.date("modifiedAt", elementText(core, "dcterms:modified"));
+  out.date("lastPrintedAt", elementText(core, "cp:lastPrinted"));
+
+  out.text("company", elementText(app, "Company"));
+  out.text("manager", elementText(app, "Manager"));
+  out.text("application", elementText(app, "Application"));
+  out.text("applicationVersion", elementText(app, "AppVersion"));
+  out.text("template", elementText(app, "Template"));
+  out.count("pages", elementText(app, "Pages"));
+  out.count("words", elementText(app, "Words"));
+  out.count("characters", elementText(app, "Characters"));
+  out.count("paragraphs", elementText(app, "Paragraphs"));
+  out.count("slides", elementText(app, "Slides"));
+  // TotalTime is already whole minutes, unlike ODF's ISO duration.
+  const totalTime = elementText(app, "TotalTime");
+  out.minutes(
+    "editingMinutes",
+    totalTime === null ? null : Number.parseInt(totalTime, 10),
+  );
+
+  return out.properties();
+};
+
+/** OpenDocument keeps everything in one `meta.xml` part. */
+const readOdfProperties = async (
+  bytes: ArrayBuffer,
+): Promise<DocumentProperty[]> => {
+  const archive = await loadDocxArchive(bytes, {
+    maxEntryBytes: PROPERTY_ENTRY_MAX_BYTES,
+    maxTotalBytes: PROPERTY_ENTRY_MAX_BYTES * 2,
+  });
+  const meta = (await archive.readEntryString("meta.xml")) ?? "";
+
+  const out = collector();
+  out.text("title", elementText(meta, "dc:title"));
+  out.text("subject", elementText(meta, "dc:subject"));
+  out.text("description", elementText(meta, "dc:description"));
+  out.text("keywords", elementText(meta, "meta:keyword"));
+  out.text("language", elementText(meta, "dc:language"));
+  // ODF splits authorship the other way round from OOXML: `meta:initial-creator`
+  // is who started the document, `dc:creator` who last saved it.
+  out.text("author", elementText(meta, "meta:initial-creator"));
+  out.text("lastModifiedBy", elementText(meta, "dc:creator"));
+  out.text("application", elementText(meta, "meta:generator"));
+  out.text("revision", elementText(meta, "meta:editing-cycles"));
+  out.date("createdAt", elementText(meta, "meta:creation-date"));
+  out.date("modifiedAt", elementText(meta, "dc:date"));
+  out.date("lastPrintedAt", elementText(meta, "meta:print-date"));
+  out.minutes(
+    "editingMinutes",
+    durationToMinutes(elementText(meta, "meta:editing-duration")),
+  );
+
+  const statistic = "meta:document-statistic";
+  out.count("pages", elementAttribute(meta, statistic, "meta:page-count"));
+  out.count("words", elementAttribute(meta, statistic, "meta:word-count"));
+  out.count(
+    "characters",
+    elementAttribute(meta, statistic, "meta:character-count"),
+  );
+  out.count(
+    "paragraphs",
+    elementAttribute(meta, statistic, "meta:paragraph-count"),
+  );
+
+  return out.properties();
+};
+
+/**
+ * PDF exposes the Info dictionary plus the page count. `Creator` names the
+ * application the content came from and `Producer` the one that wrote the PDF,
+ * which is what reveals a converted-from-Word original.
+ */
+const readPdfProperties = async (
+  bytes: ArrayBuffer,
+): Promise<DocumentPropertiesResult> => {
+  const pdf = await PDF.load(new Uint8Array(bytes));
+  if (pdf.isEncrypted) {
+    return { status: "password-protected" };
+  }
+
+  const out = collector();
+  out.text("title", pdf.getTitle());
+  out.text("subject", pdf.getSubject());
+  out.text("keywords", pdf.getKeywords()?.join(", "));
+  out.text("author", pdf.getAuthor());
+  out.text("application", pdf.getCreator());
+  out.text("producer", pdf.getProducer());
+  out.text("language", pdf.getLanguage());
+  out.date("createdAt", pdf.getCreationDate());
+  out.date("modifiedAt", pdf.getModificationDate());
+  out.count("pages", pdf.getPageCount());
+
+  return { status: "available", properties: out.properties() };
+};
+
+type ExtractDocumentPropertiesOptions = {
+  bytes: ArrayBuffer;
+  mimeType: string;
+};
+
+/**
+ * Read the embedded properties of one file. Never throws: a malformed or
+ * unexpectedly shaped document is reported as `unreadable`, because a metadata
+ * panel failing to open is worse than one saying it could not read the file.
+ */
+export const extractDocumentProperties = async ({
+  bytes,
+  mimeType,
+}: ExtractDocumentPropertiesOptions): Promise<DocumentPropertiesResult> => {
+  const format = documentContainerFormat(mimeType);
+  if (format === null) {
+    return { status: "unsupported-format" };
+  }
+
+  try {
+    switch (format) {
+      case "ooxml":
+        return {
+          status: "available",
+          properties: await readOoxmlProperties(bytes),
+        };
+      case "odf":
+        return {
+          status: "available",
+          properties: await readOdfProperties(bytes),
+        };
+      case "pdf":
+        return await readPdfProperties(bytes);
+      default:
+        return format satisfies never;
+    }
+  } catch {
+    return { status: "unreadable" };
+  }
+};
+
+// ── Scrubbing ───────────────────────────────────────────
+
+/**
+ * Either the cleaned bytes or why they could not be produced. `signed` is its
+ * own answer rather than a generic failure: removing metadata from a signed PDF
+ * means rewriting the byte ranges the signature covers, which would silently
+ * invalidate it.
+ */
+export type ScrubDocumentPropertiesResult =
+  | { status: "scrubbed"; bytes: Uint8Array }
+  | { status: "unsupported-format" }
+  | { status: "password-protected" }
+  | { status: "signed" }
+  | { status: "unreadable" };
+
+/**
+ * OOXML core properties that name a person, an organisation or the drafting
+ * history. Counts and the producing application stay: they identify nobody, and
+ * a file stripped of them looks tampered with rather than cleaned.
+ */
+const OOXML_CORE_CLEARED = [
+  "dc:title",
+  "dc:subject",
+  "dc:creator",
+  "dc:description",
+  "cp:keywords",
+  "cp:category",
+  "cp:contentStatus",
+  "cp:lastModifiedBy",
+  "cp:revision",
+  "cp:lastPrinted",
+  "dcterms:created",
+  "dcterms:modified",
+] as const;
+
+/** Extended properties naming the firm, the supervisor or the time spent. */
+const OOXML_APP_CLEARED = ["Company", "Manager", "Template"] as const;
+
+const ODF_META_CLEARED = [
+  "dc:title",
+  "dc:subject",
+  "dc:description",
+  "meta:keyword",
+  "meta:initial-creator",
+  "dc:creator",
+  "meta:printed-by",
+  "meta:creation-date",
+  "dc:date",
+  "meta:print-date",
+  "meta:editing-cycles",
+  "meta:editing-duration",
+] as const;
+
+const clearRegexCache = new Map<string, RegExp>();
+
+/**
+ * Empty every occurrence of `<name>…</name>`, leaving the element in place.
+ * Deleting the elements outright is the other option, but Word and LibreOffice
+ * both treat a missing part as "never had properties" and helpfully write fresh
+ * ones from the current user on the next save; an empty element stays empty.
+ */
+const clearElements = (xml: string, names: readonly string[]): string => {
+  let cleared = xml;
+  for (const name of names) {
+    let regex = clearRegexCache.get(name);
+    if (!regex) {
+      regex = new RegExp(
+        `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
+        "gu",
+      );
+      clearRegexCache.set(name, regex);
+    }
+    cleared = cleared.replace(regex, "$1$2");
+  }
+  return cleared;
+};
+
+/** `<TotalTime>` is numeric: blanking it yields invalid OOXML, so zero it. */
+const ZERO_TOTAL_TIME_RE = /(<TotalTime(?:\s[^>]*)?>)[\s\S]*?(<\/TotalTime>)/gu;
+
+const scrubZipArchive = async (
+  bytes: ArrayBuffer,
+  parts: { path: string; clear: (xml: string) => string }[],
+): Promise<Uint8Array> => {
+  const archive = await loadDocxArchive(bytes);
+  // Read every part first, then write: the reads are independent, and writing
+  // into the archive while another read is in flight would race the same zip.
+  const read = await Promise.all(
+    parts.map(async (part) => ({
+      part,
+      xml: await archive.readEntryString(part.path),
+    })),
+  );
+  for (const { part, xml } of read) {
+    if (xml !== null) {
+      archive.zip.file(part.path, part.clear(xml));
+    }
+  }
+  return await archive.zip.generateAsync({ type: "uint8array" });
+};
+
+/**
+ * `docProps/custom.xml` is deliberately untouched: that part carries stella's
+ * own provenance stamp, which the user opted into and which is not a leak.
+ */
+const scrubOoxml = async (bytes: ArrayBuffer): Promise<Uint8Array> =>
+  await scrubZipArchive(bytes, [
+    {
+      path: "docProps/core.xml",
+      clear: (xml) => clearElements(xml, OOXML_CORE_CLEARED),
+    },
+    {
+      path: "docProps/app.xml",
+      clear: (xml) =>
+        clearElements(xml, OOXML_APP_CLEARED).replace(
+          ZERO_TOTAL_TIME_RE,
+          "$10$2",
+        ),
+    },
+  ]);
+
+const ODF_STATISTIC_RE = /<meta:document-statistic\b[^>]*\/>/gu;
+
+const scrubOdf = async (bytes: ArrayBuffer): Promise<Uint8Array> =>
+  await scrubZipArchive(bytes, [
+    {
+      path: "meta.xml",
+      clear: (xml) =>
+        clearElements(xml, ODF_META_CLEARED).replace(ODF_STATISTIC_RE, ""),
+    },
+  ]);
+
+const scrubPdf = async (
+  bytes: ArrayBuffer,
+  scrubbedAt: Date,
+): Promise<ScrubDocumentPropertiesResult> => {
+  const pdf = await PDF.load(new Uint8Array(bytes));
+  if (pdf.isEncrypted) {
+    return { status: "password-protected" };
+  }
+  if (pdf.getForm()?.properties.hasSignatures === true) {
+    return { status: "signed" };
+  }
+
+  // Overwrite through the document API rather than deleting the trailer's
+  // Info entry: libpdf rebuilds the trailer on save, so a raw delete is
+  // discarded and the original strings survive into the exported bytes.
+  // The dates cannot be unset, so they become the moment this copy was
+  // produced, which is true of the copy and silent about the drafting.
+  pdf.setMetadata({
+    title: "",
+    author: "",
+    subject: "",
+    keywords: [],
+    creator: "",
+    producer: "",
+    creationDate: scrubbedAt,
+    modificationDate: scrubbedAt,
+  });
+  // Info is only half the story. Most producers write the same author and
+  // title again into an XMP packet hanging off the catalog, so clearing Info
+  // alone would leave the names one `strings` invocation away.
+  pdf.getCatalog().delete("Metadata");
+
+  // A full save, never `{ incremental: true }`: an incremental update appends
+  // the cleared state while the originals stay physically present earlier in
+  // the file, which for a scrub is no removal at all.
+  return { status: "scrubbed", bytes: await pdf.save() };
+};
+
+type ScrubDocumentPropertiesOptions = {
+  bytes: ArrayBuffer;
+  mimeType: string;
+  /** Timestamp the cleaned copy is dated with; injected so it is testable. */
+  scrubbedAt?: Date;
+};
+
+/**
+ * Produce a copy of `bytes` without the metadata that identifies who drafted
+ * the document, for whom, and over how long. Never throws: an unexpected
+ * document shape is reported as `unreadable` so the caller refuses the export
+ * rather than handing over a file it failed to clean.
+ */
+export const scrubDocumentProperties = async ({
+  bytes,
+  mimeType,
+  scrubbedAt = new Date(),
+}: ScrubDocumentPropertiesOptions): Promise<ScrubDocumentPropertiesResult> => {
+  const format = documentContainerFormat(mimeType);
+  if (format === null) {
+    return { status: "unsupported-format" };
+  }
+
+  try {
+    switch (format) {
+      case "ooxml":
+        return { status: "scrubbed", bytes: await scrubOoxml(bytes) };
+      case "odf":
+        return { status: "scrubbed", bytes: await scrubOdf(bytes) };
+      case "pdf":
+        return await scrubPdf(bytes, scrubbedAt);
+      default:
+        return format satisfies never;
+    }
+  } catch {
+    return { status: "unreadable" };
+  }
+};
