@@ -376,15 +376,19 @@ Once the publisher's list states that a document exists, a missing, withdrawn
 or temporarily unparseable detail page must not erase that identity from the
 crawl. Permanent detail absence should produce a durable listing-only result
 with the exact `sourceDocumentId`, source URL and a structured reason in
-metadata. Transient network and server failures must fail the page so its
-cursor is retried.
+metadata. Archive the verbatim listing row as `sourceRaw` when no detail
+payload exists, so future parsers can repair historical metadata without
+depending on a steady-state cursor rediscovering that slice. Transient network
+and server failures must fail the page so its cursor is retried.
 
 If the preferred list identity is malformed but the row exposes another exact
 publisher key (for example, a retrieval identifier), persist a namespaced
-fallback identity rather than poisoning the page. If the list lacks a real
-docket, mark the durable label with `caseNumberIsPlaceholder`; a later partial
-refresh must not replace a docket already recovered from detail or its derived
-citation key with that placeholder.
+fallback identity rather than poisoning the page, and expose it as an alias
+when the preferred identity recovers so the pipeline migrates the same row.
+If the list lacks a real docket, mark the durable label with
+`caseNumberIsPlaceholder`; a later partial refresh must advance only the
+observation watermark, never replace any previously recovered detail metadata,
+dates, raw payload pointers, docket or derived citation key.
 
 Likewise, an HTTP 200 search response is not an empty result unless the
 publisher's exact no-results state is present. Fail closed on unknown markup.
@@ -461,8 +465,9 @@ When adding a new country adapter:
     leave a date gap (rule 19)
 13. **Preserve listed-only records** — test a permanent missing/unparseable
     detail, a malformed primary identity with an exact fallback, a placeholder
-    refresh after docket recovery, and an unrecognised HTTP 200 search response
-    (rule 20)
+    refresh after docket recovery, fallback-to-canonical identity migration,
+    archived listing HTML, and an unrecognised HTTP 200 search response (rule
+    20)
 14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
     test every publisher-declared origin against an explicit allowlist (rule 21)
 

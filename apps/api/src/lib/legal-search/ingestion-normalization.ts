@@ -62,6 +62,9 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
     sourceDocumentId: strip(result.sourceDocumentId),
+    sourceDocumentIdAliases: result.sourceDocumentIdAliases
+      ?.map((identity) => strip(identity))
+      .filter((identity): identity is string => identity !== undefined),
     legacySourceUrls: result.legacySourceUrls
       ?.map((url) => strip(url))
       .filter((url): url is string => url !== undefined),

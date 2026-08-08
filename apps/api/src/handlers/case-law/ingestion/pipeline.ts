@@ -538,7 +538,7 @@ const processDecisionAttempt = async ({
   // of the uniqueness key, so the lookup has to split the same way the
   // index does or it would find a row the insert cannot replace.
   const existing = await scopedDb(async (tx) => {
-    const identified = await tx.query.caseLawDecisions.findFirst({
+    const exactIdentified = await tx.query.caseLawDecisions.findFirst({
       where: caseLawDecisionIdentityWhere({
         caseNumber: result.caseNumber,
         language: result.language,
@@ -557,9 +557,46 @@ const processDecisionAttempt = async ({
         sourceRawS3Key: true,
         sourceRawContentType: true,
         sourceUrl: true,
-        languageGroupKey: true,
       },
     });
+    const identified =
+      exactIdentified ??
+      (result.sourceDocumentIdAliases !== undefined &&
+      result.sourceDocumentIdAliases.length > 0
+        ? await tx.query.caseLawDecisions.findFirst({
+            where: {
+              sourceId: { eq: sourceId },
+              sourceDocumentId: { in: [...result.sourceDocumentIdAliases] },
+            },
+            columns: {
+              id: true,
+              ecli: true,
+              metadata: true,
+              sourceHash: true,
+              sourceObservedAt: true,
+              sourceObservationHash: true,
+              redactedAt: true,
+              corpusMirrorStatus: true,
+              sourceRawS3Key: true,
+              sourceRawContentType: true,
+              sourceUrl: true,
+            },
+          })
+        : undefined);
+    if (!exactIdentified && identified) {
+      // Bind the canonical publisher identity as soon as an exact alias finds
+      // the row. This identity-only step is also safe for a tombstone and for
+      // a partial placeholder refresh, both of which intentionally skip the
+      // ordinary metadata/payload update below.
+      // audit: skip — background identity repair for public case-law data
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          sourceDocumentId: result.sourceDocumentId,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(eq(caseLawDecisions.id, identified.id));
+    }
     if (identified || !result.sourceDocumentId) {
       return identified;
     }
@@ -587,7 +624,6 @@ const processDecisionAttempt = async ({
         sourceRawS3Key: true,
         sourceRawContentType: true,
         sourceUrl: true,
-        languageGroupKey: true,
       },
     });
     const ecliMatches =
@@ -631,6 +667,36 @@ const processDecisionAttempt = async ({
   });
 
   if (existing?.redactedAt) {
+    return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      inserted: false,
+      searchVectorFailed: false,
+    };
+  }
+
+  if (existing && result.caseNumberIsPlaceholder === true) {
+    // A listing-only placeholder carries less information than an identified
+    // row that was previously enriched from detail. Advance only the source
+    // observation watermark: replacing metadata, dates, raw-source pointers
+    // or payload fields would make a temporary publisher regression durable.
+    await scopedDb(async (tx) => {
+      // audit: skip — background case-law observation watermark; public data
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          sourceObservedAt: observedAt,
+          sourceObservationOrder: observationOrder,
+          sourceObservationHash: result.rawHash,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, existing.id),
+            storedObservationPrecedes({ order: observationOrder }),
+            isNull(caseLawDecisions.redactedAt),
+          ),
+        );
+    });
     return {
       status: PROCESS_DECISION_STATUS.COMPLETE,
       inserted: false,
@@ -990,8 +1056,6 @@ const processDecisionAttempt = async ({
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
-        const preserveRecoveredCaseNumber =
-          result.caseNumberIsPlaceholder === true;
         // A refresh with no document of its own may not overwrite one.
         // Ordinary empty refreshes therefore guard a separate payload
         // statement, while a pending-mirror repair claims its exact owner
@@ -1006,21 +1070,15 @@ const processDecisionAttempt = async ({
         const updated = await tx
           .update(caseLawDecisions)
           .set({
-            ...(preserveRecoveredCaseNumber
-              ? {}
-              : {
-                  caseNumber: result.caseNumber,
-                  citationKey: citationKeyOf(result.caseNumber),
-                }),
+            caseNumber: result.caseNumber,
+            citationKey: citationKeyOf(result.caseNumber),
             sourceDocumentId: result.sourceDocumentId,
             ecli: result.ecli,
             court: result.court,
             country: result.country,
             language: result.language,
             sheetNumber: result.sheetNumber,
-            languageGroupKey: preserveRecoveredCaseNumber
-              ? (result.ecli ?? existing.languageGroupKey)
-              : languageGroupKey,
+            languageGroupKey,
             decisionDate: result.decisionDate,
             decisionType: result.decisionType,
             ...(payloadNeedsGuard ? {} : payloadColumns),

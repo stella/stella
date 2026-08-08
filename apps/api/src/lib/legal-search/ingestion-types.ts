@@ -30,6 +30,12 @@ export type IngestionResult = {
    */
   sourceDocumentId?: string | undefined;
   /**
+   * Older exact publisher identifiers for this same document. The pipeline
+   * may migrate an identified row from one of these aliases to the canonical
+   * `sourceDocumentId` without inserting a duplicate.
+   */
+  sourceDocumentIdAliases?: readonly string[] | undefined;
+  /**
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to

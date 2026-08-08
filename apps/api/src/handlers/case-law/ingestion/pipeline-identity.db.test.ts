@@ -379,6 +379,7 @@ if (!databaseUrl || !runPostgresTests) {
         input: {
           ...placeholder,
           caseNumber: recoveredCaseNumber,
+          metadata: { ...placeholder.metadata, recoveredDetail: true },
           rawHash: "hash-recovered-docket",
         },
         observationOrder: 2n,
@@ -406,8 +407,16 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const [row] = await db.execute(
-        sql<{ caseNumber: string; citationKey: string }>`
-          SELECT case_number AS "caseNumber", citation_key AS "citationKey"
+        sql<{
+          caseNumber: string;
+          citationKey: string;
+          metadata: Record<string, unknown>;
+          sourceHash: string;
+        }>`
+          SELECT case_number AS "caseNumber",
+                 citation_key AS "citationKey",
+                 metadata,
+                 source_hash AS "sourceHash"
           FROM case_law_decisions
           WHERE source_id = ${sourceId}
             AND source_document_id = ${publisherId}
@@ -419,6 +428,61 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? row["citationKey"] : undefined).toBe(
         bareCitationKey(recoveredCaseNumber),
       );
+      expect(isRecord(row) ? row["sourceHash"] : undefined).toBe(
+        "hash-recovered-docket",
+      );
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["recoveredDetail"]
+          : undefined,
+      ).toBe(true);
+    });
+
+    test("migrates an exact publisher-id alias without duplicating the row", async () => {
+      const fallbackId = "nalus-sz:2-91-24_1";
+      const canonicalId = "nalus-record:7391";
+      const fallback = decisionAt("Publisher alias migration", fallbackId);
+      await processDecision({
+        input: fallback,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...fallback,
+          sourceDocumentId: canonicalId,
+          sourceDocumentIdAliases: [fallbackId],
+          rawHash: "hash-canonical-publisher-id",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        canonicalCount: number;
+        fallbackCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${canonicalId}
+               )::int AS "canonicalCount",
+               count(*) FILTER (
+                 WHERE source_document_id = ${fallbackId}
+               )::int AS "fallbackCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${fallback.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["canonicalCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
     test("an older overlapping observation cannot overwrite a newer winner", async () => {

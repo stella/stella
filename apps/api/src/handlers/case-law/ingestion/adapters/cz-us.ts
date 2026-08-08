@@ -375,6 +375,10 @@ const parseDecisionPage = ({
   return {
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
+    sourceDocumentIdAliases:
+      nalusRecordId === undefined || nalusSz === undefined
+        ? undefined
+        : [`nalus-sz:${nalusSz}`],
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
       ecliCounter,
@@ -435,6 +439,7 @@ type ListedDecision = {
   caseNumber: string;
   counter?: number | undefined;
   listingDocketMissing?: true | undefined;
+  listingHtml: string;
   sourceDocumentId: string;
   nalusRecordId?: string | undefined;
   sourceUrl: string;
@@ -807,6 +812,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         nalusRecordId === undefined
           ? `nalus-sz:${sz}`
           : `nalus-record:${nalusRecordId}`,
+      listingHtml: `${primary.toString()}${actions.toString()}`,
       ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
       sourceUrl: sourceUrl.href,
       ...(sz === undefined ? {} : { sz }),
@@ -988,6 +994,10 @@ const listedOnlyDecision = (
   caseNumber: listed.caseNumber,
   caseNumberIsPlaceholder: listed.listingDocketMissing === true,
   sourceDocumentId: listed.sourceDocumentId,
+  sourceDocumentIdAliases:
+    listed.nalusRecordId === undefined || listed.sz === undefined
+      ? undefined
+      : [`nalus-sz:${listed.sz}`],
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,
     listed.counter,
@@ -1015,8 +1025,8 @@ const listedOnlyDecision = (
   ),
   parserVersion: PARSER_VERSION,
   documentAst: EMPTY_AST,
-  sourceRaw,
-  ...(sourceRaw === undefined ? {} : { sourceRawContentType: "text/html" }),
+  sourceRaw: sourceRaw ?? listed.listingHtml,
+  sourceRawContentType: "text/html",
 });
 
 const fetchListedDecisions = async (

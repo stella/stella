@@ -755,6 +755,8 @@ describe("czUsAdapter.fetchPage", () => {
         listedOnlyReason: "missing-text-action",
       },
     });
+    expect(page.decisions[0]?.sourceRaw).toContain("ResultDetail.aspx?id=7201");
+    expect(page.decisions[0]?.sourceRawContentType).toBe("text/html");
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.coverage?.collected).toBe(1);
   });
