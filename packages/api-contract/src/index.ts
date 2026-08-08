@@ -9,6 +9,20 @@ export type {
   ChatSendRequest,
   SafeId,
 } from "./chat";
+export {
+  DOCUMENT_PROPERTY_KEYS,
+  DOCUMENT_PROPERTY_MIME_TYPES,
+  documentContainerFormat,
+  hasDocumentProperties,
+} from "./document-properties";
+export type {
+  DocumentContainerFormat,
+  DocumentPropertiesResult,
+  DocumentPropertiesStatus,
+  DocumentProperty,
+  DocumentPropertyKey,
+  DocumentPropertyValue,
+} from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {

@@ -110,7 +110,7 @@
         "title": "Ein KI-Agent, der über Ihre Akten, Dateien und Tools hinweg arbeitet."
       },
       "anonymization": {
-        "blurb": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem anonymisierten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
+        "blurb": "Entfernen Sie Namen, Organisationen und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem anonymisierten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
         "discover": "Entdecken Sie die Anonymisierung",
         "eyebrow": "Anonymisierung",
         "title": "Material für KI vorbereiten, ohne identifizierende Angaben preiszugeben."
@@ -263,7 +263,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Entfernt Namen, Entitäten und identifizierende Angaben, bevor Material an die KI geht.",
+          "body": "Entfernt Namen, Organisationen und identifizierende Angaben, bevor Material an die KI geht.",
           "title": "Identifizierende Angaben bleiben draußen"
         },
         "1": {
@@ -288,20 +288,20 @@
           "question": "Ist die Anonymisierung schon verfügbar?"
         },
         "1": {
-          "answer": "Sie bereitet Material für KI-Workflows auf, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben; das anonymisierte Ergebnis bleibt zur Prüfung erhalten.",
+          "answer": "Sie bereitet Material für KI-Workflows auf, ohne Namen, Organisationen oder identifizierende Angaben preiszugeben; das anonymisierte Ergebnis bleibt zur Prüfung erhalten.",
           "question": "Wobei hilft sie?"
         }
       },
-      "metaDescription": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus Chat und Prüfung, mit prüfbarem Ergebnis.",
+      "metaDescription": "Entfernen Sie Namen, Organisationen und identifizierende Angaben, bevor Material die KI erreicht, direkt aus Chat und Prüfung, mit prüfbarem Ergebnis.",
       "metaTitle": "Dokumente anonymisieren für KI in der Kanzlei | stella",
       "quickAnswer": {
-        "answer": "Sie entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das anonymisierte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
+        "answer": "Sie entfernt Namen, Organisationen und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das anonymisierte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
         "question": "Was ist Anonymisierung in stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Hält Namen, Entitäten und identifizierende Angaben aus KI-Schritten heraus",
+            "0": "Hält Namen, Organisationen und identifizierende Angaben aus KI-Schritten heraus",
             "1": "Für juristische KI-Workflows gebaut, nicht für generisches Maskieren",
             "2": "Vor dem nächsten Schritt liegt ein prüfbares anonymisiertes Dokument vor"
           },

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -11,6 +12,7 @@ import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
+import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -134,6 +136,66 @@ const stampedDownloadEndpoint = createSafeHandler(
   },
 );
 
+export const readDocumentPropertiesEndpoint = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    params: workspaceParams({ fieldId: tSafeId("field") }),
+  } satisfies HandlerConfig,
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readDocumentProperties({
+            fieldId,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            scopedDb,
+            workspaceId,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export const scrubbedDownloadEndpoint = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    params: workspaceParams({ fieldId: tSafeId("field") }),
+  } satisfies HandlerConfig,
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readScrubbedDownload({
+            fieldId,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            scopedDb,
+            workspaceId,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
 export const ocrExportEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
@@ -184,9 +246,21 @@ export const filesRoute = new Elysia({
     params: readEmailHtmlPreviewEndpoint.config.params,
     permissions: readEmailHtmlPreviewEndpoint.config.permissions,
   })
+  .get(
+    "/document-properties/:fieldId",
+    readDocumentPropertiesEndpoint.handler,
+    {
+      params: readDocumentPropertiesEndpoint.config.params,
+      permissions: readDocumentPropertiesEndpoint.config.permissions,
+    },
+  )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,
+  })
+  .get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
+    params: scrubbedDownloadEndpoint.config.params,
+    permissions: scrubbedDownloadEndpoint.config.permissions,
   })
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,

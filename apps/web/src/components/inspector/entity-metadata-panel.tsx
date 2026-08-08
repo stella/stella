@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import {
   useCallback,
   useOptimistic,
@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
@@ -326,14 +327,14 @@ const EntityMetadataContent = ({
     />
   );
 
-  // Resolve the current version (if loaded) for the Document info section.
+  // Resolve the current version (if loaded) for the stella record section.
   // We never block render on this — the section just shows a muted dash
   // until the versions query resolves.
   const currentVersion =
     versionsData?.versions.find(
       (v) => v.id === versionsData.currentVersionId,
     ) ?? null;
-  const authorLabel = currentVersion?.author?.name ?? null;
+  const updatedByLabel = currentVersion?.author?.name ?? null;
   const versionLabel = currentVersion
     ? t("inspector.metadata.versionCurrent", {
         version: String(currentVersion.versionNumber),
@@ -341,16 +342,116 @@ const EntityMetadataContent = ({
     : null;
   const updatedAtIso = currentVersion?.createdAt ?? null;
 
+  // The three groups answer different questions and must not be mixed: what
+  // stella recorded, what the file says about itself, and what AI read out of
+  // it. Columns a person filled in are a fourth, editable, group.
+  const aiFields = visibleFields.filter(
+    (field) =>
+      visiblePropertyById.get(field.propertyId)?.tool.type === "ai-model",
+  );
+  const manualFields = visibleFields.filter(
+    (field) =>
+      visiblePropertyById.get(field.propertyId)?.tool.type !== "ai-model",
+  );
+
+  const renderField = (field: FieldInfoRow) => {
+    const property = visiblePropertyById.get(field.propertyId);
+    if (!property) {
+      return null;
+    }
+    const isPending = field.content?.type === "pending";
+    const isAiField = property.tool.type === "ai-model";
+    const canJustify =
+      isAiField &&
+      onAiFieldClick !== undefined &&
+      field.content !== undefined &&
+      field.content.type !== "pending" &&
+      field.content.type !== "error";
+    const isActive = isAiField && field.id === activeJustificationFieldId;
+    const handleJustifyClick = canJustify
+      ? () =>
+          onAiFieldClick({
+            fieldId: field.id,
+            propertyId: field.propertyId,
+          })
+      : undefined;
+    const fieldBody = (
+      <>
+        <span
+          className={cn(
+            "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
+            isPending && "opacity-60",
+          )}
+        >
+          {property.name}
+        </span>
+        <div className="text-foreground text-sm leading-snug">
+          <EditableField
+            content={field.content}
+            entityKind={entity.kind}
+            entityId={entity.entityId}
+            property={property}
+            propertyId={field.propertyId}
+            readonly={isAiField}
+            workspaceId={workspaceId}
+          />
+        </div>
+      </>
+    );
+    if (handleJustifyClick) {
+      return (
+        <div
+          className={cn(
+            "rounded-md transition-colors",
+            isActive && "bg-accent",
+          )}
+          key={field.id + field.propertyId}
+        >
+          <button
+            aria-pressed={isActive}
+            className={cn(
+              "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors",
+              !isActive && "hover:bg-accent",
+            )}
+            onClick={handleJustifyClick}
+            type="button"
+          >
+            {fieldBody}
+          </button>
+          {isActive && activeJustification && fileFieldId !== null && (
+            <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
+              <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
+                {t("workspaces.justification")}
+              </div>
+              <div className="text-foreground-strong-muted text-xs leading-relaxed break-words">
+                <Justification
+                  justification={activeJustification}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div
+        className="flex flex-col gap-1 rounded-md px-2 py-2"
+        key={field.id + field.propertyId}
+      >
+        {fieldBody}
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <SectionHeading>
-          {t("inspector.metadata.documentInfoHeading")}
-        </SectionHeading>
+        <SectionHeading>{t("inspector.metadata.stellaHeading")}</SectionHeading>
         <div className="flex flex-col gap-px px-2 pb-2">
           <ReadOnlyRow
-            label={t("inspector.metadata.author")}
-            value={authorLabel}
+            label={t("inspector.metadata.lastUpdatedBy")}
+            value={updatedByLabel}
           />
           <ReadOnlyRow label={t("common.version")} value={versionLabel} />
           {updatedAtIso !== null && (
@@ -362,117 +463,48 @@ const EntityMetadataContent = ({
           )}
         </div>
 
+        {fileFieldId !== null && (
+          <>
+            <SectionHeading>
+              {t("inspector.metadata.documentProperties.heading")}
+            </SectionHeading>
+            <DocumentPropertiesSection
+              fileFieldId={fileFieldId}
+              workspaceId={workspaceId}
+            />
+          </>
+        )}
+
+        {aiFields.length > 0 && (
+          <>
+            <SectionHeading
+              icon={
+                <Sparkles
+                  aria-hidden="true"
+                  className="text-primary size-3.5"
+                />
+              }
+            >
+              {t("inspector.metadata.aiExtractedHeading")}
+            </SectionHeading>
+            <div className="flex flex-col gap-px p-2 pt-0">
+              {aiFields.map(renderField)}
+            </div>
+          </>
+        )}
+
         <SectionHeading>
           {t("inspector.metadata.matterColumnsHeading")}
         </SectionHeading>
-        {visibleFields.length === 0 ? (
+        {manualFields.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 px-6 py-6 text-center">
             <span className="text-muted-foreground text-sm">
-              {t("workspaces.noFieldsToView")}
+              {t("inspector.metadata.noMatterColumns")}
             </span>
           </div>
         ) : (
           <div className="flex flex-col gap-px p-2 pt-0">
-            {visibleFields.map((field) => {
-              const property = visibleProperties.find(
-                (p) => p.id === field.propertyId,
-              );
-              if (!property) {
-                return null;
-              }
-              const isPending = field.content?.type === "pending";
-              const isAiField = property.tool.type === "ai-model";
-              const canJustify =
-                isAiField &&
-                onAiFieldClick !== undefined &&
-                field.content !== undefined &&
-                field.content.type !== "pending" &&
-                field.content.type !== "error";
-              const isActive =
-                isAiField && field.id === activeJustificationFieldId;
-              const handleJustifyClick = canJustify
-                ? () =>
-                    onAiFieldClick({
-                      fieldId: field.id,
-                      propertyId: field.propertyId,
-                    })
-                : undefined;
-              const fieldBody = (
-                <>
-                  <span
-                    className={cn(
-                      "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
-                      isPending && "opacity-60",
-                    )}
-                  >
-                    {isAiField && (
-                      <Sparkles
-                        aria-hidden="true"
-                        className="text-primary size-3"
-                      />
-                    )}
-                    {property.name}
-                  </span>
-                  <div className="text-foreground text-sm leading-snug">
-                    <EditableField
-                      content={field.content}
-                      entityKind={entity.kind}
-                      entityId={entity.entityId}
-                      property={property}
-                      propertyId={field.propertyId}
-                      readonly={isAiField}
-                      workspaceId={workspaceId}
-                    />
-                  </div>
-                </>
-              );
-              if (handleJustifyClick) {
-                return (
-                  <div
-                    className={cn(
-                      "rounded-md transition-colors",
-                      isActive && "bg-accent",
-                    )}
-                    key={field.id + field.propertyId}
-                  >
-                    <button
-                      aria-pressed={isActive}
-                      className={cn(
-                        "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors",
-                        !isActive && "hover:bg-accent",
-                      )}
-                      onClick={handleJustifyClick}
-                      type="button"
-                    >
-                      {fieldBody}
-                    </button>
-                    {isActive &&
-                      activeJustification &&
-                      fileFieldId !== null && (
-                        <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
-                          <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
-                            {t("workspaces.justification")}
-                          </div>
-                          <div className="text-foreground-strong-muted text-xs leading-relaxed break-words">
-                            <Justification
-                              justification={activeJustification}
-                              workspaceId={workspaceId}
-                            />
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                );
-              }
-              return (
-                <div
-                  className="flex flex-col gap-1 rounded-md px-2 py-2"
-                  key={field.id + field.propertyId}
-                >
-                  {fieldBody}
-                </div>
-              );
-            })}
+            {manualFields.map(renderField)}
           </div>
         )}
       </div>
@@ -483,8 +515,12 @@ const EntityMetadataContent = ({
   );
 };
 
-const SectionHeading = ({ children }: PropsWithChildren) => (
-  <div className="bg-muted/40 text-foreground border-b px-4 py-2 text-sm font-semibold">
+const SectionHeading = ({
+  children,
+  icon,
+}: PropsWithChildren<{ icon?: ReactNode }>) => (
+  <div className="bg-muted/40 text-foreground flex items-center gap-1.5 border-b px-4 py-2 text-sm font-semibold">
+    {icon}
     {children}
   </div>
 );

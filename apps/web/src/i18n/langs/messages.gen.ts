@@ -502,7 +502,7 @@ type Messages = {
       "category": {
         "entities": "In this matter";
       };
-      "loadError": "Failed to load entities";
+      "loadError": "Failed to load items";
     };
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.";
@@ -868,6 +868,7 @@ type Messages = {
     "disconnect": "Disconnect";
     "displayName": "Display name";
     "document": "Document";
+    "documentTitle": "Document title";
     "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
@@ -1255,7 +1256,7 @@ type Messages = {
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
-      "legalSourceEntityLimitReached": "This matter has reached the entity limit, so the document could not be created.";
+      "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
@@ -1269,14 +1270,14 @@ type Messages = {
     "failedToChangeViewType": "Failed to change view type";
     "failedToCheckSlugAvailability": "Failed to check slug availability";
     "failedToCreateContact": "Failed to create client";
-    "failedToCreateEntity": "Failed to create entity";
+    "failedToCreateEntity": "Failed to create item";
     "failedToCreateOrganization": "Failed to create organization";
     "failedToCreateProperty": "Failed to create property";
     "failedToCreateView": "Failed to create view";
     "failedToCreateWorkspace": "Failed to create matter";
     "failedToDeclineInvitation": "Failed to decline invitation";
     "failedToDeleteContact": "Failed to delete client";
-    "failedToDeleteEntities": "Failed to delete entities";
+    "failedToDeleteEntities": "Failed to delete items";
     "failedToDeleteProperty": "Failed to delete property";
     "failedToDeleteTemplate": "Failed to delete template";
     "failedToDeleteView": "Failed to delete view";
@@ -1514,7 +1515,6 @@ type Messages = {
       "aiHelp": "Writes text from your instructions and can read the selected input documents.";
       "createDocument": "Create document";
       "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.";
-      "documentTitle": "Document title";
       "documentTitlePlaceholder": "e.g. Summary memo";
       "documentTitleRequired": "Enter a document title.";
       "empty": "Add at least one step.";
@@ -1817,16 +1817,16 @@ type Messages = {
       "contextMenuAddAction": "Anonymize selection";
       "deleteAction": "Delete term";
       "detectedHeading": "Detected in this document ({count})";
-      "detectingMatches": "Detecting entities in this document…";
+      "detectingMatches": "Detecting matches in this document…";
       "emptyState": "No workspace-specific terms yet. Add one above.";
       "ignoreAction": "Ignore in this document";
       "ignoreScopeAlways": "Always ignore";
       "ignoreScopeDocument": "Ignore in this matter";
       "ignoreScopeMenuAriaLabel": "Ignore scope";
-      "labelPickerAriaLabel": "Entity label";
+      "labelPickerAriaLabel": "Match label";
       "labelPickerEmpty": "No matching label.";
       "labelPickerPlaceholder": "Label";
-      "matchCount": "{count} entities highlighted in this document.";
+      "matchCount": "{count} matches highlighted in this document.";
       "matchedWorkspaceTermsHeading": "Matching workspace terms ({count})";
       "noMatchesInDocument": "None of your workspace terms appear in this document.";
       "openFullViewHint": "Open the file in full view to see anonymization highlights and per-document match counts.";
@@ -1858,9 +1858,42 @@ type Messages = {
       "title": "Matter context";
     };
     "metadata": {
-      "author": "Author";
-      "documentInfoHeading": "Document info";
+      "aiExtractedHeading": "Extracted by AI";
+      "documentProperties": {
+        "empty": "This file records no properties of its own";
+        "heading": "File properties";
+        "keys": {
+          "application": "Application";
+          "applicationVersion": "Application version";
+          "author": "Document author";
+          "characters": "Character count";
+          "company": "Company";
+          "contentStatus": "Content status";
+          "createdAt": "Date created";
+          "editingMinutes": "Total editing time";
+          "keywords": "Document keywords";
+          "lastModifiedBy": "Last saved by";
+          "lastPrintedAt": "Last printed";
+          "manager": "Manager";
+          "modifiedAt": "Date modified";
+          "pages": "Page count";
+          "paragraphs": "Paragraph count";
+          "producer": "PDF producer";
+          "revision": "Revision number";
+          "slides": "Slide count";
+          "subject": "Subject";
+          "template": "Document template";
+          "words": "Word count";
+        };
+        "passwordProtected": "The file is password-protected, so its properties cannot be read";
+        "tooLarge": "The file is too large to read its properties";
+        "unreadable": "The file's properties could not be read";
+        "unsupportedFormat": "This file type does not carry document properties";
+      };
+      "lastUpdatedBy": "Last updated by";
       "matterColumnsHeading": "Matter columns";
+      "noMatterColumns": "No matter columns are filled in for this document yet";
+      "stellaHeading": "Stored in stella";
       "updatedAt": "Updated";
       "versionCurrent": "v{version} (current)";
     };
@@ -2865,7 +2898,7 @@ type Messages = {
         "importHint": "CSV (canonical,label,variants), TXT (one per line), or JSON";
         "importParseError": "Couldn't read that file. Use CSV, TXT, or JSON.";
         "importSuccessToast": "Imported {count} terms.";
-        "labelPickerAriaLabel": "Entity label";
+        "labelPickerAriaLabel": "Match label";
         "labelPickerEmpty": "No matching label.";
         "labelPickerPlaceholder": "Label";
         "termAddedToast": "Added \"{value}\" to the team-wide deny list.";
@@ -3089,14 +3122,14 @@ type Messages = {
     "dueDate": "Due date";
     "hardDeadline": "Hard deadline";
     "hardDeadlineOverdue": "Hard deadline overdue";
-    "linkEntity": "Link entity";
-    "linkedEntities": "Linked entities";
+    "linkEntity": "Link item";
+    "linkedEntities": "Linked items";
     "myTasksTitle": "My tasks";
     "myWorkTitle": "My work";
     "newTask": "New task";
     "noActivity": "No activity yet";
     "noAssignees": "No assignees";
-    "noLinks": "No linked entities";
+    "noLinks": "No linked items";
     "noOwner": "No accountable owner";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
@@ -3619,8 +3652,10 @@ type Messages = {
       "downloadExtractedText": "Extracted text (.txt)";
       "downloadOriginal": "Original file";
       "downloadPdf": "PDF";
+      "downloadScrubbed": "Download without metadata";
+      "downloadScrubbedHint": "Removes the author, company and drafting history the file carries. The copy in the matter keeps them.";
       "downloadSearchablePdf": "Searchable PDF";
-      "maxEntitiesReached": "Max entities count reached";
+      "maxEntitiesReached": "Maximum number of items reached";
       "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
@@ -3628,6 +3663,7 @@ type Messages = {
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "runOcr": "Queue OCR";
+      "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded";
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}";
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";
@@ -3783,7 +3819,6 @@ type Messages = {
     "newDocument": "New document";
     "newFolder": "New folder";
     "noDocuments": "No documents yet";
-    "noFieldsToView": "This entity doesn't have any fields to view";
     "noGrouping": "No grouping";
     "noItems": "No items yet";
     "noMatters": "No matters yet. Create your first matter to get started.";
@@ -3928,7 +3963,7 @@ type Messages = {
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
       "backToPeek": "Back to peek";
-      "entitySidebar": "Entity details";
+      "entitySidebar": "Document details";
       "evidence": "Justification";
       "fullView": "Full view";
       "incorrectPassword": "Incorrect password. Please try again.";
@@ -3994,7 +4029,7 @@ type Messages = {
       "editConditionsDescription": "Set conditions for when this property should be generated.";
       "editConditionsWhen": "Only run extraction when …";
       "enterAValue": "Enter a value";
-      "extractEntityType": "Extract entity type";
+      "extractEntityType": "Extract information";
       "extractEntityTypeDescription": "Create an AI-extracted table column.";
       "extractionInstruction": "AI instruction";
       "extractionInstructionHelp": "Reruns when source documents or referenced columns change.";
@@ -4204,13 +4239,13 @@ type Messages = {
       "allManualInputsTitle": "All properties are manual inputs";
       "generate": "Generate";
       "largeRunPrompt": {
-        "description": "This will queue AI extraction for {count} entities. Start it only if you want to process this many files now.";
+        "description": "This will queue AI extraction for {count} documents. Start it only if you want to process this many files now.";
         "start": "Start extraction";
         "title": "Start AI extraction?";
       };
       "noFieldsToProcess": "No fields to process";
       "serviceTierPrompt": {
-        "description": "This workflow will queue AI extraction for {count} entities. Start now with standard credits, or use reduced credits and wait longer.";
+        "description": "This workflow will queue AI extraction for {count} documents. Start now with standard credits, or use reduced credits and wait longer.";
         "flex": "Use reduced credits";
         "standard": "Start now";
         "title": "Use reduced credits?";

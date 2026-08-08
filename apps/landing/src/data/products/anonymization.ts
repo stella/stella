@@ -7,10 +7,10 @@ export const anonymization: Product = {
   eyebrow: "Anonymization",
   title: "Prepare material for AI without exposing identifying details.",
   summary:
-    "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
+    "Remove names, organisations, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
   metaTitle: "Document anonymization for legal AI | stella",
   metaDescription:
-    "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
+    "Remove names, organisations, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
   hero: {
     type: "live-anonymize",
     alt: "stella · Anonymization — live demo",
@@ -21,12 +21,12 @@ export const anonymization: Product = {
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
-      "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
+      "It removes names, organisations, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
   },
   capabilities: [
     {
       title: "Keeps identifying details out",
-      body: "Removes names, entities, and identifying details before material reaches an AI step.",
+      body: "Removes names, organisations, and identifying details before material reaches an AI step.",
     },
     {
       title: "Works in chat and review",
@@ -45,7 +45,7 @@ export const anonymization: Product = {
     {
       heading: "Prepare material before it reaches AI",
       bullets: [
-        "Keeps names, entities, and identifying details out of AI steps",
+        "Keeps names, organisations, and identifying details out of AI steps",
         "Built for legal AI workflows rather than generic document masking",
         "Leaves a reviewable redacted document before the next step",
       ],
@@ -68,7 +68,7 @@ export const anonymization: Product = {
     {
       question: "What does it help with?",
       answer:
-        "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
+        "Preparing material for AI workflows without exposing names, organisations, or identifying details, while keeping the redacted result available for review.",
     },
   ],
   adjacent: [

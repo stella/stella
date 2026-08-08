@@ -49,6 +49,15 @@ interpolation variables semantic (`{documentName}`, not `{value}`), use ICU
 plural/select branches for grammatical variation, and never concatenate
 translated fragments whose word order differs by locale.
 
+**Never call anything an "entity" in user-facing copy**, in English or as a
+calque (`entita`, `Entität`, `entidad`, `entité`, `entidade`, `encja`, ...).
+It is the database's word for a row and means nothing to a lawyer. Name the
+concrete thing the string is about — document, file, folder, task, matter —
+and fall back to "item" only when the string genuinely covers all of them. In
+anonymization, what the detector finds is a **match**, not an entity. The
+`item` concept in `glossary.json` enforces this with `forbiddenAlways`, so it
+fires on the English source too, not only on translations.
+
 Key naming, pluralization, and style rules are documented
 in `apps/web/src/i18n/TERMINOLOGY.md`.
 
@@ -78,7 +87,15 @@ When introducing a NEW concept (or changing a preferred term):
    and compound forms a translator might use — e.g. de
    `Sache`/`Sachen`/`Mandatsdaten`, sk `Vec`/`veci`/`vecou`, et
    `asi`/`asja`/`asjad`. A base form alone misses inflected drift.
-4. **Apply consistently.** `bun run i18n:check` fails on new
+4. **Pick the right ban field.** `forbidden` is concept-gated: it fires
+   only where the English source names the concept (or a `keyTriggers`
+   path matches), which is what stops a common word from false-firing
+   everywhere. `forbiddenAlways` drops that gate, for wording that is
+   wrong in every context. Use it when a concept-gated ban would go
+   blind the moment someone rewords the English source, and only once
+   you have checked that no legitimate use of the word exists in that
+   locale.
+5. **Apply consistently.** `bun run i18n:check` fails on new
    forbidden renderings; fix the translations, or — only for
    genuine pre-existing debt — grandfather with
    `i18n-lint <dir> --write-baseline` and flag for native review.
