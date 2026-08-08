@@ -37,6 +37,24 @@ const walk = (directory: string): string[] => {
  * outside the helper is what reproduces the branchy part of the rule.
  */
 describe("session cookie name has a single owner", () => {
+  /**
+   * `useSecureCookies` decides whether better-auth prepends `__Secure-`, so a
+   * module that computes it independently can produce a name the readers do not
+   * expect. Passing the policy's value through is fine — `auth.ts` does exactly
+   * that — so this looks for the value being *assigned* an expression rather
+   * than for the identifier appearing at all.
+   */
+  test("no other module computes useSecureCookies", () => {
+    const assigned = /useSecureCookies:\s*[^,\n]/u;
+    const offenders = SEARCH_ROOTS.flatMap((root) => walk(root)).filter(
+      (file) =>
+        !OWNERS.has(file) &&
+        assigned.test(readFileSync(path.join(API_ROOT, file), "utf-8")),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   test("no other module derives the prefix itself", () => {
     const offenders = SEARCH_ROOTS.flatMap((root) => walk(root)).filter(
       (file) =>

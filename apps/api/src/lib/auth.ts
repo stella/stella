@@ -38,7 +38,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { authCookiePrefixOverride } from "@/api/lib/auth-cookie-name";
+import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
@@ -420,7 +420,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-const authCookiePrefix = authCookiePrefixOverride();
+const { cookiePrefix, useSecureCookies } = authCookiePolicy();
 
 /**
  * Keeps `user.name` from ever persisting as an empty string.
@@ -785,8 +785,8 @@ const createAuth = () => {
       freshAge: 0,
     },
     advanced: {
-      ...(authCookiePrefix ? { cookiePrefix: authCookiePrefix } : {}),
-      useSecureCookies: !env.isDev,
+      cookiePrefix,
+      useSecureCookies,
     },
     rateLimit: {
       enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
