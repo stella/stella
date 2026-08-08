@@ -4,6 +4,7 @@ import type {
 } from "@/components/chat/prompt-slash-extension";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { getReservedChatCommands } from "@/lib/reserved-chat-commands";
+import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
 type SlashShortcutRow = Pick<
   ChatPrompt,
@@ -44,20 +45,21 @@ type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
   /**
-   * The reserved `/new` command only has submit handling on the chat
-   * composers, so they stay off by default to keep them out of other editors
-   * (workspace property prompts, template studio) that reuse this builder.
+   * Reserved-command availability context. Reserved commands only have
+   * submit handling on the chat composers, so `null`/absent keeps them out
+   * of other editors (workspace property prompts, template studio) that
+   * reuse this builder.
    */
-  includeReservedCommands?: boolean;
+  reservedCommands?: ReservedChatCommandContext | null;
 };
 
 export const buildChatSlashItems = ({
   shortcuts,
   skillPages,
-  includeReservedCommands = false,
+  reservedCommands = null,
 }: BuildChatSlashItemsInput): SlashItem[] => {
-  const commandItems: SlashItem[] = includeReservedCommands
-    ? getReservedChatCommands().map((command) => ({
+  const commandItems: SlashItem[] = reservedCommands
+    ? getReservedChatCommands(reservedCommands).map((command) => ({
         kind: "command" as const,
         command,
       }))

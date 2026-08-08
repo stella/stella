@@ -577,6 +577,7 @@
     "recapLoading": "Apibendrinamas pokalbis…",
     "removeSuggestion": "(pašalinti)",
     "renameThread": "Pervadinti pokalbį",
+    "renameUnavailableEmptyThread": "Pirmiausia išsiųskite žinutę, tada pokalbį bus galima pervadinti.",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
+    "suggestTitle": "Pasiūlyti pavadinimą",
+    "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
+    "suggestingTitle": "Siūlomas pavadinimas…",
     "suggestionSeverity": {
       "style": "Stilius",
       "substantive": "Esminis",

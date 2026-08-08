@@ -577,6 +577,7 @@
     "recapLoading": "Vestlus võetakse kokku…",
     "removeSuggestion": "(eemalda)",
     "renameThread": "Nimeta vestlus ümber",
+    "renameUnavailableEmptyThread": "Saada esmalt sõnum, seejärel saab vestluse ümber nimetada.",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
     "richContentLoading": "Interaktiivse sisu laadimine…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "suggestTitle": "Paku pealkiri",
+    "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
+    "suggestingTitle": "Pealkirja pakkumine…",
     "suggestionSeverity": {
       "style": "Stiil",
       "substantive": "Sisuline",

@@ -39,6 +39,12 @@ type RenameState = {
   onCancel: () => void;
   /** Optional element appended after the input — e.g. a file extension. */
   suffix?: ReactNode;
+  /**
+   * Optional action rendered between the input and Done (e.g. the chat
+   * tab's title-suggest wand). See `InlineEdit`'s `action` slot for the
+   * required `onMouseDown` trigger semantics.
+   */
+  action?: ReactNode;
 };
 
 type InspectorTabHeaderProps = {
@@ -123,6 +129,7 @@ export const InspectorTabHeader = ({
         </Button>
         {rename?.active ? (
           <InlineEdit
+            action={rename.action}
             inputClassName="w-40 text-xs"
             onCancel={rename.onCancel}
             onChange={rename.onChange}

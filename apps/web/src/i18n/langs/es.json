@@ -577,6 +577,7 @@
     "recapLoading": "Resumiendo la conversación…",
     "removeSuggestion": "(eliminar)",
     "renameThread": "Cambiar el nombre de la conversación",
+    "renameUnavailableEmptyThread": "Envía un mensaje primero; después podrás cambiar el nombre de la conversación.",
     "resend": "Reenviar",
     "resizeThread": "Cambiar tamaño de la conversación",
     "richContentLoading": "Cargando contenido interactivo…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Detener",
     "stopped": "Detenido",
+    "suggestTitle": "Sugerir un título",
+    "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
     "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
+    "suggestingTitle": "Sugiriendo un título…",
     "suggestionSeverity": {
       "style": "Estilo",
       "substantive": "Sustantivo",

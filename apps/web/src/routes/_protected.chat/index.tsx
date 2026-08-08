@@ -27,6 +27,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
@@ -73,7 +74,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -334,11 +335,23 @@ function ChatIndex() {
   };
 
   const handleSubmit = async (draft: ChatInputDraft) => {
-    const reservedCommand = matchReservedChatCommand(draft.html);
-    if (reservedCommand?.id === "new") {
-      controller.setContent("");
-      threadIdRef.current = createChatThreadId();
-      rotateDraftThread((value) => value + 1);
+    const handledReserved = runReservedChatCommand(draft.html, {
+      new: () => {
+        controller.setContent("");
+        threadIdRef.current = createChatThreadId();
+        rotateDraftThread((value) => value + 1);
+      },
+      "rename-chat": () => {
+        // Nothing persisted to rename yet: this composer only ever holds an
+        // unsent draft thread. Explain instead of silently no-oping.
+        controller.setContent("");
+        stellaToast.add({
+          title: t("chat.renameUnavailableEmptyThread"),
+          type: "info",
+        });
+      },
+    });
+    if (handledReserved) {
       return;
     }
     if (!(await ensureAIAvailable())) {
@@ -462,6 +475,7 @@ function ChatIndex() {
                 selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
                 selectModel: modelSelection.selectModel,
               }}
+              reservedCommands={{ hasPersistedThread: false }}
               skillsOrganizationId={activeOrganizationId}
               dock={
                 <ChatComposerDock

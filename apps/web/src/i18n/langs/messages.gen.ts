@@ -580,6 +580,7 @@ type Messages = {
     "recapLoading": "Recapping the conversation…";
     "removeSuggestion": "(remove)";
     "renameThread": "Rename conversation";
+    "renameUnavailableEmptyThread": "Send a message first, then the conversation can be renamed.";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "richContentLoading": "Loading interactive content…";
@@ -606,7 +607,10 @@ type Messages = {
     };
     "stopResponse": "Stop";
     "stopped": "Stopped";
+    "suggestTitle": "Suggest a title";
+    "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.";
     "suggestedFollowupsLabel": "Suggested follow-up prompts";
+    "suggestingTitle": "Suggesting a title…";
     "suggestionSeverity": {
       "style": "Style";
       "substantive": "Substantive";

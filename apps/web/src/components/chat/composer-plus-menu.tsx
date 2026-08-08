@@ -81,6 +81,7 @@ import {
   mcpConnectorsOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
+import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
@@ -91,7 +92,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 export type ComposerSkillsMenuProps = {
   activeOrganizationId: string;
   editor: Editor | null;
-  includeReservedCommands?: boolean | undefined;
+  reservedCommands?: ReservedChatCommandContext | null | undefined;
 };
 
 /** Enables and drives the Context submenu: reference a matter, or a file
@@ -368,7 +369,7 @@ const ComposerSkillsSubmenu = ({
 }) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const { activeOrganizationId, editor, includeReservedCommands } = skills;
+  const { activeOrganizationId, editor, reservedCommands } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -392,11 +393,9 @@ const ComposerSkillsSubmenu = ({
       buildChatSlashItems({
         shortcuts: shortcutRows,
         skillPages: data?.pages,
-        ...(includeReservedCommands === undefined
-          ? {}
-          : { includeReservedCommands }),
+        reservedCommands: reservedCommands ?? null,
       }),
-    [includeReservedCommands, shortcutRows, data?.pages],
+    [reservedCommands, shortcutRows, data?.pages],
   );
 
   const query = search.trim().toLowerCase();

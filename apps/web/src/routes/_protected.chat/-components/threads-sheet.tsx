@@ -35,6 +35,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  ChatTitleRename,
+  ChatTitleSuggestButton,
+} from "@/features/chat/components/chat-title-rename";
+import {
   groupedChatThreadsOptions,
   invalidateChatThreadLists,
   listChatHistoryItems,
@@ -43,6 +47,7 @@ import {
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { useChatAnonymized } from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
@@ -343,28 +348,67 @@ const ThreadList = ({
 
   return (
     <div className="flex flex-col gap-1">
-      {threads.map((thread) => {
-        const threadRef: ChatThreadRef =
-          thread.scope === "workspace"
-            ? {
-                scope: thread.scope,
-                threadId: toChatThreadId(thread.id),
-                workspaceId: thread.workspaceId,
-              }
-            : {
-                scope: thread.scope,
-                threadId: toChatThreadId(thread.id),
-              };
-        return (
-          <div
-            className={cn(
-              "group flex items-center gap-1 rounded-lg transition-colors",
-              activeThreadRef?.threadId === threadRef.threadId
-                ? "bg-muted"
-                : "hover:bg-muted",
-            )}
-            key={threadRef.threadId}
-          >
+      {threads.map((thread) => (
+        <ThreadRow
+          activeThreadRef={activeThreadRef}
+          key={thread.id}
+          onOpenChange={onOpenChange}
+          thread={thread}
+        />
+      ))}
+    </div>
+  );
+};
+
+type ThreadRowProps = {
+  activeThreadRef: ChatThreadRef | null;
+  onOpenChange: (open: boolean) => void;
+  thread: ChatHistoryItem;
+};
+
+const ThreadRow = ({
+  activeThreadRef,
+  onOpenChange,
+  thread,
+}: ThreadRowProps) => {
+  const threadRef: ChatThreadRef =
+    thread.scope === "workspace"
+      ? {
+          scope: thread.scope,
+          threadId: toChatThreadId(thread.id),
+          workspaceId: thread.workspaceId,
+        }
+      : {
+          scope: thread.scope,
+          threadId: toChatThreadId(thread.id),
+        };
+  const committedTitle = isPlaceholderThreadTitle(thread.title)
+    ? ""
+    : thread.title;
+  const anonymized = useChatAnonymized(threadRef);
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-1 rounded-lg transition-colors",
+        activeThreadRef?.threadId === threadRef.threadId
+          ? "bg-muted"
+          : "hover:bg-muted",
+      )}
+    >
+      {/* Rename lives on the row itself: the wand opens inline editing
+          prefilled with a suggestion, replacing the navigation link until
+          committed or cancelled. Listed threads always have messages. */}
+      <ChatTitleRename
+        editClassName="min-w-0 flex-1 px-3 py-1.5"
+        hasMessages
+        inputClassName="min-w-0 flex-1 text-sm"
+        renderView={({
+          displayTitle,
+          isSuggesting,
+          startEditingWithSuggestion,
+        }) => (
+          <>
             <Link
               className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
               onClick={() => onOpenChange(false)}
@@ -382,9 +426,7 @@ const ThreadList = ({
                   })}
             >
               <BidiText as="span" className="truncate text-sm font-medium">
-                {isPlaceholderThreadTitle(thread.title)
-                  ? t("chat.newChat")
-                  : thread.title}
+                {displayTitle}
               </BidiText>
               <span className="text-muted-foreground text-xs">
                 {thread.scope === "workspace" ? (
@@ -398,13 +440,22 @@ const ThreadList = ({
                 )}
               </span>
             </Link>
-            <DeleteThreadButton
-              activeThreadRef={activeThreadRef}
-              threadRef={threadRef}
+            <ChatTitleSuggestButton
+              anonymized={anonymized}
+              className="opacity-0 group-hover:opacity-100"
+              hasMessages
+              isPending={isSuggesting}
+              onTrigger={startEditingWithSuggestion}
             />
-          </div>
-        );
-      })}
+          </>
+        )}
+        threadRef={threadRef}
+        title={committedTitle}
+      />
+      <DeleteThreadButton
+        activeThreadRef={activeThreadRef}
+        threadRef={threadRef}
+      />
     </div>
   );
 };

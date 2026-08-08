@@ -1,34 +1,18 @@
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
-import { stellaToast } from "@stll/ui/components/toast";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
-import { InlineEdit } from "@/components/inline-edit";
-import Tooltip from "@/components/tooltip";
+import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import {
   chatThreadOptions,
   chatThreadTitleOptions,
   groupedChatThreadsOptions,
-  invalidateChatThreadLists,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
-import { useInlineRename } from "@/hooks/use-inline-rename";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
 
 const protectedRoute = getRouteApi("/_protected");
 
@@ -42,13 +26,11 @@ const protectedRoute = getRouteApi("/_protected");
 // localized "New chat" while the thread is still untitled; the crumb updates
 // once the list query invalidates.
 //
-// The crumb doubles as an inline rename affordance. Because this crumb IS the
-// current route, clicking it has no navigation meaning, so a click activates
-// in-place editing (Enter commits, Escape cancels) instead — the same
-// `InlineEdit` + `useInlineRename` pair the inspector chat tab header uses. The
-// commit optimistically patches the grouped-threads cache and invalidates it on
-// settle, so every surface that reads the title (sidebar, threads sheet, this
-// crumb) reflects the new name immediately.
+// The crumb doubles as the chat route's rename affordance. Because this crumb
+// IS the current route, clicking it has no navigation meaning, so a click
+// activates in-place editing instead. The editing itself (InlineEdit, the
+// suggest wand, the rename mutation, the `/rename-chat` subscription) lives
+// in the shared `ChatTitleRename`; this file only resolves the title.
 export const ChatBreadcrumb = ({
   threadId,
   workspaceId,
@@ -56,8 +38,6 @@ export const ChatBreadcrumb = ({
   threadId: string;
   workspaceId?: string | undefined;
 }) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -105,118 +85,18 @@ export const ChatBreadcrumb = ({
 
   const title = groupedTitle ?? byIdTitle ?? null;
   const currentTitle = title && !isPlaceholderThreadTitle(title) ? title : "";
-  const displayTitle =
-    currentTitle.length > 0 ? currentTitle : t("chat.newChat");
-
-  const groupedKey = groupedChatThreadsOptions({
-    activeOrganizationId,
-  }).queryKey;
-  const titleKey = titleOptions.queryKey;
-  const rename = useMutation({
-    mutationFn: async (nextTitle: string) => {
-      const response = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(threadId) })
-        .title.patch(
-          { title: nextTitle },
-          {
-            query: workspaceId
-              ? { workspaceId: toSafeId<"workspace">(workspaceId) }
-              : {},
-          },
-        );
-      return unwrapEden(response);
-    },
-    onMutate: async (nextTitle) => {
-      await queryClient.cancelQueries({ queryKey: groupedKey });
-      await queryClient.cancelQueries({ queryKey: titleKey });
-      const previous = queryClient.getQueryData(groupedKey);
-      const previousTitle = queryClient.getQueryData(titleKey);
-      queryClient.setQueryData(titleKey, nextTitle);
-      queryClient.setQueryData(groupedKey, (old) =>
-        old
-          ? {
-              ...old,
-              pages: old.pages.map((page) => ({
-                ...page,
-                global: page.global.map((thread) =>
-                  thread.id === threadId
-                    ? { ...thread, title: nextTitle }
-                    : thread,
-                ),
-                workspaces: page.workspaces.map((workspace) => ({
-                  ...workspace,
-                  threads: workspace.threads.map((thread) =>
-                    thread.id === threadId
-                      ? { ...thread, title: nextTitle }
-                      : thread,
-                  ),
-                })),
-              })),
-            }
-          : old,
-      );
-      return { previous, previousTitle };
-    },
-    onError: (error, _nextTitle, context) => {
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(groupedKey, context.previous);
-      }
-      if (context?.previousTitle !== undefined) {
-        queryClient.setQueryData(titleKey, context.previousTitle);
-      }
-      getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    },
-    onSettled: () => {
-      detached(
-        invalidateChatThreadLists({ queryClient, workspaceId }),
-        "onSettled",
-      );
-      detached(
-        queryClient.invalidateQueries({ queryKey: titleKey }),
-        "onSettled",
-      );
-    },
-  });
-
-  const inlineRename = useInlineRename({
-    initial: currentTitle,
-    onCommit: (value) => {
-      rename.mutate(value);
-    },
-  });
-
-  if (inlineRename.state.mode === "edit") {
-    return (
-      <BreadcrumbItem className="min-w-0 shrink">
-        <InlineEdit
-          inputClassName="w-48 text-xs"
-          onCancel={inlineRename.cancel}
-          onChange={inlineRename.setDraft}
-          onCommit={() => {
-            detached(inlineRename.commit(), "ChatBreadcrumb");
-          }}
-          value={inlineRename.state.draft}
-        />
-      </BreadcrumbItem>
-    );
-  }
+  // A title resolved from the server means the thread is persisted (threads
+  // are created on first send); otherwise fall back to the primed existence
+  // signal for a persisted thread that is still on its placeholder title.
+  const hasMessages = title !== null || threadData?.threadExists === true;
 
   return (
     <BreadcrumbItem className="min-w-0 shrink">
-      <Tooltip
-        content={t("chat.renameThread")}
-        render={
-          <button
-            className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5 transition-colors"
-            onClick={() => inlineRename.startEditing()}
-            type="button"
-          >
-            <BidiText as="span" className="max-w-64 truncate">
-              {displayTitle}
-            </BidiText>
-          </button>
-        }
+      <ChatTitleRename
+        hasMessages={hasMessages}
+        inputClassName="w-48 text-xs"
+        threadRef={threadRef}
+        title={currentTitle}
       />
     </BreadcrumbItem>
   );

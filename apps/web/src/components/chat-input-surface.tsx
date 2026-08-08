@@ -26,6 +26,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -77,6 +78,12 @@ type ChatInputSurfaceProps = {
    */
   skillsOrganizationId?: string | undefined;
   /**
+   * Reserved-command availability for this composer's slash menu. Required:
+   * every chat composer must declare its context so command availability is
+   * decided centrally (`getReservedChatCommands`), never per surface.
+   */
+  reservedCommands: ReservedChatCommandContext;
+  /**
    * When provided, the (+) menu gains a Context submenu (mention a matter
    * or one of its files), wired to this surface's own editor. Omit on
    * surfaces without mention insertion.
@@ -104,6 +111,7 @@ export const ChatInputSurface = ({
   dock,
   models,
   skillsOrganizationId,
+  reservedCommands,
   context,
   mcpOrganizationId,
 }: ChatInputSurfaceProps) => {
@@ -287,7 +295,7 @@ export const ChatInputSurface = ({
                     ? {
                         activeOrganizationId: skillsOrganizationId,
                         editor,
-                        includeReservedCommands: true,
+                        reservedCommands,
                       }
                     : undefined
                 }

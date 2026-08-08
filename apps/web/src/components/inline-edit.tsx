@@ -11,8 +11,15 @@ type InlineEditProps = {
   onCancel: () => void;
   /** Extra content after the input (e.g. file extension). */
   suffix?: React.ReactNode;
-  className?: string;
-  inputClassName?: string;
+  /**
+   * Action button(s) between the input and Done (e.g. a suggest wand).
+   * Buttons placed here must trigger on `onMouseDown` + `preventDefault()`:
+   * the input commits on blur, so a plain `onClick` would close the editor
+   * before the action's result could land in the draft.
+   */
+  action?: React.ReactNode | undefined;
+  className?: string | undefined;
+  inputClassName?: string | undefined;
 };
 
 /**
@@ -31,6 +38,7 @@ export const InlineEdit = ({
   onCommit,
   onCancel,
   suffix,
+  action,
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -61,6 +69,7 @@ export const InlineEdit = ({
         value={value}
       />
       {suffix}
+      {action}
       <Button
         className="h-6 shrink-0 gap-0.5 px-2 text-xs"
         onMouseDown={(e) => {

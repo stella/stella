@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { buttonVariants } from "@stll/ui/components/button-variants";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import {
   Conversation,
@@ -42,6 +43,7 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -76,7 +78,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { managementRoles } from "@/lib/organization/consts";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
@@ -459,31 +461,47 @@ export const ChatThreadPage = ({
   }, []);
 
   const handleSubmit = async (draft: ChatInputDraft) => {
-    const reservedCommand = matchReservedChatCommand(draft.html);
-    if (reservedCommand?.id === "new") {
-      // Abort any live stream first: `chatThreadOptions` keeps the
-      // in-flight Chat alive in the query cache, so navigating away
-      // would leave it streaming against the abandoned thread.
-      stop();
-      controller.setContent("");
-      if (threadRef.scope === "workspace") {
-        detached(
-          navigate({
-            to: "/chat/workspaces/$workspaceId/new",
-            params: { workspaceId: threadRef.workspaceId },
-            replace: true,
-          }),
-          "ChatThreadPage",
-        );
-      } else {
-        detached(
-          navigate({
-            to: "/chat/new",
-            replace: true,
-          }),
-          "ChatThreadPage",
-        );
-      }
+    const handledReserved = runReservedChatCommand(draft.html, {
+      new: () => {
+        // Abort any live stream first: `chatThreadOptions` keeps the
+        // in-flight Chat alive in the query cache, so navigating away
+        // would leave it streaming against the abandoned thread.
+        stop();
+        controller.setContent("");
+        if (threadRef.scope === "workspace") {
+          detached(
+            navigate({
+              to: "/chat/workspaces/$workspaceId/new",
+              params: { workspaceId: threadRef.workspaceId },
+              replace: true,
+            }),
+            "ChatThreadPage",
+          );
+        } else {
+          detached(
+            navigate({
+              to: "/chat/new",
+              replace: true,
+            }),
+            "ChatThreadPage",
+          );
+        }
+      },
+      "rename-chat": () => {
+        controller.setContent("");
+        if (messages.length === 0) {
+          stellaToast.add({
+            title: t("chat.renameUnavailableEmptyThread"),
+            type: "info",
+          });
+          return;
+        }
+        // The breadcrumb owns this route's rename editor; hand the command
+        // over through the store and let it open with a suggestion.
+        useChatRenameCommandStore.getState().requestRename(threadRef.threadId);
+      },
+    });
+    if (handledReserved) {
       return;
     }
     if (!(await ensureAIAvailable())) {
@@ -688,6 +706,9 @@ export const ChatThreadPage = ({
                     selectedModel: data.model,
                     selectedReasoningEffort: data.reasoningEffort,
                     selectModel: modelSelection.selectModel,
+                  }}
+                  reservedCommands={{
+                    hasPersistedThread: messages.length > 0,
                   }}
                   skillsOrganizationId={activeOrganizationId}
                   dock={

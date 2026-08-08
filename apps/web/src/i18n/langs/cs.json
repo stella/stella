@@ -577,6 +577,7 @@
     "recapLoading": "Shrnutí konverzace…",
     "removeSuggestion": "(odebrat)",
     "renameThread": "Přejmenovat konverzaci",
+    "renameUnavailableEmptyThread": "Nejprve odešlete zprávu, poté bude možné konverzaci přejmenovat.",
     "resend": "Odeslat znovu",
     "resizeThread": "Změnit velikost konverzace",
     "richContentLoading": "Načítání interaktivního obsahu…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
+    "suggestTitle": "Navrhnout název",
+    "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestedFollowupsLabel": "Navrhované navazující dotazy",
+    "suggestingTitle": "Navrhuji název…",
     "suggestionSeverity": {
       "style": "Styl",
       "substantive": "Věcné",
