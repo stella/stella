@@ -24,7 +24,7 @@ describe("entity list cursor", () => {
     });
   });
 
-  test("rejects millisecond timestamps", () => {
+  test("rejects millisecond timestamps without a UTC marker", () => {
     const cursor = encodeEntityListCursor({
       createdAt: "2026-05-22T09:31:31.123",
       id: "entity_1",
@@ -55,8 +55,9 @@ describe("entity list cursor", () => {
     const dialect = new PgDialect();
     const sql = dialect.sqlToQuery(condition).sql;
 
-    expect(sql).toContain('"entities"."id" =');
-    expect(sql).toContain('"fields"."id" >');
+    expect(sql).toContain(
+      '("entities"."created_at", "entities"."id", "fields"."id") >',
+    );
   });
 
   test("round-trips file cursor tie-breaker", () => {

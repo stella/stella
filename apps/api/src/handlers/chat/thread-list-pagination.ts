@@ -1,97 +1,29 @@
+import { chatThreads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
-
-const CURSOR_SEPARATOR = "|";
-const CURSOR_TIMESTAMP_RE =
-  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<microsecond>\d{6})$/u;
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 type ChatThreadListCursor = {
   id: SafeId<"chatThread">;
   updatedAt: string;
 };
 
+export const chatThreadListCursorCodec = createTimestampIdCursorCodec({
+  column: chatThreads.updatedAt,
+  brandId: brandPersistedChatThreadId,
+});
+
 export const encodeChatThreadListCursor = ({
   id,
   updatedAt,
-}: ChatThreadListCursor): string => `${updatedAt}${CURSOR_SEPARATOR}${id}`;
+}: ChatThreadListCursor): string =>
+  chatThreadListCursorCodec.encode(updatedAt, id);
 
 export const decodeChatThreadListCursor = (
   cursor: string,
 ): ChatThreadListCursor | null => {
-  const separatorIndex = cursor.indexOf(CURSOR_SEPARATOR);
-  if (separatorIndex === -1) {
-    return null;
-  }
-
-  const updatedAt = cursor.slice(0, separatorIndex);
-  const id = cursor.slice(separatorIndex + 1);
-  if (!isValidCursorTimestamp(updatedAt) || !UUID_RE.test(id)) {
-    return null;
-  }
-
-  return { id: brandPersistedChatThreadId(id), updatedAt };
-};
-
-const isValidCursorTimestamp = (timestamp: string): boolean => {
-  const match = CURSOR_TIMESTAMP_RE.exec(timestamp);
-  if (!match) {
-    return false;
-  }
-
-  const { year, month, day, hour, minute, second, microsecond } =
-    match.groups ?? {};
-  const parts = [year, month, day, hour, minute, second, microsecond].map(
-    Number,
-  );
-  const [
-    yearValue,
-    monthValue,
-    dayValue,
-    hourValue,
-    minuteValue,
-    secondValue,
-    microsecondValue,
-  ] = parts;
-  if (
-    yearValue === undefined ||
-    monthValue === undefined ||
-    dayValue === undefined ||
-    hourValue === undefined ||
-    minuteValue === undefined ||
-    secondValue === undefined ||
-    microsecondValue === undefined ||
-    yearValue < 1 ||
-    monthValue < 1 ||
-    monthValue > 12 ||
-    dayValue < 1 ||
-    hourValue > 23 ||
-    minuteValue > 59 ||
-    secondValue > 59 ||
-    microsecondValue > 999_999
-  ) {
-    return false;
-  }
-
-  const date = new Date(
-    Date.UTC(
-      yearValue,
-      monthValue - 1,
-      dayValue,
-      hourValue,
-      minuteValue,
-      secondValue,
-      Math.floor(microsecondValue / 1000),
-    ),
-  );
-
-  return (
-    date.getUTCFullYear() === yearValue &&
-    date.getUTCMonth() === monthValue - 1 &&
-    date.getUTCDate() === dayValue &&
-    date.getUTCHours() === hourValue &&
-    date.getUTCMinutes() === minuteValue &&
-    date.getUTCSeconds() === secondValue
-  );
+  const decoded = chatThreadListCursorCodec.decode(cursor);
+  return decoded === null
+    ? null
+    : { id: decoded.id, updatedAt: decoded.timestamp.value };
 };

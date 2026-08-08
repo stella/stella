@@ -1,11 +1,4 @@
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
-import { cn } from "@stll/ui/lib/utils";
-
-import { getInitials } from "@/lib/get-initials";
+import { UserIdentity } from "@/components/user-avatar";
 import type { PersonMention } from "@/lib/types";
 
 type PersonMentionLabelProps = {
@@ -23,28 +16,17 @@ export const PersonMentionLabel = ({
     mention.deletedAt !== null && mention.deletedAt !== undefined;
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5",
-        isDeleted && "text-muted-foreground",
-        className,
-      )}
-    >
-      {!mention.hideAvatar && (
-        <Avatar
-          className={cn(avatarClassName, isDeleted && "opacity-60 grayscale")}
-        >
-          {mention.image && (
-            <AvatarImage alt={mention.name} src={mention.image} />
-          )}
-          <AvatarFallback
-            className={cn(isDeleted && "bg-muted text-muted-foreground")}
-          >
-            {getInitials(mention.name)}
-          </AvatarFallback>
-        </Avatar>
-      )}
-      {mention.name}
-    </span>
+    <UserIdentity
+      as="span"
+      avatarClassName={avatarClassName}
+      deleted={isDeleted}
+      image={mention.image}
+      name={mention.name}
+      nameClassName="text-inherit font-normal"
+      {...(className === undefined ? {} : { className })}
+      {...(mention.hideAvatar === undefined
+        ? {}
+        : { hideAvatar: mention.hideAvatar })}
+    />
   );
 };

@@ -1,9 +1,6 @@
-import { DAY_IN_MS } from "@stll/time";
-
 import type { TableTreeNode } from "@/components/workspaces/table/types";
-import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
+import { getFormatter } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
-import { getRelativeTimeFormatter } from "@/lib/relative-time";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -132,51 +129,6 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
   return null;
 };
 
-const MINUTE = 60_000;
-const HOUR = 3_600_000;
-const DAY = DAY_IN_MS;
-
-export const formatRelativeTime = (
-  isoString: string | null | undefined,
-  locale?: string,
-): string => {
-  if (!isoString) {
-    return "-";
-  }
-
-  const currentLocale = locale ?? getFormattingLocale();
-
-  const date = new Date(isoString);
-  const now = Date.now();
-  const diff = now - date.getTime();
-
-  const rtf = getRelativeTimeFormatter(currentLocale);
-
-  if (diff < MINUTE) {
-    return rtf.format(0, "second");
-  }
-
-  const mins = Math.floor(diff / MINUTE);
-  if (diff < HOUR) {
-    return rtf.format(-mins, "minute");
-  }
-
-  const hrs = Math.floor(diff / HOUR);
-  if (diff < DAY) {
-    return rtf.format(-hrs, "hour");
-  }
-
-  const days = Math.floor(diff / DAY);
-  if (diff < 7 * DAY) {
-    return rtf.format(-days, "day");
-  }
-
-  return date.toLocaleDateString(currentLocale, {
-    month: "short",
-    day: "numeric",
-  });
-};
-
 /** Start of the current week (local time), per the locale's first weekday. */
 export const getWeekStart = (locale: string, date = new Date()): Date =>
   startOfWeek(date, locale);
@@ -187,22 +139,6 @@ export const toISODate = (d: Date): string => {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-};
-
-export const formatFullTimestamp = (
-  isoString: string | null | undefined,
-  locale?: string,
-): string | null => {
-  if (!isoString) {
-    return null;
-  }
-
-  const currentLocale = locale ?? getFormattingLocale();
-
-  return new Date(isoString).toLocaleString(currentLocale, {
-    dateStyle: "full",
-    timeStyle: "medium",
-  });
 };
 
 // -- Tree utilities (shared between filesystem and table views) --

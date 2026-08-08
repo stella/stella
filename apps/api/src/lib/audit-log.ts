@@ -113,12 +113,18 @@ export type AuditExecutionContext = {
         rootUserId: SafeId<"user">;
       }
     | {
-        type: "schedule" | "webhook" | "credential";
+        type: "schedule" | "credential";
         ownerUserId: SafeId<"user">;
         source?: string;
         sourceId?: string;
       }
-    | { type: "system"; source?: string };
+    | {
+        type: "webhook";
+        ownerUserId?: SafeId<"user">;
+        source?: string;
+        sourceId?: string;
+      }
+    | { type: "system"; source?: string; sourceId?: string };
   runId?: string;
   approval?:
     | { status: "not_required" | "pending" }
@@ -158,7 +164,7 @@ type AuditRecorderBindings = {
 
 const executionColumns = (
   execution: AuditExecutionContext | undefined,
-  accountableUserId: SafeId<"user">,
+  accountableUserId: string,
 ) => {
   const performer = execution?.performer ?? {
     type: "user" as const,
@@ -174,9 +180,10 @@ const executionColumns = (
       case "agent_delegation":
         return trigger.rootUserId;
       case "schedule":
-      case "webhook":
       case "credential":
         return trigger.ownerUserId;
+      case "webhook":
+        return trigger.ownerUserId ?? null;
       case "direct":
       case "system":
         return null;
@@ -307,7 +314,7 @@ export const createBackgroundAuditRecorder =
   (bindings: {
     organizationId: SafeId<"organization">;
     workspaceId: SafeId<"workspace"> | null;
-    userId: SafeId<"user">;
+    userId: string;
     execution: AuditExecutionContext;
   }): AuditRecorder =>
   async (tx, event) => {

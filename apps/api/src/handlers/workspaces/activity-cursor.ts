@@ -1,3 +1,4 @@
+import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -11,9 +12,6 @@ export type WorkspaceActivityCursor = {
   id: string;
   type: WorkspaceActivityType;
 };
-
-const timestampPattern =
-  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<microsecond>\d{6})$/u;
 
 export const encodeWorkspaceActivityCursor = ({
   activityAt,
@@ -36,7 +34,8 @@ export const decodeWorkspaceActivityCursor = (
 
   const [activityAt, id, type] = parts;
   if (
-    !isWorkspaceActivityTimestamp(activityAt) ||
+    typeof activityAt !== "string" ||
+    parsePgTimestampCursorValue(activityAt) === null ||
     !isUuidPaginationCursorPart(id) ||
     (type !== "entity" && type !== "thread")
   ) {
@@ -44,46 +43,4 @@ export const decodeWorkspaceActivityCursor = (
   }
 
   return { activityAt, id, type };
-};
-
-const isWorkspaceActivityTimestamp = (value: unknown): value is string => {
-  if (typeof value !== "string") {
-    return false;
-  }
-
-  const match = timestampPattern.exec(value);
-  if (!match) {
-    return false;
-  }
-
-  const { year, month, day, hour, minute, second, microsecond } =
-    match.groups ?? {};
-  const values = [year, month, day, hour, minute, second, microsecond].map(
-    Number,
-  );
-  const [yearValue, monthValue, dayValue, hourValue, minuteValue, secondValue] =
-    values;
-  if (
-    yearValue === undefined ||
-    monthValue === undefined ||
-    dayValue === undefined ||
-    hourValue === undefined ||
-    minuteValue === undefined ||
-    secondValue === undefined
-  ) {
-    return false;
-  }
-
-  const date = new Date(0);
-  date.setUTCFullYear(yearValue, monthValue - 1, dayValue);
-  date.setUTCHours(hourValue, minuteValue, secondValue, 0);
-
-  return (
-    date.getUTCFullYear() === yearValue &&
-    date.getUTCMonth() === monthValue - 1 &&
-    date.getUTCDate() === dayValue &&
-    date.getUTCHours() === hourValue &&
-    date.getUTCMinutes() === minuteValue &&
-    date.getUTCSeconds() === secondValue
-  );
 };

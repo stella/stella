@@ -14,7 +14,12 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId, withDescription } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  tUserId,
+  withDescription,
+} from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -74,11 +79,7 @@ export const readAuditLogsQuerySchema = t.Object({
       description: "Max entries to return",
     }),
   ),
-  cursor: t.Optional(
-    t.String({
-      description: "Opaque cursor from a previous page to fetch the next page",
-    }),
-  ),
+  cursor: t.Optional(tPaginationCursor()),
 });
 
 export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;

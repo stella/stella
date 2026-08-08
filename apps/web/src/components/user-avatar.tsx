@@ -49,9 +49,11 @@ export const UserAvatar = ({
 };
 
 type UserIdentityProps = {
+  as?: "div" | "span";
   image?: string | null | undefined;
   name?: string | null;
   deleted?: boolean | undefined;
+  hideAvatar?: boolean;
   secondaryText?: string | null;
   className?: string;
   avatarClassName?: string;
@@ -61,7 +63,9 @@ type UserIdentityProps = {
 };
 
 export const UserIdentity = ({
+  as = "div",
   deleted = false,
+  hideAvatar = false,
   image,
   name,
   secondaryText,
@@ -72,19 +76,22 @@ export const UserIdentity = ({
   secondaryClassName,
 }: UserIdentityProps) => {
   const displayName = getDisplayName(name, secondaryText) ?? UNKNOWN_USER_LABEL;
+  const Component = as;
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-2", className)}>
-      <UserAvatar
-        className={avatarClassName}
-        deleted={deleted}
-        fallbackClassName={avatarFallbackClassName}
-        image={image}
-        name={displayName}
-      />
-      <div className="min-w-0 flex-1">
+    <Component className={cn("flex min-w-0 items-center gap-2", className)}>
+      {hideAvatar ? null : (
+        <UserAvatar
+          className={avatarClassName}
+          deleted={deleted}
+          fallbackClassName={avatarFallbackClassName}
+          image={image}
+          name={displayName}
+        />
+      )}
+      <Component className="min-w-0 flex-1">
         <BidiText
-          as="div"
+          as={as}
           className={cn(
             "truncate text-sm font-medium",
             deleted && "text-muted-foreground",
@@ -95,7 +102,7 @@ export const UserIdentity = ({
         </BidiText>
         {secondaryText ? (
           <BidiText
-            as="div"
+            as={as}
             className={cn(
               "text-muted-foreground truncate text-xs",
               secondaryClassName,
@@ -104,7 +111,7 @@ export const UserIdentity = ({
             {secondaryText}
           </BidiText>
         ) : null}
-      </div>
-    </div>
+      </Component>
+    </Component>
   );
 };

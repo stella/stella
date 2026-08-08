@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { getDisplayName, getInitials } from "./team-avatars";
+import { getDisplayName } from "@/lib/get-display-name";
+import { getInitials } from "@/lib/get-initials";
 
 describe("team avatar labels", () => {
   it("derives stable initials from names", () => {
@@ -9,11 +10,10 @@ describe("team avatar labels", () => {
     expect(getInitials("Plato")).toBe("PL");
   });
 
-  it("falls back when an auth user has no display name", () => {
+  it("uses the canonical fallback when an auth user has no display name", () => {
     expect(getInitials(null)).toBe("?");
-    expect(getInitials(undefined)).toBe("?");
     expect(getInitials(" ")).toBe("?");
-    expect(getDisplayName(null, "user_123")).toBe("user_123");
-    expect(getDisplayName("", "user_123")).toBe("user_123");
+    expect(getDisplayName(null, "ada@example.com")).toBe("ada@example.com");
+    expect(getDisplayName("", null)).toBeNull();
   });
 });

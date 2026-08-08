@@ -1,11 +1,12 @@
 {
   "as-casts": {
-    "count": 5,
+    "count": 6,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/components/docx/use-sync-docx-suggestions.ts": 1,
+      "apps/web/src/components/user-avatar.tsx": 1,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1
     }
   },
@@ -50,12 +51,68 @@
       "apps/web/src/components/search-dialog.tsx": 2
     }
   },
+  "hand-rolled-user-identity": {
+    "count": 8,
+    "files": {
+      "apps/web/src/components/sidebar-user-menu.tsx": 1,
+      "apps/web/src/components/versions/version-list.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/-components/team-avatars.tsx": 1
+    }
+  },
+  "raw-user-avatar-primitive": {
+    "count": 0,
+    "files": {}
+  },
+  "shadowed-user-name-helpers": {
+    "count": 0,
+    "files": {}
+  },
+  "ad-hoc-relative-time-formatting": {
+    "count": 33,
+    "files": {
+      "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1,
+      "apps/web/src/features/case-law/components/decision-table.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 3,
+      "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/styles.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/templates.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 14,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 2
+    }
+  },
+  "direct-audit-log-insert": {
+    "count": 0,
+    "files": {}
+  },
+  "inline-timestamp-cursor-sql": {
+    "count": 0,
+    "files": {}
+  },
+  "repeated-timestamp-cursor-boundary": {
+    "count": 0,
+    "files": {}
+  },
+  "unbounded-pagination-cursor-schema": {
+    "count": 0,
+    "files": {}
+  },
   "raw-use-effect-suppressions": {
     "count": 0,
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 599,
+    "count": 602,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -157,7 +214,7 @@
       "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts": 1,
       "apps/api/src/handlers/workspaces/list.ts": 2,
       "apps/api/src/handlers/workspaces/read-overview-activity.ts": 1,
-      "apps/api/src/lib/account-deletion-steps.ts": 5,
+      "apps/api/src/lib/account-deletion-steps.ts": 6,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
@@ -203,8 +260,9 @@
       "apps/api/src/lib/scheduler/runner.ts": 4,
       "apps/api/src/lib/scheduler/tasks/case-law-sk-documents.ts": 1,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 3,
-      "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 5,
+      "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 10,
+      "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
       "apps/api/src/lib/search/extraction-worker.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 4,
       "apps/api/src/lib/search/index-entity.ts": 1,

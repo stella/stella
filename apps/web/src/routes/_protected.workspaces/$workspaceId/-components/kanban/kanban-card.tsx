@@ -6,20 +6,15 @@ import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/el
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { UserIdentity } from "@/components/user-avatar";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
-  formatRelativeTime,
   getEntityName,
   getFirstFile,
   getInternalPropertyId,
@@ -38,6 +33,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -548,28 +544,17 @@ const KanbanCardFooter = ({
     return null;
   }
 
-  const authorInitials =
-    entity.createdBy === null
-      ? ""
-      : entity.createdBy
-          .split(" ")
-          .map((part) => part.at(0))
-          .join("")
-          .slice(0, 2)
-          .toUpperCase();
-
   return (
     <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs leading-none">
       {showAuthor && entity.createdBy && (
-        <span className="flex min-w-0 items-center gap-1">
-          <Avatar className="size-4 text-[9px]">
-            {entity.createdByImage && (
-              <AvatarImage alt={entity.createdBy} src={entity.createdByImage} />
-            )}
-            <AvatarFallback>{authorInitials}</AvatarFallback>
-          </Avatar>
-          <span className="truncate">{entity.createdBy}</span>
-        </span>
+        <UserIdentity
+          as="span"
+          avatarClassName="size-4 text-[9px]"
+          className="gap-1"
+          image={entity.createdByImage}
+          name={entity.createdBy}
+          nameClassName="text-xs font-normal"
+        />
       )}
       {showUpdatedAt && (
         <span className="shrink-0">

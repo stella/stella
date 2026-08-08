@@ -5,7 +5,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
@@ -27,7 +27,7 @@ export const searchBodySchema = t.Object({
   mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
   updatedTo: t.Optional(isoDateTime),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor()),
   limit: t.Optional(
     t.Integer({
       minimum: 1,

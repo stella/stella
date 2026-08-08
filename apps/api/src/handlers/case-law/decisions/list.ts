@@ -7,18 +7,24 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { isUuid, tPaginationLimit, tSafeId } from "@/api/lib/custom-schema";
 import {
+  isUuid,
+  tPaginationCursor,
+  tPaginationLimit,
+  tSafeId,
+} from "@/api/lib/custom-schema";
+import {
+  createTimestampIdCursorCodec,
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const listDecisionsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
   country: t.Optional(t.String({ maxLength: 3 })),
   dateFrom: t.Optional(t.String({ format: "date" })),
@@ -30,9 +36,10 @@ export const listDecisionsQuerySchema = t.Object({
 
 type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
-const caseLawCreatedAtCursor = pgTimestampCursorValue(
-  caseLawDecisions.createdAt,
-);
+const caseLawCreatedAtCursor = createTimestampIdCursorCodec({
+  column: caseLawDecisions.createdAt,
+  brandId: brandPersistedCaseLawDecisionId,
+});
 
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
@@ -42,25 +49,48 @@ export const listDecisionsHandler = async (
   const conditions: SQL[] = [redistributableCaseLawSource];
 
   if (query.cursor) {
-    const separatorIdx = query.cursor.indexOf("_");
-    if (separatorIdx > 0) {
-      const ts = query.cursor.slice(0, separatorIdx);
-      const id = query.cursor.slice(separatorIdx + 1);
-      const timestamp = parsePgTimestampCursorValue(ts);
-      if (timestamp === null || !isUuid(id)) {
-        return status(400, { message: "Invalid cursor" });
+    const currentCursor = caseLawCreatedAtCursor.decode(query.cursor);
+    if (currentCursor) {
+      const cursorCondition = caseLawCreatedAtCursor.keysetAfter({
+        cursor: currentCursor,
+        direction: "descending",
+        idColumn: caseLawDecisions.id,
+      });
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
       }
-      conditions.push(
-        sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) < (${pgTimestampCursorBoundary(timestamp)}, ${id})`,
-      );
     } else {
-      const timestamp = parsePgTimestampCursorValue(query.cursor);
-      if (timestamp === null) {
-        return status(400, { message: "Invalid cursor" });
+      const separatorIdx = query.cursor.indexOf("_");
+      if (separatorIdx > 0) {
+        const ts = query.cursor.slice(0, separatorIdx);
+        const id = query.cursor.slice(separatorIdx + 1);
+        const timestamp = parsePgTimestampCursorValue(ts);
+        if (timestamp === null || !isUuid(id)) {
+          return status(400, { message: "Invalid cursor" });
+        }
+        const cursorCondition = caseLawCreatedAtCursor.keysetAfter({
+          cursor: {
+            timestamp,
+            id: brandPersistedCaseLawDecisionId(id),
+          },
+          direction: "descending",
+          idColumn: caseLawDecisions.id,
+        });
+        if (cursorCondition) {
+          conditions.push(cursorCondition);
+        }
+      } else {
+        const timestamp = parsePgTimestampCursorValue(query.cursor);
+        if (timestamp === null) {
+          return status(400, { message: "Invalid cursor" });
+        }
+        // Old cursors without an id cannot express a tie-break. Retain their
+        // timestamp-only boundary while all newly emitted cursors use the
+        // complete shared tuple codec below.
+        conditions.push(
+          lt(caseLawDecisions.createdAt, pgTimestampCursorBoundary(timestamp)),
+        );
       }
-      conditions.push(
-        lt(caseLawDecisions.createdAt, pgTimestampCursorBoundary(timestamp)),
-      );
     }
   }
 
@@ -107,7 +137,8 @@ export const listDecisionsHandler = async (
         decisionType: caseLawDecisions.decisionType,
         sourceUrl: caseLawDecisions.sourceUrl,
         createdAt: caseLawDecisions.createdAt,
-        createdAtCursor: caseLawCreatedAtCursor.as("created_at_cursor"),
+        createdAtCursor:
+          caseLawCreatedAtCursor.cursorValue.as("created_at_cursor"),
       })
       .from(caseLawDecisions)
       .innerJoin(
@@ -183,7 +214,8 @@ export const listDecisionsHandler = async (
       createdAtCursor: decision.createdAtCursor,
     })),
     limit,
-    cursorForItem: (item) => `${item.createdAtCursor}_${item.id}`,
+    cursorForItem: (item) =>
+      caseLawCreatedAtCursor.encode(item.createdAtCursor, item.id),
   });
 
   return {

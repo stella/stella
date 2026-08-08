@@ -5,7 +5,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import {
   buildKanbanGroupCondition,
   tGroupByPropertyId,
@@ -28,7 +28,7 @@ const readKanbanGroupBodySchema = t.Object({
       maximum: LIMITS.entitiesWindowSizeMax,
     }),
   ),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor()),
   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {

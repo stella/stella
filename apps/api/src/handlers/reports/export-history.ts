@@ -1,22 +1,13 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 
@@ -40,32 +31,24 @@ type ReportExportHistoryOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-const reportExportCreatedAtCursor = pgTimestampCursorValue(
-  reportExports.createdAt,
-);
+const reportExportCreatedAtCursor = createTimestampIdCursorCodec({
+  column: reportExports.createdAt,
+  brandId: brandPersistedReportExportId,
+});
 
 const parseReportExportCursor = (cursor: string | undefined) => {
   if (cursor === undefined) {
     return Result.ok(null);
   }
 
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parsePgTimestampCursorValue(parts?.at(0));
-  const id = parts?.at(1);
-  if (
-    parts?.length !== 2 ||
-    createdAt === null ||
-    !isUuidPaginationCursorPart(id)
-  ) {
+  const decoded = reportExportCreatedAtCursor.decode(cursor);
+  if (decoded === null) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid cursor" }),
     );
   }
 
-  return Result.ok({
-    createdAt,
-    id: brandPersistedReportExportId(id),
-  });
+  return Result.ok(decoded);
 };
 
 export const readReportExportHistory = async function* ({
@@ -83,19 +66,11 @@ export const readReportExportHistory = async function* ({
   const cursorCondition =
     cursorResult.value === null
       ? undefined
-      : or(
-          lt(
-            reportExports.createdAt,
-            pgTimestampCursorBoundary(cursorResult.value.createdAt),
-          ),
-          and(
-            eq(
-              reportExports.createdAt,
-              pgTimestampCursorBoundary(cursorResult.value.createdAt),
-            ),
-            lt(reportExports.id, cursorResult.value.id),
-          ),
-        );
+      : reportExportCreatedAtCursor.keysetAfter({
+          cursor: cursorResult.value,
+          direction: "descending",
+          idColumn: reportExports.id,
+        });
 
   const rows = yield* await safeDb((tx) =>
     tx
@@ -109,7 +84,8 @@ export const readReportExportHistory = async function* ({
         ),
         resultS3Key: reportExports.resultS3Key,
         createdAt: reportExports.createdAt,
-        createdAtCursor: reportExportCreatedAtCursor.as("created_at_cursor"),
+        createdAtCursor:
+          reportExportCreatedAtCursor.cursorValue.as("created_at_cursor"),
       })
       .from(reportExports)
       .where(
@@ -127,7 +103,7 @@ export const readReportExportHistory = async function* ({
     rows,
     limit,
     cursorForItem: (item) =>
-      encodePaginationCursor([item.createdAtCursor, item.id]),
+      reportExportCreatedAtCursor.encode(item.createdAtCursor, item.id),
   });
 
   return Result.ok({

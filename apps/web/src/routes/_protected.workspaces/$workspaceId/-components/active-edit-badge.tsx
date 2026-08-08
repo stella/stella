@@ -1,16 +1,13 @@
 import { LockIcon } from "lucide-react";
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
-import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
+
+import { UserAvatar } from "@/components/user-avatar";
 
 type ActiveEditBadgeProps = {
   name: string;
@@ -29,12 +26,12 @@ export const ActiveEditBadge = ({
       render={<span />}
     >
       <LockIcon className="text-warning size-3" />
-      <Avatar className="size-4">
-        <AvatarImage alt={name} src={image ?? undefined} />
-        <AvatarFallback className="text-[7px]">
-          {name.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
+      <UserAvatar
+        className="size-4"
+        fallbackClassName="text-[7px]"
+        image={image}
+        name={name}
+      />
     </TooltipTrigger>
     <TooltipPopup>{name}</TooltipPopup>
   </TooltipRoot>
