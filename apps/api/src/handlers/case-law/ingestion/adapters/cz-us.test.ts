@@ -23,6 +23,7 @@ type ResultRow = {
   date: string;
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
+  textActionLabel?: string | undefined;
 };
 
 const makeSearchForm = (): string => `
@@ -88,13 +89,20 @@ const makeResultsPage = (
         row.id === undefined
           ? `ResultDetail.aspx?malformed=true&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}`
           : `ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}&typ=result`;
+      let textAction = "";
+      if (textUrl) {
+        textAction =
+          row.textActionLabel === undefined
+            ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />`
+            : `<a onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")'>${row.textActionLabel}</a>`;
+      }
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
   <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
-  <td>${textUrl ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />` : ""}</td>
+  <td>${textAction}</td>
 </tr>`;
     })
     .join("");
@@ -1004,6 +1012,44 @@ describe("czUsAdapter.fetchPage", () => {
       caseNumber: "Pl.ÚS 11/24",
       ecli: "ECLI:CZ:US:2024:Pl.US.11.24.1",
       sourceDocumentId: "nalus-record:7402",
+    });
+    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
+      quarantined?.sourceDocumentId,
+    );
+  });
+
+  test("keeps the repair identity when a visible text action recovers", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 12/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+    const quarantined = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    installSearchMock({
+      rows: [
+        {
+          sz: "Pl-12-24_1",
+          caseNumber: "Pl.ÚS 12/24",
+          date: "4. 1. 2024",
+          textActionLabel: "Text rozhodnutí",
+        },
+      ],
+    });
+    const recovered = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    expect(recovered).toMatchObject({
+      caseNumber: "Pl.ÚS 12/24",
+      sourceDocumentId: "nalus-sz:Pl-12-24_1",
     });
     expect(recovered?.sourceDocumentIdRepairAliases).toContain(
       quarantined?.sourceDocumentId,

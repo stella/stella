@@ -729,17 +729,17 @@ const hiddenField = (html: string, name: string): string | undefined =>
  */
 const quarantineFingerprint = ({
   stablePrimaryText,
-  actionsText,
+  stableActionsText,
 }: {
   stablePrimaryText: string;
-  actionsText: string;
+  stableActionsText: string;
 }): string => {
   const normalize = (value: string): string =>
     value.replace(/\s+/gu, " ").trim();
   return hashContent(
     JSON.stringify({
       stablePrimaryText: normalize(stablePrimaryText),
-      actionsText: normalize(actionsText),
+      stableActionsText: normalize(stableActionsText),
     }),
   );
 };
@@ -864,15 +864,20 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     });
     // Compute the identity-less form for every row. If publisher links are
     // restored later, this becomes a migration alias for the earlier durable
-    // quarantine row. Strip the detail anchor and ECLI from the visible text:
-    // both can appear only when identity metadata recovers, so neither may
-    // participate in the repair fingerprint.
+    // quarantine row. Strip every identity-bearing control from the visible
+    // text: the detail anchor, ECLI and retrieval action can all appear only
+    // when identity metadata recovers, so none may participate in the repair
+    // fingerprint.
     const stablePrimary = primary.clone();
     stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
     const stablePrimaryText = stablePrimary.text().replace(ecli ?? "", "");
+    const stableActions = actions.clone();
+    stableActions
+      .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
+      .remove();
     const quarantineId = quarantineFingerprint({
       stablePrimaryText,
-      actionsText: actions.text(),
+      stableActionsText: stableActions.text(),
     });
     const publisherIdentity = exactPublisherIdentity ?? {
       sourceDocumentId: `nalus-quarantine:${quarantineId}`,
