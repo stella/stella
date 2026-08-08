@@ -28,3 +28,23 @@ export const conditionHasFormula = (node: ConditionNode): boolean => {
   }
   return leafOperands(node).some((operand) => operand.type === "formula");
 };
+
+/** Whether a condition tree explicitly includes an entity kind. */
+export const conditionIncludesKind = (
+  nodes: readonly ConditionNode[],
+  kind: string,
+): boolean =>
+  nodes.some((node) => {
+    if (node.type === "group") {
+      return conditionIncludesKind(node.children, kind);
+    }
+    if (
+      node.type !== "predicate" ||
+      node.operand.type !== "kind" ||
+      node.op !== "in" ||
+      !Array.isArray(node.value)
+    ) {
+      return false;
+    }
+    return node.value.includes(kind);
+  });

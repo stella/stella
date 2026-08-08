@@ -5,6 +5,22 @@ import {
 } from "@stll/chat-limits";
 
 export const LIMITS = {
+  legalListsPageSizeDefault: 50,
+  legalListsPageSizeMax: 100,
+  legalListsPerWorkspace: 200,
+  legalListSectionsPerList: 200,
+  legalListColumnsPerList: 100,
+  legalListItemsPageSizeDefault: 100,
+  legalListItemsPageSizeMax: 500,
+  legalListSourcesPageSizeDefault: 50,
+  legalListSourcesPageSizeMax: 200,
+  legalListGenerationSourcesMax: 100,
+  legalListGenerationCandidatesMax: 200,
+  legalListGenerationCandidateSourcesMax: 10,
+  legalListGenerationRunsPageSizeDefault: 20,
+  legalListGenerationRunsPageSizeMax: 100,
+  legalListActivityPageSizeDefault: 50,
+  legalListActivityPageSizeMax: 200,
   workspacesCount: 1000,
   workspaceNavigationPageSizeDefault: 100,
   workspaceNavigationPageSizeMax: 1000,

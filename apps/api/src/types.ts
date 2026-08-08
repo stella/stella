@@ -50,6 +50,7 @@ export type MemoriesAPI = Elysia<
 
 export { toSafeId } from "@/api/lib/branded-types";
 export type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+export type { LegalListSourceLocator } from "@/api/lib/lists/types";
 export type { Page } from "@/api/lib/pagination";
 export type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 

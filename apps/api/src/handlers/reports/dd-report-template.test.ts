@@ -114,6 +114,7 @@ const makeEntity = (
   updatedAt: null,
   status: null,
   priority: null,
+  listItemType: null,
   dueDate: null,
   agendaKind: "task",
   startAt: null,

@@ -1,10 +1,19 @@
 import type { PropertyTool } from "@/api/db/schema-validators";
+import { viewIncludesListItems } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 const METADATA_COLUMNS = [
   { id: "_created-by", header: "Author" },
   { id: "_updated-at", header: "Last updated" },
   { id: "_version", header: "Version" },
+] as const;
+
+const LIST_COLUMNS = [
+  { id: "_name", header: "Name" },
+  { id: "_list-item-type", header: "Type" },
+  { id: "_status", header: "Status" },
+  { id: "_priority", header: "Priority" },
+  { id: "_due-date", header: "Due date" },
 ] as const;
 
 type ExportProperty = {
@@ -30,6 +39,11 @@ export type ExportColumn =
   | {
       type: "metadata";
       id: (typeof METADATA_COLUMNS)[number]["id"];
+      header: string;
+    }
+  | {
+      type: "list";
+      id: (typeof LIST_COLUMNS)[number]["id"];
       header: string;
     };
 
@@ -74,7 +88,15 @@ export const buildExportColumns = (
       ? []
       : [{ type: "metadata" as const, id: column.id, header: column.header }],
   );
+  const listColumns = viewIncludesListItems(layout.filters)
+    ? LIST_COLUMNS.flatMap((column) =>
+        hiddenIds.has(column.id)
+          ? []
+          : [{ type: "list" as const, id: column.id, header: column.header }],
+      )
+    : [];
   const defaultColumns: ExportColumn[] = [
+    ...listColumns,
     ...propertyColumns,
     ...metadataColumns,
   ];

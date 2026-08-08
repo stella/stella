@@ -19,6 +19,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import {
   buildExportColumns,
@@ -375,6 +376,29 @@ const buildMetadataExportCell = (
   return buildTextExportCell(formatMetadataColumn(column, entity, locale));
 };
 
+const buildListExportCell = (
+  column: Extract<ExportColumn, { type: "list" }>,
+  entity: QueryEntityResult,
+  locale: string,
+): ExportCell => {
+  switch (column.id) {
+    case "_name":
+      return buildTextExportCell(entity.name ?? "");
+    case "_list-item-type":
+      return buildTextExportCell(entity.listItemType ?? "task");
+    case "_status":
+      return buildTextExportCell(entity.status?.replaceAll("_", " ") ?? "");
+    case "_priority":
+      return buildTextExportCell(entity.priority ?? "");
+    case "_due-date":
+      return buildTextExportCell(
+        entity.dueDate ? formatExportDate(entity.dueDate, locale) : "",
+      );
+    default:
+      return buildTextExportCell("");
+  }
+};
+
 const getExportCellStyle = (
   metadata: QueryEntityResult["cellMetadata"][number]["metadata"] | undefined,
 ): ExportCellStyle => {
@@ -422,7 +446,9 @@ export const buildExportTable = (
         });
       }
 
-      return buildMetadataExportCell(column, entity, locale);
+      return column.type === "list"
+        ? buildListExportCell(column, entity, locale)
+        : buildMetadataExportCell(column, entity, locale);
     });
   }),
 });
@@ -648,7 +674,7 @@ const exportTableView = createSafeHandler(
         limit: LIMITS.exportRowLimit,
         fieldMode: "visible",
         fieldIds,
-        excludedKinds: ["folder", "task"],
+        excludedKinds: excludedEntityKindsForView(layout.filters),
       }),
     );
 

@@ -901,6 +901,10 @@
     "import": "Importálás",
     "invite": "Meghívás",
     "invoices": "Számlák",
+    "itemTypeValues": {
+      "event": "Esemény",
+      "requirement": "Követelmény"
+    },
     "kind": "Fajta",
     "language": "Nyelv",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "Szereplő",
           "dateTime": "Dátum és idő",
-          "event": "Esemény",
           "provenance": "Eredet"
         },
         "loadEarlier": "Korábbiak betöltése",

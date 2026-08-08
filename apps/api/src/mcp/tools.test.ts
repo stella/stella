@@ -2779,6 +2779,7 @@ describe("OpenAI-compatible MCP tools", () => {
       tasks: [
         {
           id: "task_1",
+          itemType: "task",
           name: "[PERSON_1] deposition",
           status: "open",
           priority: "high",

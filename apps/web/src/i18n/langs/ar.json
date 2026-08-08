@@ -901,6 +901,10 @@
     "import": "استيراد",
     "invite": "دعوة",
     "invoices": "الفواتير",
+    "itemTypeValues": {
+      "event": "حدث",
+      "requirement": "متطلب"
+    },
     "kind": "النوع",
     "language": "اللغة",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "الفاعل",
           "dateTime": "التاريخ والوقت",
-          "event": "الحدث",
           "provenance": "المنشأ"
         },
         "loadEarlier": "تحميل الأقدم",

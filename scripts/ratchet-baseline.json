@@ -1,11 +1,12 @@
 {
   "as-casts": {
-    "count": 4,
+    "count": 5,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
-      "apps/web/src/components/docx/use-sync-docx-suggestions.ts": 1
+      "apps/web/src/components/docx/use-sync-docx-suggestions.ts": 1,
+      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1
     }
   },
   "super-linear-regexes": {
@@ -13,8 +14,11 @@
     "files": {}
   },
   "nullish-array-fallback": {
-    "count": 4,
+    "count": 9,
     "files": {
+      "apps/api/src/handlers/lists/generation-candidates/create.ts": 1,
+      "apps/api/src/handlers/lists/generation-candidates/list.ts": 2,
+      "apps/api/src/handlers/lists/items/list.ts": 2,
       "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 1
     }
@@ -51,7 +55,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 601,
+    "count": 602,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -152,7 +156,7 @@
       "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts": 1,
       "apps/api/src/handlers/workspaces/list.ts": 2,
       "apps/api/src/handlers/workspaces/read-overview-activity.ts": 1,
-      "apps/api/src/lib/account-deletion-steps.ts": 4,
+      "apps/api/src/lib/account-deletion-steps.ts": 5,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
@@ -242,7 +246,6 @@
       "apps/web/src/components/chat-editor-provider.tsx": 10,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 2,
-      "apps/web/src/components/chat/chat-rich-message-part.tsx": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 5,
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
@@ -300,6 +303,7 @@
       "apps/web/src/lib/slot.tsx": 1,
       "apps/web/src/lib/workspaces/queries/docx-suggestions.ts": 1,
       "apps/web/src/lib/workspaces/queries/entities.ts": 3,
+      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
       "apps/web/src/lib/workspaces/queries/view-templates.ts": 1,
       "apps/web/src/router.tsx": 1,
       "apps/web/src/routes/_protected.chat/index.tsx": 1,
@@ -369,8 +373,10 @@
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 0,
-    "files": {}
+    "count": 1,
+    "files": {
+      "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1
+    }
   },
   "lib-to-handler-imports": {
     "count": 0,
@@ -388,10 +394,10 @@
     }
   },
   "capabilities-without-description": {
-    "count": 518,
+    "count": 558,
     "files": {
-      "apps/api/src/mcp/generated/capability-catalog.json": 259,
-      "packages/cli/src/generated/capability-catalog.json": 259
+      "apps/api/src/mcp/generated/capability-catalog.json": 279,
+      "packages/cli/src/generated/capability-catalog.json": 279
     }
   },
   "capability-file-transport-suppressed": {

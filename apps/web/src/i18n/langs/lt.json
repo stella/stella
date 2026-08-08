@@ -901,6 +901,10 @@
     "import": "Importuoti",
     "invite": "Pakviesti",
     "invoices": "Sąskaitos",
+    "itemTypeValues": {
+      "event": "Įvykis",
+      "requirement": "Reikalavimas"
+    },
     "kind": "Rūšis",
     "language": "Kalba",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "Atlikėjas",
           "dateTime": "Data ir laikas",
-          "event": "Įvykis",
           "provenance": "Kilmė"
         },
         "loadEarlier": "Įkelti ankstesnius",

@@ -904,6 +904,10 @@ type Messages = {
     "import": "Import";
     "invite": "Invite";
     "invoices": "Invoices";
+    "itemTypeValues": {
+      "event": "Event";
+      "requirement": "Requirement";
+    };
     "kind": "Kind";
     "language": "Language";
     "languages": {
@@ -3698,7 +3702,6 @@ type Messages = {
         "list": {
           "actor": "Actor";
           "dateTime": "Date and time";
-          "event": "Event";
           "provenance": "Origin";
         };
         "loadEarlier": "Load earlier";

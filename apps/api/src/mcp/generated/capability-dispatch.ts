@@ -380,6 +380,68 @@ export const CAPABILITY_DISPATCH = {
   "legislation.search": {
     load: async () => await import("@/api/handlers/legislation/search"),
   },
+  "lists.columns.create": {
+    load: async () => await import("@/api/handlers/lists/columns/create"),
+  },
+  "lists.create": {
+    load: async () => await import("@/api/handlers/lists/create"),
+  },
+  "lists.generation-candidates.acceptance.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/generation-candidates/acceptance/create"),
+  },
+  "lists.generation-candidates.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/generation-candidates/create"),
+  },
+  "lists.generation-candidates.list": {
+    load: async () =>
+      await import("@/api/handlers/lists/generation-candidates/list"),
+  },
+  "lists.generation-candidates.rejection.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/generation-candidates/rejection/create"),
+  },
+  "lists.generations.create": {
+    load: async () => await import("@/api/handlers/lists/generations/create"),
+  },
+  "lists.generations.list": {
+    load: async () => await import("@/api/handlers/lists/generations/list"),
+  },
+  "lists.get": { load: async () => await import("@/api/handlers/lists/get") },
+  "lists.items.activity.list": {
+    load: async () => await import("@/api/handlers/lists/items/activity/list"),
+  },
+  "lists.items.comments.create": {
+    load: async () =>
+      await import("@/api/handlers/lists/items/comments/create"),
+  },
+  "lists.items.list": {
+    load: async () => await import("@/api/handlers/lists/items/list"),
+  },
+  "lists.items.reviews.update": {
+    load: async () => await import("@/api/handlers/lists/items/reviews/update"),
+  },
+  "lists.items.sources.create": {
+    load: async () => await import("@/api/handlers/lists/items/sources/create"),
+  },
+  "lists.items.sources.list": {
+    load: async () => await import("@/api/handlers/lists/items/sources/list"),
+  },
+  "lists.items.sources.verification.update": {
+    load: async () =>
+      await import("@/api/handlers/lists/items/sources/verification/update"),
+  },
+  "lists.items.update": {
+    load: async () => await import("@/api/handlers/lists/items/update"),
+  },
+  "lists.list": { load: async () => await import("@/api/handlers/lists/list") },
+  "lists.sections.create": {
+    load: async () => await import("@/api/handlers/lists/sections/create"),
+  },
+  "lists.update": {
+    load: async () => await import("@/api/handlers/lists/update"),
+  },
   "organization-settings.document-ocr-availability.get": {
     load: async () =>
       await import("@/api/handlers/organization-settings/document-ocr-availability/get"),

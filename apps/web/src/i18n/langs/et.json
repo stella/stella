@@ -901,6 +901,10 @@
     "import": "Impordi",
     "invite": "Kutsu",
     "invoices": "Arved",
+    "itemTypeValues": {
+      "event": "Sündmus",
+      "requirement": "Nõue"
+    },
     "kind": "Liik",
     "language": "Keel",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "Täitja",
           "dateTime": "Kuupäev ja kellaaeg",
-          "event": "Sündmus",
           "provenance": "Päritolu"
         },
         "loadEarlier": "Laadi varasemad",

@@ -8,6 +8,7 @@ export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
 export * from "./schema/case-law";
 export * from "./schema/legislation";
+export * from "./schema/lists";
 export * from "./schema/chat";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
@@ -30,6 +31,7 @@ export {
   CHAT_TITLE_SOURCE,
   CHAT_TITLE_SOURCES,
   ENTITY_KINDS,
+  LIST_ITEM_TYPES,
   EXPENSE_CATEGORIES,
   PROPERTY_ROLES,
   PROPERTY_STATUSES,
@@ -77,6 +79,7 @@ export type {
   JustificationBlock,
   JustificationContent,
   LinkMetadata,
+  ListItemType,
   PdfBatesJustificationBlock,
   PersistedChatMessageContent,
   PersistedDecisionAnalysis,

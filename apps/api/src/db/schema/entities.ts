@@ -1,6 +1,7 @@
 import {
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
+  LIST_ITEM_TYPES,
   TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
@@ -44,6 +45,7 @@ export const entities = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: ENTITY_KINDS }).notNull().default("document"),
+    listItemType: p.text("list_item_type", { enum: LIST_ITEM_TYPES }),
     parentId: safeUuid<"entity">("parent_id").references(
       (): AnyPgColumn => entities.id,
       {
@@ -156,6 +158,10 @@ export const entities = p.pgTable(
       .index("entities_due_date_idx")
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
+    p.check(
+      "entities_list_item_type_task_only",
+      sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN ('task', 'fact', 'issue', 'requirement', 'event'))`,
+    ),
     p
       .index("entities_agenda_kind_idx")
       .on(table.workspaceId, table.agendaKind)
@@ -348,6 +354,9 @@ export const entityVersions = p.pgTable(
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    p
+      .uniqueIndex("entity_versions_id_entity_ws_uidx")
+      .on(table.id, table.entityId, table.workspaceId),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
     p
       .index("entity_versions_stamp_idx")

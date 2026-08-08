@@ -901,6 +901,10 @@
     "import": "Importuj",
     "invite": "Zaproś",
     "invoices": "Faktury",
+    "itemTypeValues": {
+      "event": "Zdarzenie",
+      "requirement": "Wymóg"
+    },
     "kind": "Rodzaj",
     "language": "Język",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "Wykonawca",
           "dateTime": "Data i godzina",
-          "event": "Zdarzenie",
           "provenance": "Pochodzenie"
         },
         "loadEarlier": "Wczytaj starsze",

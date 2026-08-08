@@ -901,6 +901,10 @@
     "import": "Importovať",
     "invite": "Pozvať",
     "invoices": "Faktúry",
+    "itemTypeValues": {
+      "event": "Udalosť",
+      "requirement": "Požiadavka"
+    },
     "kind": "Druh",
     "language": "Jazyk",
     "languages": {
@@ -3695,7 +3699,6 @@
         "list": {
           "actor": "Aktér",
           "dateTime": "Dátum a čas",
-          "event": "Udalosť",
           "provenance": "Pôvod"
         },
         "loadEarlier": "Načítať staršie",

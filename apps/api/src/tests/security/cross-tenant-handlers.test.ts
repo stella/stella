@@ -8,7 +8,12 @@ import {
 } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, savedSearches, workObligations } from "@/api/db/schema";
+import {
+  entities,
+  legalLists,
+  savedSearches,
+  workObligations,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
@@ -19,6 +24,7 @@ import readVersions from "@/api/handlers/entities/read-versions";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readFileHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
+import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
@@ -94,6 +100,12 @@ const foreignOwnedTaskB = toSafeId<"entity">(
 );
 const visibleOwnedTaskB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222247",
+);
+const legalListA = toSafeId<"legalList">(
+  "11111111-1111-4111-8111-111111111146",
+);
+const legalListB = toSafeId<"legalList">(
+  "22222222-2222-4222-8222-222222222246",
 );
 
 const savedSearchCriteria = (
@@ -301,6 +313,19 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.billingCodeB1),
   },
   {
+    name: "legal list list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listLegalLists, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listLegalLists, workspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, legalListB),
+    expectPositive: (result) => expectPageContainsId(result, legalListB),
+  },
+  {
     name: "saved search list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listSavedSearches, workspaceA, {
@@ -380,6 +405,20 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(legalLists).values([
+    {
+      id: legalListA,
+      workspaceId: ids.wsA1,
+      name: "Workspace A list",
+      createdBy: ids.userA1,
+    },
+    {
+      id: legalListB,
+      workspaceId: ids.wsB1,
+      name: "Workspace B list",
+      createdBy: ids.userB1,
+    },
+  ]);
   await testDb.insert(savedSearches).values([
     {
       id: savedSearchA,

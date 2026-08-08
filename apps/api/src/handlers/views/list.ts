@@ -6,7 +6,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
-import { localizeDefaultViewName } from "@/api/lib/views";
+import {
+  localizeDefaultViewName,
+  normalizeDefaultViewLayout,
+} from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { cleanStalePropertyIds } from "@/api/lib/views/utils";
 
@@ -26,18 +29,25 @@ const toViewResponse = (
   },
   lang: SupportedLang,
   layout = parseViewLayoutSafe(view.layout),
-) => ({
-  version: 1 as const,
-  id: view.id,
-  name: localizeDefaultViewName({
-    lang,
-    layoutType: layout.type,
+) => {
+  const normalizedLayout = normalizeDefaultViewLayout({
+    layout,
     name: view.name,
-  }),
-  layout,
-  position: view.position,
-  createdAt: view.createdAt.toISOString(),
-});
+  });
+
+  return {
+    version: 1 as const,
+    id: view.id,
+    name: localizeDefaultViewName({
+      lang,
+      layoutType: normalizedLayout.type,
+      name: view.name,
+    }),
+    layout: normalizedLayout,
+    position: view.position,
+    createdAt: view.createdAt.toISOString(),
+  };
+};
 
 // Pure read. Default views are seeded when a workspace is created
 // (`handlers/workspaces/create.ts`) and backfilled for pre-existing
