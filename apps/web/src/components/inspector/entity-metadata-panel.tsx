@@ -21,6 +21,7 @@ import { DocumentPropertiesSection } from "@/components/inspector/document-prope
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
+import { UserIdentity } from "@/components/user-avatar";
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
@@ -334,7 +335,6 @@ const EntityMetadataContent = ({
     versionsData?.versions.find(
       (v) => v.id === versionsData.currentVersionId,
     ) ?? null;
-  const updatedByLabel = currentVersion?.author?.name ?? null;
   const versionLabel = currentVersion
     ? t("inspector.metadata.versionCurrent", {
         version: String(currentVersion.versionNumber),
@@ -449,18 +449,28 @@ const EntityMetadataContent = ({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SectionHeading>{t("inspector.metadata.stellaHeading")}</SectionHeading>
         <div className="flex flex-col gap-px px-2 pb-2">
-          <ReadOnlyRow
+          {/* A person is shown as a person here, the same as everywhere else
+              in the app; a bare name in a panel of machine fields read as one
+              more string. Version and its timestamp answer the same question
+              ("which revision am I looking at, and when"), so they share a
+              row instead of being read as two unrelated facts. */}
+          <PersonRow
             label={t("inspector.metadata.lastUpdatedBy")}
-            value={updatedByLabel}
+            person={currentVersion?.author ?? null}
           />
-          <ReadOnlyRow label={t("common.version")} value={versionLabel} />
-          {updatedAtIso !== null && (
-            <ReadOnlyRow
-              label={t("inspector.metadata.updatedAt")}
-              title={formatFullTimestamp(updatedAtIso)}
-              value={formatRelativeTime(updatedAtIso)}
-            />
-          )}
+          <ReadOnlyRow
+            label={t("common.version")}
+            title={
+              updatedAtIso === null
+                ? undefined
+                : formatFullTimestamp(updatedAtIso)
+            }
+            value={
+              versionLabel === null || updatedAtIso === null
+                ? versionLabel
+                : `${versionLabel} · ${formatRelativeTime(updatedAtIso)}`
+            }
+          />
         </div>
 
         {fileFieldId !== null && (
@@ -525,10 +535,32 @@ const SectionHeading = ({
   </div>
 );
 
+type PersonRowProps = {
+  label: string;
+  person: { id: string; name: string; image: string | null } | null;
+};
+
+const PersonRow = ({ label, person }: PersonRowProps) => (
+  <div className="flex flex-col gap-1 rounded-md px-2 py-2">
+    <span className="text-muted-foreground text-xs font-medium">{label}</span>
+    {person === null ? (
+      <span className="text-muted-foreground text-sm">—</span>
+    ) : (
+      <UserIdentity
+        avatarClassName="size-5 shrink-0 text-[0.5625rem]"
+        className="min-w-0"
+        image={person.image}
+        name={person.name}
+        nameClassName="text-sm"
+      />
+    )}
+  </div>
+);
+
 type ReadOnlyRowProps = {
   label: string;
   value: string | null;
-  title?: string;
+  title?: string | undefined;
 };
 
 const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => {

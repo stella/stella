@@ -55,12 +55,16 @@ export type {
   ChatReferenceHrefPrefix,
 } from "./chat-references";
 export {
+  AUTHORED_DOCUMENT_PROPERTY_KEYS,
   DOCUMENT_PROPERTY_KEYS,
   DOCUMENT_PROPERTY_MIME_TYPES,
   documentContainerFormat,
+  GENERATED_DOCUMENT_PROPERTY_KEYS,
   hasDocumentProperties,
+  isAuthoredDocumentPropertyKey,
 } from "./document-properties";
 export type {
+  AuthoredDocumentPropertyKey,
   DocumentContainerFormat,
   DocumentPropertiesResult,
   DocumentPropertiesStatus,

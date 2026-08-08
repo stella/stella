@@ -11,11 +11,11 @@
  */
 
 /**
- * Property names, in display order. Formats map onto these where they mean the
- * same thing (OOXML `dc:creator`, PDF `Author` and ODF `meta:initial-creator`
- * are all `author`), so one label set covers every format.
+ * Properties a person wrote, and the only ones an authoring application lets
+ * them change. These carry intent — who owns the document, which client it
+ * belongs to, whether it is still a draft — so they are what the panel shows.
  */
-export const DOCUMENT_PROPERTY_KEYS = [
+export const AUTHORED_DOCUMENT_PROPERTY_KEYS = [
   "title",
   "subject",
   "description",
@@ -26,6 +26,16 @@ export const DOCUMENT_PROPERTY_KEYS = [
   "lastModifiedBy",
   "company",
   "manager",
+] as const;
+
+/**
+ * Facts the producing application generated about itself and about the bytes.
+ * Kept in the contract because the scrubber has to find and clear them, but not
+ * shown: they are unactionable, and worse, routinely stale. A generator that
+ * never recomputes the statistics leaves "0 words" on a document full of text,
+ * so rendering them tells the reader something false with total confidence.
+ */
+export const GENERATED_DOCUMENT_PROPERTY_KEYS = [
   "createdAt",
   "modifiedAt",
   "lastPrintedAt",
@@ -43,7 +53,29 @@ export const DOCUMENT_PROPERTY_KEYS = [
   "slides",
 ] as const;
 
+/**
+ * Property names, in display order. Formats map onto these where they mean the
+ * same thing (OOXML `dc:creator`, PDF `Author` and ODF `meta:initial-creator`
+ * are all `author`), so one label set covers every format.
+ */
+export const DOCUMENT_PROPERTY_KEYS = [
+  ...AUTHORED_DOCUMENT_PROPERTY_KEYS,
+  ...GENERATED_DOCUMENT_PROPERTY_KEYS,
+] as const;
+
 export type DocumentPropertyKey = (typeof DOCUMENT_PROPERTY_KEYS)[number];
+
+export type AuthoredDocumentPropertyKey =
+  (typeof AUTHORED_DOCUMENT_PROPERTY_KEYS)[number];
+
+const AUTHORED_KEYS: ReadonlySet<string> = new Set(
+  AUTHORED_DOCUMENT_PROPERTY_KEYS,
+);
+
+/** Whether this property is one a person authored, rather than a generated fact. */
+export const isAuthoredDocumentPropertyKey = (
+  key: DocumentPropertyKey,
+): key is AuthoredDocumentPropertyKey => AUTHORED_KEYS.has(key);
 
 /**
  * A value keeps its kind so the client formats it in the reader's locale (a

@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type {
-  DocumentPropertiesResult,
-  DocumentPropertyKey,
-  DocumentPropertyValue,
+import {
+  type DocumentPropertiesResult,
+  type DocumentPropertyKey,
+  type DocumentPropertyValue,
+  isAuthoredDocumentPropertyKey,
 } from "@stll/api-contract";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -91,7 +92,13 @@ export const DocumentPropertiesSection = ({
   if (data.status !== "available") {
     return <Message>{t(UNAVAILABLE_MESSAGE_KEYS[data.status])}</Message>;
   }
-  if (data.properties.length === 0) {
+  // Generated facts (word counts, producer, template) are dropped rather than
+  // tucked below a disclosure: they are not actionable here, and a generator
+  // that never recomputed them reports "0 words" for a document full of text.
+  const authored = data.properties.filter((property) =>
+    isAuthoredDocumentPropertyKey(property.key),
+  );
+  if (authored.length === 0) {
     return (
       <Message>{t("inspector.metadata.documentProperties.empty")}</Message>
     );
@@ -120,7 +127,7 @@ export const DocumentPropertiesSection = ({
 
   return (
     <div className="flex flex-col gap-px px-2 pb-2">
-      {data.properties.map((property) => (
+      {authored.map((property) => (
         <div
           className="flex flex-col gap-1 rounded-md px-2 py-2"
           key={property.key}
