@@ -559,6 +559,10 @@ describe("validateMessage", () => {
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
         {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
           interruptId: "approval-2",
           payload: { approved: true },
           status: "resolved",
@@ -567,10 +571,30 @@ describe("validateMessage", () => {
     });
     expect(Result.isOk(accepted)).toBe(true);
 
+    const rejectedCancelledTransition = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-2",
+          status: "cancelled",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedCancelledTransition)).toBe(true);
+
     const rejectedUnknownInterrupt = await validateMessageWithPersistence({
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
         {
           interruptId: "approval-forged",
           payload: { approved: true },

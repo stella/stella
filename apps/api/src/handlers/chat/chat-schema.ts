@@ -701,9 +701,6 @@ const validateContinuationToolCallIntegrity = ({
     parts: [...incomingParts],
     role: "assistant",
   });
-  if (resumedInteraction === null) {
-    return Result.ok();
-  }
   const awaitedInteractions = getAwaitingUserInteractions({
     parts: [...persistedParts],
     role: "assistant",
@@ -735,7 +732,11 @@ const validateContinuationToolCallIntegrity = ({
         interruptId: `client_tool_${call.id}`,
       });
     }
-    const resumedInteractions = incomingCalls.flatMap((call) => {
+    const resumedInteractions = incomingCalls.flatMap((call, index) => {
+      const canonicalCall = canonicalCalls.at(index);
+      if (canonicalCall === undefined || canonicalCall.state === call.state) {
+        return [];
+      }
       const resumed = getResumedUserInteraction({
         parts: [call],
         role: "assistant",
@@ -744,22 +745,27 @@ const validateContinuationToolCallIntegrity = ({
     });
     if (
       awaitedInterrupts.length !== awaitedInteractions.length ||
-      resume.some(({ interruptId }) => {
+      resume.length !== awaitedInterrupts.length ||
+      resume.some(({ interruptId, status }) => {
         const awaited = awaitedInterrupts.find(
           (candidate) => candidate.interruptId === interruptId,
         );
-        return (
-          awaited === undefined ||
-          !resumedInteractions.some(
-            (resumed) =>
-              resumed.toolCallId === awaited.interaction.toolCallId &&
-              resumed.type === awaited.interaction.type,
-          )
+        if (awaited === undefined) {
+          return true;
+        }
+        const transitioned = resumedInteractions.some(
+          (resumed) =>
+            resumed.toolCallId === awaited.interaction.toolCallId &&
+            resumed.type === awaited.interaction.type,
         );
+        return status === "resolved" ? !transitioned : transitioned;
       })
     ) {
       return invalidContinuationToolCall();
     }
+  }
+  if (resumedInteraction === null) {
+    return Result.ok();
   }
   const interaction = awaitedInteractions.find(
     (candidate) =>
