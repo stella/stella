@@ -329,8 +329,9 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
     }
     // SAFETY: dev-only script; each call site declares the shape it expects and
     // a mismatch fails the run immediately.
+    const parsed = await response.json();
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
-    return (await response.json()) as T;
+    return parsed as T;
   };
   return { request };
 };
