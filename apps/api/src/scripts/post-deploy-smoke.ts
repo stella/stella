@@ -23,9 +23,15 @@
  */
 
 import { TaggedError } from "better-result";
+import type { Static } from "elysia";
 import * as v from "valibot";
 
+import type {
+  agUiSendMessageBodySchema,
+  ChatSendRequest,
+} from "@/api/handlers/chat/chat-schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
@@ -305,29 +311,7 @@ const parseSmokeSession = (value: unknown): SmokeSession => {
   });
 };
 
-type ChatSmokeMessage = {
-  id: string;
-  role: "user";
-  parts: Extract<ChatPart, { type: "text" }>[];
-};
-
-type ChatSmokeForwardedProps = {
-  threadId: string;
-  runId: string;
-  sendMode: "rawOverride";
-  message: ChatSmokeMessage;
-};
-
-type ChatSmokeBody = {
-  threadId: string;
-  runId: string;
-  state: Record<string, never>;
-  messages: ChatSmokeMessage[];
-  tools: never[];
-  context: never[];
-  forwardedProps: ChatSmokeForwardedProps;
-  data: ChatSmokeForwardedProps;
-};
+type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
 
 /**
  * Minimal valid AG-UI `POST /v1/chat/` envelope that triggers a real chat
@@ -336,19 +320,24 @@ type ChatSmokeBody = {
  * for the synthetic org.
  */
 export const buildChatSmokeBody = (): ChatSmokeBody => {
-  const threadId = Bun.randomUUIDv7();
+  const threadId = createSafeId<"chatThread">();
   const runId = Bun.randomUUIDv7();
-  const message: ChatSmokeMessage = {
-    id: Bun.randomUUIDv7(),
+  const message = {
+    id: createSafeId<"chatMessage">(),
     role: "user",
-    parts: [{ type: "text", content: "ping" }],
-  };
-  const forwardedProps: ChatSmokeForwardedProps = {
+    parts: [
+      {
+        type: "text",
+        content: "ping",
+      } satisfies Extract<ChatPart, { type: "text" }>,
+    ],
+  } as const satisfies ChatSendRequest["message"];
+  const forwardedProps = {
     threadId,
     runId,
     sendMode: "rawOverride",
     message,
-  };
+  } as const satisfies ChatSendRequest;
 
   return {
     threadId,
@@ -359,7 +348,7 @@ export const buildChatSmokeBody = (): ChatSmokeBody => {
     context: [],
     forwardedProps,
     data: forwardedProps,
-  };
+  } satisfies ChatSmokeBody;
 };
 
 const mintSmokeSession = async (
