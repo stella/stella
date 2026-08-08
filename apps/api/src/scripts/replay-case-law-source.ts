@@ -38,14 +38,13 @@ import {
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
-// eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
-import { toSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   readS3ObjectIfPresent,
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
+import { toSafeId } from "@/api/types";
 
 const DEFAULT_LIMIT = 100;
 const DEFAULT_PAGE_SIZE = 25;

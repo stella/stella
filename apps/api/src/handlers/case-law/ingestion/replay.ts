@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -87,6 +90,7 @@ export type ReplayRowOutcome =
 export type ReplayDecisionRow = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
+  sourceDocumentId: string | null;
   language: string;
   court: string;
   ecli: string | null;
@@ -104,6 +108,7 @@ export type ReplayDecisionRow = {
   parserVersion: number | null;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
+  corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
 };
 
 type SelectReplayPageOptions = {
@@ -140,6 +145,7 @@ export const selectReplayPage = async ({
       .select({
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
+        sourceDocumentId: caseLawDecisions.sourceDocumentId,
         language: caseLawDecisions.language,
         court: caseLawDecisions.court,
         ecli: caseLawDecisions.ecli,
@@ -153,6 +159,7 @@ export const selectReplayPage = async ({
         parserVersion: caseLawDecisions.parserVersion,
         sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
         sourceRawContentType: caseLawDecisions.sourceRawContentType,
+        corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
       })
       .from(caseLawDecisions)
       .where(
@@ -254,11 +261,7 @@ export type ReplayRunReport = {
   visited: number;
   outcomes: Record<ReplayRowOutcome, number>;
   rejections: Record<StoredRawReparseRejection, number>;
-  /**
-   * The first rows that produced no result, up to
-   * {@link MAX_REPORTED_PROBLEM_ROWS}. The counts above stay exact; this
-   * list is what an operator reads to see which decisions to look at.
-   */
+  /** Every row that produced no result, so advancing is always auditable. */
   problems: ReplayRowReport[];
   /**
    * Id of the last row this run finished, or null when it finished none.
@@ -270,9 +273,6 @@ export type ReplayRunReport = {
   /** Why the run stopped before its limit, if it did. */
   haltReason: string | null;
 };
-
-/** A run reports every problem by count and the first few by identity. */
-const MAX_REPORTED_PROBLEM_ROWS = 50;
 
 // Both counters are annotated with a total `Record` over their union, so a
 // new outcome or rejection reason fails to compile until it is counted here.
@@ -287,6 +287,8 @@ const emptyOutcomeCounts = (): Record<ReplayRowOutcome, number> => ({
 
 const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
   [STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA]: 0,
+  [STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH]: 0,
+  [STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST]: 0,
   [STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT]: 0,
   [STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT]: 0,
 });
@@ -304,6 +306,7 @@ const storedInputFor = (
   raw,
   contentType: row.sourceRawContentType,
   caseNumber: row.caseNumber,
+  sourceDocumentId: row.sourceDocumentId,
   language: row.language,
   court: row.court,
   ecli: row.ecli,
@@ -394,6 +397,9 @@ const replayWouldChangeRow = async ({
   result: IngestionResult;
   scopedDb: ScopedDb;
 }): Promise<boolean> => {
+  if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
+    return true;
+  }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
     existingSourceHash: row.sourceHash,
@@ -442,6 +448,25 @@ const replayRow = async ({
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: reparsed.rejection,
       detail: reparsed.detail,
+    };
+  }
+
+  const regeneratedIdentity = {
+    caseNumber: reparsed.result.caseNumber,
+    language: reparsed.result.language,
+    sourceDocumentId: reparsed.result.sourceDocumentId ?? null,
+  };
+  const selectedIdentity = {
+    caseNumber: row.caseNumber,
+    language: row.language,
+    sourceDocumentId: row.sourceDocumentId,
+  };
+  if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
+    return {
+      ...base,
+      outcome: REPLAY_ROW_OUTCOME.REJECTED,
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `selected ${JSON.stringify(selectedIdentity)}, regenerated ${JSON.stringify(regeneratedIdentity)}`,
     };
   }
 
@@ -677,8 +702,60 @@ export const replayCaseLawSource = async ({
     },
   });
 
-  while (visited < limit) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset walk; each page's boundary is the previous page's last row
+  const replayPage = async (
+    page: readonly ReplayDecisionRow[],
+    index = 0,
+  ): Promise<boolean> => {
+    const row = page.at(index);
+    if (row === undefined) {
+      return true;
+    }
+
+    const attempt = await Result.tryPromise({
+      try: async () =>
+        await replayOneRow({
+          capability,
+          readStoredRaw,
+          row,
+          scopedDb,
+          sourceId,
+          sourceLease,
+        }),
+      catch: (cause) => cause,
+    });
+
+    // A failure that says nothing about the row (a payload read that did
+    // not confirm absence, a database error) is not a fact to record
+    // against it. The run stops with the cursor still behind the row, so
+    // resuming re-attempts it instead of stepping over it forever.
+    if (Result.isError(attempt)) {
+      haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
+      return false;
+    }
+    const rowReport = attempt.value;
+
+    visited += 1;
+    outcomes[rowReport.outcome] += 1;
+    if (rowReport.rejection !== undefined) {
+      rejections[rowReport.rejection] += 1;
+    }
+    if (PROBLEM_OUTCOMES.has(rowReport.outcome)) {
+      problems.push(rowReport);
+    }
+    cursor = row.id;
+
+    if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
+      haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
+      return false;
+    }
+    resumeAfter = row.id;
+    return await replayPage(page, index + 1);
+  };
+
+  const walk = async (): Promise<void> => {
+    if (visited >= limit) {
+      return;
+    }
     const page = await selectReplayPage({
       scopedDb,
       sourceId,
@@ -687,54 +764,14 @@ export const replayCaseLawSource = async ({
       celex,
     });
     if (page.length === 0) {
-      break;
+      return;
     }
-
-    for (const row of page) {
-      // oxlint-disable-next-line no-await-in-loop -- one decision at a time: each write is ordered on the source's observation counter
-      const attempt = await Result.tryPromise({
-        try: async () =>
-          await replayOneRow({
-            capability,
-            readStoredRaw,
-            row,
-            scopedDb,
-            sourceId,
-            sourceLease,
-          }),
-        catch: (cause) => cause,
-      });
-
-      // A failure that says nothing about the row (a payload read that did
-      // not confirm absence, a database error) is not a fact to record
-      // against it. The run stops with the cursor still behind the row, so
-      // resuming re-attempts it instead of stepping over it forever.
-      if (Result.isError(attempt)) {
-        haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
-        return ran();
-      }
-      const rowReport = attempt.value;
-
-      visited += 1;
-      outcomes[rowReport.outcome] += 1;
-      if (rowReport.rejection !== undefined) {
-        rejections[rowReport.rejection] += 1;
-      }
-      if (
-        PROBLEM_OUTCOMES.has(rowReport.outcome) &&
-        problems.length < MAX_REPORTED_PROBLEM_ROWS
-      ) {
-        problems.push(rowReport);
-      }
-      cursor = row.id;
-
-      if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
-        haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
-        return ran();
-      }
-      resumeAfter = row.id;
+    if (await replayPage(page)) {
+      await walk();
     }
-  }
+  };
+
+  await walk();
 
   return ran();
 };

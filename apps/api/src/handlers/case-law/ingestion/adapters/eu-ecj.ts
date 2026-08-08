@@ -26,6 +26,7 @@ import {
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   ecjDocumentHtml,
+  ecjKeywordSpacingNeedsVerbatim,
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
@@ -524,8 +525,12 @@ export const fetchDecisionsByCelex = async ({
   return decisions;
 };
 
-/** Media type the adapter stores every manifestation under. */
+/** Historical media type whose string payload passed through normalization. */
 const ECJ_RAW_CONTENT_TYPE = "application/xhtml+xml";
+
+/** Media type marking raw bytes that bypassed string normalization. */
+const ECJ_VERBATIM_RAW_CONTENT_TYPE =
+  "application/xhtml+xml; stella-storage=verbatim";
 
 /** Decision type recorded when the CDM class maps to none of the known ones. */
 const UNKNOWN_DECISION_TYPE = "unknown";
@@ -618,7 +623,8 @@ const ecjDecisionFromHtml = ({
     documentAst,
     sections,
     sourceRaw: html,
-    sourceRawContentType: ECJ_RAW_CONTENT_TYPE,
+    sourceRawBytes: new TextEncoder().encode(html),
+    sourceRawContentType: ECJ_VERBATIM_RAW_CONTENT_TYPE,
   };
 };
 
@@ -631,6 +637,7 @@ const ecjDecisionFromHtml = ({
  */
 const ECJ_REPARSABLE_CONTENT_TYPES = new Set([
   ECJ_RAW_CONTENT_TYPE,
+  ECJ_VERBATIM_RAW_CONTENT_TYPE,
   "text/html",
 ]);
 
@@ -684,6 +691,18 @@ const reparseStoredRaw = (
   const publishedLanguage = ECJ_LANGUAGES.find(
     (supported) => supported === language.toUpperCase(),
   );
+  const html = new TextDecoder().decode(stored.raw);
+  if (
+    stored.contentType !== ECJ_VERBATIM_RAW_CONTENT_TYPE &&
+    ecjKeywordSpacingNeedsVerbatim(html)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail:
+        "historical source normalization made ECJ keyword spacing ambiguous",
+    };
+  }
   const result = ecjDecisionFromHtml({
     celex,
     ecli,
@@ -698,7 +717,7 @@ const reparseStoredRaw = (
       stored.sourceUrl ??
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
-    html: new TextDecoder().decode(stored.raw),
+    html,
     metadata: stored.metadata,
   });
 

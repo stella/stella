@@ -153,6 +153,7 @@ export type StoredRawReparseInput = {
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;
   caseNumber: string;
+  sourceDocumentId: string | null;
   language: string;
   court: string;
   ecli: string | null;
@@ -171,6 +172,10 @@ export type StoredRawReparseInput = {
 export const STORED_RAW_REPARSE_REJECTION = {
   /** The row lacks a field the adapter needs to rebuild the result. */
   INCOMPLETE_METADATA: "incomplete-metadata",
+  /** Re-parsing would target a different decision than the selected row. */
+  IDENTITY_MISMATCH: "identity-mismatch",
+  /** Historical normalization erased source distinctions the parser needs. */
+  RAW_FIDELITY_LOST: "raw-fidelity-lost",
   /** The stored media type is not one this adapter parses. */
   UNSUPPORTED_CONTENT: "unsupported-content",
   /** The payload parsed to nothing that could be stored as a decision. */

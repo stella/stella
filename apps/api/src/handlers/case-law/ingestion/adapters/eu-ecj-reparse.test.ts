@@ -71,9 +71,12 @@ const storedFrom = (
   decision: IngestionResult,
   overrides: Partial<StoredRawReparseInput> = {},
 ): StoredRawReparseInput => ({
-  raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+  raw:
+    decision.sourceRawBytes ??
+    new TextEncoder().encode(decision.sourceRaw ?? ""),
   contentType: decision.sourceRawContentType ?? null,
   caseNumber: decision.caseNumber,
+  sourceDocumentId: decision.sourceDocumentId ?? null,
   language: decision.language,
   court: decision.court,
   ecli: decision.ecli ?? null,
@@ -91,6 +94,13 @@ if (!reparse) {
 }
 
 describe("eu-ecj reparseStoredRaw", () => {
+  test("stores the publisher XHTML as verbatim bytes", async () => {
+    const crawled = await crawlDecision();
+
+    expect(new TextDecoder().decode(crawled.sourceRawBytes)).toBe(fulltextHtml);
+    expect(crawled.sourceRawContentType).toContain("stella-storage=verbatim");
+  });
+
   test("reproduces the crawl's result from the payload the crawl stored", async () => {
     const crawled = await crawlDecision();
 
@@ -123,6 +133,26 @@ describe("eu-ecj reparseStoredRaw", () => {
     expect(outcome).toMatchObject({
       type: "rejected",
       rejection: "unsupported-content",
+    });
+  });
+
+  test("rejects legacy bytes whose keyword spacing is ambiguous", async () => {
+    const crawled = await crawlDecision();
+    const ambiguous = `
+      <html><body>
+        <p class="coj-index">(Regula (ES) 2016/679 – 2. panta 2. punkts)</p>
+      </body></html>`;
+
+    const outcome = await reparse(
+      storedFrom(crawled, {
+        contentType: "application/xhtml+xml",
+        raw: new TextEncoder().encode(ambiguous),
+      }),
+    );
+
+    expect(outcome).toMatchObject({
+      type: "rejected",
+      rejection: "raw-fidelity-lost",
     });
   });
 

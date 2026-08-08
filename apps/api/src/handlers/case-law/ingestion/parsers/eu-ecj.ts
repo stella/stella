@@ -480,6 +480,22 @@ const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
     .filter((part) => part.length > 0);
 };
 
+/**
+ * Whether a normalized historical payload lost spacing that determines ECJ
+ * keyword boundaries. The old sourceRaw path converted NBSP to ordinary
+ * spaces before upload; once that has happened, a loose space-dash-space in
+ * the keyword chain can be either a separator or part of one Latvian keyword.
+ */
+export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
+  const $ = cheerio.load(html);
+  const raw = $(sel(CLASS.index)).first().text().trim();
+  return (
+    raw.length > 0 &&
+    !KEYWORD_SEPARATOR.test(raw) &&
+    LOOSE_KEYWORD_SEPARATOR.test(raw)
+  );
+};
+
 // ── Block building ─────────────────────────────────────────
 
 type Zone = "header" | "body" | "operative" | "footnotes";

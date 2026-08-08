@@ -536,7 +536,8 @@ export const getS3ObjectWithSignal = async (
  * fact about the key, while a timeout, a refused credential or a dropped
  * connection says nothing about it. Treating the second as the first turns
  * a transient failure into a durable conclusion. The SDK reports absence as
- * a `NoSuchKey`/`NotFound` error name or a 404 in the response metadata.
+ * a `NoSuchKey`/`NotFound` error name. A status-only 404 is not enough:
+ * `NoSuchBucket` has the same status and says nothing about the key.
  */
 export const isMissingS3ObjectError = (error: unknown): boolean => {
   if (!isRecord(error)) {
@@ -546,8 +547,7 @@ export const isMissingS3ObjectError = (error: unknown): boolean => {
   if (name === "NoSuchKey" || name === "NotFound") {
     return true;
   }
-  const metadata = error["$metadata"];
-  return isRecord(metadata) && metadata["httpStatusCode"] === 404;
+  return false;
 };
 
 /**

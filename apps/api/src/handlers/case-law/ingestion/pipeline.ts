@@ -69,11 +69,11 @@ import {
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -990,6 +990,7 @@ const processDecisionAttempt = async ({
         observedAt,
         observationOrder,
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
       });
     }
     return {

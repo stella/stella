@@ -303,9 +303,6 @@ describe("isMissingS3ObjectError", () => {
       name: "NoSuchKey",
     }),
     Object.assign(new Error("Not Found"), { name: "NotFound" }),
-    Object.assign(new Error("no such object"), {
-      $metadata: { httpStatusCode: 404 },
-    }),
   ];
 
   const unanswered = [
@@ -317,6 +314,13 @@ describe("isMissingS3ObjectError", () => {
     }),
     Object.assign(new Error("Service unavailable"), {
       $metadata: { httpStatusCode: 503 },
+    }),
+    Object.assign(new Error("status without an S3 error code"), {
+      $metadata: { httpStatusCode: 404 },
+    }),
+    Object.assign(new Error("The specified bucket does not exist."), {
+      name: "NoSuchBucket",
+      $metadata: { httpStatusCode: 404 },
     }),
     new DOMException("aborted", "AbortError"),
     null,

@@ -8,7 +8,12 @@ import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
@@ -521,6 +526,139 @@ describe("replay of a source", () => {
       ["stored-hash-1", "stored-hash-2"],
     );
     expect(rows.every(({ fulltext }) => fulltext === null)).toBe(true);
+  });
+
+  test("a reparse cannot redirect a replay to another decision identity", async () => {
+    const sourceId = await createSource();
+    const id = createSafeId<"caseLawDecision">();
+    await insertDecision({
+      sourceId,
+      id,
+      sub: 41,
+      caseNumber: "C-41/26",
+      storedRaw: true,
+      sourceHash: "stored-hash-41",
+    });
+
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: (stored) => ({
+          type: "parsed",
+          result: {
+            caseNumber: "C-42/26",
+            court: stored.court,
+            country: "EU",
+            language: stored.language,
+            metadata: stored.metadata,
+            rawHash: "new-hash-41",
+            documentAst: EMPTY_AST,
+          },
+        }),
+      }),
+      scopedDb,
+      sourceId,
+      readStoredRaw: storedRawReader([]),
+      sourceLease: null,
+      limit: 10,
+      pageSize: 10,
+    });
+
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(ran.report.rejections["identity-mismatch"]).toBe(1);
+    expect(ran.report.problems).toEqual([
+      expect.objectContaining({ id, outcome: REPLAY_ROW_OUTCOME.REJECTED }),
+    ]);
+  });
+
+  test("a pending corpus mirror is reported as work even when content matches", async () => {
+    const sourceId = await createSource();
+    const id = createSafeId<"caseLawDecision">();
+    await insertDecision({
+      sourceId,
+      id,
+      sub: 42,
+      caseNumber: "C-42/26",
+      storedRaw: true,
+      sourceHash: "stored-hash-42",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING })
+      .where(eq(caseLawDecisions.id, id));
+
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: (stored) => ({
+          type: "parsed",
+          result: {
+            caseNumber: stored.caseNumber,
+            court: stored.court,
+            country: "EU",
+            language: stored.language,
+            metadata: stored.metadata,
+            rawHash: "stored-hash-42",
+            documentAst: EMPTY_AST,
+          },
+        }),
+      }),
+      scopedDb,
+      sourceId,
+      readStoredRaw: storedRawReader([]),
+      sourceLease: null,
+      limit: 10,
+      pageSize: 10,
+    });
+
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(0);
+  });
+
+  test("every skipped row remains identifiable after the cursor advances", async () => {
+    const sourceId = await createSource();
+    const inserted = await Promise.all(
+      Array.from({ length: 55 }, async (_, index) => {
+        const id = createSafeId<"caseLawDecision">();
+        await insertDecision({
+          sourceId,
+          id,
+          sub: 100 + index,
+          caseNumber: `C-${100 + index}/26`,
+          storedRaw: true,
+          sourceHash: `stored-hash-${100 + index}`,
+        });
+        return id;
+      }),
+    );
+
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: () => ({
+          type: "rejected",
+          rejection: "no-document",
+          detail: "fixture rejection",
+        }),
+      }),
+      scopedDb,
+      sourceId,
+      readStoredRaw: storedRawReader([]),
+      sourceLease: null,
+      limit: inserted.length,
+      pageSize: 13,
+    });
+
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(ran.report.problems).toHaveLength(inserted.length);
+    expect(new Set(ran.report.problems.map(({ id }) => id))).toEqual(
+      new Set(inserted),
+    );
+    expect(ran.report.resumeAfter).not.toBeNull();
   });
 
   test("the replayable split counts stored payloads against re-fetches", async () => {
