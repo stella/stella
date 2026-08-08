@@ -1,3 +1,9 @@
+import type {
+  DesktopEditSessionRealtimeEvent,
+  OrganizationRealtimeEvent,
+  WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -15,12 +21,9 @@ import {
   publishWorkspaceEvent,
   REDIS_CHANNEL,
 } from "@/api/lib/sse-broadcast";
-import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 /** Keep-alive interval in milliseconds (20 seconds). */
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
-
-export type { SSEEvent };
 
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
@@ -32,7 +35,7 @@ const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 
 const encoder = new TextEncoder();
 
-const formatSSE = (event: SSEEvent): Uint8Array => {
+const formatSSE = (event: WorkspaceRealtimeEvent): Uint8Array => {
   const payload = JSON.stringify({ type: event.type, data: event.data });
   return encoder.encode(`data: ${payload}\n\n`);
 };
@@ -100,7 +103,7 @@ export const subscribe = (
 /** Push an SSE event to local connections for a workspace. */
 const broadcastLocal = (
   workspaceId: SafeId<"workspace">,
-  event: SSEEvent,
+  event: WorkspaceRealtimeEvent,
 ): void => {
   const set = connections.get(workspaceId);
   if (!set) {
@@ -125,7 +128,7 @@ const broadcastLocal = (
 /** Push an SSE event to local connections for an entire organization. */
 const broadcastLocalToOrganization = (
   organizationId: SafeId<"organization">,
-  event: SSEEvent,
+  event: OrganizationRealtimeEvent,
 ): void => {
   const chunk = formatSSE(event);
 
@@ -208,7 +211,7 @@ const handleMessage = (message: string) => {
  */
 export const broadcast = (
   workspaceId: SafeId<"workspace">,
-  event: SSEEvent,
+  event: WorkspaceRealtimeEvent,
 ): void => {
   // When this instance has no attached subscriber it never receives its
   // own published message back through the Redis loopback, so deliver
@@ -245,7 +248,7 @@ export const broadcast = (
 
 export const broadcastToOrganization = (
   organizationId: SafeId<"organization">,
-  event: SSEEvent,
+  event: OrganizationRealtimeEvent,
 ): void => {
   const deliveredLocally = !hasAttachedSubscriber();
   if (deliveredLocally) {
@@ -274,7 +277,7 @@ export const broadcastToOrganization = (
 
 type SessionDeliveryHandler = (
   sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
+  event: DesktopEditSessionRealtimeEvent,
 ) => void;
 
 let sessionDeliveryHandler: SessionDeliveryHandler | null = null;
@@ -296,7 +299,7 @@ export const registerSessionDelivery = (
  */
 export const broadcastSessionEvent = (
   sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
+  event: DesktopEditSessionRealtimeEvent,
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 

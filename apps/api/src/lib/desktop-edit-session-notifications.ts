@@ -1,27 +1,41 @@
+import {
+  REALTIME_EVENT_TYPE,
+  type DesktopEditSessionRealtimeEvent,
+} from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { broadcastSessionEvent } from "@/api/lib/sse";
-import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 export const DESKTOP_EDIT_SESSION_CLOSE_SIGNAL =
-  "__desktop_edit_session_closed__";
+  REALTIME_EVENT_TYPE.DESKTOP_EDIT_SESSION_CLOSED;
 
-export const desktopEditSessionClosedEvent = (reason: string): SSEEvent => ({
-  type: "session-closed",
+export const desktopEditSessionClosedEvent = (
+  reason: string,
+): DesktopEditSessionRealtimeEvent => ({
+  type: REALTIME_EVENT_TYPE.SESSION_CLOSED,
   data: { reason },
 });
 
-export const desktopEditSessionCloseSignal = (): SSEEvent => ({
-  type: DESKTOP_EDIT_SESSION_CLOSE_SIGNAL,
-  data: null,
-});
+type DesktopEditSessionCloseSignal = Extract<
+  DesktopEditSessionRealtimeEvent,
+  { type: typeof DESKTOP_EDIT_SESSION_CLOSE_SIGNAL }
+>;
 
-export const isDesktopEditSessionCloseSignal = (event: SSEEvent): boolean =>
+export const desktopEditSessionCloseSignal =
+  (): DesktopEditSessionCloseSignal => ({
+    type: DESKTOP_EDIT_SESSION_CLOSE_SIGNAL,
+    data: null,
+  });
+
+export const isDesktopEditSessionCloseSignal = (
+  event: DesktopEditSessionRealtimeEvent,
+): event is DesktopEditSessionCloseSignal =>
   event.type === DESKTOP_EDIT_SESSION_CLOSE_SIGNAL;
 
 /** Broadcast an event to this session's SSE streams on every API instance. */
 export const pushSessionEvent = (
   sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
+  event: DesktopEditSessionRealtimeEvent,
 ): void => {
   broadcastSessionEvent(sessionId, event);
 };

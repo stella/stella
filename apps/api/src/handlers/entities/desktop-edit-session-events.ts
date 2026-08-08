@@ -1,5 +1,10 @@
 import { status, t } from "elysia";
 
+import type {
+  DesktopEditSessionClientEvent,
+  DesktopEditSessionRealtimeEvent,
+} from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -13,7 +18,6 @@ import {
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
 import { registerSessionDelivery } from "@/api/lib/sse";
-import type { SSEEvent } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
@@ -45,7 +49,7 @@ const connections = new Map<
 
 const encoder = new TextEncoder();
 
-const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
+const formatSSE = (event: DesktopEditSessionClientEvent): Uint8Array => {
   const payload = JSON.stringify(event);
   return encoder.encode(`data: ${payload}\n\n`);
 };
@@ -58,7 +62,7 @@ const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
  */
 const deliverSessionEventLocal = (
   sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
+  event: DesktopEditSessionRealtimeEvent,
 ): void => {
   const conns = connections.get(sessionId);
   if (!conns) {
