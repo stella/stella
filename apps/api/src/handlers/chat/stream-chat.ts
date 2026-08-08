@@ -546,16 +546,19 @@ const chatAttemptTerminalError = (
 
 type ShouldAttemptChatFallbackInput = {
   hasFallbackModel: boolean;
+  hasNativeContinuation: boolean;
   primaryError: ChatLoopDetectedError | ChatEmptyCompletionError;
   runMode: ChatRunMode | undefined;
 };
 
 export const shouldAttemptChatFallback = ({
   hasFallbackModel,
+  hasNativeContinuation,
   primaryError,
   runMode,
 }: ShouldAttemptChatFallbackInput): boolean =>
   runMode !== CHAT_RUN_MODE.agent &&
+  !hasNativeContinuation &&
   primaryError instanceof ChatEmptyCompletionError &&
   hasFallbackModel;
 const projectServerToolsForProvider = ({
@@ -819,6 +822,7 @@ const runChatAttempts = async function* ({
   if (
     !shouldAttemptChatFallback({
       hasFallbackModel: fallbackModel !== null,
+      hasNativeContinuation: resume !== undefined,
       primaryError,
       runMode,
     })

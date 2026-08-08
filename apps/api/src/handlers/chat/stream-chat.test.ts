@@ -1654,6 +1654,7 @@ describe("chat attempt terminal classification", () => {
     expect(
       shouldAttemptChatFallback({
         hasFallbackModel: true,
+        hasNativeContinuation: false,
         primaryError: new ChatEmptyCompletionError({ message: "empty" }),
         runMode: CHAT_RUN_MODE.agent,
       }),
@@ -1664,10 +1665,22 @@ describe("chat attempt terminal classification", () => {
     expect(
       shouldAttemptChatFallback({
         hasFallbackModel: true,
+        hasNativeContinuation: false,
         primaryError: new ChatEmptyCompletionError({ message: "empty" }),
         runMode: undefined,
       }),
     ).toBe(true);
+  });
+
+  test("does not replay a native continuation through fallback", () => {
+    expect(
+      shouldAttemptChatFallback({
+        hasFallbackModel: true,
+        hasNativeContinuation: true,
+        primaryError: new ChatEmptyCompletionError({ message: "empty" }),
+        runMode: undefined,
+      }),
+    ).toBe(false);
   });
 
   test("captures empty stop completions", () => {
