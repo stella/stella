@@ -69,6 +69,7 @@ import {
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
@@ -141,18 +142,18 @@ export const corpusWriteErrorDetail = (error: unknown): string => {
     : outer;
 };
 
-const PROCESS_DECISION_STATUS = {
+export const PROCESS_DECISION_STATUS = {
   COMPLETE: "complete",
   RETRYABLE: "retryable",
 } as const;
 
-const PROCESS_DECISION_RETRY_REASON = {
+export const PROCESS_DECISION_RETRY_REASON = {
   CONTENTION: "contention",
   CORPUS_WRITE: "corpus-write",
   SOURCE_RAW_WRITE: "source-raw-write",
 } as const;
 
-type ProcessResult =
+export type ProcessResult =
   | {
       status: typeof PROCESS_DECISION_STATUS.COMPLETE;
       inserted: boolean;
@@ -185,6 +186,25 @@ type DecisionRowWriteStatus =
 /** One canonical identity plus a small, explicit set of publisher aliases. */
 const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
 
+export const DECISION_REFRESH = {
+  /**
+   * Skip a decision whose source hash and metadata are unchanged: a crawl
+   * that re-reads the same document has nothing new to store.
+   */
+  WHEN_SOURCE_CHANGED: "when-source-changed",
+  /**
+   * Write the result even when the source hash is unchanged. This is what a
+   * re-parse of an already-stored payload needs: the source hash covers the
+   * publisher's document, not what a parser derives from it, so a parser
+   * that restructures a document without changing its words leaves the hash
+   * exactly where it was.
+   */
+  ALWAYS: "always",
+} as const;
+
+export type DecisionRefresh =
+  (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
+
 type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
@@ -192,12 +212,16 @@ type ProcessDecisionAttemptOptions = {
   observedAt: Date;
   observationOrder: bigint;
   contentionReconciliation: ContentionReconciliation;
+  refresh: DecisionRefresh;
 };
 
 type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation"
->;
+  "contentionReconciliation" | "refresh"
+> & {
+  /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
+  refresh?: DecisionRefresh;
+};
 
 type SourceObservation = { order: bigint };
 
@@ -213,7 +237,13 @@ type AllocateSourceObservationOrderOptions = {
   sourceId: SafeId<"caseLawSource">;
 };
 
-const allocateSourceObservationOrder = async ({
+/**
+ * Take the next observation order for a source, under the lease that owns
+ * its ingestion. Exported so an operator replay orders its writes on the
+ * same counter a crawl does: the row-level guards compare orders, so a
+ * replay that minted its own numbering could overwrite a newer observation.
+ */
+export const allocateSourceObservationOrder = async ({
   leaseToken,
   scopedDb,
   sourceId,
@@ -491,6 +521,36 @@ const loadPendingMirrorPayload = async (
   };
 };
 
+/**
+ * Structural sections for a result: the parser's own where it recovered
+ * them, otherwise derived from the flattened text. Structure-derived
+ * sections win — an adapter supplies them only when its parser recovered
+ * the document's own headings, which is strictly better than re-deriving
+ * boundaries from flattened text.
+ *
+ * One definition, because the stored payload's identity depends on it: a
+ * second derivation elsewhere would hash a different document than the one
+ * this pipeline stores.
+ */
+export const decisionSections = (result: IngestionResult): DecisionSection[] =>
+  result.sections ?? (result.fulltext ? segmentDecision(result.fulltext) : []);
+
+/**
+ * The canonical payload a result stores, in the shape the content hash is
+ * taken over. Exported so a caller comparing a re-parse against what is
+ * already stored asks the same question the corpus write does.
+ */
+export const caseLawCanonicalPayload = (
+  result: IngestionResult,
+): CorpusPayload => {
+  const sections = decisionSections(result);
+  return {
+    ast: result.documentAst,
+    sections: sections.length > 0 ? sections : null,
+    text: result.fulltext ?? null,
+  };
+};
+
 const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
   switch (mode) {
     case "off":
@@ -537,6 +597,7 @@ const processDecisionAttempt = async ({
   observedAt,
   observationOrder,
   contentionReconciliation,
+  refresh,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
   const proposedDecisionId = createSafeId<"caseLawDecision">();
@@ -929,6 +990,7 @@ const processDecisionAttempt = async ({
         observedAt,
         observationOrder,
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
       });
     }
     return {
@@ -941,11 +1003,15 @@ const processDecisionAttempt = async ({
   if (
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
+    refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
+      existingSourceRawContentType: existing.sourceRawContentType,
       existingSourceHash: existing.sourceHash,
       incomingMetadata: result.metadata,
       incomingRawHash: result.rawHash,
+      incomingSourceRawContentType: result.sourceRawContentType ?? "text/plain",
+      incomingUsesSourceRawBytes: result.sourceRawBytes !== undefined,
     })
   ) {
     const watermarkAdvanced = await scopedDb(
@@ -1032,6 +1098,7 @@ const processDecisionAttempt = async ({
         observedAt,
         observationOrder,
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
       });
     }
     return {
@@ -1101,12 +1168,7 @@ const processDecisionAttempt = async ({
     }
   }
 
-  // Structure-derived sections win: an adapter only supplies them when
-  // its parser recovered the document's own headings, which is strictly
-  // better than re-deriving boundaries from the flattened text.
-  const sections =
-    result.sections ??
-    (result.fulltext ? segmentDecision(result.fulltext) : []);
+  const sections = decisionSections(result);
 
   // A metadata-first source keeps refreshing a decision it has no
   // document for: the list endpoint's fields change, the hash moves, and
@@ -1227,9 +1289,7 @@ const processDecisionAttempt = async ({
       ? {
           documentId: decisionId,
           jurisdiction: result.country,
-          text: result.fulltext ?? null,
-          sections: sections.length > 0 ? sections : null,
-          ast: result.documentAst,
+          ...caseLawCanonicalPayload(result),
         }
       : {
           documentId: decisionId,
@@ -1563,6 +1623,7 @@ const processDecisionAttempt = async ({
         observedAt,
         observationOrder,
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+        refresh,
       });
     }
     throw rowWrite.error;
@@ -1735,12 +1796,14 @@ const processDecisionAttempt = async ({
       };
 };
 
-export const processDecision = async (
-  options: ProcessDecisionOptions,
-): Promise<ProcessResult> =>
+export const processDecision = async ({
+  refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+  ...options
+}: ProcessDecisionOptions): Promise<ProcessResult> =>
   await processDecisionAttempt({
     ...options,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
+    refresh,
   });
 
 /**

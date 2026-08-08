@@ -221,7 +221,10 @@ describe("euEcjAdapter.fetchPage", () => {
       // The XHTML is kept verbatim so a parser change can be replayed
       // without re-crawling, and the parse feeds the reader directly.
       expect(first.sourceRaw).toBe(fulltextHtml);
-      expect(first.sourceRawContentType).toBe("application/xhtml+xml");
+      expect(new TextDecoder().decode(first.sourceRawBytes)).toBe(fulltextHtml);
+      expect(first.sourceRawContentType).toBe(
+        "application/xhtml+xml; stella-storage=verbatim",
+      );
       expect(hasUsableAst(first.documentAst)).toBe(true);
       expect(first.sections?.length).toBeGreaterThan(1);
     },

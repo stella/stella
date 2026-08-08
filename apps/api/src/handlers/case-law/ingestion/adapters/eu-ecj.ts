@@ -6,11 +6,16 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
   SourceAdapter,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -21,6 +26,7 @@ import {
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   ecjDocumentHtml,
+  ecjKeywordSpacingNeedsVerbatim,
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
@@ -519,6 +525,211 @@ export const fetchDecisionsByCelex = async ({
   return decisions;
 };
 
+/** Historical media type whose string payload passed through normalization. */
+const ECJ_RAW_CONTENT_TYPE = "application/xhtml+xml";
+
+/** Media type marking raw bytes that bypassed string normalization. */
+const ECJ_VERBATIM_RAW_CONTENT_TYPE =
+  "application/xhtml+xml; stella-storage=verbatim";
+
+/** Decision type recorded when the CDM class maps to none of the known ones. */
+const UNKNOWN_DECISION_TYPE = "unknown";
+
+/**
+ * Fields identifying one language variant of one decision, as either the
+ * SPARQL binding or the stored row supplies them.
+ */
+type EcjDecisionIdentity = {
+  celex: string;
+  ecli: string;
+  court: string;
+  decisionDate: string;
+  decisionType: string;
+  /** Lower-case language tag, as stored on the row. */
+  language: string;
+  sourceUrl: string | undefined;
+  documentUrl: string | undefined;
+};
+
+type EcjDecisionFromHtmlOptions = EcjDecisionIdentity & {
+  html: string;
+  /**
+   * Metadata this result carries besides the parser-derived keywords. The
+   * crawl passes what the SPARQL binding resolved; a re-parse passes the
+   * row's stored metadata, so fields the query once recorded survive.
+   */
+  metadata: Record<string, unknown>;
+};
+
+/**
+ * Build the ingestion result for one XHTML manifestation.
+ *
+ * The crawl and the stored-payload re-parse both go through here, so the
+ * two cannot produce different results for the same bytes: replaying a
+ * stored payload writes exactly what a fresh crawl of it would write.
+ */
+const ecjDecisionFromHtml = ({
+  celex,
+  ecli,
+  court,
+  decisionDate,
+  decisionType,
+  language,
+  sourceUrl,
+  documentUrl,
+  html,
+  metadata,
+}: EcjDecisionFromHtmlOptions): IngestionResult | undefined => {
+  const caseNumber = celexToCaseNumber(celex);
+  const { documentAst, sections, fulltext, keywords } = parseManifestation({
+    caseNumber,
+    ecli,
+    court,
+    decisionDate,
+    decisionType,
+    sourceUrl,
+    language,
+    celex,
+    html,
+  });
+
+  if (!fulltext) {
+    return undefined;
+  }
+
+  return {
+    caseNumber,
+    ecli,
+    court,
+    country: "EU",
+    language,
+    decisionDate,
+    decisionType,
+    fulltext,
+    sourceUrl,
+    documentUrl,
+    metadata: {
+      ...metadata,
+      celex,
+      ecli,
+      decisionDate,
+      decisionType,
+      keywords,
+    },
+    rawHash: hashContent(
+      `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
+    ),
+    parserVersion: PARSER_VERSION,
+    documentAst,
+    sections,
+    sourceRaw: html,
+    sourceRawBytes: new TextEncoder().encode(html),
+    sourceRawContentType: ECJ_VERBATIM_RAW_CONTENT_TYPE,
+  };
+};
+
+/**
+ * Media types a stored payload may carry for this adapter. `null` is
+ * accepted because the only payload this adapter has ever stored is the
+ * Cellar XHTML manifestation, written together with its content type;
+ * anything else named is not a manifestation and is rejected rather than
+ * fed to the XHTML parser.
+ */
+const ECJ_REPARSABLE_CONTENT_TYPES = new Set([
+  ECJ_RAW_CONTENT_TYPE,
+  ECJ_VERBATIM_RAW_CONTENT_TYPE,
+  "text/html",
+]);
+
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
+
+/**
+ * Rebuild the ingestion result for a stored manifestation.
+ *
+ * The row carries everything the SPARQL query once resolved: CELEX, ECLI,
+ * date and type on the row or in its metadata. What the parser derives from
+ * the payload (AST, sections, fulltext, keywords) is recomputed; what the
+ * query resolved is carried over, so a re-parse cannot invent metadata the
+ * publisher never sent.
+ */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !ECJ_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+
+  // CELEX, ECLI and the decision date are the result's identity and feed its
+  // hash; a row missing any of them cannot be replayed into the same result
+  // the crawl produced, so it is reported instead of guessed at.
+  const celex = nonEmptyString(stored.metadata["celex"]);
+  const ecli = stored.ecli ?? nonEmptyString(stored.metadata["ecli"]);
+  const decisionDate =
+    stored.decisionDate ?? nonEmptyString(stored.metadata["decisionDate"]);
+  const missing = [
+    celex === undefined ? "celex" : undefined,
+    ecli === undefined ? "ecli" : undefined,
+    decisionDate === undefined ? "decisionDate" : undefined,
+  ].filter((field) => field !== undefined);
+  if (celex === undefined || ecli === undefined || decisionDate === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: `missing ${missing.join(", ")}`,
+    };
+  }
+
+  const language = stored.language.toLowerCase();
+  const publishedLanguage = ECJ_LANGUAGES.find(
+    (supported) => supported === language.toUpperCase(),
+  );
+  const html = new TextDecoder().decode(stored.raw);
+  if (
+    stored.contentType !== ECJ_VERBATIM_RAW_CONTENT_TYPE &&
+    ecjKeywordSpacingNeedsVerbatim(html)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail:
+        "historical source normalization made ECJ keyword spacing ambiguous",
+    };
+  }
+  const result = ecjDecisionFromHtml({
+    celex,
+    ecli,
+    court: stored.court,
+    decisionDate,
+    decisionType:
+      stored.decisionType ??
+      nonEmptyString(stored.metadata["decisionType"]) ??
+      UNKNOWN_DECISION_TYPE,
+    language,
+    sourceUrl:
+      stored.sourceUrl ??
+      (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
+    documentUrl: stored.documentUrl ?? undefined,
+    html,
+    metadata: stored.metadata,
+  });
+
+  return result === undefined
+    ? {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        detail: `no fulltext parsed from the stored payload for ${celex}`,
+      }
+    : { type: "parsed", result };
+};
+
 /**
  * Turn one SPARQL binding into an ingestion result: fetch the language
  * variant's XHTML manifestation, parse it, and attach the metadata the
@@ -534,8 +745,8 @@ export const buildDecision = async (
   const celex = binding.celex.value;
   const ecli = binding.ecli.value;
   const date = binding.date.value;
-  const caseNumber = celexToCaseNumber(celex);
-  const decisionType = CDM_TYPE_MAP[binding.type.value] ?? "unknown";
+  const decisionType =
+    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
   const lang = toEcjLanguage(binding.language.value);
   const documentUrl = toCellarContentUrl(binding.manifestation.value);
 
@@ -562,52 +773,22 @@ export const buildDecision = async (
     return undefined;
   }
 
-  const sourceUrl = eurLexSourceUrl(lang, celex);
-  const { documentAst, sections, fulltext, keywords } = parseManifestation({
-    caseNumber,
-    ecli,
-    court,
-    decisionDate: date,
-    decisionType,
-    sourceUrl,
+  return ecjDecisionFromHtml({
     celex,
-    html,
-  });
-
-  if (!fulltext) {
-    return undefined;
-  }
-
-  const language = lang.toLowerCase();
-
-  return {
-    caseNumber,
     ecli,
     court,
-    country: "EU",
-    language,
     decisionDate: date,
     decisionType,
-    fulltext,
-    sourceUrl,
+    language: lang.toLowerCase(),
+    sourceUrl: eurLexSourceUrl(lang, celex),
     documentUrl,
+    html,
     metadata: {
-      celex,
-      ecli,
-      decisionDate: date,
-      decisionType,
-      keywords,
       manifestationUri: binding.manifestation.value,
       languageUri: binding.language.value,
       cdmType: binding.type.value,
     },
-    rawHash: hashContent(`${celex}|${ecli}|${date}|${language}|${fulltext}`),
-    parserVersion: PARSER_VERSION,
-    documentAst,
-    sections,
-    sourceRaw: html,
-    sourceRawContentType: "application/xhtml+xml",
-  };
+  });
 };
 
 // -- Date helpers --
@@ -637,6 +818,9 @@ export const euEcjAdapter: SourceAdapter = {
   language: "en",
   minRequestIntervalMs: 1000,
   pageTimeoutMs: ECJ_PAGE_TIMEOUT,
+  // One stored payload is one language variant of one decision, so a stored
+  // manifestation maps back to exactly the row it was stored for.
+  reparseStoredRaw,
 
   /**
    * Counts (work, language) pairs under the same type and manifestation
