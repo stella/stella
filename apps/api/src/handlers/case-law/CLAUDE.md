@@ -330,6 +330,49 @@ trailing sheet number (`-28`, číslo listu) belongs in its own optional
 field, not in the docket, or one case fragments into a row per sheet
 and no citation ever matches it.
 
+### 18. Enumerate what the publisher lists; never guess identities
+
+A predictable-looking document URL is not an enumeration API. Docket
+numbers may overlap across chambers, old records may use a different URL
+grammar, and one docket may publish several documents. Probing constructed
+identifiers can therefore return valid decisions while silently missing a
+large part of the corpus.
+
+Prefer the publisher's search, export, sitemap, dump or list UI, even when it
+is an awkward WebForms surface. Take the exact document identity and detail
+URL from each listed row. If no enumeration surface exists, describe the
+guessing blind spot in the adapter and coverage benchmark; do not present a
+miss cutoff as proof that the source is exhausted.
+
+### 19. Paginate a fixed set, not a moving target
+
+Offset pagination is safe only while the matched set and ordering stay fixed.
+If new records can land ahead of the cursor, every later offset moves and a
+document can pass between pages unseen. Oldest-first ordering helps when new
+records append at the end; otherwise persist an immutable query boundary in
+the cursor and catch up from that exact boundary after the snapshot finishes.
+Do not include the publisher's still-live current day in a verified snapshot.
+
+For a multi-page slice that can still mutate, collect a digest of the exact
+publisher identities and make a listing-only verification pass before writing
+complete coverage. A mismatch holds or restarts the slice. The follow-up
+window must begin at the snapshot boundary plus one, not at a fresh rolling
+lookback, or a long crawl/outage creates a permanent gap.
+
+### 20. A listed document survives detail and parser failures
+
+Once the publisher's list states that a document exists, a missing, withdrawn
+or temporarily unparseable detail page must not erase that identity from the
+crawl. Permanent detail absence should produce a durable listing-only result
+with the exact `sourceDocumentId`, source URL and a structured reason in
+metadata. Transient network and server failures must fail the page so its
+cursor is retried.
+
+Likewise, an HTTP 200 search response is not an empty result unless the
+publisher's exact no-results state is present. Fail closed on unknown markup.
+These rules let a later parser or source fix enrich the same row rather than
+leaving an invisible hole or creating a duplicate.
+
 ## DocumentAst Conventions
 
 ```typescript
@@ -377,6 +420,14 @@ When adding a new country adapter:
 10. **Wire the coverage count** — if the source reports a total for
     a query, return `SliceCoverage`; if it does not, say so in the
     adapter's doc comment so the blind spot is recorded
+11. **Use exact listed identities** — exercise overlapping dockets and
+    multiple documents under one docket; never infer uniqueness from a URL
+    pattern (rules 17-18)
+12. **Prove pagination against mutation** — use stable ordering or a fixed
+    snapshot boundary, then test an outage longer than the rolling window
+    cannot leave a date gap (rule 19)
+13. **Preserve listed-only records** — test a permanent missing/unparseable
+    detail and an unrecognised HTTP 200 search response (rule 20)
 
 ## File Map
 

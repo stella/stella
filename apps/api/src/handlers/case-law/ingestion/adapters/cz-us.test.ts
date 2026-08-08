@@ -65,16 +65,17 @@ const makeResultsPage = (
 ): string => {
   const rangeTo = rangeFrom + rows.length - 1;
   const body = rows
-    .map(
-      (row, index) => `
+    .map((row, index) => {
+      const counter = /_(?<counter>\d+)$/u.exec(row.sz)?.groups?.["counter"];
+      return `
 <tr class='resultData${index % 2}'>
   <td></td>
-  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.caseNumber} #1</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${index % 2}' valign="top">
   <td><img onclick='javascript:ShowLink("https://nalus.usoud.cz:443/Search/GetText.aspx?sz=${row.sz}", "Odkaz", "")' /></td>
-</tr>`,
-    )
+</tr>`;
+    })
     .join("");
   const banner = `Výsledky ${rangeFrom} - ${rangeTo} z celkem ${reported}`;
   return `<html><body>${banner}<table>${body}</table>${banner}</body></html>`;
@@ -194,8 +195,27 @@ const installSearchMock = ({
   );
 };
 
-const historicalCursor = (year: number): string =>
-  `search:historical:${year}:collect:0:0:-`;
+const latestClosedAvailabilityDay = (): string => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+};
+
+const czechDay = (day: string): string => {
+  const date = new Date(`${day}T00:00:00Z`);
+  return `${date.getUTCDate()}.${date.getUTCMonth() + 1}.${date.getUTCFullYear()}`;
+};
+
+const addDays = (day: string, days: number): string => {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const historicalCursor = (
+  year: number,
+  availableTo = latestClosedAvailabilityDay(),
+): string => `search:historical:${availableTo}:${year}:collect:0:0:-`;
 
 const recentCursor = (availableFrom: string, availableTo: string): string =>
   `search:recent:${availableFrom}:${availableTo}:collect:0:0:-`;
@@ -249,6 +269,10 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
     expect(submitted?.get("ctl00$MainContent$decidedTo")).toBe("31.12.1993");
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("1.1.1900");
+    expect(submitted?.get("ctl00$MainContent$availableTo")).toBe(
+      czechDay(latestClosedAvailabilityDay()),
+    );
     expect(submitted?.get("ctl00$MainContent$resultsPageSize")).toBe("40");
     expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual(
       rows.map(({ caseNumber }) => caseNumber),
@@ -298,6 +322,12 @@ describe("czUsAdapter.fetchPage", () => {
       "ECLI:CZ:US:2024:1.US.42.24.1",
       "ECLI:CZ:US:2024:1.US.42.24.2",
     ]);
+    expect(
+      page.decisions.map(({ legacySourceUrls }) => legacySourceUrls),
+    ).toEqual([
+      ["https://nalus.usoud.cz/Search/GetText.aspx?sz=I-42-24_1"],
+      undefined,
+    ]);
   });
 
   test("uses the result banner for pagination and slice coverage", async () => {
@@ -312,7 +342,7 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     expect(first.nextCursor).toMatch(
-      /^search:historical:2024:collect:1:[a-f0-9]+:-$/u,
+      /^search:historical:\d{4}-\d{2}-\d{2}:2024:collect:1:[a-f0-9]+:-$/u,
     );
     expect(first.coverage).toBeUndefined();
 
@@ -337,7 +367,7 @@ describe("czUsAdapter.fetchPage", () => {
     const last = unwrap(await czUsAdapter.fetchPage(first.nextCursor, {}));
     expect(last.coverage).toBeUndefined();
     expect(last.nextCursor).toMatch(
-      /^search:historical:2024:verify:0:0:[a-f0-9]+$/u,
+      /^search:historical:\d{4}-\d{2}-\d{2}:2024:verify:0:0:[a-f0-9]+$/u,
     );
 
     installSearchMock({ rows: firstRows, reported: 42 });
@@ -403,6 +433,26 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.nextCursor).toMatch(
       /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
     );
+    expect(page.nextCursor?.split(":").at(3)).toBe(
+      latestClosedAvailabilityDay(),
+    );
+  });
+
+  test("catches up every publication day after the historical snapshot", async () => {
+    installSearchMock({ empty: true });
+    const currentYear = new Date().getUTCFullYear();
+    const snapshotDay = addDays(latestClosedAvailabilityDay(), -90);
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(
+        historicalCursor(currentYear, snapshotDay),
+        {},
+      ),
+    );
+
+    expect(page.nextCursor).toBe(
+      recentCursor(addDays(snapshotDay, 1), addDays(snapshotDay, 45)),
+    );
   });
 
   test("recent polling queries publication availability rather than decision date", async () => {
@@ -415,17 +465,17 @@ describe("czUsAdapter.fetchPage", () => {
     });
 
     const page = unwrap(
-      await czUsAdapter.fetchPage(recentCursor("2026-06-25", "2026-08-08"), {}),
+      await czUsAdapter.fetchPage(recentCursor("2026-06-24", "2026-08-07"), {}),
     );
 
-    expect(submitted?.get("ctl00$MainContent$dle_data_zpristupneni")).toBe(
-      "on",
-    );
-    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("25.6.2026");
-    expect(submitted?.get("ctl00$MainContent$availableTo")).toBe("8.8.2026");
+    expect(
+      submitted?.get("ctl00$MainContent$dle_data_zpristupneni"),
+    ).toBeNull();
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("24.6.2026");
+    expect(submitted?.get("ctl00$MainContent$availableTo")).toBe("7.8.2026");
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBeNull();
     expect(page.coverage).toEqual({
-      slice: "availability:2026-06-25:2026-08-08",
+      slice: "availability:2026-06-24:2026-08-07",
       reported: 0,
       collected: 0,
     });

@@ -42,7 +42,7 @@ const COMMON_HEADERS = {
  * distinctions.
  *
  * Cursor formats:
- *   search:historical:<decision-year>:<pass>:<page>:<digest>:<expected>
+ *   search:historical:<available-to>:<decision-year>:<pass>:<page>:<digest>:<expected>
  *   search:recent:<available-from>:<available-to>:<pass>:<page>:<digest>:<expected>
  *
  * A null or legacy probe cursor starts the search-based historical repair at
@@ -290,14 +290,23 @@ const extractAbstract = (
   return result;
 };
 
-const parseDecisionPage = (
-  html: string,
-  sourceUrl: string,
-  sourceDocumentId: string,
-  listedEcli: string | undefined,
-  listedCounter: number | undefined,
-  nalusRecordId: string,
-): IngestionResult | null => {
+type ParseDecisionPageOptions = {
+  html: string;
+  sourceUrl: string;
+  sourceDocumentId: string;
+  listedEcli: string | undefined;
+  listedCounter: number | undefined;
+  nalusRecordId: string;
+};
+
+const parseDecisionPage = ({
+  html,
+  sourceUrl,
+  sourceDocumentId,
+  listedEcli,
+  listedCounter,
+  nalusRecordId,
+}: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
     return null; // Empty page
@@ -385,6 +394,7 @@ const parseDecisionPage = (
 
 type HistoricalCursor = {
   phase: typeof SWEEP_PHASE.HISTORICAL;
+  availableTo: string;
   year: number;
   pass: CrawlPass;
   page: number;
@@ -421,29 +431,38 @@ type SearchPage = {
   reported: number;
 };
 
-const historicalStart = (): HistoricalCursor => ({
+const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
+
+const isoDay = (date: Date): string => date.toISOString().slice(0, 10);
+
+/** Latest complete NALUS publication day; today's result set is still live. */
+const latestClosedAvailabilityDay = (now: Date): string => {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return isoDay(date);
+};
+
+const historicalStart = (now: Date): HistoricalCursor => ({
   phase: SWEEP_PHASE.HISTORICAL,
+  availableTo: latestClosedAvailabilityDay(now),
   year: FIRST_YEAR,
   pass: CRAWL_PASS.COLLECT,
   page: 0,
   digest: DIGEST_SEED,
 });
 
-const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
-
-const isoDay = (date: Date): string => date.toISOString().slice(0, 10);
-
 const czechDate = (date: Date): string =>
   `${date.getUTCDate()}.${date.getUTCMonth() + 1}.${date.getUTCFullYear()}`;
 
 const recentStart = (now: Date): RecentCursor => {
-  const from = new Date(now);
+  const latest = latestClosedAvailabilityDay(now);
+  const from = new Date(`${latest}T00:00:00Z`);
   from.setUTCDate(from.getUTCDate() - RECENT_WINDOW_DAYS + 1);
   return {
     phase: SWEEP_PHASE.RECENT,
     availableFrom: isoDay(from),
-    availableTo: isoDay(now),
+    availableTo: latest,
     pass: CRAWL_PASS.COLLECT,
     page: 0,
     digest: DIGEST_SEED,
@@ -467,12 +486,12 @@ const parseNonNegativeInteger = (
   return parsed;
 };
 
-const parseCursor = (cursor: string): CursorState => {
+const parseCursor = (cursor: string, now: Date): CursorState => {
   // The old probe cursor cannot be translated faithfully: it says which
   // guessed number came next, not which publisher documents were covered.
   // Restart the one-time publisher enumeration to repair that uncertainty.
   if (LEGACY_CURSOR_PATTERN.test(cursor)) {
-    return historicalStart();
+    return historicalStart(now);
   }
 
   const parts = cursor.split(":");
@@ -481,15 +500,19 @@ const parseCursor = (cursor: string): CursorState => {
   }
 
   const phase = parts.at(1);
-  if (phase === SWEEP_PHASE.HISTORICAL && parts.length === 7) {
-    const year = parseNonNegativeInteger(parts.at(2), "year");
+  if (phase === SWEEP_PHASE.HISTORICAL && parts.length === 8) {
+    const availableTo = parts.at(2);
+    const year = parseNonNegativeInteger(parts.at(3), "year");
     if (year < FIRST_YEAR) {
       throw new TypeError("Invalid cz-us cursor year");
     }
-    const pass = parts.at(3);
-    const digest = parts.at(5);
-    const expectedDigest = parts.at(6);
+    const pass = parts.at(4);
+    const digest = parts.at(6);
+    const expectedDigest = parts.at(7);
     if (
+      !availableTo ||
+      !ISO_DAY_PATTERN.test(availableTo) ||
+      availableTo > latestClosedAvailabilityDay(now) ||
       (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
       !digest ||
       (pass === CRAWL_PASS.VERIFY &&
@@ -500,9 +523,10 @@ const parseCursor = (cursor: string): CursorState => {
     }
     return {
       phase,
+      availableTo,
       year,
       pass,
-      page: parseNonNegativeInteger(parts.at(4), "page"),
+      page: parseNonNegativeInteger(parts.at(5), "page"),
       digest,
       ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
@@ -519,6 +543,7 @@ const parseCursor = (cursor: string): CursorState => {
       !ISO_DAY_PATTERN.test(availableFrom) ||
       !ISO_DAY_PATTERN.test(availableTo) ||
       availableFrom > availableTo ||
+      availableTo > latestClosedAvailabilityDay(now) ||
       (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
       !digest ||
       (pass === CRAWL_PASS.VERIFY &&
@@ -543,7 +568,7 @@ const parseCursor = (cursor: string): CursorState => {
 const makeCursor = (state: CursorState): string => {
   switch (state.phase) {
     case SWEEP_PHASE.HISTORICAL:
-      return `search:${state.phase}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
+      return `search:${state.phase}:${state.availableTo}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     case SWEEP_PHASE.RECENT:
       return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     default: {
@@ -559,29 +584,15 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
       return state.year < now.getUTCFullYear()
         ? {
             phase: state.phase,
+            availableTo: state.availableTo,
             year: state.year + 1,
             pass: CRAWL_PASS.COLLECT,
             page: 0,
             digest: DIGEST_SEED,
           }
-        : recentStart(now);
+        : nextRecentWindow(state.availableTo, now);
     case SWEEP_PHASE.RECENT: {
-      const today = isoDay(now);
-      if (state.availableTo < today) {
-        const availableFrom = addUtcDays(state.availableTo, 1);
-        return {
-          phase: state.phase,
-          availableFrom,
-          availableTo:
-            [addUtcDays(availableFrom, RECENT_WINDOW_DAYS - 1), today]
-              .sort()
-              .at(0) ?? today,
-          pass: CRAWL_PASS.COLLECT,
-          page: 0,
-          digest: DIGEST_SEED,
-        };
-      }
-      return recentStart(now);
+      return nextRecentWindow(state.availableTo, now);
     }
     default: {
       const unhandled: never = state;
@@ -589,6 +600,25 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
     }
   }
 };
+
+function nextRecentWindow(availableTo: string, now: Date): RecentCursor {
+  const latest = latestClosedAvailabilityDay(now);
+  if (availableTo < latest) {
+    const availableFrom = addUtcDays(availableTo, 1);
+    return {
+      phase: SWEEP_PHASE.RECENT,
+      availableFrom,
+      availableTo:
+        [addUtcDays(availableFrom, RECENT_WINDOW_DAYS - 1), latest]
+          .sort()
+          .at(0) ?? latest,
+      pass: CRAWL_PASS.COLLECT,
+      page: 0,
+      digest: DIGEST_SEED,
+    };
+  }
+  return recentStart(now);
+}
 
 const restartSlice = (state: CursorState): CursorState => ({
   ...state,
@@ -641,11 +671,14 @@ const searchFields = (state: CursorState): Record<string, string> => {
       return {
         ctl00$MainContent$decidedFrom: `1.1.${state.year}`,
         ctl00$MainContent$decidedTo: `31.12.${state.year}`,
-        ctl00$MainContent$razeni: "3",
+        ctl00$MainContent$availableFrom: "1.1.1900",
+        ctl00$MainContent$availableTo: czechDate(
+          new Date(`${state.availableTo}T00:00:00Z`),
+        ),
+        ctl00$MainContent$razeni: "20",
       };
     case SWEEP_PHASE.RECENT:
       return {
-        ctl00$MainContent$dle_data_zpristupneni: "on",
         ctl00$MainContent$availableFrom: czechDate(
           new Date(`${state.availableFrom}T00:00:00Z`),
         ),
@@ -854,14 +887,14 @@ const fetchListedDecision = async (
     );
   }
   const responseHtml = await response.text();
-  const decision = parseDecisionPage(
-    responseHtml,
-    listed.sourceUrl,
-    listed.sourceDocumentId,
-    listed.ecli,
-    listed.counter,
-    listed.nalusRecordId,
-  );
+  const decision = parseDecisionPage({
+    html: responseHtml,
+    sourceUrl: listed.sourceUrl,
+    sourceDocumentId: listed.sourceDocumentId,
+    listedEcli: listed.ecli,
+    listedCounter: listed.counter,
+    nalusRecordId: listed.nalusRecordId,
+  });
   if (!decision) {
     return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
   }
@@ -1050,7 +1083,7 @@ export const czUsAdapter: SourceAdapter = {
     return await Result.tryPromise({
       try: async () => {
         const now = new Date();
-        const state = cursor ? parseCursor(cursor) : historicalStart();
+        const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
         const page = await fetchSearchPage(state, signal);
         if (page === null) {
           if (state.pass === CRAWL_PASS.VERIFY) {
