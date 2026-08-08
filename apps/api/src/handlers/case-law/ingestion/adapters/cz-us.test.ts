@@ -785,9 +785,42 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "II.ÚS 91/24",
       sourceDocumentId: "nalus-sz:2-91-24_1",
-      sourceDocumentIdAliases: ["nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1"],
       sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=2-91-24_1",
     });
+    expect(page.decisions[0]?.sourceDocumentIdAliases).toContain(
+      "nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1",
+    );
+    expect(page.decisions[0]?.sourceDocumentIdAliases?.at(-1)).toMatch(
+      /^nalus-quarantine:[a-f0-9]+$/u,
+    );
+  });
+
+  test("discards an oversized identity alias without poisoning its row", async () => {
+    const oversizedSz = "x".repeat(300);
+    installSearchMock({
+      rows: [
+        {
+          id: "7392",
+          sz: oversizedSz,
+          caseNumber: "II.ÚS 92/24",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+
+    const decision = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    expect(decision?.sourceDocumentId).toBe("nalus-record:7392");
+    expect(
+      decision?.sourceDocumentIdAliases?.some((identity) =>
+        identity.startsWith("nalus-sz:"),
+      ),
+    ).toBe(false);
+    expect(decision?.sourceDocumentIdAliases).toContain(
+      "nalus-ecli:ECLI:CZ:US:2024:2.US.92.24.1",
+    );
   });
 
   test("publishes overlapping identities before a record link disappears", async () => {
@@ -806,11 +839,13 @@ describe("czUsAdapter.fetchPage", () => {
     ).decisions[0];
     expect(canonical).toMatchObject({
       sourceDocumentId: "nalus-record:7391",
-      sourceDocumentIdAliases: [
+    });
+    expect(canonical?.sourceDocumentIdAliases).toEqual(
+      expect.arrayContaining([
         "nalus-sz:2-91-24_1",
         "nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1",
-      ],
-    });
+      ]),
+    );
 
     installSearchMock({
       rows: [
@@ -826,8 +861,10 @@ describe("czUsAdapter.fetchPage", () => {
     ).decisions[0];
     expect(fallback).toMatchObject({
       sourceDocumentId: "nalus-sz:2-91-24_1",
-      sourceDocumentIdAliases: ["nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1"],
     });
+    expect(fallback?.sourceDocumentIdAliases).toEqual(
+      expect.arrayContaining(["nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1"]),
+    );
   });
 
   test("quarantines a counted row that exposes neither NALUS identity", async () => {
@@ -879,6 +916,28 @@ describe("czUsAdapter.fetchPage", () => {
       reported: 1,
       collected: 1,
     });
+
+    installSearchMock({
+      rows: [
+        {
+          id: "7401",
+          sz: "",
+          caseNumber: "Pl.ÚS 10/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+    const recovered = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+    expect(recovered).toMatchObject({
+      sourceDocumentId: "nalus-record:7401",
+      isListingOnly: true,
+    });
+    expect(recovered?.sourceDocumentIdAliases).toContain(
+      page.decisions[0]?.sourceDocumentId,
+    );
   });
 
   test("recovers a missing listed docket from the decision detail", async () => {

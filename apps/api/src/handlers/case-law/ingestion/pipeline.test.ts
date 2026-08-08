@@ -6,7 +6,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -134,6 +137,30 @@ describe("sanitizeResult — shared partial-observation quality", () => {
       caseNumberIsPlaceholder: false,
       isListingOnly: false,
     });
+  });
+});
+
+describe("sanitizeResult — shared publisher identity limits", () => {
+  test("drops an oversized alias without poisoning a valid canonical id", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sourceDocumentId: "publisher:canonical",
+      sourceDocumentIdAliases: [
+        "publisher:fallback",
+        "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      ],
+    });
+
+    expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
+  });
+
+  test("rejects an oversized canonical id instead of truncating identity", () => {
+    expect(() =>
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      }),
+    ).toThrow("Publisher document identity exceeds storage limits");
   });
 });
 

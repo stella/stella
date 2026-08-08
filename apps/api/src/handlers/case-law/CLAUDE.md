@@ -389,13 +389,19 @@ identity and every exact alias to one decision UUID before inserting the row;
 this mapping must work in both directions and remain atomic when canonical and
 fallback observations overlap. A sequential lookup-and-migrate hint is not
 sufficient: two workers can otherwise insert under different uniqueness keys.
+Validate canonical and alternate identities against the shared persistence
+limit at the publisher boundary. A malformed alternate must be discarded so
+one oversized value cannot pin the page; the shared normalizer enforces the
+same rule for every court as a final safety net.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
-one poison row pin every later record in the slice. Mark every listing-only
-result with `isListingOnly`, and, if the list also lacks a real docket, mark
-the durable label with `caseNumberIsPlaceholder`. A later partial refresh must
-never replace previously recovered detail metadata, dates, raw payload
-pointers, docket or derived citation key. It may enrich an earlier partial row;
+one poison row pin every later record in the slice. Continue emitting that
+quarantine fingerprint as an alias after a publisher identity recovers, so the
+repair enriches the audited row instead of inserting a duplicate. Mark every
+listing-only result with `isListingOnly`, and, if the list also lacks a real
+docket, mark the durable label with `caseNumberIsPlaceholder`. A later partial
+refresh must never replace previously recovered detail metadata, dates, raw
+payload pointers, docket or derived citation key. It may enrich an earlier partial row;
 the pipeline persists adapter-neutral observation quality so that rule applies
 to every court without depending on court-specific metadata keys.
 If the existing row has a pending corpus mirror, replay its stored payload to

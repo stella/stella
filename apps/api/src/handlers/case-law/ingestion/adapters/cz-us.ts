@@ -7,7 +7,10 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -61,10 +64,12 @@ const nalusIdentities = ({
   recordId,
   sz,
   ecli,
+  quarantineId,
 }: {
   recordId: string | undefined;
   sz: string | undefined;
   ecli: string | undefined;
+  quarantineId?: string | undefined;
 }): {
   sourceDocumentId: string;
   aliases: readonly string[] | undefined;
@@ -73,7 +78,11 @@ const nalusIdentities = ({
     recordId === undefined ? undefined : `nalus-record:${recordId}`,
     sz === undefined ? undefined : `nalus-sz:${sz}`,
     ecli === undefined ? undefined : `nalus-ecli:${ecli}`,
-  ].filter((identity): identity is string => identity !== undefined);
+    quarantineId === undefined ? undefined : `nalus-quarantine:${quarantineId}`,
+  ].filter(
+    (identity): identity is string =>
+      identity !== undefined && isPersistableSourceDocumentId(identity),
+  );
   const sourceDocumentId = identities.at(0);
   if (sourceDocumentId === undefined) {
     return null;
@@ -336,6 +345,7 @@ type ParseDecisionPageOptions = {
   listedCounter: number | undefined;
   nalusRecordId: string | undefined;
   nalusSz: string | undefined;
+  nalusQuarantineId: string | undefined;
 };
 
 const parseDecisionPage = ({
@@ -346,6 +356,7 @@ const parseDecisionPage = ({
   listedCounter,
   nalusRecordId,
   nalusSz,
+  nalusQuarantineId,
 }: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
@@ -407,6 +418,7 @@ const parseDecisionPage = ({
       recordId: nalusRecordId,
       sz: nalusSz,
       ecli,
+      quarantineId: nalusQuarantineId,
     })?.aliases,
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
@@ -468,6 +480,7 @@ type ListedDecision = {
   caseNumber: string;
   counter?: number | undefined;
   identityQuarantined?: true | undefined;
+  quarantineId: string;
   listingDocketMissing?: true | undefined;
   listingHtml: string;
   sourceDocumentId: string;
@@ -850,32 +863,41 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     // withdrawn row exposes neither of NALUS's normal identities. Give that
     // terminal listing a content-addressed quarantine identity derived from
     // semantic fields so one poison row cannot pin the reconciliation slice.
-    const publisherIdentity = nalusIdentities({
+    const exactPublisherIdentity = nalusIdentities({
       recordId: nalusRecordId,
       sz,
       ecli,
     });
-    const quarantineId =
-      publisherIdentity === null
-        ? quarantineFingerprint({
-            primaryText: primary.text(),
-            actionsText: actions.text(),
-            registrySign,
-            ecli,
-          })
-        : undefined;
+    // Compute the identity-less form for every row. If publisher links are
+    // restored later, this becomes a migration alias for the earlier durable
+    // quarantine row. Historical quarantines necessarily had no ECLI, so the
+    // repair fingerprint deliberately fixes that field to undefined.
+    const quarantineId = quarantineFingerprint({
+      primaryText: primary.text(),
+      actionsText: actions.text(),
+      registrySign,
+      ecli: undefined,
+    });
+    const publisherIdentity = nalusIdentities({
+      recordId: nalusRecordId,
+      sz,
+      ecli,
+      quarantineId,
+    });
+    if (publisherIdentity === null) {
+      throw new TypeError("NALUS row has no persistable identity");
+    }
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
       "counter"
     ];
     const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
     const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     const fallbackCaseNumber =
-      quarantineId === undefined
+      exactPublisherIdentity !== null
         ? `NALUS record ${nalusRecordId ?? sz ?? ecli}`
         : `NALUS listing ${quarantineId}`;
     const caseNumber = listedCaseNumber || fallbackCaseNumber;
-    const sourceDocumentId =
-      publisherIdentity?.sourceDocumentId ?? `nalus-quarantine:${quarantineId}`;
+    const sourceDocumentId = publisherIdentity.sourceDocumentId;
 
     let sourceUrl: URL;
     if (sz !== undefined) {
@@ -886,7 +908,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       sourceUrl.searchParams.set("id", nalusRecordId);
     } else {
       sourceUrl = new URL(RESULTS_URL);
-      sourceUrl.hash = `listing-${quarantineId ?? hashContent(sourceDocumentId)}`;
+      sourceUrl.hash = `listing-${quarantineId}`;
     }
     listed.push({
       caseNumber,
@@ -896,8 +918,9 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
           ? 1
           : Number.parseInt(counterText ?? szCounter ?? "1", 10),
       sourceDocumentId,
+      quarantineId,
       listingHtml,
-      ...(quarantineId === undefined ? {} : { identityQuarantined: true }),
+      ...(exactPublisherIdentity === null ? { identityQuarantined: true } : {}),
       ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
       sourceUrl: sourceUrl.href,
       ...(sz === undefined ? {} : { sz }),
@@ -1031,6 +1054,7 @@ const fetchListedDecision = async (
     listedCounter: listed.counter,
     nalusRecordId: listed.nalusRecordId,
     nalusSz: listed.sz,
+    nalusQuarantineId: listed.quarantineId,
   });
   if (!decision) {
     return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
@@ -1087,6 +1111,7 @@ const listedOnlyDecision = (
     recordId: listed.nalusRecordId,
     sz: listed.sz,
     ecli: listed.ecli,
+    quarantineId: listed.quarantineId,
   })?.aliases,
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,

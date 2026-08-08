@@ -6,8 +6,11 @@ import {
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+  type IngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Pipeline-owned quality marker persisted with partial source observations. */
@@ -97,13 +100,24 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     };
   }
 
+  const sourceDocumentId = strip(result.sourceDocumentId);
+  if (
+    sourceDocumentId !== undefined &&
+    !isPersistableSourceDocumentId(sourceDocumentId)
+  ) {
+    throw new TypeError("Publisher document identity exceeds storage limits");
+  }
+
   return {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
-    sourceDocumentId: strip(result.sourceDocumentId),
+    sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases
       ?.map((identity) => strip(identity))
-      .filter((identity): identity is string => identity !== undefined),
+      .filter(
+        (identity): identity is string =>
+          identity !== undefined && isPersistableSourceDocumentId(identity),
+      ),
     legacySourceUrls: result.legacySourceUrls
       ?.map((url) => strip(url))
       .filter((url): url is string => url !== undefined),

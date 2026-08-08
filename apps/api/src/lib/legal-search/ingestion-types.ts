@@ -11,6 +11,12 @@ import type {
 export { EMPTY_AST };
 export type { EmptyAst };
 
+/** Mirrors the publisher-identity columns in the case-law schema. */
+export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
+
+export const isPersistableSourceDocumentId = (value: string): boolean =>
+  value.length > 0 && value.length <= SOURCE_DOCUMENT_ID_MAX_LENGTH;
+
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
@@ -40,7 +46,9 @@ export type IngestionResult = {
    * Other exact publisher identifiers for this same document. Emit every
    * alternate identity visible with the canonical `sourceDocumentId`; the
    * pipeline atomically reserves all of them to one durable decision UUID, so
-   * canonical/fallback observations converge in either order.
+   * canonical/fallback observations converge in either order. Identities must
+   * fit `SOURCE_DOCUMENT_ID_MAX_LENGTH`; adapters should discard a malformed
+   * alias at their publisher boundary instead of poisoning the whole page.
    */
   sourceDocumentIdAliases?: readonly string[] | undefined;
   /**
