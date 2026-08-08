@@ -5,10 +5,12 @@ import {
   documentProcessingRuns,
   entities,
   entityVersions,
+  extractedContent,
   fields,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { shouldRequeueAutomaticOcrRun } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -119,7 +121,11 @@ export const requestAutomaticDocumentOcr = async ({
     }
 
     const existingRows = await tx
-      .select({ id: documentProcessingRuns.id })
+      .select({
+        id: documentProcessingRuns.id,
+        requestSource: documentProcessingRuns.requestSource,
+        status: documentProcessingRuns.status,
+      })
       .from(documentProcessingRuns)
       .where(
         and(
@@ -135,11 +141,73 @@ export const requestAutomaticDocumentOcr = async ({
             documentProcessingRuns.processorVersion,
             DOCUMENT_OCR_PROCESSOR_VERSION,
           ),
-          eq(documentProcessingRuns.status, "queued"),
         ),
       )
-      .limit(1);
-    return existingRows.at(0);
+      .limit(1)
+      .for("update");
+    const existing = existingRows.at(0);
+    if (!existing) {
+      return null;
+    }
+
+    const projectionRows =
+      existing.status === "succeeded"
+        ? await tx
+            .select({
+              ocrRunId: extractedContent.ocrRunId,
+              sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+              sourceFieldId: extractedContent.sourceFieldId,
+              sourceFileId: extractedContent.sourceFileId,
+              sourceSha256Hex: extractedContent.sourceSha256Hex,
+            })
+            .from(extractedContent)
+            .where(
+              and(
+                eq(extractedContent.entityId, entityId),
+                eq(extractedContent.organizationId, organizationId),
+                eq(extractedContent.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1)
+        : [];
+    if (
+      !shouldRequeueAutomaticOcrRun({
+        projection: projectionRows.at(0) ?? null,
+        run: existing,
+        source: {
+          entityVersionId,
+          fieldId,
+          sourceFileId,
+          sourceSha256Hex,
+        },
+      })
+    ) {
+      return existing.status === "queued" ? existing : null;
+    }
+
+    const retried = await tx
+      .update(documentProcessingRuns)
+      .set({
+        claimedAt: null,
+        claimedBy: null,
+        errorAt: null,
+        errorCode: null,
+        finishedAt: null,
+        nextAttemptAt: null,
+        progressCompleted: 0,
+        progressTotal: null,
+        startedAt: null,
+        status: "queued",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, existing.id),
+          eq(documentProcessingRuns.status, "succeeded"),
+        ),
+      )
+      .returning({ id: documentProcessingRuns.id });
+    return retried.at(0) ?? null;
   });
 
   // The configured batch scheduler releases the durable queued row. Uploads
