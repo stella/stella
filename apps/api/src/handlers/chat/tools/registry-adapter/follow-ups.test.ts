@@ -82,6 +82,14 @@ describe("follow-up (b): read_document propertyId path", () => {
             },
           }),
         },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
+        extractedContent: { findFirst: async () => null },
+        organizationSettings: {
+          findFirst: async () => ({ documentProcessingMode: "off" }),
+        },
+        searchDocuments: { findFirst: async () => null },
       },
     };
 
