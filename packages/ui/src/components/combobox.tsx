@@ -8,6 +8,7 @@ import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const ComboboxContext = React.createContext<{
@@ -161,7 +162,7 @@ const ComboboxPopup = ({
         align={align}
         alignOffset={alignOffset}
         anchor={chipsRef}
-        className="z-50 select-none"
+        className={cn(OVERLAY_LAYER_CLASS_NAMES.popup, "select-none")}
         data-slot="combobox-positioner"
         side={side}
         sideOffset={sideOffset}
