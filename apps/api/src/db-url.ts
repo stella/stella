@@ -22,12 +22,31 @@ const COMPONENT_KEYS = [
 // `allow`, and `prefer` would silently downgrade transport security
 // and have no legitimate reason to appear in a managed deploy.
 const ALLOWED_SSLMODES = ["require", "verify-ca", "verify-full"] as const;
+const SUPPORTED_DATABASE_PROTOCOLS = ["postgres:", "postgresql:"] as const;
 
 export const resolveDatabaseUrl = (
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined => {
   if (env["DATABASE_URL"]) {
-    return env["DATABASE_URL"];
+    const databaseUrl = env["DATABASE_URL"];
+    let parsed: URL;
+    try {
+      parsed = new URL(databaseUrl);
+    } catch {
+      panic("DATABASE_URL is not a valid URL");
+    }
+    const hasAuthoritySyntax = databaseUrl
+      .slice(parsed.protocol.length)
+      .startsWith("//");
+    if (
+      !hasAuthoritySyntax ||
+      !SUPPORTED_DATABASE_PROTOCOLS.some(
+        (protocol) => protocol === parsed.protocol,
+      )
+    ) {
+      panic("DATABASE_URL must use the postgres:// or postgresql:// scheme");
+    }
+    return databaseUrl;
   }
 
   const { DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSLMODE } = env;
