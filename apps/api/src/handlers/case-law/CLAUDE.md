@@ -404,7 +404,15 @@ if it were an exact publisher key. Build the repair fingerprint only from
 fields that remain present when identity metadata recovers: exclude the ECLI,
 detail and retrieval-action labels, and any other value that can appear
 together with the new exact identity, or the recovered observation will hash
-differently from its quarantine row. Mark every listing-only result with
+differently from its quarantine row. Do not discard a stable discriminator
+such as a docket merely because an older malformed row may lack it: use the
+discriminating fingerprint for the quarantine identity and emit both the
+specific and discriminator-free forms as repair-only aliases after recovery.
+The low-information form must never be reserved as an exact identity.
+Likewise, preserve the digit string of any numeric publisher component used to
+synthesize an exact alias, or reject it unless it is a safe bounded integer;
+rounding two counters to one JavaScript number silently merges documents.
+Mark every listing-only result with
 `isListingOnly`, and, if the list also lacks a real docket, mark the durable
 label with `caseNumberIsPlaceholder`. A later partial refresh must never replace
 previously recovered detail metadata, dates, raw payload pointers, docket or

@@ -208,6 +208,14 @@ const buildEcli = (
   return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
 };
 
+const parseCounter = (raw: string | undefined): number | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const counter = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(counter) && counter > 0 ? counter : undefined;
+};
+
 /** Extract case number and date from the registry sign label. */
 const parseRegistrySign = (
   raw: string,
@@ -243,7 +251,7 @@ const extractEcliCounter = (html: string): number | undefined => {
     return undefined;
   }
   const counter = /#(?<counter>\d+)/u.exec(hiddenValue)?.groups?.["counter"];
-  return counter ? Number.parseInt(counter, 10) : undefined;
+  return parseCounter(counter);
 };
 
 /** URL identity emitted by the pre-search adapter for counter-one records. */
@@ -342,7 +350,7 @@ type ParseDecisionPageOptions = {
   listedCounter: number | undefined;
   nalusRecordId: string | undefined;
   nalusSz: string | undefined;
-  nalusQuarantineId: string | undefined;
+  nalusQuarantineIds: readonly string[];
 };
 
 const parseDecisionPage = ({
@@ -353,7 +361,7 @@ const parseDecisionPage = ({
   listedCounter,
   nalusRecordId,
   nalusSz,
-  nalusQuarantineId,
+  nalusQuarantineIds,
 }: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
@@ -416,10 +424,9 @@ const parseDecisionPage = ({
       sz: nalusSz,
       ecli,
     })?.aliases,
-    sourceDocumentIdRepairAliases:
-      nalusQuarantineId === undefined
-        ? undefined
-        : [`nalus-quarantine:${nalusQuarantineId}`],
+    sourceDocumentIdRepairAliases: nalusQuarantineIds.map(
+      (quarantineId) => `nalus-quarantine:${quarantineId}`,
+    ),
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
       ecliCounter,
@@ -481,6 +488,7 @@ type ListedDecision = {
   counter?: number | undefined;
   identityQuarantined?: true | undefined;
   quarantineId: string;
+  quarantineRepairIds: readonly string[];
   listingDocketMissing?: true | undefined;
   listingHtml: string;
   sourceDocumentId: string;
@@ -730,9 +738,11 @@ const hiddenField = (html: string, name: string): string | undefined =>
 const quarantineFingerprint = ({
   stablePrimaryText,
   stableActionsText,
+  stableDetailText,
 }: {
   stablePrimaryText: string;
   stableActionsText: string;
+  stableDetailText: string;
 }): string => {
   const normalize = (value: string): string =>
     value.replace(/\s+/gu, " ").trim();
@@ -740,6 +750,7 @@ const quarantineFingerprint = ({
     JSON.stringify({
       stablePrimaryText: normalize(stablePrimaryText),
       stableActionsText: normalize(stableActionsText),
+      stableDetailText: normalize(stableDetailText),
     }),
   );
 };
@@ -862,6 +873,11 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       sz,
       ecli,
     });
+    const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
+      "counter"
+    ];
+    const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
+    const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     // Compute the identity-less form for every row. If publisher links are
     // restored later, this becomes a migration alias for the earlier durable
     // quarantine row. Strip every identity-bearing control from the visible
@@ -875,19 +891,26 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     stableActions
       .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
       .remove();
-    const quarantineId = quarantineFingerprint({
+    const stableFingerprintFields = {
       stablePrimaryText,
       stableActionsText: stableActions.text(),
-    });
+    };
+    const quarantineRepairIds = [
+      quarantineFingerprint({
+        ...stableFingerprintFields,
+        stableDetailText: listedCaseNumber,
+      }),
+      quarantineFingerprint({
+        ...stableFingerprintFields,
+        stableDetailText: "",
+      }),
+    ].filter((value, index, values) => values.indexOf(value) === index);
+    const quarantineId =
+      quarantineRepairIds[0] ?? panic("Missing quarantine id");
     const publisherIdentity = exactPublisherIdentity ?? {
       sourceDocumentId: `nalus-quarantine:${quarantineId}`,
       aliases: undefined,
     };
-    const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
-      "counter"
-    ];
-    const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
-    const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     const fallbackCaseNumber =
       exactPublisherIdentity !== null
         ? `NALUS record ${nalusRecordId ?? sz ?? ecli}`
@@ -912,9 +935,10 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       counter:
         counterText === undefined && szCounter === undefined
           ? 1
-          : Number.parseInt(counterText ?? szCounter ?? "1", 10),
+          : parseCounter(counterText ?? szCounter),
       sourceDocumentId,
       quarantineId,
+      quarantineRepairIds,
       listingHtml,
       ...(exactPublisherIdentity === null ? { identityQuarantined: true } : {}),
       ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
@@ -1050,7 +1074,7 @@ const fetchListedDecision = async (
     listedCounter: listed.counter,
     nalusRecordId: listed.nalusRecordId,
     nalusSz: listed.sz,
-    nalusQuarantineId: listed.quarantineId,
+    nalusQuarantineIds: listed.quarantineRepairIds,
   });
   if (!decision) {
     return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
@@ -1111,7 +1135,9 @@ const listedOnlyDecision = (
   sourceDocumentIdRepairAliases:
     listed.identityQuarantined === true
       ? undefined
-      : [`nalus-quarantine:${listed.quarantineId}`],
+      : listed.quarantineRepairIds.map(
+          (quarantineId) => `nalus-quarantine:${quarantineId}`,
+        ),
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,
     listed.counter,

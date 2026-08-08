@@ -48,7 +48,7 @@ const makeTextPage = (
     decisionForm?: string;
     parallelQuotation?: string;
     popularName?: string;
-    counter?: number;
+    counter?: number | string;
   } = {},
 ): string => `
 <html><body>
@@ -210,9 +210,7 @@ const installSearchMock = ({
                   : makeTextPage(
                       row.caseNumber,
                       row.date,
-                      counterText === undefined
-                        ? {}
-                        : { counter: Number(counterText) },
+                      counterText === undefined ? {} : { counter: counterText },
                     ),
                 { status: detailStatus },
               )
@@ -378,6 +376,42 @@ describe("czUsAdapter.fetchPage", () => {
       ["https://nalus.usoud.cz/Search/GetText.aspx?sz=I-42-24_1"],
       undefined,
     ]);
+  });
+
+  test("does not synthesize colliding ECLI aliases from unsafe counters", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "2003",
+          sz: "1-43-24_9007199254740992",
+          caseNumber: "I.ÚS 43/24",
+          date: "4. 1. 2024",
+        },
+        {
+          id: "2004",
+          sz: "1-43-24_9007199254740993",
+          caseNumber: "I.ÚS 43/24",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["nalus-record:2003", "nalus-record:2004"]);
+    expect(page.decisions.every(({ ecli }) => ecli === undefined)).toBe(true);
+    expect(
+      page.decisions.every(
+        ({ sourceDocumentIdAliases }) =>
+          sourceDocumentIdAliases?.every(
+            (identity) => !identity.startsWith("nalus-ecli:"),
+          ) ?? true,
+      ),
+    ).toBe(true);
   });
 
   test("uses the result banner for pagination and slice coverage", async () => {
@@ -971,6 +1005,40 @@ describe("czUsAdapter.fetchPage", () => {
     expect(recovered?.sourceDocumentIdRepairAliases).toContain(
       page.decisions[0]?.sourceDocumentId,
     );
+  });
+
+  test("keeps identity-less dockets distinct in quarantine", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 13/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 14/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    const quarantineIds = page.decisions.map(
+      ({ sourceDocumentId }) => sourceDocumentId,
+    );
+
+    expect(quarantineIds).toHaveLength(2);
+    expect(new Set(quarantineIds).size).toBe(2);
+    expect(
+      quarantineIds.every(
+        (identity) => identity?.startsWith("nalus-quarantine:") === true,
+      ),
+    ).toBe(true);
   });
 
   test("keeps the repair identity when ECLI and the detail docket recover", async () => {
