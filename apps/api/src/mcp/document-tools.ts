@@ -1494,7 +1494,7 @@ const loadDocumentProcessingStates = async ({
   } else if (
     currentExtracted?.charCount === 0 &&
     (ocrRun === undefined || ocrDisabledByPolicy) &&
-    sourceFile.mimeType === PDF_MIME_TYPE &&
+    extractionMimeType === PDF_MIME_TYPE &&
     (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
       "off"
   ) {

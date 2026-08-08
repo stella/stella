@@ -2464,13 +2464,13 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("read_document returns the exact manual OCR action for an authorized caller when automatic OCR is off", async () => {
+  test("read_document returns the exact manual OCR action for an extension-resolved PDF when automatic OCR is off", async () => {
     const textlessProjection = createExtractedContentRow({ charCount: 0 });
     const currentPdf = {
       encrypted: false,
       fileName: "scan.pdf",
       id: "file_1",
-      mimeType: "application/pdf",
+      mimeType: "application/octet-stream",
       pdfFileId: null,
       sha256Hex: "a".repeat(64),
       sizeBytes: 128,

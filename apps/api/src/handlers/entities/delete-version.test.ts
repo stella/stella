@@ -414,6 +414,22 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(restoredCheck);
   });
 
+  test("deleting the current version withdraws and rebuilds its search projection", () => {
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+    const txStart = source.indexOf("safeDb(async (tx) =>");
+    const projectionDelete = source.indexOf(".delete(searchDocuments)");
+    const txEnd = source.indexOf("if (!txOutcome.ok)");
+
+    expect(projectionDelete).toBeGreaterThan(txStart);
+    expect(projectionDelete).toBeLessThan(txEnd);
+    expect(
+      source.indexOf("processExtraction(params.entityId)"),
+    ).toBeGreaterThan(txEnd);
+  });
+
   test("every entityVersions UPDATE gates on deletedAt or is a reviewed write", () => {
     // Write-side variant of the tombstone class: an UPDATE keyed by a version id
     // whose WHERE lacks a deletedAt predicate can land on a version tombstoned
