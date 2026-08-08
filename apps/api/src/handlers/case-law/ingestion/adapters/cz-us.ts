@@ -216,6 +216,7 @@ const extractEcliCounter = (html: string): number | undefined => {
 const legacySourceUrlsFor = (
   caseNumber: string,
   counter: number | undefined,
+  nalusSz: string | undefined,
 ): readonly string[] | undefined => {
   if (counter !== 1) {
     return undefined;
@@ -227,9 +228,15 @@ const legacySourceUrlsFor = (
   const legacyYear = String(
     Number.parseInt(components.shortYear, 10) % 100,
   ).padStart(2, "0");
-  return [
-    `https://nalus.usoud.cz/Search/GetText.aspx?sz=I-${components.caseIndex}-${legacyYear}_1`,
-  ];
+  const legacySz = `I-${components.caseIndex}-${legacyYear}_1`;
+  // The old probe always requested an I-prefixed URL, but NALUS can map
+  // that guessed URL to a different chamber/plenary docket with the same
+  // visible number. It is an adoption alias only when the listing exposes
+  // that exact retrieval identity for this exact publisher record.
+  if (nalusSz !== legacySz) {
+    return undefined;
+  }
+  return [`https://nalus.usoud.cz/Search/GetText.aspx?sz=${legacySz}`];
 };
 
 /** Plain text of the DocContent table, the decision body. */
@@ -368,7 +375,11 @@ const parseDecisionPage = ({
   return {
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
-    legacySourceUrls: legacySourceUrlsFor(parsed.caseNumber, ecliCounter),
+    legacySourceUrls: legacySourceUrlsFor(
+      parsed.caseNumber,
+      ecliCounter,
+      nalusSz,
+    ),
     ecli,
     court: "Ústavní soud",
     country: "CZE",
@@ -437,6 +448,10 @@ type SearchPage = {
   rangeTo: number;
   reported: number;
 };
+
+class SearchPageDriftError extends TypeError {
+  override name = "SearchPageDriftError";
+}
 
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
@@ -727,7 +742,10 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
   }
 
   const expectedFrom = expectedPage * RESULTS_PAGE_SIZE + 1;
-  if (banner.rangeFrom !== expectedFrom || banner.rangeTo > banner.reported) {
+  if (banner.rangeFrom !== expectedFrom) {
+    throw new SearchPageDriftError("NALUS result page moved during traversal");
+  }
+  if (banner.rangeTo > banner.reported) {
     throw new TypeError("NALUS returned an unexpected result page");
   }
 
@@ -962,7 +980,11 @@ const listedOnlyDecision = (
 ): IngestionResult => ({
   caseNumber: listed.caseNumber,
   sourceDocumentId: listed.sourceDocumentId,
-  legacySourceUrls: legacySourceUrlsFor(listed.caseNumber, listed.counter),
+  legacySourceUrls: legacySourceUrlsFor(
+    listed.caseNumber,
+    listed.counter,
+    listed.sz,
+  ),
   ecli: listed.ecli,
   court: "Ústavní soud",
   country: "CZE",
@@ -1110,7 +1132,18 @@ export const czUsAdapter: SourceAdapter = {
       try: async () => {
         const now = new Date();
         const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
-        const page = await fetchSearchPage(state, signal);
+        let page: SearchPage | null;
+        try {
+          page = await fetchSearchPage(state, signal);
+        } catch (error) {
+          if (state.page > 0 && error instanceof SearchPageDriftError) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
+          }
+          throw error;
+        }
         if (page === null) {
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {

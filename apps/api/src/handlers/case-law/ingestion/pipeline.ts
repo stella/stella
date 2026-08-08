@@ -588,11 +588,21 @@ const processDecisionAttempt = async ({
         sourceUrl: true,
       },
     });
-    const legacyMatches =
+    const ecliMatches =
       legacy !== undefined &&
-      ((result.ecli !== undefined && legacy.ecli === result.ecli) ||
-        (legacy.sourceUrl !== null &&
-          result.legacySourceUrls?.includes(legacy.sourceUrl) === true));
+      result.ecli !== undefined &&
+      legacy.ecli === result.ecli;
+    const legacyEcliContradicts =
+      legacy !== undefined &&
+      legacy.ecli !== null &&
+      result.ecli !== undefined &&
+      legacy.ecli !== result.ecli;
+    const sourceUrlMatches =
+      legacy !== undefined &&
+      !legacyEcliContradicts &&
+      legacy.sourceUrl !== null &&
+      result.legacySourceUrls?.includes(legacy.sourceUrl) === true;
+    const legacyMatches = ecliMatches || sourceUrlMatches;
     if (!legacyMatches) {
       return undefined;
     }
@@ -992,7 +1002,9 @@ const processDecisionAttempt = async ({
         const updated = await tx
           .update(caseLawDecisions)
           .set({
+            caseNumber: result.caseNumber,
             sourceDocumentId: result.sourceDocumentId,
+            citationKey: citationKeyOf(result.caseNumber),
             ecli: result.ecli,
             court: result.court,
             country: result.country,

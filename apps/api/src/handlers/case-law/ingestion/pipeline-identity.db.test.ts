@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -306,6 +307,99 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
       expect(isRecord(row) ? row["redactedIdentity"] : undefined).toBe(
         "redacted-publisher-id",
+      );
+    });
+
+    test("does not adopt a legacy URL when its ECLI contradicts the decision", async () => {
+      const legacyUrl = "https://publisher.test/ambiguous-legacy-url";
+      const legacy = {
+        ...decisionAt("Ambiguous legacy identity", undefined),
+        ecli: "ECLI:TEST:LEGACY",
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "contradictory-ecli-publisher-id",
+          legacySourceUrls: [legacyUrl],
+          ecli: "ECLI:TEST:INCOMING",
+          rawHash: "hash-contradictory-ecli",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        legacyCount: number;
+        identifiedCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (WHERE source_document_id IS NULL)::int AS "legacyCount",
+               count(*) FILTER (
+                 WHERE source_document_id = 'contradictory-ecli-publisher-id'
+               )::int AS "identifiedCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? Number(row["legacyCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["identifiedCount"]) : 0).toBe(1);
+    });
+
+    test("replaces a listing placeholder when detail recovers the docket", async () => {
+      const publisherId = "recovered-docket-publisher-id";
+      const placeholder = {
+        ...decisionAt("Recovered docket identity", publisherId),
+        caseNumber: "NALUS record 7301",
+        rawHash: "hash-listing-placeholder",
+      };
+      await processDecision({
+        input: placeholder,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const recoveredCaseNumber = "III.ÚS 81/24";
+      await processDecision({
+        input: {
+          ...placeholder,
+          caseNumber: recoveredCaseNumber,
+          rawHash: "hash-recovered-docket",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{ caseNumber: string; citationKey: string }>`
+          SELECT case_number AS "caseNumber", citation_key AS "citationKey"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(isRecord(row) ? row["caseNumber"] : undefined).toBe(
+        recoveredCaseNumber,
+      );
+      expect(isRecord(row) ? row["citationKey"] : undefined).toBe(
+        bareCitationKey(recoveredCaseNumber),
       );
     });
 

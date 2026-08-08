@@ -301,7 +301,7 @@ describe("czUsAdapter.fetchPage", () => {
     const rows = [
       {
         id: "2001",
-        sz: "1-42-24_1",
+        sz: "I-42-24_1",
         caseNumber: "I.ÚS 42/24",
         date: "1. 2. 2024",
         ecli: "ECLI:CZ:US:2024:1.US.42.24.1",
@@ -409,6 +409,36 @@ describe("czUsAdapter.fetchPage", () => {
       reported: 42,
       collected: 42,
     });
+  });
+
+  test("restarts a traversal when a saved result page disappears", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "3099",
+          sz: "1-1-24_1",
+          caseNumber: "I.ÚS 1/24",
+          date: "2. 1. 2024",
+        },
+      ],
+      rangeFrom: 1,
+      reported: 1,
+    });
+    const availableTo = latestClosedAvailabilityDay();
+
+    const pages = await Promise.all(
+      [
+        `search:historical:${availableTo}:2024:collect:1:prior:-`,
+        `search:historical:${availableTo}:2024:verify:1:prior:expected`,
+      ].map(async (cursor) => unwrap(await czUsAdapter.fetchPage(cursor, {}))),
+    );
+
+    for (const page of pages) {
+      expect(page.decisions).toEqual([]);
+      expect(page.nextCursor).toBe(
+        `search:historical:${availableTo}:2024:collect:0:0:-`,
+      );
+    }
   });
 
   test("legacy probe cursors restart the publisher enumeration", async () => {
@@ -568,9 +598,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
     const decision = page.decisions[0];
     expect(decision?.sourceDocumentId).toBe("nalus-record:6001");
-    expect(decision?.legacySourceUrls).toEqual([
-      "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-14-24_1",
-    ]);
+    expect(decision?.legacySourceUrls).toBeUndefined();
     expect(decision?.decisionType).toBe("usnesení");
     expect(decision?.metadata).toMatchObject({
       judge: "amet. Jan Novák",
@@ -712,14 +740,12 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "I.ÚS 77/24",
       sourceDocumentId: "nalus-record:7001",
-      legacySourceUrls: [
-        "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-77-24_1",
-      ],
       metadata: {
         listedOnly: true,
         listedOnlyReason: "unparseable-detail",
       },
     });
+    expect(page.decisions[0]?.legacySourceUrls).toBeUndefined();
     expect(page.coverage?.collected).toBe(1);
   });
 
