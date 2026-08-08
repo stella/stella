@@ -1269,6 +1269,11 @@ describe("czUsAdapter.fetchPage", () => {
       },
     });
     expect(page.decisions[0]?.legacySourceUrls).toBeUndefined();
+    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
+    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
+      listingHtml: expect.stringContaining("ResultDetail.aspx?id=7001"),
+      textHtml: expect.stringContaining("detail unavailable"),
+    });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.coverage?.collected).toBe(1);
   });

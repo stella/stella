@@ -1097,7 +1097,14 @@ const fetchListedDecision = async (
     nalusQuarantineIds: listed.quarantineRepairIds,
   });
   if (!decision) {
-    return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
+    return listedOnlyDecision(
+      listed,
+      "unparseable-detail",
+      multiResponseSourceRaw({
+        listingHtml: listed.listingHtml,
+        textHtml: responseHtml,
+      }),
+    );
   }
   if (listed.listingDocketMissing) {
     decision.metadata["listingDocketMissing"] = true;
@@ -1132,19 +1139,41 @@ const fetchListedDecision = async (
     // Abstracts are optional enrichment; the listed decision is complete
     // enough to ingest without one.
   }
-  decision.sourceRaw = JSON.stringify({
-    listingHtml: listed.listingHtml,
-    textHtml: responseHtml,
-    ...(abstractHtml === undefined ? {} : { abstractHtml }),
-  });
-  decision.sourceRawContentType = "application/json";
+  Object.assign(
+    decision,
+    multiResponseSourceRaw({
+      listingHtml: listed.listingHtml,
+      textHtml: responseHtml,
+      abstractHtml,
+    }),
+  );
   return decision;
 };
+
+const multiResponseSourceRaw = ({
+  listingHtml,
+  textHtml,
+  abstractHtml,
+}: {
+  listingHtml: string;
+  textHtml: string;
+  abstractHtml?: string | undefined;
+}): { sourceRaw: string; sourceRawContentType: string } => ({
+  sourceRaw: JSON.stringify({
+    listingHtml,
+    textHtml,
+    ...(abstractHtml === undefined ? {} : { abstractHtml }),
+  }),
+  sourceRawContentType: "application/json",
+});
 
 const listedOnlyDecision = (
   listed: ListedDecision,
   reason: string,
-  sourceRaw?: string,
+  rawSource?: {
+    sourceRaw: string;
+    sourceRawContentType: string;
+  },
 ): IngestionResult => ({
   caseNumber: listed.caseNumber,
   caseNumberIsPlaceholder: listed.listingDocketMissing === true,
@@ -1190,8 +1219,8 @@ const listedOnlyDecision = (
   ),
   parserVersion: PARSER_VERSION,
   documentAst: EMPTY_AST,
-  sourceRaw: sourceRaw ?? listed.listingHtml,
-  sourceRawContentType: "text/html",
+  sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
+  sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",
 });
 
 const fetchListedDecisions = async (
