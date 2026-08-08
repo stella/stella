@@ -1,5 +1,11 @@
 # @stll/conditions
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1200](https://github.com/stella/stella/pull/1200) [`7e53091`](https://github.com/stella/stella/commit/7e53091060df479830961d7be7948f2bdef739c2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add legal-list capabilities to the CLI and expose nested entity-kind condition matching.
+
 ## 0.1.1
 
 ### Patch Changes

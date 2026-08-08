@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.3.0
+
+### Minor Changes
+
+- [#1812](https://github.com/stella/stella/pull/1812) [`93304d8`](https://github.com/stella/stella/commit/93304d8a9e682336c1a30ef5bc4176d4d0323fc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose actionable document-processing states and retryable ARES failures through stella MCP clients.
+
 ## 0.2.2
 
 ### Patch Changes
