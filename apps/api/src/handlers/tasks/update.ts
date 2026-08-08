@@ -411,7 +411,6 @@ export const updateTaskHandler = async function* ({
           body.dueDate !== workflow.workingTargetDate
         ) {
           if (
-            features.governedWorkflow &&
             body.dueDate !== null &&
             workflow.hardDeadlineDate !== null &&
             !updatesLegacyDeadline &&

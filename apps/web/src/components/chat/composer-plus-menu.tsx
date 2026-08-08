@@ -65,6 +65,7 @@ import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control
 import {
   COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,
+  shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
@@ -593,6 +594,20 @@ const ComposerSkillsSubmenu = ({
   );
 
   const query = search.trim().toLowerCase();
+  useExternalSyncEffect(() => {
+    if (
+      !shouldDrainSkillPages({
+        hasNextPage,
+        isFetchingNextPage,
+        open,
+        query,
+      })
+    ) {
+      return;
+    }
+    detached(fetchNextPage(), "ComposerSkillsSubmenu.search");
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, open, query]);
+
   const filteredItems = query
     ? items.filter((item) => itemName(item).toLowerCase().includes(query))
     : items;
@@ -606,6 +621,14 @@ const ComposerSkillsSubmenu = ({
 
   let skillItemsContent: React.ReactNode;
   if (isLoadingSkills) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (
+    filteredItems.length === 0 &&
+    query !== "" &&
+    (hasNextPage || isFetchingNextPage)
+  ) {
     skillItemsContent = (
       <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
     );

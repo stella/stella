@@ -149,9 +149,10 @@ export function LegacyTodosPage() {
   } = useInfiniteQuery(
     myTasksOptions(activeOrganizationId, filter === "all" ? null : filter),
   );
-  const { data: workspaces } = useQuery(
+  const { data: workspaces, error: workspacesError } = useQuery(
     workspacesOptions(activeOrganizationId),
   );
+  const pageError = queryError ?? workspacesError;
 
   const tasks = data ? data.pages.flatMap((page) => page.items) : [];
   const filtered = (() => {
@@ -176,14 +177,14 @@ export function LegacyTodosPage() {
   const groups = groupByWorkspace(filtered);
 
   useExternalSyncEffect(() => {
-    if (!queryError) {
+    if (!pageError) {
       return;
     }
-    analytics.captureError(queryError);
+    analytics.captureError(pageError);
     stellaToast.error(
-      userErrorFromThrown(queryError, t("common.unexpectedError")),
+      userErrorFromThrown(pageError, t("common.unexpectedError")),
     );
-  }, [analytics, queryError, t]);
+  }, [analytics, pageError, t]);
 
   const createTaskMutation = useMutation({
     mutationFn: async (wsId: string) => {
@@ -255,9 +256,15 @@ export function LegacyTodosPage() {
         </div>
       </div>
 
+      {pageError && (
+        <p className="text-destructive text-sm" role="alert">
+          {userErrorFromThrown(pageError, t("common.unexpectedError"))}
+        </p>
+      )}
+
       {isLoading && <TasksLoadingSkeleton />}
 
-      {!isLoading && !queryError && groups.length === 0 && (
+      {!isLoading && !pageError && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
           <EntityKindIcon className="size-10 opacity-40" kind="task" />
           <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
@@ -300,12 +307,6 @@ export function LegacyTodosPage() {
           </div>
         </div>
       ))}
-
-      {queryError && groups.length === 0 && (
-        <p className="text-destructive py-16 text-center text-sm" role="alert">
-          {userErrorFromThrown(queryError, t("common.unexpectedError"))}
-        </p>
-      )}
 
       {hasNextPage && (
         <Button

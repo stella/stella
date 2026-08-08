@@ -1,4 +1,5 @@
 import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, taskAssignees } from "@/api/db/schema";
@@ -16,6 +17,20 @@ const isMyTasksStatus = (status: TaskStatus): status is MyTasksStatus =>
   status !== TASK_STATUS.CANCELLED;
 
 export const MY_TASKS_STATUSES = TASK_STATUSES.filter(isMyTasksStatus);
+
+const myTasksStatusSchemas = {
+  [TASK_STATUS.OPEN]: t.Literal(TASK_STATUS.OPEN),
+  [TASK_STATUS.IN_PROGRESS]: t.Literal(TASK_STATUS.IN_PROGRESS),
+  [TASK_STATUS.IN_REVIEW]: t.Literal(TASK_STATUS.IN_REVIEW),
+  [TASK_STATUS.DONE]: t.Literal(TASK_STATUS.DONE),
+} as const satisfies Record<MyTasksStatus, ReturnType<typeof t.Literal>>;
+
+export const myTasksStatusSchema = t.Union([
+  myTasksStatusSchemas[TASK_STATUS.OPEN],
+  myTasksStatusSchemas[TASK_STATUS.IN_PROGRESS],
+  myTasksStatusSchemas[TASK_STATUS.IN_REVIEW],
+  myTasksStatusSchemas[TASK_STATUS.DONE],
+]);
 
 export type MyTasksCursor = {
   entityId: SafeId<"entity">;

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,
+  shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 
 const baseOptions = {
@@ -86,5 +87,36 @@ describe("resolveComposerMenuShortcut", () => {
         key: "@",
       }),
     ).toBe(COMPOSER_MENU_SHORTCUT.context);
+  });
+});
+
+describe("shouldDrainSkillPages", () => {
+  test("keeps loading pages until a non-empty search reaches the end", () => {
+    expect(
+      shouldDrainSkillPages({
+        hasNextPage: true,
+        isFetchingNextPage: false,
+        open: true,
+        query: "conflict",
+      }),
+    ).toBe(true);
+
+    for (const options of [
+      { hasNextPage: false, isFetchingNextPage: false, open: true },
+      { hasNextPage: true, isFetchingNextPage: true, open: true },
+      { hasNextPage: true, isFetchingNextPage: false, open: false },
+    ]) {
+      expect(shouldDrainSkillPages({ ...options, query: "conflict" })).toBe(
+        false,
+      );
+    }
+    expect(
+      shouldDrainSkillPages({
+        hasNextPage: true,
+        isFetchingNextPage: false,
+        open: true,
+        query: "  ",
+      }),
+    ).toBe(false);
   });
 });

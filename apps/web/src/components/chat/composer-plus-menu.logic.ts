@@ -6,6 +6,21 @@ export const COMPOSER_MENU_SHORTCUT = {
 export type ComposerMenuShortcut =
   (typeof COMPOSER_MENU_SHORTCUT)[keyof typeof COMPOSER_MENU_SHORTCUT];
 
+type ShouldDrainSkillPagesOptions = {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  open: boolean;
+  query: string;
+};
+
+export const shouldDrainSkillPages = ({
+  hasNextPage,
+  isFetchingNextPage,
+  open,
+  query,
+}: ShouldDrainSkillPagesOptions): boolean =>
+  open && query.trim() !== "" && hasNextPage && !isFetchingNextPage;
+
 type ResolveComposerMenuShortcutOptions = {
   altKey: boolean;
   ctrlKey: boolean;

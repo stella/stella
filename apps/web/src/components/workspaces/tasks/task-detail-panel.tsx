@@ -314,6 +314,11 @@ const TaskDetailPanelContent = ({
             })(),
             "TaskDetailPanel",
           );
+        } else {
+          detached(
+            queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
+            "TaskDetailPanel",
+          );
         }
       }
     }
