@@ -38,7 +38,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * European Court of Justice (CJEU) adapter.
  *
  * Uses the Cellar SPARQL endpoint (no auth) to discover
- * decisions and EUR-Lex HTML for fulltext retrieval.
+ * decisions and Cellar's own content streams for their text.
  *
  * Flow:
  * 1. SPARQL query with date filter to list ECLIs + CELEX

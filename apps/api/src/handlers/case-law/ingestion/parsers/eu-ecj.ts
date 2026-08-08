@@ -290,10 +290,19 @@ export const ecjDocumentRoot = (
     if (ancestor === undefined) {
       continue;
     }
-    // A layout whose only marker is its own wrapper is its own common
-    // ancestor; the decision is then that wrapper's container.
+    // The oldest layout annotates nothing but its own wrapper, so its
+    // single marker is its own common ancestor and the decision is that
+    // wrapper's container. Every other layout marks the paragraphs, and
+    // a marked element that contains the rest is already the boundary:
+    // promoting past it would step back out into the carrying page.
     const parent = ancestor.parent;
-    if (marked.includes(ancestor) && parent !== null && isTag(parent)) {
+    if (
+      selector === LEGACY_DOCUMENT_CONTAINER &&
+      marked.length === 1 &&
+      marked.at(0) === ancestor &&
+      parent !== null &&
+      isTag(parent)
+    ) {
       return $(parent);
     }
     return $(ancestor);
