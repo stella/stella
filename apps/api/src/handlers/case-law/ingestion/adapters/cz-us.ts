@@ -33,7 +33,8 @@ const COMMON_HEADERS = {
  * Scrapes the NALUS database at nalus.usoud.cz through its public search UI.
  * NALUS has no JSON API, but its WebForms search is a complete, paginated
  * enumeration surface. Each result carries the court's exact GetText.aspx
- * identifier and its internal record id.
+ * identifier and its internal record id. The record id is the canonical
+ * document identity; the text identifier is an optional retrieval action.
  *
  * Never reconstruct a GetText identifier from a docket. Historical NALUS
  * identifiers use a different grammar, chamber numbering was not globally
@@ -51,8 +52,10 @@ const COMMON_HEADERS = {
  */
 
 const ABSTRACT_URL = "https://nalus.usoud.cz/Search/GetAbstract.aspx";
+const RESULT_DETAIL_URL = "https://nalus.usoud.cz/Search/ResultDetail.aspx";
 const SEARCH_URL = "https://nalus.usoud.cz/Search/Search.aspx";
 const RESULTS_URL = "https://nalus.usoud.cz/Search/Results.aspx";
+const TEXT_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
 
 /** Largest result size that keeps one page's text fetches reasonably bounded. */
 const RESULTS_PAGE_SIZE = 40;
@@ -297,6 +300,7 @@ type ParseDecisionPageOptions = {
   listedEcli: string | undefined;
   listedCounter: number | undefined;
   nalusRecordId: string;
+  nalusSz: string | undefined;
 };
 
 const parseDecisionPage = ({
@@ -306,6 +310,7 @@ const parseDecisionPage = ({
   listedEcli,
   listedCounter,
   nalusRecordId,
+  nalusSz,
 }: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
@@ -383,6 +388,7 @@ const parseDecisionPage = ({
       popularName: popularName || undefined,
       ecliCounter,
       nalusRecordId,
+      nalusSz,
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
@@ -420,7 +426,7 @@ type ListedDecision = {
   sourceDocumentId: string;
   nalusRecordId: string;
   sourceUrl: string;
-  sz: string;
+  sz?: string | undefined;
   ecli?: string | undefined;
 };
 
@@ -745,35 +751,40 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
         linkAction ?? "",
       )?.groups?.["url"];
-    if (!nalusRecordId || !rawUrl) {
-      throw new TypeError("NALUS result row is missing document identity");
+    if (!nalusRecordId) {
+      throw new TypeError("NALUS result row is missing its record identity");
     }
-    const url = new URL(rawUrl);
-    url.port = "";
-    const sz = url.searchParams.get("sz");
-    if (!sz) {
-      throw new TypeError("NALUS result row is missing its sz identifier");
+    let sz: string | undefined;
+    if (rawUrl) {
+      try {
+        sz = new URL(rawUrl).searchParams.get("sz") ?? undefined;
+      } catch {
+        // A malformed or withdrawn text action does not erase the stable
+        // ResultDetail record identity exposed by the listing.
+      }
     }
     const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
     const registrySign = detail.text();
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
       "counter"
     ];
-    const szCounter = /_(?<counter>\d+)$/u.exec(sz)?.groups?.["counter"];
+    const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
     const caseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     if (!caseNumber) {
       throw new TypeError("NALUS result row is missing its docket");
     }
+    const sourceUrl = new URL(sz ? TEXT_URL : RESULT_DETAIL_URL);
+    sourceUrl.searchParams.set(sz ? "sz" : "id", sz ?? nalusRecordId);
     listed.push({
       caseNumber,
       counter:
         counterText === undefined && szCounter === undefined
           ? 1
           : Number.parseInt(counterText ?? szCounter ?? "1", 10),
-      sourceDocumentId: `nalus:${sz}`,
+      sourceDocumentId: `nalus-record:${nalusRecordId}`,
       nalusRecordId,
-      sourceUrl: url.href,
-      sz,
+      sourceUrl: sourceUrl.href,
+      ...(sz === undefined ? {} : { sz }),
       ecli,
     });
   });
@@ -873,6 +884,9 @@ const fetchListedDecision = async (
   listed: ListedDecision,
   signal: AbortSignal | undefined,
 ): Promise<IngestionResult> => {
+  if (listed.sz === undefined) {
+    return listedOnlyDecision(listed, "missing-text-action");
+  }
   const response = await fetchWithTimeout(listed.sourceUrl, {
     headers: COMMON_HEADERS,
     signal,
@@ -894,6 +908,7 @@ const fetchListedDecision = async (
     listedEcli: listed.ecli,
     listedCounter: listed.counter,
     nalusRecordId: listed.nalusRecordId,
+    nalusSz: listed.sz,
   });
   if (!decision) {
     return listedOnlyDecision(listed, "unparseable-detail", responseHtml);
@@ -951,6 +966,7 @@ const listedOnlyDecision = (
     ecli: listed.ecli,
     court: "Ústavní soud",
     nalusRecordId: listed.nalusRecordId,
+    nalusSz: listed.sz,
     listedOnly: true,
     listedOnlyReason: reason,
   },

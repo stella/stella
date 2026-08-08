@@ -373,6 +373,20 @@ publisher's exact no-results state is present. Fail closed on unknown markup.
 These rules let a later parser or source fix enrich the same row rather than
 leaving an invisible hole or creating a duplicate.
 
+### 21. Rebuild fetch URLs from a trusted origin
+
+Treat every URL embedded in publisher HTML or JSON as untrusted input. When an
+adapter expects a known endpoint, extract only the opaque publisher identifier
+and construct the request from a fixed HTTPS origin and path. Do not fetch an
+absolute action URL merely because its pathname contains the expected endpoint:
+a compromised result page could point the ingestion worker at a private or
+metadata service.
+
+Some publishers intentionally use several document hosts. In that case declare
+the exact allowed origins in the adapter and reject everything else before any
+request. Redirect handling needs the same boundary; a trusted start URL is not
+enough if the client can follow it to an arbitrary origin.
+
 ## DocumentAst Conventions
 
 ```typescript
@@ -428,6 +442,8 @@ When adding a new country adapter:
     cannot leave a date gap (rule 19)
 13. **Preserve listed-only records** — test a permanent missing/unparseable
     detail and an unrecognised HTTP 200 search response (rule 20)
+14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
+    test every publisher-declared origin against an explicit allowlist (rule 21)
 
 ## File Map
 

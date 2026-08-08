@@ -11,6 +11,7 @@ type ResultRow = {
   caseNumber: string;
   date: string;
   ecli?: string | undefined;
+  textUrl?: string | null | undefined;
 };
 
 const makeSearchForm = (): string => `
@@ -67,13 +68,17 @@ const makeResultsPage = (
   const body = rows
     .map((row, index) => {
       const counter = /_(?<counter>\d+)$/u.exec(row.sz)?.groups?.["counter"];
+      const textUrl =
+        row.textUrl === undefined
+          ? `https://nalus.usoud.cz:443/Search/GetText.aspx?sz=${row.sz}`
+          : row.textUrl;
       return `
 <tr class='resultData${index % 2}'>
   <td></td>
   <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${index % 2}' valign="top">
-  <td><img onclick='javascript:ShowLink("https://nalus.usoud.cz:443/Search/GetText.aspx?sz=${row.sz}", "Odkaz", "")' /></td>
+  <td>${textUrl ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />` : ""}</td>
 </tr>`;
     })
     .join("");
@@ -115,6 +120,7 @@ type MockSearchOptions = {
   detailStatus?: number;
   unparseableDetail?: boolean;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
+  onDetail?: (url: URL) => void;
 };
 
 const installSearchMock = ({
@@ -128,6 +134,7 @@ const installSearchMock = ({
   detailStatus = 200,
   unparseableDetail = false,
   onPost,
+  onDetail,
 }: MockSearchOptions): void => {
   const bySz = new Map(rows.map((row) => [row.sz, row]));
   globalThis.fetch = asFetchMock(
@@ -161,6 +168,7 @@ const installSearchMock = ({
         );
       }
       if (url.pathname.endsWith("/Search/GetText.aspx")) {
+        onDetail?.(url);
         const row = bySz.get(url.searchParams.get("sz") ?? "");
         const counterText =
           row === undefined
@@ -279,7 +287,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
-    ).toEqual(["nalus:1-1-1993", "nalus:2-1-1993", "nalus:Pl-1-1993"]);
+    ).toEqual(["nalus-record:1001", "nalus-record:1002", "nalus-record:1003"]);
     expect(page.nextCursor).toBe(historicalCursor(1994));
     expect(page.coverage).toEqual({
       slice: "decision-year:1993",
@@ -317,7 +325,7 @@ describe("czUsAdapter.fetchPage", () => {
     ]);
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
-    ).toEqual(["nalus:1-42-24_1", "nalus:1-42-24_2"]);
+    ).toEqual(["nalus-record:2001", "nalus-record:2002"]);
     expect(page.decisions.map(({ ecli }) => ecli)).toEqual([
       "ECLI:CZ:US:2024:1.US.42.24.1",
       "ECLI:CZ:US:2024:1.US.42.24.2",
@@ -558,7 +566,7 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     const decision = page.decisions[0];
-    expect(decision?.sourceDocumentId).toBe("nalus:Pl-14-24_1");
+    expect(decision?.sourceDocumentId).toBe("nalus-record:6001");
     expect(decision?.legacySourceUrls).toEqual([
       "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-14-24_1",
     ]);
@@ -598,6 +606,63 @@ describe("czUsAdapter.fetchPage", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
+  test("rebuilds text URLs from the trusted NALUS origin", async () => {
+    let requestedDetail: URL | undefined;
+    installSearchMock({
+      rows: [
+        {
+          id: "7101",
+          sz: "1-78-24_1",
+          caseNumber: "I.ÚS 78/24",
+          date: "2. 1. 2024",
+          textUrl: "http://169.254.169.254/latest/GetText.aspx?sz=1-78-24_1",
+        },
+      ],
+      onDetail: (url) => {
+        requestedDetail = url;
+      },
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(requestedDetail?.origin).toBe("https://nalus.usoud.cz");
+    expect(page.decisions[0]?.sourceUrl).toBe(
+      "https://nalus.usoud.cz/Search/GetText.aspx?sz=1-78-24_1",
+    );
+  });
+
+  test("persists a listed identity with no text action", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "7201",
+          sz: "withdrawn-action-is-not-listed",
+          caseNumber: "Pl.ÚS 9/24",
+          date: "3. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions[0]).toMatchObject({
+      caseNumber: "Pl.ÚS 9/24",
+      sourceDocumentId: "nalus-record:7201",
+      sourceUrl: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=7201",
+      metadata: {
+        nalusRecordId: "7201",
+        listedOnly: true,
+        listedOnlyReason: "missing-text-action",
+      },
+    });
+    expect(page.coverage?.collected).toBe(1);
+  });
+
   test("persists a listed identity when its detail is permanently unparseable", async () => {
     installSearchMock({
       rows: [
@@ -616,7 +681,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "I.ÚS 77/24",
-      sourceDocumentId: "nalus:1-77-24_1",
+      sourceDocumentId: "nalus-record:7001",
       legacySourceUrls: [
         "https://nalus.usoud.cz/Search/GetText.aspx?sz=I-77-24_1",
       ],
