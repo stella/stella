@@ -427,15 +427,23 @@ const readOverviewActivity = createSafeHandler(
       eq(auditLogs.organizationId, session.activeOrganizationId),
       eq(auditLogs.workspaceId, workspaceId),
       inArray(auditLogs.action, VISIBLE_ACTIONS),
+      // "other" is housekeeping — session expiry, retention sweeps — and stays
+      // out of the matter's story no matter who performed it. Testing the
+      // performer on its own let any service-performed row skip that exclusion,
+      // so a scheduler task expiring a desktop edit session read as matter
+      // activity. The performer test only rescues rows written before
+      // activityCategory existed.
       or(
         and(
           isNotNull(auditLogs.activityCategory),
           ne(auditLogs.activityCategory, "other"),
         ),
-        ne(auditLogs.performerType, "user"),
         and(
           isNull(auditLogs.activityCategory),
-          inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
+          or(
+            ne(auditLogs.performerType, "user"),
+            inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
+          ),
         ),
       ),
     ];
