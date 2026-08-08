@@ -469,11 +469,31 @@ const CONTRACT_CORPUS = {
       }),
       tx: () => ({
         query: {
+          entities: {
+            findFirst: async () => ({
+              workspaceId: WS,
+              kind: "document",
+              name: "NDA draft",
+              currentVersion: {
+                id: uid(60),
+                createdAt: new Date("2026-01-01"),
+                fields: [],
+              },
+            }),
+          },
+          entityVersions: {
+            findFirst: async () => ({ id: uid(60) }),
+          },
           extractedContent: {
             findFirst: async () => ({
               charCount: 14,
               ciphertext: "cipher",
+              extractedAt: new Date("2026-01-02"),
               iv: "iv",
+              sourceEntityVersionId: null,
+              sourceFieldId: null,
+              sourceFileId: null,
+              sourceSha256Hex: null,
               entity: { kind: "document", name: "NDA draft", workspaceId: WS },
             }),
           },
@@ -545,11 +565,14 @@ const CONTRACT_CORPUS = {
         query: {
           entities: {
             findFirst: async () => ({
+              createdAt: new Date("2025-12-01"),
               workspaceId: WS,
               kind: "document",
               name: "NDA draft",
+              updatedAt: new Date("2026-01-01"),
               currentVersion: {
                 id: uid(17),
+                createdAt: new Date("2026-01-01"),
                 fields: [
                   {
                     id: uid(18),
@@ -566,9 +589,8 @@ const CONTRACT_CORPUS = {
                       version: 1,
                       type: "file",
                       id: uid(63),
-                      fileName: "NDA draft.docx",
-                      mimeType:
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      fileName: "NDA draft.pdf",
+                      mimeType: "application/pdf",
                       sizeBytes: 12_345,
                       encrypted: false,
                       sha256Hex: "a".repeat(64),
@@ -579,6 +601,24 @@ const CONTRACT_CORPUS = {
               },
             }),
           },
+          documentProcessingRuns: { findMany: async () => [] },
+          entityVersions: {
+            findFirst: async () => ({ id: uid(17) }),
+          },
+          extractedContent: {
+            findFirst: async () => ({
+              charCount: 0,
+              extractedAt: new Date("2026-01-01"),
+              sourceEntityVersionId: uid(17),
+              sourceFieldId: uid(61),
+              sourceFileId: uid(63),
+              sourceSha256Hex: "a".repeat(64),
+            }),
+          },
+          organizationSettings: {
+            findFirst: async () => ({ documentProcessingMode: "off" }),
+          },
+          searchDocuments: { findFirst: async () => undefined },
         },
         select: selectQueue([
           [
@@ -593,7 +633,12 @@ const CONTRACT_CORPUS = {
           ],
         ]),
       }),
-      expectRefPaths: ["entityId", "fields[].propertyId"],
+      expectRefPaths: [
+        "entityId",
+        "fields[].propertyId",
+        "contentState.remediation.arguments.input.params.workspaceId",
+        "contentState.remediation.arguments.input.params.entityId",
+      ],
     },
     {
       mode: "specific version",

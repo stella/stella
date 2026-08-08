@@ -422,8 +422,11 @@ const documentContentStateProjection = v.variant("status", [
           capability: v.literal("entities.ocr.create"),
           input: v.strictObject({
             params: v.strictObject({
-              workspaceId: passthroughId(),
-              entityId: passthroughId(),
+              workspaceId: chatRef("matter"),
+              entityId: chatEntityRef({
+                from: "inputEntity",
+                param: "entity_id",
+              }),
             }),
             body: v.strictObject({ fieldId: passthroughId() }),
           }),
