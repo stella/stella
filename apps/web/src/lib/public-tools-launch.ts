@@ -1,5 +1,5 @@
 import { env } from "@/env";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { betaFeaturesHostDefaultEnabled } from "@/lib/beta-features";
 
 // Beta hosts always serve the /tools routes; the env flag governs
 // production. The gate must resolve identically on server and client
@@ -8,7 +8,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 export const isPublicToolsRouteEnabled = (): boolean =>
   import.meta.env.DEV ||
   env.VITE_PUBLIC_TOOLS_ENABLED ||
-  betaFeaturesAvailable();
+  betaFeaturesHostDefaultEnabled();
 
 // Sitemap XML serving: a deployment builds and serves the tools sitemap
 // once the public-tools surface is indexing-ready. This is independent of

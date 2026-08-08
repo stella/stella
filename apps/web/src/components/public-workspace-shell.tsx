@@ -48,7 +48,7 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { HOTKEYS } from "@/lib/hotkeys";
-import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
+import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
@@ -174,7 +174,7 @@ function PublicSidebar({
   // toggle is browser-only and would mismatch hydration. The host/env
   // gate is isomorphic, and anyone rendering this shell passed it.
   const primaryNavItems = getWorkspacePrimaryNavItems({
-    includePublicLaw: isPublicLawRouteEnabled(),
+    includePublicLaw: isPublicLawSsrRouteEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
   });
 

@@ -192,6 +192,16 @@ export const chatMessages = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
     content: jsonb().notNull().$type<PersistedChatMessageContent>(),
+    // Captured when content is written. Compactions spanning an opted-out
+    // message remain permanently ineligible for later memory extraction,
+    // even if the deployment feature is enabled again before compaction.
+    memoryExtractionEligible: p
+      .boolean("memory_extraction_eligible")
+      .notNull()
+      // Fail closed for any future writer that does not make an explicit
+      // eligibility decision. Existing rows are backfilled as eligible by the
+      // migration because they predate the deployment opt-out boundary.
+      .default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

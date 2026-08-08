@@ -30,6 +30,7 @@ import {
   CANARY_TIERS,
   CANARY_PROVIDERS,
   modelRoleMaxOutputTokens,
+  structuredOutputModelRoleMaxOutputTokens,
   NEVER_MATCH_PATTERN,
   NULL_WIDENING_CANARY_PROVIDERS,
   weeklyCanaryRotation,
@@ -791,7 +792,7 @@ const runStructuredOutputModelRoleProbe = async ({
   await generateTanStackObjectForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens(role),
     organizationId: null,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
@@ -846,7 +847,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
   await generateTanStackObjectForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens(role),
     organizationId: null,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,

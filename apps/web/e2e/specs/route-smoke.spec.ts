@@ -130,7 +130,9 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/account/beta", { expectation: { kind: "settles" } }),
   staticRoute("/settings/account/connections"),
   staticRoute("/settings/account/desktop"),
-  staticRoute("/settings/account/memory"),
+  staticRoute("/settings/account/memory", {
+    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
+  }),
   staticRoute("/settings/account/profile"),
   staticRoute("/settings/organization", {
     expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
@@ -172,6 +174,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   {
     template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
+    expectation: { kind: "redirectsTo", to: "" },
   },
   {
     template: "/workspaces/$workspaceId/timesheets",

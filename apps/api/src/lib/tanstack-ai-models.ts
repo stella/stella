@@ -1189,6 +1189,9 @@ const tanStackAnthropicModelOptionsForRole = ({
       modelId,
       requested: reasoningEffort,
     });
+    if (effort === "none") {
+      return { thinking: { type: "disabled" } };
+    }
     if (effort !== null && isAnthropicReasoningEffort(effort)) {
       return {
         thinking: anthropicThinkingForModel(modelId),

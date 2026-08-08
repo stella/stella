@@ -1418,6 +1418,7 @@ const TemplateStudioChatInner = ({
           ]}
           queueWhileGenerating
           sendDisabledReason={editorReady ? undefined : "editor-loading"}
+          skillsOrganizationId={activeOrganizationId}
           status={isGenerating ? "generating" : "idle"}
           threadHasMessages={hasMessages}
           dock={

@@ -37,6 +37,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -44,6 +45,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { localISODate } from "@/lib/local-iso-date";
 import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteInfiniteQueryData,
@@ -51,6 +53,7 @@ import {
 } from "@/lib/react-query";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { LegacyTodosPage } from "@/routes/_protected.todos/-legacy-page";
 import type {
   MyWorkItem,
   MyWorkQueue,
@@ -60,8 +63,15 @@ import { getDisplayedWorkDate } from "@/routes/_protected.todos/-task-row.logic"
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+const TodosPage = () =>
+  env.VITE_FEATURE_GOVERNED_WORKFLOW ? <MyWorkPage /> : <LegacyTodosPage />;
+
 export const Route = createFileRoute("/_protected/todos/")({
   loader: async ({ context }) => {
+    if (!env.VITE_FEATURE_GOVERNED_WORKFLOW) {
+      return;
+    }
+
     await Promise.all([
       ensureRouteInfiniteQueryData(
         context.queryClient,
@@ -76,7 +86,7 @@ export const Route = createFileRoute("/_protected/todos/")({
   head: () => ({
     meta: [{ title: pageTitle("navigation.myTodos") }],
   }),
-  component: MyTodosPage,
+  component: TodosPage,
 });
 
 const STATUS_COLORS: Record<string, string> = {
@@ -136,15 +146,7 @@ const groupByWorkspace = (tasks: readonly MyWorkItem[]): GroupedTasks[] => {
   return Array.from(map.values());
 };
 
-const localISODate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-function MyTodosPage() {
+function MyWorkPage() {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();

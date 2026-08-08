@@ -342,7 +342,6 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
-    reservedCommands: true,
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
     threadRef,

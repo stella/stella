@@ -343,7 +343,6 @@ export const ChatTabPanel = ({
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
-    reservedCommands: true,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -552,6 +551,8 @@ export const ChatTabPanel = ({
             }}
             pendingCount={0}
             queueWhileGenerating
+            reservedCommands
+            skillsOrganizationId={activeOrganizationId}
             status={isGenerating ? "generating" : "idle"}
             dock={
               <ChatComposerDock

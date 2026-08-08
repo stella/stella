@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { env } from "@/api/env";
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -21,9 +22,11 @@ import readLists from "@/api/handlers/lists/list";
 import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
+  .use(deploymentFeatureGate(env.isDev || env.FEATURE_LEGAL_LISTS))
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)

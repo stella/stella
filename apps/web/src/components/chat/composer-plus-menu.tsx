@@ -65,6 +65,7 @@ import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control
 import {
   COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,
+  shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
@@ -110,6 +111,7 @@ export type ComposerModelsMenuProps = {
 export type ComposerSkillsMenuProps = {
   activeOrganizationId: string;
   editor: Editor | null;
+  includeReservedCommands?: boolean | undefined;
 };
 
 /** Enables and drives the Context submenu: reference a matter, or a file
@@ -173,9 +175,9 @@ export const ComposerPlusMenu = ({
   const hasContextShortcut = context !== undefined;
 
   // The menu owns its editor shortcuts. Any composer that renders a Skills
-  // submenu therefore gets the same blank-composer "/" behavior without a
-  // second surface-level flag or key handler that can drift. Capture runs
-  // before TipTap's legacy slash/mention suggestion plugins on the editor DOM.
+  // submenu therefore gets the same "/" behavior at any cursor position
+  // without a second surface-level key handler that can drift. The slash is
+  // consumed here and the unified Skills submenu owns filtering.
   useExternalSyncEffect(() => {
     if (!shortcutEditor || shortcutEditor.isDestroyed) {
       return undefined;
@@ -531,12 +533,8 @@ const itemKey = (item: SlashItem): string => {
   return `command-${item.command.id}`;
 };
 
-/** Secondary, muted line under an item's name — mirrors the `/`-suggestion
- *  list's row shape (prompt body / skill description) so both surfaces
- *  read as one consistent picker. This submenu's items never include
- *  reserved commands (`buildChatSlashItems` is called without
- *  `includeReservedCommands`), so the command branch is unreachable here
- *  but kept for exhaustiveness with `SlashItem`. */
+/** Secondary, muted line under an item's name, mirroring the former
+ *  `/`-suggestion list's row shape (prompt body / skill description). */
 const itemSecondary = (item: SlashItem): string => {
   if (item.kind === "prompt") {
     return item.prompt.body;
@@ -564,7 +562,7 @@ const ComposerSkillsSubmenu = ({
 }) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const { activeOrganizationId, editor } = skills;
+  const { activeOrganizationId, editor, includeReservedCommands } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -583,15 +581,33 @@ const ComposerSkillsSubmenu = ({
     () => commandShortcutRowsFromSkillPages(data?.pages),
     [data?.pages],
   );
-  // `includeReservedCommands` defaults to false, so `/new`
-  // never appear here — only saved prompts and enabled skills.
   const items = useMemo(
     () =>
-      buildChatSlashItems({ shortcuts: shortcutRows, skillPages: data?.pages }),
-    [shortcutRows, data?.pages],
+      buildChatSlashItems({
+        shortcuts: shortcutRows,
+        skillPages: data?.pages,
+        ...(includeReservedCommands === undefined
+          ? {}
+          : { includeReservedCommands }),
+      }),
+    [includeReservedCommands, shortcutRows, data?.pages],
   );
 
   const query = search.trim().toLowerCase();
+  useExternalSyncEffect(() => {
+    if (
+      !shouldDrainSkillPages({
+        hasNextPage,
+        isFetchingNextPage,
+        open,
+        query,
+      })
+    ) {
+      return;
+    }
+    detached(fetchNextPage(), "ComposerSkillsSubmenu.search");
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, open, query]);
+
   const filteredItems = query
     ? items.filter((item) => itemName(item).toLowerCase().includes(query))
     : items;
@@ -605,6 +621,14 @@ const ComposerSkillsSubmenu = ({
 
   let skillItemsContent: React.ReactNode;
   if (isLoadingSkills) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (
+    filteredItems.length === 0 &&
+    query !== "" &&
+    (hasNextPage || isFetchingNextPage)
+  ) {
     skillItemsContent = (
       <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
     );

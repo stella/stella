@@ -29,7 +29,6 @@ import {
   isTaskPriority,
   isListItemType,
   isTaskStatus,
-  localISODate,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import {
@@ -48,6 +47,7 @@ import {
   WorkTypeSelect,
 } from "@/components/workspaces/tasks/task-metadata";
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
+import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -56,10 +56,12 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
+import { myTasksKeys } from "@/lib/workspaces/queries/my-tasks";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
 import type {
@@ -154,6 +156,7 @@ const TaskDetailPanelContent = ({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
         queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+        queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
         queryClient.invalidateQueries({
           queryKey: legalListKeys.all(workspaceId),
         }),
@@ -171,6 +174,7 @@ const TaskDetailPanelContent = ({
         queryKey: taskKeys.detail(workspaceId, taskId),
       }),
       queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+      queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       }),
@@ -294,6 +298,9 @@ const TaskDetailPanelContent = ({
                   queryClient.invalidateQueries({
                     queryKey: workspacesKeys.overview(workspaceId),
                   }),
+                  queryClient.invalidateQueries({
+                    queryKey: myTasksKeys.all,
+                  }),
                 ]);
               } catch (error: unknown) {
                 analytics.captureError(error);
@@ -305,6 +312,11 @@ const TaskDetailPanelContent = ({
                 );
               }
             })(),
+            "TaskDetailPanel",
+          );
+        } else {
+          detached(
+            queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
             "TaskDetailPanel",
           );
         }
@@ -350,7 +362,11 @@ const TaskDetailPanelContent = ({
   };
 
   const handleDueDateChange = (value: string | null) => {
-    workflowMutation.mutate({ workingTargetDate: value });
+    if (env.VITE_FEATURE_GOVERNED_WORKFLOW) {
+      workflowMutation.mutate({ workingTargetDate: value });
+      return;
+    }
+    updateMutation.mutate({ taskId, dueDate: value });
   };
 
   const handleItemTypeChange = (value: ListItemType | null) => {
@@ -493,7 +509,9 @@ const TaskDetailPanelContent = ({
       sourceEntity: NonNullable<typeof link.sourceEntity>;
     } => link.sourceEntity !== null,
   );
-  const workflow = task.workObligation;
+  const workflow = env.VITE_FEATURE_GOVERNED_WORKFLOW
+    ? task.workObligation
+    : null;
   const hardDeadlineDate = toISODate(workflow?.hardDeadlineDate);
   const hardDeadlineOverdue =
     hardDeadlineDate.length > 0 &&
@@ -595,13 +613,15 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
-          <MetadataRow label={tCommon("type")}>
-            <ItemTypeSelect
-              ariaLabel={tCommon("type")}
-              onChange={handleItemTypeChange}
-              value={currentItemType}
-            />
-          </MetadataRow>
+          {env.VITE_FEATURE_LEGAL_LISTS && (
+            <MetadataRow label={tCommon("type")}>
+              <ItemTypeSelect
+                ariaLabel={tCommon("type")}
+                onChange={handleItemTypeChange}
+                value={currentItemType}
+              />
+            </MetadataRow>
+          )}
 
           <MetadataRow label={t("status")}>
             <StatusSelect onChange={handleStatusChange} value={currentStatus} />

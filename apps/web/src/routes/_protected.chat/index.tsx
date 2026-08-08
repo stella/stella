@@ -104,7 +104,6 @@ function ChatIndex() {
     threadId: draftThreadId,
   };
   const controller = useChatEditor({
-    reservedCommands: true,
     threadRef,
   });
   const prompts = useSavedPrompts();

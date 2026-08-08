@@ -670,7 +670,8 @@ describe("public law sitemap", () => {
     expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
     // The server-rendered shell must use the isomorphic host/env gate;
     // the browser-only preview hook would mismatch hydration there.
-    expect(publicShellSource).toContain("isPublicLawRouteEnabled");
+    expect(publicShellSource).toContain("isPublicLawSsrRouteEnabled");
+    expect(publicShellSource).not.toContain("isPublicLawRouteEnabled");
     expect(publicShellSource).not.toContain("usePublicLawPreviewEnabled");
   });
 

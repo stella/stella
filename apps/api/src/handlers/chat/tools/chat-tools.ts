@@ -2,6 +2,7 @@ import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import {
   CHAT_EDIT_APPLY_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -291,6 +292,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 type GetChatToolsProps = {
+  /** Deployment gate; injectable so both disabled and enabled toolsets test. */
+  memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
@@ -457,6 +460,13 @@ type GetChatToolsProps = {
    * the model still receives exactly one DOCX edit tool.
    */
   includeAllDocxEditToolsForValidation?: boolean | undefined;
+  /**
+   * Validation-only compatibility for persisted turns. Historical `remember`
+   * calls must remain schema-valid after the deployment feature is disabled,
+   * even though the live provider toolset must no longer advertise or execute
+   * the tool.
+   */
+  includeRememberToolForValidation?: boolean | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -614,6 +624,7 @@ export type ApprovalRequiredBuiltInChatToolName = {
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
+    memoryEnabled = env.FEATURE_AI_MEMORY,
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -644,6 +655,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     includeAllDocxEditToolsForValidation = false,
+    includeRememberToolForValidation = false,
   } = props;
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -753,6 +765,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // (schema-only construction) get no remember tool rather than an
   // unaudited or cross-matter write path.
   const rememberTools =
+    !(memoryEnabled || includeRememberToolForValidation) ||
     recordAuditEvent === undefined ||
     resolveMemorySourceWorkspaceIds === undefined
       ? {}

@@ -1,14 +1,17 @@
 import Elysia from "elysia";
 
+import { env } from "@/api/env";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const workObligationsRoute = new Elysia({
   prefix: "/work-obligations/:workspaceId",
 })
+  .use(deploymentFeatureGate(env.isDev || env.FEATURE_GOVERNED_WORKFLOW))
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)

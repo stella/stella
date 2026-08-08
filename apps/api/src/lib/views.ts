@@ -1,6 +1,7 @@
 import { conditionIncludesKind } from "@stll/conditions";
 
 import type { EntityKind } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
@@ -80,78 +81,96 @@ export const excludedEntityKindsForView = (
   viewIncludesListItems(filters) ? ["folder"] : ["folder", "task"];
 
 const VIEW_NAMES = {
-  en: { overview: "Overview", table: "Table", files: "Files", lists: "Lists" },
+  en: {
+    overview: "Overview",
+    table: "Table",
+    files: "Files",
+    lists: "Lists",
+    todos: "Todos",
+  },
   ar: {
     overview: "نظرة عامة",
     table: "جدول",
     files: "الملفات",
     lists: "القوائم",
+    todos: "المهام",
   },
   cs: {
     overview: "Přehled",
     table: "Tabulka",
     files: "Soubory",
     lists: "Seznamy",
+    todos: "Úkoly",
   },
   de: {
     overview: "Übersicht",
     table: "Tabelle",
     files: "Dateien",
     lists: "Listen",
+    todos: "Aufgaben",
   },
   es: {
     overview: "Resumen",
     table: "Tabla",
     files: "Archivos",
     lists: "Listas",
+    todos: "Tareas",
   },
   et: {
     overview: "Ülevaade",
     table: "Tabel",
     files: "Failid",
     lists: "Loendid",
+    todos: "Ülesanded",
   },
   fr: {
     overview: "Aperçu",
     table: "Tableau",
     files: "Fichiers",
     lists: "Listes",
+    todos: "Tâches",
   },
   hu: {
     overview: "Áttekintés",
     table: "Táblázat",
     files: "Fájlok",
     lists: "Listák",
+    todos: "Feladatok",
   },
   lt: {
     overview: "Apžvalga",
     table: "Lentelė",
     files: "Failai",
     lists: "Sąrašai",
+    todos: "Užduotys",
   },
   lv: {
     overview: "Pārskats",
     table: "Tabula",
     files: "Faili",
     lists: "Saraksti",
+    todos: "Uzdevumi",
   },
   pl: {
     overview: "Przegląd",
     table: "Tabela",
     files: "Pliki",
     lists: "Listy",
+    todos: "Zadania",
   },
   "pt-BR": {
     overview: "Visão geral",
     table: "Tabela",
     files: "Arquivos",
     lists: "Listas",
+    todos: "Tarefas",
   },
   sk: {
     overview: "Prehľad",
     table: "Tabuľka",
     files: "Súbory",
     lists: "Zoznamy",
+    todos: "Úlohy",
   },
 } as const satisfies Record<SupportedLang, Record<string, string>>;
 
@@ -159,11 +178,15 @@ const VIEW_NAMES = {
  * Templates for default views. Use `getDefaultViews(lang)` to
  * get localized view definitions.
  */
-const DEFAULT_VIEW_TEMPLATES: readonly DefaultViewTemplate[] = [
+const defaultViewTemplates = (
+  legalListsEnabled: boolean,
+): readonly DefaultViewTemplate[] => [
   { nameKey: "overview", layout: emptyLayout("overview"), position: 0 },
   { nameKey: "table", layout: emptyLayout("table"), position: 1 },
   { nameKey: "files", layout: emptyLayout("filesystem"), position: 2 },
-  { nameKey: "lists", layout: listLayout(), position: 3 },
+  legalListsEnabled
+    ? { nameKey: "lists", layout: listLayout(), position: 3 }
+    : { nameKey: "todos", layout: listLayout(), position: 3 },
 ];
 
 type DefaultView = {
@@ -173,6 +196,7 @@ type DefaultView = {
 };
 
 type GetDefaultViewsOptions = {
+  legalListsEnabled?: boolean;
   tableColumnPinning?: string[];
 };
 
@@ -207,7 +231,10 @@ export const getDefaultViews = (
   options: GetDefaultViewsOptions = {},
 ): DefaultView[] => {
   const names = VIEW_NAMES[lang];
-  return DEFAULT_VIEW_TEMPLATES.map((tmpl) => ({
+  const templates = defaultViewTemplates(
+    options.legalListsEnabled ?? env.FEATURE_LEGAL_LISTS,
+  );
+  return templates.map((tmpl) => ({
     name: names[tmpl.nameKey],
     layout: cloneDefaultLayout(tmpl.layout, options),
     position: tmpl.position,
@@ -254,13 +281,12 @@ export const buildDefaultViewRows = ({
   }));
 
 // A default view's layout type → its VIEW_NAMES key.
-const LAYOUT_TYPE_TO_NAME_KEY: Partial<
+const BASE_LAYOUT_TYPE_TO_NAME_KEY: Partial<
   Record<ViewLayoutType, keyof typeof VIEW_NAMES.en>
 > = {
   overview: "overview",
   table: "table",
   filesystem: "files",
-  kanban: "lists",
 };
 
 const LEGACY_TODO_VIEW_NAMES = [
@@ -290,15 +316,19 @@ const DEFAULT_NAME_SETS: Record<
     table: new Set<string>(),
     files: new Set<string>(),
     lists: new Set<string>(),
+    todos: new Set<string>(),
   };
   for (const names of Object.values(VIEW_NAMES)) {
     sets.overview.add(names.overview);
     sets.table.add(names.table);
     sets.files.add(names.files);
     sets.lists.add(names.lists);
+    sets.todos.add(names.todos);
+    sets.todos.add(names.lists);
   }
   for (const legacyName of LEGACY_TODO_VIEW_NAMES) {
     sets.lists.add(legacyName);
+    sets.todos.add(legacyName);
   }
   return sets;
 })();
@@ -344,15 +374,20 @@ export const normalizeDefaultViewLayout = ({
  * re-localized on read. Acceptable given the low collision likelihood.
  */
 export const localizeDefaultViewName = ({
+  legalListsEnabled = env.FEATURE_LEGAL_LISTS,
   lang,
   layoutType,
   name,
 }: {
+  legalListsEnabled?: boolean;
   lang: SupportedLang;
   layoutType: ViewLayoutType;
   name: string;
 }): string => {
-  const nameKey = LAYOUT_TYPE_TO_NAME_KEY[layoutType];
+  let nameKey = BASE_LAYOUT_TYPE_TO_NAME_KEY[layoutType];
+  if (layoutType === "kanban") {
+    nameKey = legalListsEnabled ? "lists" : "todos";
+  }
   if (nameKey === undefined || !DEFAULT_NAME_SETS[nameKey].has(name)) {
     return name;
   }

@@ -1640,7 +1640,6 @@ const FileChatOverlayInner = ({
 
   const editorController = useChatEditor({
     placeholder: filePlaceholder,
-    reservedCommands: true,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -2261,6 +2260,7 @@ const FileChatOverlayInner = ({
             selectedReasoningEffort: data.reasoningEffort,
             selectModel: modelSelection.selectModel,
           }}
+          reservedCommands
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
             (activeFile || activeDraft || activeExternal) &&

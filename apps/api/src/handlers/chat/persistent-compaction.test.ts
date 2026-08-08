@@ -6,7 +6,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   applyChatCompactionCheckpoint,
   chatCompactionSnapshotMessagesEqual,
+  memoryExtractionExclusionStamp,
   shouldInvalidateChatCompactionCheckpoint,
+  summarizedMessagesAreMemoryEligible,
 } from "./persistent-compaction";
 
 const message = (id: string, text: string): ChatMessage => ({
@@ -163,5 +165,24 @@ describe("persistent chat compaction", () => {
         persistencePlan: { type: "insert" },
       }),
     ).toBe(false);
+  });
+
+  test("permanently excludes checkpoints created while memory is disabled", () => {
+    const createdAt = new Date("2026-08-08T08:00:00.000Z");
+
+    expect(memoryExtractionExclusionStamp(false, createdAt)).toBe(createdAt);
+    expect(memoryExtractionExclusionStamp(true, createdAt)).toBeNull();
+  });
+
+  test("excludes a summarized prefix containing an opted-out message", () => {
+    const rows = [
+      { memoryExtractionEligible: true },
+      { memoryExtractionEligible: false },
+      { memoryExtractionEligible: true },
+    ];
+
+    expect(summarizedMessagesAreMemoryEligible(rows, 1)).toBe(true);
+    expect(summarizedMessagesAreMemoryEligible(rows, 2)).toBe(false);
+    expect(summarizedMessagesAreMemoryEligible(rows, 3)).toBe(false);
   });
 });

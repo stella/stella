@@ -1,5 +1,9 @@
 import { env } from "@/env";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
+import {
+  betaFeaturesAvailable,
+  betaFeaturesHostDefaultEnabled,
+} from "@/lib/beta-features";
+import { previewRouteAvailable } from "@/lib/beta-features.logic";
 import { useDevStore } from "@/lib/dev-store";
 
 const isPlaybooksPreviewEnabledForDevState = (
@@ -15,8 +19,11 @@ export const usePlaybooksPreviewEnabled = (): boolean => {
   return isPlaybooksPreviewEnabledForDevState(devPreviewEnabled);
 };
 
-// Route-level gate: env/host availability only, without the per-browser toggle,
-// so `/knowledge/playbooks` resolves identically on server and client. The
-// entry-point card and run action layer the toggle on top for the in-app UX.
+// Deployment-enabled and beta-host routes resolve during SSR. Elsewhere, only
+// an opted-in browser may navigate to the preview route.
 export const playbooksRouteAvailable = (): boolean =>
-  env.VITE_PLAYBOOKS_ENABLED || betaFeaturesAvailable();
+  previewRouteAvailable({
+    browserPreviewEnabled: isPlaybooksPreviewEnabled(),
+    deploymentEnabled: env.VITE_PLAYBOOKS_ENABLED,
+    hostDefaultEnabled: betaFeaturesHostDefaultEnabled(),
+  });
