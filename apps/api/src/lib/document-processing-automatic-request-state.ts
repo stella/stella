@@ -1,4 +1,4 @@
-type AutomaticOcrRun = {
+type OcrRun = {
   id: string;
   requestSource: string;
   status: string;
@@ -19,22 +19,30 @@ type AutomaticOcrSource = {
   sourceSha256Hex: string;
 };
 
-/** Restore an automatic OCR run only when its durable projection was lost. */
-export const shouldRequeueAutomaticOcrRun = ({
+export const isExactOcrProjection = ({
   projection,
   run,
   source,
 }: {
   projection: AutomaticOcrProjection | null;
-  run: AutomaticOcrRun;
+  run: Pick<OcrRun, "id">;
+  source: AutomaticOcrSource;
+}): boolean =>
+  projection?.ocrRunId === run.id &&
+  projection.sourceEntityVersionId === source.entityVersionId &&
+  projection.sourceFieldId === source.fieldId &&
+  projection.sourceFileId === source.sourceFileId &&
+  projection.sourceSha256Hex === source.sourceSha256Hex;
+
+/** Restore a successful OCR run only when its durable projection was lost. */
+export const shouldRequeueOcrRunAfterProjectionLoss = ({
+  projection,
+  run,
+  source,
+}: {
+  projection: AutomaticOcrProjection | null;
+  run: OcrRun;
   source: AutomaticOcrSource;
 }): boolean =>
   run.status === "succeeded" &&
-  run.requestSource !== "manual" &&
-  !(
-    projection?.ocrRunId === run.id &&
-    projection.sourceEntityVersionId === source.entityVersionId &&
-    projection.sourceFieldId === source.fieldId &&
-    projection.sourceFileId === source.sourceFileId &&
-    projection.sourceSha256Hex === source.sourceSha256Hex
-  );
+  !isExactOcrProjection({ projection, run, source });
