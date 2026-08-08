@@ -13,10 +13,18 @@ const entityIds = [
 ] as const;
 
 describe("myTasksHandler", () => {
-  test("returns a bounded assignment-keyset page without dropping its cursor", async () => {
-    const findAssignments = mock(async () =>
-      entityIds.map((entityId) => ({ entityId, role: "assignee" })),
-    );
+  test("returns a bounded due-date-keyset page without dropping its cursor", async () => {
+    const visibleTasks = [
+      { entityId: entityIds[0], sortDate: "2026-08-08" },
+      { entityId: entityIds[1], sortDate: "2026-08-09" },
+      { entityId: entityIds[2], sortDate: "9999-12-31" },
+    ];
+    const limitPage = mock(async () => visibleTasks);
+    const orderPage = mock(() => ({ limit: limitPage }));
+    const wherePage = mock(() => ({ orderBy: orderPage }));
+    const joinPage = mock(() => ({ where: wherePage }));
+    const fromPage = mock(() => ({ innerJoin: joinPage }));
+    const selectPage = mock(() => ({ from: fromPage }));
     const findTasks = mock(async () => [
       { id: entityIds[1], name: "Second" },
       { id: entityIds[0], name: "First" },
@@ -24,54 +32,58 @@ describe("myTasksHandler", () => {
     const { scopedDb } = createScopedDbMock({
       query: {
         entities: { findMany: findTasks },
-        taskAssignees: { findMany: findAssignments },
       },
+      select: selectPage,
     });
 
     const page = await myTasksHandler({
-      cursorEntityId: null,
+      cursor: null,
       limit: 2,
       scopedDb,
+      status: null,
       userId: toSafeId<"user">("user-test"),
     });
 
     expect(page.items.map((task) => task.id)).toEqual(entityIds.slice(0, 2));
     expect(page.limit).toBe(2);
     expect(decodePaginationCursor(page.nextCursor ?? "")).toEqual([
+      "2026-08-09",
       entityIds[1],
     ]);
-    expect(findAssignments).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 3, orderBy: { entityId: "asc" } }),
-    );
+    expect(limitPage).toHaveBeenCalledWith(3);
+    expect(orderPage).toHaveBeenCalledTimes(1);
     expect(findTasks).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 2 }),
     );
   });
 
-  test("applies the entity cursor to the next assignment page", async () => {
-    const findAssignments = mock(async () => []);
+  test("applies the due-date cursor and status before selecting a page", async () => {
+    const limitPage = mock(async () => []);
+    const wherePage = mock(() => ({
+      orderBy: () => ({ limit: limitPage }),
+    }));
     const { scopedDb, getCallCount } = createScopedDbMock({
       query: {
         entities: { findMany: mock(async () => []) },
-        taskAssignees: { findMany: findAssignments },
       },
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({ where: wherePage }),
+        }),
+      }),
     });
 
     const page = await myTasksHandler({
-      cursorEntityId: entityIds[1],
+      cursor: { entityId: entityIds[1], sortDate: "2026-08-09" },
       limit: 2,
       scopedDb,
+      status: "open",
       userId: toSafeId<"user">("user-test"),
     });
 
     expect(page).toEqual({ items: [], limit: 2, nextCursor: null });
-    expect(findAssignments).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          entityId: { gt: entityIds[1] },
-        }),
-      }),
-    );
+    expect(wherePage).toHaveBeenCalledTimes(1);
+    expect(limitPage).toHaveBeenCalledWith(3);
     expect(getCallCount()).toBe(1);
   });
 });

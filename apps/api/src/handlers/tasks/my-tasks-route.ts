@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { myTasksHandler } from "@/api/handlers/tasks/my-tasks";
+import type { MyTasksCursor } from "@/api/handlers/tasks/my-tasks";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro } from "@/api/lib/auth";
@@ -9,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
@@ -17,6 +19,9 @@ const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.myTasksPageSizeMax }),
+  ),
+  status: t.Optional(
+    t.Union([t.Literal("open"), t.Literal("in_progress"), t.Literal("done")]),
   ),
 });
 
@@ -27,17 +32,26 @@ const config = {
 } satisfies HandlerConfig;
 
 const decodeCursor = (cursor: string) => {
-  const entityId = decodePaginationCursor(cursor)?.at(0);
-  return isUuidPaginationCursorPart(entityId)
-    ? brandPersistedEntityId(entityId)
-    : null;
+  const parts = decodePaginationCursor(cursor);
+  const sortDate = parts?.at(0);
+  const entityId = parts?.at(1);
+  if (
+    !isDateOnlyPaginationCursorPart(sortDate) ||
+    !isUuidPaginationCursorPart(entityId)
+  ) {
+    return null;
+  }
+  return {
+    entityId: brandPersistedEntityId(entityId),
+    sortDate,
+  } satisfies MyTasksCursor;
 };
 
 const myTasksEndpoint = createSafeRootHandler(
   config,
   async function* ({ query, scopedDb, user }) {
-    const cursorEntityId = query.cursor ? decodeCursor(query.cursor) : null;
-    if (query.cursor && cursorEntityId === null) {
+    const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+    if (query.cursor && cursor === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
@@ -47,8 +61,9 @@ const myTasksEndpoint = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await myTasksHandler({
-            cursorEntityId,
+            cursor,
             limit: query.limit ?? LIMITS.myTasksPageSizeDefault,
+            status: query.status ?? null,
             userId: user.id,
             scopedDb,
           }),

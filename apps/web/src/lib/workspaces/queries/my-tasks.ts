@@ -6,19 +6,25 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 
 export const myTasksKeys = {
   all: ["my-tasks"] as const,
-  organization: (activeOrganizationId: string) =>
-    ["my-tasks", activeOrganizationId] as const,
+  organization: (activeOrganizationId: string, status: MyTasksStatus | null) =>
+    ["my-tasks", activeOrganizationId, status] as const,
 };
 
-export const myTasksOptions = (activeOrganizationId: string) =>
+export type MyTasksStatus = "done" | "in_progress" | "open";
+
+export const myTasksOptions = (
+  activeOrganizationId: string,
+  status: MyTasksStatus | null,
+) =>
   infiniteQueryOptions({
-    queryKey: myTasksKeys.organization(activeOrganizationId),
+    queryKey: myTasksKeys.organization(activeOrganizationId, status),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api["my-tasks"].get({
         query: {
           limit: 50,
           ...(pageParam ? { cursor: pageParam } : {}),
+          ...(status ? { status } : {}),
         },
         fetch: { signal },
       });

@@ -45,12 +45,15 @@ import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import type { TaskItem } from "@/lib/workspaces/queries/my-tasks";
+import type {
+  MyTasksStatus,
+  TaskItem,
+} from "@/lib/workspaces/queries/my-tasks";
 import { myTasksKeys, myTasksOptions } from "@/lib/workspaces/queries/my-tasks";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-type TaskFilter = "all" | "open" | "in_progress" | "done";
+type TaskFilter = "all" | MyTasksStatus;
 
 const STATUS_COLORS = {
   open: "bg-muted-foreground",
@@ -139,7 +142,9 @@ export function LegacyTodosPage() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-  } = useInfiniteQuery(myTasksOptions(activeOrganizationId));
+  } = useInfiniteQuery(
+    myTasksOptions(activeOrganizationId, filter === "all" ? null : filter),
+  );
   const { data: workspaces } = useQuery(
     workspacesOptions(activeOrganizationId),
   );
@@ -161,10 +166,7 @@ export function LegacyTodosPage() {
         return compareStableStrings(left.dueDate, right.dueDate);
       });
 
-    if (filter === "all") {
-      return valid;
-    }
-    return valid.filter((task) => task.status === filter);
+    return valid;
   })();
 
   const groups = groupByWorkspace(filtered);
