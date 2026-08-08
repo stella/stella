@@ -11,9 +11,28 @@ import type {
 export { EMPTY_AST };
 export type { EmptyAst };
 
+/** Mirrors the publisher-identity columns in the case-law schema. */
+export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
+
+export const isPersistableSourceDocumentId = (value: string): boolean =>
+  value.length > 0 && value.length <= SOURCE_DOCUMENT_ID_MAX_LENGTH;
+
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
+  /**
+   * True when `caseNumber` is a durable ingestion placeholder rather than a
+   * publisher docket. Identified-row refreshes preserve an already recovered
+   * docket and its citation key when a later partial listing carries this.
+   */
+  caseNumberIsPlaceholder?: boolean | undefined;
+  /**
+   * True when the publisher listing proves this document exists but the
+   * adapter could not recover its detail payload. The first observation is
+   * still durable; a later listing-only refresh must not replace detail state
+   * that an earlier fetch or repair already recovered.
+   */
+  isListingOnly?: boolean | undefined;
   /**
    * The publisher's own identifier for this document. Supply it whenever the
    * source has one: it is what makes a decision identifiable. A case number
@@ -23,6 +42,29 @@ export type IngestionResult = {
    * Omit it only where the source publishes no such id.
    */
   sourceDocumentId?: string | undefined;
+  /**
+   * Other exact publisher identifiers for this same document. Emit every
+   * alternate identity visible with the canonical `sourceDocumentId`; the
+   * pipeline atomically reserves all of them to one durable decision UUID, so
+   * canonical/fallback observations converge in either order. Identities must
+   * fit `SOURCE_DOCUMENT_ID_MAX_LENGTH`; adapters should discard a malformed
+   * alias at their publisher boundary instead of poisoning the whole page.
+   */
+  sourceDocumentIdAliases?: readonly string[] | undefined;
+  /**
+   * Deterministic identities emitted by an older or degraded observation that
+   * may adopt an existing registry owner but are not exact enough to reserve
+   * when unclaimed. Use this for content-addressed repair fingerprints, never
+   * for an alternate publisher key.
+   */
+  sourceDocumentIdRepairAliases?: readonly string[] | undefined;
+  /**
+   * Exact source URLs emitted by an older adapter version for this same
+   * publisher document. This is a narrowly scoped identity-migration hint:
+   * the pipeline may use it to attach a newly learned `sourceDocumentId` to
+   * the right legacy null-id row without guessing from a shared docket.
+   */
+  legacySourceUrls?: readonly string[] | undefined;
   /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on

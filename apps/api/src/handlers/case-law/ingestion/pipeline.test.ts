@@ -6,7 +6,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -18,6 +21,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -109,6 +113,87 @@ describe("sanitizeResult — adapter-supplied sections", () => {
     });
 
     expect(sanitized.sections?.at(0)?.title).toBeNull();
+  });
+});
+
+describe("sanitizeResult — shared partial-observation quality", () => {
+  test("persists adapter-neutral quality and removes it after detail recovery", () => {
+    const partial = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      caseNumberIsPlaceholder: true,
+      isListingOnly: true,
+    });
+    expect(partialObservationFromMetadata(partial.metadata)).toEqual({
+      caseNumberIsPlaceholder: true,
+      isListingOnly: true,
+    });
+
+    const recovered = sanitizeResult({
+      ...partial,
+      caseNumberIsPlaceholder: undefined,
+      isListingOnly: undefined,
+    });
+    expect(partialObservationFromMetadata(recovered.metadata)).toEqual({
+      caseNumberIsPlaceholder: false,
+      isListingOnly: false,
+    });
+  });
+});
+
+describe("sanitizeResult — shared publisher identity limits", () => {
+  test("drops an oversized alias without poisoning a valid canonical id", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sourceDocumentId: "publisher:canonical",
+      sourceDocumentIdAliases: [
+        "publisher:fallback",
+        "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      ],
+      sourceDocumentIdRepairAliases: [
+        "publisher:repair",
+        "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      ],
+    });
+
+    expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
+    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+      "publisher:repair",
+    ]);
+  });
+
+  test("rejects an oversized canonical id instead of truncating identity", () => {
+    expect(() =>
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      }),
+    ).toThrow("Publisher document identity exceeds storage limits");
+  });
+
+  test("drops aliases changed by sanitization instead of merging identities", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sourceDocumentId: "publisher:canonical",
+      sourceDocumentIdAliases: ["publisher:a\u200Bb", "publisher:ab"],
+      sourceDocumentIdRepairAliases: [
+        "publisher:repair\u200Bchanged",
+        "publisher:repair-clean",
+      ],
+    });
+
+    expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
+    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+      "publisher:repair-clean",
+    ]);
+  });
+
+  test("rejects a canonical id changed by sanitization", () => {
+    expect(() =>
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        sourceDocumentId: "publisher:a\u200Bb",
+      }),
+    ).toThrow("Publisher document identity cannot be sanitized");
   });
 });
 

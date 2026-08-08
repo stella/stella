@@ -7,13 +7,15 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -31,93 +33,108 @@ const COMMON_HEADERS = {
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
  *
- * Scrapes the NALUS database at nalus.usoud.cz. Each decision
- * has a predictable URL keyed by case number and year:
+ * Scrapes the NALUS database at nalus.usoud.cz through its public search UI.
+ * NALUS has no JSON API, but its WebForms search is a complete, paginated
+ * enumeration surface. Each result carries the court's exact GetText.aspx
+ * identifier and its internal record id. The record id is the canonical
+ * document identity; the text identifier is an optional retrieval action.
  *
- *   GetText.aspx?sz=I-{number}-{year}_1
+ * Never reconstruct a GetText identifier from a docket. Historical NALUS
+ * identifiers use a different grammar, chamber numbering was not globally
+ * sequential, plenary dockets overlap chamber numbers, and one docket can
+ * publish several decisions. Probing `I-{number}-{year}_1` loses all of those
+ * distinctions.
  *
- * The senate prefix in the URL is ignored by the server;
- * case numbers are sequential across all senates (I, II,
- * III, IV, Pl) within a year. ~3500 cases/year.
+ * Cursor formats:
+ *   search:historical:<available-to>:<decision-year>:<pass>:<page>:<digest>:<expected>
+ *   search:recent:<available-from>:<available-to>:<pass>:<page>:<digest>:<expected>
  *
- * Empty pages (non-existent numbers) return HTTP 200 with
- * no "ze dne" in the registry sign.
- *
- * Cursor format: "number:year:phase" (e.g. "100:2025:historical").
- * The phase segment is optional: a stored "number:year" predates it
- * and is read as a historical descent. A null cursor starts the
- * historical descent at the current year.
+ * A null or legacy probe cursor starts the search-based historical repair at
+ * FIRST_YEAR. This intentionally re-enumerates history once: it migrates the
+ * incomplete probe crawl onto publisher-stated document identities.
  */
 
-const BASE_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
 const ABSTRACT_URL = "https://nalus.usoud.cz/Search/GetAbstract.aspx";
+const RESULT_DETAIL_URL = "https://nalus.usoud.cz/Search/ResultDetail.aspx";
+const SEARCH_URL = "https://nalus.usoud.cz/Search/Search.aspx";
+const RESULTS_URL = "https://nalus.usoud.cz/Search/Results.aspx";
+const TEXT_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
 
-/**
- * After this many consecutive empty numbers we assume the
- * year is exhausted. Real gaps are tiny (max ~5 in any year);
- * 30 gives a wide safety margin without wasting probes.
- */
-const MAX_CONSECUTIVE_MISSES = 30;
+const persistableNalusComponent = (
+  namespace: "nalus-record" | "nalus-sz" | "nalus-ecli",
+  value: string | undefined,
+): string | undefined =>
+  value !== undefined &&
+  value.length > 0 &&
+  isPersistableSourceDocumentId(`${namespace}:${value}`)
+    ? value
+    : undefined;
 
-/** Decisions to collect per fetchPage call. */
-const PAGE_SIZE = 50;
+const nalusIdentities = ({
+  recordId,
+  sz,
+  ecli,
+}: {
+  recordId: string | undefined;
+  sz: string | undefined;
+  ecli: string | undefined;
+}): {
+  sourceDocumentId: string;
+  aliases: readonly string[] | undefined;
+} | null => {
+  const identities = [
+    recordId ? `nalus-record:${recordId}` : undefined,
+    sz ? `nalus-sz:${sz}` : undefined,
+    ecli ? `nalus-ecli:${ecli}` : undefined,
+  ].filter(
+    (identity): identity is string =>
+      identity !== undefined && isPersistableSourceDocumentId(identity),
+  );
+  const sourceDocumentId = identities.at(0);
+  if (sourceDocumentId === undefined) {
+    return null;
+  }
+  const aliases = identities.slice(1);
+  return {
+    sourceDocumentId,
+    aliases: aliases.length === 0 ? undefined : aliases,
+  };
+};
 
-/** Number of case numbers to probe concurrently. */
-const PROBE_CONCURRENCY = 5;
+/** Largest result size that keeps one page's text fetches reasonably bounded. */
+const RESULTS_PAGE_SIZE = 40;
+
+/** Detail/abstract pairs fetched concurrently from the court. */
+const DOCUMENT_CONCURRENCY = 5;
 
 /** First year of the Constitutional Court's existence. */
 const FIRST_YEAR = 1993;
 
-/**
- * Which sweep the cursor is in.
- *
- * NALUS has no list endpoint, so decisions are discovered by probing case
- * numbers. The first pass has to walk every year back to FIRST_YEAR; once
- * it has, descending through those years again re-fetches the whole corpus
- * to store nothing (rule 13). Holes the descent left behind belong to a
- * reconciliation pass, not to the live cursor (rule 16).
- */
 const SWEEP_PHASE = {
-  /** First pass: walking years backward toward FIRST_YEAR. */
+  /** One-time complete enumeration by decision year. */
   HISTORICAL: "historical",
-  /** Descent done: only the recent window is swept, repeatedly. */
+  /** Steady state: enumerate the source's recent publication window. */
   RECENT: "recent",
 } as const;
 
-type SweepPhase = (typeof SWEEP_PHASE)[keyof typeof SWEEP_PHASE];
-
-const SWEEP_PHASES: readonly SweepPhase[] = Object.values(SWEEP_PHASE);
-
 /**
- * Years the steady-state sweep covers, counting the current one.
- *
- * A case number carries the year the case was filed, not the year it was
- * decided, and the Court often rules a year or two after filing. A window
- * of one year would therefore never see those decisions at all.
+ * NALUS exposes availability dates only for a rolling recent index. Replaying
+ * a generous window makes ordinary scheduler interruptions self-healing while
+ * keeping steady-state work bounded.
  */
-const RECENT_WINDOW_YEARS = 3;
+const RECENT_WINDOW_DAYS = 45;
 
-/** Oldest year the steady-state sweep may reach. */
-export const recentWindowFloor = (currentYear: number): number =>
-  Math.max(FIRST_YEAR, currentYear - RECENT_WINDOW_YEARS + 1);
+const CRAWL_PASS = {
+  COLLECT: "collect",
+  VERIFY: "verify",
+} as const;
 
-/** Oldest year the given phase may descend to. */
-const sweepFloor = (phase: SweepPhase, currentYear: number): number => {
-  switch (phase) {
-    case SWEEP_PHASE.HISTORICAL:
-      return FIRST_YEAR;
-    case SWEEP_PHASE.RECENT:
-      return recentWindowFloor(currentYear);
-    default: {
-      const unhandled: never = phase;
-      return panic(`Unhandled cz-us sweep phase: ${String(unhandled)}`);
-    }
-  }
-};
+type CrawlPass = (typeof CRAWL_PASS)[keyof typeof CRAWL_PASS];
 
-/** Zero-pad 2-digit year suffix for NALUS URLs. */
-const toYearSuffix = (year: number): string =>
-  String(year % 100).padStart(2, "0");
+/** Seed for the rolling identity digest stored in the cursor. */
+const DIGEST_SEED = "0";
+
+const NO_RESULTS_MESSAGE = "Pro zadaná kritéria nebyly nalezeny žádné záznamy.";
 
 const REGISTRY_SIGN_PATTERN =
   /^(?<caseNumber>\S+(?:\s\S+)*?)\s+ze\s+dne\s+(?<date>\S.*)$/u;
@@ -165,6 +182,18 @@ const SENATE_MAP: Record<string, string> = {
   IV: "4",
 };
 
+const parseCaseNumberComponents = (
+  caseNumber: string,
+): { senate: string; caseIndex: string; shortYear: string } | undefined => {
+  const { senate, caseIndex, shortYear } =
+    /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
+      caseNumber,
+    )?.groups ?? {};
+  return senate && caseIndex && shortYear
+    ? { senate, caseIndex, shortYear }
+    : undefined;
+};
+
 /**
  * Build ECLI from parsed case number components.
  *
@@ -180,16 +209,21 @@ const buildEcli = (
   counter: number,
 ): string | undefined => {
   // "II.ÚS 3436/14" or "Pl.ÚS 24/10"
-  const match =
-    /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
-      caseNumber,
-    );
-  const { senate, caseIndex, shortYear } = match?.groups ?? {};
-  if (!senate || !caseIndex || !shortYear) {
+  const components = parseCaseNumberComponents(caseNumber);
+  if (!components) {
     return undefined;
   }
+  const { senate, caseIndex, shortYear } = components;
   const mappedSenate = SENATE_MAP[senate] ?? senate.toUpperCase();
   return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
+};
+
+const parseCounter = (raw: string | undefined): number | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const counter = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(counter) && counter > 0 ? counter : undefined;
 };
 
 /** Extract case number and date from the registry sign label. */
@@ -227,7 +261,34 @@ const extractEcliCounter = (html: string): number | undefined => {
     return undefined;
   }
   const counter = /#(?<counter>\d+)/u.exec(hiddenValue)?.groups?.["counter"];
-  return counter ? Number.parseInt(counter, 10) : undefined;
+  return parseCounter(counter);
+};
+
+/** URL identity emitted by the pre-search adapter for counter-one records. */
+const legacySourceUrlsFor = (
+  caseNumber: string,
+  counter: number | undefined,
+  nalusSz: string | undefined,
+): readonly string[] | undefined => {
+  if (counter !== 1) {
+    return undefined;
+  }
+  const components = parseCaseNumberComponents(caseNumber);
+  if (!components) {
+    return undefined;
+  }
+  const legacyYear = String(
+    Number.parseInt(components.shortYear, 10) % 100,
+  ).padStart(2, "0");
+  const legacySz = `I-${components.caseIndex}-${legacyYear}_1`;
+  // The old probe always requested an I-prefixed URL, but NALUS can map
+  // that guessed URL to a different chamber/plenary docket with the same
+  // visible number. It is an adoption alias only when the listing exposes
+  // that exact retrieval identity for this exact publisher record.
+  if (nalusSz !== legacySz) {
+    return undefined;
+  }
+  return [`https://nalus.usoud.cz/Search/GetText.aspx?sz=${legacySz}`];
 };
 
 /** Plain text of the DocContent table, the decision body. */
@@ -291,11 +352,27 @@ const extractAbstract = (
   return result;
 };
 
-const parseDecisionPage = (
-  html: string,
-  number: number,
-  year: number,
-): IngestionResult | null => {
+type ParseDecisionPageOptions = {
+  html: string;
+  sourceUrl: string;
+  sourceDocumentId: string;
+  listedEcli: string | undefined;
+  listedCounter: number | undefined;
+  nalusRecordId: string | undefined;
+  nalusSz: string | undefined;
+  nalusQuarantineIds: readonly string[];
+};
+
+const parseDecisionPage = ({
+  html,
+  sourceUrl,
+  sourceDocumentId,
+  listedEcli,
+  listedCounter,
+  nalusRecordId,
+  nalusSz,
+  nalusQuarantineIds,
+}: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
     return null; // Empty page
@@ -313,19 +390,18 @@ const parseDecisionPage = (
   const fulltext = extractFulltext(bodyText);
   const judge = bodyText === undefined ? undefined : extractJudge(bodyText);
 
-  const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
-
   // Build ECLI from case number + decision year + counter.
   // Counter comes from registrySignHidden (not the visible label).
   // ECLI is only built when both decision year and counter are known.
   const decisionYear = parsed.decisionDate
     ? Number.parseInt(parsed.decisionDate.slice(0, 4), 10)
     : undefined;
-  const ecliCounter = extractEcliCounter(html);
+  const ecliCounter = extractEcliCounter(html) ?? listedCounter;
   const ecli =
-    decisionYear !== undefined && ecliCounter !== undefined
+    listedEcli ??
+    (decisionYear !== undefined && ecliCounter !== undefined
       ? buildEcli(parsed.caseNumber, decisionYear, ecliCounter)
-      : undefined;
+      : undefined);
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let resolvedFulltext = fulltext;
@@ -348,10 +424,24 @@ const parseDecisionPage = (
 
   // Hash on identity fields only (not fulltext) for stability
   // across parser changes. Matches NSS adapter pattern.
-  const raw = `${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
+  const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
 
   return {
     caseNumber: parsed.caseNumber,
+    sourceDocumentId,
+    sourceDocumentIdAliases: nalusIdentities({
+      recordId: nalusRecordId,
+      sz: nalusSz,
+      ecli,
+    })?.aliases,
+    sourceDocumentIdRepairAliases: nalusQuarantineIds.map(
+      (quarantineId) => `nalus-quarantine:${quarantineId}`,
+    ),
+    legacySourceUrls: legacySourceUrlsFor(
+      parsed.caseNumber,
+      ecliCounter,
+      nalusSz,
+    ),
     ecli,
     court: "Ústavní soud",
     country: "CZE",
@@ -370,6 +460,8 @@ const parseDecisionPage = (
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
       ecliCounter,
+      nalusRecordId,
+      nalusSz,
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
@@ -379,41 +471,778 @@ const parseDecisionPage = (
   };
 };
 
-type CursorState = { number: number; year: number; phase: SweepPhase };
-
-/**
- * Read the phase segment. Cursors stored before it existed are bare
- * "number:year" and are mid-descent by definition; an unrecognised
- * segment is a corrupt cursor and must not silently restart a sweep.
- */
-const parsePhase = (segment: string | undefined): SweepPhase => {
-  if (segment === undefined) {
-    return SWEEP_PHASE.HISTORICAL;
-  }
-  const phase = SWEEP_PHASES.find((candidate) => candidate === segment);
-  if (!phase) {
-    throw new TypeError("Invalid cz-us cursor phase");
-  }
-  return phase;
+type HistoricalCursor = {
+  phase: typeof SWEEP_PHASE.HISTORICAL;
+  availableTo: string;
+  year: number;
+  pass: CrawlPass;
+  page: number;
+  digest: string;
+  expectedDigest?: string | undefined;
 };
 
-const parseCursor = (cursor: string): CursorState => {
+type RecentCursor = {
+  phase: typeof SWEEP_PHASE.RECENT;
+  availableFrom: string;
+  availableTo: string;
+  pass: CrawlPass;
+  page: number;
+  digest: string;
+  expectedDigest?: string | undefined;
+};
+
+type CursorState = HistoricalCursor | RecentCursor;
+
+type ListedDecision = {
+  caseNumber: string;
+  counter?: number | undefined;
+  identityQuarantined?: true | undefined;
+  quarantineId: string;
+  quarantineRepairIds: readonly string[];
+  listingDocketMissing?: true | undefined;
+  listingHtml: string;
+  sourceDocumentId: string;
+  nalusRecordId?: string | undefined;
+  sourceUrl: string;
+  sz?: string | undefined;
+  ecli?: string | undefined;
+};
+
+type SearchPage = {
+  listed: ListedDecision[];
+  rangeFrom: number;
+  rangeTo: number;
+  reported: number;
+};
+
+class SearchPageDriftError extends TypeError {
+  override name = "SearchPageDriftError";
+}
+
+const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
+
+const isoDay = (date: Date): string => date.toISOString().slice(0, 10);
+
+/** Latest complete NALUS publication day; today's result set is still live. */
+const latestClosedAvailabilityDay = (now: Date): string => {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return isoDay(date);
+};
+
+const historicalStart = (now: Date): HistoricalCursor => ({
+  phase: SWEEP_PHASE.HISTORICAL,
+  availableTo: latestClosedAvailabilityDay(now),
+  year: FIRST_YEAR,
+  pass: CRAWL_PASS.COLLECT,
+  page: 0,
+  digest: DIGEST_SEED,
+});
+
+const czechDate = (date: Date): string =>
+  `${date.getUTCDate()}.${date.getUTCMonth() + 1}.${date.getUTCFullYear()}`;
+
+const recentStart = (now: Date): RecentCursor => {
+  const latest = latestClosedAvailabilityDay(now);
+  const from = new Date(`${latest}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - RECENT_WINDOW_DAYS + 1);
+  return {
+    phase: SWEEP_PHASE.RECENT,
+    availableFrom: isoDay(from),
+    availableTo: latest,
+    pass: CRAWL_PASS.COLLECT,
+    page: 0,
+    digest: DIGEST_SEED,
+  };
+};
+
+const addUtcDays = (day: string, days: number): string => {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return isoDay(date);
+};
+
+const parseNonNegativeInteger = (
+  value: string | undefined,
+  field: string,
+): number => {
+  const parsed = value === undefined ? Number.NaN : Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new TypeError(`Invalid cz-us cursor ${field}`);
+  }
+  return parsed;
+};
+
+const parseCursor = (cursor: string, now: Date): CursorState => {
+  // The old probe cursor cannot be translated faithfully: it says which
+  // guessed number came next, not which publisher documents were covered.
+  // Restart the one-time publisher enumeration to repair that uncertainty.
+  if (LEGACY_CURSOR_PATTERN.test(cursor)) {
+    return historicalStart(now);
+  }
+
   const parts = cursor.split(":");
-  const number = Number.parseInt(parts.at(0) ?? "1", 10);
-  const year = Number.parseInt(
-    parts.at(1) ?? String(new Date().getFullYear()),
-    10,
+  if (parts.at(0) !== "search") {
+    throw new TypeError("Invalid cz-us cursor version");
+  }
+
+  const phase = parts.at(1);
+  if (phase === SWEEP_PHASE.HISTORICAL && parts.length === 8) {
+    const availableTo = parts.at(2);
+    const year = parseNonNegativeInteger(parts.at(3), "year");
+    if (year < FIRST_YEAR) {
+      throw new TypeError("Invalid cz-us cursor year");
+    }
+    const pass = parts.at(4);
+    const digest = parts.at(6);
+    const expectedDigest = parts.at(7);
+    if (
+      !availableTo ||
+      !ISO_DAY_PATTERN.test(availableTo) ||
+      availableTo > latestClosedAvailabilityDay(now) ||
+      (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
+      !digest ||
+      (pass === CRAWL_PASS.VERIFY &&
+        (!expectedDigest || expectedDigest === "-")) ||
+      (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
+    ) {
+      throw new TypeError("Invalid cz-us historical pass");
+    }
+    return {
+      phase,
+      availableTo,
+      year,
+      pass,
+      page: parseNonNegativeInteger(parts.at(5), "page"),
+      digest,
+      ...(expectedDigest === "-" ? {} : { expectedDigest }),
+    };
+  }
+  if (phase === SWEEP_PHASE.RECENT && parts.length === 8) {
+    const availableFrom = parts.at(2);
+    const availableTo = parts.at(3);
+    const pass = parts.at(4);
+    const digest = parts.at(6);
+    const expectedDigest = parts.at(7);
+    if (
+      !availableFrom ||
+      !availableTo ||
+      !ISO_DAY_PATTERN.test(availableFrom) ||
+      !ISO_DAY_PATTERN.test(availableTo) ||
+      availableFrom > availableTo ||
+      availableTo > latestClosedAvailabilityDay(now) ||
+      (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
+      !digest ||
+      (pass === CRAWL_PASS.VERIFY &&
+        (!expectedDigest || expectedDigest === "-")) ||
+      (pass === CRAWL_PASS.COLLECT && expectedDigest !== "-")
+    ) {
+      throw new TypeError("Invalid cz-us availability window");
+    }
+    return {
+      phase,
+      availableFrom,
+      availableTo,
+      pass,
+      page: parseNonNegativeInteger(parts.at(5), "page"),
+      digest,
+      ...(expectedDigest === "-" ? {} : { expectedDigest }),
+    };
+  }
+  throw new TypeError("Invalid cz-us cursor phase");
+};
+
+const makeCursor = (state: CursorState): string => {
+  switch (state.phase) {
+    case SWEEP_PHASE.HISTORICAL:
+      return `search:${state.phase}:${state.availableTo}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
+    case SWEEP_PHASE.RECENT:
+      return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
+    default: {
+      const unhandled: never = state;
+      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+    }
+  }
+};
+
+const nextSlice = (state: CursorState, now: Date): CursorState => {
+  switch (state.phase) {
+    case SWEEP_PHASE.HISTORICAL:
+      return state.year < now.getUTCFullYear()
+        ? {
+            phase: state.phase,
+            availableTo: state.availableTo,
+            year: state.year + 1,
+            pass: CRAWL_PASS.COLLECT,
+            page: 0,
+            digest: DIGEST_SEED,
+          }
+        : nextRecentWindow(state.availableTo, now);
+    case SWEEP_PHASE.RECENT: {
+      return nextRecentWindow(state.availableTo, now);
+    }
+    default: {
+      const unhandled: never = state;
+      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+    }
+  }
+};
+
+function nextRecentWindow(availableTo: string, now: Date): RecentCursor {
+  const latest = latestClosedAvailabilityDay(now);
+  if (availableTo < latest) {
+    const availableFrom = addUtcDays(availableTo, 1);
+    return {
+      phase: SWEEP_PHASE.RECENT,
+      availableFrom,
+      availableTo:
+        [addUtcDays(availableFrom, RECENT_WINDOW_DAYS - 1), latest]
+          .sort()
+          .at(0) ?? latest,
+      pass: CRAWL_PASS.COLLECT,
+      page: 0,
+      digest: DIGEST_SEED,
+    };
+  }
+  return recentStart(now);
+}
+
+const restartSlice = (state: CursorState): CursorState => ({
+  ...state,
+  pass: CRAWL_PASS.COLLECT,
+  page: 0,
+  digest: DIGEST_SEED,
+  expectedDigest: undefined,
+});
+
+const rollingPageDigest = (digest: string, page: SearchPage): string =>
+  hashContent(
+    `${digest}|${page.reported}|${page.listed
+      .map(({ sourceDocumentId }) => sourceDocumentId)
+      .join("|")}`,
   );
 
-  if (Number.isNaN(number) || Number.isNaN(year)) {
-    throw new TypeError("Invalid cz-us cursor format");
+const coverageSlice = (state: CursorState): string => {
+  switch (state.phase) {
+    case SWEEP_PHASE.HISTORICAL:
+      return `decision-year:${state.year}`;
+    case SWEEP_PHASE.RECENT:
+      return `availability:${state.availableFrom}:${state.availableTo}`;
+    default: {
+      const unhandled: never = state;
+      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+    }
   }
-
-  return { number, year, phase: parsePhase(parts.at(2)) };
 };
 
-const makeCursor = (s: CursorState): string =>
-  `${s.number}:${s.year}:${s.phase}`;
+const hiddenField = (html: string, name: string): string | undefined =>
+  cheerio.load(html)(`#${name}`).attr("value");
+
+/**
+ * Stable publisher-visible fields for an anomalous row that exposes neither
+ * normal NALUS identity. Render position is deliberately absent: WebForms
+ * alternates CSS classes and embeds `pos`/`cnt` in links, so hashing the row
+ * markup would mint a new quarantine identity whenever result order moves.
+ */
+const quarantineFingerprint = ({
+  stablePrimaryText,
+  stableActionsText,
+  stableDetailText,
+  stableCounterText,
+}: {
+  stablePrimaryText: string;
+  stableActionsText: string;
+  stableDetailText: string;
+  stableCounterText: string;
+}): string => {
+  const normalize = (value: string): string =>
+    value.replace(/\s+/gu, " ").trim();
+  return hashContent(
+    JSON.stringify({
+      stablePrimaryText: normalize(stablePrimaryText),
+      stableActionsText: normalize(stableActionsText),
+      stableDetailText: normalize(stableDetailText),
+      stableCounterText: normalize(stableCounterText),
+    }),
+  );
+};
+
+const cookieHeader = (responses: readonly Response[]): string => {
+  const cookies = new Map<string, string>();
+  for (const response of responses) {
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(";").at(0);
+      const separator = pair?.indexOf("=") ?? -1;
+      if (pair && separator > 0) {
+        cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+      }
+    }
+  }
+  return [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
+};
+
+const searchFields = (state: CursorState): Record<string, string> => {
+  switch (state.phase) {
+    case SWEEP_PHASE.HISTORICAL:
+      return {
+        ctl00$MainContent$decidedFrom: `1.1.${state.year}`,
+        ctl00$MainContent$decidedTo: `31.12.${state.year}`,
+        ctl00$MainContent$availableFrom: "1.1.1900",
+        ctl00$MainContent$availableTo: czechDate(
+          new Date(`${state.availableTo}T00:00:00Z`),
+        ),
+        ctl00$MainContent$razeni: "20",
+      };
+    case SWEEP_PHASE.RECENT:
+      return {
+        ctl00$MainContent$availableFrom: czechDate(
+          new Date(`${state.availableFrom}T00:00:00Z`),
+        ),
+        ctl00$MainContent$availableTo: czechDate(
+          new Date(`${state.availableTo}T00:00:00Z`),
+        ),
+        ctl00$MainContent$razeni: "20",
+      };
+    default: {
+      const unhandled: never = state;
+      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+    }
+  }
+};
+
+const parseResultPage = (html: string, expectedPage: number): SearchPage => {
+  const banners = [
+    ...html.matchAll(
+      /Výsledky\s+(?<from>\d+)\s*-\s*(?<to>\d+)\s+z\s+celkem\s+(?<total>\d+)/gu,
+    ),
+  ].map(({ groups }) => ({
+    rangeFrom: Number(groups?.["from"]),
+    rangeTo: Number(groups?.["to"]),
+    reported: Number(groups?.["total"]),
+  }));
+  const banner = banners.at(0);
+  if (!banner) {
+    throw new TypeError("NALUS result count banner is missing");
+  }
+  if (
+    banners.some(
+      (candidate) =>
+        candidate.rangeFrom !== banner.rangeFrom ||
+        candidate.rangeTo !== banner.rangeTo ||
+        candidate.reported !== banner.reported,
+    )
+  ) {
+    throw new TypeError("NALUS result count banners disagree");
+  }
+
+  const expectedFrom = expectedPage * RESULTS_PAGE_SIZE + 1;
+  if (banner.rangeFrom !== expectedFrom) {
+    throw new SearchPageDriftError("NALUS result page moved during traversal");
+  }
+  if (banner.rangeTo > banner.reported) {
+    throw new TypeError("NALUS returned an unexpected result page");
+  }
+
+  const $ = cheerio.load(html);
+  const listed: ListedDecision[] = [];
+  $("tr.resultData0, tr.resultData1").each((_, row) => {
+    const primary = $(row);
+    if (primary.attr("valign") === "top") {
+      return;
+    }
+    const detail = primary.find("a[href*='ResultDetail.aspx']").first();
+    const detailHref = detail.attr("href");
+    const nalusRecordId = persistableNalusComponent(
+      "nalus-record",
+      /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.["id"],
+    );
+    const actions = primary.next("tr");
+    const linkAction = actions
+      .find("[onclick*='GetText.aspx?sz=']")
+      .first()
+      .attr("onclick");
+    const rawUrl =
+      /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
+        linkAction ?? "",
+      )?.groups?.["url"];
+    let sz: string | undefined;
+    if (rawUrl) {
+      try {
+        sz = persistableNalusComponent(
+          "nalus-sz",
+          new URL(rawUrl).searchParams.get("sz") || undefined,
+        );
+      } catch {
+        // A malformed or withdrawn text action does not erase the stable
+        // ResultDetail record identity exposed by the listing.
+      }
+    }
+    const listingHtml = `${primary.toString()}${actions.toString()}`;
+    const ecli = persistableNalusComponent(
+      "nalus-ecli",
+      /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0),
+    );
+    const registrySign = detail.text();
+    // The count banner says this is a publisher record even if a malformed or
+    // withdrawn row exposes neither of NALUS's normal identities. Give that
+    // terminal listing a content-addressed quarantine identity derived from
+    // semantic fields so one poison row cannot pin the reconciliation slice.
+    const exactPublisherIdentity = nalusIdentities({
+      recordId: nalusRecordId,
+      sz,
+      ecli,
+    });
+    const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
+      "counter"
+    ];
+    const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
+    const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
+    // Compute the identity-less form for every row. If publisher links are
+    // restored later, this becomes a migration alias for the earlier durable
+    // quarantine row. Strip every identity-bearing control from the visible
+    // text: the detail anchor, ECLI and retrieval action can all appear only
+    // when identity metadata recovers, so none may participate in the repair
+    // fingerprint.
+    const stablePrimary = primary.clone();
+    stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
+    const stablePrimaryText = stablePrimary.text().replace(ecli ?? "", "");
+    const stableActions = actions.clone();
+    stableActions
+      .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
+      .remove();
+    const stableFingerprintFields = {
+      stablePrimaryText,
+      stableActionsText: stableActions.text(),
+    };
+    const stableDetailTexts = [...new Set([listedCaseNumber, ""])];
+    const stableCounterTexts = [
+      ...new Set([counterText ?? szCounter ?? "", ""]),
+    ];
+    const quarantineRepairIds = stableDetailTexts.flatMap((stableDetailText) =>
+      stableCounterTexts.map((stableCounterText) =>
+        quarantineFingerprint({
+          ...stableFingerprintFields,
+          stableDetailText,
+          stableCounterText,
+        }),
+      ),
+    );
+    const quarantineId =
+      quarantineRepairIds[0] ?? panic("Missing quarantine id");
+    const publisherIdentity = exactPublisherIdentity ?? {
+      sourceDocumentId: `nalus-quarantine:${quarantineId}`,
+      aliases: undefined,
+    };
+    const fallbackCaseNumber =
+      exactPublisherIdentity !== null
+        ? `NALUS record ${nalusRecordId ?? sz ?? ecli}`
+        : `NALUS listing ${quarantineId}`;
+    const caseNumber = listedCaseNumber || fallbackCaseNumber;
+    const sourceDocumentId = publisherIdentity.sourceDocumentId;
+
+    let sourceUrl: URL;
+    if (sz !== undefined) {
+      sourceUrl = new URL(TEXT_URL);
+      sourceUrl.searchParams.set("sz", sz);
+    } else if (nalusRecordId !== undefined) {
+      sourceUrl = new URL(RESULT_DETAIL_URL);
+      sourceUrl.searchParams.set("id", nalusRecordId);
+    } else {
+      sourceUrl = new URL(RESULTS_URL);
+      sourceUrl.hash = `listing-${quarantineId}`;
+    }
+    listed.push({
+      caseNumber,
+      ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
+      counter: parseCounter(counterText ?? szCounter),
+      sourceDocumentId,
+      quarantineId,
+      quarantineRepairIds,
+      listingHtml,
+      ...(exactPublisherIdentity === null ? { identityQuarantined: true } : {}),
+      ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
+      sourceUrl: sourceUrl.href,
+      ...(sz === undefined ? {} : { sz }),
+      ecli,
+    });
+  });
+
+  const expectedRows = banner.rangeTo - banner.rangeFrom + 1;
+  if (
+    listed.length !== expectedRows ||
+    new Set(listed.map(({ sourceDocumentId }) => sourceDocumentId)).size !==
+      listed.length
+  ) {
+    throw new TypeError("NALUS result rows do not match the count banner");
+  }
+  return { listed, ...banner };
+};
+
+const fetchSearchPage = async (
+  state: CursorState,
+  signal: AbortSignal | undefined,
+): Promise<SearchPage | null> => {
+  const first = await fetchWithTimeout(SEARCH_URL, {
+    headers: COMMON_HEADERS,
+    redirect: "manual",
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
+  if (!first.ok) {
+    throw new TypeError(`NALUS search form returned HTTP ${first.status}`);
+  }
+  const formHtml = await first.text();
+  const viewState = hiddenField(formHtml, "__VIEWSTATE");
+  const validation = hiddenField(formHtml, "__EVENTVALIDATION");
+  if (!viewState || !validation) {
+    throw new TypeError("NALUS search form is missing WebForms state");
+  }
+
+  const form = new URLSearchParams({
+    __EVENTTARGET: "",
+    __EVENTARGUMENT: "",
+    __VIEWSTATE: viewState,
+    ...(hiddenField(formHtml, "__VIEWSTATEGENERATOR")
+      ? {
+          __VIEWSTATEGENERATOR:
+            hiddenField(formHtml, "__VIEWSTATEGENERATOR") ?? "",
+        }
+      : {}),
+    __EVENTVALIDATION: validation,
+    ctl00$MainContent$nalezy: "on",
+    ctl00$MainContent$usneseni: "on",
+    ctl00$MainContent$stanoviska_plena: "on",
+    ctl00$MainContent$resultsPageSize: String(RESULTS_PAGE_SIZE),
+    ctl00$MainContent$resultsFontSize: "10",
+    ctl00$MainContent$but_search: "Vyhledat",
+    ...searchFields(state),
+  });
+  const initialCookies = cookieHeader([first]);
+  const submit = await fetchWithTimeout(SEARCH_URL, {
+    method: "POST",
+    signal,
+    redirect: "manual",
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    headers: {
+      ...COMMON_HEADERS,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: initialCookies,
+      Referer: SEARCH_URL,
+    },
+    body: form.toString(),
+  });
+  if (submit.status !== 302) {
+    if (submit.ok) {
+      const $ = cheerio.load(await submit.text());
+      const noResults = $("#ctl00_MainContent_lbError").text().trim();
+      const resultsDisabled =
+        $("#ctl00_bResults").attr("disabled") === "disabled";
+      if (noResults === NO_RESULTS_MESSAGE && resultsDisabled) {
+        return null;
+      }
+      throw new TypeError("NALUS search did not confirm an empty result set");
+    }
+    throw new TypeError(`NALUS search returned HTTP ${submit.status}`);
+  }
+
+  const cookies = cookieHeader([first, submit]);
+  const pageUrl =
+    state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
+  const results = await fetchWithTimeout(pageUrl, {
+    headers: { ...COMMON_HEADERS, Cookie: cookies },
+    redirect: "manual",
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
+  if (!results.ok) {
+    throw new TypeError(`NALUS results returned HTTP ${results.status}`);
+  }
+  return parseResultPage(await results.text(), state.page);
+};
+
+const fetchListedDecision = async (
+  listed: ListedDecision,
+  signal: AbortSignal | undefined,
+): Promise<IngestionResult> => {
+  if (listed.identityQuarantined) {
+    return listedOnlyDecision(listed, "missing-record-identity");
+  }
+  if (listed.sz === undefined) {
+    return listedOnlyDecision(listed, "missing-text-action");
+  }
+  const response = await fetchWithTimeout(listed.sourceUrl, {
+    headers: COMMON_HEADERS,
+    redirect: "manual",
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 410) {
+      return listedOnlyDecision(listed, `http-${response.status}`);
+    }
+    throw new TypeError(
+      `NALUS decision ${listed.sourceDocumentId} returned HTTP ${response.status}`,
+    );
+  }
+  const responseHtml = await response.text();
+  const decision = parseDecisionPage({
+    html: responseHtml,
+    sourceUrl: listed.sourceUrl,
+    sourceDocumentId: listed.sourceDocumentId,
+    listedEcli: listed.ecli,
+    listedCounter: listed.counter,
+    nalusRecordId: listed.nalusRecordId,
+    nalusSz: listed.sz,
+    nalusQuarantineIds: listed.quarantineRepairIds,
+  });
+  if (!decision) {
+    return listedOnlyDecision(
+      listed,
+      "unparseable-detail",
+      multiResponseSourceRaw({
+        listingHtml: listed.listingHtml,
+        textHtml: responseHtml,
+      }),
+    );
+  }
+  if (listed.listingDocketMissing) {
+    decision.metadata["listingDocketMissing"] = true;
+  }
+
+  let abstractHtml: string | undefined;
+  try {
+    const abstractQuery = new URLSearchParams({ sz: listed.sz });
+    const abstractResponse = await fetchWithTimeout(
+      `${ABSTRACT_URL}?${abstractQuery.toString()}`,
+      {
+        headers: COMMON_HEADERS,
+        redirect: "manual",
+        signal,
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      },
+    );
+    if (abstractResponse.ok) {
+      abstractHtml = await abstractResponse.text();
+      const { abstract, legalSentence } = extractAbstract(abstractHtml);
+      if (abstract) {
+        decision.metadata["abstract"] = abstract;
+      }
+      if (legalSentence) {
+        decision.metadata["legalSentence"] = legalSentence;
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    // Abstracts are optional enrichment; the listed decision is complete
+    // enough to ingest without one.
+  }
+  Object.assign(
+    decision,
+    multiResponseSourceRaw({
+      listingHtml: listed.listingHtml,
+      textHtml: responseHtml,
+      abstractHtml,
+    }),
+  );
+  return decision;
+};
+
+const multiResponseSourceRaw = ({
+  listingHtml,
+  textHtml,
+  abstractHtml,
+}: {
+  listingHtml: string;
+  textHtml: string;
+  abstractHtml?: string | undefined;
+}): { sourceRaw: string; sourceRawContentType: string } => ({
+  sourceRaw: JSON.stringify({
+    listingHtml,
+    textHtml,
+    ...(abstractHtml === undefined ? {} : { abstractHtml }),
+  }),
+  sourceRawContentType: "application/json",
+});
+
+const listedOnlyDecision = (
+  listed: ListedDecision,
+  reason: string,
+  rawSource?: {
+    sourceRaw: string;
+    sourceRawContentType: string;
+  },
+): IngestionResult => ({
+  caseNumber: listed.caseNumber,
+  caseNumberIsPlaceholder: listed.listingDocketMissing === true,
+  isListingOnly: true,
+  sourceDocumentId: listed.sourceDocumentId,
+  sourceDocumentIdAliases: nalusIdentities({
+    recordId: listed.nalusRecordId,
+    sz: listed.sz,
+    ecli: listed.ecli,
+  })?.aliases,
+  sourceDocumentIdRepairAliases:
+    listed.identityQuarantined === true
+      ? undefined
+      : listed.quarantineRepairIds.map(
+          (quarantineId) => `nalus-quarantine:${quarantineId}`,
+        ),
+  legacySourceUrls: legacySourceUrlsFor(
+    listed.caseNumber,
+    listed.counter,
+    listed.sz,
+  ),
+  ecli: listed.ecli,
+  court: "Ústavní soud",
+  country: "CZE",
+  language: "cs",
+  sourceUrl: listed.sourceUrl,
+  metadata: {
+    caseNumber: listed.caseNumber,
+    ecli: listed.ecli,
+    court: "Ústavní soud",
+    ...(listed.nalusRecordId === undefined
+      ? {}
+      : { nalusRecordId: listed.nalusRecordId }),
+    nalusSz: listed.sz,
+    listingDocketMissing: listed.listingDocketMissing,
+    identityQuarantined: listed.identityQuarantined,
+    ecliCounter: listed.counter,
+    listedOnly: true,
+    listedOnlyReason: reason,
+  },
+  rawHash: hashContent(
+    `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
+  ),
+  parserVersion: PARSER_VERSION,
+  documentAst: EMPTY_AST,
+  sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
+  sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",
+});
+
+const fetchListedDecisions = async (
+  listed: readonly ListedDecision[],
+  signal: AbortSignal | undefined,
+): Promise<IngestionResult[]> => {
+  const decisions: IngestionResult[] = [];
+  for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
+    const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
+    decisions.push(
+      // oxlint-disable-next-line no-await-in-loop -- bounded batches pace the court while preserving result order
+      ...(await Promise.all(
+        batch.map(async (item) => await fetchListedDecision(item, signal)),
+      )),
+    );
+    if (start + DOCUMENT_CONCURRENCY < listed.length) {
+      // oxlint-disable-next-line no-await-in-loop -- deliberate pacing between bounded request batches
+      await Bun.sleep(100);
+    }
+  }
+  return decisions;
+};
 
 export const czUsAdapter: SourceAdapter = {
   key: ADAPTER_KEYS.CZ_US,
@@ -421,18 +1250,12 @@ export const czUsAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 100,
-  // Each fetchPage probes numbers in batches of PROBE_CONCURRENCY and
-  // then fetches one abstract per hit, serially:
-  // ~50 hits + 30 miss gap = ~80 probes ÷ 5 = 16 batches × ~2s = ~32s,
-  // plus ~50 abstract fetches × ~0.5s = ~25s, so ~55s per page.
+  // A page performs three serial search requests, then up to eight batches
+  // whose detail and abstract requests are sequential. At the request-level
+  // timeout that is about 190 seconds; the page budget leaves transport
+  // margin, while maxCycleMs still bounds how many slow pages one cycle runs.
   //
-  // maxSyncPages × pageTimeoutMs (10 × 120s) is below maxCycleMs, so the
-  // page budget is reachable even when every page runs to its timeout.
-  // A cycle that cannot reach it always ends as TIMEOUT, and the runner
-  // only backs off (cycle-progress `cycleWasIdle`) on a COMPLETED cycle
-  // that inserted nothing, so an unreachable budget pins a caught-up
-  // adapter to the 5s cadence and starves the other adapters.
-  pageTimeoutMs: 120_000,
+  pageTimeoutMs: 240_000,
   maxSyncPages: 10,
   maxCycleMs: 30 * 60 * 1000,
 
@@ -447,6 +1270,7 @@ export const czUsAdapter: SourceAdapter = {
     try {
       const searchUrl = "https://nalus.usoud.cz/Search/Search.aspx";
       const first = await fetchWithTimeout(searchUrl, {
+        redirect: "manual",
         signal,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       });
@@ -498,6 +1322,7 @@ export const czUsAdapter: SourceAdapter = {
       const results = await fetchWithTimeout(
         "https://nalus.usoud.cz/Search/Results.aspx",
         {
+          redirect: "manual",
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           headers: { Cookie: cookies },
@@ -520,178 +1345,88 @@ export const czUsAdapter: SourceAdapter = {
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const callerSignal = signal;
-        const currentYear = new Date().getFullYear();
-
-        const state: CursorState = cursor
-          ? parseCursor(cursor)
-          : { number: 1, year: currentYear, phase: SWEEP_PHASE.HISTORICAL };
-
-        const decisions: IngestionResult[] = [];
-        let consecutiveMisses = 0;
-
-        while (decisions.length < PAGE_SIZE) {
-          if (callerSignal?.aborted) {
-            return { decisions, nextCursor: makeCursor(state) };
+        const now = new Date();
+        const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
+        let page: SearchPage | null;
+        try {
+          page = await fetchSearchPage(state, signal);
+        } catch (error) {
+          if (state.page > 0 && error instanceof SearchPageDriftError) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
           }
-
-          // Probe PROBE_CONCURRENCY numbers at once. Most are
-          // misses (~97%), so concurrent probing cuts wall time
-          // by ~5x without meaningful server load increase.
-          const yearSuffix = toYearSuffix(state.year);
-
-          // oxlint-disable-next-line no-await-in-loop -- sequential probe batches; each batch advances the cursor based on the previous batch's results and consecutive-miss count
-          const probeResults = await Promise.allSettled(
-            Array.from({ length: PROBE_CONCURRENCY }, async (_, i) => {
-              const num = state.number + i;
-              const url = `${BASE_URL}?sz=I-${num}-${yearSuffix}_1`;
-              const response = await fetchWithTimeout(url, {
-                headers: COMMON_HEADERS,
-                signal: callerSignal,
-                timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-              });
-              if (response.status === 429) {
-                return { num, status: "rate-limited" as const };
-              }
-              if (!response.ok) {
-                return { num, status: "miss" as const };
-              }
-              const html = await response.text();
-              return { num, status: "ok" as const, html };
-            }),
-          );
-
-          // Process results in order to maintain consecutive miss tracking.
-          // batchStart lets early exits preserve cursor progress.
-          const batchStart = state.number;
-          let rateLimited = false;
-          for (const [i, result] of probeResults.entries()) {
-            if (callerSignal?.aborted) {
-              state.number = batchStart + i;
-              return { decisions, nextCursor: makeCursor(state) };
-            }
-
-            if (result.status === "rejected") {
-              const error: unknown = result.reason;
-              if (
-                error instanceof DOMException &&
-                error.name === "AbortError"
-              ) {
-                state.number = batchStart + i;
-                return { decisions, nextCursor: makeCursor(state) };
-              }
-              // Per-request timeout: treat as miss. Other errors:
-              // propagate so the pipeline can handle them.
-              if (
-                !(error instanceof DOMException) ||
-                error.name !== "TimeoutError"
-              ) {
-                state.number = batchStart + i;
-                throw error;
-              }
-              consecutiveMisses++;
-              continue;
-            }
-
-            const probe = result.value;
-            if (probe.status === "rate-limited") {
-              // Set cursor to the rate-limited item so
-              // unprocessed probes after it are retried.
-              state.number = batchStart + i;
-              rateLimited = true;
-              break;
-            }
-            if (probe.status !== "ok") {
-              consecutiveMisses++;
-              continue;
-            }
-
-            const decision = parseDecisionPage(
-              probe.html,
-              probe.num,
-              state.year,
-            );
-            if (!decision) {
-              consecutiveMisses++;
-              continue;
-            }
-
-            // Fetch abstract + legal sentence (separate endpoint)
-            try {
-              const szParam = `I-${probe.num}-${yearSuffix}_1`;
-              // oxlint-disable-next-line no-await-in-loop -- sequential per-decision abstract fetch within the ordered result-processing loop
-              const absResp = await fetchWithTimeout(
-                `${ABSTRACT_URL}?sz=${szParam}`,
-                {
-                  headers: COMMON_HEADERS,
-                  signal: callerSignal,
-                  timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-                },
-              );
-              if (absResp.ok) {
-                // oxlint-disable-next-line no-await-in-loop -- reads the body of the per-decision abstract fetch in this ordered loop
-                const absHtml = await absResp.text();
-                const { abstract, legalSentence } = extractAbstract(absHtml);
-                if (abstract) {
-                  decision.metadata["abstract"] = abstract;
-                }
-                if (legalSentence) {
-                  decision.metadata["legalSentence"] = legalSentence;
-                }
-                decision.sourceRaw = JSON.stringify({
-                  textHtml: decision.sourceRaw,
-                  abstractHtml: absHtml,
-                });
-              }
-            } catch {
-              // Abstract fetch failed; proceed without it
-            }
-
-            decisions.push(decision);
-            consecutiveMisses = 0;
+          throw error;
+        }
+        if (page === null) {
+          if (state.pass === CRAWL_PASS.VERIFY) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
           }
-
-          // Only advance past full batch if no rate limit hit.
-          // On 429, state.number was set to the failing item above.
-          if (!rateLimited) {
-            state.number += PROBE_CONCURRENCY;
-          } else {
-            // oxlint-disable-next-line no-await-in-loop -- rate-limit backoff between probe batches after a 429 from the court server
-            await Bun.sleep(backoffMs(0, 2000));
-          }
-
-          // Too many consecutive numbers with no decisions: year
-          // exhausted, move to the previous year within the phase's
-          // range. Below that range the sweep restarts at the top of
-          // the recent window; the historical descent hands over to the
-          // recent phase there and never walks the completed years again.
-          if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
-            if (
-              state.year <= sweepFloor(state.phase, currentYear) ||
-              state.year > currentYear
-            ) {
-              return {
-                decisions,
-                nextCursor: makeCursor({
-                  number: 1,
-                  year: currentYear,
-                  phase: SWEEP_PHASE.RECENT,
-                }),
-              };
-            }
-            state.number = 1;
-            state.year -= 1;
-            consecutiveMisses = 0;
-          }
-
-          // Rate limit between batches
-          // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential probe batches against the court server
-          await Bun.sleep(100);
+          return {
+            decisions: [],
+            nextCursor: makeCursor(nextSlice(state, now)),
+            coverage: {
+              slice: coverageSlice(state),
+              reported: 0,
+              collected: 0,
+            },
+          };
         }
 
+        const digest = rollingPageDigest(state.digest, page);
+        const sliceComplete = page.rangeTo === page.reported;
+        if (state.pass === CRAWL_PASS.VERIFY) {
+          if (!sliceComplete) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor({
+                ...state,
+                page: state.page + 1,
+                digest,
+              }),
+            };
+          }
+          if (digest !== state.expectedDigest) {
+            return {
+              decisions: [],
+              nextCursor: makeCursor(restartSlice(state)),
+            };
+          }
+          return {
+            decisions: [],
+            nextCursor: makeCursor(nextSlice(state, now)),
+            coverage: {
+              slice: coverageSlice(state),
+              reported: page.reported,
+              collected: page.reported,
+            },
+          };
+        }
+
+        const decisions = await fetchListedDecisions(page.listed, signal);
+        if (sliceComplete) {
+          return {
+            decisions,
+            nextCursor: makeCursor({
+              ...state,
+              pass: CRAWL_PASS.VERIFY,
+              page: 0,
+              digest: DIGEST_SEED,
+              expectedDigest: digest,
+            }),
+          };
+        }
         return {
           decisions,
-          nextCursor: makeCursor(state),
+          nextCursor: makeCursor({
+            ...state,
+            page: state.page + 1,
+            digest,
+          }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),

@@ -339,6 +339,128 @@ trailing sheet number (`-28`, číslo listu) belongs in its own optional
 field, not in the docket, or one case fragments into a row per sheet
 and no citation ever matches it.
 
+### 18. Enumerate what the publisher lists; never guess identities
+
+A predictable-looking document URL is not an enumeration API. Docket
+numbers may overlap across chambers, old records may use a different URL
+grammar, and one docket may publish several documents. Probing constructed
+identifiers can therefore return valid decisions while silently missing a
+large part of the corpus.
+
+Prefer the publisher's search, export, sitemap, dump or list UI, even when it
+is an awkward WebForms surface. Take the exact document identity and detail
+URL from each listed row. If no enumeration surface exists, describe the
+guessing blind spot in the adapter and coverage benchmark; do not present a
+miss cutoff as proof that the source is exhausted.
+
+### 19. Paginate a fixed set, not a moving target
+
+Offset pagination is safe only while the matched set and ordering stay fixed.
+If new records can land ahead of the cursor, every later offset moves and a
+document can pass between pages unseen. Oldest-first ordering helps when new
+records append at the end; otherwise persist an immutable query boundary in
+the cursor and catch up from that exact boundary after the snapshot finishes.
+Do not include the publisher's still-live current day in a verified snapshot.
+
+For every non-empty slice that can still mutate — including one-page slices —
+collect a digest of the exact publisher identities and make a listing-only
+verification pass before writing complete coverage. A mismatch holds or
+restarts the slice. A saved page that disappears after a withdrawal must also
+restart from page zero, not retry the invalid offset forever. The follow-up
+window must begin at the snapshot boundary plus one, not at a fresh rolling
+lookback, or a long crawl/outage creates a permanent gap.
+
+### 20. A listed document survives detail and parser failures
+
+Once the publisher's list states that a document exists, a missing, withdrawn
+or temporarily unparseable detail page must not erase that identity from the
+crawl. Permanent detail absence should produce a durable listing-only result
+with the exact `sourceDocumentId`, source URL and a structured reason in
+metadata. Archive the verbatim listing row as `sourceRaw` when no detail
+payload exists, so future parsers can repair historical metadata without
+depending on a steady-state cursor rediscovering that slice. Transient network
+and server failures must fail the page so its cursor is retried.
+When several publisher responses form one observation, archive all of them —
+listing, detail, abstract, export or equivalent — in a structured raw payload
+with the matching content type. Keeping only the preferred detail response
+silently discards listing-only fields and prevents future parser improvements
+from being replayed across courts without another historical crawl.
+
+If the preferred list identity is malformed but the row exposes another exact
+publisher key (for example, a retrieval identifier), persist a namespaced
+fallback identity rather than poisoning the page, and expose it as an alias
+whenever both are visible. The shared pipeline durably reserves the canonical
+identity and every exact alias to one decision UUID before inserting the row;
+this mapping must work in both directions and remain atomic when canonical and
+fallback observations overlap. A sequential lookup-and-migrate hint is not
+sufficient: two workers can otherwise insert under different uniqueness keys.
+Rolling deployments add a second race: a new worker can reserve an identity,
+then an older worker can insert the unique decision row without that registry.
+If a reservation points to no decision, resolve the exact identity against the
+decision table and repoint the reservation to that winner so replay converges.
+Validate canonical and alternate identities against the shared persistence
+limit at the publisher boundary. Normalize an invalid component before it can
+be used in a retrieval URL, metadata field or fallback path; dropping only its
+derived alias still lets an oversized value pin the page or fail persistence.
+The shared normalizer enforces the same rule for every court as a final safety
+net. Publisher identities are opaque and byte-exact: if general text
+sanitization would change an identity, reject the canonical value or discard
+the alias. Never reserve the rewritten value, which may be another document's
+legitimate exact key.
+If a counted row exposes no publisher identity at all, durably quarantine its
+verbatim listing payload under a content-addressed audit identity; do not let
+one poison row pin every later record in the slice. Continue emitting that
+quarantine fingerprint as a repair-only alias after a publisher identity
+recovers, so the repair enriches the audited row instead of inserting a
+duplicate. Repair-only aliases may adopt an existing row only while it is still
+stored under that degraded identity; never reserve an unclaimed heuristic as
+if it were an exact publisher key. Build the repair fingerprint only from
+fields that remain present when identity metadata recovers: exclude the ECLI,
+detail and retrieval-action labels, and any other value that can appear
+together with the new exact identity, or the recovered observation will hash
+differently from its quarantine row. Do not discard stable discriminators such
+as the docket and sibling counter merely because an older malformed row may
+lack one: use their most specific fingerprint for the quarantine identity and
+emit the bounded combinations of present and absent optional discriminators as
+repair-only aliases after recovery. A low-information form must never be
+reserved as an exact identity.
+Likewise, preserve the digit string of any numeric publisher component used to
+synthesize an exact alias, or reject it unless it is a safe bounded integer;
+rounding two counters to one JavaScript number silently merges documents. An
+absent component stays absent—never invent a default counter merely to produce
+an alias.
+Mark every listing-only result with
+`isListingOnly`, and, if the list also lacks a real docket, mark the durable
+label with `caseNumberIsPlaceholder`. Persist every discriminator already
+parsed from the listing, including sibling counters, even when detail retrieval
+fails; raw HTML is an audit fallback, not the only durable representation. A
+later partial refresh must never replace previously recovered detail metadata,
+dates, raw payload pointers, docket or derived citation key. It may enrich an
+earlier partial row;
+the pipeline persists adapter-neutral observation quality so that rule applies
+to every court without depending on court-specific metadata keys.
+If the existing row has a pending corpus mirror, replay its stored payload to
+settlement before allowing the source page to advance.
+
+Likewise, an HTTP 200 search response is not an empty result unless the
+publisher's exact no-results state is present. Fail closed on unknown markup.
+These rules let a later parser or source fix enrich the same row rather than
+leaving an invisible hole or creating a duplicate.
+
+### 21. Rebuild fetch URLs from a trusted origin
+
+Treat every URL embedded in publisher HTML or JSON as untrusted input. When an
+adapter expects a known endpoint, extract only the opaque publisher identifier
+and construct the request from a fixed HTTPS origin and path. Do not fetch an
+absolute action URL merely because its pathname contains the expected endpoint:
+a compromised result page could point the ingestion worker at a private or
+metadata service.
+
+Some publishers intentionally use several document hosts. In that case declare
+the exact allowed origins in the adapter and reject everything else before any
+request. Redirect handling needs the same boundary; a trusted start URL is not
+enough if the client can follow it to an arbitrary origin.
+
 ## DocumentAst Conventions
 
 ```typescript
@@ -386,6 +508,20 @@ When adding a new country adapter:
 10. **Wire the coverage count** — if the source reports a total for
     a query, return `SliceCoverage`; if it does not, say so in the
     adapter's doc comment so the blind spot is recorded
+11. **Use exact listed identities** — exercise overlapping dockets and
+    multiple documents under one docket; never infer uniqueness from a URL
+    pattern (rules 17-18)
+12. **Prove pagination against mutation** — use stable ordering or a fixed
+    snapshot boundary, verify one-page and multi-page slices, and test that a
+    withdrawn saved page plus an outage longer than the rolling window cannot
+    leave a date gap (rule 19)
+13. **Preserve listed-only records** — test a permanent missing/unparseable
+    detail, a malformed primary identity with an exact fallback, a counted row
+    with no identity, partial refresh after detail recovery, pending-mirror
+    replay, fallback-to-canonical identity migration, archived listing HTML,
+    and an unrecognised HTTP 200 search response (rule 20)
+14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
+    test every publisher-declared origin against an explicit allowlist (rule 21)
 
 ## File Map
 

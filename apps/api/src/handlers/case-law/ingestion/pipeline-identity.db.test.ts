@@ -6,14 +6,17 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawSources,
   relations,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -139,6 +142,64 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await storedCourts()).toEqual(before);
     });
 
+    test("repoints an abandoned rollout reservation to the stored winner", async () => {
+      const publisherId = "publisher-id-won-by-stale-task";
+      const decision = decisionAt("Rolling deployment winner", publisherId);
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const winner = await db.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          sourceDocumentId: { eq: publisherId },
+        },
+        columns: { id: true },
+      });
+      if (winner === undefined) {
+        throw new Error("expected rollout winner");
+      }
+      const abandonedId = createSafeId<"caseLawDecision">();
+      await db
+        .update(caseLawDecisionSourceIdentities)
+        .set({ decisionId: abandonedId })
+        .where(
+          and(
+            eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+            eq(caseLawDecisionSourceIdentities.sourceDocumentId, publisherId),
+          ),
+        );
+
+      await processDecision({
+        input: decision,
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const reservation =
+        await db.query.caseLawDecisionSourceIdentities.findFirst({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { eq: publisherId },
+          },
+          columns: { decisionId: true },
+        });
+      const rows = await db.execute(sql<{ count: number }>`
+        SELECT count(*)::int AS count
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND source_document_id = ${publisherId}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(reservation?.decisionId).toBe(winner.id);
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+    });
+
     test("uses publisher identity when a replay also carries a sheet number", async () => {
       const publisherId = "publisher-id-with-sheet";
       const decision = {
@@ -170,6 +231,711 @@ if (!databaseUrl || !runPostgresTests) {
       const row = Array.isArray(rows) ? rows.at(0) : undefined;
       expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
       expect(isRecord(row) ? row["sheetNumber"] : undefined).toBe("42");
+    });
+
+    test("adopts only the matching legacy row when a sibling arrives first", async () => {
+      const legacyUrl = "https://publisher.test/legacy-document";
+      const legacy = {
+        ...decisionAt("Legacy identity", undefined),
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const [legacyBefore] = await db.execute(sql<{ id: string }>`
+        SELECT id
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND source_document_id IS NULL
+      `);
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "second-document-under-the-docket",
+          sourceUrl: "https://publisher.test/sibling-document",
+          rawHash: "hash-second-document",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const identified = {
+        ...legacy,
+        sourceDocumentId: "publisher-id-learned-later",
+        legacySourceUrls: [legacyUrl],
+        rawHash: "hash-with-publisher-id",
+      };
+      await processDecision({
+        input: identified,
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        learnedId: string;
+      }>`
+        SELECT count(*)::int AS count,
+               min(id::text) FILTER (
+                 WHERE source_document_id = 'publisher-id-learned-later'
+               ) AS "learnedId"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? row["learnedId"] : undefined).toBe(
+        isRecord(legacyBefore) ? legacyBefore["id"] : undefined,
+      );
+    });
+
+    test("binds a redacted legacy tombstone before inserting siblings", async () => {
+      const legacyUrl = "https://publisher.test/redacted-legacy";
+      const legacy = {
+        ...decisionAt("Redacted legacy identity", undefined),
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await db
+        .update(caseLawDecisions)
+        .set({ redactedAt: new Date("2026-07-31T12:00:01.000Z") })
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.caseNumber, legacy.caseNumber),
+            eq(caseLawDecisions.court, legacy.court),
+          ),
+        );
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "redacted-publisher-id",
+          legacySourceUrls: [legacyUrl],
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "redacted-docket-sibling",
+          sourceUrl: "https://publisher.test/redacted-sibling",
+          rawHash: "hash-redacted-sibling",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:03.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        redactedIdentity: string;
+      }>`
+        SELECT count(*)::int AS count,
+               min(source_document_id) FILTER (
+                 WHERE redacted_at IS NOT NULL
+               ) AS "redactedIdentity"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? row["redactedIdentity"] : undefined).toBe(
+        "redacted-publisher-id",
+      );
+    });
+
+    test("does not adopt a legacy URL when its ECLI contradicts the decision", async () => {
+      const legacyUrl = "https://publisher.test/ambiguous-legacy-url";
+      const legacy = {
+        ...decisionAt("Ambiguous legacy identity", undefined),
+        ecli: "ECLI:TEST:LEGACY",
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "contradictory-ecli-publisher-id",
+          legacySourceUrls: [legacyUrl],
+          ecli: "ECLI:TEST:INCOMING",
+          rawHash: "hash-contradictory-ecli",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        legacyCount: number;
+        identifiedCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (WHERE source_document_id IS NULL)::int AS "legacyCount",
+               count(*) FILTER (
+                 WHERE source_document_id = 'contradictory-ecli-publisher-id'
+               )::int AS "identifiedCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(2);
+      expect(isRecord(row) ? Number(row["legacyCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["identifiedCount"]) : 0).toBe(1);
+    });
+
+    test("replaces a listing placeholder when detail recovers the docket", async () => {
+      const publisherId = "recovered-docket-publisher-id";
+      const placeholder = {
+        ...decisionAt("Recovered docket identity", publisherId),
+        caseNumber: "NALUS record 7301",
+        rawHash: "hash-listing-placeholder",
+      };
+      await processDecision({
+        input: placeholder,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const recoveredCaseNumber = "III.ÚS 81/24";
+      await processDecision({
+        input: {
+          ...placeholder,
+          caseNumber: recoveredCaseNumber,
+          metadata: { ...placeholder.metadata, recoveredDetail: true },
+          rawHash: "hash-recovered-docket",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...placeholder,
+          caseNumber: "NALUS record 7301",
+          caseNumberIsPlaceholder: true,
+          metadata: {
+            ...placeholder.metadata,
+            listedOnly: true,
+            listingDocketMissing: true,
+          },
+          rawHash: "hash-withdrawn-detail-placeholder",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{
+          caseNumber: string;
+          citationKey: string;
+          metadata: Record<string, unknown>;
+          sourceHash: string;
+        }>`
+          SELECT case_number AS "caseNumber",
+                 citation_key AS "citationKey",
+                 metadata,
+                 source_hash AS "sourceHash"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(isRecord(row) ? row["caseNumber"] : undefined).toBe(
+        recoveredCaseNumber,
+      );
+      expect(isRecord(row) ? row["citationKey"] : undefined).toBe(
+        bareCitationKey(recoveredCaseNumber),
+      );
+      expect(isRecord(row) ? row["sourceHash"] : undefined).toBe(
+        "hash-recovered-docket",
+      );
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["recoveredDetail"]
+          : undefined,
+      ).toBe(true);
+    });
+
+    test("migrates an exact publisher-id alias without duplicating the row", async () => {
+      const fallbackId = "nalus-sz:2-91-24_1";
+      const canonicalId = "nalus-record:7391";
+      const fallback = decisionAt("Publisher alias migration", fallbackId);
+      await processDecision({
+        input: fallback,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...fallback,
+          sourceDocumentId: canonicalId,
+          sourceDocumentIdAliases: [fallbackId],
+          rawHash: "hash-canonical-publisher-id",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        canonicalCount: number;
+        fallbackCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${canonicalId}
+               )::int AS "canonicalCount",
+               count(*) FILTER (
+                 WHERE source_document_id = ${fallbackId}
+               )::int AS "fallbackCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${fallback.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["canonicalCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
+    });
+
+    test("uses heuristic repair aliases only when an owner already exists", async () => {
+      const quarantineId = "nalus-quarantine:known-repair";
+      const recoveredId = "nalus-record:known-repair";
+      const quarantined = decisionAt("Known repair alias", quarantineId);
+      await processDecision({
+        input: quarantined,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...quarantined,
+          sourceDocumentId: recoveredId,
+          sourceDocumentIdRepairAliases: [quarantineId],
+          rawHash: "hash-known-repair-recovered",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...decisionAt(
+            "Distinct row after repair",
+            "nalus-record:known-repair-collision",
+          ),
+          sourceDocumentIdRepairAliases: [quarantineId],
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const unclaimedRepairId = "nalus-quarantine:shared-but-unclaimed";
+      await Promise.all(
+        ["nalus-record:distinct-a", "nalus-record:distinct-b"].map(
+          async (publisherId, index) =>
+            await processDecision({
+              input: {
+                ...decisionAt(`Distinct repair row ${index}`, publisherId),
+                sourceDocumentIdRepairAliases: [unclaimedRepairId],
+              },
+              observationOrder: BigInt(index + 4),
+              sourceId,
+              scopedDb,
+              observedAt: new Date(`2026-07-31T12:00:0${index + 2}.000Z`),
+            }),
+        ),
+      );
+
+      const rows = await db.execute(sql<{
+        recoveredCount: number;
+        postRepairDistinctCount: number;
+        distinctCount: number;
+        unclaimedRepairCount: number;
+      }>`
+        SELECT (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = ${quarantined.court}
+                   AND source_document_id = ${recoveredId}
+               ) AS "recoveredCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = 'Distinct row after repair'
+                   AND source_document_id = 'nalus-record:known-repair-collision'
+               ) AS "postRepairDistinctCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court LIKE 'Distinct repair row %'
+               ) AS "distinctCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decision_source_identities
+                 WHERE source_id = ${sourceId}
+                   AND source_document_id = ${unclaimedRepairId}
+               ) AS "unclaimedRepairCount"
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["recoveredCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["postRepairDistinctCount"]) : 0).toBe(
+        1,
+      );
+      expect(isRecord(row) ? Number(row["distinctCount"]) : 0).toBe(2);
+      expect(isRecord(row) ? Number(row["unclaimedRepairCount"]) : -1).toBe(0);
+    });
+
+    test("keeps canonical ownership when a later observation has only a fallback", async () => {
+      const canonicalId = "nalus-record:inverse-7391";
+      const fallbackId = "nalus-sz:inverse-2-91-24_1";
+      const canonical = {
+        ...decisionAt("Inverse publisher alias", canonicalId),
+        sourceDocumentIdAliases: [fallbackId],
+      };
+      await processDecision({
+        input: canonical,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...canonical,
+          sourceDocumentId: fallbackId,
+          sourceDocumentIdAliases: undefined,
+          rawHash: "hash-inverse-fallback",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        canonicalCount: number;
+        fallbackCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${canonicalId}
+               )::int AS "canonicalCount",
+               count(*) FILTER (
+                 WHERE source_document_id = ${fallbackId}
+               )::int AS "fallbackCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${canonical.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["canonicalCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
+    });
+
+    test("atomically reserves one row for concurrent canonical and fallback observations", async () => {
+      const canonicalId = "nalus-record:concurrent-7391";
+      const fallbackId = "nalus-sz:concurrent-2-91-24_1";
+      const base = decisionAt("Concurrent publisher alias", canonicalId);
+      let reservationsCompleted = 0;
+      let releaseReservations = (): void => undefined;
+      const bothReserved = new Promise<void>((resolve) => {
+        releaseReservations = resolve;
+      });
+      const concurrentDb: ScopedDb = async (transactionWork) => {
+        const value = await scopedDb(transactionWork);
+        reservationsCompleted += 1;
+        if (reservationsCompleted <= 2) {
+          if (reservationsCompleted === 2) {
+            releaseReservations();
+          }
+          await bothReserved;
+        }
+        return value;
+      };
+
+      const outcomes = await Promise.all([
+        processDecision({
+          input: {
+            ...base,
+            sourceDocumentIdAliases: [fallbackId],
+          },
+          observationOrder: 1n,
+          sourceId,
+          scopedDb: concurrentDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        }),
+        processDecision({
+          input: {
+            ...base,
+            sourceDocumentId: fallbackId,
+            rawHash: "hash-concurrent-fallback",
+          },
+          observationOrder: 2n,
+          sourceId,
+          scopedDb: concurrentDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        }),
+      ]);
+
+      expect(outcomes.every(({ status }) => status === "complete")).toBe(true);
+      const rows = await db.execute(sql<{
+        decisionCount: number;
+        ownerCount: number;
+      }>`
+        SELECT (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = ${base.court}
+               ) AS "decisionCount",
+               (
+                 SELECT count(DISTINCT decision_id)::int
+                 FROM case_law_decision_source_identities
+                 WHERE source_id = ${sourceId}
+                   AND source_document_id IN (${canonicalId}, ${fallbackId})
+               ) AS "ownerCount"
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["decisionCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["ownerCount"]) : 0).toBe(1);
+    });
+
+    test("preserves recovered detail on a listing-only refresh with a valid docket", async () => {
+      const publisherId = "listing-only-preserves-detail";
+      const recovered = decisionAt("Recovered detail court", publisherId);
+      await processDecision({
+        input: recovered,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...recovered,
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "degraded-listing-hash",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{
+          court: string;
+          fulltext: string;
+          metadata: Record<string, unknown>;
+          observationHash: string;
+          sourceHash: string;
+        }>`
+          SELECT court,
+                 fulltext,
+                 metadata,
+                 source_observation_hash AS "observationHash",
+                 source_hash AS "sourceHash"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(row).toMatchObject({
+        court: recovered.court,
+        fulltext: recovered.fulltext,
+        observationHash: "degraded-listing-hash",
+        sourceHash: recovered.rawHash,
+      });
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["court"]
+          : undefined,
+      ).toBe(recovered.court);
+    });
+
+    test("allows a better listing-only observation to replace an earlier partial row", async () => {
+      const publisherId = "listing-only-enrichment";
+      const partial = {
+        ...decisionAt("Partial listing court", publisherId),
+        caseNumber: "NALUS record 8801",
+        caseNumberIsPlaceholder: true,
+        fulltext: undefined,
+        isListingOnly: true,
+        metadata: { listedOnly: true, listingDocketMissing: true },
+        rawHash: "hash-partial-placeholder",
+      };
+      await processDecision({
+        input: partial,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const recoveredCaseNumber = "II.ÚS 8801/24";
+      await processDecision({
+        input: {
+          ...partial,
+          caseNumber: recoveredCaseNumber,
+          caseNumberIsPlaceholder: undefined,
+          metadata: { listedOnly: true, listingDocketMissing: false },
+          rawHash: "hash-partial-with-docket",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{
+          caseNumber: string;
+          citationKey: string;
+          metadata: Record<string, unknown>;
+          sourceHash: string;
+        }>`
+          SELECT case_number AS "caseNumber",
+                 citation_key AS "citationKey",
+                 metadata,
+                 source_hash AS "sourceHash"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(row).toMatchObject({
+        caseNumber: recoveredCaseNumber,
+        citationKey: bareCitationKey(recoveredCaseNumber),
+        sourceHash: "hash-partial-with-docket",
+      });
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["listingDocketMissing"]
+          : undefined,
+      ).toBe(false);
+    });
+
+    test("binds a legacy row before a listing-only preservation return", async () => {
+      const publisherId = "listing-only-legacy-binding";
+      const legacyUrl = "https://publisher.test/listing-only-legacy";
+      const legacy = {
+        ...decisionAt("Listing-only legacy", undefined),
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: publisherId,
+          legacySourceUrls: [legacyUrl],
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-binding",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: publisherId,
+          sourceUrl: "https://publisher.test/current-listing",
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-without-legacy-hint",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const rows = await db.execute(sql<{ count: number; identified: number }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${publisherId}
+               )::int AS identified
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["identified"]) : 0).toBe(1);
     });
 
     test("an older overlapping observation cannot overwrite a newer winner", async () => {
@@ -357,6 +1123,60 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         scopedDb: racingDb,
         observedAt: new Date("2026-07-31T12:04:01.000Z"),
+      });
+
+      expect(transactions).toBe(3);
+      expect(outcome).toEqual({
+        status: "retryable",
+        inserted: false,
+        reason: "corpus-write",
+      });
+    });
+
+    test("a listing-only watermark race holds a pending winner for replay", async () => {
+      const publisherId = "listing-only-watermark-pending-winner";
+      const initial = decisionAt("Listing-only race detail", publisherId);
+
+      await processDecision({
+        input: initial,
+        observationOrder: 50n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:05:00.000Z"),
+      });
+
+      let transactions = 0;
+      const racingDb: ScopedDb = async (transactionWork) => {
+        transactions += 1;
+        if (transactions === 2) {
+          await db
+            .update(caseLawDecisions)
+            .set({
+              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+              sourceObservationOrder: 52n,
+            })
+            .where(
+              and(
+                eq(caseLawDecisions.sourceId, sourceId),
+                eq(caseLawDecisions.sourceDocumentId, publisherId),
+              ),
+            );
+        }
+        return await scopedDb(transactionWork);
+      };
+
+      const outcome = await processDecision({
+        input: {
+          ...initial,
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-watermark-race",
+        },
+        observationOrder: 51n,
+        sourceId,
+        scopedDb: racingDb,
+        observedAt: new Date("2026-07-31T12:05:01.000Z"),
       });
 
       expect(transactions).toBe(3);

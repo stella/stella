@@ -347,6 +347,37 @@ export const caseLawDecisions = p.pgTable(
 );
 
 /**
+ * Durable ownership for every exact publisher identity observed for a
+ * decision. `decisionId` intentionally has no foreign key: identity is
+ * reserved before the decision row is inserted, so overlapping canonical and
+ * fallback observations converge on the same UUID instead of racing two
+ * uniqueness keys. A later retry completes any reservation whose worker died.
+ */
+export const caseLawDecisionSourceIdentities = p.pgTable(
+  "case_law_decision_source_identities",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 256 })
+      .notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.sourceDocumentId],
+      name: "case_law_decision_source_identities_pk",
+    }),
+    p
+      .index("case_law_decision_source_identities_decision_idx")
+      .on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
  * Exact corpus-object keys reserved before an external PUT. This deliberately
  * has no foreign key: a redaction or source deletion must not remove the
  * cleanup ownership record before the root scheduler has erased its objects.

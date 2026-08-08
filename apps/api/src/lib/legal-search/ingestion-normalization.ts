@@ -6,9 +6,33 @@ import {
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+  type IngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+
+/** Pipeline-owned quality marker persisted with partial source observations. */
+const PARTIAL_OBSERVATION_KEY = "_stellaPartialObservation";
+
+export type PartialObservation = {
+  caseNumberIsPlaceholder: boolean;
+  isListingOnly: boolean;
+};
+
+export const partialObservationFromMetadata = (
+  metadata: unknown,
+): PartialObservation => {
+  const value = isRecord(metadata)
+    ? metadata[PARTIAL_OBSERVATION_KEY]
+    : undefined;
+  return {
+    caseNumberIsPlaceholder:
+      isRecord(value) && value["caseNumberIsPlaceholder"] === true,
+    isListingOnly: isRecord(value) && value["isListingOnly"] === true,
+  };
+};
 
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
@@ -58,10 +82,53 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     ? sanitizedDocumentAst
     : EMPTY_AST;
 
+  const metadata = Object.fromEntries(
+    Object.entries(sanitizeMetadata(result.metadata)).filter(
+      ([key]) => key !== PARTIAL_OBSERVATION_KEY,
+    ),
+  );
+  // Adapter metadata describes the publisher. Keep ingestion quality in a
+  // reserved pipeline-owned marker so every court gets the same partial-row
+  // upgrade/downgrade semantics without relying on court-specific keys.
+  if (
+    result.caseNumberIsPlaceholder === true ||
+    result.isListingOnly === true
+  ) {
+    metadata[PARTIAL_OBSERVATION_KEY] = {
+      caseNumberIsPlaceholder: result.caseNumberIsPlaceholder === true,
+      isListingOnly: result.isListingOnly === true,
+    };
+  }
+
+  const sourceDocumentId = strip(result.sourceDocumentId);
+  if (
+    result.sourceDocumentId !== undefined &&
+    sourceDocumentId !== result.sourceDocumentId
+  ) {
+    throw new TypeError("Publisher document identity cannot be sanitized");
+  }
+  if (
+    sourceDocumentId !== undefined &&
+    !isPersistableSourceDocumentId(sourceDocumentId)
+  ) {
+    throw new TypeError("Publisher document identity exceeds storage limits");
+  }
+
   return {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
-    sourceDocumentId: strip(result.sourceDocumentId),
+    sourceDocumentId,
+    sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
+      (identity): identity is string =>
+        strip(identity) === identity && isPersistableSourceDocumentId(identity),
+    ),
+    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases?.filter(
+      (identity): identity is string =>
+        strip(identity) === identity && isPersistableSourceDocumentId(identity),
+    ),
+    legacySourceUrls: result.legacySourceUrls
+      ?.map((url) => strip(url))
+      .filter((url): url is string => url !== undefined),
     sheetNumber: strip(result.sheetNumber),
     fulltext: result.fulltext
       ? collapseSpacedLetters(strip(result.fulltext) ?? "")
@@ -70,7 +137,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     decisionType: normalizeDecisionType(strip(result.decisionType)),
     sourceUrl: strip(result.sourceUrl),
     documentUrl: strip(result.documentUrl),
-    metadata: sanitizeMetadata(result.metadata),
+    metadata,
     publisherCitedCases: result.publisherCitedCases?.map((cited) =>
       stripDangerousChars(cited),
     ),
