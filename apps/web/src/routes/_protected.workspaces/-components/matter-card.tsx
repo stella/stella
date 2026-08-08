@@ -18,7 +18,6 @@ import { DocumentIcon } from "@/components/document-icon";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { overviewOptions } from "@/lib/workspaces/queries";
@@ -198,13 +197,7 @@ export const MatterCard = ({
                   />
                 )}
                 <Tooltip
-                  content={new Date(workspace.lastActivityAt).toLocaleString(
-                    getFormattingLocale(),
-                    {
-                      dateStyle: "full",
-                      timeStyle: "medium",
-                    },
-                  )}
+                  content={formatFullTimestamp(workspace.lastActivityAt)}
                   render={<span className={cn("shrink-0", recencyClass)} />}
                 >
                   {lastActivityAt}

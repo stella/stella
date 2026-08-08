@@ -48,8 +48,7 @@ describe("PostgreSQL timestamp cursor values", () => {
   });
 
   test("keeps Z-less microsecond cursors readable, tagged naive", () => {
-    // Issued before cursor rendering was UTC-anchored; the boundary keeps the
-    // session-zone interpretation these were cut under.
+    // Issued before the UTC marker was added; the wall-clock was already UTC.
     const value = "2026-07-10T08:15:30.123456";
     expect(parsePgTimestampCursorValue(value)).toEqual({
       type: "pgTimestampCursor",
@@ -200,13 +199,10 @@ describe("createTimestampIdCursorCodec keysetAfter", () => {
     expect(descending).toContain('"id" <');
   });
 
-  test("legacy naive microsecond cursor keeps its session-zone boundary", () => {
+  test("legacy naive microsecond cursor keeps its UTC boundary", () => {
     const rendered = renderAfter("2026-07-10T08:15:30.123456", "ascending");
     expect(rendered).not.toContain("date_trunc");
-    // Issued under session-zone semantics; re-anchoring it as UTC would move
-    // the boundary on deployments whose server zone is not UTC.
-    expect(rendered).not.toContain("AT TIME ZONE");
-    expect(rendered).toContain("::timestamptz");
+    expect(rendered).toContain("AT TIME ZONE 'UTC'");
   });
 
   test("INVARIANT: an unresolved millisecond cursor skips its ambiguous interval", () => {

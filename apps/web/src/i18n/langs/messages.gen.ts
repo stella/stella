@@ -1025,6 +1025,7 @@ type Messages = {
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
+    "unknownUser": "Unknown user";
     "unpin": "Unpin";
     "unverified": "Unverified";
     "unverifiedCitationHint": "This quote could not be matched to the source document.";

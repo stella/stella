@@ -35,14 +35,17 @@ import type {
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
-  isValidDateCursorValue,
-  isValidTimestampCursorValue,
-} from "@/api/lib/entities/cursor-validation";
-import type {
-  EntitiesWindowCursorValue,
-  EntitiesWindowCursorValues,
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
+import {
+  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
+  type EntitiesWindowCursorValue,
+  type EntitiesWindowCursorValues,
 } from "@/api/lib/entities/window-cursor";
 import {
   AGENDA_ITEM_KIND,
@@ -291,8 +294,7 @@ const LOW_TIMESTAMP_SENTINEL = new Date("0001-01-01T00:00:00.000Z");
 const orderSortKey = ({ direction, expr }: EntitySortKey): SQL =>
   direction === "desc" ? sql`${expr} DESC` : sql`${expr} ASC`;
 
-const timestampCursorExpr = (expr: SQL): SQL =>
-  sql`to_char(${expr} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
+const timestampCursorExpr = (expr: SQL): SQL => pgTimestampCursorValue(expr);
 
 const textSortKey = ({
   direction,
@@ -374,10 +376,13 @@ const displayedNameExpr = (): SQL =>
   sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
 
 const propertySortValueExpr = (propertyId: string): SQL => sql`(
-  SELECT COALESCE(
-    ${fields.content}->>'value',
-    ${fields.content}->>'fileName',
-    ''
+  SELECT left(
+    COALESCE(
+      ${fields.content}->>'value',
+      ${fields.content}->>'fileName',
+      ''
+    ),
+    ${ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH}
   )
   FROM ${fields}
   WHERE ${fields.workspaceId} = ${entities.workspaceId}
@@ -547,7 +552,7 @@ const parseCursorValue = (
       if (typeof value !== "string") {
         return null;
       }
-      return isValidTimestampCursorValue(value) ? value : null;
+      return parsePgTimestampCursorValue(value) === null ? null : value;
     }
     default: {
       key.type satisfies never;
@@ -558,7 +563,11 @@ const parseCursorValue = (
 
 const cursorValueSql = (key: EntitySortKey, value: number | string): SQL => {
   if (key.type === "timestamp") {
-    return sql`(${value}::timestamp AT TIME ZONE 'UTC')`;
+    const timestamp = parsePgTimestampCursorValue(value);
+    if (timestamp === null) {
+      return panic("Validated timestamp cursor did not parse");
+    }
+    return pgTimestampCursorBoundary(timestamp);
   }
 
   return sql`${value}`;

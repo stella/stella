@@ -1,8 +1,19 @@
 import { Result } from "better-result";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const ENTITIES_WINDOW_CURSOR_VERSION = 2;
+
+// Entity windows carry at most LIMITS.propertiesCount projected field sort
+// values. JSON can expand one control character to six ASCII bytes; add room
+// for the version wrapper, built-in sort keys, and the entity id before
+// base64url encoding.
+export const ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH = 1000;
+const ENTITIES_WINDOW_CURSOR_JSON_MAX_BYTES =
+  LIMITS.propertiesCount * ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH * 6 + 1024;
+export const ENTITIES_WINDOW_CURSOR_MAX_LENGTH =
+  Math.ceil(ENTITIES_WINDOW_CURSOR_JSON_MAX_BYTES / 3) * 4;
 
 export type EntitiesWindowCursorValue = string | number | null;
 export type EntitiesWindowCursorValues = readonly EntitiesWindowCursorValue[];

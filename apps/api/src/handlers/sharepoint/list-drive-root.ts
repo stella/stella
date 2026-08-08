@@ -10,13 +10,14 @@ import {
 } from "@/api/handlers/sharepoint/graph-client";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_PAGE_SIZE = 50;
 
 const requestQuery = t.Object({
-  cursor: t.Optional(t.String({ maxLength: 4096 })),
+  cursor: t.Optional(tPaginationCursor(4096)),
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
 });
 

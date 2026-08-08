@@ -307,7 +307,7 @@ export const handleHostedEntitlementUpsert = async ({
       resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
       resourceId: existingByProvider.id,
       eventId,
-      changes: { provider_event: { new: eventId } },
+      changes: { provider_event: { old: null, new: eventId } },
     });
     entitlementId = existingByProvider.id;
   } else {
@@ -361,7 +361,7 @@ export const handleHostedEntitlementUpsert = async ({
         resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
         resourceId: existingByAccountRef.id,
         eventId,
-        changes: { provider_event: { new: eventId } },
+        changes: { provider_event: { old: null, new: eventId } },
       });
       entitlementId = existingByAccountRef.id;
     } else {

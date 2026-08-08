@@ -4,7 +4,11 @@ import { t } from "elysia";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 
@@ -27,7 +31,7 @@ const listDocxSuggestions = createSafeHandler(
     mcp: { type: "internal", reason: "document_processing" },
     params: workspaceParams({ entityId: tSafeId("entity") }),
     query: t.Object({
-      cursor: t.Optional(t.String()),
+      cursor: t.Optional(tPaginationCursor()),
       limit: t.Optional(
         t.Integer({ minimum: 1, maximum: DOCX_SUGGESTIONS_PAGE_SIZE_MAX }),
       ),

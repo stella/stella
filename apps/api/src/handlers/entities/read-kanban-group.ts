@@ -5,7 +5,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import {
   buildKanbanGroupCondition,
   tGroupByPropertyId,
@@ -13,6 +13,7 @@ import {
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
@@ -21,14 +22,16 @@ import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readKanbanGroupBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
-  sorts: t.Optional(t.Array(tViewSortSchema)),
+  sorts: t.Optional(
+    t.Array(tViewSortSchema, { maxItems: LIMITS.propertiesCount }),
+  ),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
       maximum: LIMITS.entitiesWindowSizeMax,
     }),
   ),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor(ENTITIES_WINDOW_CURSOR_MAX_LENGTH)),
   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {

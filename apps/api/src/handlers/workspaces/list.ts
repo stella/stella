@@ -109,6 +109,7 @@ const readWorkspaces = createSafeRootHandler(
                 .select({
                   workspaceId: workspaceMembers.workspaceId,
                   userId: workspaceMembers.userId,
+                  userEmail: user.email,
                   userName: user.name,
                   userImage: user.image,
                   lastActivity: max(entities.updatedAt),
@@ -126,6 +127,7 @@ const readWorkspaces = createSafeRootHandler(
                 .groupBy(
                   workspaceMembers.workspaceId,
                   workspaceMembers.userId,
+                  user.email,
                   user.name,
                   user.image,
                 )

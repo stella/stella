@@ -2,13 +2,15 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { aiMemories, auditLogs } from "@/api/db/schema";
+import { aiMemories } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
-import { memorySchedulerAuditColumns } from "@/api/lib/memory/memory-scheduler-audit";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const MEMORY_CURATOR_TASK = "memory.curator" as const;
@@ -182,22 +184,44 @@ const recordMemoryLifecycleAuditEvents = async (
   if (rows.length === 0) {
     return;
   }
-  await tx.insert(auditLogs).values(
-    rows.map((row) => ({
-      id: createSafeId<"auditLog">(),
-      organizationId: row.organizationId,
-      workspaceId: row.workspaceId,
+  const rowsByOrganization = new Map<
+    SafeId<"organization">,
+    MemoryLifecycleRow[]
+  >();
+  for (const row of rows) {
+    const organizationRows = rowsByOrganization.get(row.organizationId);
+    if (organizationRows) {
+      organizationRows.push(row);
+    } else {
+      rowsByOrganization.set(row.organizationId, [row]);
+    }
+  }
+
+  for (const [organizationId, organizationRows] of rowsByOrganization) {
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      execution: {
+        performer: {
+          id: "memory-curator",
+          name: "Memory curator",
+          type: "service",
+        },
+        trigger: { source: MEMORY_CURATOR_TASK, type: "system" },
+      },
+      organizationId,
+      workspaceId: null,
       userId: MEMORY_CURATOR_AUDIT_ACTOR,
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
-      resourceId: row.id,
-      changes: { status: { old: oldStatus, new: newStatus } },
-      metadata: { source: MEMORY_CURATOR_TASK },
-      ...memorySchedulerAuditColumns({
-        id: "memory-curator",
-        name: "Memory curator",
-        source: MEMORY_CURATOR_TASK,
-      }),
-    })),
-  );
+    });
+    // oxlint-disable-next-line no-await-in-loop -- one bounded insert per organization represented in the scheduler batch
+    await recordAuditEvent(
+      tx,
+      organizationRows.map((row) => ({
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
+        resourceId: row.id,
+        workspaceId: row.workspaceId,
+        changes: { status: { old: oldStatus, new: newStatus } },
+        metadata: { source: MEMORY_CURATOR_TASK },
+      })),
+    );
+  }
 };

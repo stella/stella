@@ -1,14 +1,17 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { listContactsPage } from "@/api/handlers/contacts/list-query";
+import {
+  CONTACT_CURSOR_MAX_LENGTH,
+  listContactsPage,
+} from "@/api/handlers/contacts/list-query";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tPaginationLimit } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const readContactsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.contactsPageSizeMax)),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor(CONTACT_CURSOR_MAX_LENGTH)),
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
   q: t.Optional(t.String()),
 });

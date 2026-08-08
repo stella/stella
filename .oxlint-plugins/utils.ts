@@ -6,6 +6,14 @@
 
 export type AstNode = { type: string } & Record<string, unknown>;
 
+type FilenameContext = {
+  filename?: string;
+  getFilename?: () => string;
+};
+
+export const filenameForContext = (context: FilenameContext): string =>
+  (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
+
 export const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
@@ -119,4 +127,13 @@ export const getImportedName = (specifier: unknown): string | null => {
     return imported.value;
   }
   return null;
+};
+
+// Resolve an ImportSpecifier's local binding name. This differs from
+// getImportedName for aliased imports such as `import { source as local }`.
+export const getImportLocalName = (specifier: unknown): string | null => {
+  if (!isAstNode(specifier) || specifier.type !== "ImportSpecifier") {
+    return null;
+  }
+  return isIdentifier(specifier.local) ? specifier.local.name : null;
 };

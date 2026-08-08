@@ -1,14 +1,6 @@
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
-
 import Tooltip from "@/components/tooltip";
-import {
-  formatFullTimestamp,
-  formatRelativeTime,
-} from "@/components/workspaces/entity-utils";
+import { UserIdentity } from "@/components/user-avatar";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
 export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
@@ -21,23 +13,14 @@ export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
     return null;
   }
 
-  const initials = name
-    .split(" ")
-    .map((n) => n.at(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
   return (
-    <div className="text-muted-foreground flex min-w-0 items-center justify-end gap-1.5 text-xs">
-      <Avatar className="size-5 text-[10px]">
-        {entity.createdByImage && (
-          <AvatarImage alt={name} src={entity.createdByImage} />
-        )}
-        <AvatarFallback>{initials}</AvatarFallback>
-      </Avatar>
-      <span className="truncate text-end">{name}</span>
-    </div>
+    <UserIdentity
+      avatarClassName="size-5 shrink-0 text-[10px]"
+      className="justify-end gap-1.5"
+      image={entity.createdByImage}
+      name={name}
+      nameClassName="text-muted-foreground text-end text-xs font-normal"
+    />
   );
 };
 

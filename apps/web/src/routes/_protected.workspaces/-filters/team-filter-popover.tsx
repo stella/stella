@@ -12,8 +12,8 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
+import { getDisplayName } from "@/lib/get-display-name";
 import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
-import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
 
 type TeamFilterPopoverProps = {
   teamValue: string[] | undefined;
@@ -25,6 +25,7 @@ type TeamFilterPopoverProps = {
 
 type MemberOption = {
   userId: string;
+  userEmail: string;
   userName: string;
   userImage: string | null;
 };
@@ -47,7 +48,10 @@ export const TeamFilterPopover = ({
         if (!map.has(m.userId)) {
           map.set(m.userId, {
             userId: m.userId,
-            userName: getDisplayName(m.userName, m.userId),
+            userEmail: m.userEmail,
+            userName:
+              getDisplayName(m.userName, m.userEmail) ??
+              t("common.unknownUser"),
             userImage: m.userImage,
           });
         }
@@ -61,7 +65,12 @@ export const TeamFilterPopover = ({
 
   const q = search.trim().toLowerCase();
   const filtered = q
-    ? members.filter((m) => m.userName.toLowerCase().includes(q))
+    ? members.filter(
+        (m) =>
+          m.userName.toLowerCase().includes(q) ||
+          m.userEmail.toLowerCase().includes(q) ||
+          m.userId.toLowerCase().includes(q),
+      )
     : members;
 
   const selectedTeam: Set<string> = teamValue ? new Set(teamValue) : new Set();

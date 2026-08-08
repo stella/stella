@@ -1,25 +1,14 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { LEGAL_LIST_STATUSES, legalLists } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
-import {
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
@@ -38,20 +27,10 @@ const config = {
   query: querySchema,
 } satisfies HandlerConfig;
 
-type ListCursor = {
-  createdAt: ParsedPgTimestampCursor;
-  id: SafeId<"legalList">;
-};
-
-const decodeCursor = (value: string): ListCursor | null => {
-  const parts = decodePaginationCursor(value);
-  const createdAt = parsePgTimestampCursorValue(parts?.at(0));
-  const id = parts?.at(1);
-  if (!createdAt || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-  return { createdAt, id: brandPersistedLegalListId(id) };
-};
+const listCursorCodec = createTimestampIdCursorCodec({
+  column: legalLists.createdAt,
+  brandId: brandPersistedLegalListId,
+});
 
 const readLists = createSafeHandler(
   config,
@@ -70,19 +49,17 @@ const readLists = createSafeHandler(
     ];
 
     if (query.cursor) {
-      const cursor = decodeCursor(query.cursor);
+      const cursor = listCursorCodec.decode(query.cursor);
       if (!cursor) {
         return Result.err(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
       }
-      const cursorCondition = or(
-        lt(legalLists.createdAt, pgTimestampCursorBoundary(cursor.createdAt)),
-        and(
-          eq(legalLists.createdAt, pgTimestampCursorBoundary(cursor.createdAt)),
-          lt(legalLists.id, cursor.id),
-        ),
-      );
+      const cursorCondition = listCursorCodec.keysetAfter({
+        cursor,
+        direction: "descending",
+        idColumn: legalLists.id,
+      });
       if (cursorCondition) {
         conditions.push(cursorCondition);
       }
@@ -98,9 +75,8 @@ const readLists = createSafeHandler(
             status: legalLists.status,
             createdAt: legalLists.createdAt,
             updatedAt: legalLists.updatedAt,
-            createdAtCursor: pgTimestampCursorValue(legalLists.createdAt).as(
-              "created_at_cursor",
-            ),
+            createdAtCursor:
+              listCursorCodec.cursorValue.as("created_at_cursor"),
           })
           .from(legalLists)
           .where(and(...conditions))
@@ -113,7 +89,7 @@ const readLists = createSafeHandler(
       rows,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAtCursor, item.id]),
+        listCursorCodec.encode(item.createdAtCursor, item.id),
     });
 
     return Result.ok({

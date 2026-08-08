@@ -4551,6 +4551,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
+                          maxLength: 512,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
@@ -6447,6 +6448,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
+                          maxLength: 512,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
@@ -8433,6 +8435,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
+                          maxLength: 4154,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         type: {
@@ -13383,6 +13388,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
+                          maxItems: 20,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -13400,6 +13406,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         cursor: {
+                          maxLength: 161368,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
@@ -17170,6 +17177,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         limit: {
@@ -20586,6 +20596,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         sorts: {
+                          maxItems: 20,
                           type: "array",
                           items: {
                             additionalProperties: false,
@@ -20623,6 +20634,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
+                          maxLength: 161368,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         excludedKinds: {
@@ -28187,6 +28201,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         jurisdiction: {
@@ -61089,6 +61106,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         limit: {

@@ -322,6 +322,214 @@ const countEntityKindGlyphs = (content: string): number => {
   return total;
 };
 
+const countMatches = (content: string, pattern: RegExp): number =>
+  (content.match(pattern) ?? []).length;
+
+// Preserve strings, templates, and regex literals because some shared-helper
+// metrics inspect import sources and SQL literals. Only parser-recognized
+// comment trivia is blanked, with line breaks retained so tokens cannot join.
+const stripComments = (content: string): string => {
+  const sourceFile = ts.createSourceFile(
+    "ratchet-comments.tsx",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const ranges = new Map<number, ts.CommentRange>();
+  const collect = (comments: readonly ts.CommentRange[] | undefined): void => {
+    for (const comment of comments ?? []) {
+      ranges.set(comment.pos, comment);
+    }
+  };
+  const visit = (node: ts.Node): void => {
+    collect(ts.getLeadingCommentRanges(content, node.getFullStart()));
+    collect(ts.getTrailingCommentRanges(content, node.getEnd()));
+    for (const child of node.getChildren(sourceFile)) {
+      visit(child);
+    }
+  };
+  visit(sourceFile);
+
+  let output = "";
+  let previousEnd = 0;
+  for (const range of [...ranges.values()].sort(
+    (left, right) => left.pos - right.pos,
+  )) {
+    if (range.pos < previousEnd) {
+      continue;
+    }
+    output += content.slice(previousEnd, range.pos);
+    output += content.slice(range.pos, range.end).replace(/[^\r\n]/gu, " ");
+    previousEnd = range.end;
+  }
+  return output + content.slice(previousEnd);
+};
+
+const importedLocalBindings = (
+  content: string,
+  moduleName: string,
+  importedName: string,
+): Set<string> => {
+  const bindings = new Set([importedName]);
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source.tsx",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== moduleName
+    ) {
+      continue;
+    }
+    const bindingsNode = statement.importClause?.namedBindings;
+    if (!bindingsNode || !ts.isNamedImports(bindingsNode)) {
+      continue;
+    }
+    for (const specifier of bindingsNode.elements) {
+      if ((specifier.propertyName ?? specifier.name).text === importedName) {
+        bindings.add(specifier.name.text);
+      }
+    }
+  }
+  return bindings;
+};
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+// Fuzzy supersets for narrow shared-helper/component bans. These counters are
+// intentionally lexical: the AST rules reject the exact known-bad shapes,
+// while the ratchets keep nearby aliases and new spellings visible in review.
+const countHandRolledUserIdentity = (content: string): number =>
+  countMatches(stripComments(content), /<UserAvatar\b/gu);
+
+const countRawUserAvatarPrimitive = (content: string): number =>
+  countMatches(
+    stripComments(content),
+    /["']@stll\/ui\/components\/avatar["']/gu,
+  );
+
+const countShadowedUserNameHelpers = (content: string): number =>
+  countMatches(
+    stripComments(content),
+    /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
+  );
+
+const countAdHocRelativeTimeFormatting = (content: string): number => {
+  const code = stripComments(content);
+  const fullTimestampBindings = importedLocalBindings(
+    code,
+    "@/lib/relative-time",
+    "formatFullTimestamp",
+  );
+  const nativeTitleCount = [...fullTimestampBindings].reduce(
+    (total, binding) =>
+      total +
+      countMatches(
+        code,
+        new RegExp("title=\\{" + escapeRegExp(binding) + "\\s*\\(", "gu"),
+      ),
+    0,
+  );
+  return (
+    nativeTitleCount +
+    countMatches(
+      code,
+      /\{(?=[^{}]*\bdateStyle\s*:)(?=[^{}]*\btimeStyle\s*:)[^{}]*\}/gsu,
+    )
+  );
+};
+
+const countDirectAuditLogInserts = (content: string): number => {
+  const code = stripComments(content);
+  const auditLogBindings = importedLocalBindings(
+    code,
+    "@/api/db/schema",
+    "auditLogs",
+  );
+  return [...auditLogBindings].reduce(
+    (total, binding) =>
+      total +
+      countMatches(
+        code,
+        new RegExp(
+          "\\.insert\\s*\\(\\s*" + escapeRegExp(binding) + "\\s*\\)",
+          "gu",
+        ),
+      ),
+    0,
+  );
+};
+
+const countInlineTimestampCursorSql = (content: string): number =>
+  countMatches(
+    stripComments(content),
+    /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
+  );
+
+const countRepeatedTimestampCursorBoundaries = (content: string): number => {
+  const code = stripComments(content);
+  const sourceFile = ts.createSourceFile(
+    "ratchet-source.ts",
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const boundaryBindings = importedLocalBindings(
+    code,
+    "@/api/lib/db-pagination",
+    "pgTimestampCursorBoundary",
+  );
+  const orBindings = importedLocalBindings(code, "drizzle-orm", "or");
+
+  const countBoundaries = (node: ts.Node): number => {
+    let count =
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      boundaryBindings.has(node.expression.text)
+        ? 1
+        : 0;
+    node.forEachChild((child) => {
+      count += countBoundaries(child);
+    });
+    return count;
+  };
+
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      orBindings.has(node.expression.text)
+    ) {
+      total += Math.max(0, countBoundaries(node) - 1);
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return total;
+};
+
+const countUnboundedPaginationCursorSchema = (content: string): number => {
+  let count = 0;
+  const code = stripComments(content);
+  const cursorSchemas =
+    /\bcursor\s*:\s*t\.Optional\s*\(\s*t\.String\s*\((?<options>[^)]*)\)\s*\)/gu;
+  for (const match of code.matchAll(cursorSchemas)) {
+    if (!/\bmaxLength\s*:/u.test(match.groups?.["options"] ?? "")) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 /**
  * Regex literals whose worst case backtracks super-linearly in the length of
  * the subject — the shape that turns one oversized input into minutes of
@@ -981,6 +1189,89 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countEntityKindGlyphs,
   },
   {
+    id: "hand-rolled-user-identity",
+    description:
+      "<UserAvatar> JSX openings outside the shared user-avatar component (fuzzy superset; paired avatar+label shapes are banned by no-hand-rolled-user-identity)",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/web/src/components/user-avatar.tsx",
+    count: countHandRolledUserIdentity,
+  },
+  {
+    id: "raw-user-avatar-primitive",
+    description:
+      "imports of @stll/ui/components/avatar outside the shared owner and explicit non-user exceptions",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      [
+        "apps/web/src/components/user-avatar.tsx",
+        "apps/web/src/components/public-workspace-shell.tsx",
+        "apps/web/src/routes/auth/organization.tsx",
+        "apps/web/src/routes/dev/-components/ui-playground.tsx",
+        "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
+      ].includes(file),
+    count: countRawUserAvatarPrimitive,
+  },
+  {
+    id: "shadowed-user-name-helpers",
+    description:
+      "module-like const/function declarations named getDisplayName or getInitials outside apps/web/src/lib",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file.includes("apps/web/src/lib/"),
+    count: countShadowedUserNameHelpers,
+  },
+  {
+    id: "ad-hoc-relative-time-formatting",
+    description:
+      "native title={formatFullTimestamp(...)} plus date-and-time locale option objects outside the canonical formatter",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/web/src/lib/relative-time.ts",
+    count: countAdHocRelativeTimeFormatting,
+  },
+  {
+    id: "direct-audit-log-insert",
+    description:
+      "direct .insert(auditLogs) calls outside the audit-log recorder module",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
+    count: countDirectAuditLogInserts,
+  },
+  {
+    id: "inline-timestamp-cursor-sql",
+    description:
+      "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/lib/db-pagination.ts" ||
+      file === "apps/api/src/handlers/case-law/citation-authority.ts",
+    count: countInlineTimestampCursorSql,
+  },
+  {
+    id: "repeated-timestamp-cursor-boundary",
+    description:
+      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/lib/db-pagination.ts" ||
+      file === "apps/api/src/handlers/entities/list-cursor.ts" ||
+      file === "apps/api/src/lib/workflow-target-queries.ts",
+    count: countRepeatedTimestampCursorBoundaries,
+  },
+  {
+    id: "unbounded-pagination-cursor-schema",
+    description: "literal cursor: t.Optional(t.String()) schemas in API source",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countUnboundedPaginationCursorSchema,
+  },
+  {
     id: "raw-use-effect-suppressions",
     description:
       "no-raw-use-effect disable directives in apps/web/src (each is a reviewed exception; new effects use the wrappers or a better primitive — see /conventions-use-effect)",
@@ -1433,6 +1724,79 @@ const SELF_TEST_ENTITY_GLYPHS = `${ENTITY_GLYPH_FIXTURE_LINES.join("\n")}\n`;
 // are all excluded.
 const EXPECTED_ENTITY_GLYPHS = 8;
 
+const SHARED_WEB_HELPER_FIXTURE_LINES = [
+  'import { Avatar } from "@stll/ui/components/avatar";',
+  'import { UserIdentity } from "@/components/user-avatar";',
+  'import { formatFullTimestamp as fullTimestamp } from "@/lib/relative-time";',
+  "const avatar = <UserAvatar name={user.name} />;",
+  "const identity = <UserIdentity name={user.name} />;",
+  "const getDisplayName = (name: string) => name;",
+  "function getInitials(name: string) { return name.slice(0, 2); }",
+  "const formatDisplayName = (name: string) => name;",
+  'const full = value.toLocaleString(locale, { dateStyle: "full", timeStyle: "medium" });',
+  "const native = <span title={formatFullTimestamp(value)} />;",
+  "const aliasedNative = <span title={fullTimestamp(value)} />;",
+  'const dateOnly = value.toLocaleString(locale, { dateStyle: "full" });',
+  'const timeOnly = value.toLocaleString(locale, { timeStyle: "medium" });',
+  "const quotePattern = /[\"']/u;",
+  "const urlPattern = /https:\\/\\//u;",
+  "// <UserAvatar /> and const getInitials = () => '?' must not count.",
+  '// import { Avatar } from "@stll/ui/components/avatar";',
+  "// title={formatFullTimestamp(value)} must not count.",
+];
+const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_HAND_ROLLED_USER_IDENTITIES = 1;
+const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
+const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
+const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
+
+const SHARED_API_HELPER_FIXTURE_LINES = [
+  "await tx.insert(auditLogs).values(rows);",
+  "await tx.insert(otherLogs).values(rows);",
+  "const naive = sql`to_char(createdAt, 'YYYY-MM-DD\"T\"HH24:MI:SS.US')`;",
+  'const canonical = sql`to_char(createdAt, \'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\')`;',
+  [
+    "const boundary = sql`(",
+    "$",
+    "{value}::timestamp AT TIME ZONE 'UTC')`;",
+  ].join(""),
+  "const first = { cursor: t.Optional(t.String()) };",
+  "const second = { cursor: t.Optional(t.String({ minLength: 1 })) };",
+  "const bounded = { cursor: t.Optional(t.String({ maxLength: 512 })) };",
+  "const shared = { cursor: t.Optional(tPaginationCursor()) };",
+  "// tx.insert(auditLogs) must not count.",
+  '// YYYY-MM-DD"T"HH24:MI:SS.US must not count.',
+  "// value::timestamp AT TIME ZONE 'UTC' must not count.",
+  "// cursor: t.Optional(t.String()) must not count.",
+];
+const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
+const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
+const EXPECTED_UNBOUNDED_PAGINATION_CURSOR_SCHEMAS = 2;
+
+const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
+  'import { or as anyOf } from "drizzle-orm";',
+  'import { pgTimestampCursorBoundary as cursorBoundary } from "@/api/lib/db-pagination";',
+  [
+    "const manual = or(",
+    "lt(column, pgTimestampCursorBoundary(first)), ",
+    "eq(column, pgTimestampCursorBoundary(first))",
+    ");",
+  ].join(""),
+  [
+    "const aliased = anyOf(",
+    "lt(column, cursorBoundary(second)), ",
+    "eq(column, cursorBoundary(second))",
+    ");",
+  ].join(""),
+  "const first = pgTimestampCursorBoundary(cursor.timestamp);",
+  "const second = pgTimestampCursorBoundary(other.timestamp);",
+  "const unrelated = buildTimestampBoundary(value);",
+  "// or(pgTimestampCursorBoundary(a), pgTimestampCursorBoundary(b))",
+];
+const SELF_TEST_TIMESTAMP_BOUNDARIES = `${TIMESTAMP_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES = 2;
+
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
   "stellaToast.add({ title: error.message ?? fallback });",
@@ -1731,6 +2095,21 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/shared-helper-shapes.tsx",
+      SELF_TEST_SHARED_WEB_HELPERS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/shared-helper-shapes.ts",
+      SELF_TEST_SHARED_API_HELPERS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/timestamp-boundaries.ts",
+      SELF_TEST_TIMESTAMP_BOUNDARIES,
+    );
+    writeFixture(
+      root,
       "apps/api/src/super-linear-regexes.ts",
       SELF_TEST_SUPER_LINEAR_REGEXES,
     );
@@ -1861,6 +2240,32 @@ const runSelfTest = (): number => {
       failures.push(
         `entity-kind-glyph-adhoc counted ${entityGlyphMetric.count}, expected ${EXPECTED_ENTITY_GLYPHS}`,
       );
+    }
+
+    const sharedHelperMetricExpectations = [
+      ["hand-rolled-user-identity", EXPECTED_HAND_ROLLED_USER_IDENTITIES],
+      ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
+      [
+        "ad-hoc-relative-time-formatting",
+        EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
+      ],
+      ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
+      ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
+      [
+        "repeated-timestamp-cursor-boundary",
+        EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
+      ],
+      [
+        "unbounded-pagination-cursor-schema",
+        EXPECTED_UNBOUNDED_PAGINATION_CURSOR_SCHEMAS,
+      ],
+    ] as const;
+    for (const [id, expected] of sharedHelperMetricExpectations) {
+      const metric = requireSnapshot(snapshot, id);
+      if (metric.count !== expected) {
+        failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+      }
     }
 
     const superLinearMetric = requireSnapshot(snapshot, "super-linear-regexes");

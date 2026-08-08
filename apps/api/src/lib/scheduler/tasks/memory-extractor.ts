@@ -6,7 +6,6 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
-  auditLogs,
   chatThreadCompactions,
   organizationSettings,
 } from "@/api/db/schema";
@@ -18,8 +17,11 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
@@ -27,7 +29,6 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
-import { memorySchedulerAuditColumns } from "@/api/lib/memory/memory-scheduler-audit";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { runMemoryExtractionFailureStamp } from "@/api/lib/scheduler/tasks/memory-extractor-failure";
 import {
@@ -554,15 +555,26 @@ const recordExtractedMemoryAuditEvents = async (
   if (inserted.length === 0) {
     return;
   }
-  await tx.insert(auditLogs).values(
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    execution: {
+      performer: {
+        id: "memory-extractor",
+        name: "Memory extractor",
+        type: "service",
+      },
+      trigger: { source: MEMORY_EXTRACTOR_TASK, type: "system" },
+    },
+    organizationId: compaction.threadOrganizationId,
+    workspaceId: null,
+    userId: MEMORY_EXTRACTOR_AUDIT_ACTOR,
+  });
+  await recordAuditEvent(
+    tx,
     inserted.map((memory) => ({
-      id: createSafeId<"auditLog">(),
-      organizationId: compaction.threadOrganizationId,
-      workspaceId: memory.workspaceId,
-      userId: MEMORY_EXTRACTOR_AUDIT_ACTOR,
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
       resourceId: memory.id,
+      workspaceId: memory.workspaceId,
       changes: {
         created: {
           old: null,
@@ -573,11 +585,6 @@ const recordExtractedMemoryAuditEvents = async (
         source: MEMORY_EXTRACTOR_TASK,
         sourceMessageId: compaction.sourceMessageId,
       },
-      ...memorySchedulerAuditColumns({
-        id: "memory-extractor",
-        name: "Memory extractor",
-        source: MEMORY_EXTRACTOR_TASK,
-      }),
     })),
   );
 };

@@ -5,7 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -42,11 +42,7 @@ export const listClausesQuerySchema = t.Object({
       description: "Max clauses to return",
     }),
   ),
-  cursor: t.Optional(
-    t.String({
-      description: "Opaque cursor from a previous page to fetch the next page",
-    }),
-  ),
+  cursor: t.Optional(tPaginationCursor()),
 });
 
 type ListClausesProps = {

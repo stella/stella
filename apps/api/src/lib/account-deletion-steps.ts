@@ -29,7 +29,6 @@ import type { Transaction } from "@/api/db/root";
 import {
   accountDeletionRequests,
   agentSkills,
-  auditLogs,
   chatThreads,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -57,9 +56,13 @@ import {
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
@@ -524,7 +527,9 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
           ),
       ),
     );
-    await tx.insert(auditLogs).values(
+    await recordAccountDeletionAuditEvents(
+      tx,
+      brandPersistedUserId(currentUserId),
       updates.map((item) => {
         const assignment = assignmentByEntityId.get(item.entityId);
         if (!assignment) {
@@ -535,27 +540,27 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
         }
 
         return {
-          action: AUDIT_ACTION.UPDATE,
-          activityCategory: "tasks" as const,
-          changes: {
-            assigneeUserId: {
-              new: item.reassignedUserId,
-              old: currentUserId,
-            },
-          },
-          metadata: {
-            accountDeletionRequestId: deletionRequestId,
-            change: "assignee-reassigned",
-            fromUserId: currentUserId,
-            kind: "task",
-            reason: "account-deletion",
-            toUserId: item.reassignedUserId,
-          },
           organizationId: assignment.organizationId,
-          resourceId: item.entityId,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          userId: currentUserId,
-          workspaceId: assignment.workspaceId,
+          event: {
+            action: AUDIT_ACTION.UPDATE,
+            changes: {
+              assigneeUserId: {
+                new: item.reassignedUserId,
+                old: currentUserId,
+              },
+            },
+            metadata: {
+              accountDeletionRequestId: deletionRequestId,
+              change: "assignee-reassigned",
+              fromUserId: currentUserId,
+              kind: "task",
+              reason: "account-deletion",
+              toUserId: item.reassignedUserId,
+            },
+            resourceId: item.entityId,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            workspaceId: assignment.workspaceId,
+          },
         };
       }),
     );
@@ -643,7 +648,9 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
         occurredAt: now,
       })),
     );
-    await tx.insert(auditLogs).values(
+    await recordAccountDeletionAuditEvents(
+      tx,
+      brandPersistedUserId(currentUserId),
       ownedMutableWork.map((work) => {
         const nextOwnerUserId =
           obligationOwnerByEntityId.get(work.entityId) ?? null;
@@ -652,25 +659,25 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
             ? WORK_OBLIGATION_STATUS.UNASSIGNED
             : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
         return {
-          action: AUDIT_ACTION.UPDATE,
-          activityCategory: "tasks" as const,
-          changes: {
-            ownerUserId: { old: currentUserId, new: nextOwnerUserId },
-            ...(work.status === nextStatus
-              ? {}
-              : { status: { old: work.status, new: nextStatus } }),
-          },
-          metadata: {
-            accountDeletionRequestId: deletionRequestId,
-            cause: "account-deletion",
-            fromUserId: currentUserId,
-            toUserId: nextOwnerUserId,
-          },
           organizationId: work.organizationId,
-          resourceId: work.entityId,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          userId: currentUserId,
-          workspaceId: work.workspaceId,
+          event: {
+            action: AUDIT_ACTION.UPDATE,
+            changes: {
+              ownerUserId: { old: currentUserId, new: nextOwnerUserId },
+              ...(work.status === nextStatus
+                ? {}
+                : { status: { old: work.status, new: nextStatus } }),
+            },
+            metadata: {
+              accountDeletionRequestId: deletionRequestId,
+              cause: "account-deletion",
+              fromUserId: currentUserId,
+              toUserId: nextOwnerUserId,
+            },
+            resourceId: work.entityId,
+            resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+            workspaceId: work.workspaceId,
+          },
         };
       }),
     );
@@ -682,6 +689,45 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     .where(eq(workspaceMembers.userId, currentUserId));
 
   return taskReassignmentCount;
+};
+
+type AccountDeletionAuditEnvelope = {
+  organizationId: SafeId<"organization">;
+  event: AuditEvent;
+};
+
+const recordAccountDeletionAuditEvents = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+  envelopes: readonly AccountDeletionAuditEnvelope[],
+): Promise<void> => {
+  const eventsByOrganization = new Map<SafeId<"organization">, AuditEvent[]>();
+  for (const { organizationId, event } of envelopes) {
+    const events = eventsByOrganization.get(organizationId);
+    if (events) {
+      events.push(event);
+    } else {
+      eventsByOrganization.set(organizationId, [event]);
+    }
+  }
+
+  for (const [organizationId, events] of eventsByOrganization) {
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      execution: {
+        performer: {
+          id: "account-deletion",
+          name: "Account deletion",
+          type: "service",
+        },
+        trigger: { source: "account-deletion", type: "system" },
+      },
+      organizationId,
+      workspaceId: null,
+      userId,
+    });
+    // oxlint-disable-next-line no-await-in-loop -- one bounded insert per affected organization in the enclosing account-deletion transaction
+    await recordAuditEvent(tx, events);
+  }
 };
 
 export type DeleteDesktopEditSessionsParams = {

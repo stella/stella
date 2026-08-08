@@ -25,6 +25,22 @@ type DecodedCursor = {
   id: SafeId<"contact">;
 };
 
+const CONTACT_DISPLAY_NAME_MAX_LENGTH = 512;
+const MAX_JSON_ESCAPE_LENGTH = 6;
+const UUID_LENGTH = 36;
+const JSON_TUPLE_OVERHEAD = 7;
+
+// A control character or lone surrogate can occupy six ASCII bytes after
+// JSON escaping. Keep the request bound large enough for every cursor this
+// producer can emit from the varchar(512) display-name column.
+export const CONTACT_CURSOR_MAX_LENGTH = Math.ceil(
+  ((CONTACT_DISPLAY_NAME_MAX_LENGTH * MAX_JSON_ESCAPE_LENGTH +
+    UUID_LENGTH +
+    JSON_TUPLE_OVERHEAD) *
+    4) /
+    3,
+);
+
 // Legacy cursors were base64 of `displayName\0uuid`; the current form is the
 // base64url JSON tuple `encodePaginationCursor` emits. Keep the fallback so an
 // in-flight legacy cursor does not silently restart pagination at page one.
