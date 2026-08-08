@@ -288,6 +288,7 @@ type RecordUsageEventInput = {
   userId: string;
   actionType: UsageActionType;
   modelRole: string;
+  modelId?: string | null;
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
@@ -321,6 +322,7 @@ export const recordUsageEvent = async ({
   userId,
   actionType,
   modelRole,
+  modelId = null,
   unitsConsumed,
   serviceTier,
   isByok,
@@ -340,6 +342,7 @@ export const recordUsageEvent = async ({
     periodEnd: periodResolved.end,
     actionType,
     modelRole,
+    modelId,
     unitsConsumed,
     serviceTier,
     isByok,
