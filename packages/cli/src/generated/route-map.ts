@@ -20762,6 +20762,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "restore-version"],
                 capabilityId: "entities.restore-version",
+                description:
+                  "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
                 access: "write",
                 flags: [
                   {
@@ -20837,6 +20839,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "translate"],
                 capabilityId: "entities.translate",
+                description:
+                  "Translate a document file with the organization's configured translation provider and save the translated result as a new document.",
                 access: "write",
                 flags: [
                   {
@@ -26013,6 +26017,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "list"],
                 capabilityId: "flows.list",
+                description:
+                  "List flow definitions available to the organization, with optional status filtering and pagination.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -26119,6 +26125,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-detail"],
                 capabilityId: "flows.run-detail",
+                description:
+                  "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
                 access: "read",
                 flags: [
                   {
@@ -26178,6 +26186,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-list"],
                 capabilityId: "flows.run-list",
+                description:
+                  "List flow runs in a matter, including lifecycle state and pagination metadata.",
                 access: "read",
                 flags: [
                   {
@@ -26367,6 +26377,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-start"],
                 capabilityId: "flows.run-start",
+                description:
+                  "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
                 access: "write",
                 flags: [
                   {
@@ -51840,6 +51852,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "export-view"],
                 capabilityId: "reports.export-view",
+                description:
+                  "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
                 access: "write",
                 flags: [
                   {
@@ -51976,6 +51990,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "list-exports"],
                 capabilityId: "reports.list-exports",
+                description:
+                  "List report exports requested by the current user in a matter, newest first with cursor pagination.",
                 access: "read",
                 flags: [
                   {
@@ -52046,6 +52062,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "list-templates"],
                 capabilityId: "reports.list-templates",
+                description:
+                  "List built-in and organization report templates available for exporting a matter view.",
                 access: "read",
                 flags: [
                   {
@@ -52089,6 +52107,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "read-export"],
                 capabilityId: "reports.read-export",
+                description:
+                  "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
                 access: "write",
                 flags: [
                   {

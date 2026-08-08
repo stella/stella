@@ -84,8 +84,8 @@ the active session; `stella auth logout` clears it.
 
 The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `missing_scope` -> 3, `feature_disabled` -> 5, `not_found` -> 6,
-`confirmation_required` -> 7, and `rate_limited` / `unknown_tool` /
-`internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
+`confirmation_required` -> 7, and `rate_limited` / `upstream_unavailable` /
+`unknown_tool` / `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
 code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
