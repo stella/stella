@@ -85,6 +85,8 @@ import {
   shouldForceSidebarCollapsed,
 } from "@/routes/-inspector-pane-width";
 
+const MEMORY_ROUTE_PATH = "/settings/account/memory";
+
 const LazyInspectorPanel = lazy(
   async () =>
     await import("@/components/inspector/inspector-panel").then((m) => ({
@@ -170,10 +172,10 @@ export const Route = createFileRoute("/_protected")({
     // via a non-suspense useQuery mounts (app-sidebar, inspector): a cold-cache
     // role fetch resolving mid-mount triggers React's "state update on a
     // not-yet-mounted component" warning, which the route-smoke e2e treats as a
-    // failure. So we AWAIT the role prefetch fully — no time-boxed race that
-    // could let chrome render while the fetch is still in flight. The prefetch is
-    // non-throwing, so a role-fetch failure resolves it rather than stalling or
-    // taking down the shell.
+    // failure. We therefore settle the role before chrome mounts: normally in
+    // this parent, or in the memory child while it primes that route's panel
+    // data. The prefetch is non-throwing, so a role-fetch failure resolves it
+    // rather than stalling or taking down the shell.
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
@@ -185,7 +187,18 @@ export const Route = createFileRoute("/_protected")({
       ),
       "beforeLoad",
     );
-    await prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
+    const rolePrefetch = prefetchRouteQuery(
+      context.queryClient,
+      roleOptions,
+      onPrefetchError,
+    );
+    if (location.pathname === MEMORY_ROUTE_PATH) {
+      // The child settles this same in-flight query together with its panel
+      // data before chrome can mount, keeping all three requests in one wave.
+      detached(rolePrefetch, "beforeLoad.memory-role");
+    } else {
+      await rolePrefetch;
+    }
 
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when
