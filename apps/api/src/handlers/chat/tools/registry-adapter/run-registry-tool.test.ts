@@ -177,12 +177,25 @@ describe("runRegistryReadTool", () => {
       query: {
         entities: {
           findFirst: async () => ({
+            createdAt: new Date("2025-12-01T00:00:00.000Z"),
             workspaceId: WS_UUID,
             kind: "document",
             name: "NDA draft",
-            currentVersion: { id: "version-1", fields: fieldRows },
+            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            currentVersion: {
+              id: "version-1",
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              fields: fieldRows,
+            },
           }),
         },
+        documentProcessingRuns: { findMany: async () => [] },
+        entityVersions: { findFirst: async () => ({ id: "version-1" }) },
+        extractedContent: { findFirst: async () => null },
+        organizationSettings: {
+          findFirst: async () => ({ documentProcessingMode: "off" }),
+        },
+        searchDocuments: { findFirst: async () => undefined },
       },
     };
     return asTestRaw<ScopedDb>(
@@ -279,6 +292,12 @@ describe("runRegistryReadTool", () => {
 
     expect(Result.isError(result)).toBe(false);
     expect(result.unwrap()).toEqual({
+      contentState: {
+        source: "direct_docx",
+        sourceVersionId: "version-1",
+        status: "ready",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
       entityId: entityRef,
       kind: "document",
       name: "NDA draft",
@@ -298,6 +317,10 @@ describe("runRegistryReadTool", () => {
           },
         },
       ],
+      searchIndexState: {
+        sourceVersionId: "version-1",
+        status: "pending",
+      },
     });
   });
 
