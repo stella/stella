@@ -12,10 +12,12 @@
 import { PDF } from "@libpdf/core";
 
 import {
+  AUTHORED_DOCUMENT_PROPERTY_KEYS,
   DOCUMENT_PROPERTY_KEYS,
   documentContainerFormat,
 } from "@stll/api-contract";
 import type {
+  AuthoredDocumentPropertyKey,
   DocumentPropertiesResult,
   DocumentProperty,
   DocumentPropertyKey,
@@ -540,6 +542,157 @@ type ScrubDocumentPropertiesOptions = {
  * document shape is reported as `unreadable` so the caller refuses the export
  * rather than handing over a file it failed to clean.
  */
+// ── Writing ─────────────────────────────────────────────
+
+/**
+ * Where each authored property lives in an OOXML package, mirroring the reader
+ * above. Total over the authored key list, so a key added to the contract fails
+ * this typecheck rather than silently becoming unwritable.
+ *
+ * `core` is `docProps/core.xml`, `app` is `docProps/app.xml`. The parts have
+ * different namespaces and different root elements, so a property cannot simply
+ * be written to whichever part happens to exist.
+ */
+const OOXML_AUTHORED_ELEMENT = {
+  title: { part: "core", element: "dc:title" },
+  subject: { part: "core", element: "dc:subject" },
+  description: { part: "core", element: "dc:description" },
+  keywords: { part: "core", element: "cp:keywords" },
+  category: { part: "core", element: "cp:category" },
+  contentStatus: { part: "core", element: "cp:contentStatus" },
+  author: { part: "core", element: "dc:creator" },
+  lastModifiedBy: { part: "core", element: "cp:lastModifiedBy" },
+  company: { part: "app", element: "Company" },
+  manager: { part: "app", element: "Manager" },
+} as const satisfies Record<
+  AuthoredDocumentPropertyKey,
+  { part: "core" | "app"; element: string }
+>;
+
+const OOXML_PART_PATH = {
+  core: "docProps/core.xml",
+  app: "docProps/app.xml",
+} as const;
+
+/** Root element of each part, used to append a property the file never had. */
+const OOXML_PART_ROOT = {
+  core: "cp:coreProperties",
+  app: "Properties",
+} as const;
+
+const escapeXmlText = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+/**
+ * Set `<name>` to `value`, replacing its content in place. A property the
+ * document never carried has no element to replace, so append one before the
+ * closing root tag rather than dropping the edit silently.
+ */
+const setElement = (xml: string, name: string, value: string, root: string) => {
+  // Every replacement below is a function, not a string: the value is written
+  // by a person, and `$&` or `$'` in a replacement string is interpreted by JS
+  // even when the search is a plain string, which would splice surrounding
+  // markup into the property.
+  const text = escapeXmlText(value);
+  const existing = new RegExp(
+    `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
+    "u",
+  );
+  if (existing.test(xml)) {
+    return xml.replace(
+      existing,
+      (_match, open: string, close: string) => `${open}${text}${close}`,
+    );
+  }
+  // Self-closing form, which is how an empty property is often written.
+  const selfClosing = new RegExp(`<${name}(?:\\s[^>]*)?/>`, "u");
+  if (selfClosing.test(xml)) {
+    return xml.replace(selfClosing, () => `<${name}>${text}</${name}>`);
+  }
+  const closingRoot = new RegExp(`</${root}>`, "u");
+  if (!closingRoot.test(xml)) {
+    return xml;
+  }
+  return xml.replace(
+    closingRoot,
+    () => `<${name}>${text}</${name}></${root}>`,
+  );
+};
+
+export type WriteDocumentPropertiesOptions = {
+  bytes: ArrayBuffer;
+  mimeType: string;
+  /** Authored properties to set. A blank value empties the element. */
+  values: Partial<Record<AuthoredDocumentPropertyKey, string>>;
+};
+
+export type WriteDocumentPropertiesResult =
+  | { status: "written"; bytes: Uint8Array }
+  | { status: "unsupported-format" }
+  | { status: "unreadable" };
+
+/**
+ * Write authored properties back into the document's own bytes.
+ *
+ * OOXML only. ODF and PDF are read and scrubbed but not written: PDF carries
+ * the same fields in both the Info dictionary and an XMP packet, and writing
+ * one without the other leaves a file that reports two different authors
+ * depending on which the reader trusts. Refusing is honest; a half-written PDF
+ * is not.
+ */
+export const writeDocumentProperties = async ({
+  bytes,
+  mimeType,
+  values,
+}: WriteDocumentPropertiesOptions): Promise<WriteDocumentPropertiesResult> => {
+  if (documentContainerFormat(mimeType) !== "ooxml") {
+    return { status: "unsupported-format" };
+  }
+
+  // Driven by the contract's key list rather than the caller's object keys, so
+  // an unknown key cannot reach the archive and no cast is needed to narrow it.
+  const byPart = new Map<"core" | "app", { element: string; value: string }[]>();
+  for (const key of AUTHORED_DOCUMENT_PROPERTY_KEYS) {
+    const value = values[key];
+    if (value === undefined) {
+      continue;
+    }
+    const target = OOXML_AUTHORED_ELEMENT[key];
+    const edits = byPart.get(target.part) ?? [];
+    edits.push({ element: target.element, value });
+    byPart.set(target.part, edits);
+  }
+  if (byPart.size === 0) {
+    return { status: "written", bytes: new Uint8Array(bytes) };
+  }
+
+  try {
+    const archive = await loadDocxArchive(bytes);
+    for (const [part, edits] of byPart) {
+      const path = OOXML_PART_PATH[part];
+      // oxlint-disable-next-line no-await-in-loop -- at most two parts, and each write must see the prior read
+      const xml = await archive.readEntryString(path);
+      if (xml === null) {
+        continue;
+      }
+      let updated = xml;
+      for (const { element, value } of edits) {
+        updated = setElement(updated, element, value, OOXML_PART_ROOT[part]);
+      }
+      archive.zip.file(path, updated);
+    }
+    return {
+      status: "written",
+      bytes: await archive.zip.generateAsync({ type: "uint8array" }),
+    };
+  } catch {
+    return { status: "unreadable" };
+  }
+};
+
 export const scrubDocumentProperties = async ({
   bytes,
   mimeType,

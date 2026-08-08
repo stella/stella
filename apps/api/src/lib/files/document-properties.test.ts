@@ -8,6 +8,7 @@ import type { DocumentProperty } from "@stll/api-contract";
 import {
   extractDocumentProperties,
   scrubDocumentProperties,
+  writeDocumentProperties,
 } from "./document-properties";
 
 const DOCX_MIME_TYPE =
@@ -372,6 +373,131 @@ describe("extractDocumentProperties (failure modes)", () => {
     const result = await extractDocumentProperties({
       bytes: toArrayBuffer(new TextEncoder().encode("not a zip at all")),
       mimeType: DOCX_MIME_TYPE,
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+  });
+});
+
+describe("writeDocumentProperties", () => {
+  const source = async () =>
+    await zipOf({
+      "docProps/core.xml": CORE_XML,
+      "docProps/app.xml": APP_XML,
+      "word/document.xml": "<w:document/>",
+    });
+
+  const writtenBytes = async (
+    values: Parameters<typeof writeDocumentProperties>[0]["values"],
+  ): Promise<ArrayBuffer> => {
+    const result = await writeDocumentProperties({
+      bytes: await source(),
+      mimeType: DOCX_MIME_TYPE,
+      values,
+    });
+    if (result.status !== "written") {
+      throw new Error(`expected written bytes, got ${result.status}`);
+    }
+    return toArrayBuffer(result.bytes);
+  };
+
+  it("writes each property into the part it belongs to", async () => {
+    const written = await writtenBytes({
+      author: "Petra Harbrook",
+      company: "Harbrook & Partners",
+    });
+
+    const properties = await availableProperties(written, DOCX_MIME_TYPE);
+    expect(valueOf(properties, "author")).toEqual({
+      type: "text",
+      value: "Petra Harbrook",
+    });
+    // core.xml and app.xml have different roots and namespaces, so a value
+    // written into the wrong part reads back missing.
+    expect(valueOf(properties, "company")).toEqual({
+      type: "text",
+      value: "Harbrook & Partners",
+    });
+  });
+
+  it("escapes markup so a value cannot forge a sibling property", async () => {
+    const injection = "</dc:title><dc:creator>forged</dc:creator><dc:title>";
+    const written = await writtenBytes({ title: injection });
+
+    const properties = await availableProperties(written, DOCX_MIME_TYPE);
+    expect(valueOf(properties, "title")).toEqual({
+      type: "text",
+      value: injection,
+    });
+    // The forged element must not have displaced the real author.
+    expect(valueOf(properties, "author")).toEqual({
+      type: "text",
+      value: "Jane Novak & Co.",
+    });
+  });
+
+  it("writes replacement patterns literally", async () => {
+    // JS interprets $&, $$, $` and $' in a replacement string even when the
+    // search is a plain string, so a value containing them would otherwise
+    // splice the surrounding markup into the property.
+    const value = "Dollar $& and $$ and $` and $' and $1";
+    const written = await writtenBytes({ company: value });
+
+    expect(
+      valueOf(await availableProperties(written, DOCX_MIME_TYPE), "company"),
+    ).toEqual({ type: "text", value });
+  });
+
+  it("fills an element the document left empty", async () => {
+    const written = await writtenBytes({ manager: "Tomas" });
+
+    expect(
+      valueOf(await availableProperties(written, DOCX_MIME_TYPE), "manager"),
+    ).toEqual({ type: "text", value: "Tomas" });
+  });
+
+  it("adds a property the document never carried", async () => {
+    // CORE_XML has no cp:category at all, so this can only be satisfied by
+    // appending a new element before the closing root.
+    const written = await writtenBytes({ category: "Financing" });
+
+    expect(
+      valueOf(await availableProperties(written, DOCX_MIME_TYPE), "category"),
+    ).toEqual({ type: "text", value: "Financing" });
+  });
+
+  it("leaves properties it was not asked to change alone", async () => {
+    const written = await writtenBytes({ author: "Someone Else" });
+
+    const properties = await availableProperties(written, DOCX_MIME_TYPE);
+    expect(valueOf(properties, "title")).toEqual({
+      type: "text",
+      value: "Series Seed SANE",
+    });
+    expect(valueOf(properties, "lastModifiedBy")).toEqual({
+      type: "text",
+      value: "tomas",
+    });
+  });
+
+  it("refuses a format it cannot write rather than returning the input unchanged", async () => {
+    const result = await writeDocumentProperties({
+      bytes: await zipOf({
+        "meta.xml":
+          '<office:document-meta xmlns:office="urn:office"></office:document-meta>',
+      }),
+      mimeType: ODT_MIME_TYPE,
+      values: { author: "Petra" },
+    });
+
+    expect(result).toEqual({ status: "unsupported-format" });
+  });
+
+  it("reports bytes that are not the archive their MIME type claims", async () => {
+    const result = await writeDocumentProperties({
+      bytes: toArrayBuffer(new TextEncoder().encode("not a zip at all")),
+      mimeType: DOCX_MIME_TYPE,
+      values: { author: "Petra" },
     });
 
     expect(result).toEqual({ status: "unreadable" });
