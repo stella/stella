@@ -45,15 +45,18 @@ describe("search provider workspace scoping", () => {
       // Workspace scope present and bound to the authorized workspace.
       expect(serialized).toContain("workspace_id");
       expect(serialized).toContain(workspaceId);
-      // A newly committed version updates the live entity before its async
-      // projection. Every query must hide that stale row until reindexing.
+      // A newly committed version exists before its async projection. Compare
+      // with that version's creation time, not entities.updated_at: metadata-
+      // only mutations such as moving a document must not hide a valid row.
       expect(serialized).toContain("updated_at");
       expect(serialized).toContain("created_at");
       expect(serialized).toContain("entities");
+      expect(serialized).toContain("entity_versions");
+      expect(serialized).toContain("current_version_id");
     }
   });
 
-  test("content search also excludes projections older than the live entity", async () => {
+  test("content search excludes projections older than the current version", async () => {
     await pgFtsProvider.searchContent({
       query: "closing memo",
       organizationId,
@@ -66,6 +69,8 @@ describe("search provider workspace scoping", () => {
       expect(serialized).toContain("updated_at");
       expect(serialized).toContain("created_at");
       expect(serialized).toContain("entities");
+      expect(serialized).toContain("entity_versions");
+      expect(serialized).toContain("current_version_id");
     }
   });
 

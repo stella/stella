@@ -42,10 +42,8 @@ export const readEntityByIdHandler = async function* ({
           },
         },
         columns: {
-          createdAt: true,
           kind: true,
           name: true,
-          updatedAt: true,
         },
         with: {
           currentVersion: {
@@ -89,11 +87,9 @@ export const readEntityByIdHandler = async function* ({
   }
 
   return Result.ok({
-    createdAt: entity.createdAt,
     entityId,
     kind: entity.kind,
     name: entity.name,
-    updatedAt: entity.updatedAt,
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
     fields: entity.currentVersion.fields,

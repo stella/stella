@@ -546,7 +546,7 @@ export const LIST_PROPERTIES_PROJECTION = v.strictObject({
       name: v.string(),
       valueType: v.string(),
       status: v.string(),
-      writeMethod: v.picklist(["set_field_value", "upload_document_version"]),
+      writeMethod: v.picklist(["set_field_value", "unsupported"]),
     }),
   ),
   // Opaque `[createdAt, id]` cursor; not UUID-formatted.

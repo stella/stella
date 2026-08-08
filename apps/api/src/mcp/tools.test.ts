@@ -2371,6 +2371,160 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_document keeps extracted OCR content ready when only indexing failed", async () => {
+    const sha256Hex = "a".repeat(64);
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Scan",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: "search_index_failed",
+                finishedAt: null,
+                id: "run_ocr",
+                kind: "ocr",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+            ],
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: { status: "ready", source: "extracted_text" },
+      searchIndexState: {
+        status: "failed",
+        errorCode: "search_index_failed",
+        runId: "run_ocr",
+      },
+    });
+  });
+
+  test("read_document uses successful processing runs as index completion provenance", async () => {
+    const sha256Hex = "a".repeat(64);
+    const indexedAt = new Date("2026-01-03T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "searchable.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Searchable PDF",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: null,
+                finishedAt: indexedAt,
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+            ],
+            // Search projections persist the entity's semantic timestamp,
+            // which legitimately predates extraction completion.
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: { status: "ready", source: "extracted_text" },
+      searchIndexState: {
+        status: "ready",
+        updatedAt: indexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document terminates unsupported extraction while reporting metadata indexing", async () => {
+    const unsupportedFile = {
+      encrypted: false,
+      fileName: "payload.bin",
+      id: "file_1",
+      mimeType: "application/octet-stream",
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          null,
+          [unsupportedFile],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Binary payload",
+            workspaceId: "ws_1",
+          },
+          {
+            searchUpdatedAt: new Date("2026-01-02T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "unsupported",
+        reason:
+          "Content extraction is not supported for application/octet-stream.",
+      },
+      searchIndexState: { status: "ready" },
+    });
+  });
+
   test("list_properties declares how file and scalar properties are written", async () => {
     const result = await handleMcpToolCall({
       args: { matter_id: "ws_1" },
@@ -2400,7 +2554,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           id: "property_file",
           valueType: "file",
-          writeMethod: "upload_document_version",
+          writeMethod: "unsupported",
         },
         {
           id: "property_text",
@@ -2411,7 +2565,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("set_field_value points file values to the upload lifecycle", async () => {
+  test("set_field_value explains the primary-file upload boundary", async () => {
     const result = await handleMcpToolCall({
       args: {
         entity_id: "entity_1",
@@ -2425,13 +2579,13 @@ describe("OpenAI-compatible MCP tools", () => {
     const error = validationEnvelope(result);
     expect(error).toMatchObject({
       code: "validation_error",
-      message: "File properties are managed through document uploads",
-      hint: "Call open_document_version_upload or upload_document_version for this document.",
+      message: "File properties cannot be targeted by set_field_value",
+      hint: "To replace the document's primary file, call open_document_version_upload or upload_document_version. These tools do not target an arbitrary property_id.",
     });
     expect(error["issues"]).toEqual([
       {
         path: "content.type",
-        message: "Use upload_document_version for file content",
+        message: "Arbitrary file-property cells are not writable",
       },
     ]);
   });

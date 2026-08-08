@@ -54,60 +54,67 @@ export type NormalizeAresOptions = {
 export const toNormalizedEntity = (
   company: AresCompany,
   options: NormalizeAresOptions,
-): NormalizedRegistryEntity => ({
-  country: "CZ",
-  registryId: toValidatedRegistryIdentifier({
-    scheme: "CZ-ICO",
-    value: company.ico,
-    validate: validateIco,
-  }),
-  identifiers: [],
-  name: company.name,
-  nameWithoutLegalForm: unsupportedField(),
-  legalForm: availableField(
-    company.legalForm ? { code: company.legalForm, label: null } : null,
-  ),
-  status: unsupportedField(),
-  statusDetail: company.status,
-  address: availableField(
-    company.address ? normalizeAddress(company.address) : null,
-  ),
-  creationDate: availableField(company.dateEstablished),
-  registrationDate: availableField(company.dateRegistered),
-  removalDate: unsupportedField(),
-  registryRecord: options.vrLoaded
-    ? availableField(
-        company.courtFile
-          ? {
-              courtName: company.courtFile.court,
-              section: company.courtFile.section,
-              idNumber: company.courtFile.insert,
-              reference: [
-                company.courtFile.section,
-                company.courtFile.insert,
-                company.courtFile.court,
-              ].join(" "),
-            }
-          : null,
-      )
-    : notLoadedField(),
-  keyPeople: options.vrLoaded
-    ? availableField(normalizeKeyPeople(company))
-    : notLoadedField(),
-  shareCapital: options.vrLoaded
-    ? availableField(
-        company.shareCapital
-          ? { text: company.shareCapital, amount: null, currency: null }
-          : null,
-      )
-    : notLoadedField(),
-  shareCapitalPaid: unsupportedField(),
-  actingClause: options.vrLoaded
-    ? availableField(company.actingClause)
-    : notLoadedField(),
-  registryUrl: availableField(company.registryUrl),
-  warnings: unsupportedField(),
-});
+): NormalizedRegistryEntity => {
+  const vrLoaded =
+    options.vrLoaded &&
+    (company.vrEnrichmentStatus === "complete" ||
+      company.vrEnrichmentStatus === "not_found");
+
+  return {
+    country: "CZ",
+    registryId: toValidatedRegistryIdentifier({
+      scheme: "CZ-ICO",
+      value: company.ico,
+      validate: validateIco,
+    }),
+    identifiers: [],
+    name: company.name,
+    nameWithoutLegalForm: unsupportedField(),
+    legalForm: availableField(
+      company.legalForm ? { code: company.legalForm, label: null } : null,
+    ),
+    status: unsupportedField(),
+    statusDetail: company.status,
+    address: availableField(
+      company.address ? normalizeAddress(company.address) : null,
+    ),
+    creationDate: availableField(company.dateEstablished),
+    registrationDate: availableField(company.dateRegistered),
+    removalDate: unsupportedField(),
+    registryRecord: vrLoaded
+      ? availableField(
+          company.courtFile
+            ? {
+                courtName: company.courtFile.court,
+                section: company.courtFile.section,
+                idNumber: company.courtFile.insert,
+                reference: [
+                  company.courtFile.section,
+                  company.courtFile.insert,
+                  company.courtFile.court,
+                ].join(" "),
+              }
+            : null,
+        )
+      : notLoadedField(),
+    keyPeople: vrLoaded
+      ? availableField(normalizeKeyPeople(company))
+      : notLoadedField(),
+    shareCapital: vrLoaded
+      ? availableField(
+          company.shareCapital
+            ? { text: company.shareCapital, amount: null, currency: null }
+            : null,
+        )
+      : notLoadedField(),
+    shareCapitalPaid: unsupportedField(),
+    actingClause: vrLoaded
+      ? availableField(company.actingClause)
+      : notLoadedField(),
+    registryUrl: availableField(company.registryUrl),
+    warnings: unsupportedField(),
+  };
+};
 
 export const toNormalizedSearchResult = (
   result: AresSearchResult,

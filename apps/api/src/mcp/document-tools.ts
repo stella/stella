@@ -58,6 +58,7 @@ import type {
 } from "@/api/lib/chat/projections";
 import { isUuid } from "@/api/lib/custom-schema";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -70,6 +71,8 @@ import {
   brandPersistedEntityVersionId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
+import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
+import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { findExtractionFileField } from "@/api/lib/search/types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
@@ -137,7 +140,7 @@ const SETTABLE_VALUE_TYPES = [
 ] as const;
 
 const PROPERTY_WRITE_METHODS = {
-  file: "upload_document_version",
+  file: "unsupported",
   text: "set_field_value",
   "single-select": "set_field_value",
   "multi-select": "set_field_value",
@@ -145,7 +148,7 @@ const PROPERTY_WRITE_METHODS = {
   int: "set_field_value",
 } as const satisfies Record<
   PropertyContentType,
-  "set_field_value" | "upload_document_version"
+  "set_field_value" | "unsupported"
 >;
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
@@ -717,7 +720,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "List the property (column) definitions of a matter. Returns each " +
       "property's id, name, value type (text, single-select, multi-select, " +
       "date, int, or file), status, and writeMethod. Use set_field_value for " +
-      "scalar properties; file properties are managed through document upload/version tools.",
+      "scalar properties. Arbitrary file-property cells are not writable; document " +
+      "upload/version tools replace only a document's primary file.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1181,7 +1185,6 @@ const loadVersionHistory = async ({
 };
 
 type CurrentDocumentForState = {
-  createdAt: Date;
   currentVersionCreatedAt: Date;
   currentVersionId: SafeId<"entityVersion">;
   fields: {
@@ -1189,7 +1192,6 @@ type CurrentDocumentForState = {
     id: SafeId<"field">;
     propertyId: SafeId<"property">;
   }[];
-  updatedAt: Date | null;
 };
 
 type DocumentContentState =
@@ -1295,6 +1297,7 @@ const loadDocumentProcessingStates = async ({
           },
           columns: {
             errorCode: true,
+            finishedAt: true,
             id: true,
             kind: true,
             sourceFileId: true,
@@ -1321,11 +1324,11 @@ const loadDocumentProcessingStates = async ({
 
   const sourceFile = findExtractionFileField(current.fields);
   if (!sourceFile) {
-    const semanticUpdatedAt = current.updatedAt ?? current.createdAt;
     return {
       contentState: { status: "not_applicable" },
       searchIndexState:
-        searchDocument && searchDocument.updatedAt >= semanticUpdatedAt
+        searchDocument &&
+        searchDocument.updatedAt >= current.currentVersionCreatedAt
           ? {
               status: "ready",
               sourceVersionId: current.currentVersionId,
@@ -1354,6 +1357,17 @@ const loadDocumentProcessingStates = async ({
   const searchFailure = sourceRuns.find(
     (run) => run.status === "failed" && run.errorCode === "search_index_failed",
   );
+  const extractionMimeType = resolveExtractionMimeType({
+    fileName: sourceFile.fileName,
+    mimeType: sourceFile.mimeType,
+  });
+  const extractionCanBecomeAvailable =
+    canExtractMimeType(extractionMimeType) ||
+    sourceFile.pdfFileId !== null ||
+    shouldGeneratePdfDerivative({
+      encrypted: sourceFile.encrypted,
+      mimeType: sourceFile.mimeType,
+    });
 
   let contentState: DocumentContentState;
   if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
@@ -1363,7 +1377,10 @@ const loadDocumentProcessingStates = async ({
       sourceVersionId: current.currentVersionId,
       updatedAt: current.currentVersionCreatedAt.toISOString(),
     };
-  } else if (ocrRun?.status === "failed") {
+  } else if (
+    ocrRun?.status === "failed" &&
+    ocrRun.errorCode !== "search_index_failed"
+  ) {
     contentState = {
       status: "failed",
       processingKind: "ocr",
@@ -1381,6 +1398,7 @@ const loadDocumentProcessingStates = async ({
     };
   } else if (
     currentExtracted?.charCount === 0 &&
+    ocrRun === undefined &&
     sourceFile.mimeType === PDF_MIME_TYPE &&
     (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
       "off"
@@ -1418,6 +1436,12 @@ const loadDocumentProcessingStates = async ({
       sourceVersionId: current.currentVersionId,
       reason: "Encrypted document content cannot be extracted.",
     };
+  } else if (!extractionCanBecomeAvailable) {
+    contentState = {
+      status: "unsupported",
+      sourceVersionId: current.currentVersionId,
+      reason: `Content extraction is not supported for ${sourceFile.mimeType}.`,
+    };
   } else {
     contentState = {
       status: "pending",
@@ -1439,27 +1463,28 @@ const loadDocumentProcessingStates = async ({
       errorCode: "search_index_failed",
       retryable: true,
     };
-  } else if (
-    currentExtracted &&
-    searchDocument &&
-    searchDocument.updatedAt >= currentExtracted.extractedAt
-  ) {
-    searchIndexState = {
-      status: "ready",
-      sourceVersionId: current.currentVersionId,
-      updatedAt: searchDocument.updatedAt.toISOString(),
-    };
-  } else if (contentState.status === "unsupported") {
-    searchIndexState = {
-      status: "unsupported",
-      sourceVersionId: current.currentVersionId,
-      reason: contentState.reason,
-    };
   } else {
-    searchIndexState = {
-      status: "pending",
-      sourceVersionId: current.currentVersionId,
-    };
+    const latestSourceRun = ocrRun ?? nativeRun;
+    const sourceRunCompleted = latestSourceRun?.status === "succeeded";
+    const freshUntrackedProjection =
+      latestSourceRun === undefined &&
+      searchDocument !== undefined &&
+      searchDocument.updatedAt >= current.currentVersionCreatedAt;
+
+    if (searchDocument && (sourceRunCompleted || freshUntrackedProjection)) {
+      searchIndexState = {
+        status: "ready",
+        sourceVersionId: current.currentVersionId,
+        updatedAt: (
+          latestSourceRun?.finishedAt ?? searchDocument.updatedAt
+        ).toISOString(),
+      };
+    } else {
+      searchIndexState = {
+        status: "pending",
+        sourceVersionId: current.currentVersionId,
+      };
+    }
   }
 
   return { contentState, searchIndexState };
@@ -2414,14 +2439,14 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
   ) {
     return structuredErrorResult({
       code: "validation_error",
-      message: "File properties are managed through document uploads",
+      message: "File properties cannot be targeted by set_field_value",
       issues: [
         {
           path: "content.type",
-          message: "Use upload_document_version for file content",
+          message: "Arbitrary file-property cells are not writable",
         },
       ],
-      hint: "Call open_document_version_upload or upload_document_version for this document.",
+      hint: "To replace the document's primary file, call open_document_version_upload or upload_document_version. These tools do not target an arbitrary property_id.",
     });
   }
 

@@ -69,9 +69,31 @@ describe("ARES normalized projection", () => {
   });
 
   test("does not confuse skipped enrichment with absent registry data", () => {
-    const entity = toNormalizedEntity(company, { vrLoaded: false });
+    const entity = toNormalizedEntity(
+      { ...company, vrEnrichmentStatus: "not_requested" },
+      { vrLoaded: false },
+    );
     expect(entity.keyPeople).toEqual({ availability: "not-loaded" });
     expect(entity.registryRecord).toEqual({ availability: "not-loaded" });
+    expect(entity.actingClause).toEqual({ availability: "not-loaded" });
+  });
+
+  test("does not turn unavailable VR enrichment into known-empty fields", () => {
+    const entity = toNormalizedEntity(
+      {
+        ...company,
+        courtFile: null,
+        statutoryBodies: [],
+        shareCapital: null,
+        actingClause: null,
+        vrEnrichmentStatus: "unavailable",
+      },
+      { vrLoaded: true },
+    );
+
+    expect(entity.registryRecord).toEqual({ availability: "not-loaded" });
+    expect(entity.keyPeople).toEqual({ availability: "not-loaded" });
+    expect(entity.shareCapital).toEqual({ availability: "not-loaded" });
     expect(entity.actingClause).toEqual({ availability: "not-loaded" });
   });
 
