@@ -81,6 +81,7 @@ const encryptContentMock = mock(async () => ({
   iv: Buffer.from("iv"),
 }));
 const requestAutomaticDocumentOcrMock = mock(async () => undefined);
+const restoreManualOcrRunAfterProjectionLossMock = mock(async () => undefined);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
@@ -105,6 +106,10 @@ void mock.module("@/api/lib/content-encryption", () => ({
 }));
 void mock.module("@/api/lib/document-processing-automatic-request", () => ({
   requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
+}));
+void mock.module("@/api/lib/document-processing-manual-ocr-restore", () => ({
+  restoreManualOcrRunAfterProjectionLoss:
+    restoreManualOcrRunAfterProjectionLossMock,
 }));
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
@@ -183,6 +188,7 @@ beforeEach(() => {
     iv: Buffer.from("iv"),
   }));
   requestAutomaticDocumentOcrMock.mockClear();
+  restoreManualOcrRunAfterProjectionLossMock.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
 });
@@ -350,6 +356,33 @@ describe("processExtraction", () => {
     expect(encryptContentMock).toHaveBeenCalledWith(organizationId, "");
     expect(executeMock).toHaveBeenCalledTimes(2);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
+    expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
+  });
+
+  test("restores manual OCR after native PDF extraction without automatic eligibility", async () => {
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(restoreManualOcrRunAfterProjectionLossMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityId,
+        fieldId,
+        sourceFileId: fileContent.id,
+      }),
+    );
+    expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 
   test("requests OCR for a textless extension-resolved PDF", async () => {
@@ -377,6 +410,7 @@ describe("processExtraction", () => {
     });
 
     expect(outcome).toBe("persisted");
+    expect(restoreManualOcrRunAfterProjectionLossMock).toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).toHaveBeenCalledWith(
       expect.objectContaining({
         entityId,
@@ -521,6 +555,13 @@ describe("processExtraction", () => {
     });
 
     expect(outcome).toBe("preserved");
+    expect(restoreManualOcrRunAfterProjectionLossMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityId,
+        fieldId,
+        sourceFileId: fileContent.id,
+      }),
+    );
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 });

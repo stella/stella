@@ -10,7 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { shouldRequeueAutomaticOcrRun } from "@/api/lib/document-processing-automatic-request-state";
+import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -149,6 +149,9 @@ export const requestAutomaticDocumentOcr = async ({
     if (!existing) {
       return null;
     }
+    if (existing.requestSource === "manual") {
+      return null;
+    }
 
     const projectionRows =
       existing.status === "succeeded"
@@ -171,7 +174,7 @@ export const requestAutomaticDocumentOcr = async ({
             .limit(1)
         : [];
     if (
-      !shouldRequeueAutomaticOcrRun({
+      !shouldRequeueOcrRunAfterProjectionLoss({
         projection: projectionRows.at(0) ?? null,
         run: existing,
         source: {

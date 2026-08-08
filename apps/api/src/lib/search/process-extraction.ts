@@ -12,6 +12,7 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -284,6 +285,22 @@ export const executeNativeExtraction = async ({
     sourceSha256Hex: run.sourceSha256Hex,
     workspaceId: run.workspaceId,
   });
+  if (persistenceOutcome === "source_cancelled") {
+    return persistenceOutcome;
+  }
+
+  if (source.extractionMimeType === PDF_MIME_TYPE) {
+    await restoreManualOcrRunAfterProjectionLoss({
+      entityId: run.entityId,
+      entityVersionId: run.entityVersionId,
+      fieldId: run.fieldId,
+      organizationId: run.organizationId,
+      sourceFileId: run.sourceFileId,
+      sourceSha256Hex: run.sourceSha256Hex,
+      workspaceId: run.workspaceId,
+    });
+  }
+
   if (persistenceOutcome !== "persisted") {
     return persistenceOutcome;
   }

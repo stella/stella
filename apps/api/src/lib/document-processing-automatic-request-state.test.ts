@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { shouldRequeueAutomaticOcrRun } from "@/api/lib/document-processing-automatic-request-state";
+import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 
 const source = {
   entityVersionId: "version_1",
@@ -21,13 +21,20 @@ const projection = {
   sourceSha256Hex: source.sourceSha256Hex,
 };
 
-describe("shouldRequeueAutomaticOcrRun", () => {
-  test("requeues succeeded automatic OCR when rollback removed its projection", () => {
+describe("shouldRequeueOcrRunAfterProjectionLoss", () => {
+  test("requeues succeeded OCR when rollback removed its projection", () => {
     expect(
-      shouldRequeueAutomaticOcrRun({ projection: null, run, source }),
+      shouldRequeueOcrRunAfterProjectionLoss({ projection: null, run, source }),
     ).toBe(true);
     expect(
-      shouldRequeueAutomaticOcrRun({
+      shouldRequeueOcrRunAfterProjectionLoss({
+        projection: null,
+        run: { ...run, requestSource: "upload" },
+        source,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRequeueOcrRunAfterProjectionLoss({
         projection: { ...projection, ocrRunId: null },
         run,
         source,
@@ -35,22 +42,15 @@ describe("shouldRequeueAutomaticOcrRun", () => {
     ).toBe(true);
   });
 
-  test("keeps a succeeded automatic run whose OCR projection is intact", () => {
-    expect(shouldRequeueAutomaticOcrRun({ projection, run, source })).toBe(
-      false,
-    );
+  test("keeps a succeeded run whose OCR projection is intact", () => {
+    expect(
+      shouldRequeueOcrRunAfterProjectionLoss({ projection, run, source }),
+    ).toBe(false);
   });
 
-  test("does not convert manual or non-succeeded runs into automatic retries", () => {
+  test("does not retry non-succeeded runs", () => {
     expect(
-      shouldRequeueAutomaticOcrRun({
-        projection: null,
-        run: { ...run, requestSource: "manual" },
-        source,
-      }),
-    ).toBe(false);
-    expect(
-      shouldRequeueAutomaticOcrRun({
+      shouldRequeueOcrRunAfterProjectionLoss({
         projection: null,
         run: { ...run, status: "queued" },
         source,
