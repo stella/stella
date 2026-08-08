@@ -135,6 +135,18 @@ const SENATE_MAP: Record<string, string> = {
   IV: "4",
 };
 
+const parseCaseNumberComponents = (
+  caseNumber: string,
+): { senate: string; caseIndex: string; shortYear: string } | undefined => {
+  const { senate, caseIndex, shortYear } =
+    /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
+      caseNumber,
+    )?.groups ?? {};
+  return senate && caseIndex && shortYear
+    ? { senate, caseIndex, shortYear }
+    : undefined;
+};
+
 /**
  * Build ECLI from parsed case number components.
  *
@@ -150,14 +162,11 @@ const buildEcli = (
   counter: number,
 ): string | undefined => {
   // "II.ÚS 3436/14" or "Pl.ÚS 24/10"
-  const match =
-    /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
-      caseNumber,
-    );
-  const { senate, caseIndex, shortYear } = match?.groups ?? {};
-  if (!senate || !caseIndex || !shortYear) {
+  const components = parseCaseNumberComponents(caseNumber);
+  if (!components) {
     return undefined;
   }
+  const { senate, caseIndex, shortYear } = components;
   const mappedSenate = SENATE_MAP[senate] ?? senate.toUpperCase();
   return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
 };
@@ -208,18 +217,15 @@ const legacySourceUrlsFor = (
   if (counter !== 1) {
     return undefined;
   }
-  const legacyDocket =
-    /^(?:[IVX]+|Pl)\.ÚS\s+(?<number>\d+)\/(?<year>\d+)$/u.exec(
-      caseNumber,
-    )?.groups;
-  if (!legacyDocket?.["number"] || !legacyDocket["year"]) {
+  const components = parseCaseNumberComponents(caseNumber);
+  if (!components) {
     return undefined;
   }
   const legacyYear = String(
-    Number.parseInt(legacyDocket["year"], 10) % 100,
+    Number.parseInt(components.shortYear, 10) % 100,
   ).padStart(2, "0");
   return [
-    `https://nalus.usoud.cz/Search/GetText.aspx?sz=I-${legacyDocket["number"]}-${legacyYear}_1`,
+    `https://nalus.usoud.cz/Search/GetText.aspx?sz=I-${components.caseIndex}-${legacyYear}_1`,
   ];
 };
 
@@ -721,7 +727,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       "counter"
     ];
     const szCounter = /_(?<counter>\d+)$/u.exec(sz)?.groups?.["counter"];
-    const caseNumber = registrySign.replace(/\s+#\d+\s*$/u, "").trim();
+    const caseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     if (!caseNumber) {
       throw new TypeError("NALUS result row is missing its docket");
     }
