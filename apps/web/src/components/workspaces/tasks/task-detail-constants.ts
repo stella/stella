@@ -20,9 +20,10 @@ import type {
   TaskStatus,
 } from "@stll/api-contract";
 
+import type { TranslationKey } from "@/i18n/types";
+
 export { isTaskPriority, isTaskStatus, TASK_PRIORITIES, TASK_STATUSES };
 export type { TaskPriority, TaskStatus };
-import type { TranslationKey } from "@/i18n/types";
 
 /** Normalize a date value that may be a Date object (Eden
  *  transforms `format: "date"`) or a YYYY-MM-DD string. */
@@ -58,7 +59,7 @@ export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
 
 export const ITEM_TYPE_TRANSLATION_KEYS = {
   event: "common.itemTypeValues.event",
-  fact: "common.itemTypeValues.fact",
+  fact: "memory.kinds.fact",
   issue: "knowledge.playbooks.issueLabel",
   requirement: "common.itemTypeValues.requirement",
   task: "search.kinds.task",

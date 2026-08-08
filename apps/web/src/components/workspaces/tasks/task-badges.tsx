@@ -12,11 +12,10 @@ import { cn } from "@stll/ui/lib/utils";
 import {
   isListItemType,
   ITEM_TYPE_TRANSLATION_KEYS,
+  localISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceEntity } from "@/lib/types";
-
-import { localISODate } from "./task-detail-constants";
 
 const PRIORITY_CONFIG: Record<
   string,

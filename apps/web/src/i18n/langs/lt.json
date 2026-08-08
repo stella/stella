@@ -903,7 +903,6 @@
     "invoices": "Sąskaitos",
     "itemTypeValues": {
       "event": "Įvykis",
-      "fact": "Faktas",
       "requirement": "Reikalavimas"
     },
     "kind": "Rūšis",

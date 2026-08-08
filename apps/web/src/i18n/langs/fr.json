@@ -903,7 +903,6 @@
     "invoices": "Factures",
     "itemTypeValues": {
       "event": "Événement",
-      "fact": "Fait",
       "requirement": "Exigence"
     },
     "kind": "Type",

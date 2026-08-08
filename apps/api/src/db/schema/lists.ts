@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { timestamptz } from "@/api/db/columns";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 
@@ -19,6 +21,16 @@ import type { SafeId } from "./common";
 import { workspaces } from "./contacts";
 import { entities, entityVersions } from "./entities";
 import { properties } from "./properties";
+
+const toNonEmptyEnum = <T extends string>(
+  values: readonly T[],
+): [T, ...T[]] => {
+  const first = values[0];
+  if (first === undefined) {
+    panic("Database enum values must not be empty");
+  }
+  return [first, ...values.slice(1)];
+};
 
 export const LEGAL_LIST_STATUSES = ["active", "archived"] as const;
 export type LegalListStatus = (typeof LEGAL_LIST_STATUSES)[number];
@@ -465,8 +477,12 @@ export const legalListGenerationCandidates = p.pgTable(
     name: p.varchar({ length: 2000 }).notNull(),
     description: p.text(),
     itemType: p.text("item_type", { enum: LIST_ITEM_TYPES }).notNull(),
-    itemStatus: p.text("item_status", { enum: TASK_STATUSES }),
-    priority: p.text("priority", { enum: ENTITY_PRIORITIES }),
+    itemStatus: p.text("item_status", {
+      enum: toNonEmptyEnum(TASK_STATUSES),
+    }),
+    priority: p.text("priority", {
+      enum: toNonEmptyEnum(ENTITY_PRIORITIES),
+    }),
     dueDate: p.date("due_date", { mode: "string" }),
     suggestedAssigneeUserIds: jsonb("suggested_assignee_user_ids")
       .$type<SafeId<"user">[]>()

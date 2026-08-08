@@ -241,7 +241,8 @@ export const createTaskEntityHandler = async function* ({
         }
       }
 
-      const validAssigneeIds = [...new Set(body.assigneeIds ?? [])];
+      const validAssigneeIds =
+        body.assigneeIds === undefined ? [] : [...new Set(body.assigneeIds)];
       const memberIdsToValidate = body.ownerUserId ? [body.ownerUserId] : [];
       memberIdsToValidate.push(...validAssigneeIds);
       const memberIdsToLoad = [...memberIdsToValidate];

@@ -903,7 +903,6 @@
     "invoices": "Rēķini",
     "itemTypeValues": {
       "event": "Notikums",
-      "fact": "Fakts",
       "requirement": "Prasība"
     },
     "kind": "Veids",

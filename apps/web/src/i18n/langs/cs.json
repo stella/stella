@@ -903,7 +903,6 @@
     "invoices": "Faktury",
     "itemTypeValues": {
       "event": "Událost",
-      "fact": "Skutečnost",
       "requirement": "Požadavek"
     },
     "kind": "Druh",

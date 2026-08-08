@@ -302,7 +302,7 @@ export const updateTaskHandler = async function* ({
         const updatesLegacyDeadline =
           body.dueDate !== undefined &&
           (agendaKind === "deadline" ||
-            (agendaKind === undefined &&
+            (agendaKind === null &&
               workflow.type === WORK_OBLIGATION_TYPE.DEADLINE));
         const nextLegacyHardDeadlineDate = updatesLegacyDeadline
           ? body.dueDate

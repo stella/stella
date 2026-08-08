@@ -903,7 +903,6 @@
     "invoices": "الفواتير",
     "itemTypeValues": {
       "event": "حدث",
-      "fact": "واقعة",
       "requirement": "متطلب"
     },
     "kind": "النوع",

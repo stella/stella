@@ -906,7 +906,6 @@ type Messages = {
     "invoices": "Invoices";
     "itemTypeValues": {
       "event": "Event";
-      "fact": "Fact";
       "requirement": "Requirement";
     };
     "kind": "Kind";

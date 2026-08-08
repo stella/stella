@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -8,15 +8,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = t.Object({
@@ -37,29 +32,21 @@ const config = {
   query: querySchema,
 } satisfies HandlerConfig;
 
+const activityCursor = createTimestampIdCursorCodec({
+  column: auditLogs.createdAt,
+  brandId: brandPersistedAuditLogId,
+});
+
 const readItemActivity = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
     const limit = query.limit ?? LIMITS.legalListActivityPageSizeDefault;
-    const cursorParts = query.cursor
-      ? decodePaginationCursor(query.cursor)
-      : null;
-    const cursorDate = cursorParts
-      ? parseDateTimePaginationCursorPart(cursorParts.at(0))
-      : null;
-    const cursorId = cursorParts?.at(1);
-    if (
-      query.cursor &&
-      (!cursorDate || !isUuidPaginationCursorPart(cursorId))
-    ) {
+    const cursor = query.cursor ? activityCursor.decode(query.cursor) : null;
+    if (query.cursor && !cursor) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
-    const cursorAuditId =
-      typeof cursorId === "string" && isUuidPaginationCursorPart(cursorId)
-        ? brandPersistedAuditLogId(cursorId)
-        : null;
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
@@ -75,16 +62,13 @@ const readItemActivity = createSafeHandler(
           return null;
         }
 
-        const cursorCondition =
-          cursorDate && cursorAuditId
-            ? or(
-                lt(auditLogs.createdAt, cursorDate),
-                and(
-                  eq(auditLogs.createdAt, cursorDate),
-                  lt(auditLogs.id, cursorAuditId),
-                ),
-              )
-            : undefined;
+        const cursorCondition = cursor
+          ? activityCursor.keysetAfter({
+              cursor,
+              idColumn: auditLogs.id,
+              direction: "descending",
+            })
+          : undefined;
         return await tx
           .select({
             id: auditLogs.id,
@@ -94,6 +78,7 @@ const readItemActivity = createSafeHandler(
             metadata: auditLogs.metadata,
             changes: auditLogs.changes,
             createdAt: auditLogs.createdAt,
+            createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
           })
           .from(auditLogs)
           .leftJoin(
@@ -128,24 +113,26 @@ const readItemActivity = createSafeHandler(
       );
     }
 
-    return Result.ok(
-      createCursorPage({
-        rows: result.map((event) => ({
-          id: event.id,
-          action: event.action,
-          actorName: event.performerName ?? event.userName,
-          changes: event.changes,
-          createdAt: event.createdAt,
-          operation:
-            typeof event.metadata?.["operation"] === "string"
-              ? event.metadata["operation"]
-              : null,
-        })),
-        limit,
-        cursorForItem: (event) =>
-          encodePaginationCursor([event.createdAt.toISOString(), event.id]),
-      }),
-    );
+    const page = createCursorPage({
+      rows: result,
+      limit,
+      cursorForItem: (event) =>
+        activityCursor.encode(event.createdAtCursor, event.id),
+    });
+    return Result.ok({
+      ...page,
+      items: page.items.map((event) => ({
+        id: event.id,
+        action: event.action,
+        actorName: event.performerName ?? event.userName,
+        changes: event.changes,
+        createdAt: event.createdAt,
+        operation:
+          typeof event.metadata?.["operation"] === "string"
+            ? event.metadata["operation"]
+            : null,
+      })),
+    });
   },
 );
 
