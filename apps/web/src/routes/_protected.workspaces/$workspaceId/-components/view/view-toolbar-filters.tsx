@@ -44,7 +44,6 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 
-import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type {
   ConditionOperator,
   FieldOption,
@@ -67,11 +66,12 @@ import {
   MultiSelectValue,
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
-import { filterCapabilities } from "@/components/workspaces/conditions/filter-capabilities";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
+
+import { AdvancedFilterEditor } from "./advanced-filter-editor";
 
 type FilterChipsProps = {
   filters: ConditionNode[];
@@ -506,26 +506,14 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-[44rem] max-w-[92vw] p-3">
-        <ConditionBuilder
-          capabilities={filterCapabilities({
-            fields,
-            facetContext,
-            allowNesting: true,
-          })}
+      <PopoverPopup align="start" className="w-[44rem] max-w-[92vw] p-0">
+        <AdvancedFilterEditor
+          facetContext={facetContext}
+          fields={fields}
+          node={node}
           onChange={onChange}
-          value={node}
+          onRemove={onRemove}
         />
-        <div className="mt-2 border-t pt-2">
-          <Button
-            className="text-muted-foreground"
-            onClick={onRemove}
-            size="xs"
-            variant="ghost"
-          >
-            {t("workspaces.views.removeAdvancedFilter")}
-          </Button>
-        </div>
       </PopoverPopup>
     </Popover>
   );
