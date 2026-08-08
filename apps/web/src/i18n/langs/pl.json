@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktywni członkowie",
+      "adminOverview": {
+        "activeUsers": "Aktywni użytkownicy",
+        "activeUsersValue": "{active} z {total}",
+        "activityTrend": "Aktywność AI",
+        "activityTrendDescription": "Dzienna liczba mierzonych działań AI",
+        "aiActions": "Mierzone działania AI",
+        "description": "Wdrożenie, mierzona aktywność AI i użycie modeli z ostatnich {days} dni",
+        "funding": "Źródło klucza",
+        "lastActive": "Ostatnia aktywność",
+        "manageMembers": "Zarządzaj członkami",
+        "modelRoleFallback": "Rola {role} (dane historyczne)",
+        "modelUsage": "Użycie według modelu",
+        "modelUsageDescription": "Jednostki użycia przypisane do każdego modelu",
+        "modelsUsed": "Używane modele",
+        "mostActiveMembers": "Najaktywniejsi członkowie",
+        "noActivity": "Zaproś członka, aby rozpocząć tworzenie widoku aktywności.",
+        "pendingInvitations": "{count, plural, one {# oczekujące zaproszenie} few {# oczekujące zaproszenia} many {# oczekujących zaproszeń} other {# oczekującego zaproszenia}}",
+        "title": "Przegląd"
+      },
       "ai": "Konfiguracja AI",
       "aiDescription": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych",
       "anonymization": {

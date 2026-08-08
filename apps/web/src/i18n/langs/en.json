@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Active members",
+      "adminOverview": {
+        "activeUsers": "Active users",
+        "activeUsersValue": "{active} of {total}",
+        "activityTrend": "AI activity",
+        "activityTrendDescription": "Daily metered AI actions",
+        "aiActions": "Metered AI actions",
+        "description": "Adoption, metered AI activity, and model usage over the last {days} days",
+        "funding": "Key source",
+        "lastActive": "Latest activity",
+        "manageMembers": "Manage members",
+        "modelRoleFallback": "{role} role (historical)",
+        "modelUsage": "Usage by model",
+        "modelUsageDescription": "Usage units attributed to each model",
+        "modelsUsed": "Models used",
+        "mostActiveMembers": "Most active members",
+        "noActivity": "Invite a member to start building an activity view.",
+        "pendingInvitations": "{count, plural, one {# pending invitation} other {# pending invitations}}",
+        "title": "Admin overview"
+      },
       "ai": "AI configuration",
       "aiDescription": "Bring your own API key or configure data sovereignty region",
       "anonymization": {

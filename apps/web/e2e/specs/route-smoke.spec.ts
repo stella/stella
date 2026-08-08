@@ -133,7 +133,10 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/account/memory"),
   staticRoute("/settings/account/profile"),
   staticRoute("/settings/organization", {
-    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/overview",
+    },
   }),
   staticRoute("/settings/organization/ai"),
   staticRoute("/settings/organization/anonymization"),
@@ -144,6 +147,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/document-types"),
   staticRoute("/settings/organization/matter-numbering"),
   staticRoute("/settings/organization/members"),
+  staticRoute("/settings/organization/overview"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/todos"),
   staticRoute("/workspaces"),

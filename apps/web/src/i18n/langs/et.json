@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
+      "adminOverview": {
+        "activeUsers": "Aktiivsed kasutajad",
+        "activeUsersValue": "{active} / {total}",
+        "activityTrend": "Tehisintellekti tegevus",
+        "activityTrendDescription": "Igapäevased mõõdetud tehisintellekti toimingud",
+        "aiActions": "Mõõdetud tehisintellekti toimingud",
+        "description": "Kasutuselevõtt, mõõdetud tehisintellekti tegevus ja mudelite kasutus viimase {days} päeva jooksul",
+        "funding": "Võtme allikas",
+        "lastActive": "Viimati aktiivne",
+        "manageMembers": "Halda liikmeid",
+        "modelRoleFallback": "Roll {role} (ajalooline)",
+        "modelUsage": "Kasutus mudeli järgi",
+        "modelUsageDescription": "Igale mudelile omistatud kasutusühikud",
+        "modelsUsed": "Kasutatud mudelid",
+        "mostActiveMembers": "Aktiivseimad liikmed",
+        "noActivity": "Kutsu liige, et alustada tegevusvaate koostamist.",
+        "pendingInvitations": "{count, plural, one {# ootel kutse} other {# ootel kutset}}",
+        "title": "Ülevaade"
+      },
       "ai": "AI seadistus",
       "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
       "anonymization": {

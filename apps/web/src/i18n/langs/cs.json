@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktivní členové",
+      "adminOverview": {
+        "activeUsers": "Aktivní uživatelé",
+        "activeUsersValue": "{active} z {total}",
+        "activityTrend": "Aktivita AI",
+        "activityTrendDescription": "Denní počet měřených akcí AI",
+        "aiActions": "Měřené akce AI",
+        "description": "Využívání, měřená aktivita AI a použití modelů za posledních {days} dní",
+        "funding": "Zdroj klíče",
+        "lastActive": "Naposledy aktivní",
+        "manageMembers": "Spravovat členy",
+        "modelRoleFallback": "Role {role} (historická data)",
+        "modelUsage": "Využití podle modelu",
+        "modelUsageDescription": "Jednotky využití přiřazené jednotlivým modelům",
+        "modelsUsed": "Použité modely",
+        "mostActiveMembers": "Nejaktivnější členové",
+        "noActivity": "Pozvěte člena a začněte sledovat aktivitu.",
+        "pendingInvitations": "{count, plural, one {# nevyřízená pozvánka} few {# nevyřízené pozvánky} other {# nevyřízených pozvánek}}",
+        "title": "Přehled"
+      },
       "ai": "Nastavení AI",
       "aiDescription": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat",
       "anonymization": {

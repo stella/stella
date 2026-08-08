@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",
+      "adminOverview": {
+        "activeUsers": "Aktīvie lietotāji",
+        "activeUsersValue": "{active} no {total}",
+        "activityTrend": "MI aktivitāte",
+        "activityTrendDescription": "Ikdienas uzskaitītās MI darbības",
+        "aiActions": "Uzskaitītās MI darbības",
+        "description": "Lietošanas apguve, uzskaitītā MI aktivitāte un modeļu lietojums pēdējās {days} dienās",
+        "funding": "Atslēgas avots",
+        "lastActive": "Pēdējā aktivitāte",
+        "manageMembers": "Pārvaldīt dalībniekus",
+        "modelRoleFallback": "{role} loma (vēsturiskie dati)",
+        "modelUsage": "Lietojums pēc modeļa",
+        "modelUsageDescription": "Katram modelim attiecinātās lietojuma vienības",
+        "modelsUsed": "Izmantotie modeļi",
+        "mostActiveMembers": "Aktīvākie dalībnieki",
+        "noActivity": "Uzaiciniet dalībnieku, lai sāktu veidot aktivitātes pārskatu.",
+        "pendingInvitations": "{count, plural, zero {Nav neapstiprinātu uzaicinājumu} one {# neapstiprināts uzaicinājums} other {# neapstiprināti uzaicinājumi}}",
+        "title": "Pārskats"
+      },
       "ai": "AI konfigurācija",
       "aiDescription": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu",
       "anonymization": {
