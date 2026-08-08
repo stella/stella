@@ -321,6 +321,9 @@ export const lookupByIco = async (
 
     const vrResult = await vrResultPromise;
     if (vrResult.status === "rejected") {
+      // Cancellation remains caller control flow even when it arrives after
+      // VR headers and is wrapped while decoding the response body.
+      options?.signal?.throwIfAborted();
       if (
         vrResult.reason instanceof AresAPIError ||
         vrResult.reason instanceof AresRequestError

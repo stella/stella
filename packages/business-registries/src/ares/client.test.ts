@@ -262,6 +262,77 @@ describe("lookupByIco optional VR enrichment", () => {
     expect(outcome).toBeInstanceOf(AresRequestError);
     expect(optionalVrBodyAborted).toBe(true);
   });
+
+  test("preserves caller cancellation while a VR body is stalled", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    let vrHeadersArrived: (() => void) | undefined;
+    const headersArrived = new Promise<void>((resolve) => {
+      vrHeadersArrived = resolve;
+    });
+    const stub = async (
+      input: URL | RequestInfo,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      if (url.includes("ekonomicke-subjekty-vr")) {
+        const signal = init?.signal;
+        const response = new Response(
+          new ReadableStream({
+            start(streamController) {
+              signal?.addEventListener(
+                "abort",
+                () => streamController.error(signal.reason),
+                { once: true },
+              );
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+        vrHeadersArrived?.();
+        return response;
+      }
+      return new Response(
+        JSON.stringify({
+          icoId: "27082440",
+          zaznamy: [
+            {
+              ico: "27082440",
+              obchodniJmeno: "Example a.s.",
+              primarniZaznam: true,
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const onVrError = () => {
+      throw new Error("Caller cancellation must not be reported as VR outage");
+    };
+
+    const lookup = lookupByIco("27082440", {
+      onVrError,
+      signal: controller.signal,
+    });
+    await headersArrived;
+    controller.abort(reason);
+    const outcome = await lookup.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toBe(reason);
+  });
 });
 
 describe.skipIf(SKIP_LIVE)("searchByName live", () => {

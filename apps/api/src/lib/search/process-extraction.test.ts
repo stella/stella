@@ -352,6 +352,40 @@ describe("processExtraction", () => {
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 
+  test("requests OCR for a textless extension-resolved PDF", async () => {
+    const extensionResolvedPdf = {
+      ...fileContent,
+      fileName: "scan.pdf",
+      mimeType: "application/octet-stream",
+    } satisfies FieldContent;
+    extractFileTextResultMock.mockImplementationOnce(async () =>
+      Result.ok(null),
+    );
+
+    const outcome = await executeNativeExtraction({
+      fileField: extensionResolvedPdf,
+      lifecycleSignal: new AbortController().signal,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: extensionResolvedPdf.id,
+        sourceSha256Hex: extensionResolvedPdf.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(requestAutomaticDocumentOcrMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityId,
+        fieldId,
+        sourceFileId: extensionResolvedPdf.id,
+      }),
+    );
+  });
+
   test("serializes native persistence and fences a current manual OCR selection", async () => {
     const sourceVersionId = toSafeId<"entityVersion">(
       "019864b8-48d0-7f37-94d5-948e3bcf3f45",

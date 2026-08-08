@@ -288,7 +288,7 @@ export const executeNativeExtraction = async ({
     return persistenceOutcome;
   }
 
-  if (text === null && fileField.mimeType === PDF_MIME_TYPE) {
+  if (text === null && source.extractionMimeType === PDF_MIME_TYPE) {
     await requestAutomaticDocumentOcr({
       entityId: run.entityId,
       entityVersionId: run.entityVersionId,

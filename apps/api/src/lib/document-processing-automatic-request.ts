@@ -10,6 +10,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const requestAutomaticDocumentOcr = async ({
@@ -75,7 +76,10 @@ export const requestAutomaticDocumentOcr = async ({
       content?.type !== "file" ||
       content.id !== sourceFileId ||
       content.sha256Hex !== sourceSha256Hex ||
-      content.mimeType !== PDF_MIME_TYPE ||
+      resolveExtractionMimeType({
+        fileName: content.fileName,
+        mimeType: content.mimeType,
+      }) !== PDF_MIME_TYPE ||
       content.encrypted
     ) {
       return null;
