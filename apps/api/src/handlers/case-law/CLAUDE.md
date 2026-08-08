@@ -400,7 +400,11 @@ quarantine fingerprint as a repair-only alias after a publisher identity
 recovers, so the repair enriches the audited row instead of inserting a
 duplicate. Repair-only aliases may adopt an existing row only while it is still
 stored under that degraded identity; never reserve an unclaimed heuristic as
-if it were an exact publisher key. Mark every listing-only result with
+if it were an exact publisher key. Build the repair fingerprint only from
+fields that remain present when identity metadata recovers: exclude the ECLI,
+publisher link label and any other value that can appear together with the
+new exact identity, or the recovered observation will hash differently from
+its quarantine row. Mark every listing-only result with
 `isListingOnly`, and, if the list also lacks a real docket, mark the durable
 label with `caseNumberIsPlaceholder`. A later partial refresh must never replace
 previously recovered detail metadata, dates, raw payload pointers, docket or

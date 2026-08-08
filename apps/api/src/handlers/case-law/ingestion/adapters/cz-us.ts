@@ -728,24 +728,18 @@ const hiddenField = (html: string, name: string): string | undefined =>
  * markup would mint a new quarantine identity whenever result order moves.
  */
 const quarantineFingerprint = ({
-  primaryText,
+  stablePrimaryText,
   actionsText,
-  registrySign,
-  ecli,
 }: {
-  primaryText: string;
+  stablePrimaryText: string;
   actionsText: string;
-  registrySign: string;
-  ecli: string | undefined;
 }): string => {
   const normalize = (value: string): string =>
     value.replace(/\s+/gu, " ").trim();
   return hashContent(
     JSON.stringify({
-      primaryText: normalize(primaryText),
+      stablePrimaryText: normalize(stablePrimaryText),
       actionsText: normalize(actionsText),
-      registrySign: normalize(registrySign),
-      ecli: ecli ?? null,
     }),
   );
 };
@@ -870,13 +864,15 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     });
     // Compute the identity-less form for every row. If publisher links are
     // restored later, this becomes a migration alias for the earlier durable
-    // quarantine row. Historical quarantines necessarily had no ECLI, so the
-    // repair fingerprint deliberately fixes that field to undefined.
+    // quarantine row. Strip the detail anchor and ECLI from the visible text:
+    // both can appear only when identity metadata recovers, so neither may
+    // participate in the repair fingerprint.
+    const stablePrimary = primary.clone();
+    stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
+    const stablePrimaryText = stablePrimary.text().replace(ecli ?? "", "");
     const quarantineId = quarantineFingerprint({
-      primaryText: primary.text(),
+      stablePrimaryText,
       actionsText: actions.text(),
-      registrySign,
-      ecli: undefined,
     });
     const publisherIdentity = exactPublisherIdentity ?? {
       sourceDocumentId: `nalus-quarantine:${quarantineId}`,

@@ -965,6 +965,51 @@ describe("czUsAdapter.fetchPage", () => {
     );
   });
 
+  test("keeps the repair identity when ECLI and the detail docket recover", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 11/24",
+          listedCaseNumber: "",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+    });
+    const quarantined = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    installSearchMock({
+      rows: [
+        {
+          id: "7402",
+          sz: "",
+          caseNumber: "Pl.ÚS 11/24",
+          date: "4. 1. 2024",
+          ecli: "ECLI:CZ:US:2024:Pl.US.11.24.1",
+          textUrl: null,
+        },
+      ],
+    });
+    const recovered = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    expect(quarantined?.sourceDocumentId).toMatch(
+      /^nalus-quarantine:[a-f0-9]+$/u,
+    );
+    expect(recovered).toMatchObject({
+      caseNumber: "Pl.ÚS 11/24",
+      ecli: "ECLI:CZ:US:2024:Pl.US.11.24.1",
+      sourceDocumentId: "nalus-record:7402",
+    });
+    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
+      quarantined?.sourceDocumentId,
+    );
+  });
+
   test("recovers a missing listed docket from the decision detail", async () => {
     installSearchMock({
       rows: [
