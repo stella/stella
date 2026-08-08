@@ -1,6 +1,16 @@
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -232,6 +242,14 @@ const recentCursor = (availableFrom: string, availableTo: string): string =>
 describe("czUsAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
+
+  beforeAll(() => {
+    setSystemTime(new Date("2026-08-08T12:00:00.000Z"));
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
 
   beforeEach(() => {
     Bun.sleep = () => Promise.resolve();
