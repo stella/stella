@@ -15,6 +15,12 @@ export type { EmptyAst };
 export type IngestionResult = {
   caseNumber: string;
   /**
+   * True when `caseNumber` is a durable ingestion placeholder rather than a
+   * publisher docket. Identified-row refreshes preserve an already recovered
+   * docket and its citation key when a later partial listing carries this.
+   */
+  caseNumberIsPlaceholder?: boolean | undefined;
+  /**
    * The publisher's own identifier for this document. Supply it whenever the
    * source has one: it is what makes a decision identifiable. A case number
    * does not, because courts number dockets per court and one source often

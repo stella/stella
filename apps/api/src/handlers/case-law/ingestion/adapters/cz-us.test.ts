@@ -16,7 +16,7 @@ import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type ResultRow = {
-  id: string;
+  id?: string | undefined;
   sz: string;
   caseNumber: string;
   listedCaseNumber?: string | undefined;
@@ -83,10 +83,14 @@ const makeResultsPage = (
         row.textUrl === undefined
           ? `https://nalus.usoud.cz:443/Search/GetText.aspx?sz=${row.sz}`
           : row.textUrl;
+      const detailUrl =
+        row.id === undefined
+          ? "ResultDetail.aspx?malformed=true"
+          : `ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result`;
       return `
 <tr class='resultData${index % 2}'>
   <td></td>
-  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${index % 2}' valign="top">
   <td>${textUrl ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />` : ""}</td>
@@ -307,8 +311,14 @@ describe("czUsAdapter.fetchPage", () => {
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["nalus-record:1001", "nalus-record:1002", "nalus-record:1003"]);
-    expect(page.nextCursor).toBe(historicalCursor(1994));
-    expect(page.coverage).toEqual({
+    expect(page.nextCursor).toMatch(
+      /^search:historical:2026-08-07:1993:verify:0:0:[a-f0-9]+$/u,
+    );
+    expect(page.coverage).toBeUndefined();
+
+    const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
+    expect(verified.nextCursor).toBe(historicalCursor(1994));
+    expect(verified.coverage).toEqual({
       slice: "decision-year:1993",
       reported: 3,
       collected: 3,
@@ -457,6 +467,39 @@ describe("czUsAdapter.fetchPage", () => {
         `search:historical:${availableTo}:2024:collect:0:0:-`,
       );
     }
+  });
+
+  test("verifies a single-page slice before advancing coverage", async () => {
+    const firstRow = {
+      id: "3100",
+      sz: "1-1-24_1",
+      caseNumber: "I.ÚS 1/24",
+      date: "2. 1. 2024",
+    };
+    installSearchMock({ rows: [firstRow] });
+
+    const collected = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    expect(collected.coverage).toBeUndefined();
+
+    installSearchMock({
+      rows: [
+        firstRow,
+        {
+          id: "3101",
+          sz: "2-2-24_1",
+          caseNumber: "II.ÚS 2/24",
+          date: "3. 1. 2024",
+        },
+      ],
+    });
+    const changed = unwrap(
+      await czUsAdapter.fetchPage(collected.nextCursor, {}),
+    );
+
+    expect(changed.coverage).toBeUndefined();
+    expect(changed.nextCursor).toBe(historicalCursor(2024));
   });
 
   test("legacy probe cursors restart the publisher enumeration", async () => {
@@ -712,7 +755,30 @@ describe("czUsAdapter.fetchPage", () => {
         listedOnlyReason: "missing-text-action",
       },
     });
-    expect(page.coverage?.collected).toBe(1);
+    const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
+    expect(verified.coverage?.collected).toBe(1);
+  });
+
+  test("uses an exact text identity when ResultDetail id is malformed", async () => {
+    installSearchMock({
+      rows: [
+        {
+          sz: "2-91-24_1",
+          caseNumber: "II.ÚS 91/24",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions[0]).toMatchObject({
+      caseNumber: "II.ÚS 91/24",
+      sourceDocumentId: "nalus-sz:2-91-24_1",
+      sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=2-91-24_1",
+    });
   });
 
   test("recovers a missing listed docket from the decision detail", async () => {
@@ -764,7 +830,8 @@ describe("czUsAdapter.fetchPage", () => {
       },
     });
     expect(page.decisions[0]?.legacySourceUrls).toBeUndefined();
-    expect(page.coverage?.collected).toBe(1);
+    const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
+    expect(verified.coverage?.collected).toBe(1);
   });
 
   test("catches up recent availability in contiguous bounded windows", async () => {

@@ -387,6 +387,24 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:00:01.000Z"),
       });
 
+      await processDecision({
+        input: {
+          ...placeholder,
+          caseNumber: "NALUS record 7301",
+          caseNumberIsPlaceholder: true,
+          metadata: {
+            ...placeholder.metadata,
+            listedOnly: true,
+            listingDocketMissing: true,
+          },
+          rawHash: "hash-withdrawn-detail-placeholder",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
       const [row] = await db.execute(
         sql<{ caseNumber: string; citationKey: string }>`
           SELECT case_number AS "caseNumber", citation_key AS "citationKey"

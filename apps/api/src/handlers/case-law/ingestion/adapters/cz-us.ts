@@ -306,7 +306,7 @@ type ParseDecisionPageOptions = {
   sourceDocumentId: string;
   listedEcli: string | undefined;
   listedCounter: number | undefined;
-  nalusRecordId: string;
+  nalusRecordId: string | undefined;
   nalusSz: string | undefined;
 };
 
@@ -436,7 +436,7 @@ type ListedDecision = {
   counter?: number | undefined;
   listingDocketMissing?: true | undefined;
   sourceDocumentId: string;
-  nalusRecordId: string;
+  nalusRecordId?: string | undefined;
   sourceUrl: string;
   sz?: string | undefined;
   ecli?: string | undefined;
@@ -770,9 +770,6 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
         linkAction ?? "",
       )?.groups?.["url"];
-    if (!nalusRecordId) {
-      throw new TypeError("NALUS result row is missing its record identity");
-    }
     let sz: string | undefined;
     if (rawUrl) {
       try {
@@ -782,6 +779,9 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         // ResultDetail record identity exposed by the listing.
       }
     }
+    if (!nalusRecordId && !sz) {
+      throw new TypeError("NALUS result row is missing its record identity");
+    }
     const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
     const registrySign = detail.text();
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
@@ -789,9 +789,13 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     ];
     const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
     const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
-    const caseNumber = listedCaseNumber || `NALUS record ${nalusRecordId}`;
+    const caseNumber =
+      listedCaseNumber || `NALUS record ${nalusRecordId ?? sz}`;
     const sourceUrl = new URL(sz ? TEXT_URL : RESULT_DETAIL_URL);
-    sourceUrl.searchParams.set(sz ? "sz" : "id", sz ?? nalusRecordId);
+    sourceUrl.searchParams.set(
+      sz ? "sz" : "id",
+      sz ?? nalusRecordId ?? panic("NALUS listing identity disappeared"),
+    );
     listed.push({
       caseNumber,
       ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
@@ -799,8 +803,11 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
         counterText === undefined && szCounter === undefined
           ? 1
           : Number.parseInt(counterText ?? szCounter ?? "1", 10),
-      sourceDocumentId: `nalus-record:${nalusRecordId}`,
-      nalusRecordId,
+      sourceDocumentId:
+        nalusRecordId === undefined
+          ? `nalus-sz:${sz}`
+          : `nalus-record:${nalusRecordId}`,
+      ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
       sourceUrl: sourceUrl.href,
       ...(sz === undefined ? {} : { sz }),
       ecli,
@@ -979,6 +986,7 @@ const listedOnlyDecision = (
   sourceRaw?: string,
 ): IngestionResult => ({
   caseNumber: listed.caseNumber,
+  caseNumberIsPlaceholder: listed.listingDocketMissing === true,
   sourceDocumentId: listed.sourceDocumentId,
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,
@@ -994,7 +1002,9 @@ const listedOnlyDecision = (
     caseNumber: listed.caseNumber,
     ecli: listed.ecli,
     court: "Ústavní soud",
-    nalusRecordId: listed.nalusRecordId,
+    ...(listed.nalusRecordId === undefined
+      ? {}
+      : { nalusRecordId: listed.nalusRecordId }),
     nalusSz: listed.sz,
     listingDocketMissing: listed.listingDocketMissing,
     listedOnly: true,
@@ -1036,11 +1046,12 @@ export const czUsAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 100,
-  // A page enumerates 40 exact publisher ids, then fetches decision/abstract
-  // pairs in batches of five. Ten worst-case page timeouts remain below the
-  // cycle budget, so caught-up cycles can complete and enter idle backoff.
+  // A page performs three serial search requests, then up to eight batches
+  // whose detail and abstract requests are sequential. At the request-level
+  // timeout that is about 190 seconds; the page budget leaves transport
+  // margin, while maxCycleMs still bounds how many slow pages one cycle runs.
   //
-  pageTimeoutMs: 120_000,
+  pageTimeoutMs: 240_000,
   maxSyncPages: 10,
   maxCycleMs: 30 * 60 * 1000,
 
@@ -1193,7 +1204,7 @@ export const czUsAdapter: SourceAdapter = {
         }
 
         const decisions = await fetchListedDecisions(page.listed, signal);
-        if (sliceComplete && state.page > 0) {
+        if (sliceComplete) {
           return {
             decisions,
             nextCursor: makeCursor({
@@ -1207,20 +1218,11 @@ export const czUsAdapter: SourceAdapter = {
         }
         return {
           decisions,
-          nextCursor: makeCursor(
-            sliceComplete
-              ? nextSlice(state, now)
-              : { ...state, page: state.page + 1, digest },
-          ),
-          ...(sliceComplete
-            ? {
-                coverage: {
-                  slice: coverageSlice(state),
-                  reported: page.reported,
-                  collected: page.rangeTo,
-                },
-              }
-            : {}),
+          nextCursor: makeCursor({
+            ...state,
+            page: state.page + 1,
+            digest,
+          }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),

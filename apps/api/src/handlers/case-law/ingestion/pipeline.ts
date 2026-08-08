@@ -557,6 +557,7 @@ const processDecisionAttempt = async ({
         sourceRawS3Key: true,
         sourceRawContentType: true,
         sourceUrl: true,
+        languageGroupKey: true,
       },
     });
     if (identified || !result.sourceDocumentId) {
@@ -586,6 +587,7 @@ const processDecisionAttempt = async ({
         sourceRawS3Key: true,
         sourceRawContentType: true,
         sourceUrl: true,
+        languageGroupKey: true,
       },
     });
     const ecliMatches =
@@ -988,6 +990,8 @@ const processDecisionAttempt = async ({
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
+        const preserveRecoveredCaseNumber =
+          result.caseNumberIsPlaceholder === true;
         // A refresh with no document of its own may not overwrite one.
         // Ordinary empty refreshes therefore guard a separate payload
         // statement, while a pending-mirror repair claims its exact owner
@@ -1002,15 +1006,21 @@ const processDecisionAttempt = async ({
         const updated = await tx
           .update(caseLawDecisions)
           .set({
-            caseNumber: result.caseNumber,
+            ...(preserveRecoveredCaseNumber
+              ? {}
+              : {
+                  caseNumber: result.caseNumber,
+                  citationKey: citationKeyOf(result.caseNumber),
+                }),
             sourceDocumentId: result.sourceDocumentId,
-            citationKey: citationKeyOf(result.caseNumber),
             ecli: result.ecli,
             court: result.court,
             country: result.country,
             language: result.language,
             sheetNumber: result.sheetNumber,
-            languageGroupKey,
+            languageGroupKey: preserveRecoveredCaseNumber
+              ? (result.ecli ?? existing.languageGroupKey)
+              : languageGroupKey,
             decisionDate: result.decisionDate,
             decisionType: result.decisionType,
             ...(payloadNeedsGuard ? {} : payloadColumns),

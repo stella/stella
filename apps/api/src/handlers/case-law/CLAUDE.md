@@ -362,9 +362,11 @@ records append at the end; otherwise persist an immutable query boundary in
 the cursor and catch up from that exact boundary after the snapshot finishes.
 Do not include the publisher's still-live current day in a verified snapshot.
 
-For a multi-page slice that can still mutate, collect a digest of the exact
-publisher identities and make a listing-only verification pass before writing
-complete coverage. A mismatch holds or restarts the slice. The follow-up
+For every non-empty slice that can still mutate — including one-page slices —
+collect a digest of the exact publisher identities and make a listing-only
+verification pass before writing complete coverage. A mismatch holds or
+restarts the slice. A saved page that disappears after a withdrawal must also
+restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
 
@@ -376,6 +378,13 @@ crawl. Permanent detail absence should produce a durable listing-only result
 with the exact `sourceDocumentId`, source URL and a structured reason in
 metadata. Transient network and server failures must fail the page so its
 cursor is retried.
+
+If the preferred list identity is malformed but the row exposes another exact
+publisher key (for example, a retrieval identifier), persist a namespaced
+fallback identity rather than poisoning the page. If the list lacks a real
+docket, mark the durable label with `caseNumberIsPlaceholder`; a later partial
+refresh must not replace a docket already recovered from detail or its derived
+citation key with that placeholder.
 
 Likewise, an HTTP 200 search response is not an empty result unless the
 publisher's exact no-results state is present. Fail closed on unknown markup.
@@ -447,10 +456,13 @@ When adding a new country adapter:
     multiple documents under one docket; never infer uniqueness from a URL
     pattern (rules 17-18)
 12. **Prove pagination against mutation** — use stable ordering or a fixed
-    snapshot boundary, then test an outage longer than the rolling window
-    cannot leave a date gap (rule 19)
+    snapshot boundary, verify one-page and multi-page slices, and test that a
+    withdrawn saved page plus an outage longer than the rolling window cannot
+    leave a date gap (rule 19)
 13. **Preserve listed-only records** — test a permanent missing/unparseable
-    detail and an unrecognised HTTP 200 search response (rule 20)
+    detail, a malformed primary identity with an exact fallback, a placeholder
+    refresh after docket recovery, and an unrecognised HTTP 200 search response
+    (rule 20)
 14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
     test every publisher-declared origin against an explicit allowlist (rule 21)
 
