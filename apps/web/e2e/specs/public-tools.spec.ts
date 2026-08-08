@@ -39,11 +39,19 @@ test("anonymous visitors can search and browse by legal task", async ({
   const search = page.getByRole("searchbox", {
     name: "What do you need to do?",
   });
-  await search.fill("Companies House");
+  // The route is SSR'd, so its controls can be visible just before React has
+  // attached event handlers. Retry the first interaction until hydration has
+  // accepted it rather than treating the static markup as client-ready.
+  await expect(async () => {
+    await search.fill("");
+    await search.fill("Companies House");
+    await expect(page.getByText("1 result", { exact: true })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 15_000 });
   await expect(
     page.getByRole("link", { name: /Companies House/u }),
   ).toBeVisible();
-  await expect(page.getByText("1 result", { exact: true })).toBeVisible();
   await expect(workflowDiscovery).toHaveCount(0);
 
   await page.getByRole("button", { name: "Clear search" }).click();

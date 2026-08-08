@@ -8,6 +8,7 @@ import {
   parseSkillFile,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
+import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -2029,7 +2030,7 @@ const catalogueUpstreamStatus = (status: number): 502 | 503 =>
   status === 429 || status >= 500 ? 503 : 502;
 
 const assertSkillResourcePath = (path: string) => {
-  if (path.length <= LIMITS.agentSkillResourcePathMaxChars) {
+  if (path.length <= SKILL_PACKAGE_LIMITS.resourcePathMaxChars) {
     return;
   }
   throw new HandlerError({
