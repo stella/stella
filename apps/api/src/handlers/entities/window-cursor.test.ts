@@ -3,8 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import {
   decodeEntitiesWindowCursor,
+  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
 } from "@/api/lib/entities/window-cursor";
+import { LIMITS } from "@/api/lib/limits";
 
 describe("entities window cursor", () => {
   test("round-trips sort tuple values", () => {
@@ -26,10 +29,20 @@ describe("entities window cursor", () => {
     const decoded = decodeEntitiesWindowCursor(cursor);
 
     expect(cursor.length).toBeGreaterThan(512);
+    expect(cursor.length).toBeLessThan(ENTITIES_WINDOW_CURSOR_MAX_LENGTH);
     expect(Result.isOk(decoded)).toBe(true);
     if (Result.isOk(decoded)) {
       expect(decoded.value).toEqual([longName, "entity_1"]);
     }
+  });
+
+  test("keeps the worst-case escaped sort tuple within its request bound", () => {
+    const values = Array.from({ length: LIMITS.propertiesCount }, () =>
+      "\u0001".repeat(ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH),
+    );
+    const cursor = encodeEntitiesWindowCursor([...values, "entity_1"]);
+
+    expect(cursor.length).toBeLessThan(ENTITIES_WINDOW_CURSOR_MAX_LENGTH);
   });
 
   test("rejects tampered cursor values", () => {

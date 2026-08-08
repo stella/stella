@@ -18,7 +18,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentity } from "@/components/user-avatar";
 import {
   PRIORITY_COLORS,
   PRIORITY_ICONS,
@@ -268,17 +268,15 @@ export const OwnerPicker = ({
         }
       >
         {owner ? (
-          <>
-            <UserAvatar
-              className="size-4 text-[10px]"
-              deleted={hasDeletedAccount(owner.deletedAt)}
-              image={owner.image}
-              name={owner.name}
-            />
-            <span className="truncate">
-              {owner.name ?? t("deletedAccount")}
-            </span>
-          </>
+          <UserIdentity
+            as="span"
+            avatarClassName="size-4 text-[10px]"
+            className="gap-1.5"
+            deleted={hasDeletedAccount(owner.deletedAt)}
+            image={owner.image}
+            name={owner.name ?? t("deletedAccount")}
+            nameClassName="text-sm font-normal"
+          />
         ) : (
           <span className="text-muted-foreground">{t("noOwner")}</span>
         )}
@@ -301,12 +299,13 @@ export const OwnerPicker = ({
                   }}
                   type="button"
                 >
-                  <UserAvatar
-                    className="size-5 text-[10px]"
+                  <UserIdentity
+                    as="span"
+                    avatarClassName="size-5 text-[10px]"
                     image={candidate.image}
                     name={candidate.name}
+                    nameClassName="text-sm font-normal"
                   />
-                  <span className="truncate">{candidate.name}</span>
                 </button>
               );
             })}
@@ -399,20 +398,14 @@ export const AssigneePicker = ({
           className="group/assignee flex items-center gap-1.5 rounded-md px-1.5 py-0.5"
           key={a.user.id}
         >
-          <UserAvatar
-            className="size-4 text-[10px]"
+          <UserIdentity
+            avatarClassName="size-4 text-[10px]"
+            className="flex-1 gap-1.5"
             deleted={hasDeletedAccount(a.user.deletedAt)}
             image={a.user.image}
-            name={a.user.name}
+            name={a.user.name?.trim() || tCommon("unknownUser")}
+            nameClassName="text-sm font-normal"
           />
-          <span
-            className={cn(
-              "flex-1 truncate text-sm",
-              hasDeletedAccount(a.user.deletedAt) && "text-muted-foreground",
-            )}
-          >
-            {a.user.name}
-          </span>
           {hasDeletedAccount(a.user.deletedAt) ? (
             <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
               {t("deletedAccount")}
@@ -460,20 +453,13 @@ export const AssigneePicker = ({
                     onClick={() => addAssignee.mutate(user.id)}
                     type="button"
                   >
-                    {user.image ? (
-                      <img
-                        alt={user.name}
-                        className="size-5 rounded-full"
-                        height={20}
-                        src={user.image}
-                        width={20}
-                      />
-                    ) : (
-                      <span className="bg-primary/10 flex size-5 items-center justify-center rounded-full text-xs font-medium">
-                        {user.name[0]?.toUpperCase() ?? "?"}
-                      </span>
-                    )}
-                    <span className="truncate">{user.name}</span>
+                    <UserIdentity
+                      as="span"
+                      avatarClassName="size-5 text-[10px]"
+                      image={user.image}
+                      name={user.name.trim() || tCommon("unknownUser")}
+                      nameClassName="text-sm font-normal"
+                    />
                   </button>
                 );
               })}

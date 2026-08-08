@@ -12,7 +12,12 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
-import { isUuid, tPaginationLimit, tSafeId } from "@/api/lib/custom-schema";
+import {
+  isUuid,
+  tPaginationCursor,
+  tPaginationLimit,
+  tSafeId,
+} from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -46,7 +51,7 @@ import {
 export const searchLegislationBodySchema = t.Object({
   query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor()),
   jurisdiction: t.Optional(t.String({ maxLength: 3 })),
   documentType: t.Optional(t.String({ maxLength: 128 })),
   status: t.Optional(t.String({ maxLength: 32 })),

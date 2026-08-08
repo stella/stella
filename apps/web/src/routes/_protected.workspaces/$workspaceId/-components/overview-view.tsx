@@ -49,7 +49,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
-import { UNKNOWN_USER_LABEL, UserAvatar } from "@/components/user-avatar";
+import { UNKNOWN_USER_LABEL, UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
 import { AddMemberDialog } from "@/components/workspaces/members-section";
@@ -800,16 +800,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-14 py-2.5")}
                       key={member.userId}
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <UserAvatar
-                          className="size-5 shrink-0 text-[0.5rem]"
-                          image={member.image}
-                          name={member.name}
-                        />
-                        <span className="min-w-0 truncate text-sm">
-                          {member.name}
-                        </span>
-                      </div>
+                      <UserIdentity
+                        avatarClassName="size-5 shrink-0 text-[0.5rem]"
+                        image={member.image}
+                        name={member.name}
+                        nameClassName="text-sm font-normal"
+                      />
                       {member.daily.map((hours, dayIdx) => {
                         const opacity = maxDaily > 0 ? hours / maxDaily : 0;
                         const storedEntries = member.dailyEntries[dayIdx];

@@ -23,10 +23,10 @@ import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useMatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { useFormatter } from "@/i18n/formatting-context";
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import { detached } from "@/lib/detached";
+import { getInitials } from "@/lib/get-initials";
 import { getMatterColor } from "@/lib/matter-colors";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   MattersColumnId,
   MattersSortKey,
@@ -34,10 +34,7 @@ import type {
   WorkspaceGroup,
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS, isFilterableColumnId } from "@/lib/workspaces/types";
-import {
-  getInitials,
-  TeamAvatars,
-} from "@/routes/_protected.workspaces/-components/team-avatars";
+import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 import { ColumnFilterButton } from "@/routes/_protected.workspaces/-filters/column-filter-button";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
@@ -232,13 +229,7 @@ const EntityCountCell = ({ workspace }: CellProps) => {
 
 const LastActivityCell = ({ workspace }: CellProps) => (
   <Tooltip
-    content={new Date(workspace.lastActivityAt).toLocaleString(
-      getFormattingLocale(),
-      {
-        dateStyle: "full",
-        timeStyle: "medium",
-      },
-    )}
+    content={formatFullTimestamp(workspace.lastActivityAt)}
     render={<span className="text-muted-foreground" />}
   >
     {formatRelativeTime(workspace.lastActivityAt)}
@@ -269,10 +260,7 @@ const CreatedAtCell = ({ workspace }: CellProps) => {
   const date = new Date(workspace.createdAt);
   return (
     <Tooltip
-      content={date.toLocaleString(getFormattingLocale(), {
-        dateStyle: "full",
-        timeStyle: "medium",
-      })}
+      content={formatFullTimestamp(workspace.createdAt)}
       render={<span className="text-muted-foreground tabular-nums" />}
     >
       {toLocalISODate(date)}

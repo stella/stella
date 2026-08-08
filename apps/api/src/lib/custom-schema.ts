@@ -63,5 +63,11 @@ export const tDefaultVarchar = t.String({
 export const tPaginationLimit = (maximum: number) =>
   t.Integer({ minimum: 1, maximum });
 
+export const tPaginationCursor = (maxLength = 512) =>
+  t.String({
+    maxLength,
+    description: "Opaque cursor from a previous page to fetch the next page",
+  });
+
 export const workspaceParams = <T extends TProperties>(extra: T) =>
   t.Object({ workspaceId: tSafeId("workspace"), ...extra });

@@ -56,9 +56,14 @@ describe("createBackgroundAuditRecorder", () => {
         resourceId: "field-1",
         resourceType: AUDIT_RESOURCE_TYPE.FIELD,
       },
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceId: "obligation-1",
+        resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+      },
     ]);
 
-    expect(inserted).toHaveLength(2);
+    expect(inserted).toHaveLength(3);
     expect(inserted[0]).toMatchObject({
       activityCategory: "tasks",
       groupId: inserted[1]?.["groupId"],
@@ -72,6 +77,7 @@ describe("createBackgroundAuditRecorder", () => {
       triggerUserId: "user-1",
     });
     expect(inserted[1]).toMatchObject({ activityCategory: "documents" });
+    expect(inserted[2]).toMatchObject({ activityCategory: "tasks" });
   });
 
   test("stores the transport source for a directly acting user", async () => {

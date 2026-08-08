@@ -42,7 +42,7 @@ describe("buildExpiryAuditEvents", () => {
 
     const events = buildExpiryAuditEvents(sessions, new Set(["s1", "s3"]));
 
-    expect(events.map((event) => event.resourceId)).toEqual(["s1", "s3"]);
+    expect(events.map(({ event }) => event.resourceId)).toEqual(["s1", "s3"]);
   });
 
   test("emits no events when nothing transitioned", () => {
@@ -61,22 +61,17 @@ describe("buildExpiryAuditEvents", () => {
       organizationId: toSafeId<"organization">(
         "019e0000-0000-7000-8000-0000000org1",
       ),
-      workspaceId: toSafeId<"workspace">(
-        "019e0000-0000-7000-8000-00000000ws01",
-      ),
       userId: "user-1",
-      action: "update",
-      resourceType: "desktop_edit_session",
-      resourceId: "s1",
-      changes: { status: { old: "open", new: "expired" } },
-      metadata: { reason: "token_expired" },
-      activityCategory: "other",
-      approvalStatus: "not_required",
-      performerId: "desktop-edit-session-expiry",
-      performerName: "Desktop edit session expiry",
-      performerType: "service",
-      triggerSource: "desktop-edit-session-expiry",
-      triggerType: "system",
+      event: {
+        workspaceId: toSafeId<"workspace">(
+          "019e0000-0000-7000-8000-00000000ws01",
+        ),
+        action: "update",
+        resourceType: "desktop_edit_session",
+        resourceId: "s1",
+        changes: { status: { old: "open", new: "expired" } },
+        metadata: { reason: "token_expired" },
+      },
     });
   });
 });

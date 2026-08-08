@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import {
   Avatar,
   AvatarFallback,
@@ -16,7 +18,10 @@ import { getInitials } from "@/lib/get-initials";
  */
 export const UNKNOWN_USER_LABEL = "Unknown user";
 
-type UserAvatarProps = {
+type UserAvatarProps = Omit<
+  ComponentProps<typeof Avatar>,
+  "children" | "className"
+> & {
   image?: string | null | undefined;
   name?: string | null;
   deleted?: boolean | undefined;
@@ -30,11 +35,15 @@ export const UserAvatar = ({
   name,
   className,
   fallbackClassName,
+  ...avatarProps
 }: UserAvatarProps) => {
   const displayName = getDisplayName(name) ?? UNKNOWN_USER_LABEL;
 
   return (
-    <Avatar className={cn(className, deleted && "opacity-60 grayscale")}>
+    <Avatar
+      {...avatarProps}
+      className={cn(className, deleted && "opacity-60 grayscale")}
+    >
       {image ? <AvatarImage alt={displayName} src={image} /> : null}
       <AvatarFallback
         className={cn(
@@ -49,9 +58,11 @@ export const UserAvatar = ({
 };
 
 type UserIdentityProps = {
+  as?: "div" | "span";
   image?: string | null | undefined;
   name?: string | null;
   deleted?: boolean | undefined;
+  hideAvatar?: boolean;
   secondaryText?: string | null;
   className?: string;
   avatarClassName?: string;
@@ -61,7 +72,9 @@ type UserIdentityProps = {
 };
 
 export const UserIdentity = ({
+  as: element = "div",
   deleted = false,
+  hideAvatar = false,
   image,
   name,
   secondaryText,
@@ -72,21 +85,25 @@ export const UserIdentity = ({
   secondaryClassName,
 }: UserIdentityProps) => {
   const displayName = getDisplayName(name, secondaryText) ?? UNKNOWN_USER_LABEL;
+  const Component = element;
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-2", className)}>
-      <UserAvatar
-        className={avatarClassName}
-        deleted={deleted}
-        fallbackClassName={avatarFallbackClassName}
-        image={image}
-        name={displayName}
-      />
-      <div className="min-w-0 flex-1">
+    <Component className={cn("flex min-w-0 items-center gap-2", className)}>
+      {hideAvatar ? null : (
+        <UserAvatar
+          className={avatarClassName}
+          deleted={deleted}
+          fallbackClassName={avatarFallbackClassName}
+          image={image}
+          name={displayName}
+        />
+      )}
+      <Component className="min-w-0 flex-1">
         <BidiText
-          as="div"
+          as={element}
           className={cn(
             "truncate text-sm font-medium",
+            element === "span" && "block",
             deleted && "text-muted-foreground",
             nameClassName,
           )}
@@ -95,16 +112,17 @@ export const UserIdentity = ({
         </BidiText>
         {secondaryText ? (
           <BidiText
-            as="div"
+            as={element}
             className={cn(
               "text-muted-foreground truncate text-xs",
+              element === "span" && "block",
               secondaryClassName,
             )}
           >
             {secondaryText}
           </BidiText>
         ) : null}
-      </div>
-    </div>
+      </Component>
+    </Component>
   );
 };

@@ -12,11 +12,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Menu,
@@ -39,6 +34,7 @@ import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { SidebarMenuItem, useSidebar } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
+import { UserAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -54,7 +50,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { getInitials } from "@/lib/get-initials";
+import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
@@ -83,7 +79,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const setLang = useI18nStore((s) => s.setLang);
   const { data: role } = useChromeQuery(roleOptions);
 
-  const displayName = user.name ?? user.email;
+  const displayName = getDisplayName(user.name, user.email) ?? t("common.user");
 
   return (
     <SidebarMenuItem>
@@ -100,12 +96,12 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
           }
           side="right"
         >
-          <Avatar className="size-7 rounded-full">
-            {user.image && <AvatarImage src={user.image} />}
-            <AvatarFallback className="text-[0.625rem]">
-              {getInitials(displayName)}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            className="size-7 rounded-full"
+            fallbackClassName="text-[0.625rem]"
+            image={user.image}
+            name={displayName}
+          />
           {!isCollapsed && (
             <>
               <div className="flex min-w-0 flex-col justify-center">

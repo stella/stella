@@ -9,7 +9,7 @@ import {
   workspaces as workspacesTable,
 } from "@/api/db/schema";
 import {
-  decodeChatThreadListCursor,
+  chatThreadListCursorCodec,
   encodeChatThreadListCursor,
 } from "@/api/handlers/chat/thread-list-pagination";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -39,7 +39,7 @@ const getThreads = createSafeRootHandler(
   async function* ({ query, safeDb, session, user }) {
     const limit = query.limit ?? LIMITS.chatThreadListPageSizeDefault;
     const cursor = query.cursor
-      ? decodeChatThreadListCursor(query.cursor)
+      ? chatThreadListCursorCodec.decode(query.cursor)
       : null;
     if (query.cursor && !cursor) {
       return Result.err(
@@ -76,9 +76,14 @@ const getThreads = createSafeRootHandler(
     // application-side workspace allowlist. The joined status predicate keeps
     // deleting workspaces sealed at the product layer.
     if (cursor) {
-      conditions.push(
-        sql`(${chatThreads.updatedAt}, ${chatThreads.id}) < ((${cursor.updatedAt}::timestamp AT TIME ZONE 'UTC'), ${cursor.id}::uuid)`,
-      );
+      const cursorCondition = chatThreadListCursorCodec.keysetAfter({
+        cursor,
+        direction: "descending",
+        idColumn: chatThreads.id,
+      });
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
     }
 
     const rows = yield* Result.await(
@@ -89,10 +94,8 @@ const getThreads = createSafeRootHandler(
             id: chatThreads.id,
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
-            updatedAtCursor: sql<string>`to_char(
-              ${chatThreads.updatedAt} AT TIME ZONE 'UTC',
-              'YYYY-MM-DD"T"HH24:MI:SS.US'
-            )`,
+            updatedAtCursor:
+              chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
             workspaceId: chatThreads.workspaceId,
             workspaceName: workspacesTable.name,
           })

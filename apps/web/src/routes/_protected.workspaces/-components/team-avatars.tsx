@@ -1,30 +1,11 @@
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { UserAvatar } from "@/components/user-avatar";
+import { getDisplayName } from "@/lib/get-display-name";
 import type { Workspace } from "@/lib/workspaces/types";
-
-export const getDisplayName = (name: string | null, userId: string): string =>
-  name?.trim() || userId;
-
-export const getInitials = (name: string | null | undefined): string => {
-  const parts = (name ?? "").trim().split(/\s+/u).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  if (parts.length === 1) {
-    return (parts[0] ?? "").slice(0, 2).toUpperCase();
-  }
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.at(-1)?.[0] ?? "";
-  return `${first}${last}`.toUpperCase();
-};
 
 type TeamAvatarsProps = {
   members: Workspace["members"];
@@ -59,32 +40,38 @@ export const TeamAvatars = ({
     <div className="flex items-center -space-x-1.5">
       {visible.map((m) => {
         const isLead = leadUserId === m.userId;
-        const displayName = getDisplayName(m.userName, m.userId);
+        const displayName =
+          getDisplayName(m.userName, m.userEmail) ?? t("common.unknownUser");
         return (
-          <Avatar
-            className={cn(
-              "ring-background ring-2",
-              size,
-              textSize,
-              isLead && "ring-primary",
-            )}
-            key={m.userId}
-            title={
+          <Tooltip
+            content={
               isLead ? `${displayName} · ${t("workspaces.lead")}` : displayName
             }
-          >
-            {m.userImage ? (
-              <AvatarImage alt={displayName} src={m.userImage} />
-            ) : null}
-            <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
-          </Avatar>
+            key={m.userId}
+            render={
+              <UserAvatar
+                className={cn(
+                  "ring-background ring-2",
+                  size,
+                  textSize,
+                  isLead && "ring-primary",
+                )}
+                image={m.userImage}
+                name={displayName}
+              />
+            }
+          />
         );
       })}
       {overflow > 0 && (
         <Tooltip
           content={members
             .slice(maxVisible)
-            .map((m) => getDisplayName(m.userName, m.userId))
+            .map(
+              (m) =>
+                getDisplayName(m.userName, m.userEmail) ??
+                t("common.unknownUser"),
+            )
             .join(", ")}
           render={
             <span

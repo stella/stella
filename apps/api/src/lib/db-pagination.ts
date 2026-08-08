@@ -19,10 +19,9 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * `microseconds` is the canonical projection this codec emits today: a
  * `to_char(... AT TIME ZONE 'UTC', '...US"Z"')` value whose trailing `Z`
  * marks it as UTC wall-clock, so the boundary can re-anchor it explicitly.
- * `microseconds-naive` is the same six-digit value without the `Z`, issued
- * before the UTC-anchored rendering; its boundary keeps the old
- * session-zone interpretation, which matches how the timestamptz migration
- * converted the rows it was cut from. `milliseconds` marks the oldest ISO
+ * `microseconds-naive` is the same UTC-rendered six-digit value without the
+ * `Z`, issued before the marker was added; its boundary must therefore keep
+ * the former explicit UTC re-anchor. `milliseconds` marks the oldest ISO
  * `…​.123Z` cursor. It cannot identify a position inside that millisecond;
  * callers that can resolve its row by id replace it with the exact database
  * timestamp, while the generic fallback skips the ambiguous interval.
@@ -53,18 +52,18 @@ export const pgTimestampCursorValue = (column: SQLWrapper): SQL<string> =>
   sql<string>`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 /**
- * Parameterized timestamp boundary used by keyset comparisons. A `Z`-marked
- * canonical cursor re-anchors its UTC wall-clock explicitly; the legacy
- * forms keep the session-zone interpretation they were issued under (the
- * casts drop an embedded offset only for the naive re-anchor).
+ * Parameterized timestamp boundary used by keyset comparisons. Canonical and
+ * legacy-naive cursors re-anchor their UTC wall-clock explicitly. The oldest
+ * ISO form already carries a `Z` offset and can be cast directly to
+ * timestamptz.
  */
 export const pgTimestampCursorBoundary = ({
   value,
   precision,
 }: ParsedPgTimestampCursor): SQL<Date> =>
-  precision === "microseconds"
-    ? sql<Date>`(${value}::timestamp AT TIME ZONE 'UTC')`
-    : sql<Date>`${value}::timestamptz`;
+  precision === "milliseconds"
+    ? sql<Date>`${value}::timestamptz`
+    : sql<Date>`(${value}::timestamp AT TIME ZONE 'UTC')`;
 
 const isLeapYear = (year: number): boolean =>
   year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);

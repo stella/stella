@@ -1,9 +1,14 @@
-import { and, gt, or, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { entities, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isValidTimestampCursorValue } from "@/api/lib/entities/cursor-validation";
+import {
+  createTimestampIdCursorCodec,
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decodePaginationCursor,
@@ -14,10 +19,19 @@ import {
   brandPersistedFieldId,
 } from "@/api/lib/safe-id-boundaries";
 
-export const ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
+const isStringPart = (value: unknown): value is string =>
+  typeof value === "string";
+
+const entityListCursorCodec = createTimestampIdCursorCodec({
+  column: entities.createdAt,
+  brandId: brandPersistedEntityId,
+  // Older internal tests and development data used non-UUID branded ids;
+  // retain the prior string validation while centralizing the timestamp codec.
+  isIdPart: isStringPart,
+});
 
 export const entityListTimestampCursorExpr = (expr: SQL): SQL<string> =>
-  sql<string>`to_char(${expr} AT TIME ZONE 'UTC', ${ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT})`;
+  pgTimestampCursorValue(expr);
 
 type EntityListCursor = {
   createdAt: string;
@@ -34,7 +48,7 @@ export const encodeEntityListCursor = ({
 }: {
   createdAt: string;
   id: SafeId<"entity"> | string;
-}): string => encodePaginationCursor([createdAt, id]);
+}): string => entityListCursorCodec.encode(createdAt, id);
 
 export const encodeEntityFileListCursor = ({
   createdAt,
@@ -52,24 +66,11 @@ export const decodeEntityListCursor = (
   if (cursor === undefined) {
     return null;
   }
-
-  const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 2) {
+  const decoded = entityListCursorCodec.decode(cursor);
+  if (decoded === null) {
     throw new HandlerError({ status: 400, message: "Invalid cursor" });
   }
-
-  const createdAt = parts.at(0);
-  const id = parts.at(1);
-
-  if (
-    typeof createdAt !== "string" ||
-    !isValidTimestampCursorValue(createdAt) ||
-    typeof id !== "string"
-  ) {
-    throw new HandlerError({ status: 400, message: "Invalid cursor" });
-  }
-
-  return { createdAt, id: brandPersistedEntityId(id) };
+  return { createdAt: decoded.timestamp.value, id: decoded.id };
 };
 
 export const decodeEntityFileListCursor = (
@@ -83,16 +84,14 @@ export const decodeEntityFileListCursor = (
   if (!parts || parts.length !== 3) {
     throw new HandlerError({ status: 400, message: "Invalid cursor" });
   }
-
   const createdAt = parts.at(0);
   const id = parts.at(1);
   const fieldId = parts.at(2);
-
   if (
     typeof createdAt !== "string" ||
-    !isValidTimestampCursorValue(createdAt) ||
-    typeof id !== "string" ||
-    typeof fieldId !== "string"
+    parsePgTimestampCursorValue(createdAt) === null ||
+    !isStringPart(id) ||
+    !isStringPart(fieldId)
   ) {
     throw new HandlerError({ status: 400, message: "Invalid cursor" });
   }
@@ -110,16 +109,15 @@ export const entityListCursorCondition = (
   if (cursor === null) {
     return undefined;
   }
-
-  return (
-    or(
-      sql`${entities.createdAt} > (${cursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-      and(
-        sql`${entities.createdAt} = (${cursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-        gt(entities.id, cursor.id),
-      ),
-    ) ?? undefined
-  );
+  const timestamp = parsePgTimestampCursorValue(cursor.createdAt);
+  if (timestamp === null) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
+  return entityListCursorCodec.keysetAfter({
+    cursor: { timestamp, id: cursor.id },
+    direction: "ascending",
+    idColumn: entities.id,
+  });
 };
 
 export const entityFileListCursorCondition = (
@@ -128,19 +126,12 @@ export const entityFileListCursorCondition = (
   if (cursor === null) {
     return undefined;
   }
-
-  return (
-    or(
-      sql`${entities.createdAt} > (${cursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-      and(
-        sql`${entities.createdAt} = (${cursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-        gt(entities.id, cursor.id),
-      ),
-      and(
-        sql`${entities.createdAt} = (${cursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-        sql`${entities.id} = ${cursor.id}`,
-        gt(fields.id, cursor.fieldId),
-      ),
-    ) ?? undefined
-  );
+  const timestamp = parsePgTimestampCursorValue(cursor.createdAt);
+  if (timestamp === null) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
+  if (timestamp.precision === "milliseconds") {
+    return sql`${entities.createdAt} >= ${pgTimestampCursorBoundary(timestamp)} + interval '1 millisecond'`;
+  }
+  return sql`(${entities.createdAt}, ${entities.id}, ${fields.id}) > (${pgTimestampCursorBoundary(timestamp)}, ${cursor.id}, ${cursor.fieldId})`;
 };

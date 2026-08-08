@@ -91,7 +91,7 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import Tooltip from "@/components/tooltip";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
@@ -2460,15 +2460,15 @@ const SearchResultItem = ({
             {editorMeta ? (
               <>
                 {meta ? <span className="shrink-0">·</span> : null}
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <UserAvatar
-                    className="size-4 shrink-0 text-[0.5rem]"
-                    fallbackClassName="text-[0.5rem]"
-                    image={editorMeta.image}
-                    name={editorMeta.name}
-                  />
-                  <span className="truncate">{editorMeta.name}</span>
-                </span>
+                <UserIdentity
+                  as="span"
+                  avatarClassName="size-4 shrink-0 text-[0.5rem]"
+                  avatarFallbackClassName="text-[0.5rem]"
+                  className="gap-1.5"
+                  image={editorMeta.image}
+                  name={editorMeta.name}
+                  nameClassName="text-xs font-normal"
+                />
               </>
             ) : null}
           </div>

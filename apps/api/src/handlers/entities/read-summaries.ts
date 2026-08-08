@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -7,24 +7,20 @@ import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
-import {
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
-const entityCreatedAtCursor = pgTimestampCursorValue(entities.createdAt);
+const entityCreatedAtCursor = createTimestampIdCursorCodec({
+  column: entities.createdAt,
+  brandId: brandPersistedEntityId,
+});
 
 const readEntitySummariesQuerySchema = t.Object({
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(tPaginationCursor()),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
@@ -45,21 +41,14 @@ const parseSummaryCursor = (cursor: string | undefined) => {
     return Result.ok(null);
   }
 
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parsePgTimestampCursorValue(parts?.at(0));
-  const id = parts?.at(1);
-  if (
-    parts?.length !== 2 ||
-    createdAt === null ||
-    typeof id !== "string" ||
-    !isUuid(id)
-  ) {
+  const decoded = entityCreatedAtCursor.decode(cursor);
+  if (decoded === null) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid cursor" }),
     );
   }
 
-  return Result.ok({ createdAt, id });
+  return Result.ok(decoded);
 };
 
 const readEntitySummariesHandler = async function* ({
@@ -76,19 +65,11 @@ const readEntitySummariesHandler = async function* ({
   const cursorCondition =
     cursorResult.value === null
       ? undefined
-      : or(
-          lt(
-            entities.createdAt,
-            pgTimestampCursorBoundary(cursorResult.value.createdAt),
-          ),
-          and(
-            eq(
-              entities.createdAt,
-              pgTimestampCursorBoundary(cursorResult.value.createdAt),
-            ),
-            sql`${entities.id} < ${cursorResult.value.id}`,
-          ),
-        );
+      : entityCreatedAtCursor.keysetAfter({
+          cursor: cursorResult.value,
+          direction: "descending",
+          idColumn: entities.id,
+        });
   const whereClause = and(
     eq(entities.workspaceId, workspaceId),
     cursorCondition,
@@ -99,7 +80,8 @@ const readEntitySummariesHandler = async function* ({
       .select({
         id: entities.id,
         name: entities.name,
-        createdAtCursor: entityCreatedAtCursor.as("created_at_cursor"),
+        createdAtCursor:
+          entityCreatedAtCursor.cursorValue.as("created_at_cursor"),
       })
       .from(entities)
       .where(whereClause)
@@ -111,7 +93,7 @@ const readEntitySummariesHandler = async function* ({
     rows,
     limit,
     cursorForItem: (item) =>
-      encodePaginationCursor([item.createdAtCursor, item.id]),
+      entityCreatedAtCursor.encode(item.createdAtCursor, item.id),
   });
 
   return Result.ok({
