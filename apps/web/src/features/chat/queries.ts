@@ -48,6 +48,7 @@ import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -849,7 +850,13 @@ export const createChatRuntime = ({
     const firstError = errors.at(0);
     if (firstError !== undefined) {
       interruptSubmissionWaiter = undefined;
-      waiter.reject(new Error(firstError.message));
+      waiter.reject(
+        new ClientOperationError({
+          action: `submit-chat-interrupt:${firstError.code}`,
+          cause: firstError,
+          message: firstError.message,
+        }),
+      );
       return;
     }
     if (waiter.sawResuming) {
@@ -1359,9 +1366,22 @@ export const buildSendRequestBody = ({
   }
   return {
     ...body,
-    message: continuationMessage,
+    message: { ...continuationMessage, role: "assistant" },
     parentRunId: run.parentRunId,
-    resume: run.resume,
+    resume: run.resume.map((resolution) => {
+      if (resolution.status === "cancelled") {
+        return {
+          interruptId: resolution.interruptId,
+          status: resolution.status,
+        };
+      }
+      const payload: unknown = resolution.payload;
+      return {
+        interruptId: resolution.interruptId,
+        ...(payload === undefined ? {} : { payload }),
+        status: resolution.status,
+      };
+    }),
   };
 };
 

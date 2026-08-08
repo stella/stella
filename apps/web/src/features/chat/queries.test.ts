@@ -493,6 +493,7 @@ describe("buildSendRequestBody", () => {
           },
           {
             interruptId: "approval_tool-B",
+            payload: "ignored-vendor-payload",
             status: "cancelled",
           },
         ],
@@ -517,6 +518,7 @@ describe("buildSendRequestBody", () => {
       runId: "run-child",
       threadId: "thread-A",
     });
+    expect(body.resume?.[1]).not.toHaveProperty("payload");
   });
 
   test("normalizes context values at the transport boundary", () => {

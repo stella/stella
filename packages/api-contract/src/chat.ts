@@ -37,6 +37,7 @@ export type ChatInterruptResolution =
     }
   | {
       interruptId: string;
+      payload?: never;
       status: "cancelled";
     };
 
@@ -49,6 +50,8 @@ type ChatSendMessage = {
 
 type ChatInitialTurn = {
   message: ChatSendMessage;
+  parentRunId?: never;
+  resume?: never;
 };
 
 type ChatNativeContinuation = {
