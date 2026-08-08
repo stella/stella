@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktive Mitglieder",
+      "adminOverview": {
+        "activeUsers": "Aktive Nutzer",
+        "activeUsersValue": "{active} von {total}",
+        "activityTrend": "KI-Aktivität",
+        "activityTrendDescription": "Täglich erfasste KI-Aktionen",
+        "aiActions": "Erfasste KI-Aktionen",
+        "description": "Nutzung, erfasste KI-Aktivität und Modellnutzung der letzten {days} Tage",
+        "funding": "Schlüsselquelle",
+        "lastActive": "Zuletzt aktiv",
+        "manageMembers": "Mitglieder verwalten",
+        "modelRoleFallback": "Rolle {role} (historisch)",
+        "modelUsage": "Nutzung nach Modell",
+        "modelUsageDescription": "Nutzungseinheiten je Modell",
+        "modelsUsed": "Verwendete Modelle",
+        "mostActiveMembers": "Aktivste Mitglieder",
+        "noActivity": "Laden Sie ein Mitglied ein, um die Aktivitätsübersicht aufzubauen.",
+        "pendingInvitations": "{count, plural, one {# ausstehende Einladung} other {# ausstehende Einladungen}}",
+        "title": "Übersicht"
+      },
       "ai": "KI-Konfiguration",
       "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
       "anonymization": {

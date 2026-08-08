@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktyvūs nariai",
+      "adminOverview": {
+        "activeUsers": "Aktyvūs naudotojai",
+        "activeUsersValue": "{active} iš {total}",
+        "activityTrend": "DI veikla",
+        "activityTrendDescription": "Kasdieniai apskaityti DI veiksmai",
+        "aiActions": "Apskaityti DI veiksmai",
+        "description": "Naudojimas, apskaityta DI veikla ir modelių naudojimas per pastarąsias {days} dienų",
+        "funding": "Rakto šaltinis",
+        "lastActive": "Paskutinis aktyvumas",
+        "manageMembers": "Tvarkyti narius",
+        "modelRoleFallback": "{role} vaidmuo (istoriniai duomenys)",
+        "modelUsage": "Naudojimas pagal modelį",
+        "modelUsageDescription": "Kiekvienam modeliui priskirti naudojimo vienetai",
+        "modelsUsed": "Naudoti modeliai",
+        "mostActiveMembers": "Aktyviausi nariai",
+        "noActivity": "Pakvieskite narį, kad pradėtumėte kurti veiklos apžvalgą.",
+        "pendingInvitations": "{count, plural, one {# laukiantis kvietimas} few {# laukiantys kvietimai} other {# laukiančių kvietimų}}",
+        "title": "Apžvalga"
+      },
       "ai": "AI konfigūracija",
       "aiDescription": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną",
       "anonymization": {

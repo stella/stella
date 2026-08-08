@@ -354,6 +354,7 @@ export const usageEvents = p.pgTable(
     periodEnd: timestamptz("period_end").notNull(),
     actionType: p.text("action_type", { enum: USAGE_ACTION_TYPES }).notNull(),
     modelRole: p.varchar("model_role", { length: 32 }).notNull(),
+    modelId: p.varchar("model_id", { length: 255 }),
     unitsConsumed: p.integer("units_consumed").notNull(),
     rawUsageMicroUnits: p.bigint("raw_usage_micro_units", { mode: "number" }),
     serviceTier: p
@@ -371,6 +372,12 @@ export const usageEvents = p.pgTable(
     p
       .index("usage_events_org_user_period_idx")
       .on(table.organizationId, table.userId, table.periodStart),
+    p
+      .index("usage_events_org_created_idx")
+      .on(table.organizationId, table.createdAt),
+    p
+      .index("usage_events_org_user_created_idx")
+      .on(table.organizationId, table.userId, table.createdAt),
     p
       .uniqueIndex("usage_events_org_idempotency_key_uidx")
       .on(table.organizationId, table.idempotencyKey)

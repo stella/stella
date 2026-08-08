@@ -869,6 +869,9 @@ export const CAPABILITY_DISPATCH = {
   "usage.get-entitlement": {
     load: async () => await import("@/api/handlers/usage/get-entitlement"),
   },
+  "usage.overview.get": {
+    load: async () => await import("@/api/handlers/usage/overview/get"),
+  },
   "view-templates.create": {
     load: async () => await import("@/api/handlers/view-templates/create"),
   },

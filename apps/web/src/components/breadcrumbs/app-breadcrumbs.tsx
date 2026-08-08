@@ -164,6 +164,12 @@ export const AppBreadcrumbs = () => {
       <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
     ),
     defineBreadcrumb(
+      ["/settings/organization/overview"],
+      <BreadcrumbLink to="/settings/organization/overview">
+        {t("settings.organization.adminOverview.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/settings/organization/members"],
       <BreadcrumbLink to="/settings/organization/members">
         {t("common.members")}

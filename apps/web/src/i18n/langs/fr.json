@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Membres actifs",
+      "adminOverview": {
+        "activeUsers": "Utilisateurs actifs",
+        "activeUsersValue": "{active} sur {total}",
+        "activityTrend": "Activité de l’IA",
+        "activityTrendDescription": "Actions d’IA mesurées chaque jour",
+        "aiActions": "Actions d’IA mesurées",
+        "description": "Adoption, activité d’IA mesurée et utilisation des modèles au cours des {days} derniers jours",
+        "funding": "Source de la clé",
+        "lastActive": "Dernière activité",
+        "manageMembers": "Gérer les membres",
+        "modelRoleFallback": "Rôle {role} (historique)",
+        "modelUsage": "Utilisation par modèle",
+        "modelUsageDescription": "Unités d’utilisation attribuées à chaque modèle",
+        "modelsUsed": "Modèles utilisés",
+        "mostActiveMembers": "Membres les plus actifs",
+        "noActivity": "Invitez un membre pour commencer à constituer une vue de l’activité.",
+        "pendingInvitations": "{count, plural, one {# invitation en attente} other {# invitations en attente}}",
+        "title": "Vue d’ensemble"
+      },
       "ai": "Configuration de l’IA",
       "aiDescription": "Utilisez votre propre clé API ou configurez la région de souveraineté des données",
       "anonymization": {

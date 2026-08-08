@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "الأعضاء النشطون",
+      "adminOverview": {
+        "activeUsers": "المستخدمون النشطون",
+        "activeUsersValue": "{active} من {total}",
+        "activityTrend": "نشاط الذكاء الاصطناعي",
+        "activityTrendDescription": "إجراءات الذكاء الاصطناعي المقاسة يوميًا",
+        "aiActions": "إجراءات الذكاء الاصطناعي المقاسة",
+        "description": "التبنّي ونشاط الذكاء الاصطناعي المقاس واستخدام النماذج خلال آخر {days} يومًا",
+        "funding": "مصدر المفتاح",
+        "lastActive": "آخر نشاط",
+        "manageMembers": "إدارة الأعضاء",
+        "modelRoleFallback": "دور {role} (بيانات تاريخية)",
+        "modelUsage": "الاستخدام حسب النموذج",
+        "modelUsageDescription": "وحدات الاستخدام المنسوبة إلى كل نموذج",
+        "modelsUsed": "النماذج المستخدمة",
+        "mostActiveMembers": "الأعضاء الأكثر نشاطًا",
+        "noActivity": "ادعُ عضوًا لبدء إنشاء عرض للنشاط.",
+        "pendingInvitations": "{count, plural, zero {لا دعوات معلقة} one {دعوة معلقة واحدة} two {دعوتان معلقتان} few {# دعوات معلقة} many {# دعوة معلقة} other {# دعوة معلقة}}",
+        "title": "نظرة عامة"
+      },
       "ai": "إعدادات الذكاء الاصطناعي",
       "aiDescription": "استخدم مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات",
       "anonymization": {

@@ -422,9 +422,10 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## usage
 
-| Capability              | Access | Scope       | Feature       | Reachable via            |
-| ----------------------- | ------ | ----------- | ------------- | ------------------------ |
-| `usage.get-entitlement` | read   | stella:read | FEATURE_USAGE | curated tool `get_usage` |
+| Capability              | Access | Scope       | Feature       | Reachable via                                           |
+| ----------------------- | ------ | ----------- | ------------- | ------------------------------------------------------- |
+| `usage.get-entitlement` | read   | stella:read | FEATURE_USAGE | curated tool `get_usage`                                |
+| `usage.overview.get`    | read   | stella:read | FEATURE_USAGE | generic invoke → `stella capability usage overview-get` |
 
 ## view-templates
 

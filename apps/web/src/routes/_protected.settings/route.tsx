@@ -11,6 +11,7 @@ import {
   ScrollTextIcon,
   ShieldIcon,
   SparklesIcon,
+  SquareChartGanttIcon,
   TagsIcon,
   UserIcon,
   UsersIcon,
@@ -41,6 +42,7 @@ type NavTo =
   | "/settings/account/connections"
   | "/settings/account/memory"
   | "/settings/account/beta"
+  | "/settings/organization/overview"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/document-types"
@@ -103,6 +105,11 @@ const ORGANIZATION_SECTION = {
   id: "organization",
   labelKey: "common.organization",
   items: [
+    {
+      to: "/settings/organization/overview",
+      labelKey: "settings.organization.adminOverview.title",
+      icon: SquareChartGanttIcon,
+    },
     {
       to: "/settings/organization/members",
       labelKey: "common.members",

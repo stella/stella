@@ -2851,6 +2851,25 @@
     },
     "organization": {
       "activeMembers": "Aktív tagok",
+      "adminOverview": {
+        "activeUsers": "Aktív felhasználók",
+        "activeUsersValue": "{active} / {total}",
+        "activityTrend": "MI-aktivitás",
+        "activityTrendDescription": "Napi mért MI-műveletek",
+        "aiActions": "Mért MI-műveletek",
+        "description": "Használat, mért MI-aktivitás és modellhasználat az elmúlt {days} napban",
+        "funding": "Kulcs forrása",
+        "lastActive": "Legutóbbi aktivitás",
+        "manageMembers": "Tagok kezelése",
+        "modelRoleFallback": "{role} szerepkör (előzményadat)",
+        "modelUsage": "Használat modellenként",
+        "modelUsageDescription": "Az egyes modellekhez rendelt használati egységek",
+        "modelsUsed": "Használt modellek",
+        "mostActiveMembers": "Legaktívabb tagok",
+        "noActivity": "Hívjon meg egy tagot az aktivitási nézet felépítéséhez.",
+        "pendingInvitations": "{count, plural, one {# függőben lévő meghívás} other {# függőben lévő meghívás}}",
+        "title": "Áttekintés"
+      },
       "ai": "AI-konfiguráció",
       "aiDescription": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót",
       "anonymization": {

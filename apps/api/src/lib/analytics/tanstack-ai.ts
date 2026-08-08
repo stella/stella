@@ -236,6 +236,7 @@ const recordTanStackConsumption = async ({
         actionType: metering.actionType,
         unitsConsumed,
         isByok: modelInfo.keySource === "byok",
+        modelId: modelInfo.modelId,
         modelRole: config.modelRole ?? "chat",
         organizationId: metering.organizationId,
         rawUsageMicroUnits,
