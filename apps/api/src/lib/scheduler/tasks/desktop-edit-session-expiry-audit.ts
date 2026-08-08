@@ -1,4 +1,8 @@
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditEvent,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type ExpirableSession = {
@@ -10,20 +14,8 @@ export type ExpirableSession = {
 
 export type ExpiryAuditEvent = {
   organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
   userId: string;
-  action: typeof AUDIT_ACTION.UPDATE;
-  resourceType: typeof AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION;
-  resourceId: string;
-  changes: { status: { old: "open"; new: "expired" } };
-  metadata: { reason: "token_expired" };
-  activityCategory: "other";
-  approvalStatus: "not_required";
-  performerId: "desktop-edit-session-expiry";
-  performerName: "Desktop edit session expiry";
-  performerType: "service";
-  triggerSource: "desktop-edit-session-expiry";
-  triggerType: "system";
+  event: AuditEvent;
 };
 
 export const selectTransitionedExpirableSessions = <
@@ -45,18 +37,13 @@ export const buildExpiryAuditEvents = (
 ): ExpiryAuditEvent[] =>
   selectTransitionedExpirableSessions(sessions, expiredIds).map((session) => ({
     organizationId: session.organizationId,
-    workspaceId: session.workspaceId,
     userId: session.createdBy,
-    action: AUDIT_ACTION.UPDATE,
-    resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-    resourceId: session.id,
-    changes: { status: { old: "open", new: "expired" } },
-    metadata: { reason: "token_expired" },
-    activityCategory: "other",
-    approvalStatus: "not_required",
-    performerId: "desktop-edit-session-expiry",
-    performerName: "Desktop edit session expiry",
-    performerType: "service",
-    triggerSource: "desktop-edit-session-expiry",
-    triggerType: "system",
+    event: {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+      resourceId: session.id,
+      workspaceId: session.workspaceId,
+      changes: { status: { old: "open", new: "expired" } },
+      metadata: { reason: "token_expired" },
+    },
   }));

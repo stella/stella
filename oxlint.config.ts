@@ -119,6 +119,12 @@ export default defineConfig({
     "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
+    "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
+    "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
+      "error",
+    "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "require-pagination-cursor-schema/require-pagination-cursor-schema":
+      "error",
     // Anchored on the timestamp column, so the operand is always required
     // to carry the safe form; helpers that emit their own cast are named in
     // `allowedOperandCalls` rather than inferred from shape.
@@ -158,6 +164,10 @@ export default defineConfig({
     "no-nanoid/no-nanoid": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
+    "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
+    "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
+    "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
+    "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
     "stella-lowercase/stella-lowercase": "error",
     "must-use-result/must-use-result": "error",
@@ -353,6 +363,10 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
+    "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
+    "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
+    "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
+    "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/no-native-s3-object-read.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
@@ -390,6 +404,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
+    "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
@@ -405,6 +420,9 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
+    "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
+    "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
+    "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",

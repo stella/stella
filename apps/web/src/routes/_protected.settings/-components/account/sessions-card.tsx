@@ -37,6 +37,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import Tooltip from "@/components/tooltip";
 import { sessionsKeys, sessionsOptions } from "@/lib/account/queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth";
@@ -157,9 +158,12 @@ const SessionsCardContent = () => {
                 <TableRow key={session.id}>
                   <TableCell>{deviceLabel}</TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
-                  <TableCell title={formatFullTimestamp(session.updatedAt)}>
+                  <Tooltip
+                    content={formatFullTimestamp(session.updatedAt)}
+                    render={<TableCell />}
+                  >
                     {formatRelativeTime(session.updatedAt)}
-                  </TableCell>
+                  </Tooltip>
                   <TableCell className="text-end">
                     {isCurrent ? (
                       <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">

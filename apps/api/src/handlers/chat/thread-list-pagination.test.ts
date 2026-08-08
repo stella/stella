@@ -19,18 +19,27 @@ describe("chat thread list pagination cursor", () => {
     });
   });
 
-  test("preserves sub-millisecond timestamp precision", () => {
+  test("preserves sub-millisecond timestamp precision in opaque cursors", () => {
     const cursor = encodeChatThreadListCursor({
       id: brandPersistedChatThreadId("018f4ad2-3a6d-7000-8b1d-44f76f5df001"),
       updatedAt: "2026-05-16T08:30:00.000999",
     });
 
-    expect(cursor).toBe(
-      "2026-05-16T08:30:00.000999|018f4ad2-3a6d-7000-8b1d-44f76f5df001",
-    );
+    expect(cursor).not.toContain("|");
     expect(decodeChatThreadListCursor(cursor)?.updatedAt).toBe(
       "2026-05-16T08:30:00.000999",
     );
+  });
+
+  test("accepts the prior pipe-delimited cursor", () => {
+    expect(
+      decodeChatThreadListCursor(
+        "2026-05-16T08:30:00.000999|018f4ad2-3a6d-7000-8b1d-44f76f5df001",
+      ),
+    ).toEqual({
+      id: brandPersistedChatThreadId("018f4ad2-3a6d-7000-8b1d-44f76f5df001"),
+      updatedAt: "2026-05-16T08:30:00.000999",
+    });
   });
 
   test("rejects malformed cursors", () => {
@@ -47,7 +56,10 @@ describe("chat thread list pagination cursor", () => {
       decodeChatThreadListCursor(
         "2026-05-16T08:30:00.000Z|018f4ad2-3a6d-7000-8b1d-44f76f5df001",
       ),
-    ).toBeNull();
+    ).toEqual({
+      id: brandPersistedChatThreadId("018f4ad2-3a6d-7000-8b1d-44f76f5df001"),
+      updatedAt: "2026-05-16T08:30:00.000Z",
+    });
     expect(
       decodeChatThreadListCursor(
         "2026-02-31T08:30:00.000000|018f4ad2-3a6d-7000-8b1d-44f76f5df001",

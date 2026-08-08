@@ -31,6 +31,7 @@ import {
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import Tooltip from "@/components/tooltip";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -183,9 +184,12 @@ const ConnectedAppRow = ({ connection }: { connection: ConnectedApp }) => {
       <TableCell className="text-muted-foreground text-sm">
         <ScopeList entries={scopeEntries} />
       </TableCell>
-      <TableCell title={formatFullTimestamp(connection.createdAt)}>
+      <Tooltip
+        content={formatFullTimestamp(connection.createdAt)}
+        render={<TableCell />}
+      >
         {formatRelativeTime(connection.createdAt)}
-      </TableCell>
+      </Tooltip>
       <TableCell className="text-end">
         <DisconnectButton clientName={displayName} consentId={connection.id} />
       </TableCell>

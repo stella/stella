@@ -36,6 +36,7 @@ import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { getInitials } from "@/lib/get-initials";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -253,9 +254,7 @@ const OrganizationList = ({
             type="button"
           >
             <Avatar className="size-10">
-              <AvatarFallback>
-                {org.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
+              <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
             </Avatar>
             <div>
               <p className="font-medium">{org.name}</p>

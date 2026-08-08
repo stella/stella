@@ -1,10 +1,17 @@
 import { panic } from "better-result";
-import { and, asc, count, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createTimestampIdCursorCodec,
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import type { WorkflowTargetEntityRow } from "@/api/lib/workflow-targets";
 
@@ -13,7 +20,14 @@ type FullWorkflowTargetCursor = {
   id: SafeId<"entity">;
 };
 
-const WORKFLOW_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
+const workflowTargetCursorCodec = createTimestampIdCursorCodec({
+  column: entities.createdAt,
+  brandId: brandPersistedEntityId,
+});
+
+const parseTimestamp = (value: string) =>
+  parsePgTimestampCursorValue(value) ??
+  panic("Stored workflow timestamp cursor is invalid");
 
 const chunkEntityIds = (
   entityIds: readonly SafeId<"entity">[],
@@ -67,7 +81,7 @@ export const readFullWorkflowSnapshotCursor = async ({
 }): Promise<string> => {
   const rows = await scopedDb((tx) =>
     tx.execute<{ value: string }>(
-      sql`SELECT to_char(now() AT TIME ZONE 'UTC', ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT}) AS value`,
+      sql`SELECT ${pgTimestampCursorValue(sql`now()`)} AS value`,
     ),
   );
   const row = rows.at(0);
@@ -88,11 +102,27 @@ const fetchFullWorkflowTargetBatch = async ({
   lastCursor: FullWorkflowTargetCursor | null;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-}): Promise<FullWorkflowTargetCursor[]> =>
-  await scopedDb((tx) =>
+}): Promise<FullWorkflowTargetCursor[]> => {
+  const cutoffTimestamp = parseTimestamp(createdAtCutoff);
+  const cursorCondition = (() => {
+    if (lastCursor === null) {
+      return undefined;
+    }
+    const timestamp = parsePgTimestampCursorValue(lastCursor.createdAt);
+    if (timestamp === null) {
+      return panic("Workflow target cursor row is invalid");
+    }
+    return workflowTargetCursorCodec.keysetAfter({
+      cursor: { timestamp, id: lastCursor.id },
+      direction: "ascending",
+      idColumn: entities.id,
+    });
+  })();
+  return await scopedDb((tx) =>
     tx
       .select({
-        createdAt: sql<string>`to_char(${entities.createdAt} AT TIME ZONE 'UTC', ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT})`,
+        createdAt:
+          workflowTargetCursorCodec.cursorValue.as("created_at_cursor"),
         id: entities.id,
       })
       .from(entities)
@@ -100,23 +130,14 @@ const fetchFullWorkflowTargetBatch = async ({
         and(
           eq(entities.workspaceId, workspaceId),
           eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= (${createdAtCutoff}::timestamp AT TIME ZONE 'UTC')`,
-          ...(lastCursor === null
-            ? []
-            : [
-                or(
-                  sql`${entities.createdAt} > (${lastCursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-                  and(
-                    sql`${entities.createdAt} = (${lastCursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-                    gt(entities.id, lastCursor.id),
-                  ),
-                ),
-              ]),
+          lte(entities.createdAt, pgTimestampCursorBoundary(cutoffTimestamp)),
+          cursorCondition,
         ),
       )
       .orderBy(asc(entities.createdAt), asc(entities.id))
       .limit(LIMITS.workflowEntityBatchSize),
   );
+};
 
 export const collectFullWorkflowTargetIds = async ({
   createdAtCutoff,
@@ -164,6 +185,7 @@ const countFullWorkflowTargets = async ({
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 }): Promise<number> => {
+  const cutoffTimestamp = parseTimestamp(createdAtCutoff);
   const rows = await scopedDb((tx) =>
     tx
       .select({ value: count() })
@@ -172,7 +194,7 @@ const countFullWorkflowTargets = async ({
         and(
           eq(entities.workspaceId, workspaceId),
           eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= (${createdAtCutoff}::timestamp AT TIME ZONE 'UTC')`,
+          lte(entities.createdAt, pgTimestampCursorBoundary(cutoffTimestamp)),
         ),
       ),
   );

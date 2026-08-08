@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { t } from "elysia";
@@ -16,6 +16,11 @@ import {
 } from "@/api/handlers/workspaces/activity-scope";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -89,14 +94,10 @@ const readWorkspaceActivity = createSafeHandler(
 
     // Keep this expression aligned with entities_ws_updated_at_coalesce_id_idx.
     const entityActivityAt = sql<Date>`coalesce(${entities.updatedAt}, '0001-01-01 00:00:00+00'::timestamptz)`;
-    const entityCursorActivityAt = sql<string>`to_char(
-      ${entityActivityAt} AT TIME ZONE 'UTC',
-      'YYYY-MM-DD"T"HH24:MI:SS.US'
-    )`;
-    const threadCursorActivityAt = sql<string>`to_char(
-      ${chatThreads.updatedAt} AT TIME ZONE 'UTC',
-      'YYYY-MM-DD"T"HH24:MI:SS.US'
-    )`;
+    const entityCursorActivityAt = pgTimestampCursorValue(entityActivityAt);
+    const threadCursorActivityAt = pgTimestampCursorValue(
+      chatThreads.updatedAt,
+    );
     const entityFile = sql<ActivityFile | null>`(
       select jsonb_build_object(
         'fileName', ${fields.content}->>'fileName',
@@ -264,7 +265,10 @@ const activityCursorCondition = ({
     return undefined;
   }
 
-  return sql`(${activityAt}, ${id}, ${type}) < ((${cursor.activityAt}::timestamp AT TIME ZONE 'UTC'), ${cursor.id}::uuid, ${cursor.type})`;
+  const timestamp =
+    parsePgTimestampCursorValue(cursor.activityAt) ??
+    panic("Validated workspace activity timestamp did not parse");
+  return sql`(${activityAt}, ${id}, ${type}) < (${pgTimestampCursorBoundary(timestamp)}, ${cursor.id}::uuid, ${cursor.type})`;
 };
 
 const compareActivity = (

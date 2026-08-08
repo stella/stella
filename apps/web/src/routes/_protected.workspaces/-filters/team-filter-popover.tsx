@@ -9,11 +9,11 @@ import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { UserIdentity } from "@/components/user-avatar";
+import { UNKNOWN_USER_LABEL, UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
+import { getDisplayName } from "@/lib/get-display-name";
 import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
-import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
 
 type TeamFilterPopoverProps = {
   teamValue: string[] | undefined;
@@ -47,7 +47,7 @@ export const TeamFilterPopover = ({
         if (!map.has(m.userId)) {
           map.set(m.userId, {
             userId: m.userId,
-            userName: getDisplayName(m.userName, m.userId),
+            userName: getDisplayName(m.userName) ?? UNKNOWN_USER_LABEL,
             userImage: m.userImage,
           });
         }

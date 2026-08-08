@@ -322,6 +322,54 @@ const countEntityKindGlyphs = (content: string): number => {
   return total;
 };
 
+const countMatches = (content: string, pattern: RegExp): number =>
+  (content.match(pattern) ?? []).length;
+
+// Fuzzy supersets for narrow shared-helper/component bans. These counters are
+// intentionally lexical: the AST rules reject the exact known-bad shapes,
+// while the ratchets keep nearby aliases and new spellings visible in review.
+const countHandRolledUserIdentity = (content: string): number =>
+  countMatches(content, /<UserAvatar\b/gu);
+
+const countRawUserAvatarPrimitive = (content: string): number =>
+  countMatches(content, /["']@stll\/ui\/components\/avatar["']/gu);
+
+const countShadowedUserNameHelpers = (content: string): number =>
+  countMatches(
+    content,
+    /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
+  );
+
+const countAdHocRelativeTimeFormatting = (content: string): number =>
+  countMatches(
+    content,
+    /title=\{formatFullTimestamp\s*\(|dateStyle\s*:|timeStyle\s*:/gu,
+  );
+
+const countDirectAuditLogInserts = (content: string): number =>
+  countMatches(content, /\.insert\s*\(\s*auditLogs\s*\)/gu);
+
+const countInlineTimestampCursorSql = (content: string): number =>
+  countMatches(
+    content,
+    /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
+  );
+
+const countRepeatedTimestampCursorBoundaries = (content: string): number =>
+  Math.max(0, countMatches(content, /\bpgTimestampCursorBoundary\s*\(/gu) - 1);
+
+const countUnboundedPaginationCursorSchema = (content: string): number => {
+  let count = 0;
+  const cursorSchemas =
+    /\bcursor\s*:\s*t\.Optional\s*\(\s*t\.String\s*\((?<options>[^)]*)\)\s*\)/gu;
+  for (const match of content.matchAll(cursorSchemas)) {
+    if (!/\bmaxLength\s*:/u.test(match.groups?.["options"] ?? "")) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 /**
  * Regex literals whose worst case backtracks super-linearly in the length of
  * the subject — the shape that turns one oversized input into minutes of
@@ -979,6 +1027,89 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       file === "apps/web/src/components/workspaces/entity-kind-icon.tsx",
     count: countEntityKindGlyphs,
+  },
+  {
+    id: "hand-rolled-user-identity",
+    description:
+      "<UserAvatar> JSX openings outside the shared user-avatar component (fuzzy superset; paired avatar+label shapes are banned by no-hand-rolled-user-identity)",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/web/src/components/user-avatar.tsx",
+    count: countHandRolledUserIdentity,
+  },
+  {
+    id: "raw-user-avatar-primitive",
+    description:
+      "imports of @stll/ui/components/avatar outside the shared owner and explicit non-user exceptions",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      [
+        "apps/web/src/components/user-avatar.tsx",
+        "apps/web/src/components/public-workspace-shell.tsx",
+        "apps/web/src/routes/auth/organization.tsx",
+        "apps/web/src/routes/dev/-components/ui-playground.tsx",
+        "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
+      ].includes(file),
+    count: countRawUserAvatarPrimitive,
+  },
+  {
+    id: "shadowed-user-name-helpers",
+    description:
+      "module-like const/function declarations named getDisplayName or getInitials outside apps/web/src/lib",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file.includes("apps/web/src/lib/"),
+    count: countShadowedUserNameHelpers,
+  },
+  {
+    id: "ad-hoc-relative-time-formatting",
+    description:
+      "native title={formatFullTimestamp(...)} plus dateStyle/timeStyle option keys outside the canonical formatter",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/web/src/lib/relative-time.ts",
+    count: countAdHocRelativeTimeFormatting,
+  },
+  {
+    id: "direct-audit-log-insert",
+    description:
+      "direct .insert(auditLogs) calls outside the audit-log recorder module",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
+    count: countDirectAuditLogInserts,
+  },
+  {
+    id: "inline-timestamp-cursor-sql",
+    description:
+      "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/lib/db-pagination.ts" ||
+      file === "apps/api/src/handlers/case-law/citation-authority.ts",
+    count: countInlineTimestampCursorSql,
+  },
+  {
+    id: "repeated-timestamp-cursor-boundary",
+    description:
+      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/lib/db-pagination.ts" ||
+      file === "apps/api/src/handlers/entities/list-cursor.ts" ||
+      file === "apps/api/src/lib/workflow-target-queries.ts",
+    count: countRepeatedTimestampCursorBoundaries,
+  },
+  {
+    id: "unbounded-pagination-cursor-schema",
+    description: "literal cursor: t.Optional(t.String()) schemas in API source",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countUnboundedPaginationCursorSchema,
   },
   {
     id: "raw-use-effect-suppressions",

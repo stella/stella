@@ -1,17 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
@@ -32,7 +21,6 @@ import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/delete-version";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import {
-  ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT,
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/handlers/entities/list-cursor";
@@ -57,6 +45,7 @@ import type {
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { isUuid } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
@@ -64,7 +53,6 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
-  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import {
   brandPersistedEntityId,
@@ -2394,23 +2382,10 @@ const listPropertiesArgsSchema = v.strictObject({
   cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
 });
 
-const decodePropertyPageCursor = (
-  cursor: string,
-): { createdAt: string; id: string } | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 2) {
-    return null;
-  }
-  const [createdAt, id] = parts;
-  if (
-    typeof createdAt !== "string" ||
-    typeof id !== "string" ||
-    !isUuidPaginationCursorPart(id)
-  ) {
-    return null;
-  }
-  return { createdAt, id };
-};
+const propertyPageCursorCodec = createTimestampIdCursorCodec({
+  column: properties.createdAt,
+  brandId: brandPersistedPropertyId,
+});
 
 const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
@@ -2437,9 +2412,9 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
     return notFoundResult("Matter not found or not accessible");
   }
 
-  let boundary: { createdAt: string; id: string } | null = null;
+  let boundary: ReturnType<typeof propertyPageCursorCodec.decode> = null;
   if (parsed.output.cursor !== undefined) {
-    boundary = decodePropertyPageCursor(parsed.output.cursor);
+    boundary = propertyPageCursorCodec.decode(parsed.output.cursor);
     if (boundary === null) {
       return structuredErrorResult({
         code: "validation_error",
@@ -2452,19 +2427,17 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
   const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
 
   const boundaryCondition = boundary
-    ? or(
-        sql`${properties.createdAt} > (${boundary.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-        and(
-          sql`${properties.createdAt} = (${boundary.createdAt}::timestamp AT TIME ZONE 'UTC')`,
-          gt(properties.id, brandPersistedPropertyId(boundary.id)),
-        ),
-      )
+    ? propertyPageCursorCodec.keysetAfter({
+        cursor: boundary,
+        direction: "ascending",
+        idColumn: properties.id,
+      })
     : undefined;
 
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
-        createdAt: sql<string>`to_char(${properties.createdAt} AT TIME ZONE 'UTC', ${ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT})`,
+        createdAt: propertyPageCursorCodec.cursorValue.as("created_at_cursor"),
         id: properties.id,
         name: properties.name,
         content: properties.content,
@@ -2479,7 +2452,8 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
   const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodePaginationCursor([item.createdAt, item.id]),
+    cursorForItem: (item) =>
+      propertyPageCursorCodec.encode(item.createdAt, item.id),
   });
 
   const propertyList = page.items.map((property) => ({

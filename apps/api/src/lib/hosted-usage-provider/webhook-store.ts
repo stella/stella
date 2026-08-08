@@ -17,11 +17,15 @@ import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { auditLogs, hostedUsageWebhookEvents } from "@/api/db/schema";
+import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
-import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";
+import {
+  createBackgroundAuditRecorder,
+  type AuditAction,
+  type AuditEvent,
+  type AuditResourceType,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createSafeId } from "@/api/lib/branded-types";
 
 type InsertWebhookEventInput = {
   eventId: string;
@@ -133,7 +137,7 @@ type WebhookAuditEventInput = {
    * Optional per-event details (field diffs, period dates, etc.).
    * Merged into the audit row's `changes` payload.
    */
-  changes?: Record<string, unknown>;
+  changes?: AuditEvent["changes"];
 };
 
 /**
@@ -154,23 +158,28 @@ export const recordWebhookAuditEvent = async ({
   eventId,
   changes,
 }: WebhookAuditEventInput): Promise<void> => {
-  await tx.insert(auditLogs).values({
-    id: createSafeId<"auditLog">(),
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    execution: {
+      performer: {
+        id: "usage-provider",
+        name: "Usage provider",
+        type: "service",
+      },
+      trigger: {
+        source: "usage-provider",
+        sourceId: eventId,
+        type: "webhook",
+      },
+    },
     organizationId,
     workspaceId: null,
     userId: WEBHOOK_AUDIT_ACTOR,
+  });
+  await recordAuditEvent(tx, {
     action,
     resourceType,
     resourceId,
     changes: changes ?? null,
     metadata: { source: "usage_provider.webhook", eventId },
-    activityCategory: "other",
-    approvalStatus: "not_required",
-    performerId: "usage-provider",
-    performerName: "Usage provider",
-    performerType: "service",
-    triggerSource: "usage-provider",
-    triggerSourceId: eventId,
-    triggerType: "webhook",
   });
 };

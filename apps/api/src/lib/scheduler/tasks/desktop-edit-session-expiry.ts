@@ -2,7 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { auditLogs, desktopEditSessions, workspaces } from "@/api/db/schema";
+import { desktopEditSessions, workspaces } from "@/api/db/schema";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {
   buildExpiryAuditEvents,
   selectTransitionedExpirableSessions,
@@ -112,8 +113,45 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
       const expiredIds = new Set(transitioned.map((row) => row.id));
       const auditEvents = buildExpiryAuditEvents(batch, expiredIds);
-      if (auditEvents.length > 0) {
-        await tx.insert(auditLogs).values(auditEvents);
+      const auditEventsByActor = new Map<
+        string,
+        (typeof auditEvents)[number][]
+      >();
+      for (const auditEvent of auditEvents) {
+        const key = `${auditEvent.organizationId}\0${auditEvent.userId}`;
+        const actorEvents = auditEventsByActor.get(key);
+        if (actorEvents) {
+          actorEvents.push(auditEvent);
+        } else {
+          auditEventsByActor.set(key, [auditEvent]);
+        }
+      }
+      for (const actorEvents of auditEventsByActor.values()) {
+        const firstEvent = actorEvents.at(0);
+        if (!firstEvent) {
+          panic("Desktop edit expiry audit group must not be empty");
+        }
+        const recordAuditEvent = createBackgroundAuditRecorder({
+          execution: {
+            performer: {
+              id: "desktop-edit-session-expiry",
+              name: "Desktop edit session expiry",
+              type: "service",
+            },
+            trigger: {
+              source: "desktop-edit-session-expiry",
+              type: "system",
+            },
+          },
+          organizationId: firstEvent.organizationId,
+          workspaceId: null,
+          userId: firstEvent.userId,
+        });
+        // oxlint-disable-next-line no-await-in-loop -- one bounded insert per organization/accountable-user group in the expiry batch
+        await recordAuditEvent(
+          tx,
+          actorEvents.map(({ event }) => event),
+        );
       }
 
       return selectTransitionedExpirableSessions(batch, expiredIds);
