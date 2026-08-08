@@ -11,11 +11,41 @@ const components = {
 };
 
 describe("resolveDatabaseUrl", () => {
-  test("returns DATABASE_URL when present", () => {
-    expect(
-      resolveDatabaseUrl({ DATABASE_URL: "postgres://x/y", ...components }),
-    ).toBe("postgres://x/y");
-  });
+  test.each([["postgres://x/y"], ["postgresql://x/y"]])(
+    "returns supported DATABASE_URL unchanged: %s",
+    (databaseUrl) => {
+      expect(
+        resolveDatabaseUrl({ DATABASE_URL: databaseUrl, ...components }),
+      ).toBe(databaseUrl);
+    },
+  );
+
+  test.each([["not a URL"], ["://missing-scheme"]])(
+    "throws on malformed DATABASE_URL: %s",
+    (databaseUrl) => {
+      expect(() => resolveDatabaseUrl({ DATABASE_URL: databaseUrl })).toThrow(
+        "DATABASE_URL is not a valid URL",
+      );
+    },
+  );
+
+  test.each([["https://x/y"], ["mysql://x/y"]])(
+    "throws on unsupported DATABASE_URL protocol: %s",
+    (databaseUrl) => {
+      expect(() => resolveDatabaseUrl({ DATABASE_URL: databaseUrl })).toThrow(
+        "DATABASE_URL must use the postgres:// or postgresql:// scheme",
+      );
+    },
+  );
+
+  test.each([["postgres:db.example"], ["postgresql:db.example"]])(
+    "throws when DATABASE_URL omits the scheme separator: %s",
+    (databaseUrl) => {
+      expect(() => resolveDatabaseUrl({ DATABASE_URL: databaseUrl })).toThrow(
+        "DATABASE_URL must use the postgres:// or postgresql:// scheme",
+      );
+    },
+  );
 
   test("returns undefined when nothing is set", () => {
     expect(resolveDatabaseUrl({})).toBeUndefined();
