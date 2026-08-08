@@ -83,7 +83,8 @@ const runAwsJson = async (awsArgs: readonly string[]): Promise<unknown> => {
     console.error(stderr.trim());
     process.exit(2);
   }
-  return JSON.parse(stdout) as unknown;
+  const payload: unknown = JSON.parse(stdout);
+  return payload;
 };
 
 const startTime = Date.now() - hours * 60 * 60 * 1000;
@@ -148,7 +149,7 @@ for (const rawEvent of rawEvents) {
   // not one, and must not be counted as a zero-recall sample.
   let parsed: unknown;
   try {
-    parsed = JSON.parse(message) as unknown;
+    parsed = JSON.parse(message);
   } catch {
     totals.unparsed += 1;
     continue;
