@@ -1,28 +1,19 @@
 import { useState } from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import {
-  createFileRoute,
-  getRouteApi,
-  useNavigate,
-} from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarIcon,
-  CheckCircle2Icon,
-  InboxIcon,
   MinusIcon,
   PlusIcon,
-  ShieldAlertIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
+import type { EntityPriority, TaskStatus } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -31,88 +22,49 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { pageTitle } from "@/lib/page-title";
-import {
-  ensureRouteInfiniteQueryData,
-  ensureRouteQueryData,
-} from "@/lib/react-query";
-import { workspacesRouteOptions } from "@/lib/workspaces/queries";
+import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
+import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { LegacyTodosPage } from "@/routes/_protected.todos/-legacy-page";
+import type { TaskItem } from "@/routes/_protected.todos/-legacy-queries";
 import { myTasksOptions } from "@/routes/_protected.todos/-legacy-queries";
-import type {
-  MyWorkItem,
-  MyWorkQueue,
-} from "@/routes/_protected.todos/-queries";
-import { myWorkOptions } from "@/routes/_protected.todos/-queries";
-import { getDisplayedWorkDate } from "@/routes/_protected.todos/-task-row.logic";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-const TodosPage = () =>
-  env.VITE_FEATURE_GOVERNED_WORKFLOW ? <MyWorkPage /> : <LegacyTodosPage />;
+type TaskFilter = "all" | "open" | "in_progress" | "done";
 
-export const Route = createFileRoute("/_protected/todos/")({
-  loader: async ({ context }) => {
-    if (!env.VITE_FEATURE_GOVERNED_WORKFLOW) {
-      await ensureRouteQueryData(context.queryClient, myTasksOptions);
-      return;
-    }
-
-    await Promise.all([
-      ensureRouteInfiniteQueryData(
-        context.queryClient,
-        myWorkOptions("upcoming", localISODate()),
-      ),
-      ensureRouteQueryData(
-        context.queryClient,
-        workspacesRouteOptions(context.user.activeOrganizationId),
-      ),
-    ]);
-  },
-  head: () => ({
-    meta: [{ title: pageTitle("navigation.myTodos") }],
-  }),
-  component: TodosPage,
-});
-
-const STATUS_COLORS: Record<string, string> = {
-  unassigned: "bg-muted-foreground",
-  awaiting_acknowledgement: "bg-warning",
-  active: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
-  completed: "bg-success dark:bg-success",
+const STATUS_COLORS = {
+  open: "bg-muted-foreground",
+  in_progress: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
+  in_review: "bg-warning",
+  done: "bg-success dark:bg-success",
   cancelled: "bg-destructive dark:bg-destructive",
-};
+} as const satisfies Record<TaskStatus, string>;
 
-const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
+const PRIORITY_ICONS = {
   none: MinusIcon,
   urgent: AlertCircleIcon,
   high: ArrowUpIcon,
   medium: MinusIcon,
   low: ArrowDownIcon,
-};
+} as const satisfies Record<EntityPriority, typeof MinusIcon>;
 
-const PRIORITY_COLORS: Record<string, string> = {
+const PRIORITY_COLORS = {
   none: "text-muted-foreground",
   urgent: "text-destructive",
   high: "text-warning",
   medium: "text-warning",
   low: "text-foreground-muted dark:text-foreground",
-};
+} as const satisfies Record<EntityPriority, string>;
 
 const SKELETON_GROUP_KEYS = ["alpha", "beta", "gamma"];
 const SKELETON_ROW_KEYS = ["one", "two", "three"];
@@ -124,21 +76,25 @@ const SKELETON_ROW_NAME_WIDTHS: Record<string, string> = {
   three: "w-40",
 };
 
-type GroupedTasks = {
-  workspace: { id: string; name: string };
-  tasks: MyWorkItem[];
+type ValidTask = TaskItem & {
+  workspace: NonNullable<TaskItem["workspace"]>;
 };
 
-const groupByWorkspace = (tasks: readonly MyWorkItem[]): GroupedTasks[] => {
+type GroupedTasks = {
+  workspace: { id: string; name: string };
+  tasks: ValidTask[];
+};
+
+const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
   const map = new Map<string, GroupedTasks>();
 
   for (const task of tasks) {
-    const existing = map.get(task.workspaceId);
+    const existing = map.get(task.workspace.id);
     if (existing) {
       existing.tasks.push(task);
     } else {
-      map.set(task.workspaceId, {
-        workspace: { id: task.workspaceId, name: task.workspaceName },
+      map.set(task.workspace.id, {
+        workspace: task.workspace,
         tasks: [task],
       });
     }
@@ -147,46 +103,34 @@ const groupByWorkspace = (tasks: readonly MyWorkItem[]): GroupedTasks[] => {
   return Array.from(map.values());
 };
 
-const localISODate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-function MyWorkPage() {
+export function LegacyTodosPage() {
   const t = useTranslations();
   const navigate = useNavigate();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [queue, setQueue] = useState<MyWorkQueue>("upcoming");
-  const asOf = localISODate();
-  const {
-    data,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteQuery(myWorkOptions(queue, asOf));
+  const [filter, setFilter] = useState<TaskFilter>("all");
+  const { data: tasks, isLoading } = useQuery(myTasksOptions);
   const { data: workspaces } = useQuery(
-    workspacesRouteOptions(activeOrganizationId),
+    workspacesOptions(activeOrganizationId),
   );
 
-  const tasks = data ? data.pages.flatMap((page) => page.items) : [];
-  const groups = groupByWorkspace(tasks);
-
-  useExternalSyncEffect(() => {
-    if (!error) {
-      return;
+  const filtered = (() => {
+    if (!tasks) {
+      return [];
     }
-    analytics.captureError(error);
-    stellaToast.error(userErrorFromThrown(error, t("common.unexpectedError")));
-  }, [analytics, error, t]);
+
+    const valid = tasks.filter(
+      (task): task is ValidTask => task.workspace !== null,
+    );
+
+    if (filter === "all") {
+      return valid;
+    }
+    return valid.filter((task) => task.status === filter);
+  })();
+
+  const groups = groupByWorkspace(filtered);
 
   const handleCreateTask = async (wsId: string) => {
     const response = await api.tasks({ workspaceId: wsId }).put({
@@ -195,7 +139,6 @@ function MyWorkPage() {
     });
 
     const entityId = unwrapEden(response).entityId;
-    await queryClient.invalidateQueries({ queryKey: ["my-work"] });
 
     await navigate({
       to: "/workspaces/$workspaceId",
@@ -210,7 +153,7 @@ function MyWorkPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
       <div className="flex items-center gap-2">
         <h1 className="me-auto text-lg font-semibold">
-          {t("tasks.myWorkTitle")}
+          {t("tasks.myTasksTitle")}
         </h1>
         {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
           <Menu>
@@ -237,26 +180,26 @@ function MyWorkPage() {
             </MenuPopup>
           </Menu>
         )}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex gap-1">
           <FilterButton
-            active={queue === "inbox"}
-            label={t("tasks.queue.inbox")}
-            onClick={() => setQueue("inbox")}
+            active={filter === "all"}
+            label={t("common.all")}
+            onClick={() => setFilter("all")}
           />
           <FilterButton
-            active={queue === "upcoming"}
-            label={t("tasks.queue.upcoming")}
-            onClick={() => setQueue("upcoming")}
+            active={filter === "open"}
+            label={t("tasks.statusValues.open")}
+            onClick={() => setFilter("open")}
           />
           <FilterButton
-            active={queue === "at_risk"}
-            label={t("tasks.queue.atRisk")}
-            onClick={() => setQueue("at_risk")}
+            active={filter === "in_progress"}
+            label={t("tasks.statusValues.in_progress")}
+            onClick={() => setFilter("in_progress")}
           />
           <FilterButton
-            active={queue === "completed"}
-            label={t("tasks.queue.completed")}
-            onClick={() => setQueue("completed")}
+            active={filter === "done"}
+            label={t("tasks.statusValues.done")}
+            onClick={() => setFilter("done")}
           />
         </div>
       </div>
@@ -266,7 +209,7 @@ function MyWorkPage() {
       {!isLoading && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
           <EntityKindIcon className="size-10 opacity-40" kind="task" />
-          <p className="text-sm">{t("tasks.noWorkInQueue")}</p>
+          <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
           {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
             <Menu>
               <MenuTrigger
@@ -306,25 +249,11 @@ function MyWorkPage() {
           </h2>
           <div className="flex flex-col">
             {group.tasks.map((task) => (
-              <TaskRow key={task.entityId} task={task} />
+              <TaskRow key={task.id} task={task} />
             ))}
           </div>
         </div>
       ))}
-
-      {hasNextPage && (
-        <Button
-          className="self-center"
-          disabled={isFetchingNextPage}
-          onClick={() => {
-            detached(fetchNextPage(), "MyTodosPage");
-          }}
-          size="sm"
-          variant="outline"
-        >
-          {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
-        </Button>
-      )}
     </div>
   );
 }
@@ -341,46 +270,37 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
   </Button>
 );
 
-const TaskRow = ({ task }: { task: MyWorkItem }) => {
+const TaskRow = ({ task }: { task: ValidTask }) => {
+  const status = isTaskStatus(task.status) ? task.status : null;
+  const priority = isEntityPriority(task.priority) ? task.priority : null;
+
+  useExternalSyncEffect(() => {
+    if (status === null) {
+      captureInvalidTaskOption("status");
+    }
+    if (priority === null) {
+      captureInvalidTaskOption("priority");
+    }
+  }, [priority, status]);
+
   const statusColor =
-    STATUS_COLORS[task.workflowStatus] ?? "bg-muted-foreground";
+    status === null ? STATUS_COLORS.open : STATUS_COLORS[status];
 
-  const PriorityIcon = task.priority
-    ? (PRIORITY_ICONS[task.priority] ?? MinusIcon)
-    : null;
-  const priorityColor = task.priority
-    ? (PRIORITY_COLORS[task.priority] ?? "text-muted-foreground")
-    : null;
+  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
+  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
 
-  const displayedDate = getDisplayedWorkDate(task);
-  const isDue =
-    task.attention === "hard_deadline_due" ||
-    task.attention === "working_target_due";
-  let attentionColor = "text-success";
-  if (task.attention === "acknowledgement_required") {
-    attentionColor = "text-warning";
-  } else if (isDue) {
-    attentionColor = "text-destructive";
-  }
-  const AttentionIcon = (() => {
-    if (task.attention === "acknowledgement_required") {
-      return InboxIcon;
-    }
-    if (task.attention === "hard_deadline_due") {
-      return ShieldAlertIcon;
-    }
-    if (task.workflowStatus === "completed") {
-      return CheckCircle2Icon;
-    }
-    return null;
-  })();
+  const isOverdue =
+    task.dueDate !== null &&
+    task.status !== "done" &&
+    task.status !== "cancelled" &&
+    task.dueDate < new Date().toISOString().slice(0, 10);
 
   return (
     <MatterRefLink
       className="group hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors"
       onClick={() => {
         useInspectorTabsStore.getState().openTask({
-          taskId: task.entityId,
+          taskId: task.id,
           workspaceId: task.workspaceId,
           label: task.name,
         });
@@ -392,19 +312,16 @@ const TaskRow = ({ task }: { task: MyWorkItem }) => {
       {PriorityIcon && priorityColor && (
         <PriorityIcon className={cn("size-3.5 shrink-0", priorityColor)} />
       )}
-      {AttentionIcon && (
-        <AttentionIcon className={cn("size-3.5 shrink-0", attentionColor)} />
-      )}
-      {displayedDate && (
+      {task.dueDate && (
         <span
           className={cn(
             "flex shrink-0 items-center gap-1",
             "text-muted-foreground text-xs",
-            isDue && "text-destructive",
+            isOverdue && "text-destructive",
           )}
         >
           <CalendarIcon className="size-3" />
-          {new Date(displayedDate).toLocaleDateString(getFormattingLocale(), {
+          {new Date(task.dueDate).toLocaleDateString(getFormattingLocale(), {
             month: "short",
             day: "numeric",
             timeZone: "UTC",

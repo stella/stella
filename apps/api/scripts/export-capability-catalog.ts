@@ -409,8 +409,10 @@ const DOMAIN_FEATURE: Record<string, string> = {
   expenses: "FEATURE_TIME_BILLING",
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
+  lists: "FEATURE_LEGAL_LISTS",
   rates: "FEATURE_TIME_BILLING",
   "time-entries": "FEATURE_TIME_BILLING",
+  "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
 
 type CapabilityMcp =

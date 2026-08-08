@@ -14,6 +14,7 @@ import {
   ITEM_TYPE_TRANSLATION_KEYS,
   localISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { env } from "@/env";
 import { useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -59,7 +60,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
   const listItemType = isListItemType(entity.listItemType)
     ? entity.listItemType
     : "task";
-  const showItemType = listItemType !== "task";
+  const showItemType = env.VITE_FEATURE_LEGAL_LISTS && listItemType !== "task";
 
   if (!priorityCfg && !entity.dueDate && !showItemType) {
     return null;

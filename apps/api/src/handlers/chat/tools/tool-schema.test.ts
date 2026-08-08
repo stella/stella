@@ -97,6 +97,7 @@ const getChatTools = (
 ) =>
   getChatToolsWithPin({
     ...props,
+    memoryEnabled: props.memoryEnabled ?? true,
     pinServerValidatedWorkspaceId: () => true,
   });
 

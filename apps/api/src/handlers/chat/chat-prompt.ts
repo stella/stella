@@ -20,6 +20,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatEditApplyMode,
@@ -370,7 +371,7 @@ export const buildChatSystemPromptParts = async ({
 > =>
   await Result.gen(async function* () {
     const skillMetadata =
-      organizationId && userId
+      env.FEATURE_AI_MEMORY && organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
               organizationId,

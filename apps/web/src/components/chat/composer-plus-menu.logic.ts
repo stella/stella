@@ -30,11 +30,14 @@ export const resolveComposerMenuShortcut = ({
   metaKey,
 }: ResolveComposerMenuShortcutOptions): ComposerMenuShortcut | null => {
   const hasBlockingModifier = metaKey || (!isAltGraph && (altKey || ctrlKey));
-  if (!isEditorEmpty || isComposing || hasBlockingModifier) {
+  if (isComposing || hasBlockingModifier) {
     return null;
   }
   if (hasSkills && key === "/") {
     return COMPOSER_MENU_SHORTCUT.skills;
+  }
+  if (!isEditorEmpty) {
+    return null;
   }
   if (hasContext && key === "@") {
     return COMPOSER_MENU_SHORTCUT.context;

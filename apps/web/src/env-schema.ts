@@ -67,6 +67,11 @@ export const envWebClientSchema = {
   VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
   VITE_FEATURE_TIME_BILLING: featureFlagSchema,
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
+  VITE_FEATURE_AI_MEMORY: featureFlagSchema,
+  VITE_FEATURE_LEGAL_LISTS: featureFlagSchema,
+  VITE_FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
+  /** Lets a production deployment expose per-browser beta previews. */
+  VITE_BETA_FEATURES_ENABLED: featureFlagSchema,
   VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
   VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
   // Base URL the desktop-app download buttons point at. Defaults

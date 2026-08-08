@@ -48,6 +48,7 @@ import {
   WorkTypeSelect,
 } from "@/components/workspaces/tasks/task-metadata";
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
+import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -493,7 +494,9 @@ const TaskDetailPanelContent = ({
       sourceEntity: NonNullable<typeof link.sourceEntity>;
     } => link.sourceEntity !== null,
   );
-  const workflow = task.workObligation;
+  const workflow = env.VITE_FEATURE_GOVERNED_WORKFLOW
+    ? task.workObligation
+    : null;
   const hardDeadlineDate = toISODate(workflow?.hardDeadlineDate);
   const hardDeadlineOverdue =
     hardDeadlineDate.length > 0 &&
@@ -595,13 +598,15 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
-          <MetadataRow label={tCommon("type")}>
-            <ItemTypeSelect
-              ariaLabel={tCommon("type")}
-              onChange={handleItemTypeChange}
-              value={currentItemType}
-            />
-          </MetadataRow>
+          {env.VITE_FEATURE_LEGAL_LISTS && (
+            <MetadataRow label={tCommon("type")}>
+              <ItemTypeSelect
+                ariaLabel={tCommon("type")}
+                onChange={handleItemTypeChange}
+                value={currentItemType}
+              />
+            </MetadataRow>
+          )}
 
           <MetadataRow label={t("status")}>
             <StatusSelect onChange={handleStatusChange} value={currentStatus} />

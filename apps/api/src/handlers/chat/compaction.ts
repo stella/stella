@@ -1,7 +1,7 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
 
 import {
   getChatAttachmentFilename,
@@ -528,6 +528,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  reasoningEffort?: ReasoningEffort | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
 };
@@ -557,6 +558,7 @@ export const compactChatMessagesForModel = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   preserveTokens,
   tenantWorkspaceIds,
   triggerTokens,
@@ -585,6 +587,7 @@ export const compactChatMessagesForModel = async ({
             modelId,
             organizationId,
             orgAIConfig,
+            reasoningEffort,
             prompt: [
               "Compact the earlier conversation transcript below.",
               "Return only the checkpoint summary.",
@@ -620,6 +623,7 @@ export const summarizeChatCompactionForModel = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   preserveTokens,
   tenantWorkspaceIds,
   triggerTokens,
@@ -648,6 +652,7 @@ export const summarizeChatCompactionForModel = async ({
             modelId,
             organizationId,
             orgAIConfig,
+            reasoningEffort,
             prompt: [
               "Compact the earlier conversation transcript below.",
               "Return only the checkpoint summary.",

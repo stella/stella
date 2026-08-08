@@ -25,6 +25,7 @@ import {
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
+import { modelSelectionLabel } from "@/components/chat/chat-model-selector.logic";
 import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { TranslationKey } from "@/i18n/types";
@@ -122,22 +123,25 @@ export const ChatModelSelector = ({
       <MenuTrigger
         render={
           <Button
-            aria-label={t("chat.modelSelector.title")}
+            aria-label={triggerLabel}
             className={
               selectedModel === null
-                ? "text-muted-foreground hover:text-foreground"
-                : "bg-accent text-accent-foreground hover:text-accent-foreground"
+                ? "text-muted-foreground hover:text-foreground gap-1.5"
+                : "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
             }
             disabled={disabled}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}
-            size="icon-xs"
+            size="xs"
             variant="ghost"
           />
         }
         tooltip={triggerLabel}
       >
         <ModelTriggerIcon provider={selectedOption?.iconProvider ?? null} />
+        <BidiText as="span" className="max-w-36 truncate">
+          {triggerLabel}
+        </BidiText>
       </MenuTrigger>
       <MenuPopup align="start" className="w-80" side="top" sideOffset={6}>
         <MenuCheckboxItem
@@ -297,20 +301,3 @@ const EffortSubmenu = ({
     </MenuSub>
   );
 };
-
-const modelSelectionLabel = ({
-  defaultEffortLabel,
-  displayName,
-  reasoningEffort,
-  translateEffort,
-}: {
-  defaultEffortLabel: string;
-  displayName: string;
-  reasoningEffort: ReasoningEffort | null;
-  translateEffort: (effort: ReasoningEffort) => string;
-}): string =>
-  `${displayName} · ${
-    reasoningEffort === null
-      ? defaultEffortLabel
-      : translateEffort(reasoningEffort)
-  }`;

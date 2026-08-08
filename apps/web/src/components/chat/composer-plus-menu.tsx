@@ -173,9 +173,9 @@ export const ComposerPlusMenu = ({
   const hasContextShortcut = context !== undefined;
 
   // The menu owns its editor shortcuts. Any composer that renders a Skills
-  // submenu therefore gets the same blank-composer "/" behavior without a
-  // second surface-level flag or key handler that can drift. Capture runs
-  // before TipTap's legacy slash/mention suggestion plugins on the editor DOM.
+  // submenu therefore gets the same "/" behavior at any cursor position
+  // without a second surface-level key handler that can drift. The slash is
+  // consumed here and the unified Skills submenu owns filtering.
   useExternalSyncEffect(() => {
     if (!shortcutEditor || shortcutEditor.isDestroyed) {
       return undefined;

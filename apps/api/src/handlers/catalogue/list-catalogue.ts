@@ -15,6 +15,7 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
@@ -103,7 +104,12 @@ type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
 const listCatalogue = createSafeRootHandler(
   config,
   async function* ({ memberRole, safeDb, session, user }) {
-    const entries = loadCatalogue();
+    const entries = loadCatalogue().filter(
+      (entry) =>
+        env.FEATURE_PUBLIC_TOOLS ||
+        entry.kind !== "skill" ||
+        entry.source !== "github",
+    );
     const skillSlugs: string[] = [];
     for (const entry of entries) {
       if (entry.kind === "skill") {

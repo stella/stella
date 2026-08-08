@@ -343,7 +343,6 @@ export const ChatTabPanel = ({
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
-    reservedCommands: true,
     suggestedFollowupPrompt,
     threadRef,
   });

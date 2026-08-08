@@ -85,16 +85,20 @@ export const weeklyCanaryRotation = ({
     throw new TypeError("Weekly canary rotation catalog must not be empty.");
   }
 
-  const modelRoles = MODEL_ROLES.filter(
-    (role) =>
-      DEFAULT_MODELS[provider][role] !== modelId &&
-      isBYOKModelRoleSupported({ modelId, provider, role }),
+  const supportedRoles = MODEL_ROLES.filter((role) =>
+    isBYOKModelRoleSupported({ modelId, provider, role }),
   );
-  if (modelRoles.length === 0) {
+  if (supportedRoles.length === 0) {
     throw new TypeError(
-      `Weekly canary model ${modelId} has no non-default supported role.`,
+      `Weekly canary model ${modelId} has no supported role.`,
     );
   }
+
+  const nonDefaultRoles = supportedRoles.filter(
+    (role) => DEFAULT_MODELS[provider][role] !== modelId,
+  );
+  const modelRoles =
+    nonDefaultRoles.length > 0 ? nonDefaultRoles : supportedRoles;
 
   return { modelId, modelRoles, rotationIndex, toolShape };
 };
@@ -108,6 +112,12 @@ const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
 
 export const modelRoleMaxOutputTokens = (role: ModelRole) =>
   MODEL_ROLE_MAX_OUTPUT_TOKENS[role];
+
+// Anthropic's SDK rejects non-streaming structured-output requests whose
+// ceiling can exceed its ten-minute window. Keep the reasoning probe below
+// the adapter's documented ~21K clamp while leaving streaming probes intact.
+export const structuredOutputModelRoleMaxOutputTokens = (role: ModelRole) =>
+  role === "reasoning" ? 20_000 : modelRoleMaxOutputTokens(role);
 
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
   CANARY_PROVIDERS.some((provider) => provider === value);

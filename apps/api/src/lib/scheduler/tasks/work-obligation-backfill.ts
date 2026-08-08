@@ -9,6 +9,7 @@ import {
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -49,6 +50,10 @@ export const backfillWorkObligations: SchedulerTask = async ({
   logger,
   signal,
 }) => {
+  if (!env.FEATURE_GOVERNED_WORKFLOW) {
+    return;
+  }
+
   signal.throwIfAborted();
   const cursor = backfillCursor(job.payload);
   const leaseToken =

@@ -1,10 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { findCatalogueEntry, isGithubSkillEntry } from "@stll/catalogue";
+
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
 
 import { resolveCatalogueSkillPackage } from "./catalogue-skill-package";
@@ -43,6 +46,17 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
+    const entry = findCatalogueEntry("skill", body.slug);
+    if (
+      !env.FEATURE_PUBLIC_TOOLS &&
+      entry !== undefined &&
+      isGithubSkillEntry(entry)
+    ) {
+      return yield* Result.err(
+        new HandlerError({ status: 404, message: "Skill not found" }),
+      );
+    }
+
     const scope = body.scope ?? "team";
     const preflightResult = await preflightSkillInstall({
       memberRole,

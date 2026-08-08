@@ -47,9 +47,14 @@ export type ExportColumn =
       header: string;
     };
 
+type BuildExportColumnsOptions = {
+  legalListsEnabled?: boolean;
+};
+
 export const buildExportColumns = (
   layout: Extract<ViewLayout, { type: "table" }>,
   properties: ExportProperty[],
+  options: BuildExportColumnsOptions = {},
 ): ExportColumn[] => {
   const hiddenIds = new Set(layout.hiddenProperties);
   const verdictByAskPropertyId = new Map<string, ExportProperty>();
@@ -88,7 +93,10 @@ export const buildExportColumns = (
       ? []
       : [{ type: "metadata" as const, id: column.id, header: column.header }],
   );
-  const listColumns = viewIncludesListItems(layout.filters)
+  const listColumns = viewIncludesListItems(
+    layout.filters,
+    options.legalListsEnabled,
+  )
     ? LIST_COLUMNS.flatMap((column) =>
         hiddenIds.has(column.id)
           ? []

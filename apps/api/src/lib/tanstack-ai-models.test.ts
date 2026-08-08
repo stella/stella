@@ -747,6 +747,18 @@ describe("tanStackModelOptionsForRole", () => {
     ).toMatchObject({ reasoning: { effort: "low" } });
   });
 
+  test("turns Anthropic thinking off when the selected model offers none", () => {
+    expect(
+      tanStackModelOptionsForRole({
+        role: "chat",
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+        organizationId: null,
+        reasoningEffort: "none",
+      }),
+    ).toEqual({ thinking: { type: "disabled" } });
+  });
+
   test("never emits a reasoning control outside the model's declared capability", () => {
     // The whole-class invariant behind the "Reasoning is mandatory"
     // 502: for EVERY offered model and role, any effort (or Gemini

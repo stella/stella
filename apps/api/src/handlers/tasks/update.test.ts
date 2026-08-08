@@ -14,6 +14,11 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { updateTaskHandler } from "./update";
 
+const TASK_FEATURES_ENABLED = {
+  governedWorkflow: true,
+  legalLists: true,
+} as const;
+
 describe("updateTaskHandler legacy deadline compatibility", () => {
   test("moves the working target and hard deadline together", async () => {
     const taskId = createSafeId<"entity">();
@@ -70,6 +75,7 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
         userId,
         recordAuditEvent: async () => {},
         body: { taskId, dueDate: "2026-08-20" },
+        features: TASK_FEATURES_ENABLED,
       }),
     );
 

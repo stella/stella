@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
@@ -165,6 +167,7 @@ type PersistChatCompactionCheckpointProps = {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  reasoningEffort?: ReasoningEffort | undefined;
   preserveTokens?: number | undefined;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -180,6 +183,7 @@ export const persistChatCompactionCheckpoint = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   preserveTokens,
   safeDb,
   threadId,
@@ -195,6 +199,7 @@ export const persistChatCompactionCheckpoint = async ({
     onSummaryError,
     organizationId,
     orgAIConfig,
+    reasoningEffort,
     preserveTokens,
     // The thread's own data workspaces: the checkpoint summarizer must not
     // see their raw ids, and no wider set is in scope for a persisted turn.

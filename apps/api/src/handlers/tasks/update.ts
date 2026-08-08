@@ -33,6 +33,10 @@ import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-wo
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 import { validateAgendaFields } from "./agenda-fields";
+import {
+  deployedTaskFeatures,
+  type TaskDeploymentFeatures,
+} from "./deployment-features";
 
 const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
 const agendaParticipantSchema = t.Object({
@@ -235,6 +239,7 @@ export type UpdateTaskHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: UpdateTaskBody;
+  features?: TaskDeploymentFeatures;
 };
 
 // Shared task-update logic reused by the HTTP handler and the
@@ -245,7 +250,14 @@ export const updateTaskHandler = async function* ({
   userId,
   recordAuditEvent,
   body,
+  features = deployedTaskFeatures(),
 }: UpdateTaskHandlerProps) {
+  if (!features.legalLists && body.listItemType !== undefined) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Legal Lists are disabled" }),
+    );
+  }
+
   const workflowReason = body.workflowReason?.trim();
   const inputResult = validateTaskInput(body);
   if (inputResult.status === "error") {
@@ -264,10 +276,11 @@ export const updateTaskHandler = async function* ({
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       const workflowRelevant =
-        body.status !== undefined ||
-        body.dueDate !== undefined ||
-        agendaKind === "task" ||
-        agendaKind === "deadline";
+        features.governedWorkflow &&
+        (body.status !== undefined ||
+          body.dueDate !== undefined ||
+          agendaKind === "task" ||
+          agendaKind === "deadline");
       let workflow = workflowRelevant
         ? await lockWorkObligation(tx, {
             entityId: body.taskId,

@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CheckIcon,
@@ -42,6 +42,7 @@ import {
   LIST_ITEM_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
+import { env } from "@/env";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -71,6 +72,15 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/lists",
 )({
   validateSearch: searchSchema,
+  beforeLoad: ({ params }) => {
+    if (!env.VITE_FEATURE_LEGAL_LISTS) {
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+        replace: true,
+      });
+    }
+  },
   loader: async ({ context, params }) => {
     await ensureRouteQueryData(
       context.queryClient,

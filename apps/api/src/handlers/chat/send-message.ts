@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
@@ -1260,6 +1261,7 @@ const sendMessage = createSafeRootHandler(
         messages: messagesForContextInput,
         organizationId: session.activeOrganizationId,
         orgAIConfig,
+        reasoningEffort: chatReasoningEffort,
         safeDb,
         tenantWorkspaceIds: accessibleWorkspaceIds,
         threadId: body.threadId,
@@ -1624,6 +1626,7 @@ const sendMessage = createSafeRootHandler(
                         messages: messagesAfterAssistantPersist,
                         organizationId: session.activeOrganizationId,
                         orgAIConfig,
+                        reasoningEffort: chatReasoningEffort,
                         safeDb,
                         threadId: body.threadId,
                       });
@@ -1769,6 +1772,8 @@ type ChatCompactionModelProps = {
   chatModelOverride: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  /** Effective reasoning override paired with the selected thread model. */
+  reasoningEffort: ReasoningEffort | undefined;
 };
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
@@ -1830,6 +1835,7 @@ const compactMessagesForContext = async ({
   messages,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   safeDb,
   tenantWorkspaceIds,
   threadId,
@@ -1879,6 +1885,7 @@ const compactMessagesForContext = async ({
     },
     organizationId,
     orgAIConfig,
+    reasoningEffort,
     preserveTokens,
     triggerTokens,
   });
@@ -1933,6 +1940,7 @@ const scheduleChatCompactionCheckpoint = ({
   messages,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   safeDb,
   threadId,
 }: ScheduleChatCompactionCheckpointProps): void => {
@@ -1957,6 +1965,7 @@ const scheduleChatCompactionCheckpoint = ({
       chatModelOverride,
       organizationId,
       orgAIConfig,
+      reasoningEffort,
       preserveTokens,
       safeDb,
       threadId,
@@ -1986,6 +1995,7 @@ const runChatCompactionCheckpoint = async ({
   chatModelOverride,
   organizationId,
   orgAIConfig,
+  reasoningEffort,
   preserveTokens,
   safeDb,
   threadId,
@@ -2038,6 +2048,7 @@ const runChatCompactionCheckpoint = async ({
     },
     organizationId,
     orgAIConfig,
+    reasoningEffort,
     preserveTokens,
     safeDb,
     threadId,

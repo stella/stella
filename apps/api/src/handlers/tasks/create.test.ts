@@ -6,7 +6,13 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { createTaskEntityHandler, createTaskHandler } from "./create";
+import { createTaskEntityHandler, createTaskForFeatures } from "./create";
+
+const TASK_FEATURES_ENABLED = {
+  governedWorkflow: true,
+  legalLists: true,
+} as const;
+const createTaskHandler = createTaskForFeatures(TASK_FEATURES_ENABLED).handler;
 
 type CreateTaskCtx = Parameters<typeof createTaskHandler>[0];
 type ScopedDb = CreateTaskCtx["scopedDb"];
@@ -207,6 +213,7 @@ describe("createTaskHandler validation", () => {
         userId,
         recordAuditEvent: async () => {},
         body: { name: "Firm-admin task" },
+        features: TASK_FEATURES_ENABLED,
       }),
     );
 

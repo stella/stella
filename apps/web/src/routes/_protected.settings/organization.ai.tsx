@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { env } from "@/env";
 import { AIConfigCard } from "@/routes/_protected.settings/-components/organization/ai-config-card";
 import { DeepLKeyCard } from "@/routes/_protected.settings/-components/organization/deepl-key-card";
 import { DocumentProcessingCard } from "@/routes/_protected.settings/-components/organization/document-processing-card";
@@ -25,7 +26,7 @@ function AIConfigPage() {
       <AIConfigCard />
       <PromptCachingCard />
       <DocumentProcessingCard />
-      <MemoryExtractionCard />
+      {env.VITE_FEATURE_AI_MEMORY && <MemoryExtractionCard />}
       <div className="my-8 border-t" />
       <DeepLKeyCard />
       <div className="my-8 border-t" />

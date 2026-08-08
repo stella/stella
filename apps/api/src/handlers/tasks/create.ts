@@ -35,6 +35,10 @@ import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 
 import { validateAgendaFields } from "./agenda-fields";
+import {
+  deployedTaskFeatures,
+  type TaskDeploymentFeatures,
+} from "./deployment-features";
 
 const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
 const agendaParticipantSchema = t.Object({
@@ -128,6 +132,7 @@ export type CreateTaskEntityHandlerProps = {
   recordAuditEvent: AuditRecorder;
   body: Static<typeof createTaskBodySchema>;
   entityId?: SafeId<"entity">;
+  features?: TaskDeploymentFeatures;
 };
 
 // Shared task-creation logic reused by the HTTP handler and the
@@ -140,6 +145,7 @@ export const createTaskEntityHandler = async function* ({
   recordAuditEvent,
   body,
   entityId: requestedEntityId,
+  features = deployedTaskFeatures(),
 }: CreateTaskEntityHandlerProps) {
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
@@ -149,6 +155,19 @@ export const createTaskEntityHandler = async function* ({
     body.hardDeadlineDate ??
     (agendaKind === AGENDA_ITEM_KIND.DEADLINE ? (body.dueDate ?? null) : null);
   const listItemType = body.listItemType ?? "task";
+
+  if (
+    !features.legalLists &&
+    (listItemType !== "task" ||
+      body.listId !== undefined ||
+      body.listSectionId !== undefined ||
+      body.listPosition !== undefined ||
+      body.listDescription !== undefined)
+  ) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Legal Lists are disabled" }),
+    );
+  }
 
   if (!includes(AGENDA_ITEM_KINDS, agendaKind)) {
     return Result.err(
@@ -374,20 +393,22 @@ export const createTaskEntityHandler = async function* ({
         );
       }
 
-      await createWorkObligation({
-        tx,
-        entityId,
-        workspaceId,
-        actorUserId: userId,
-        ownerUserId,
-        agendaKind,
-        taskStatus,
-        workingTargetDate,
-        hardDeadlineDate,
-        ...(body.sourceDescription === undefined
-          ? {}
-          : { sourceDescription: body.sourceDescription }),
-      });
+      if (features.governedWorkflow) {
+        await createWorkObligation({
+          tx,
+          entityId,
+          workspaceId,
+          actorUserId: userId,
+          ownerUserId,
+          agendaKind,
+          taskStatus,
+          workingTargetDate,
+          hardDeadlineDate,
+          ...(body.sourceDescription === undefined
+            ? {}
+            : { sourceDescription: body.sourceDescription }),
+        });
+      }
 
       await tx
         .update(workspaces)
@@ -407,12 +428,16 @@ export const createTaskEntityHandler = async function* ({
             ...(body.parentId && { parentId: body.parentId }),
           },
         },
-        {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          resourceId: entityId,
-          metadata: { ownerUserId },
-        },
+        ...(features.governedWorkflow
+          ? [
+              {
+                action: AUDIT_ACTION.CREATE,
+                resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+                resourceId: entityId,
+                metadata: { ownerUserId },
+              } as const,
+            ]
+          : []),
       ]);
 
       return { ok: true as const, entityId };
@@ -433,22 +458,26 @@ export const createTaskEntityHandler = async function* ({
   return Result.ok({ entityId: txResult.entityId });
 };
 
-const createTask = createSafeHandler(
-  {
-    permissions: { entity: ["create"] },
-    mcp: { type: "tool", name: "save_task" },
-    body: createTaskBodySchema,
-  },
-  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
-    return yield* createTaskEntityHandler({
-      safeDb,
-      workspaceId,
-      userId: user.id,
-      recordAuditEvent,
-      body,
-    });
-  },
-);
+export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
+  createSafeHandler(
+    {
+      permissions: { entity: ["create"] },
+      mcp: { type: "tool", name: "save_task" },
+      body: createTaskBodySchema,
+    },
+    async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
+      return yield* createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId: user.id,
+        recordAuditEvent,
+        body,
+        features,
+      });
+    },
+  );
+
+const createTask = createTaskForFeatures(deployedTaskFeatures());
 
 export const createTaskHandler = createTask.handler;
 

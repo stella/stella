@@ -9,7 +9,7 @@ import {
 } from "react";
 import type React from "react";
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -28,10 +28,6 @@ import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
-  buildChatSlashItems,
-  commandShortcutRowsFromSkillPages,
-} from "@/components/chat-editor-slash-items";
-import {
   ChatMention,
   createChatSuggestion,
 } from "@/components/chat-mention-extension";
@@ -48,17 +44,10 @@ import {
   insertPastedTextChip,
   PastedText,
 } from "@/components/chat-pasted-text-extension";
-import {
-  createPromptSlashSuggestion,
-  PromptSlash,
-  type SlashItem,
-} from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   areDraftDocsEqual,
   createChatDraftState,
@@ -70,7 +59,6 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { skillsOptions } from "@/lib/knowledge/queries";
 import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -548,20 +536,12 @@ export const useChatComposerWiring = ({
 export const useChatEditor = ({
   onDraftStart,
   placeholder,
-  reservedCommands = false,
   sentMessageHistoryHtml,
   threadRef,
   suggestedFollowupPrompt,
 }: {
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
-  /**
-   * Surface the reserved `/new` command in the slash menu. Only
-   * the chat surfaces that intercept them on submit may opt in; other consumers
-   * of this hook (e.g. Template Studio) must leave it off or the commands would
-   * be sent to the model as literal text.
-   */
-  reservedCommands?: boolean | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
   suggestedFollowupPrompt?: string | undefined;
@@ -579,7 +559,6 @@ export const useChatEditor = ({
   // eslint-disable-next-line react/react-compiler -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
@@ -835,49 +814,6 @@ export const useChatEditor = ({
     }
   });
 
-  // useInfiniteQuery has no chrome wrapper; gate its cold-cache fetch on mount
-  // by hand so it can't resolve on a not-yet-mounted fiber (same rationale as
-  // useChromeQuery).
-  const hasMounted = useHasMounted();
-  const {
-    data: skillPages,
-    fetchNextPage: fetchNextSkillPage,
-    hasNextPage: hasNextSkillPage,
-    isFetchingNextPage: isFetchingNextSkillPage,
-  } = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId),
-    enabled: hasMounted,
-  });
-
-  // Drain every skill page into the slash menu: drive the infinite query
-  // forward whenever another page becomes available and we're not already
-  // fetching. This is imperative synchronization with TanStack's query
-  // state, not derived state or a one-shot fetch.
-  useExternalSyncEffect(() => {
-    if (!hasNextSkillPage || isFetchingNextSkillPage) {
-      return;
-    }
-    detached(fetchNextSkillPage(), "useChatEditor");
-  }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
-
-  const skillPageRows = skillPages?.pages;
-  const slashShortcutRows = useMemo(
-    () => commandShortcutRowsFromSkillPages(skillPageRows),
-    [skillPageRows],
-  );
-  const slashItems = useMemo<SlashItem[]>(
-    () =>
-      buildChatSlashItems({
-        shortcuts: slashShortcutRows,
-        skillPages: skillPageRows,
-        includeReservedCommands: reservedCommands,
-      }),
-    [slashShortcutRows, skillPageRows, reservedCommands],
-  );
-  const slashItemsRef = useRef(slashItems);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the PromptSlash suggestion reads slashItemsRef.current out-of-render, must hold this render's items
-  slashItemsRef.current = slashItems;
-
   const handleMessageHistoryKeyDown = useCallback(
     (state: EditorState, event: KeyboardEvent) => {
       if (
@@ -950,11 +886,6 @@ export const useChatEditor = ({
     [],
   );
 
-  const promptSlashExtension = PromptSlash.configure({
-    // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
-    suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
-  });
-
   const editor = useEditor({
     autofocus: false,
     content: draftDoc,
@@ -993,7 +924,6 @@ export const useChatEditor = ({
         ),
         deleteTriggerWithBackspace: true,
       }),
-      promptSlashExtension,
       PastedText,
     ],
     onCreate: ({ editor: nextEditor }) => {

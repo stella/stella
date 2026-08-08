@@ -2,6 +2,7 @@ import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import {
   CHAT_EDIT_APPLY_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -291,6 +292,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 type GetChatToolsProps = {
+  /** Deployment gate; injectable so both disabled and enabled toolsets test. */
+  memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
@@ -614,6 +617,7 @@ export type ApprovalRequiredBuiltInChatToolName = {
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
+    memoryEnabled = env.FEATURE_AI_MEMORY,
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -753,6 +757,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // (schema-only construction) get no remember tool rather than an
   // unaudited or cross-matter write path.
   const rememberTools =
+    !memoryEnabled ||
     recordAuditEvent === undefined ||
     resolveMemorySourceWorkspaceIds === undefined
       ? {}

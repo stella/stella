@@ -29,12 +29,22 @@ describe("resolveComposerMenuShortcut", () => {
     );
   });
 
-  test("leaves shortcuts to TipTap after the composer has content", () => {
+  test("opens Skills for slash after the composer has content", () => {
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
         isEditorEmpty: false,
         key: "/",
+      }),
+    ).toBe(COMPOSER_MENU_SHORTCUT.skills);
+  });
+
+  test("keeps at-sign literal after the composer has content", () => {
+    expect(
+      resolveComposerMenuShortcut({
+        ...baseOptions,
+        isEditorEmpty: false,
+        key: "@",
       }),
     ).toBeNull();
   });

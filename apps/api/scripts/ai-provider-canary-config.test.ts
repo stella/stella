@@ -11,6 +11,7 @@ import {
   CANARY_PROVIDERS,
   missingCanaryProviders,
   modelRoleMaxOutputTokens,
+  structuredOutputModelRoleMaxOutputTokens,
   WEEKLY_TOOL_SHAPES,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
@@ -20,6 +21,14 @@ describe("AI provider canary role budgets", () => {
     for (const role of MODEL_ROLES) {
       expect(modelRoleMaxOutputTokens(role)).toBe(
         role === "reasoning" ? 25_000 : 512,
+      );
+    }
+  });
+
+  test("keeps non-streaming structured output below provider timeout limits", () => {
+    for (const role of MODEL_ROLES) {
+      expect(structuredOutputModelRoleMaxOutputTokens(role)).toBe(
+        role === "reasoning" ? 20_000 : 512,
       );
     }
   });
@@ -65,7 +74,7 @@ describe("AI provider canary coverage", () => {
 });
 
 describe("AI provider weekly rotation", () => {
-  test("cycles through every curated model with non-default supported roles", () => {
+  test("cycles through every curated model with supported roles", () => {
     for (const provider of CANARY_PROVIDERS) {
       const models = BYOK_MODEL_OPTIONS[provider];
       const rotations = models.map((_, rotationIndex) =>
@@ -81,9 +90,17 @@ describe("AI provider weekly rotation", () => {
       ).toBe(models[0]);
 
       for (const { modelId, modelRoles } of rotations) {
-        expect(modelRoles.length).toBeGreaterThan(0);
+        const supportedRoles = MODEL_ROLES.filter((role) =>
+          isBYOKModelRoleSupported({ modelId, provider, role }),
+        );
+        const nonDefaultRoles = supportedRoles.filter(
+          (role) => DEFAULT_MODELS[provider][role] !== modelId,
+        );
+        const expectedRoles =
+          nonDefaultRoles.length > 0 ? nonDefaultRoles : supportedRoles;
+
+        expect(modelRoles).toEqual(expectedRoles);
         for (const role of modelRoles) {
-          expect(modelId).not.toBe(DEFAULT_MODELS[provider][role]);
           expect(isBYOKModelRoleSupported({ modelId, provider, role })).toBe(
             true,
           );
