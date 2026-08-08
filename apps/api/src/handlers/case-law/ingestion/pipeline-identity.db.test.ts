@@ -541,6 +541,129 @@ if (!databaseUrl || !runPostgresTests) {
       ).toBe(recovered.court);
     });
 
+    test("allows a better listing-only observation to replace an earlier partial row", async () => {
+      const publisherId = "listing-only-enrichment";
+      const partial = {
+        ...decisionAt("Partial listing court", publisherId),
+        caseNumber: "NALUS record 8801",
+        caseNumberIsPlaceholder: true,
+        fulltext: undefined,
+        isListingOnly: true,
+        metadata: { listedOnly: true, listingDocketMissing: true },
+        rawHash: "hash-partial-placeholder",
+      };
+      await processDecision({
+        input: partial,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const recoveredCaseNumber = "II.ÚS 8801/24";
+      await processDecision({
+        input: {
+          ...partial,
+          caseNumber: recoveredCaseNumber,
+          caseNumberIsPlaceholder: undefined,
+          metadata: { listedOnly: true, listingDocketMissing: false },
+          rawHash: "hash-partial-with-docket",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const [row] = await db.execute(
+        sql<{
+          caseNumber: string;
+          citationKey: string;
+          metadata: Record<string, unknown>;
+          sourceHash: string;
+        }>`
+          SELECT case_number AS "caseNumber",
+                 citation_key AS "citationKey",
+                 metadata,
+                 source_hash AS "sourceHash"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(row).toMatchObject({
+        caseNumber: recoveredCaseNumber,
+        citationKey: bareCitationKey(recoveredCaseNumber),
+        sourceHash: "hash-partial-with-docket",
+      });
+      expect(
+        isRecord(row) && isRecord(row["metadata"])
+          ? row["metadata"]["listingDocketMissing"]
+          : undefined,
+      ).toBe(false);
+    });
+
+    test("binds a legacy row before a listing-only preservation return", async () => {
+      const publisherId = "listing-only-legacy-binding";
+      const legacyUrl = "https://publisher.test/listing-only-legacy";
+      const legacy = {
+        ...decisionAt("Listing-only legacy", undefined),
+        sourceUrl: legacyUrl,
+      };
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: publisherId,
+          legacySourceUrls: [legacyUrl],
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-binding",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: publisherId,
+          sourceUrl: "https://publisher.test/current-listing",
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-without-legacy-hint",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const rows = await db.execute(sql<{ count: number; identified: number }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${publisherId}
+               )::int AS identified
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["identified"]) : 0).toBe(1);
+    });
+
     test("an older overlapping observation cannot overwrite a newer winner", async () => {
       const publisherId = "observed-order";
       const newer = decisionAt("Newest observation", publisherId);
@@ -726,6 +849,60 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         scopedDb: racingDb,
         observedAt: new Date("2026-07-31T12:04:01.000Z"),
+      });
+
+      expect(transactions).toBe(3);
+      expect(outcome).toEqual({
+        status: "retryable",
+        inserted: false,
+        reason: "corpus-write",
+      });
+    });
+
+    test("a listing-only watermark race holds a pending winner for replay", async () => {
+      const publisherId = "listing-only-watermark-pending-winner";
+      const initial = decisionAt("Listing-only race detail", publisherId);
+
+      await processDecision({
+        input: initial,
+        observationOrder: 50n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:05:00.000Z"),
+      });
+
+      let transactions = 0;
+      const racingDb: ScopedDb = async (transactionWork) => {
+        transactions += 1;
+        if (transactions === 2) {
+          await db
+            .update(caseLawDecisions)
+            .set({
+              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+              sourceObservationOrder: 52n,
+            })
+            .where(
+              and(
+                eq(caseLawDecisions.sourceId, sourceId),
+                eq(caseLawDecisions.sourceDocumentId, publisherId),
+              ),
+            );
+        }
+        return await scopedDb(transactionWork);
+      };
+
+      const outcome = await processDecision({
+        input: {
+          ...initial,
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "hash-listing-only-watermark-race",
+        },
+        observationOrder: 51n,
+        sourceId,
+        scopedDb: racingDb,
+        observedAt: new Date("2026-07-31T12:05:01.000Z"),
       });
 
       expect(transactions).toBe(3);

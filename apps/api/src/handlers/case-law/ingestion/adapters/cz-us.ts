@@ -679,6 +679,35 @@ const coverageSlice = (state: CursorState): string => {
 const hiddenField = (html: string, name: string): string | undefined =>
   cheerio.load(html)(`#${name}`).attr("value");
 
+/**
+ * Stable publisher-visible fields for an anomalous row that exposes neither
+ * normal NALUS identity. Render position is deliberately absent: WebForms
+ * alternates CSS classes and embeds `pos`/`cnt` in links, so hashing the row
+ * markup would mint a new quarantine identity whenever result order moves.
+ */
+const quarantineFingerprint = ({
+  primaryText,
+  actionsText,
+  registrySign,
+  ecli,
+}: {
+  primaryText: string;
+  actionsText: string;
+  registrySign: string;
+  ecli: string | undefined;
+}): string => {
+  const normalize = (value: string): string =>
+    value.replace(/\s+/gu, " ").trim();
+  return hashContent(
+    JSON.stringify({
+      primaryText: normalize(primaryText),
+      actionsText: normalize(actionsText),
+      registrySign: normalize(registrySign),
+      ecli: ecli ?? null,
+    }),
+  );
+};
+
 const cookieHeader = (responses: readonly Response[]): string => {
   const cookies = new Map<string, string>();
   for (const response of responses) {
@@ -786,16 +815,21 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       }
     }
     const listingHtml = `${primary.toString()}${actions.toString()}`;
-    // The count banner says this is a publisher record even if a malformed or
-    // withdrawn row exposes neither of NALUS's normal identities. Give that
-    // terminal listing payload a content-addressed quarantine identity so one
-    // poison row cannot pin the entire immutable reconciliation slice.
-    const quarantineId =
-      nalusRecordId === undefined && sz === undefined
-        ? hashContent(listingHtml)
-        : undefined;
     const ecli = /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0);
     const registrySign = detail.text();
+    // The count banner says this is a publisher record even if a malformed or
+    // withdrawn row exposes neither of NALUS's normal identities. Give that
+    // terminal listing a content-addressed quarantine identity derived from
+    // semantic fields so one poison row cannot pin the reconciliation slice.
+    const quarantineId =
+      nalusRecordId === undefined && sz === undefined
+        ? quarantineFingerprint({
+            primaryText: primary.text(),
+            actionsText: actions.text(),
+            registrySign,
+            ecli,
+          })
+        : undefined;
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
       "counter"
     ];

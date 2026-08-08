@@ -74,6 +74,7 @@ const makeResultsPage = (
   rows: readonly ResultRow[],
   rangeFrom: number,
   reported: number,
+  renderPositionOffset = 0,
 ): string => {
   const rangeTo = rangeFrom + rows.length - 1;
   const body = rows
@@ -85,14 +86,14 @@ const makeResultsPage = (
           : row.textUrl;
       const detailUrl =
         row.id === undefined
-          ? "ResultDetail.aspx?malformed=true"
-          : `ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result`;
+          ? `ResultDetail.aspx?malformed=true&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}`
+          : `ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}&typ=result`;
       return `
-<tr class='resultData${index % 2}'>
+<tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
   <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
-<tr class='resultData${index % 2}' valign="top">
+<tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
   <td>${textUrl ? `<img onclick='javascript:ShowLink("${textUrl}", "Odkaz", "")' />` : ""}</td>
 </tr>`;
     })
@@ -134,6 +135,7 @@ type MockSearchOptions = {
   abstractStatus?: number;
   detailStatus?: number;
   unparseableDetail?: boolean;
+  renderPositionOffset?: number;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
   onDetail?: (url: URL, init?: RequestInit) => void;
 };
@@ -148,6 +150,7 @@ const installSearchMock = ({
   abstractStatus = 200,
   detailStatus = 200,
   unparseableDetail = false,
+  renderPositionOffset = 0,
   onPost,
   onDetail,
 }: MockSearchOptions): void => {
@@ -179,7 +182,9 @@ const installSearchMock = ({
       }
       if (url.pathname.endsWith("/Search/Results.aspx")) {
         return Promise.resolve(
-          new Response(makeResultsPage(rows, rangeFrom, reported)),
+          new Response(
+            makeResultsPage(rows, rangeFrom, reported, renderPositionOffset),
+          ),
         );
       }
       if (url.pathname.endsWith("/Search/GetText.aspx")) {
@@ -816,6 +821,17 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions[0]?.sourceRaw).toContain("Pl.ÚS 10/24");
 
+    installSearchMock({
+      rows: [
+        {
+          sz: "",
+          caseNumber: "Pl.ÚS 10/24",
+          date: "4. 1. 2024",
+          textUrl: null,
+        },
+      ],
+      renderPositionOffset: 1,
+    });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.coverage).toEqual({
       slice: "decision-year:2024",

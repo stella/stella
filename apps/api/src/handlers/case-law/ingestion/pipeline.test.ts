@@ -18,6 +18,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -109,6 +110,30 @@ describe("sanitizeResult — adapter-supplied sections", () => {
     });
 
     expect(sanitized.sections?.at(0)?.title).toBeNull();
+  });
+});
+
+describe("sanitizeResult — shared partial-observation quality", () => {
+  test("persists adapter-neutral quality and removes it after detail recovery", () => {
+    const partial = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      caseNumberIsPlaceholder: true,
+      isListingOnly: true,
+    });
+    expect(partialObservationFromMetadata(partial.metadata)).toEqual({
+      caseNumberIsPlaceholder: true,
+      isListingOnly: true,
+    });
+
+    const recovered = sanitizeResult({
+      ...partial,
+      caseNumberIsPlaceholder: undefined,
+      isListingOnly: undefined,
+    });
+    expect(partialObservationFromMetadata(recovered.metadata)).toEqual({
+      caseNumberIsPlaceholder: false,
+      isListingOnly: false,
+    });
   });
 });
 

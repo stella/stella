@@ -68,7 +68,10 @@ import {
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
-import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  partialObservationFromMetadata,
+  sanitizeResult,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -645,24 +648,22 @@ const processDecisionAttempt = async ({
       return undefined;
     }
 
-    if (legacy.redactedAt) {
-      // Preserve the tombstone and all of its payload fields. Binding only
-      // the verified publisher identity prevents this null-id row from
-      // swallowing every sibling under the same docket on later replays.
-      // audit: skip — background identity repair for public case-law data
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          sourceDocumentId: result.sourceDocumentId,
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawDecisions.id, legacy.id),
-            isNull(caseLawDecisions.sourceDocumentId),
-          ),
-        );
-    }
+    // Bind the verified publisher identity before any partial-observation or
+    // tombstone fast path can return. Otherwise a later listing that loses its
+    // ECLI/legacy URL hint can insert the same publisher document again.
+    // audit: skip — background identity repair for public case-law data
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        sourceDocumentId: result.sourceDocumentId,
+        updatedAt: sql`${caseLawDecisions.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(caseLawDecisions.id, legacy.id),
+          isNull(caseLawDecisions.sourceDocumentId),
+        ),
+      );
     return legacy;
   });
 
@@ -674,11 +675,17 @@ const processDecisionAttempt = async ({
     };
   }
 
+  const storedPartialObservation = existing
+    ? partialObservationFromMetadata(existing.metadata)
+    : { caseNumberIsPlaceholder: false, isListingOnly: false };
   const preservesExistingDetail =
-    result.caseNumberIsPlaceholder === true || result.isListingOnly === true;
+    existing !== undefined &&
+    ((result.caseNumberIsPlaceholder === true &&
+      !storedPartialObservation.caseNumberIsPlaceholder) ||
+      (result.isListingOnly === true &&
+        !storedPartialObservation.isListingOnly));
 
   if (
-    existing &&
     preservesExistingDetail &&
     existing.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
   ) {
@@ -688,24 +695,88 @@ const processDecisionAttempt = async ({
     // or payload fields would make a temporary publisher regression durable.
     // A pending corpus mirror deliberately continues below: it must replay
     // the stored payload before this source page is allowed to advance.
-    await scopedDb(async (tx) => {
-      // audit: skip — background case-law observation watermark; public data
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawDecisions.id, existing.id),
-            storedObservationPrecedes({ order: observationOrder }),
-            isNull(caseLawDecisions.redactedAt),
-          ),
-        );
-    });
+    const watermarkAdvanced = await scopedDb(
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      async (tx) => {
+        // audit: skip — background case-law observation watermark; public data
+        return (
+          await tx
+            .update(caseLawDecisions)
+            .set({
+              sourceObservedAt: observedAt,
+              sourceObservationOrder: observationOrder,
+              sourceObservationHash: result.rawHash,
+              updatedAt: sql`${caseLawDecisions.updatedAt}`,
+            })
+            .where(
+              and(
+                eq(caseLawDecisions.id, existing.id),
+                storedObservationPrecedes({ order: observationOrder }),
+                isNull(caseLawDecisions.redactedAt),
+                eq(
+                  caseLawDecisions.corpusMirrorStatus,
+                  CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                ),
+              ),
+            )
+            .returning({ id: caseLawDecisions.id })
+        ).at(0);
+      },
+    );
+    if (!watermarkAdvanced) {
+      const current = await scopedDb((tx) =>
+        tx.query.caseLawDecisions.findFirst({
+          where: { id: { eq: existing.id } },
+          columns: {
+            corpusMirrorStatus: true,
+            sourceObservationOrder: true,
+            redactedAt: true,
+          },
+        }),
+      );
+      if (current?.redactedAt) {
+        return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
+          inserted: false,
+          searchVectorFailed: false,
+        };
+      }
+      if (
+        current?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+      ) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+        };
+      }
+      if (
+        !current ||
+        (current.sourceObservationOrder !== null &&
+          current.sourceObservationOrder >= observationOrder)
+      ) {
+        return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
+          inserted: false,
+          searchVectorFailed: false,
+        };
+      }
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt,
+        observationOrder,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+      });
+    }
     return {
       status: PROCESS_DECISION_STATUS.COMPLETE,
       inserted: false,
@@ -818,16 +889,15 @@ const processDecisionAttempt = async ({
 
   // Upload sourceRaw to S3 — best-effort; failure must not
   // prevent the decision from being inserted.
-  const rawPayload =
-    preservesExistingDetail && existing
-      ? undefined
-      : (result.sourceRawBytes ?? result.sourceRaw);
+  const rawPayload = preservesExistingDetail
+    ? undefined
+    : (result.sourceRawBytes ?? result.sourceRaw);
   const rawContentType = result.sourceRawContentType ?? "text/plain";
 
   let sourceRawS3Key: string | null = null;
   let sourceRawContentType: string | null = null;
   let s3UploadFailed = false;
-  if (preservesExistingDetail && existing) {
+  if (preservesExistingDetail) {
     sourceRawS3Key = existing.sourceRawS3Key;
     sourceRawContentType = existing.sourceRawContentType;
   } else if (rawPayload !== undefined) {
