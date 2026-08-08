@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
 const originalStderrWrite = process.stderr.write;
@@ -69,6 +70,46 @@ describe("logger attributes", () => {
     expect(output).not.toContain("secret.pdf");
     expect(output).not.toContain("fileName");
     expect(output).not.toContain('"body"');
+  });
+
+  // A record that reaches no sink is indistinguishable from one that was
+  // never emitted, so every severity needs a stated disposition rather than
+  // one example per direction. `satisfies` over the logger's own severity
+  // methods keeps the map total: a new method fails to typecheck until
+  // someone decides whether it is readable in the deployed runtime.
+  // Each entry carries its own emitter, so the loop iterates the map rather
+  // than a parallel list of names that could drift away from it.
+  const STREAM_DISPOSITION = {
+    debug: { emit: logger.debug, reaches: "no-sink" },
+    error: { emit: logger.error, reaches: "stream" },
+    info: { emit: logger.info, reaches: "stream" },
+    warn: { emit: logger.warn, reaches: "stream" },
+  } as const satisfies Record<
+    Exclude<keyof typeof logger, "request">,
+    {
+      emit: (message: string, attributes?: LoggerAttributes) => void;
+      reaches: "no-sink" | "stream";
+    }
+  >;
+
+  test("mirrors every severity above debug to the stream, and only those", () => {
+    for (const { emit, reaches } of Object.values(STREAM_DISPOSITION)) {
+      const chunks: string[] = [];
+      process.stderr.write = (chunk: string | Uint8Array): boolean => {
+        chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+        return true;
+      };
+
+      emit("test.event", { "http.route": "/test" });
+
+      const output = chunks.join("");
+      if (reaches === "stream") {
+        expect(output).toContain('"message":"test.event"');
+        expect(output).toContain('"http.route":"/test"');
+      } else {
+        expect(output).toBe("");
+      }
+    }
   });
 
   test("request sink emits only structured operational fields", () => {
