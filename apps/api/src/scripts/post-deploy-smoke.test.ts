@@ -316,21 +316,34 @@ describe("allChecksPassed", () => {
 });
 
 describe("buildChatSmokeBody", () => {
-  test("produces a fresh thread id and a user text message", () => {
+  test("produces a valid AG-UI envelope with a fresh thread and run", () => {
     const body = buildChatSmokeBody();
-    expect(body.sendMode).toBe("rawOverride");
     const uuid =
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
     expect(body.threadId).toMatch(uuid);
-    const { message } = body;
+    expect(body.runId).toMatch(uuid);
+    expect(body.state).toEqual({});
+    expect(body.tools).toEqual([]);
+    expect(body.context).toEqual([]);
+
+    const { message } = body.forwardedProps;
+    expect(body.forwardedProps).toEqual({
+      threadId: body.threadId,
+      runId: body.runId,
+      sendMode: "rawOverride",
+      message,
+    });
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body.messages).toEqual([message]);
     expect(message.role).toBe("user");
     expect(message.id).toMatch(uuid);
     expect(message.parts).toEqual([{ type: "text", text: "ping" }]);
   });
 
   test("each call uses a distinct thread id", () => {
-    expect(buildChatSmokeBody().threadId).not.toBe(
-      buildChatSmokeBody().threadId,
-    );
+    const first = buildChatSmokeBody();
+    const second = buildChatSmokeBody();
+    expect(first.threadId).not.toBe(second.threadId);
+    expect(first.runId).not.toBe(second.runId);
   });
 });

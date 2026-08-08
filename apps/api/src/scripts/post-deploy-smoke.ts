@@ -56,14 +56,28 @@ const smokeSessionSchema = v.strictObject({
 
 type SmokeSession = v.InferOutput<typeof smokeSessionSchema>;
 
+type ChatSmokeMessage = {
+  id: string;
+  role: "user";
+  parts: { type: "text"; text: string }[];
+};
+
+type ChatSmokeForwardedProps = {
+  threadId: string;
+  runId: string;
+  sendMode: "rawOverride";
+  message: ChatSmokeMessage;
+};
+
 type ChatSmokeBody = {
   threadId: string;
-  sendMode: "rawOverride";
-  message: {
-    id: string;
-    role: "user";
-    parts: { type: "text"; text: string }[];
-  };
+  runId: string;
+  state: Record<string, never>;
+  messages: ChatSmokeMessage[];
+  tools: never[];
+  context: never[];
+  forwardedProps: ChatSmokeForwardedProps;
+  data: ChatSmokeForwardedProps;
 };
 
 const CHECK_MODE = {
@@ -315,20 +329,37 @@ const parseSmokeSession = (value: unknown): SmokeSession => {
 };
 
 /**
- * Minimal valid `POST /v1/chat/` body that triggers a real chat turn: a
- * fresh global thread (the handler creates it) plus one user text
- * message. No workspace is referenced, so no matter provisioning is
- * needed for the synthetic org.
+ * Minimal valid AG-UI `POST /v1/chat/` envelope that triggers a real chat
+ * turn: a fresh global thread (the handler creates it) plus one user text
+ * message. No workspace is referenced, so no matter provisioning is needed
+ * for the synthetic org.
  */
-export const buildChatSmokeBody = (): ChatSmokeBody => ({
-  threadId: Bun.randomUUIDv7(),
-  sendMode: "rawOverride",
-  message: {
+export const buildChatSmokeBody = (): ChatSmokeBody => {
+  const threadId = Bun.randomUUIDv7();
+  const runId = Bun.randomUUIDv7();
+  const message: ChatSmokeMessage = {
     id: Bun.randomUUIDv7(),
     role: "user",
     parts: [{ type: "text", text: "ping" }],
-  },
-});
+  };
+  const forwardedProps: ChatSmokeForwardedProps = {
+    threadId,
+    runId,
+    sendMode: "rawOverride",
+    message,
+  };
+
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [message],
+    tools: [],
+    context: [],
+    forwardedProps,
+    data: forwardedProps,
+  };
+};
 
 const mintSmokeSession = async (
   baseUrl: string,
