@@ -46,6 +46,7 @@ export const lookupByMbs = async (
   try {
     html = await response.text();
   } catch (error) {
+    options?.signal?.throwIfAborted();
     throw new SudregAPIError({
       message: "SUDREG response body was unreadable",
       httpStatus: response.status,

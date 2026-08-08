@@ -237,6 +237,9 @@ describe("classifyToolError: structured envelope -> exit map (S4)", () => {
     expect(classifyToolError(envelope("conflict"))).toBe(EXIT_CODES.conflict);
     expect(EXIT_CODES.conflict).toBe(10);
     expect(classifyToolError(envelope("rate_limited"))).toBe(EXIT_CODES.server);
+    expect(classifyToolError(envelope("upstream_unavailable"))).toBe(
+      EXIT_CODES.server,
+    );
     expect(classifyToolError(envelope("unknown_tool"))).toBe(EXIT_CODES.server);
     expect(classifyToolError(envelope("internal_error"))).toBe(
       EXIT_CODES.server,

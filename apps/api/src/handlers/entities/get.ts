@@ -47,7 +47,7 @@ export const readEntityByIdHandler = async function* ({
         },
         with: {
           currentVersion: {
-            columns: { id: true },
+            columns: { createdAt: true, id: true },
             with: {
               // Fields of one entity version: at most one row per property
               // (fields_property_id_entity_version_id_key), so this is
@@ -90,6 +90,8 @@ export const readEntityByIdHandler = async function* ({
     entityId,
     kind: entity.kind,
     name: entity.name,
+    currentVersionId: entity.currentVersion.id,
+    currentVersionCreatedAt: entity.currentVersion.createdAt,
     fields: entity.currentVersion.fields,
   });
 };

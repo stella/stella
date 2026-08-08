@@ -150,7 +150,7 @@ describe("performRegistryRequest", () => {
     expect(await captureThrown(request)).toBe(reason);
   });
 
-  test("removes caller listeners after the request settles", async () => {
+  test("retains caller cancellation after headers settle so stalled bodies abort", async () => {
     const controller = new AbortController();
     let requestSignal: AbortSignal | null | undefined;
     restore = installFetchStub(async (_input, init) => {
@@ -165,7 +165,7 @@ describe("performRegistryRequest", () => {
     });
 
     controller.abort();
-    expect(requestSignal?.aborted).toBe(false);
+    expect(requestSignal?.aborted).toBe(true);
   });
 
   test("retains the timeout and maps it as a transport failure", async () => {
@@ -220,6 +220,34 @@ describe("readRegistryJson", () => {
       }),
     );
     expect(error).toBeInstanceOf(ParseMarkerError);
+  });
+
+  test("preserves caller cancellation during body decoding", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    const response = new Response(
+      new ReadableStream({
+        start(streamController) {
+          controller.signal.addEventListener(
+            "abort",
+            () => streamController.error(controller.signal.reason),
+            { once: true },
+          );
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+    const read = readRegistryJson({
+      response,
+      signal: controller.signal,
+      isExpectedShape: isShape,
+      wrapParseError: (cause) => new ParseMarkerError("parse", { cause }),
+      wrapShapeError: () => new ShapeMarkerError("shape"),
+    });
+
+    controller.abort(reason);
+
+    expect(await captureThrown(read)).toBe(reason);
   });
 
   test("maps an unexpected shape to the shape error", async () => {

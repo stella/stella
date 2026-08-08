@@ -11,6 +11,7 @@ import { compareCodepoint } from "@/api/lib/collation";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -140,7 +141,7 @@ const buildSearchDocument = async (
         columns: { organizationId: true },
       },
       currentVersion: {
-        columns: { id: true },
+        columns: { createdAt: true, id: true },
         with: {
           fields: {
             columns: { content: true, id: true, propertyId: true },
@@ -150,6 +151,7 @@ const buildSearchDocument = async (
       extractedContent: {
         columns: {
           ciphertext: true,
+          extractedAt: true,
           iv: true,
           language: true,
           sourceEntityVersionId: true,
@@ -168,6 +170,16 @@ const buildSearchDocument = async (
   const workspace = entity.workspace ?? panic("Entity has no workspace");
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
+  const latestVersion = await rootDb.query.entityVersions.findFirst({
+    where: {
+      entityId: { eq: entityId },
+      workspaceId: { eq: entity.workspaceId },
+    },
+    columns: { id: true },
+    // Include tombstones: a deleted newer version must keep legacy,
+    // provenance-free text from being attributed to a promoted old version.
+    orderBy: { versionNumber: "desc", id: "desc" },
+  });
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -202,24 +214,13 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
-  const isLegacyExtractedContent =
-    extractedContentRow?.sourceEntityVersionId === null &&
-    extractedContentRow.sourceFieldId === null &&
-    extractedContentRow.sourceFileId === null &&
-    extractedContentRow.sourceSha256Hex === null;
-  const currentExtractedContent =
-    extractedContentRow &&
-    (isLegacyExtractedContent ||
-      (extractedContentRow.sourceEntityVersionId === version.id &&
-        version.fields.some(
-          (field) =>
-            field.id === extractedContentRow.sourceFieldId &&
-            field.content.type === "file" &&
-            field.content.id === extractedContentRow.sourceFileId &&
-            field.content.sha256Hex === extractedContentRow.sourceSha256Hex,
-        )))
-      ? extractedContentRow
-      : null;
+  const currentExtractedContent = selectCurrentExtractedContent({
+    extracted: extractedContentRow,
+    allowLegacy: latestVersion?.id === version.id,
+    currentVersionCreatedAt: version.createdAt,
+    currentVersionId: version.id,
+    fields: version.fields,
+  });
   if (currentExtractedContent) {
     const { ciphertext, iv } = currentExtractedContent;
     language = isoToRegconfig(currentExtractedContent.language);

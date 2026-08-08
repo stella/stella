@@ -71,6 +71,8 @@ const translateBody = t.Object({
 });
 
 const config = {
+  description:
+    "Translate a document file with the organization's configured translation provider and save the translated result as a new document.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: translateBody,

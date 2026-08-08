@@ -946,7 +946,7 @@
       "scope": "read"
     },
     "name": "read_document",
-    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
+    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when searchable-text OCR is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1154,7 +1154,7 @@
       "itemsKey": "properties"
     },
     "name": "list_properties",
-    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, or int), and status. Use the returned property id with set_field_value to set a document's value for that property.",
+    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2433,7 +2433,7 @@
       "itemsKey": "items"
     },
     "name": "list_capabilities",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, a one-line summary, and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive and file-transport flags, handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "inputSchema": {
       "type": "object",
       "properties": {

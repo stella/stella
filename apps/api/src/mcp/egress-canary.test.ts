@@ -621,12 +621,31 @@ describe("MCP anonymization canary corpus", () => {
     decryptContentMock.mockResolvedValue(textSeed);
     const tx = {
       query: {
+        entities: {
+          findFirst: async () => ({
+            kind: "document",
+            name: nameSeed,
+            workspaceId: "ws_1",
+            currentVersion: {
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              id: "ver_current",
+              fields: [],
+            },
+          }),
+        },
         extractedContent: {
           findFirst: async () => ({
             ciphertext: "cipher",
+            extractedAt: new Date("2026-01-02T00:00:00.000Z"),
             iv: "iv",
-            entity: { kind: "document", name: nameSeed, workspaceId: "ws_1" },
+            sourceEntityVersionId: null,
+            sourceFieldId: null,
+            sourceFileId: null,
+            sourceSha256Hex: null,
           }),
+        },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
         },
       },
     };
@@ -725,12 +744,15 @@ describe("MCP anonymization canary corpus", () => {
       query: {
         entities: {
           findFirst: async () => ({
+            createdAt: new Date("2025-12-01T00:00:00.000Z"),
             workspaceId: "ws_1",
             kind: "document",
             name: nameSeed,
+            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
             // readEntityByIdHandler reads the current version's fields via the
             // `currentVersion` relation (folded into one tombstone-safe query).
             currentVersion: {
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
               id: "ver_current",
               fields: [
                 {
@@ -740,6 +762,19 @@ describe("MCP anonymization canary corpus", () => {
                 },
               ],
             },
+          }),
+        },
+        documentProcessingRuns: { findMany: async () => [] },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
+        extractedContent: { findFirst: async () => null },
+        organizationSettings: {
+          findFirst: async () => ({ documentProcessingMode: "off" }),
+        },
+        searchDocuments: {
+          findFirst: async () => ({
+            updatedAt: new Date("2026-01-02T00:00:00.000Z"),
           }),
         },
       },

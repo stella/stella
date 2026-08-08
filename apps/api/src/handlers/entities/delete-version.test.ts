@@ -260,6 +260,13 @@ describe("delete-version chain-of-custody guard", () => {
             "Version-number allocator (nextEntityVersionNumber): MAX(versionNumber) deliberately spans tombstones so a new version never reuses a withdrawn number; reads versionNumber only, no content.",
         },
       ],
+      "lib/search/index-entity.ts": [
+        {
+          anchor: "Include tombstones: a deleted newer version",
+          reason:
+            "Search provenance reads only the newest version ID across tombstones so legacy extracted text cannot be attributed to a promoted older version.",
+        },
+      ],
       "handlers/entities/finalize-desktop-edit-session.ts": [
         {
           anchor: "editSession.baseVersionId",
@@ -279,6 +286,20 @@ describe("delete-version chain-of-custody guard", () => {
           anchor: "sessionPreview.baseVersionId",
           reason:
             "Collab finalize: reads the base version to build the merge target on a write path, gated by an open collab session.",
+        },
+      ],
+      "mcp/document-tools.ts": [
+        {
+          anchor: "Provenance fence: include tombstones",
+          reason:
+            "MCP processing-state provenance reads only the latest version ID across tombstones so a rollback cannot expose stale extracted text.",
+        },
+      ],
+      "mcp/stella-tools.ts": [
+        {
+          anchor: "Provenance fence: include tombstones",
+          reason:
+            "MCP content provenance reads only the latest version ID across tombstones so a rollback cannot expose withdrawn extracted text.",
         },
       ],
     };
@@ -391,6 +412,29 @@ describe("delete-version chain-of-custody guard", () => {
     expect(source.indexOf("isNull(entityVersions.deletedAt)")).toBeGreaterThan(
       txStart,
     );
+    // Restoring creates a new current-version timestamp. It must also queue
+    // extraction/indexing after the transaction so freshness-filtered search
+    // does not hide the document forever.
+    const restoredCheck = source.indexOf("if (!restoreOutcome.restored)");
+    expect(
+      source.indexOf("processExtraction(params.entityId)"),
+    ).toBeGreaterThan(restoredCheck);
+  });
+
+  test("deleting the current version withdraws and rebuilds its search projection", () => {
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+    const txStart = source.indexOf("safeDb(async (tx) =>");
+    const projectionDelete = source.indexOf(".delete(searchDocuments)");
+    const txEnd = source.indexOf("if (!txOutcome.ok)");
+
+    expect(projectionDelete).toBeGreaterThan(txStart);
+    expect(projectionDelete).toBeLessThan(txEnd);
+    expect(
+      source.indexOf("processExtraction(params.entityId)"),
+    ).toBeGreaterThan(txEnd);
   });
 
   test("every entityVersions UPDATE gates on deletedAt or is a reviewed write", () => {

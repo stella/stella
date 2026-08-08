@@ -88,6 +88,7 @@ const zefixSearch = async ({
   try {
     body = await response.json();
   } catch (error) {
+    signal?.throwIfAborted();
     throw new ZefixAPIError({
       message: `Zefix ${response.status}: invalid JSON payload`,
       httpStatus: response.status,

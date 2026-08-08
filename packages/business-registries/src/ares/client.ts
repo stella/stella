@@ -121,11 +121,13 @@ const parseErrorBody = (value: unknown): AresErrorResponse => {
 const handleAresError = async (
   response: Response,
   url: string,
+  signal?: AbortSignal,
 ): Promise<never> => {
   let body: AresErrorResponse = {};
   try {
     body = parseErrorBody(await response.json());
   } catch {
+    signal?.throwIfAborted();
     // non-JSON error body; leave defaults
   }
 
@@ -147,9 +149,11 @@ const handleAresError = async (
 const readAresJson = async <T>(
   response: Response,
   isExpectedShape: (value: unknown) => value is T,
+  signal?: AbortSignal,
 ): Promise<T> =>
   await readRegistryJson({
     response,
+    signal,
     isExpectedShape,
     wrapParseError: (cause) =>
       new AresAPIError({
@@ -187,6 +191,7 @@ const aresGet = async <T>({
     try {
       body = parseErrorBody(await response.json());
     } catch {
+      signal?.throwIfAborted();
       // ignore
     }
     if (body.kod === "NENALEZENO") {
@@ -201,10 +206,10 @@ const aresGet = async <T>({
   }
 
   if (!response.ok) {
-    await handleAresError(response, url);
+    await handleAresError(response, url, signal);
   }
 
-  return readAresJson(response, isExpectedShape);
+  return readAresJson(response, isExpectedShape, signal);
 };
 
 type AresPostOptions<T> = AresGetOptions<T> & {
@@ -233,10 +238,10 @@ const aresPost = async <T>({
   });
 
   if (!response.ok) {
-    await handleAresError(response, url);
+    await handleAresError(response, url, signal);
   }
 
-  return readAresJson(response, isExpectedShape);
+  return readAresJson(response, isExpectedShape, signal);
 };
 
 // ---------------------------------------------------------------------------
@@ -250,6 +255,8 @@ export type LookupOptions = RegistryClientOptions & {
    * @default true
    */
   includeVr?: boolean;
+  /** Observe a recoverable failure of the optional VR enrichment request. */
+  onVrError?: (error: AresAPIError | AresRequestError) => void;
 };
 
 /**
@@ -274,6 +281,10 @@ export const lookupByIco = async (
   }
 
   const includeVr = options?.includeVr ?? true;
+  const optionalVrController = new AbortController();
+  const optionalVrSignal = options?.signal
+    ? AbortSignal.any([options.signal, optionalVrController.signal])
+    : optionalVrController.signal;
 
   // Fetch RES (always) and VR (optionally, in parallel)
   const resPromise = aresGet({
@@ -285,31 +296,61 @@ export const lookupByIco = async (
     ? aresGet({
         url: `${VR_URL}/${normalized}`,
         isExpectedShape: isAresVrResponse,
-        signal: options?.signal,
+        signal: optionalVrSignal,
       })
     : null;
 
-  const [resData, vrData] = await Promise.all([
-    resPromise,
-    vrPromise ?? Promise.resolve(null),
-  ]);
+  // Attach both handlers immediately so an optional VR rejection is observed,
+  // while allowing the required RES request to fail without waiting for VR.
+  const vrResultPromise = (vrPromise ?? Promise.resolve(null)).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    (error: unknown) => ({ status: "rejected" as const, reason: error }),
+  );
+  try {
+    const resData = await resPromise;
 
-  if (!resData) {
-    return null;
+    if (!resData) {
+      return null;
+    }
+
+    const primaryRecord = resData.zaznamy.find((z) => z.primarniZaznam);
+    if (!primaryRecord) {
+      return null;
+    }
+
+    const company = parseResRecord(primaryRecord);
+
+    if (!includeVr) {
+      return company;
+    }
+
+    const vrResult = await vrResultPromise;
+    if (vrResult.status === "rejected") {
+      // Cancellation remains caller control flow even when it arrives after
+      // VR headers and is wrapped while decoding the response body.
+      options?.signal?.throwIfAborted();
+      if (
+        vrResult.reason instanceof AresAPIError ||
+        vrResult.reason instanceof AresRequestError
+      ) {
+        options?.onVrError?.(vrResult.reason);
+        return { ...company, vrEnrichmentStatus: "unavailable" };
+      }
+      throw vrResult.reason;
+    }
+
+    if (!vrResult.value) {
+      return { ...company, vrEnrichmentStatus: "not_found" };
+    }
+
+    return enrichWithVr(company, vrResult.value);
+  } finally {
+    // RES is authoritative. If it fails or has no usable record, stop the
+    // optional parallel enrichment request instead of leaving it in flight
+    // until the registry timeout. Aborting an already-settled VR request is a
+    // harmless no-op on the successful path.
+    optionalVrController.abort();
   }
-
-  const primaryRecord = resData.zaznamy.find((z) => z.primarniZaznam);
-  if (!primaryRecord) {
-    return null;
-  }
-
-  let company = parseResRecord(primaryRecord);
-
-  if (vrData) {
-    company = enrichWithVr(company, vrData);
-  }
-
-  return company;
 };
 
 export type SearchOptions = RegistryClientOptions & {

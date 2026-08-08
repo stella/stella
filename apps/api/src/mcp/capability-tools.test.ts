@@ -219,7 +219,16 @@ describe("list_capabilities", () => {
   test("returns id/summary/scope items and paginates by cursor", async () => {
     const first = await call("list_capabilities", { limit: 5 });
     const payload = parseToolPayload<{
-      items: { id: string; summary: string; scope: string }[];
+      items: {
+        id: string;
+        summary: string;
+        scope: string;
+        access: string;
+        destructive: boolean;
+        handlerKind: string;
+        requiresFileInput: boolean;
+        returnsFileResponse: boolean;
+      }[];
       nextCursor: string | null;
       limit: number;
     }>(first);
@@ -230,6 +239,11 @@ describe("list_capabilities", () => {
       expect(typeof item.id).toBe("string");
       expect(typeof item.summary).toBe("string");
       expect(item.scope.startsWith("stella:")).toBe(true);
+      expect(["read", "write"]).toContain(item.access);
+      expect(typeof item.destructive).toBe("boolean");
+      expect(["workspace", "root"]).toContain(item.handlerKind);
+      expect(typeof item.requiresFileInput).toBe("boolean");
+      expect(typeof item.returnsFileResponse).toBe("boolean");
     }
 
     const second = await call("list_capabilities", {

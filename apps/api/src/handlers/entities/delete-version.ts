@@ -8,7 +8,9 @@ import {
   entities,
   entityVersions,
   folioCollabSessions,
+  searchDocuments,
 } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -17,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
@@ -230,6 +233,17 @@ export const deleteEntityVersionHandler = async function* ({
               updatedAt: new Date(),
             })
             .where(eq(entities.id, params.entityId));
+          // The existing projection belongs to the withdrawn current version.
+          // Remove it atomically with promotion; post-commit processing below
+          // rebuilds the promoted version's projection.
+          await tx
+            .delete(searchDocuments)
+            .where(
+              and(
+                eq(searchDocuments.entityId, params.entityId),
+                eq(searchDocuments.workspaceId, workspaceId),
+              ),
+            );
           promotedVersionId = next.id;
         }
       }
@@ -328,7 +342,7 @@ export const deleteEntityVersionHandler = async function* ({
       }
       await recordAuditEvent(tx, events);
 
-      return { ok: true as const };
+      return { ok: true as const, promotedVersionId };
     }),
   );
 
@@ -337,6 +351,16 @@ export const deleteEntityVersionHandler = async function* ({
       new HandlerError({
         status: txOutcome.status,
         message: txOutcome.message,
+      }),
+    );
+  }
+
+  const promotedVersionId = txOutcome.promotedVersionId;
+  if (promotedVersionId !== null) {
+    await processExtraction(params.entityId).catch((error: unknown) =>
+      captureError(error, {
+        entityId: params.entityId,
+        versionId: promotedVersionId,
       }),
     );
   }

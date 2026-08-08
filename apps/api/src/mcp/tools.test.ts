@@ -8,7 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -410,17 +410,23 @@ type ExtractedContentRow = {
   charCount: number;
   ciphertext: string;
   entityId: string;
+  extractedAt: Date;
   entity: {
     kind: string;
     name: string;
     workspaceId: string;
   };
   iv: string;
+  sourceEntityVersionId: string | null;
+  sourceFieldId: string | null;
+  sourceFileId: string | null;
+  sourceSha256Hex: string | null;
   workspaceId: string;
 };
 
 type MockEqFilter = {
   eq?: unknown;
+  in?: unknown[];
 };
 
 type MockEntityFindFirstInput = {
@@ -432,13 +438,26 @@ type MockEntityFindFirstInput = {
 
 type MockFieldContent = { type: string; [key: string]: unknown };
 
+type MockProcessingRunQueryInput = {
+  where?: {
+    fieldId?: MockEqFilter;
+    sourceFileId?: MockEqFilter;
+    sourceSha256Hex?: MockEqFilter;
+  };
+  limit?: number;
+};
+
 type MockMcpTransaction = {
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
+        createdAt: Date;
         kind: string;
         name: string;
+        updatedAt: Date;
+        workspaceId: string;
         currentVersion: {
+          createdAt: Date;
           id: string;
           fields: {
             id: string;
@@ -447,6 +466,12 @@ type MockMcpTransaction = {
           }[];
         } | null;
       } | null>;
+    };
+    documentProcessingRuns: {
+      findMany: (input?: MockProcessingRunQueryInput) => Promise<unknown[]>;
+    };
+    entityVersions: {
+      findFirst: () => Promise<{ id: string } | null>;
     };
     extractedContent: {
       findFirst: () => Promise<ExtractedContentRow | null>;
@@ -459,6 +484,12 @@ type MockMcpTransaction = {
           propertyId: string;
         }[]
       >;
+    };
+    organizationSettings: {
+      findFirst: () => Promise<{ documentProcessingMode: string }>;
+    };
+    searchDocuments: {
+      findFirst: () => Promise<{ updatedAt: Date } | undefined>;
     };
   };
   select: () => ReturnType<typeof createSelectBuilder>;
@@ -478,12 +509,17 @@ const createExtractedContentRow = ({
   charCount,
   ciphertext: "ciphertext",
   entityId,
+  extractedAt: new Date("2026-01-02T00:00:00.000Z"),
   entity: {
     kind: "document",
     name,
     workspaceId,
   },
   iv: "iv",
+  sourceEntityVersionId: null,
+  sourceFieldId: null,
+  sourceFileId: null,
+  sourceSha256Hex: null,
   workspaceId,
 });
 
@@ -504,6 +540,25 @@ const createScopedDb = (
   currentVersionFields: MockFieldContent[] = [
     DEFAULT_CURRENT_VERSION_FILE_CONTENT,
   ],
+  currentDocument: {
+    entityId: string;
+    kind: string;
+    name: string;
+    workspaceId: string;
+  } | null = extractedContentRow
+    ? {
+        entityId: extractedContentRow.entityId,
+        kind: extractedContentRow.entity.kind,
+        name: extractedContentRow.entity.name,
+        workspaceId: extractedContentRow.workspaceId,
+      }
+    : null,
+  processingState: {
+    documentProcessingMode?: "off" | "searchable-text";
+    latestVersionId?: string;
+    runs?: unknown[];
+    searchUpdatedAt?: Date | null;
+  } = {},
 ) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
@@ -513,21 +568,29 @@ const createScopedDb = (
           query: {
             entities: {
               findFirst: async ({ where }: MockEntityFindFirstInput = {}) => {
-                if (!extractedContentRow) {
+                if (!currentDocument) {
                   return null;
                 }
 
+                const allowedWorkspaces = where?.workspaceId?.in;
                 if (
-                  where?.id?.eq !== extractedContentRow.entityId ||
-                  where.workspaceId?.eq !== extractedContentRow.workspaceId
+                  where?.id?.eq !== currentDocument.entityId ||
+                  (where.workspaceId?.eq !== undefined &&
+                    where.workspaceId.eq !== currentDocument.workspaceId) ||
+                  (allowedWorkspaces !== undefined &&
+                    !allowedWorkspaces.includes(currentDocument.workspaceId))
                 ) {
                   return null;
                 }
 
                 return {
-                  kind: extractedContentRow.entity.kind,
-                  name: extractedContentRow.entity.name,
+                  createdAt: new Date("2025-12-01T00:00:00.000Z"),
+                  kind: currentDocument.kind,
+                  name: currentDocument.name,
+                  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                  workspaceId: currentDocument.workspaceId,
                   currentVersion: {
+                    createdAt: new Date("2026-01-01T00:00:00.000Z"),
                     id: "entity_version_1",
                     fields: currentVersionFields.map((content, index) => ({
                       id: `field_${index + 1}`,
@@ -541,6 +604,44 @@ const createScopedDb = (
             extractedContent: {
               findFirst: async () => extractedContentRow,
             },
+            documentProcessingRuns: {
+              findMany: async (input) => {
+                const filtered = (processingState.runs ?? []).filter((run) => {
+                  if (typeof run !== "object" || run === null) {
+                    return true;
+                  }
+                  const sourceFileId =
+                    "sourceFileId" in run ? run.sourceFileId : undefined;
+                  const sourceSha256Hex =
+                    "sourceSha256Hex" in run ? run.sourceSha256Hex : undefined;
+                  const fieldId = "fieldId" in run ? run.fieldId : "field_1";
+                  return (
+                    (input?.where?.fieldId?.eq === undefined ||
+                      fieldId === input.where.fieldId.eq) &&
+                    (input?.where?.sourceFileId?.eq === undefined ||
+                      sourceFileId === input.where.sourceFileId.eq) &&
+                    (input?.where?.sourceSha256Hex?.eq === undefined ||
+                      sourceSha256Hex === input.where.sourceSha256Hex.eq)
+                  );
+                });
+                const selected =
+                  input?.limit === undefined
+                    ? filtered
+                    : filtered.slice(0, input.limit);
+                return selected.map((run) =>
+                  typeof run === "object" && run !== null && !("fieldId" in run)
+                    ? Object.assign(run, {
+                        fieldId: input?.where?.fieldId?.eq,
+                      })
+                    : run,
+                );
+              },
+            },
+            entityVersions: {
+              findFirst: async () => ({
+                id: processingState.latestVersionId ?? "entity_version_1",
+              }),
+            },
             fields: {
               findMany: async () => [
                 {
@@ -549,6 +650,19 @@ const createScopedDb = (
                   propertyId: "property_1",
                 },
               ],
+            },
+            organizationSettings: {
+              findFirst: async () => ({
+                documentProcessingMode:
+                  processingState.documentProcessingMode ?? "off",
+              }),
+            },
+            searchDocuments: {
+              findFirst: async () =>
+                processingState.searchUpdatedAt === undefined ||
+                processingState.searchUpdatedAt === null
+                  ? undefined
+                  : { updatedAt: processingState.searchUpdatedAt },
             },
           },
           select: () => createSelectBuilder(rows),
@@ -1581,6 +1695,115 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(text).not.toContain("Full document text");
   });
 
+  test("read_content_across_matters reads a fresh DOCX before asynchronous extraction exists", async () => {
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb(
+        [],
+        null,
+        [
+          {
+            type: "file",
+            id: "file_1",
+            fileName: "agreement.docx",
+            mimeType: DOCX_MIME_TYPE,
+          },
+        ],
+        {
+          entityId: "entity_1",
+          kind: "document",
+          name: "Fresh Agreement",
+          workspaceId: "ws_1",
+        },
+      ),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      entityId: "entity_1",
+      name: "Fresh Agreement",
+      text: expect.stringContaining("# Agreement"),
+    });
+  });
+
+  test("read_content_across_matters rejects cached text from a previous version", async () => {
+    const stale = {
+      ...createExtractedContentRow(),
+      sourceEntityVersionId: "entity_version_old",
+      sourceFieldId: "field_1",
+      sourceFileId: "file_old",
+      sourceSha256Hex: "a".repeat(64),
+    };
+    const context = createContext({
+      scopedDb: createScopedDb([], stale, [
+        {
+          type: "file",
+          id: "file_current",
+          fileName: "agreement.pdf",
+          mimeType: "application/pdf",
+          sha256Hex: "b".repeat(64),
+        },
+      ]),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "conflict",
+      message: "Current document content is not ready",
+      hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
+      retryable: true,
+    });
+    expect(decryptContentMock).not.toHaveBeenCalled();
+  });
+
+  test("read_content_across_matters rejects legacy text after a version rollback", async () => {
+    const context = createContext({
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow(),
+        [
+          {
+            type: "file",
+            id: "file_current",
+            fileName: "promoted-version.pdf",
+            mimeType: "application/pdf",
+          },
+        ],
+        {
+          entityId: "entity_1",
+          kind: "document",
+          name: "Promoted Version",
+          workspaceId: "ws_1",
+        },
+        { latestVersionId: "entity_version_deleted_newer" },
+      ),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "conflict",
+      message: "Current document content is not ready",
+      hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
+      retryable: true,
+    });
+    expect(decryptContentMock).not.toHaveBeenCalled();
+  });
+
   test("read_content_across_matters selects the SAME file the extraction pipeline indexed, not just any DOCX field", async () => {
     // The current version's first file field (the one `processExtraction`
     // would extract `extractedContentRow`'s plaintext from) is a non-DOCX
@@ -2160,6 +2383,775 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("read_document reports direct DOCX readability separately from pending search indexing", async () => {
+    const currentDocx = {
+      encrypted: false,
+      fileName: "agreement.docx",
+      id: "file_1",
+      mimeType: DOCX_MIME_TYPE,
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb([], null, [currentDocx], {
+          entityId: "entity_1",
+          kind: "document",
+          name: "Fresh Agreement",
+          workspaceId: "ws_1",
+        }),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "ready",
+        source: "direct_docx",
+        sourceVersionId: "entity_version_1",
+      },
+      searchIndexState: {
+        status: "pending",
+        sourceVersionId: "entity_version_1",
+      },
+    });
+  });
+
+  test("read_document does not advertise a failed DOCX source as readable", async () => {
+    const sha256Hex = "a".repeat(64);
+    const currentDocx = {
+      encrypted: false,
+      fileName: "corrupt.docx",
+      id: "file_1",
+      mimeType: DOCX_MIME_TYPE,
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          null,
+          [currentDocx],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Corrupt Agreement",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: "processing_failed",
+                finishedAt: new Date("2026-01-02T00:00:00.000Z"),
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+            ],
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "failed",
+        processingKind: "native-extraction",
+        runId: "run_native",
+        errorCode: "processing_failed",
+        retryable: true,
+      },
+    });
+  });
+
+  test("read_document returns the exact manual OCR action for an extension-resolved PDF when automatic OCR is off", async () => {
+    const textlessProjection = createExtractedContentRow({ charCount: 0 });
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/octet-stream",
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        sourceVersionId: "entity_version_1",
+        remediation: {
+          type: "action",
+          tool: "invoke_capability",
+          arguments: {
+            capability: "entities.ocr.create",
+            input: {
+              params: { workspaceId: "ws_1", entityId: "entity_1" },
+              body: { fieldId: "field_1" },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  test.each([
+    {
+      label: "missing matter-write scope",
+      memberRole: "owner" as const,
+      grantedScopes: ["stella:read"],
+    },
+    {
+      label: "missing entity permission",
+      memberRole: "intern" as const,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    },
+  ])(
+    "read_document returns an OCR escalation for a caller $label",
+    async ({ grantedScopes, memberRole }) => {
+      const textlessProjection = createExtractedContentRow({ charCount: 0 });
+      const currentPdf = {
+        encrypted: false,
+        fileName: "scan.pdf",
+        id: "file_1",
+        mimeType: "application/pdf",
+        pdfFileId: null,
+        sha256Hex: "a".repeat(64),
+        sizeBytes: 128,
+        type: "file",
+        version: 1,
+      };
+      const context = createContext({
+        scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
+      });
+      const result = await handleMcpToolCall({
+        args: { entity_id: "entity_1" },
+        context: {
+          ...context,
+          grantedScopes,
+          memberRole,
+          request: new Request("https://example.test/mcp"),
+        },
+        toolName: "read_document",
+      });
+
+      expect(parseToolPayload(result)).toMatchObject({
+        contentState: {
+          status: "requires_ocr",
+          sourceVersionId: "entity_version_1",
+          remediation: {
+            type: "escalation",
+            requiredScope: "stella:matters_write",
+            requiredPermission: "entity:update",
+          },
+        },
+      });
+    },
+  );
+
+  test("read_document returns an OCR escalation to internal chat", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({ charCount: 0 }),
+          [
+            {
+              encrypted: false,
+              fileName: "scan.pdf",
+              id: "file_1",
+              mimeType: PDF_MIME_TYPE,
+              pdfFileId: null,
+              sha256Hex: "a".repeat(64),
+              sizeBytes: 128,
+              type: "file",
+              version: 1,
+            },
+          ],
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        remediation: { type: "escalation" },
+      },
+    });
+  });
+
+  test("read_document keeps extracted OCR content ready when only indexing failed", async () => {
+    const sha256Hex = "a".repeat(64);
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb(
+            [],
+            createExtractedContentRow(),
+            [currentPdf],
+            {
+              entityId: "entity_1",
+              kind: "document",
+              name: "Scan",
+              workspaceId: "ws_1",
+            },
+            {
+              runs: [
+                {
+                  errorCode: "search_index_failed",
+                  finishedAt: null,
+                  id: "run_ocr",
+                  kind: "ocr",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "failed",
+                },
+              ],
+            },
+          ),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: { status: "ready", source: "extracted_text" },
+      searchIndexState: {
+        status: "failed",
+        errorCode: "search_index_failed",
+        runId: "run_ocr",
+      },
+    });
+  });
+
+  test("read_document treats workspace-unavailable OCR cancellation as terminal", async () => {
+    const sha256Hex = "a".repeat(64);
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({ charCount: 0 }),
+          [
+            {
+              encrypted: false,
+              fileName: "scan.pdf",
+              id: "file_1",
+              mimeType: PDF_MIME_TYPE,
+              pdfFileId: null,
+              sha256Hex,
+              sizeBytes: 128,
+              type: "file",
+              version: 1,
+            },
+          ],
+          undefined,
+          {
+            runs: [
+              {
+                errorCode: "workspace_unavailable",
+                fieldId: "field_1",
+                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                id: "run_ocr",
+                kind: "ocr",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "cancelled",
+              },
+            ],
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "unsupported",
+        reason: "OCR is unavailable while the matter is not active.",
+      },
+    });
+  });
+
+  test("read_document preserves current content and indexing after an optional OCR attempt fails", async () => {
+    const sha256Hex = "a".repeat(64);
+    const nativeIndexedAt = new Date("2026-01-02T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Scan",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: "processing_failed",
+                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                id: "run_ocr",
+                kind: "ocr",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+              {
+                errorCode: null,
+                finishedAt: nativeIndexedAt,
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+            ],
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: { status: "ready", source: "extracted_text" },
+      searchIndexState: {
+        status: "ready",
+        updatedAt: nativeIndexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document treats policy-disabled OCR as manually retryable without masking native indexing", async () => {
+    const sha256Hex = "a".repeat(64);
+    const nativeIndexedAt = new Date("2026-01-02T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "scan.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb(
+            [],
+            createExtractedContentRow({ charCount: 0 }),
+            [currentPdf],
+            {
+              entityId: "entity_1",
+              kind: "document",
+              name: "Scan",
+              workspaceId: "ws_1",
+            },
+            {
+              documentProcessingMode: "off",
+              runs: [
+                {
+                  errorCode: "policy_disabled",
+                  finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                  id: "run_ocr",
+                  kind: "ocr",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "cancelled",
+                },
+                {
+                  errorCode: null,
+                  finishedAt: nativeIndexedAt,
+                  id: "run_native",
+                  kind: "native-extraction",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: sha256Hex,
+                  status: "succeeded",
+                },
+              ],
+              searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            },
+          ),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        remediation: { type: "action" },
+      },
+      searchIndexState: {
+        status: "ready",
+        updatedAt: nativeIndexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document filters processing runs by current source before selecting state", async () => {
+    const sha256Hex = "a".repeat(64);
+    const currentPdf = {
+      encrypted: false,
+      fileName: "current.pdf",
+      id: "file_current",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const supersededRuns = Array.from({ length: 5 }, (_, index) => ({
+      errorCode: null,
+      finishedAt: null,
+      id: `run_old_${index}`,
+      kind: "ocr",
+      sourceFileId: `file_old_${index}`,
+      sourceSha256Hex: "b".repeat(64),
+      status: "running",
+    }));
+    const indexedAt = new Date("2026-01-03T00:00:00.000Z");
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Current PDF",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: "search_index_failed",
+                fieldId: "field_2",
+                finishedAt: new Date("2026-01-04T00:00:00.000Z"),
+                id: "run_wrong_field",
+                kind: "native-extraction",
+                sourceFileId: currentPdf.id,
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+              ...supersededRuns,
+              {
+                errorCode: null,
+                finishedAt: indexedAt,
+                id: "run_current",
+                kind: "native-extraction",
+                sourceFileId: currentPdf.id,
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+            ],
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      searchIndexState: {
+        status: "ready",
+        updatedAt: indexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document uses the newest processing kind for search readiness", async () => {
+    const sha256Hex = "a".repeat(64);
+    const indexedAt = new Date("2026-01-04T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "current.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Current PDF",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: null,
+                finishedAt: indexedAt,
+                id: "run_native_new",
+                kind: "native-extraction",
+                sourceFileId: currentPdf.id,
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+              {
+                errorCode: "ocr_failed",
+                finishedAt: new Date("2026-01-03T00:00:00.000Z"),
+                id: "run_ocr_old",
+                kind: "ocr",
+                sourceFileId: currentPdf.id,
+                sourceSha256Hex: sha256Hex,
+                status: "failed",
+              },
+            ],
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      searchIndexState: {
+        status: "ready",
+        updatedAt: indexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document uses successful processing runs as index completion provenance", async () => {
+    const sha256Hex = "a".repeat(64);
+    const indexedAt = new Date("2026-01-03T00:00:00.000Z");
+    const currentPdf = {
+      encrypted: false,
+      fileName: "searchable.pdf",
+      id: "file_1",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      sha256Hex,
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow(),
+          [currentPdf],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Searchable PDF",
+            workspaceId: "ws_1",
+          },
+          {
+            runs: [
+              {
+                errorCode: null,
+                finishedAt: indexedAt,
+                id: "run_native",
+                kind: "native-extraction",
+                sourceFileId: "file_1",
+                sourceSha256Hex: sha256Hex,
+                status: "succeeded",
+              },
+            ],
+            // Search projections persist the entity's semantic timestamp,
+            // which legitimately predates extraction completion.
+            searchUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: { status: "ready", source: "extracted_text" },
+      searchIndexState: {
+        status: "ready",
+        updatedAt: indexedAt.toISOString(),
+      },
+    });
+  });
+
+  test("read_document terminates unsupported extraction while reporting metadata indexing", async () => {
+    const unsupportedFile = {
+      encrypted: false,
+      fileName: "payload.bin",
+      id: "file_1",
+      mimeType: "application/octet-stream",
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          null,
+          [unsupportedFile],
+          {
+            entityId: "entity_1",
+            kind: "document",
+            name: "Binary payload",
+            workspaceId: "ws_1",
+          },
+          {
+            searchUpdatedAt: new Date("2026-01-02T00:00:00.000Z"),
+          },
+        ),
+      }),
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "unsupported",
+        reason:
+          "Content extraction is not supported for application/octet-stream.",
+      },
+      searchIndexState: { status: "ready" },
+    });
+  });
+
+  test("list_properties declares how file and scalar properties are written", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1" },
+      context: createContext({
+        scopedDb: createScopedDb([
+          {
+            content: { type: "file", version: 1 },
+            createdAt: "2026-01-01T00:00:00.000000",
+            id: "property_file",
+            name: "Documents",
+            status: "fresh",
+          },
+          {
+            content: { type: "text", version: 1 },
+            createdAt: "2026-01-02T00:00:00.000000",
+            id: "property_text",
+            name: "Summary",
+            status: "fresh",
+          },
+        ]),
+      }),
+      toolName: "list_properties",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      properties: [
+        {
+          id: "property_file",
+          valueType: "file",
+          writeMethod: "unsupported",
+        },
+        {
+          id: "property_text",
+          valueType: "text",
+          writeMethod: "set_field_value",
+        },
+      ],
+    });
+  });
+
+  test("set_field_value explains the primary-file upload boundary", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        entity_id: "entity_1",
+        property_id: "property_file",
+        content: { type: "file", value: "not-supported" },
+      },
+      context: createContext(),
+      toolName: "set_field_value",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error).toMatchObject({
+      code: "validation_error",
+      message: "File properties cannot be targeted by set_field_value",
+      hint: "To replace the document's primary file, call open_document_version_upload or upload_document_version. These tools do not target an arbitrary property_id.",
+    });
+    expect(error["issues"]).toEqual([
+      {
+        path: "content.type",
+        message: "Arbitrary file-property cells are not writable",
+      },
+    ]);
+  });
+
   test("save_document (update branch) rejects an empty update", async () => {
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
@@ -2261,14 +3253,33 @@ describe("OpenAI-compatible MCP tools", () => {
           query: {
             entities: {
               findFirst: async () => ({
+                createdAt: new Date("2025-12-01T00:00:00.000Z"),
                 kind: "document",
                 name: "Secret Doc for John Smith",
+                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
                 workspaceId: "ws_1",
-                currentVersion: { id: "ver_current", fields: [] },
+                currentVersion: {
+                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                  id: "ver_current",
+                  fields: [],
+                },
               }),
             },
+            documentProcessingRuns: { findMany: async () => [] },
+            entityVersions: {
+              findFirst: async () => ({ id: "ver_current" }),
+            },
+            extractedContent: { findFirst: async () => null },
             fields: {
               findMany: async () => [],
+            },
+            organizationSettings: {
+              findFirst: async () => ({ documentProcessingMode: "off" }),
+            },
+            searchDocuments: {
+              findFirst: async () => ({
+                updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+              }),
             },
           },
           select: () => selectBuilder,

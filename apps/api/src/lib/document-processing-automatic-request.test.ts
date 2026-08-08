@@ -10,6 +10,15 @@ test("leaves automatic OCR delivery to the configured batch scheduler", async ()
   expect(source).toContain("configured batch scheduler releases");
 });
 
+test("validates PDF sources through the shared MIME resolver", async () => {
+  const source = await Bun.file(
+    new URL("document-processing-automatic-request.ts", import.meta.url),
+  ).text();
+
+  expect(source).toContain("resolveExtractionMimeType({");
+  expect(source).not.toContain("content.mimeType !== PDF_MIME_TYPE");
+});
+
 test("ships the batch scheduler in the stock self-host deployment", async () => {
   const dockerfile = await Bun.file(
     new URL("../../Dockerfile", import.meta.url),

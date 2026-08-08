@@ -32,6 +32,8 @@ const downloadFileName = (resultS3Key: string): string =>
   resultS3Key.endsWith(".pdf") ? "report.pdf" : "report.docx";
 
 const config = {
+  description:
+    "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "reporting_export" },
   access: "write",

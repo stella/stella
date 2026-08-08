@@ -91,7 +91,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
 });
 
 describe("requestManualOcrHandler", () => {
-  test("queues a durable run for the current unencrypted PDF field", async () => {
+  test("queues a durable run for an extension-resolved unencrypted PDF field", async () => {
     const persistRun = mock(async () => ({
       id: runId,
       status: "queued" as const,
@@ -108,7 +108,7 @@ describe("requestManualOcrHandler", () => {
             encrypted: false,
             fileName: "scan.pdf",
             id: "00000000-0000-4000-8000-000000000001",
-            mimeType: PDF_MIME_TYPE,
+            mimeType: "application/octet-stream",
             pdfFileId: null,
             sha256Hex: "a".repeat(64),
             sizeBytes: 123,

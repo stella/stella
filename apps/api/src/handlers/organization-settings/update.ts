@@ -154,6 +154,7 @@ export const updateOrganizationSettingsHandler = async function* ({
           .where(
             and(
               eq(documentProcessingRuns.organizationId, organizationId),
+              eq(documentProcessingRuns.kind, "ocr"),
               eq(documentProcessingRuns.status, "running"),
               inArray(documentProcessingRuns.requestSource, [
                 "upload",

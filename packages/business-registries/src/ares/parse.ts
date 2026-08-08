@@ -70,6 +70,7 @@ export const parseResRecord = (record: AresResRecord): AresCompany => ({
   shareCapital: null,
   statutoryBodies: [],
   actingClause: null,
+  vrEnrichmentStatus: "not_requested",
 });
 
 // ---------------------------------------------------------------------------
@@ -249,7 +250,7 @@ export const enrichWithVr = (
 ): AresCompany => {
   const primary = vrResponse.zaznamy.find((z) => z.primarniZaznam);
   if (!primary) {
-    return company;
+    return { ...company, vrEnrichmentStatus: "not_found" };
   }
 
   // Prefer VR address if available (usually more detailed)
@@ -283,6 +284,7 @@ export const enrichWithVr = (
     shareCapital: parseShareCapital(primary.zakladniKapital),
     statutoryBodies: parseStatutoryBodies(allBodies),
     actingClause: parseActingClause(primary.statutarniOrgany),
+    vrEnrichmentStatus: "complete",
   };
 };
 

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AresCompany } from "@stll/business-registries/ares";
+import {
+  AresRequestError,
+  type AresCompany,
+} from "@stll/business-registries/ares";
 
 import {
   BUSINESS_REGISTRY_DISPATCH,
@@ -24,6 +27,7 @@ const ARES_COMPANY_FIXTURE: AresCompany = {
   shareCapital: null,
   statutoryBodies: [{ organName: "Představenstvo", members: [] }],
   actingClause: null,
+  vrEnrichmentStatus: "complete",
 };
 
 const stubHandler = (
@@ -92,6 +96,32 @@ describe("executeRegistryLookup — details channel", () => {
       throw new Error(`expected search result, got ${result.type}`);
     }
     expect(result.hits[0]?.details).toBeUndefined();
+  });
+
+  test("maps ARES transport failures to a sanitized retryable-upstream tag", async () => {
+    const cause = new AresRequestError(
+      "https://ares.example.invalid/private-path",
+      "sensitive transport detail",
+    );
+    const result = await executeRegistryLookup({
+      handler: stubHandler({
+        lookup: async () => {
+          throw cause;
+        },
+      }),
+      query: "27082440",
+    });
+
+    expect(result).toMatchObject({
+      code: "upstream_unavailable",
+      status: 502,
+      message: "ARES is temporarily unavailable",
+      cause,
+    });
+    if (!(result instanceof Error)) {
+      throw new TypeError("expected a mapped HandlerError");
+    }
+    expect(result.message).not.toContain("sensitive transport detail");
   });
 });
 

@@ -177,6 +177,7 @@ const krsGet = async (
     try {
       body = parseErrorBody(await response.json());
     } catch {
+      signal?.throwIfAborted();
       // non-JSON body
     }
     throw new KrsAPIError({
@@ -191,6 +192,7 @@ const krsGet = async (
   try {
     body = await response.json();
   } catch (error) {
+    signal?.throwIfAborted();
     throw new KrsAPIError({
       message: `KRS ${response.status}: invalid JSON payload`,
       httpStatus: response.status,

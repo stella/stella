@@ -249,6 +249,28 @@ describe("internalFailureResult preserves expected handler errors", () => {
     expectInternalErrorEnvelope(result);
     expect(captureErrorMock).toHaveBeenCalled();
   });
+
+  test("a tagged upstream outage is retryable without leaking its cause", () => {
+    const result = internalFailureResult(
+      new HandlerError({
+        code: "upstream_unavailable",
+        status: 502,
+        message: "ARES is temporarily unavailable",
+        cause: new Error(DB_INTERNAL_LEAK_TOKEN),
+      }),
+    );
+
+    expect(JSON.parse(envelopeText(result))).toEqual({
+      error: {
+        code: "upstream_unavailable",
+        message: "ARES is temporarily unavailable",
+        hint: "Retry the same request. If the service remains unavailable, report the request ID with send_feedback.",
+        retryable: true,
+      },
+    });
+    expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+    expect(captureErrorMock).toHaveBeenCalled();
+  });
 });
 
 // End-to-end through a real tool handler: `save_time_entry`'s create branch

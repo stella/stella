@@ -4,6 +4,8 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  description:
+    "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",

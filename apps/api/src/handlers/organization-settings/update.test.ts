@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -81,6 +83,7 @@ describe("updateOrganizationSettingsHandler", () => {
 
   test("does not acknowledge OCR opt-out while automatic work is running", async () => {
     let selectCount = 0;
+    let runningCondition: SQL | undefined;
     const lockedSettings = {
       for: async () => [
         {
@@ -92,9 +95,12 @@ describe("updateOrganizationSettingsHandler", () => {
     const tx = asTestRaw<Transaction>({
       select: () => ({
         from: () => ({
-          where: () => ({
+          where: (condition: SQL) => ({
             limit: () => {
               selectCount += 1;
+              if (selectCount === 2) {
+                runningCondition = condition;
+              }
               return selectCount === 1 ? lockedSettings : [{ id: "run_test" }];
             },
           }),
@@ -125,6 +131,11 @@ describe("updateOrganizationSettingsHandler", () => {
     if (Result.isError(result)) {
       expect(result.error).toMatchObject({ status: 409 });
     }
+    if (!runningCondition) {
+      throw new Error("Expected the running OCR query condition");
+    }
+    const compiled = new PgDialect().sqlToQuery(runningCondition.getSQL());
+    expect(compiled.params).toContain("ocr");
   });
 
   test("preserves OCR mode when updating an unrelated setting", async () => {

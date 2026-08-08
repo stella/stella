@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -17,7 +17,6 @@ import type {
 import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
@@ -27,6 +26,7 @@ import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   AssertNoExtraFields,
@@ -41,6 +41,7 @@ import type {
 } from "@/api/lib/chat/projections";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
+import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -1240,18 +1241,34 @@ const toIsoDateString = (value: unknown): string | null => {
 
 type DocxFieldContent = Extract<FieldContent, { type: "file" }>;
 
+type CurrentDocument = {
+  currentVersion: {
+    createdAt: Date;
+    fields: {
+      id: SafeId<"field">;
+      propertyId: SafeId<"property">;
+      content: FieldContent;
+    }[];
+    id: SafeId<"entityVersion">;
+  };
+  kind: string;
+  name: string;
+  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+};
+
 // SAFETY: `content` is a NOT NULL jsonb column, but that only forbids a SQL
 // NULL -- a stored JSON `null` literal still reads back as JS `null` here,
 // so the predicate must not dereference `.type` before checking for it.
 const isDocxFileContent = (
   content: FieldContent | null | undefined,
 ): content is DocxFieldContent =>
-  content?.type === "file" && content.mimeType === DOCX_MIME_TYPE;
+  content?.type === "file" &&
+  !content.encrypted &&
+  content.mimeType === DOCX_MIME_TYPE;
 
 type LoadCurrentVersionDocxMarkdownProps = {
   context: McpRequestContext;
-  entityId: ReturnType<typeof brandPersistedEntityId>;
-  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+  document: CurrentDocument;
 };
 
 /**
@@ -1260,13 +1277,11 @@ type LoadCurrentVersionDocxMarkdownProps = {
  * every read of this entity, so the caller can always use plaintext with no
  * cursor-consistency risk.
  *
- * `unavailable`: the file IS a DOCX (or its identity could not even be
- * confirmed -- e.g. a transient entity/fields lookup failure) but Markdown
- * could not be produced for THIS call (S3 read failed, conversion errored,
- * or the attempt timed out). Unlike `not-docx`, this is not a stable fact
- * about the document -- a retry could succeed -- so the caller must not
- * treat it as equivalent to `not-docx` once a cursor is already in flight
- * (see `handleReadContentAcrossMattersTool`).
+ * `unavailable`: the file IS a DOCX but Markdown could not be produced for
+ * THIS call (S3 read failed, conversion errored, or the attempt timed out).
+ * Unlike `not-docx`, this is not a stable fact about the document -- a retry
+ * could succeed -- so the caller must not treat it as equivalent to
+ * `not-docx` once a cursor is already in flight (see the handler below).
  */
 type DocxMarkdownOutcome =
   | { kind: "not-docx" }
@@ -1275,9 +1290,9 @@ type DocxMarkdownOutcome =
 
 /**
  * Convert the entity's CURRENT version file to folio's structure-preserving
- * Markdown, but only when it is a DOCX. Reuses `readEntityByIdHandler` — the
- * same TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses
- * — so this shares its auth boundary and never re-derives entity access.
+ * Markdown, but only when it is a DOCX. The caller loads the entity and its
+ * current version atomically before invoking this helper, so the conversion
+ * never depends on a stale extracted-content projection existing first.
  *
  * File selection uses `findExtractionFileField`, the SAME first-file-field
  * selection `processExtraction` uses to produce the cached `extractedContent`
@@ -1294,17 +1309,9 @@ type DocxMarkdownOutcome =
  */
 const loadCurrentVersionDocxMarkdown = async ({
   context,
-  entityId,
-  workspaceId,
+  document,
 }: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
-  const entityResult = await Result.gen(() =>
-    readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
-  );
-  if (Result.isError(entityResult)) {
-    return { kind: "unavailable" };
-  }
-
-  const file = findExtractionFileField(entityResult.value.fields);
+  const file = findExtractionFileField(document.currentVersion.fields);
   if (!isDocxFileContent(file)) {
     return { kind: "not-docx" };
   }
@@ -1316,7 +1323,7 @@ const loadCurrentVersionDocxMarkdown = async ({
           const buffer = await readS3ArrayBuffer(
             createFileKey({
               organizationId: context.organizationId,
-              workspaceId,
+              workspaceId: document.workspaceId,
               fileId: file.id,
               mimeType: DOCX_MIME_TYPE,
             }),
@@ -1354,44 +1361,116 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   }
 
   if (context.accessibleWorkspaceIds.length === 0) {
-    return errorResult("No extracted content available for this entity.");
+    return notFoundResult("Document not found or not accessible");
   }
 
-  const row = await context.scopedDb((tx) =>
-    tx.query.extractedContent.findFirst({
+  // Resolve the live entity/version before consulting any asynchronous
+  // projection. This lets a fresh DOCX take the direct Markdown path and
+  // provides the source identity used to reject stale cached plaintext.
+  const document = await context.scopedDb((tx) =>
+    tx.query.entities.findFirst({
       where: {
-        entityId: { eq: entityId },
-        organizationId: { eq: context.organizationId },
+        id: { eq: entityId },
         workspaceId: { in: context.accessibleWorkspaceIds },
       },
+      columns: { kind: true, name: true, workspaceId: true },
       with: {
-        entity: {
-          columns: {
-            kind: true,
-            name: true,
-            workspaceId: true,
+        currentVersion: {
+          columns: { createdAt: true, id: true },
+          with: {
+            fields: {
+              columns: { content: true, id: true, propertyId: true },
+              orderBy: { id: "asc" },
+              limit: LIMITS.propertiesCount,
+            },
           },
         },
       },
     }),
   );
-
-  if (!row?.entity) {
-    return errorResult("No extracted content available for this entity.");
+  if (!document?.currentVersion) {
+    return notFoundResult("Document not found or not accessible");
   }
+  const currentDocument = {
+    currentVersion: document.currentVersion,
+    kind: document.kind,
+    name: document.name,
+    workspaceId: document.workspaceId,
+  };
 
-  const plaintext = await decryptContent(
-    context.organizationId,
-    row.ciphertext,
-    row.iv,
-  );
-
-  const workspaceId = row.entity.workspaceId;
   const docxOutcome = await loadCurrentVersionDocxMarkdown({
     context,
-    entityId,
-    workspaceId,
+    document: currentDocument,
   });
+
+  if (docxOutcome.kind === "unavailable" && cursor !== undefined) {
+    return structuredErrorResult({
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  }
+
+  const projection =
+    docxOutcome.kind === "markdown"
+      ? null
+      : await context.scopedDb(
+          async (tx) =>
+            await Promise.all([
+              tx.query.extractedContent.findFirst({
+                where: {
+                  entityId: { eq: entityId },
+                  organizationId: { eq: context.organizationId },
+                  workspaceId: { eq: currentDocument.workspaceId },
+                },
+                columns: {
+                  ciphertext: true,
+                  extractedAt: true,
+                  iv: true,
+                  sourceEntityVersionId: true,
+                  sourceFieldId: true,
+                  sourceFileId: true,
+                  sourceSha256Hex: true,
+                },
+              }),
+              // Provenance fence: include tombstones so a rollback cannot make
+              // a withdrawn version's legacy extraction readable again.
+              tx.query.entityVersions.findFirst({
+                where: {
+                  entityId: { eq: entityId },
+                  workspaceId: { eq: currentDocument.workspaceId },
+                },
+                columns: { id: true },
+                orderBy: { versionNumber: "desc", id: "desc" },
+              }),
+            ]),
+        );
+
+  const currentExtracted = selectCurrentExtractedContent({
+    extracted: projection?.[0],
+    allowLegacy: projection?.[1]?.id === currentDocument.currentVersion.id,
+    currentVersionCreatedAt: currentDocument.currentVersion.createdAt,
+    currentVersionId: currentDocument.currentVersion.id,
+    fields: currentDocument.currentVersion.fields,
+  });
+  if (docxOutcome.kind !== "markdown" && !currentExtracted) {
+    return structuredErrorResult({
+      code: "conflict",
+      message: "Current document content is not ready",
+      hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
+      retryable: true,
+    });
+  }
+
+  const plaintext = currentExtracted
+    ? await decryptContent(
+        context.organizationId,
+        currentExtracted.ciphertext,
+        currentExtracted.iv,
+      )
+    : "";
 
   // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
   // preserved) whenever the current version holds a DOCX file; every other
@@ -1415,13 +1494,8 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   } else if (cursor === undefined) {
     text = plaintext;
   } else {
-    return structuredErrorResult({
-      code: "internal_error",
-      message:
-        "Could not continue reading this document's Markdown conversion.",
-      hint: "Retry the request with the same cursor.",
-      retryable: true,
-    });
+    // The cursor-specific unavailable branch returned above.
+    return panic("DOCX conversion unavailable without a readable fallback");
   }
 
   // Carry the FULL text and window it in the egress pipeline, so an
@@ -1432,12 +1506,12 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   const payload = {
     charCount: text.length,
     entityId,
-    kind: row.entity.kind,
-    name: row.entity.name,
+    kind: currentDocument.kind,
+    name: currentDocument.name,
     text,
     truncated: false,
     nextCursor: initialNextCursor(),
-    workspaceId,
+    workspaceId: currentDocument.workspaceId,
   };
   // The egress window's `apply` below mutates this object in place, so the tie
   // cannot ride on the literal: a `satisfies` clause would contextually pin
