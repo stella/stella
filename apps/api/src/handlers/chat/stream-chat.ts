@@ -1931,7 +1931,7 @@ const createOutgoingChunkTransformer = ({
         ),
         {
           ...chunk,
-          messages: restoreVisibleStringLeaves(chunk.messages, {
+          messages: restoreSnapshotMessages(chunk.messages, {
             boundary,
             resolveAssistantValueRefs,
           }),
@@ -1954,7 +1954,7 @@ const createOutgoingChunkTransformer = ({
           ...chunk,
           outcome: {
             ...chunk.outcome,
-            interrupts: restoreVisibleStringLeaves(chunk.outcome.interrupts, {
+            interrupts: restoreInterrupts(chunk.outcome.interrupts, {
               boundary,
               resolveAssistantValueRefs,
             }),
@@ -2315,44 +2315,15 @@ const transformToolCallInput = ({
     : visibleInput;
 };
 
-/**
- * Restore strings inside an AG-UI snapshot/interrupt without widening its
- * protocol type. `structuredClone` preserves the object shape; the walker only
- * replaces string leaves with strings, so ids, bindings, and schemas retain
- * their exact structural contract.
- */
-const restoreVisibleStringLeaves = <T extends object>(
-  value: T,
-  {
-    boundary,
-    resolveAssistantValueRefs,
-  }: {
-    boundary: ChatThirdPartyBoundary;
-    resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  },
-): T => {
-  const restored = structuredClone(value);
-  const controlKeys = new Set([
-    "approvalSchemaHash",
-    "id",
-    "inputSchemaHash",
-    "interruptId",
-    "interruptedRunId",
-    "kind",
-    "messageId",
-    "name",
-    "outputSchemaHash",
-    "parentMessageId",
-    "reason",
-    "responseSchemaHash",
-    "role",
-    "runId",
-    "status",
-    "threadId",
-    "toolCallId",
-    "toolName",
-    "type",
-  ]);
+type RestoreVisibleStringOptions = {
+  boundary: ChatThirdPartyBoundary;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+};
+
+const createVisibleStringRestorer = ({
+  boundary,
+  resolveAssistantValueRefs,
+}: RestoreVisibleStringOptions) => {
   const restoreString = (text: string): string => {
     const visible =
       boundary.type === "anonymized"
@@ -2367,32 +2338,146 @@ const restoreVisibleStringLeaves = <T extends object>(
     }
     return resolved;
   };
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      for (let index = 0; index < node.length; index += 1) {
-        const child: unknown = node[index];
-        if (typeof child === "string") {
-          node[index] = restoreString(child);
-        } else {
-          visit(child);
-        }
-      }
-      return;
-    }
-    if (!isRecord(node)) {
-      return;
-    }
-    for (const [key, child] of Object.entries(node)) {
+  return restoreString;
+};
+
+const restoreApplicationStringsInPlace = (
+  node: unknown,
+  restoreString: (text: string) => string,
+): void => {
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      const child: unknown = node[index];
       if (typeof child === "string") {
-        if (!controlKeys.has(key)) {
-          node[key] = restoreString(child);
-        }
+        node[index] = restoreString(child);
       } else {
-        visit(child);
+        restoreApplicationStringsInPlace(child, restoreString);
       }
     }
-  };
-  visit(restored);
+    return;
+  }
+  if (!isRecord(node)) {
+    return;
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (typeof child === "string") {
+      node[key] = restoreString(child);
+    } else {
+      restoreApplicationStringsInPlace(child, restoreString);
+    }
+  }
+};
+
+const restoreRecordProperty = (
+  record: Record<string, unknown>,
+  key: string,
+  restoreString: (text: string) => string,
+): void => {
+  const value = record[key];
+  if (typeof value === "string") {
+    record[key] = restoreString(value);
+    return;
+  }
+  restoreApplicationStringsInPlace(value, restoreString);
+};
+
+const restoreMetadataStringsInPlace = (
+  metadata: unknown,
+  restoreString: (text: string) => string,
+): void => {
+  if (!isRecord(metadata)) {
+    return;
+  }
+  for (const [key, value] of Object.entries(metadata)) {
+    if (key !== "tanstack:interruptBinding") {
+      restoreApplicationStringsInPlace(value, restoreString);
+      continue;
+    }
+    if (isRecord(value)) {
+      restoreRecordProperty(value, "originalArgs", restoreString);
+    }
+  }
+};
+
+/**
+ * Restore only user/application-bearing fields in AG-UI messages. Protocol
+ * identifiers and discriminators stay byte-for-byte stable, while arbitrary
+ * application records (activity content and media metadata) restore every
+ * nested leaf, even when an application happens to use keys such as `id` or
+ * `type`.
+ */
+const restoreSnapshotMessages = <T extends object>(
+  messages: T,
+  options: RestoreVisibleStringOptions,
+): T => {
+  const restored = structuredClone(messages);
+  const restoreString = createVisibleStringRestorer(options);
+  if (!Array.isArray(restored)) {
+    return restored;
+  }
+  for (const message of restored) {
+    if (!isRecord(message)) {
+      continue;
+    }
+    const role = message["role"];
+    const content = message["content"];
+    if (role === "activity") {
+      restoreApplicationStringsInPlace(content, restoreString);
+    } else if (role === "user" && Array.isArray(content)) {
+      for (const part of content) {
+        if (!isRecord(part)) {
+          continue;
+        }
+        if (part["type"] === "text") {
+          restoreRecordProperty(part, "text", restoreString);
+        } else {
+          restoreMetadataStringsInPlace(part["metadata"], restoreString);
+          if (part["type"] === "binary") {
+            restoreRecordProperty(part, "filename", restoreString);
+          }
+        }
+      }
+    } else if (typeof content === "string") {
+      message["content"] = restoreString(content);
+    }
+    restoreMetadataStringsInPlace(message["metadata"], restoreString);
+    if (role === "tool") {
+      restoreRecordProperty(message, "error", restoreString);
+    }
+    const toolCalls = message["toolCalls"];
+    if (!Array.isArray(toolCalls)) {
+      continue;
+    }
+    for (const toolCall of toolCalls) {
+      if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
+        continue;
+      }
+      restoreRecordProperty(toolCall["function"], "arguments", restoreString);
+    }
+  }
+  return restored;
+};
+
+/** Restore interrupt display/application payloads without touching correlation
+ * ids, discriminators, expiry data, or response schemas. TanStack's binding is
+ * protocol-owned except for `originalArgs`, which is application input. */
+const restoreInterrupts = <T extends object>(
+  interrupts: T,
+  options: RestoreVisibleStringOptions,
+): T => {
+  const restored = structuredClone(interrupts);
+  const restoreString = createVisibleStringRestorer(options);
+  if (!Array.isArray(restored)) {
+    return restored;
+  }
+  for (const interrupt of restored) {
+    if (!isRecord(interrupt)) {
+      continue;
+    }
+    restoreRecordProperty(interrupt, "message", restoreString);
+    const metadata = interrupt["metadata"];
+    restoreMetadataStringsInPlace(metadata, restoreString);
+  }
   return restored;
 };
 

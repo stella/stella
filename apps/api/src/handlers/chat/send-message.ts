@@ -332,7 +332,11 @@ const stampValidatedMessageWithActiveDraftContext = ({
 
 type ClaimedChatTurnOwnership =
   | { status: "unclaimed" }
-  | { status: "preflight"; execution: ChatTurnExecution }
+  | {
+      status: "preflight";
+      execution: ChatTurnExecution;
+      owningAssistantMessage?: PersistableChatMessage | undefined;
+    }
   | { status: "streaming" };
 
 const sendMessage = createSafeRootHandler(
@@ -1195,7 +1199,14 @@ const sendMessage = createSafeRootHandler(
       claimedChatTurnOwnership = {
         status: "preflight",
         execution: turnExecution,
+        ...(parsedMessage.message.role === "assistant"
+          ? { owningAssistantMessage: parsedMessage.message }
+          : {}),
       };
+      const owningAssistantMessage =
+        parsedMessage.message.role === "assistant"
+          ? parsedMessage.message
+          : undefined;
       const failCurrentTurn = async (
         code: ChatTurnFailureCode,
         retryable: boolean,
@@ -1205,6 +1216,7 @@ const sendMessage = createSafeRootHandler(
           execution: turnExecution,
           recordAuditEvent,
           retryable,
+          owningAssistantMessage,
           safeDb,
           threadId: body.threadId,
           userId: user.id,
@@ -1221,6 +1233,7 @@ const sendMessage = createSafeRootHandler(
       const interruptCurrentTurn = async () => {
         const settlementResult = await persistInterruptedChatTurn({
           execution: turnExecution,
+          owningAssistantMessage,
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
@@ -1726,6 +1739,8 @@ const sendMessage = createSafeRootHandler(
         const failureResult = await persistFailedChatTurn({
           code: "internal",
           execution: claimedChatTurnOwnership.execution,
+          owningAssistantMessage:
+            claimedChatTurnOwnership.owningAssistantMessage,
           recordAuditEvent,
           retryable: true,
           safeDb,

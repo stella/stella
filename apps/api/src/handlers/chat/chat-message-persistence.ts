@@ -336,7 +336,7 @@ export const finalizeAssistantTurn = async ({
   return Result.ok({ persistencePlan });
 };
 
-type PersistEmptyTerminalAssistantTurnProps = {
+type PersistTerminalAssistantTurnProps = {
   execution: ChatTurnExecution;
   failure?:
     | {
@@ -345,6 +345,7 @@ type PersistEmptyTerminalAssistantTurnProps = {
       }
     | undefined;
   outcome: ChatTurnOutcome;
+  owningAssistantMessage?: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -352,24 +353,44 @@ type PersistEmptyTerminalAssistantTurnProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const persistEmptyTerminalAssistantTurn = async ({
+const persistTerminalAssistantTurn = async ({
   execution,
   failure,
   outcome,
+  owningAssistantMessage,
   recordAuditEvent,
   safeDb,
   threadId,
   userId,
   workspaceId,
-}: PersistEmptyTerminalAssistantTurnProps) => {
+}: PersistTerminalAssistantTurnProps) => {
+  if (
+    owningAssistantMessage !== undefined &&
+    owningAssistantMessage.role !== "assistant"
+  ) {
+    panic("A terminal continuation owner must be an assistant message");
+  }
   const assistantMessage = toPersistableChatMessage({
-    id: createSafeId<"chatMessage">(),
-    metadata: { turnOutcome: outcome },
-    parts: [],
+    id: owningAssistantMessage?.id ?? createSafeId<"chatMessage">(),
+    metadata: {
+      ...owningAssistantMessage?.metadata,
+      turnOutcome: outcome,
+    },
+    parts: owningAssistantMessage?.parts ?? [],
     role: "assistant",
+    ...(owningAssistantMessage?.createdAt === undefined
+      ? {}
+      : { createdAt: owningAssistantMessage.createdAt }),
   });
   return await persistMessage({
-    persistencePlan: { type: "insert", message: assistantMessage },
+    persistencePlan:
+      owningAssistantMessage === undefined
+        ? { type: "insert", message: assistantMessage }
+        : {
+            type: "update",
+            messageId: assistantMessage.id,
+            message: assistantMessage,
+          },
     recordAuditEvent,
     safeDb,
     threadId,
@@ -391,15 +412,16 @@ const persistEmptyTerminalAssistantTurn = async ({
 
 /**
  * A failure before the stream exists must still hydrate as the same terminal
- * assistant turn as a streamed RUN_ERROR. Persist the empty terminal message
- * and settle its owner in one transaction, so reload cannot turn a retryable
- * failure into a missing assistant response.
+ * assistant turn as a streamed RUN_ERROR. Insert an empty assistant for a new
+ * user turn or update the continuation's owning assistant, and settle its owner
+ * in the same transaction.
  */
 export const persistFailedChatTurn = async ({
   code,
   execution,
   recordAuditEvent,
   retryable,
+  owningAssistantMessage,
   safeDb,
   threadId,
   userId,
@@ -409,16 +431,18 @@ export const persistFailedChatTurn = async ({
   execution: ChatTurnExecution;
   recordAuditEvent: AuditRecorder;
   retryable: boolean;
+  owningAssistantMessage?: PersistableChatMessage | undefined;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
   const outcome = { type: "failed", error: "unknown" } as const;
-  return await persistEmptyTerminalAssistantTurn({
+  return await persistTerminalAssistantTurn({
     execution,
     failure: { code, retryable },
     outcome,
+    owningAssistantMessage,
     recordAuditEvent,
     safeDb,
     threadId,
@@ -430,15 +454,17 @@ export const persistFailedChatTurn = async ({
 /** Persist a pre-stream client disconnect as a reloadable terminal turn. */
 export const persistInterruptedChatTurn = async ({
   execution,
+  owningAssistantMessage,
   recordAuditEvent,
   safeDb,
   threadId,
   userId,
   workspaceId,
-}: Omit<PersistEmptyTerminalAssistantTurnProps, "failure" | "outcome">) =>
-  await persistEmptyTerminalAssistantTurn({
+}: Omit<PersistTerminalAssistantTurnProps, "failure" | "outcome">) =>
+  await persistTerminalAssistantTurn({
     execution,
     outcome: { type: "interrupted", reason: "client-disconnected" },
+    owningAssistantMessage,
     recordAuditEvent,
     safeDb,
     threadId,

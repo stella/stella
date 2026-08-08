@@ -10,7 +10,10 @@ import {
   toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { finalizeAssistantTurn } from "@/api/handlers/chat/chat-message-persistence";
+import {
+  finalizeAssistantTurn,
+  persistFailedChatTurn,
+} from "@/api/handlers/chat/chat-message-persistence";
 import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   canAcceptChatTurnOnTx,
@@ -188,6 +191,96 @@ const seedAwaitingTurn = async () => {
 };
 
 describe("durable chat turn persistence", () => {
+  test("terminalizes a failed continuation on its owning assistant", async () => {
+    const { acceptance, assistantMessageId, threadId } =
+      await seedAwaitingTurn();
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the continuation to be claimed");
+    }
+    const resolvedParts = [
+      {
+        arguments:
+          '{"analysis":"Need jurisdiction","questions":[{"question":"Which court?","reason":"Jurisdiction determines the law."}]}',
+        id: "ask-1",
+        input: {
+          analysis: "Need jurisdiction",
+          questions: [
+            {
+              question: "Which court?",
+              reason: "Jurisdiction determines the law.",
+            },
+          ],
+        },
+        name: "ask-user",
+        output: {
+          answers: [{ answer: "Commercial Court", question: "Which court?" }],
+        },
+        state: "complete",
+        type: "tool-call",
+      },
+    ] satisfies ChatPart[];
+    const owningAssistantMessage = toPersistableChatMessage({
+      id: assistantMessageId,
+      metadata: {
+        turnOutcome: {
+          interaction: { toolCallId: "ask-1", type: "ask-user" },
+          type: "awaiting-user",
+        },
+      },
+      parts: resolvedParts,
+      role: "assistant",
+    });
+
+    unwrap(
+      await persistFailedChatTurn({
+        code: "connector-discovery",
+        execution,
+        owningAssistantMessage,
+        recordAuditEvent: async () => {},
+        retryable: true,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    const messages = await testDb.query.chatMessages.findMany({
+      where: { threadId: { eq: threadId } },
+      columns: { content: true, id: true, role: true },
+    });
+    expect(messages).toHaveLength(2);
+    const assistant = messages.find(({ id }) => id === assistantMessageId);
+    if (assistant === undefined) {
+      throw new Error("Expected the owning assistant to remain persisted");
+    }
+    const reloaded = clientMessageFromPageRow(assistant, new Map());
+    expect(reloaded.metadata?.turnOutcome).toEqual({
+      error: "unknown",
+      type: "failed",
+    });
+    expect(reloaded.parts).toEqual(owningAssistantMessage.parts);
+    expect(
+      await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: acceptance.id } },
+        columns: { assistantMessageId: true, status: true },
+      }),
+    ).toEqual({ assistantMessageId, status: "failed" });
+  });
+
   test("finalizes the assistant message, data scope, and turn atomically", async () => {
     const { assistantMessageId, threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({

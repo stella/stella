@@ -2023,6 +2023,12 @@ describe("anonymized outgoing chat stream", () => {
               role: "assistant",
               content: "Review [PERSON_1]",
             },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { id: "[PERSON_1]", status: "[PERSON_1]" },
+            },
           ],
         },
         {
@@ -2037,8 +2043,14 @@ describe("anonymized outgoing chat stream", () => {
                 reason: "tool_call",
                 metadata: {
                   "tanstack:interruptBinding": {
-                    originalArgs: { assignee: "[PERSON_1]" },
+                    originalArgs: {
+                      assignee: "[PERSON_1]",
+                      id: "[PERSON_1]",
+                      name: "[PERSON_1]",
+                      nested: { status: "[PERSON_1]", type: "[PERSON_1]" },
+                    },
                   },
+                  application: { id: "[PERSON_1]", type: "[PERSON_1]" },
                 },
               },
             ],
@@ -2063,6 +2075,12 @@ describe("anonymized outgoing chat stream", () => {
             role: "assistant",
             content: "Review Jan Novak",
           },
+          {
+            id: "activity-1",
+            role: "activity",
+            activityType: "review",
+            content: { id: "Jan Novak", status: "Jan Novak" },
+          },
         ],
       },
       {
@@ -2077,8 +2095,14 @@ describe("anonymized outgoing chat stream", () => {
               reason: "tool_call",
               metadata: {
                 "tanstack:interruptBinding": {
-                  originalArgs: { assignee: "Jan Novak" },
+                  originalArgs: {
+                    assignee: "Jan Novak",
+                    id: "Jan Novak",
+                    name: "Jan Novak",
+                    nested: { status: "Jan Novak", type: "Jan Novak" },
+                  },
                 },
+                application: { id: "Jan Novak", type: "Jan Novak" },
               },
             },
           ],
