@@ -2,41 +2,75 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import {
-  czUsAdapter,
-  recentWindowFloor,
-} from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-// ── Helpers ──────────────────────────────────────────────
+type ResultRow = {
+  id: string;
+  sz: string;
+  caseNumber: string;
+  date: string;
+  ecli?: string | undefined;
+};
 
-/** Build a minimal NALUS GetText.aspx response. */
-const makeTextPage = (caseNumber: string, date: string): string => `
+const makeSearchForm = (): string => `
 <html><body>
-  <span id="lblRegistrySign" class="DocRegistrySign"
-    style="font-size:10pt;">${caseNumber} ze dne ${date}</span>
-  <span id="lblDecisionForm">Nález</span>
-  <table class="DocContent">
-    <tr><td>
-      ${"Lorem ipsum dolor sit amet. ".repeat(10)}
-      Jan Novák (soudce zpravodaj)
-    </td></tr>
-  </table>
+  <input id="__VIEWSTATE" value="view-state" />
+  <input id="__VIEWSTATEGENERATOR" value="generator" />
+  <input id="__EVENTVALIDATION" value="validation" />
 </body></html>`;
 
-/** Build an empty NALUS response (no decision at this number). */
-const makeEmptyPage = (): string => `
+const makeTextPage = (
+  caseNumber: string,
+  date: string,
+  fields: {
+    decisionForm?: string;
+    parallelQuotation?: string;
+    popularName?: string;
+    counter?: number;
+  } = {},
+): string => `
 <html><body>
-  <span id="lblRegistrySign" class="DocRegistrySign"
-    style="font-size:10pt;"></span>
+  <span id="lblRegistrySign">${caseNumber} ze dne ${date}</span>
+  <span id="lblDecisionForm">${fields.decisionForm ?? "Nález"}</span>
+  <span id="lblParallelQuotation">${fields.parallelQuotation ?? ""}</span>
+  <span id="lblPopularName">${fields.popularName ?? ""}</span>
+  <input name="registrySignHidden" value="${caseNumber}${
+    fields.counter === undefined ? "" : ` #${fields.counter}`
+  } ze dne ${date}" />
+  <table class="DocContent"><tr><td>
+    ${"Lorem ipsum dolor sit amet. ".repeat(10)}
+    Jan Novák (soudce zpravodaj)
+  </td></tr></table>
 </body></html>`;
 
-/** Build a minimal GetAbstract.aspx response. */
-const makeAbstractPage = (abstract: string): string => `
+const makeAbstractPage = (abstract = "", legalSentence = ""): string => `
 <html><body>
   <table class="abstractContent"><tr><td>${abstract}</td></tr></table>
-  <table class="legalSentenceContent"><tr><td></td></tr></table>
+  <table class="legalSentenceContent"><tr><td>${legalSentence}</td></tr></table>
 </body></html>`;
+
+const makeResultsPage = (
+  rows: readonly ResultRow[],
+  rangeFrom: number,
+  reported: number,
+): string => {
+  const rangeTo = rangeFrom + rows.length - 1;
+  const body = rows
+    .map(
+      (row, index) => `
+<tr class='resultData${index % 2}'>
+  <td></td>
+  <td><a href='ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index}&cnt=${reported}&typ=result'>${row.caseNumber} #1</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+</tr>
+<tr class='resultData${index % 2}' valign="top">
+  <td><img onclick='javascript:ShowLink("https://nalus.usoud.cz:443/Search/GetText.aspx?sz=${row.sz}", "Odkaz", "")' /></td>
+</tr>`,
+    )
+    .join("");
+  const banner = `Výsledky ${rangeFrom} - ${rangeTo} z celkem ${reported}`;
+  return `<html><body>${banner}<table>${body}</table>${banner}</body></html>`;
+};
 
 const resolveUrl = (input: string | URL | Request): string => {
   if (typeof input === "string") {
@@ -48,23 +82,102 @@ const resolveUrl = (input: string | URL | Request): string => {
   return input.url;
 };
 
-/**
- * NALUS wraps every page in an ASP.NET form whose `__VIEWSTATE` is one
- * unbroken run of thousands of non-space characters. Real pages carry
- * 12-18 KB of it.
- */
-const makeViewStatePage = (
-  caseNumber: string,
-  date: string,
-  viewStateChars: number,
-): string =>
-  makeTextPage(caseNumber, date).replace(
-    "<html><body>",
-    () =>
-      `<html><body><input type="hidden" name="__VIEWSTATE" value="${"P".repeat(viewStateChars)}" />`,
-  );
+const requestMethod = (
+  input: string | URL | Request,
+  init?: RequestInit,
+): string => init?.method ?? (input instanceof Request ? input.method : "GET");
 
-// ── Tests ────────────────────────────────────────────────
+const unwrap = <T>(result: Result<T, unknown>): T => {
+  expect(Result.isOk(result)).toBe(true);
+  if (!Result.isOk(result)) {
+    throw result.error;
+  }
+  return result.value;
+};
+
+type MockSearchOptions = {
+  rows?: readonly ResultRow[];
+  rangeFrom?: number;
+  reported?: number;
+  empty?: boolean;
+  abstract?: string;
+  legalSentence?: string;
+  abstractStatus?: number;
+  onPost?: (form: URLSearchParams, headers: Headers) => void;
+};
+
+const installSearchMock = ({
+  rows = [],
+  rangeFrom = 1,
+  reported = rows.length,
+  empty = false,
+  abstract = "",
+  legalSentence = "",
+  abstractStatus = 200,
+  onPost,
+}: MockSearchOptions): void => {
+  const bySz = new Map(rows.map((row) => [row.sz, row]));
+  globalThis.fetch = asFetchMock(
+    mock((input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(resolveUrl(input));
+      const method = requestMethod(input, init);
+      if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
+        return Promise.resolve(
+          new Response(makeSearchForm(), {
+            headers: { "Set-Cookie": "ASP.NET_SessionId=test-session; Path=/" },
+          }),
+        );
+      }
+      if (url.pathname.endsWith("/Search/Search.aspx") && method === "POST") {
+        onPost?.(
+          new URLSearchParams(typeof init?.body === "string" ? init.body : ""),
+          new Headers(init?.headers),
+        );
+        return Promise.resolve(
+          empty
+            ? new Response(makeSearchForm())
+            : new Response(null, {
+                status: 302,
+                headers: { Location: "/Search/Results.aspx" },
+              }),
+        );
+      }
+      if (url.pathname.endsWith("/Search/Results.aspx")) {
+        return Promise.resolve(
+          new Response(makeResultsPage(rows, rangeFrom, reported)),
+        );
+      }
+      if (url.pathname.endsWith("/Search/GetText.aspx")) {
+        const row = bySz.get(url.searchParams.get("sz") ?? "");
+        const counterText =
+          row === undefined
+            ? undefined
+            : /_(?<counter>\d+)$/u.exec(row.sz)?.groups?.["counter"];
+        return Promise.resolve(
+          row
+            ? new Response(
+                makeTextPage(
+                  row.caseNumber,
+                  row.date,
+                  counterText === undefined
+                    ? {}
+                    : { counter: Number(counterText) },
+                ),
+              )
+            : new Response("missing", { status: 404 }),
+        );
+      }
+      if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
+        return Promise.resolve(
+          new Response(makeAbstractPage(abstract, legalSentence), {
+            status: abstractStatus,
+          }),
+        );
+      }
+      return Promise.resolve(new Response("unexpected", { status: 500 }));
+    }),
+  );
+};
 
 describe("czUsAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
@@ -79,498 +192,285 @@ describe("czUsAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("null cursor starts at current year and crawls backward", async () => {
-    // null cursor → starts at currentYear. Current year has n=1,
-    // after 30 misses descends to previous year which has n=1..2.
-    const currentYear = new Date().getFullYear();
-    const curYr = String(currentYear % 100).padStart(2, "0");
-    const prevYr = String((currentYear - 1) % 100).padStart(2, "0");
-
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        const yr = match ? Number(match.groups?.["yr"]) : 0;
-
-        if (yr === Number(curYr) && n === 1) {
-          return Promise.resolve(
-            new Response(
-              makeTextPage(`I.ÚS 1/${curYr}`, `1. 1. ${currentYear}`),
-            ),
-          );
-        }
-        if (yr === Number(prevYr) && n >= 1 && n <= 2) {
-          return Promise.resolve(
-            new Response(
-              makeTextPage(`II.ÚS ${n}/${prevYr}`, `5. 5. ${currentYear - 1}`),
-            ),
-          );
-        }
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
-    );
-
-    // Pass null cursor (the real entry point)
-    const result = await czUsAdapter.fetchPage(null, {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const caseNumbers = result.value.decisions.map((d) => d.caseNumber);
-    // Should find 1 from current year, then descend to previous year
-    expect(caseNumbers).toContain(`I.ÚS 1/${curYr}`);
-    expect(caseNumbers).toContain(`II.ÚS 1/${prevYr}`);
-    expect(caseNumbers).toContain(`II.ÚS 2/${prevYr}`);
-  });
-
-  test("collects decisions from sequential numbers", async () => {
-    // Year 2025: numbers 1-5 have decisions, rest are empty.
-    const hitNumbers = new Set([1, 2, 3, 4, 5]);
-
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        const yr = match ? Number(match.groups?.["yr"]) : 0;
-        const body =
-          yr === 25 && hitNumbers.has(n)
-            ? makeTextPage(`II.ÚS ${n}/25`, "1. 1. 2025")
-            : makeEmptyPage();
-        return Promise.resolve(new Response(body));
-      }),
-    );
-
-    const result = await czUsAdapter.fetchPage("1:2025", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    expect(result.value.decisions).toHaveLength(5);
-    expect(result.value.decisions[0]?.caseNumber).toBe("II.ÚS 1/25");
-    expect(result.value.decisions[4]?.caseNumber).toBe("II.ÚS 5/25");
-  });
-
-  test("moves to previous year after consecutive misses", async () => {
-    // Year 2025: only n=1 has a decision.
-    // After 30 consecutive misses, adapter moves to 2024.
-    // Year 2024: n=1..3 have decisions.
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-
-        const yearMatch = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
-        if (!yearMatch) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-
-        const n = Number(yearMatch.groups?.["n"]);
-        const yr = Number(yearMatch.groups?.["yr"]);
-
-        if (yr === 25 && n === 1) {
-          return Promise.resolve(
-            new Response(makeTextPage("I.ÚS 1/25", "10. 1. 2025")),
-          );
-        }
-        if (yr === 24 && n >= 1 && n <= 3) {
-          return Promise.resolve(
-            new Response(makeTextPage(`III.ÚS ${n}/24`, "15. 3. 2024")),
-          );
-        }
-
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
-    );
-
-    const result = await czUsAdapter.fetchPage("1:2025", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const caseNumbers = result.value.decisions.map((d) => d.caseNumber);
-
-    expect(caseNumbers).toContain("I.ÚS 1/25");
-    expect(caseNumbers).toContain("III.ÚS 1/24");
-    expect(caseNumbers).toContain("III.ÚS 2/24");
-    expect(caseNumbers).toContain("III.ÚS 3/24");
-  });
-
-  test("hands the exhausted descent over to the recent sweep", async () => {
-    // Only year 1993 (93): n=1 has a decision.
-    // After 30 misses at FIRST_YEAR the descent is complete, so the
-    // cursor parks at the top of the recent window in the recent
-    // phase (never null, and never another lap over history).
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-
-        const match = /sz=I-(?<n>\d+)-93_1/u.exec(url);
-        if (match && Number(match.groups?.["n"]) === 1) {
-          return Promise.resolve(
-            new Response(makeTextPage("I.ÚS 1/93", "11. 11. 1993")),
-          );
-        }
-
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
-    );
-
-    const result = await czUsAdapter.fetchPage("1:1993", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    expect(result.value.decisions).toHaveLength(1);
-    expect(result.value.decisions[0]?.caseNumber).toBe("I.ÚS 1/93");
-    const currentYear = new Date().getFullYear();
-    expect(result.value.nextCursor).toBe(`1:${currentYear}:recent`);
-  });
-
-  test("the parked sweep stays inside the recent window", async () => {
-    // Every year back to 1993 holds decisions, so a sweep that fell
-    // back into the descent would be visible twice over: in the years
-    // it probes, and in the cursors it returns. Neither may leave the
-    // window, however many times the adapter is driven from the park.
-    const currentYear = new Date().getFullYear();
-    const floor = recentWindowFloor(currentYear);
-    const suffix = (year: number): string =>
-      String(year % 100).padStart(2, "0");
-    const windowSuffixes = new Set(
-      Array.from({ length: currentYear - floor + 1 }, (_, i) =>
-        suffix(floor + i),
-      ),
-    );
-
-    const probedSuffixes = new Set<string>();
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
-        const n = Number(match?.groups?.["n"]);
-        const yr = match?.groups?.["yr"];
-        if (yr === undefined) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        probedSuffixes.add(yr);
-        // Every year of the court's existence has decisions at n=1..2.
-        return Promise.resolve(
-          new Response(
-            n <= 2
-              ? makeTextPage(`I.ÚS ${n}/${yr}`, `1. 1. 20${yr}`)
-              : makeEmptyPage(),
-          ),
+  test("enumerates exact historical identifiers across chambers and plenary dockets", async () => {
+    const rows = [
+      {
+        id: "1001",
+        sz: "1-1-1993",
+        caseNumber: "I.ÚS 1/1993",
+        date: "1. 3. 1993",
+      },
+      {
+        id: "1002",
+        sz: "2-1-1993",
+        caseNumber: "II.ÚS 1/1993",
+        date: "2. 3. 1993",
+      },
+      {
+        id: "1003",
+        sz: "Pl-1-1993",
+        caseNumber: "Pl.ÚS 1/1993",
+        date: "3. 3. 1993",
+      },
+    ];
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      rows,
+      onPost: (form, headers) => {
+        submitted = form;
+        expect(headers.get("Cookie")).toContain(
+          "ASP.NET_SessionId=test-session",
         );
-      }),
+      },
+    });
+
+    const page = unwrap(await czUsAdapter.fetchPage(null, {}));
+
+    expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
+    expect(submitted?.get("ctl00$MainContent$decidedTo")).toBe("31.12.1993");
+    expect(submitted?.get("ctl00$MainContent$resultsPageSize")).toBe("40");
+    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual(
+      rows.map(({ caseNumber }) => caseNumber),
     );
-
-    let cursor = `1:${currentYear}:recent`;
-    let collected = 0;
-    for (let lap = 0; lap < 12; lap++) {
-      // oxlint-disable-next-line no-await-in-loop -- each lap resumes from the cursor the previous one returned
-      const result = await czUsAdapter.fetchPage(cursor, {});
-      expect(Result.isOk(result)).toBe(true);
-      if (!Result.isOk(result)) {
-        return;
-      }
-      collected += result.value.decisions.length;
-
-      const next = result.value.nextCursor;
-      expect(next).not.toBeNull();
-      const [, year, phase] = (next ?? "").split(":");
-      expect(phase).toBe("recent");
-      expect(Number(year)).toBeGreaterThanOrEqual(floor);
-      expect(Number(year)).toBeLessThanOrEqual(currentYear);
-      cursor = next ?? cursor;
-    }
-
-    expect(collected).toBeGreaterThan(0);
-    expect([...probedSuffixes].sort()).toEqual([...windowSuffixes].sort());
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["nalus:1-1-1993", "nalus:2-1-1993", "nalus:Pl-1-1993"]);
+    expect(page.nextCursor).toBe("search:historical:1994:0");
+    expect(page.coverage).toEqual({
+      slice: "decision-year:1993",
+      reported: 3,
+      collected: 3,
+    });
   });
 
-  test("a legacy cursor without a phase resumes the historical descent", async () => {
-    // Stored cursors predating the phase segment are bare "number:year".
-    // 2001 holds two decisions, 2000 holds a full page of them: a
-    // descent below the recent window, which the recent phase never does.
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        const yr = match ? Number(match.groups?.["yr"]) : -1;
-        if (yr === 1 && n <= 2) {
-          return Promise.resolve(
-            new Response(makeTextPage(`I.ÚS ${n}/01`, "1. 1. 2001")),
-          );
-        }
-        if (yr === 0) {
-          return Promise.resolve(
-            new Response(makeTextPage(`II.ÚS ${n}/00`, "1. 1. 2000")),
-          );
-        }
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
+  test("keeps multiple published decisions under one docket distinct", async () => {
+    const rows = [
+      {
+        id: "2001",
+        sz: "1-42-24_1",
+        caseNumber: "I.ÚS 42/24",
+        date: "1. 2. 2024",
+        ecli: "ECLI:CZ:US:2024:1.US.42.24.1",
+      },
+      {
+        id: "2002",
+        sz: "1-42-24_2",
+        caseNumber: "I.ÚS 42/24",
+        date: "1. 2. 2024",
+        ecli: "ECLI:CZ:US:2024:1.US.42.24.2",
+      },
+    ];
+    installSearchMock({ rows });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
     );
 
-    const result = await czUsAdapter.fetchPage("1:2001", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const caseNumbers = result.value.decisions.map((d) => d.caseNumber);
-    expect(caseNumbers).toContain("I.ÚS 1/01");
-    expect(caseNumbers).toContain("II.ÚS 1/00");
-
-    const [, year, phase] = (result.value.nextCursor ?? "").split(":");
-    expect(year).toBe("2000");
-    expect(phase).toBe("historical");
+    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
+      "I.ÚS 42/24",
+      "I.ÚS 42/24",
+    ]);
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["nalus:1-42-24_1", "nalus:1-42-24_2"]);
+    expect(page.decisions.map(({ ecli }) => ecli)).toEqual([
+      "ECLI:CZ:US:2024:1.US.42.24.1",
+      "ECLI:CZ:US:2024:1.US.42.24.2",
+    ]);
   });
 
-  test("respects PAGE_SIZE limit", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-25_1/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        return Promise.resolve(
-          new Response(makeTextPage(`I.ÚS ${n}/25`, "1. 6. 2025")),
-        );
-      }),
+  test("uses the result banner for pagination and slice coverage", async () => {
+    const firstRows = Array.from({ length: 40 }, (_, index) => ({
+      id: String(3000 + index),
+      sz: `1-${index + 1}-24_1`,
+      caseNumber: `I.ÚS ${index + 1}/24`,
+      date: "1. 1. 2024",
+    }));
+    installSearchMock({ rows: firstRows, reported: 42 });
+    const first = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
     );
+    expect(first.nextCursor).toBe("search:historical:2024:1");
+    expect(first.coverage).toBeUndefined();
 
-    const result = await czUsAdapter.fetchPage("1:2025", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    expect(result.value.decisions).toHaveLength(50);
-    expect(result.value.nextCursor).toBe("51:2025:historical");
+    installSearchMock({
+      rows: [
+        {
+          id: "3040",
+          sz: "1-41-24_1",
+          caseNumber: "I.ÚS 41/24",
+          date: "2. 1. 2024",
+        },
+        {
+          id: "3041",
+          sz: "1-42-24_1",
+          caseNumber: "I.ÚS 42/24",
+          date: "2. 1. 2024",
+        },
+      ],
+      rangeFrom: 41,
+      reported: 42,
+    });
+    const last = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:1", {}),
+    );
+    expect(last.coverage).toEqual({
+      slice: "decision-year:2024",
+      reported: 42,
+      collected: 42,
+    });
   });
 
-  test("abstract failure does not drop the decision", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.reject(new Error("Network error"));
-        }
-        const match = /sz=I-(?<n>\d+)-/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        if (n === 1) {
-          return Promise.resolve(
-            new Response(makeTextPage("IV.ÚS 1/25", "5. 2. 2025")),
-          );
-        }
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
-    );
+  test("legacy probe cursors restart the publisher enumeration", async () => {
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      empty: true,
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
 
-    const result = await czUsAdapter.fetchPage("1:2025", {});
+    const page = unwrap(await czUsAdapter.fetchPage("3510:2024:recent", {}));
 
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const decision = result.value.decisions.find(
-      (d) => d.caseNumber === "IV.ÚS 1/25",
-    );
-    expect(decision).toBeDefined();
-    expect(decision?.metadata["abstract"]).toEqual(undefined);
+    expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
+    expect(page.nextCursor).toBe("search:historical:1994:0");
+    expect(page.coverage).toEqual({
+      slice: "decision-year:1993",
+      reported: 0,
+      collected: 0,
+    });
   });
 
-  test("enriches decision with abstract when available", async () => {
-    const longAbstract =
-      "Právo na spravedlivý proces zahrnuje právo na " +
-      "odůvodnění soudního rozhodnutí, které musí být " +
-      "přezkoumatelné a dostatečně podrobné.";
+  test("finishing the current decision year hands over to availability polling", async () => {
+    installSearchMock({ empty: true });
+    const currentYear = new Date().getUTCFullYear();
 
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeAbstractPage(longAbstract)));
-        }
-        const match = /sz=I-(?<n>\d+)-/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        if (n === 1) {
-          return Promise.resolve(
-            new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
-          );
-        }
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
+    const page = unwrap(
+      await czUsAdapter.fetchPage(`search:historical:${currentYear}:0`, {}),
     );
 
-    const result = await czUsAdapter.fetchPage("1:2025", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const decision = result.value.decisions[0];
-    expect(decision?.metadata["abstract"]).toBe(longAbstract);
-    const raw = JSON.parse(decision?.sourceRaw ?? "{}");
-    expect(raw.textHtml).toBeDefined();
-    expect(raw.abstractHtml).toBeDefined();
+    expect(page.nextCursor).toMatch(
+      /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:0$/u,
+    );
   });
 
-  test("AbortError preserves partial results", async () => {
-    let callCount = 0;
+  test("recent polling queries publication availability rather than decision date", async () => {
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      empty: true,
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
 
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        callCount++;
-        if (callCount === 1) {
-          return Promise.resolve(
-            new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
-          );
-        }
-        return Promise.reject(new DOMException("Aborted", "AbortError"));
-      }),
+    const page = unwrap(
+      await czUsAdapter.fetchPage("search:recent:2026-06-25:2026-08-08:0", {}),
     );
 
-    const result = await czUsAdapter.fetchPage("1:2025", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    expect(result.value.decisions).toHaveLength(1);
-    expect(result.value.nextCursor).not.toBeNull();
-  });
-
-  test("extracts metadata fields from decision page", async () => {
-    const body =
-      "Ústavní soud rozhodl v plénu složeném z předsedy soudu. ".repeat(5);
-    const html = `
-<html><body>
-  <span id="lblRegistrySign" class="DocRegistrySign"
-    style="font-size:10pt;">Pl.ÚS 24/10 ze dne 22. 3. 2011</span>
-  <span id="lblDecisionForm">Nález</span>
-  <span id="lblParallelQuotation">N 42/60 SbNU 507</span>
-  <span id="lblPopularName">Melčák</span>
-  <table class="DocContent">
-    <tr><td>${body}<p>Pavel Rychetský (soudce zpravodaj)</p></td></tr>
-  </table>
-</body></html>`;
-
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = resolveUrl(input);
-        if (url.includes("GetAbstract")) {
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }
-        const match = /sz=I-(?<n>\d+)-/u.exec(url);
-        const n = match ? Number(match.groups?.["n"]) : 0;
-        if (n === 1) {
-          return Promise.resolve(new Response(html));
-        }
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }),
+    expect(submitted?.get("ctl00$MainContent$dle_data_zpristupneni")).toBe(
+      "on",
     );
-
-    const result = await czUsAdapter.fetchPage("1:2010", {});
-
-    expect(Result.isOk(result)).toBe(true);
-    if (!Result.isOk(result)) {
-      return;
-    }
-
-    const decision = result.value.decisions[0];
-    expect(decision).toBeDefined();
-    expect(decision?.caseNumber).toBe("Pl.ÚS 24/10");
-    expect(decision?.decisionDate).toBe("2011-03-22");
-    expect(decision?.decisionType).toBe("nález");
-    expect(decision?.court).toBe("Ústavní soud");
-    expect(decision?.country).toBe("CZE");
-    expect(decision?.language).toBe("cs");
-    expect(decision?.metadata["parallelQuotation"]).toBe("N 42/60 SbNU 507");
-    expect(decision?.metadata["popularName"]).toBe("Melčák");
-    expect(decision?.metadata["judge"]).toContain("Pavel Rychetský");
-    expect(decision?.fulltext).toBeDefined();
-    expect(decision?.rawHash).toBeDefined();
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("25.6.2026");
+    expect(submitted?.get("ctl00$MainContent$availableTo")).toBe("8.8.2026");
+    expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBeNull();
+    expect(page.coverage).toEqual({
+      slice: "availability:2026-06-25:2026-08-08",
+      reported: 0,
+      collected: 0,
+    });
   });
 
-  test("parse cost does not grow with the size of the __VIEWSTATE blob", async () => {
-    const parseWith = async (viewStateChars: number): Promise<number> => {
-      globalThis.fetch = asFetchMock(
-        mock((input: string | URL | Request) => {
-          const url = resolveUrl(input);
-          if (url.includes("GetAbstract")) {
-            return Promise.resolve(new Response(makeEmptyPage()));
-          }
-          if (url.includes("sz=I-1-10_1")) {
-            return Promise.resolve(
-              new Response(
-                makeViewStatePage("I.ÚS 1/10", "1. 1. 2010", viewStateChars),
-              ),
-            );
-          }
-          return Promise.resolve(new Response(makeEmptyPage()));
-        }),
-      );
+  test("abstract failure does not drop a listed decision", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "4001",
+          sz: "1-1-24_1",
+          caseNumber: "I.ÚS 1/24",
+          date: "1. 1. 2024",
+        },
+      ],
+      abstractStatus: 500,
+    });
 
-      const startedAt = performance.now();
-      const result = await czUsAdapter.fetchPage("1:2010", {});
-      const elapsedMs = performance.now() - startedAt;
+    const page = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+    );
+    expect(page.decisions).toHaveLength(1);
+    expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
+  });
 
-      expect(Result.isOk(result)).toBe(true);
-      if (Result.isOk(result)) {
-        // The blob must not cost the parse its output either.
-        expect(result.value.decisions[0]?.metadata["judge"]).toContain(
-          "Jan Novák",
-        );
-      }
-      return elapsedMs;
+  test("enriches listed decisions with abstracts and legal sentences", async () => {
+    const abstract =
+      "This abstract is long enough to pass the extraction threshold.";
+    const legalSentence =
+      "This legal sentence is also long enough to pass the extraction threshold.";
+    installSearchMock({
+      rows: [
+        {
+          id: "5001",
+          sz: "2-10-24_1",
+          caseNumber: "II.ÚS 10/24",
+          date: "2. 2. 2024",
+        },
+      ],
+      abstract,
+      legalSentence,
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+    );
+    expect(page.decisions[0]?.metadata["abstract"]).toBe(abstract);
+    expect(page.decisions[0]?.metadata["legalSentence"]).toBe(legalSentence);
+  });
+
+  test("preserves decision-page metadata while taking identity from search", async () => {
+    const row = {
+      id: "6001",
+      sz: "Pl-14-24_1",
+      caseNumber: "Pl.ÚS 14/24",
+      date: "28. 5. 2024",
     };
+    installSearchMock({ rows: [row] });
+    const originalFetchForMetadata = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(resolveUrl(input));
+        if (url.pathname.endsWith("/Search/GetText.aspx")) {
+          return Promise.resolve(
+            new Response(
+              makeTextPage(row.caseNumber, row.date, {
+                decisionForm: "Usnesení",
+                parallelQuotation: "NALUS 14/24",
+                popularName: "Testovací věc",
+                counter: 1,
+              }),
+            ),
+          );
+        }
+        return originalFetchForMetadata(input, init);
+      }),
+    );
 
-    const small = await parseWith(1000);
-    const large = await parseWith(64_000);
+    const page = unwrap(
+      await czUsAdapter.fetchPage("search:historical:2024:0", {}),
+    );
+    const decision = page.decisions[0];
+    expect(decision?.sourceDocumentId).toBe("nalus:Pl-14-24_1");
+    expect(decision?.decisionType).toBe("usnesení");
+    expect(decision?.metadata).toMatchObject({
+      judge: "amet. Jan Novák",
+      parallelQuotation: "NALUS 14/24",
+      popularName: "Testovací věc",
+      ecliCounter: 1,
+      nalusRecordId: "6001",
+    });
+  });
 
-    // A super-linear scan over the blob turns a 64x size increase into
-    // minutes. Linear extraction leaves the two runs in the same order
-    // of magnitude, so a generous multiple still catches a regression
-    // without depending on how fast the machine is.
-    expect(large).toBeLessThan(Math.max(small, 50) * 8);
+  test("rejects corrupt search cursors instead of silently restarting", async () => {
+    installSearchMock({ empty: true });
+    const result = await czUsAdapter.fetchPage("search:future:2026:0", {});
+    expect(Result.isError(result)).toBe(true);
   });
 });

@@ -537,8 +537,8 @@ const processDecisionAttempt = async ({
   // fall back to the case number where it does not. The two are the halves
   // of the uniqueness key, so the lookup has to split the same way the
   // index does or it would find a row the insert cannot replace.
-  const existing = await scopedDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
+  const existing = await scopedDb(async (tx) => {
+    const identified = await tx.query.caseLawDecisions.findFirst({
       where: caseLawDecisionIdentityWhere({
         caseNumber: result.caseNumber,
         language: result.language,
@@ -556,8 +556,35 @@ const processDecisionAttempt = async ({
         sourceRawS3Key: true,
         sourceRawContentType: true,
       },
-    }),
-  );
+    });
+    if (identified || !result.sourceDocumentId) {
+      return identified;
+    }
+
+    // Adapters that learned the publisher's document id after their first
+    // release must adopt the legacy null-id row instead of duplicating it.
+    // The first document seen for a docket claims that row; later documents
+    // under the same docket then insert under their own publisher ids.
+    return await tx.query.caseLawDecisions.findFirst({
+      where: {
+        sourceId: { eq: sourceId },
+        caseNumber: result.caseNumber,
+        language: result.language,
+        sourceDocumentId: { isNull: true },
+      },
+      columns: {
+        id: true,
+        metadata: true,
+        sourceHash: true,
+        sourceObservedAt: true,
+        sourceObservationHash: true,
+        redactedAt: true,
+        corpusMirrorStatus: true,
+        sourceRawS3Key: true,
+        sourceRawContentType: true,
+      },
+    });
+  });
 
   if (existing?.redactedAt) {
     return {
@@ -933,6 +960,7 @@ const processDecisionAttempt = async ({
         const updated = await tx
           .update(caseLawDecisions)
           .set({
+            sourceDocumentId: result.sourceDocumentId,
             ecli: result.ecli,
             court: result.court,
             country: result.country,

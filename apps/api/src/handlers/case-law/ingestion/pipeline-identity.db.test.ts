@@ -172,6 +172,67 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? row["sheetNumber"] : undefined).toBe("42");
     });
 
+    test("adopts a legacy null-id row without collapsing later documents", async () => {
+      const legacy = decisionAt("Legacy identity", undefined);
+      await processDecision({
+        input: legacy,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const identified = {
+        ...legacy,
+        sourceDocumentId: "publisher-id-learned-later",
+        rawHash: "hash-with-publisher-id",
+      };
+      await processDecision({
+        input: identified,
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        sourceDocumentId: string;
+      }>`
+        SELECT count(*)::int AS count,
+               min(source_document_id) AS "sourceDocumentId"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND court = ${legacy.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? row["sourceDocumentId"] : undefined).toBe(
+        "publisher-id-learned-later",
+      );
+
+      await processDecision({
+        input: {
+          ...legacy,
+          sourceDocumentId: "second-document-under-the-docket",
+          rawHash: "hash-second-document",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+      const [afterSecond] = await db.execute(sql<{ count: number }>`
+        SELECT count(*)::int AS count
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND case_number = ${legacy.caseNumber}
+          AND court = ${legacy.court}
+      `);
+      expect(isRecord(afterSecond) ? Number(afterSecond["count"]) : 0).toBe(2);
+    });
+
     test("an older overlapping observation cannot overwrite a newer winner", async () => {
       const publisherId = "observed-order";
       const newer = decisionAt("Newest observation", publisherId);
