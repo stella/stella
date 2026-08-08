@@ -35,6 +35,37 @@ describe("shouldSkipRefresh", () => {
     ).toBe(false);
   });
 
+  test("allows unchanged content to upgrade to verbatim raw storage", () => {
+    expect(
+      shouldSkipRefresh({
+        existingMetadata: {},
+        existingSourceRawContentType: "application/xhtml+xml",
+        existingSourceHash: "same-hash",
+        incomingMetadata: {},
+        incomingRawHash: "same-hash",
+        incomingSourceRawContentType:
+          "application/xhtml+xml; stella-storage=verbatim",
+        incomingUsesSourceRawBytes: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("skips unchanged content after the raw storage upgrade", () => {
+    const verbatimContentType =
+      "application/xhtml+xml; stella-storage=verbatim";
+    expect(
+      shouldSkipRefresh({
+        existingMetadata: {},
+        existingSourceRawContentType: verbatimContentType,
+        existingSourceHash: "same-hash",
+        incomingMetadata: {},
+        incomingRawHash: "same-hash",
+        incomingSourceRawContentType: verbatimContentType,
+        incomingUsesSourceRawBytes: true,
+      }),
+    ).toBe(true);
+  });
+
   test("skips a transient downgrade from detail-rich to dump-only content", () => {
     expect(
       shouldSkipRefresh({

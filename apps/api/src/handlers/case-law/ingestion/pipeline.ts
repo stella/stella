@@ -1006,9 +1006,12 @@ const processDecisionAttempt = async ({
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
+      existingSourceRawContentType: existing.sourceRawContentType,
       existingSourceHash: existing.sourceHash,
       incomingMetadata: result.metadata,
       incomingRawHash: result.rawHash,
+      incomingSourceRawContentType: result.sourceRawContentType ?? "text/plain",
+      incomingUsesSourceRawBytes: result.sourceRawBytes !== undefined,
     })
   ) {
     const watermarkAdvanced = await scopedDb(
