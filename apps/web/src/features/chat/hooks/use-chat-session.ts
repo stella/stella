@@ -501,7 +501,7 @@ export const useChatSession = ({
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
-  const addToolApprovalResponse = chat.addToolApprovalResponse;
+  const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
   // with each older page. Re-seed whenever a fresh runtime is hydrated — both
@@ -748,9 +748,9 @@ export const useChatSession = ({
       _toolName?: ApprovalToolName,
       options?: ChatSendMessageOptions,
     ) => {
-      await addToolApprovalResponse({ id, approved: true }, options);
+      await resolveToolApproval({ id, approved: true }, options);
     },
-    [addToolApprovalResponse],
+    [resolveToolApproval],
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
@@ -767,9 +767,9 @@ export const useChatSession = ({
         conversationId,
         scope: "session",
       });
-      await addToolApprovalResponse({ id, approved: true });
+      await resolveToolApproval({ id, approved: true });
     },
-    [addToolApprovalResponse, conversationApprovedTools, conversationId],
+    [resolveToolApproval, conversationApprovedTools, conversationId],
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
@@ -779,7 +779,7 @@ export const useChatSession = ({
         toolName,
       });
       if (approvalKey === null) {
-        await addToolApprovalResponse({ id, approved: true });
+        await resolveToolApproval({ id, approved: true });
         return;
       }
 
@@ -794,10 +794,10 @@ export const useChatSession = ({
         nextStored,
       );
       dispatchApprovedToolsChanged({ scope: "local" });
-      await addToolApprovalResponse({ id, approved: true });
+      await resolveToolApproval({ id, approved: true });
     },
     [
-      addToolApprovalResponse,
+      resolveToolApproval,
       alwaysApprovedTools,
       mcpConnectorIdentities,
       organizationId,
@@ -805,9 +805,9 @@ export const useChatSession = ({
   );
   const handleDeny = useCallback(
     async (id: string) => {
-      await addToolApprovalResponse({ id, approved: false });
+      await resolveToolApproval({ id, approved: false });
     },
-    [addToolApprovalResponse],
+    [resolveToolApproval],
   );
   const handleAskUserSubmit = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {

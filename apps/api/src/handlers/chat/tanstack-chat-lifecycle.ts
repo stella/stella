@@ -1,3 +1,4 @@
+import { EventType } from "@tanstack/ai";
 import type {
   AbortInfo,
   ChatMiddleware,
@@ -32,6 +33,7 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   onError: "terminal",
   onFinish: "terminal",
   onIteration: "nonterminal",
+  onShouldContinue: "nonterminal",
   onStart: "nonterminal",
   onStructuredOutputConfig: "nonterminal",
   onToolPhaseComplete: "nonterminal",
@@ -62,7 +64,7 @@ export const TANSTACK_CHAT_MIDDLEWARE_PHASE_POLICY = {
 export type TanStackChatTerminalEvent =
   | { type: "completed"; context: ChatMiddlewareContext; info: FinishInfo }
   | { type: "failed"; context: ChatMiddlewareContext; info: ErrorInfo }
-  | { type: "interrupted"; context: ChatMiddlewareContext; info: AbortInfo };
+  | { type: "aborted"; context: ChatMiddlewareContext; info: AbortInfo };
 
 type TanStackTerminalHooks = Required<
   Pick<ChatMiddleware, "onAbort" | "onError" | "onFinish">
@@ -86,7 +88,7 @@ export const createTanStackTerminalHooks = (
   };
   return {
     onAbort: async (context, info) =>
-      await once({ type: "interrupted", context, info }),
+      await once({ type: "aborted", context, info }),
     onError: async (context, info) =>
       await once({ type: "failed", context, info }),
     onFinish: async (context, info) =>
@@ -110,7 +112,7 @@ export const TANSTACK_STREAM_EVENT_LIFECYCLE = {
   REASONING_MESSAGE_START: "content",
   REASONING_START: "content",
   RUN_ERROR: "failed",
-  RUN_FINISHED: "completed",
+  RUN_FINISHED: "terminal",
   RUN_STARTED: "started",
   STATE_DELTA: "content",
   STATE_SNAPSHOT: "content",
@@ -125,13 +127,17 @@ export const TANSTACK_STREAM_EVENT_LIFECYCLE = {
   TOOL_CALL_START: "content",
 } as const satisfies Record<
   StreamChunk["type"],
-  "completed" | "content" | "failed" | "started"
+  "content" | "failed" | "started" | "terminal"
 >;
 
 export const tanStackStreamEventLifecycle = (
   chunk: StreamChunk,
-): (typeof TANSTACK_STREAM_EVENT_LIFECYCLE)[StreamChunk["type"]] =>
-  TANSTACK_STREAM_EVENT_LIFECYCLE[chunk.type];
+): "completed" | "content" | "failed" | "started" | "waiting" => {
+  if (chunk.type === EventType.RUN_FINISHED) {
+    return chunk.outcome?.type === "interrupt" ? "waiting" : "completed";
+  }
+  return TANSTACK_STREAM_EVENT_LIFECYCLE[chunk.type];
+};
 
 /** Compile-time seam with TanStack's browser chat state union. */
 export const TANSTACK_CHAT_CLIENT_STATE_LIFECYCLE = {

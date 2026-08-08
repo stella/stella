@@ -140,6 +140,15 @@ const installDockerFake = (): DockerFake => {
 };
 
 describe("bun Docker provider failure handling", () => {
+  test("advertises spawned processes as killable", async () => {
+    installDockerFake();
+    const provider = bunDockerSandbox({ image: "sandbox:test" });
+    const handle = await provider.create({});
+
+    expect(handle.capabilities.killableProcesses).toBe(true);
+    await handle.destroy();
+  });
+
   test("filesystem mutations surface nonzero command exit codes", async () => {
     const { removals } = installDockerFake();
     const provider = bunDockerSandbox({ image: "sandbox:test" });

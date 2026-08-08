@@ -107,6 +107,7 @@ const { default: sendMessage, shouldLoadExternalMcpToolsForStreaming } =
   await import("./send-message");
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
+type SendMessageInput = SendMessageCtx["body"]["forwardedProps"];
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -169,13 +170,13 @@ const createContext = ({
     },
   },
 }: {
-  contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
-  message?: SendMessageCtx["body"]["message"];
+  contextMatterIds: SendMessageInput["contextMatterIds"];
+  message?: SendMessageInput["message"];
   request?: Request;
   onSafeDbTransaction?: (() => void) | undefined;
-  runMode?: SendMessageCtx["body"]["runMode"];
-  truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
-  turnIntent?: SendMessageCtx["body"]["turnIntent"];
+  runMode?: SendMessageInput["runMode"];
+  truncateAfterMessageId?: SendMessageInput["truncateAfterMessageId"];
+  turnIntent?: SendMessageInput["turnIntent"];
   transaction?: unknown;
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(transaction);
@@ -184,17 +185,27 @@ const createContext = ({
     return await safeDb(operation, retry);
   };
 
+  const forwardedProps = {
+    threadId,
+    runId: "run-test",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message,
+    ...(contextMatterIds === undefined ? {} : { contextMatterIds }),
+    ...(truncateAfterMessageId === undefined ? {} : { truncateAfterMessageId }),
+    ...(turnIntent === undefined ? {} : { turnIntent }),
+    ...(runMode === undefined ? {} : { runMode }),
+  };
+
   return asTestRaw<SendMessageCtx>({
     body: {
       threadId,
-      sendMode: CHAT_SEND_MODE.rawOverride,
-      contextMatterIds,
-      message,
-      ...(truncateAfterMessageId === undefined
-        ? {}
-        : { truncateAfterMessageId }),
-      ...(turnIntent === undefined ? {} : { turnIntent }),
-      ...(runMode === undefined ? {} : { runMode }),
+      runId: "run-test",
+      state: {},
+      messages: [message],
+      tools: [],
+      context: [],
+      forwardedProps,
+      data: forwardedProps,
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [

@@ -1,8 +1,4 @@
-import {
-  isStandardSchema,
-  parseWithStandardSchema,
-  type SchemaInput,
-} from "@tanstack/ai";
+import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -28,7 +24,6 @@ import {
   hasServerOwnedChatPartType,
   isIncomingChatPart,
   isChatTextPart,
-  restoreServerOwnedChatParts,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
@@ -50,17 +45,26 @@ import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 export { CHAT_RUN_MODE };
 export type { ChatRunMode };
 
+const rawMessageProperties = {
+  id: tSafeId("chatMessage"),
+  metadata: t.Optional(t.Unknown()),
+  parts: t.Array(t.Unknown()),
+};
+
 const rawMessageSchema = t.Object(
   {
-    id: tSafeId("chatMessage"),
+    ...rawMessageProperties,
     role: t.Union([
       t.Literal("system"),
       t.Literal("user"),
       t.Literal("assistant"),
     ]),
-    metadata: t.Optional(t.Unknown()),
-    parts: t.Array(t.Unknown()),
   },
+  { additionalProperties: true },
+);
+
+const rawAssistantContinuationMessageSchema = t.Object(
+  { ...rawMessageProperties, role: t.Literal("assistant") },
   { additionalProperties: true },
 );
 
@@ -184,8 +188,32 @@ export type DocxEditRepresentation =
 export const DEFAULT_DOCX_EDIT_REPRESENTATION: DocxEditRepresentation =
   DOCX_EDIT_REPRESENTATION.trackedChanges;
 
-export const sendMessageBodySchema = t.Object({
+const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
+const agUiResumeSchema = t.Array(
+  t.Union([
+    t.Object(
+      {
+        interruptId: t.String({ minLength: 1, maxLength: 512 }),
+        status: t.Literal("resolved"),
+        // AG-UI intentionally defines resume payloads as application-owned JSON.
+        payload: t.Optional(t.Unknown()),
+      },
+      { additionalProperties: false },
+    ),
+    t.Object(
+      {
+        interruptId: t.String({ minLength: 1, maxLength: 512 }),
+        status: t.Literal("cancelled"),
+      },
+      { additionalProperties: false },
+    ),
+  ]),
+  { minItems: 1, maxItems: 128 },
+);
+
+const sendMessageCommonProperties = {
   threadId: tSafeId("chatThread"),
+  runId: agUiRunIdSchema,
   workspaceId: t.Optional(tSafeId("workspace")),
   sendMode: t.Union([
     t.Literal(CHAT_SEND_MODE.anonymized),
@@ -200,7 +228,6 @@ export const sendMessageBodySchema = t.Object({
    * without re-sending.
    */
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
-  message: rawMessageSchema,
   truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
   turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
   /**
@@ -211,13 +238,8 @@ export const sendMessageBodySchema = t.Object({
    */
   toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   /**
-   * Execution mode for this turn. Absent (the default) runs the normal
-   * server-side chat model with the user's selected model, tools, and MCP.
-   * `"agent"` explicitly requests an agent-sandbox run; the request
-   * fails when the deployment has not enabled and fully configured that
-   * engine. Making this an explicit opt-in means a normal, BYOK, or
-   * model-selected chat is never silently rerouted into a sandbox just because
-   * the engine is enabled.
+   * Execution mode for this turn. Absent runs normal server-side chat;
+   * `"agent"` explicitly requests the configured agent sandbox.
    */
   runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
   userContext: t.Optional(userContextSchema),
@@ -257,11 +279,113 @@ export const sendMessageBodySchema = t.Object({
       pattern: "^[A-Za-z0-9._:/-]+$",
     }),
   ),
-});
+};
+
+const noResumeBodySchema = t.Object(
+  {
+    ...sendMessageCommonProperties,
+    message: rawMessageSchema,
+  },
+  { additionalProperties: false },
+);
+
+const nativeAssistantContinuationBodySchema = t.Object(
+  {
+    ...sendMessageCommonProperties,
+    message: rawAssistantContinuationMessageSchema,
+    parentRunId: agUiRunIdSchema,
+    resume: agUiResumeSchema,
+  },
+  { additionalProperties: false },
+);
+
+export const sendMessageBodySchema = t.Union([
+  noResumeBodySchema,
+  nativeAssistantContinuationBodySchema,
+]);
 
 export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
 
+const agUiMessageEnvelopeSchema = t.Object(
+  {
+    id: t.String({ minLength: 1, maxLength: 512 }),
+    role: t.Union([
+      t.Literal("developer"),
+      t.Literal("system"),
+      t.Literal("assistant"),
+      t.Literal("user"),
+      t.Literal("tool"),
+      t.Literal("activity"),
+      t.Literal("reasoning"),
+    ]),
+  },
+  {
+    // Message bodies are the upstream AG-UI discriminated union plus
+    // TanStack's `parts` extension. Stella does not consume this mirrored
+    // history: `forwardedProps.message` below is the strict mutation input.
+    additionalProperties: true,
+  },
+);
+
+/**
+ * Canonical AG-UI RunAgentInput envelope emitted by TanStack's connection
+ * adapter. Stella-specific, strictly validated inputs live in forwardedProps;
+ * correlation and resume fields stay protocol-native at the top level.
+ */
+const agUiEnvelopeCommonProperties = {
+  threadId: tSafeId("chatThread"),
+  runId: agUiRunIdSchema,
+  state: t.Object({}, { additionalProperties: true }),
+  messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
+  tools: t.Array(
+    t.Object(
+      {
+        name: t.String({ minLength: 1, maxLength: 512 }),
+        description: t.String({ maxLength: 16_384 }),
+        parameters: t.Optional(t.Unknown()),
+        metadata: t.Optional(t.Record(t.String(), t.Unknown())),
+      },
+      { additionalProperties: false },
+    ),
+    { maxItems: 512 },
+  ),
+  context: t.Array(
+    t.Object(
+      {
+        description: t.String({ maxLength: 16_384 }),
+        value: t.String({ maxLength: 1_000_000 }),
+      },
+      { additionalProperties: false },
+    ),
+    { maxItems: 512 },
+  ),
+};
+
+export const agUiSendMessageBodySchema = t.Union([
+  t.Object(
+    {
+      ...agUiEnvelopeCommonProperties,
+      forwardedProps: noResumeBodySchema,
+      // TanStack mirrors forwardedProps under legacy `data`; validating both
+      // prevents an untyped shadow payload from crossing the route boundary.
+      data: noResumeBodySchema,
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      ...agUiEnvelopeCommonProperties,
+      forwardedProps: nativeAssistantContinuationBodySchema,
+      data: nativeAssistantContinuationBodySchema,
+      parentRunId: agUiRunIdSchema,
+      resume: agUiResumeSchema,
+    },
+    { additionalProperties: false },
+  ),
+]);
+
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
+type AgUiResume = Static<typeof agUiResumeSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
 export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
@@ -280,6 +404,7 @@ type ValidateMessageInput = {
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
   userId: SafeId<"user">;
+  resume?: AgUiResume | undefined;
 };
 
 type ValidateMessageResult = Result<
@@ -290,7 +415,6 @@ type ValidateMessageResult = Result<
   HandlerError<400 | 403 | 404> | SafeDbError
 >;
 
-type ChatToolSchema = SchemaInput | undefined;
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
 const CONTINUATION_TOOL_CALL_TRANSITIONS = {
@@ -337,6 +461,7 @@ type ValidatedToolCallPart =
 export const validateMessage = async ({
   message,
   persistedMessage,
+  resume,
   safeDb,
   threadId,
   tools,
@@ -346,6 +471,7 @@ export const validateMessage = async ({
     const partsResult = validateIncomingChatParts({
       message,
       persistedMessage,
+      resume,
     });
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
@@ -356,7 +482,7 @@ export const validateMessage = async ({
       return Result.err(metadataResult.error);
     }
 
-    const metadata = restoreServerOwnedChatMetadata({
+    const metadata = resolveValidatedChatMetadata({
       incomingMetadata: metadataResult.value,
       message,
       persistedMessage,
@@ -433,7 +559,7 @@ export const validateMessage = async ({
     });
   });
 
-const restoreServerOwnedChatMetadata = ({
+const resolveValidatedChatMetadata = ({
   incomingMetadata,
   message,
   persistedMessage,
@@ -446,35 +572,21 @@ const restoreServerOwnedChatMetadata = ({
     return incomingMetadata;
   }
 
-  const persistedMetadata = chatMessageFromPersisted({
+  return chatMessageFromPersisted({
     id: message.id,
     role: persistedMessage.role,
     content: persistedMessage.content,
   }).metadata;
-  const restored: ChatMessageMetadata = {
-    ...incomingMetadata,
-    ...(persistedMetadata?.serverProvenance === undefined
-      ? {}
-      : { serverProvenance: persistedMetadata.serverProvenance }),
-    ...(persistedMetadata?.activeDraftContext === undefined
-      ? {}
-      : { activeDraftContext: persistedMetadata.activeDraftContext }),
-    ...(persistedMetadata?.sourceDocuments === undefined
-      ? {}
-      : { sourceDocuments: persistedMetadata.sourceDocuments }),
-    ...(persistedMetadata?.turnOutcome === undefined
-      ? {}
-      : { turnOutcome: persistedMetadata.turnOutcome }),
-  };
-  return isChatMessageMetadataEmpty(restored) ? undefined : restored;
 };
 
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
+  resume,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
+  resume: AgUiResume | undefined;
 }): Result<ChatPart[], HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
   for (const part of message.parts) {
@@ -508,17 +620,77 @@ const validateIncomingChatParts = ({
     const continuationIntegrityResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedParts,
+      resume,
     });
     if (Result.isError(continuationIntegrityResult)) {
       return Result.err(continuationIntegrityResult.error);
     }
+    return Result.ok(
+      applyValidatedContinuationTransitions({
+        incomingParts: validatedParts,
+        persistedParts,
+      }),
+    );
   }
-  return Result.ok(
-    restoreServerOwnedChatParts({
-      incomingParts: validatedParts,
-      persistedParts,
-    }),
+  return Result.ok(validatedParts);
+};
+
+const applyValidatedContinuationTransitions = ({
+  incomingParts,
+  persistedParts,
+}: {
+  incomingParts: readonly ChatPart[];
+  persistedParts: readonly ChatPart[];
+}): ChatPart[] => {
+  const incomingCalls = new Map(
+    incomingParts.flatMap((part) =>
+      part.type === "tool-call" ? [[part.id, part] as const] : [],
+    ),
   );
+  const transitionedCallIds = new Set<string>();
+  const mergedParts = persistedParts.map((part) => {
+    if (part.type !== "tool-call") {
+      return part;
+    }
+    const incomingCall = incomingCalls.get(part.id);
+    if (incomingCall === undefined || deepEquals(incomingCall, part)) {
+      return part;
+    }
+    transitionedCallIds.add(part.id);
+    return incomingCall;
+  });
+  const resultCallIds = new Set(
+    persistedParts.flatMap((part) =>
+      part.type === "tool-result" ? [part.toolCallId] : [],
+    ),
+  );
+
+  for (const part of incomingParts) {
+    if (
+      part.type !== "tool-result" ||
+      resultCallIds.has(part.toolCallId) ||
+      !transitionedCallIds.has(part.toolCallId)
+    ) {
+      continue;
+    }
+    const callIndex = mergedParts.findIndex(
+      (candidate) =>
+        candidate.type === "tool-call" && candidate.id === part.toolCallId,
+    );
+    if (callIndex === -1) {
+      continue;
+    }
+    mergedParts.splice(callIndex + 1, 0, {
+      type: "tool-result",
+      toolCallId: part.toolCallId,
+      content: part.content,
+      state: part.state,
+      ...(part.error === undefined ? {} : { error: part.error }),
+    });
+    resultCallIds.add(part.toolCallId);
+  }
+
+  return mergedParts;
 };
 
 /**
@@ -529,9 +701,11 @@ const validateIncomingChatParts = ({
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedParts,
+  resume,
 }: {
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
+  resume: AgUiResume | undefined;
 }): Result<void, HandlerError<400>> => {
   const canonicalCalls = persistedParts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
@@ -560,13 +734,86 @@ const validateContinuationToolCallIntegrity = ({
     parts: [...incomingParts],
     role: "assistant",
   });
-  if (resumedInteraction === null) {
-    return Result.ok();
-  }
   const awaitedInteractions = getAwaitingUserInteractions({
     parts: [...persistedParts],
     role: "assistant",
   });
+  if (resume !== undefined) {
+    const awaitedInterrupts: {
+      interaction: (typeof awaitedInteractions)[number];
+      interruptId: string;
+    }[] = [];
+    for (const awaited of awaitedInteractions) {
+      const call = canonicalCalls.find(
+        (candidate) => candidate.id === awaited.toolCallId,
+      );
+      if (call === undefined) {
+        continue;
+      }
+      if (awaited.type === "approval") {
+        if (!("approval" in call)) {
+          continue;
+        }
+        awaitedInterrupts.push({
+          interaction: awaited,
+          interruptId: call.approval.id,
+        });
+        continue;
+      }
+      awaitedInterrupts.push({
+        interaction: awaited,
+        interruptId: `client_tool_${call.id}`,
+      });
+    }
+    const resumedInteractions = incomingCalls.flatMap((call, index) => {
+      const canonicalCall = canonicalCalls.at(index);
+      if (canonicalCall === undefined || canonicalCall.state === call.state) {
+        return [];
+      }
+      const resumed = getResumedUserInteraction({
+        parts: [call],
+        role: "assistant",
+      });
+      return resumed === null ? [] : [{ call, interaction: resumed }];
+    });
+    if (
+      awaitedInterrupts.length !== awaitedInteractions.length ||
+      resume.length !== awaitedInterrupts.length ||
+      resume.some((resolution) => {
+        const awaited = awaitedInterrupts.find(
+          (candidate) => candidate.interruptId === resolution.interruptId,
+        );
+        if (awaited === undefined) {
+          return true;
+        }
+        const transition = resumedInteractions.find(
+          ({ interaction }) =>
+            interaction.toolCallId === awaited.interaction.toolCallId &&
+            interaction.type === awaited.interaction.type,
+        );
+        if (resolution.status === "cancelled") {
+          return transition !== undefined;
+        }
+        if (transition === undefined) {
+          return true;
+        }
+        if (awaited.interaction.type === "approval") {
+          return (
+            !("approval" in transition.call) ||
+            !deepEquals(resolution.payload, {
+              approved: transition.call.approval.approved,
+            })
+          );
+        }
+        return !deepEquals(resolution.payload, transition.call.output);
+      })
+    ) {
+      return invalidContinuationToolCall();
+    }
+  }
+  if (resumedInteraction === null) {
+    return Result.ok();
+  }
   const interaction = awaitedInteractions.find(
     (candidate) =>
       candidate.toolCallId === resumedInteraction.toolCallId &&
@@ -585,6 +832,31 @@ const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
       message: "Chat continuation does not match its awaited interaction",
     }),
   );
+
+const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
+  "approval",
+  "state",
+]);
+const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
+
+const hasOnlyPermittedToolCallChanges = ({
+  canonicalCall,
+  incomingCall,
+  mutableProperties,
+}: {
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+  mutableProperties: ReadonlySet<string>;
+}): boolean => {
+  const immutableProperties = (call: ChatToolCallPart) =>
+    Object.fromEntries(
+      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
+    );
+  return deepEquals(
+    immutableProperties(incomingCall),
+    immutableProperties(canonicalCall),
+  );
+};
 
 const isPermittedContinuationToolCallTransition = ({
   canonicalCall,
@@ -622,6 +894,11 @@ const isPermittedContinuationToolCallTransition = ({
       return false;
     }
     return (
+      hasOnlyPermittedToolCallChanges({
+        canonicalCall,
+        incomingCall,
+        mutableProperties: APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES,
+      }) &&
       incomingCall.approval.id === canonicalCall.approval.id &&
       incomingCall.approval.needsApproval ===
         canonicalCall.approval.needsApproval &&
@@ -634,11 +911,11 @@ const isPermittedContinuationToolCallTransition = ({
     canonicalCall.state === "input-complete" &&
     (incomingCall.state === "complete" || incomingCall.state === "error")
   ) {
-    const canonicalApproval =
-      "approval" in canonicalCall ? canonicalCall.approval : undefined;
-    const incomingApproval =
-      "approval" in incomingCall ? incomingCall.approval : undefined;
-    return deepEquals(incomingApproval, canonicalApproval);
+    return hasOnlyPermittedToolCallChanges({
+      canonicalCall,
+      incomingCall,
+      mutableProperties: TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES,
+    });
   }
   return false;
 };
@@ -1187,7 +1464,7 @@ const validateToolPayload = ({
 }: {
   payload: unknown;
   payloadName: "arguments" | "input" | "output" | "result";
-  schema: ChatToolSchema;
+  schema: unknown;
   toolName: string;
 }): Result<unknown, HandlerError<400>> => {
   if (schema === undefined || !isStandardSchema(schema)) {

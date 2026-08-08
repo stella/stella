@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import type { Tool } from "@tanstack/ai";
+import type { AnyServerTool } from "@tanstack/ai";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -100,7 +100,7 @@ const outputSchema = v.strictObject({
 export type WeeklyToolShapeDefinition = {
   expectedInputs: unknown[];
   prompt: string;
-  tool: Tool;
+  tool: AnyServerTool;
 };
 
 export const createWeeklyToolShapeDefinition = (

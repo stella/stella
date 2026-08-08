@@ -1,4 +1,4 @@
-import type { MCPToolSource, ServerTool } from "@tanstack/ai";
+import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import { Result } from "better-result";
 
 import {
@@ -819,6 +819,46 @@ const anonymizeUnknownStrings = ({
   });
 };
 
+/**
+ * Prepare an arbitrary application value for a third-party model boundary.
+ * Every user-bearing string is anonymized in one batch, while structured
+ * technical identifiers retain the same preservation rules as tool payloads.
+ */
+export const prepareUnknownForThirdParty = async ({
+  boundary,
+  value,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  value: unknown;
+}): Promise<Result<unknown, BoundaryRefusal>> => {
+  if (boundary.type === "raw") {
+    return Result.ok(value);
+  }
+
+  const replacements: TextReplacement[] = [];
+  let preparedValue: unknown;
+  const anonymized = anonymizeUnknownStrings({
+    apply: (next) => {
+      preparedValue = next;
+    },
+    replacements,
+    value,
+  });
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
+
+  preparedValue = anonymized.value;
+  const anonymizedBatch = await prepareTextBatchForThirdParty({
+    boundary,
+    replacements,
+  });
+  if (Result.isError(anonymizedBatch)) {
+    return Result.err(anonymizedBatch.error);
+  }
+  return Result.ok(preparedValue);
+};
+
 type ToolLikePart = Extract<ChatMessage["parts"][number], { state: string }>;
 type ToolResultPart = Extract<
   ChatMessage["parts"][number],
@@ -1134,8 +1174,8 @@ export const prepareMcpToolSourceForThirdParty = ({
 
 const prepareMcpServerToolForThirdParty = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
-  tool: ServerTool,
-): ServerTool => {
+  tool: AnyServerTool,
+): AnyServerTool => {
   const execute = tool.execute;
   if (!execute) {
     return tool;

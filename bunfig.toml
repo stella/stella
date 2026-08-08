@@ -49,6 +49,7 @@ minimumReleaseAgeExcludes = [
   # TanStack AI beta: opted in ahead of stable for the AI SDK migration.
   "@tanstack/ai",
   "@tanstack/ai-anthropic",
+  "@tanstack/ai-codex",
   "@tanstack/ai-code-mode",
   "@tanstack/ai-bedrock",
   "@tanstack/ai-client",
@@ -59,6 +60,7 @@ minimumReleaseAgeExcludes = [
   "@tanstack/ai-openai",
   "@tanstack/ai-openrouter",
   "@tanstack/ai-react",
+  "@tanstack/ai-sandbox",
   "@tanstack/ai-utils",
   "@tanstack/react-ai-devtools",
   # TanStack Table 9 stable was adopted before its release-age window. These

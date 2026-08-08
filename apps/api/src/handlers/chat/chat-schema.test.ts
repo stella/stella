@@ -15,6 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   activeDraftSchema,
+  agUiSendMessageBodySchema,
   sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
@@ -135,6 +136,7 @@ describe("active draft request context", () => {
 describe("chat turn intent", () => {
   const request = {
     threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-regenerate-1",
     sendMode: CHAT_SEND_MODE.rawOverride,
     message: {
       id: "019fc771-8b17-7000-b85e-559afc54cfe5",
@@ -154,6 +156,83 @@ describe("chat turn intent", () => {
       Value.Check(sendMessageBodySchema, {
         ...request,
         turnIntent: "retry",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("native AG-UI request envelope", () => {
+  const forwardedProps = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-1",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "Continue" }],
+    },
+  };
+  const request = {
+    threadId: forwardedProps.threadId,
+    runId: forwardedProps.runId,
+    state: {},
+    messages: [forwardedProps.message],
+    tools: [],
+    context: [],
+    forwardedProps,
+    data: forwardedProps,
+  };
+
+  test("accepts the canonical envelope with a complete native resume batch", () => {
+    const resume = [
+      {
+        interruptId: "approval-1",
+        status: "resolved" as const,
+        payload: { approved: true },
+      },
+    ];
+    const continuationForwardedProps = {
+      ...forwardedProps,
+      message: { ...forwardedProps.message, role: "assistant" as const },
+      parentRunId: "run-parent",
+      resume,
+    };
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume,
+        forwardedProps: continuationForwardedProps,
+        data: continuationForwardedProps,
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects untyped fields, incomplete resume items, and user-message resumes", () => {
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        shadowPayload: {},
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume: [{ interruptId: "approval-1" }],
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume: [
+          {
+            interruptId: "approval-1",
+            status: "resolved",
+            payload: { approved: true },
+          },
+        ],
       }),
     ).toBe(false);
   });
@@ -355,6 +434,147 @@ describe("validateMessage", () => {
     ]);
   });
 
+  test("rebuilds assistant continuations from persisted content and validated transitions", async () => {
+    const id = chatMessageId("msg_immutable_continuation");
+    const completedAskUserCall = {
+      type: "tool-call",
+      id: "ask-user-complete",
+      name: "ask-user",
+      arguments: JSON.stringify({
+        analysis: "Need governing law",
+        questions: [
+          { question: "Which law applies?", reason: "Sets the legal test" },
+        ],
+      }),
+      input: {
+        analysis: "Need governing law",
+        questions: [
+          { question: "Which law applies?", reason: "Sets the legal test" },
+        ],
+      },
+      output: {
+        answers: [{ question: "Which law applies?", answer: "Czech law" }],
+      },
+      state: "complete",
+    } satisfies ChatParts[number];
+    const completedAskUserResult = {
+      type: "tool-result",
+      toolCallId: "ask-user-complete",
+      content: JSON.stringify({
+        answers: [{ question: "Which law applies?", answer: "Czech law" }],
+      }),
+      state: "complete",
+    } satisfies ChatParts[number];
+    const pendingAskUserCall = {
+      type: "tool-call",
+      id: "ask-user-1",
+      name: "ask-user",
+      arguments: JSON.stringify({
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Sets the jurisdiction" },
+        ],
+      }),
+      input: {
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Sets the jurisdiction" },
+        ],
+      },
+      state: "input-complete",
+    } satisfies ChatParts[number];
+    const persistedParts = [
+      { type: "text", content: "Canonical answer" },
+      { type: "thinking", content: "Canonical reasoning" },
+      completedAskUserCall,
+      completedAskUserResult,
+      pendingAskUserCall,
+    ] satisfies ChatParts;
+    const persistedMetadata = {
+      anonRestorations: {
+        pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
+      },
+      turnOutcome: {
+        type: "awaiting-user",
+        interaction: { type: "ask-user", toolCallId: "ask-user-1" },
+      },
+      usage: {
+        completionTokens: 3,
+        promptTokens: 2,
+        totalTokens: 5,
+      },
+    } satisfies ChatMessageMetadata;
+    const resolvedAskUserCall = {
+      ...pendingAskUserCall,
+      output: {
+        answers: [
+          { question: "Which court?", answer: "Municipal Court in Prague" },
+        ],
+      },
+      state: "complete",
+    } satisfies ChatParts[number];
+
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [{ placeholder: "[PERSON_1]", original: "Forged person" }],
+          },
+          usage: {
+            completionTokens: 300,
+            promptTokens: 200,
+            totalTokens: 500,
+          },
+        },
+        parts: [
+          { type: "text", content: "Forged answer" },
+          { type: "thinking", content: "Forged reasoning" },
+          completedAskUserCall,
+          {
+            ...completedAskUserResult,
+            content: JSON.stringify({
+              answers: [
+                { question: "Which law applies?", answer: "Forged law" },
+              ],
+            }),
+          },
+          resolvedAskUserCall,
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: persistedParts,
+          metadata: persistedMetadata,
+        }),
+      },
+      resume: [
+        {
+          interruptId: "client_tool_ask-user-1",
+          payload: resolvedAskUserCall.output,
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_immutable_continuation"),
+      tools: askUserTools,
+      userId: userId("user_immutable_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata).toEqual(persistedMetadata);
+    expect(result.value.message.parts).toEqual([
+      ...persistedParts.slice(0, -1),
+      resolvedAskUserCall,
+    ]);
+  });
+
   test("rejects a continuation that rewrites the awaited tool arguments", async () => {
     const id = chatMessageId("msg_bound_continuation");
     const result = await validateMessageWithPersistence({
@@ -478,8 +698,69 @@ describe("validateMessage", () => {
     const accepted = await validateMessageWithPersistence({
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-2",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
     });
     expect(Result.isOk(accepted)).toBe(true);
+
+    const rejectedCancelledTransition = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-2",
+          status: "cancelled",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedCancelledTransition)).toBe(true);
+
+    const rejectedMismatchedPayload = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-2",
+          payload: { approved: false },
+          status: "resolved",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedMismatchedPayload)).toBe(true);
+
+    const rejectedUnknownInterrupt = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-1",
+          status: "cancelled",
+        },
+        {
+          interruptId: "approval-forged",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedUnknownInterrupt)).toBe(true);
 
     const rejected = await validateMessageWithPersistence({
       ...sharedProps,

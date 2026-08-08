@@ -1,4 +1,4 @@
-import type { MCPToolSource, ServerTool } from "@tanstack/ai";
+import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -88,7 +88,7 @@ export const loadExternalMcpToolsForUser = async ({
 
   const clients: MCPClient[] = [];
   const connectors: LoadedExternalMcpConnector[] = [];
-  const sourceTools: Record<string, ServerTool | undefined> = {};
+  const sourceTools: Record<string, AnyServerTool | undefined> = {};
   const loadedTools: ChatToolMap = {};
 
   // Merge sequentially, after every connector has settled, instead of
@@ -177,12 +177,12 @@ export const createStellaMcpToolSource = ({
   sourceTools,
 }: {
   closeClients: () => Promise<void>;
-  sourceTools: Readonly<Record<string, ServerTool | undefined>>;
+  sourceTools: Readonly<Record<string, AnyServerTool | undefined>>;
 }): StellaMcpToolSource => ({
   close: closeClients,
   tools: async ({ lazy = true }: { lazy?: boolean } = {}) => {
     const discoveredTools = Object.values(sourceTools).filter(
-      (tool): tool is ServerTool => tool !== undefined,
+      (tool): tool is AnyServerTool => tool !== undefined,
     );
     if (lazy) {
       return await Promise.resolve(discoveredTools);
@@ -192,7 +192,7 @@ export const createStellaMcpToolSource = ({
   },
 });
 
-const stripLazyToolFlag = (tool: ServerTool): ServerTool => {
+const stripLazyToolFlag = (tool: AnyServerTool): AnyServerTool => {
   const eagerTool = { ...tool };
   delete eagerTool.lazy;
   return eagerTool;
@@ -202,7 +202,7 @@ const copyServerTools = ({
   sourceTools,
   tools,
 }: {
-  sourceTools: Record<string, ServerTool | undefined>;
+  sourceTools: Record<string, AnyServerTool | undefined>;
   tools: ChatToolMap;
 }): void => {
   for (const [name, tool] of Object.entries(tools)) {
@@ -212,7 +212,7 @@ const copyServerTools = ({
   }
 };
 
-const isServerTool = (tool: ChatTool | undefined): tool is ServerTool =>
+const isServerTool = (tool: ChatTool | undefined): tool is AnyServerTool =>
   tool !== undefined && "__toolSide" in tool && tool.__toolSide === "server";
 
 type LoadedExternalMcpConnectorResult = {
@@ -354,7 +354,7 @@ export const loadMcpConnectorTools = async ({
 }: {
   client: MCPClient;
   row: LoadedMcpConnection;
-}): Promise<ServerTool[]> => {
+}): Promise<AnyServerTool[]> => {
   const definitions = getExternalMcpToolDefinitionsForConnector(row);
   if (definitions === null) {
     return await client.tools();

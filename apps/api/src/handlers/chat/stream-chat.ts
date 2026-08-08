@@ -6,10 +6,11 @@ import {
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
+  AnyServerTool,
   ChatMiddleware,
   ChatMiddlewareConfig,
   ModelMessage,
-  ServerTool,
+  RunAgentResumeItem,
   StreamChunk,
   TokenUsage,
   UIMessage,
@@ -70,6 +71,7 @@ import {
   prepareMcpToolSourceForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
+  prepareUnknownForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
@@ -167,7 +169,11 @@ type StreamChatProps = {
   /** Explicit effort for a validated manual model selection. */
   reasoningEffort?: ReasoningEffort | undefined;
   latestMessageId: string;
+  runId: string;
+  parentRunId?: string | undefined;
+  resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
+  owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -235,11 +241,54 @@ export const pruneOrphanedToolParts = (
       : { ...message, parts };
   });
 
+export const prepareResumeForThirdParty = async ({
+  boundary,
+  resume,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  resume: RunAgentResumeItem[] | undefined;
+}): Promise<
+  Result<RunAgentResumeItem[] | undefined, HandlerError<422 | 500>>
+> => {
+  if (resume === undefined || boundary.type === "raw") {
+    return Result.ok(resume);
+  }
+
+  const resumePayloads: unknown[] = resume.map((item) => {
+    const payload: unknown = item.payload;
+    return payload;
+  });
+  const payloads = await prepareUnknownForThirdParty({
+    boundary,
+    value: resumePayloads,
+  });
+  if (Result.isError(payloads)) {
+    return Result.err(payloads.error);
+  }
+  const preparedPayloads: unknown = payloads.value;
+  if (!Array.isArray(preparedPayloads)) {
+    return panic("Resume payload preparation changed the batch shape");
+  }
+  return Result.ok(
+    resume.map((item, index) => {
+      if (item.payload === undefined) {
+        return item;
+      }
+      const payload: unknown = preparedPayloads.at(index);
+      return { ...item, payload };
+    }),
+  );
+};
+
 export const streamChat = async ({
   abortSignal,
   devModelId,
   latestMessageId,
+  runId,
+  parentRunId,
+  resume,
   messages: rawMessages,
+  owningAssistantMessageId,
   onFinish,
   organizationId,
   orgAIConfig,
@@ -295,6 +344,14 @@ export const streamChat = async ({
   if (Result.isError(rawPreparedMessages)) {
     return thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error);
   }
+  const preparedResumeResult = await prepareResumeForThirdParty({
+    boundary: thirdPartyBoundary,
+    resume,
+  });
+  if (Result.isError(preparedResumeResult)) {
+    return thirdPartyBoundaryRefusalResponse(preparedResumeResult.error);
+  }
+  const preparedResume = preparedResumeResult.value;
   // Messages carry user-authored and historical text (mention hrefs from
   // before ref hydration covered user text, pasted workspace URLs), so hits
   // are redacted rather than refused: old threads keep working, telemetry
@@ -399,6 +456,9 @@ export const streamChat = async ({
     promptCachingEnabled,
     runMode,
     sandboxRun,
+    runId,
+    parentRunId,
+    resume: preparedResume,
     safeDb,
     surfaces: {
       messages: preparedMessageList,
@@ -414,6 +474,8 @@ export const streamChat = async ({
 
   const output = processServerChatStream({
     abortSignal,
+    existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
+    preservedTerminalMessageId: owningAssistantMessageId,
     onFinish,
     processor,
     source: transformOutgoingStream({
@@ -535,16 +597,19 @@ const chatAttemptTerminalError = (
 
 type ShouldAttemptChatFallbackInput = {
   hasFallbackModel: boolean;
+  hasNativeContinuation: boolean;
   primaryError: ChatLoopDetectedError | ChatEmptyCompletionError;
   runMode: ChatRunMode | undefined;
 };
 
 export const shouldAttemptChatFallback = ({
   hasFallbackModel,
+  hasNativeContinuation,
   primaryError,
   runMode,
 }: ShouldAttemptChatFallbackInput): boolean =>
   runMode !== CHAT_RUN_MODE.agent &&
+  !hasNativeContinuation &&
   primaryError instanceof ChatEmptyCompletionError &&
   hasFallbackModel;
 const projectServerToolsForProvider = ({
@@ -552,13 +617,13 @@ const projectServerToolsForProvider = ({
   serverTools,
 }: {
   provider: string;
-  serverTools: readonly ServerTool[];
-}): ServerTool[] => {
+  serverTools: readonly AnyServerTool[];
+}): AnyServerTool[] => {
   const projectionOptions = providerSafeJsonSchemaOptionsForTanStackProvider(
     provider,
     "tool",
   );
-  const projectedTools: ServerTool[] = [];
+  const projectedTools: AnyServerTool[] = [];
   for (const tool of serverTools) {
     const projectedTool = { ...tool };
     if (tool.inputSchema !== undefined) {
@@ -736,6 +801,9 @@ type RunChatAttemptsProps = {
   promptCachingEnabled: boolean;
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  runId: string;
+  parentRunId: string | undefined;
+  resume: RunAgentResumeItem[] | undefined;
   safeDb: SafeDb;
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
@@ -757,6 +825,9 @@ const runChatAttempts = async function* ({
   promptCachingEnabled,
   runMode,
   sandboxRun,
+  runId,
+  parentRunId,
+  resume,
   safeDb,
   surfaces,
   thirdPartyBoundary,
@@ -780,6 +851,9 @@ const runChatAttempts = async function* ({
     orgAIConfig,
     promptCacheKey,
     promptCachingEnabled,
+    runId,
+    parentRunId,
+    resume,
     role: "chat",
     safeDb,
     sandboxRun,
@@ -799,6 +873,7 @@ const runChatAttempts = async function* ({
   if (
     !shouldAttemptChatFallback({
       hasFallbackModel: fallbackModel !== null,
+      hasNativeContinuation: resume !== undefined,
       primaryError,
       runMode,
     })
@@ -853,6 +928,9 @@ type RunChatAttemptProps = {
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
+  runId?: string | undefined;
+  parentRunId?: string | undefined;
+  resume?: RunAgentResumeItem[] | undefined;
   role: ChatAttemptRole;
   safeDb: SafeDb;
   /**
@@ -883,6 +961,9 @@ const runChatAttempt = async function* ({
   orgAIConfig,
   promptCacheKey,
   promptCachingEnabled,
+  runId,
+  parentRunId,
+  resume,
   role,
   safeDb,
   sandboxRun,
@@ -949,6 +1030,9 @@ const runChatAttempt = async function* ({
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
+      ...(runId === undefined ? {} : { runId }),
+      ...(parentRunId === undefined ? {} : { parentRunId }),
+      ...(resume === undefined ? {} : { resume }),
       middleware: [
         analytics.middleware,
         createChatRuntimeMiddleware({
@@ -995,6 +1079,9 @@ const runChatAttempt = async function* ({
     agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
     abortController,
     threadId,
+    ...(runId === undefined ? {} : { runId }),
+    ...(parentRunId === undefined ? {} : { parentRunId }),
+    ...(resume === undefined ? {} : { resume }),
     ...systemPromptsPatch({ caching, model, system: baseSystem }),
     modelOptions: mergeGenerationOptions({
       caching,
@@ -1113,8 +1200,8 @@ const createChatRuntimeMiddleware = ({
           usage: event.info.usage,
         });
         return;
+      case "aborted":
       case "failed":
-      case "interrupted":
         return;
       default:
         event satisfies never;
@@ -1187,9 +1274,11 @@ const createChatRuntimeMiddleware = ({
 
 type ProcessServerChatStreamProps = {
   abortSignal: AbortSignal;
+  existingMessageIds?: ReadonlySet<string> | undefined;
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  preservedTerminalMessageId?: SafeId<"chatMessage"> | undefined;
   processor: StreamProcessor;
   source: AsyncIterable<StreamChunk>;
 };
@@ -1273,9 +1362,11 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
 
 export const processServerChatStream = async function* ({
   abortSignal,
+  existingMessageIds = new Set(),
   getResponseMessage,
   mapMessageId,
   onFinish,
+  preservedTerminalMessageId,
   processor,
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
@@ -1303,6 +1394,7 @@ export const processServerChatStream = async function* ({
       getResponseMessage,
       mapMessageId,
       outcome,
+      preservedTerminalMessageId,
       usage,
     });
     terminal.state = "settled";
@@ -1313,6 +1405,7 @@ export const processServerChatStream = async function* ({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
+        existingMessageIds,
         mapMessageId,
         source,
       }),
@@ -1351,7 +1444,7 @@ export const processServerChatStream = async function* ({
           ? normalizeRunErrorChunk(sourceChunk)
           : sourceChunk;
       const lifecycle = tanStackStreamEventLifecycle(chunk);
-      if (lifecycle === "completed") {
+      if (lifecycle === "completed" || lifecycle === "waiting") {
         if (chunk.type !== EventType.RUN_FINISHED) {
           panic("Unhandled TanStack completed stream event");
         }
@@ -1458,6 +1551,7 @@ type FinishResponseMessageProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
+  preservedTerminalMessageId: SafeId<"chatMessage"> | undefined;
   usage: TokenUsage | undefined;
 };
 
@@ -1465,6 +1559,7 @@ const createTerminalResponseMessage = ({
   getResponseMessage,
   mapMessageId,
   outcome,
+  preservedTerminalMessageId,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   const responseMessage = getResponseMessage();
@@ -1488,6 +1583,7 @@ const createTerminalResponseMessage = ({
           message: normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
+            preservedMessageId: preservedTerminalMessageId,
           }),
           usage,
         });
@@ -1522,25 +1618,41 @@ export const createChatMessageIdMapper = (
 export const normalizeFinalAssistantMessageId = ({
   mapMessageId,
   message,
+  preservedMessageId,
 }: {
   mapMessageId: MessageIdMapper;
   message: ChatMessage;
+  preservedMessageId?: SafeId<"chatMessage"> | undefined;
 }): PersistableChatMessage => {
-  const id = mapMessageId(message.id);
+  const id =
+    preservedMessageId !== undefined && message.id === preservedMessageId
+      ? preservedMessageId
+      : mapMessageId(message.id);
   return toPersistableChatMessage({ ...message, id });
 };
 
 type RemapOutgoingMessageIdsProps = {
+  existingMessageIds?: ReadonlySet<string> | undefined;
   mapMessageId: MessageIdMapper;
   source: AsyncIterable<StreamChunk>;
 };
 
 export const remapOutgoingMessageIds = async function* ({
+  existingMessageIds = new Set(),
   mapMessageId,
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
+  const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
+  let primarySnapshotMessageIdAssigned = false;
   for await (const chunk of source) {
-    yield remapChunkMessageId({ chunk, mapMessageId });
+    yield remapChunkMessageId({
+      chunk,
+      existingMessageIds,
+      mapMessageId,
+      snapshotMessageIds,
+      primarySnapshotMessageIdAssigned,
+    });
+    primarySnapshotMessageIdAssigned ||= snapshotMessageIds.size > 0;
   }
 };
 
@@ -1613,13 +1725,56 @@ const hasMessageId = (chunk: StreamChunk): chunk is StreamChunkWithMessageId =>
 
 const remapChunkMessageId = ({
   chunk,
+  existingMessageIds,
   mapMessageId,
+  primarySnapshotMessageIdAssigned,
+  snapshotMessageIds,
 }: {
   chunk: StreamChunk;
+  existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
+  primarySnapshotMessageIdAssigned: boolean;
+  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
 }): StreamChunk => {
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const newAssistantIds = chunk.messages
+      .filter(
+        (message) =>
+          message.role === "assistant" &&
+          !existingMessageIds.has(message.id) &&
+          !snapshotMessageIds.has(message.id),
+      )
+      .map(({ id }) => id);
+    const primarySourceId = primarySnapshotMessageIdAssigned
+      ? undefined
+      : newAssistantIds.at(-1);
+    return {
+      ...chunk,
+      messages: chunk.messages.map((message) =>
+        message.role !== "assistant" || existingMessageIds.has(message.id)
+          ? message
+          : {
+              ...message,
+              id:
+                snapshotMessageIds.get(message.id) ??
+                (() => {
+                  const id =
+                    message.id === primarySourceId
+                      ? mapMessageId(message.id)
+                      : createSafeId<"chatMessage">();
+                  snapshotMessageIds.set(message.id, id);
+                  return id;
+                })(),
+            },
+      ),
+    };
+  }
+  const remapMessageId = (messageId: string): string =>
+    existingMessageIds.has(messageId)
+      ? messageId
+      : (snapshotMessageIds.get(messageId) ?? mapMessageId(messageId));
   const remappedChunk = hasMessageId(chunk)
-    ? { ...chunk, messageId: mapMessageId(chunk.messageId) }
+    ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
     : chunk;
 
   const remappedParentChunk =
@@ -1627,7 +1782,7 @@ const remapChunkMessageId = ({
     typeof remappedChunk.parentMessageId === "string"
       ? {
           ...remappedChunk,
-          parentMessageId: mapMessageId(remappedChunk.parentMessageId),
+          parentMessageId: remapMessageId(remappedChunk.parentMessageId),
         }
       : remappedChunk;
 
@@ -1647,7 +1802,7 @@ const remapChunkMessageId = ({
     ...remappedParentChunk,
     value: {
       ...remappedParentChunk.value,
-      messageId: mapMessageId(messageId),
+      messageId: remapMessageId(messageId),
     },
   };
 };
@@ -1837,6 +1992,45 @@ const createOutgoingChunkTransformer = ({
   };
 
   const transform = (chunk: StreamChunk): StreamChunk[] => {
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      return [
+        ...emitRestorationDelta(
+          collectUnknownStringPlaceholders(chunk.messages, lenientCollector),
+        ),
+        {
+          ...chunk,
+          messages: restoreSnapshotMessages(chunk.messages, {
+            boundary,
+            resolveAssistantValueRefs,
+          }),
+        },
+      ];
+    }
+
+    if (
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+    ) {
+      return [
+        ...emitRestorationDelta(
+          collectUnknownStringPlaceholders(
+            chunk.outcome.interrupts,
+            lenientCollector,
+          ),
+        ),
+        {
+          ...chunk,
+          outcome: {
+            ...chunk.outcome,
+            interrupts: restoreInterrupts(chunk.outcome.interrupts, {
+              boundary,
+              resolveAssistantValueRefs,
+            }),
+          },
+        },
+      ];
+    }
+
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
@@ -2187,6 +2381,176 @@ const transformToolCallInput = ({
   return resolveAssistantValueRefs
     ? resolveAssistantValueRefs(visibleInput)
     : visibleInput;
+};
+
+type RestoreVisibleStringOptions = {
+  boundary: ChatThirdPartyBoundary;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+};
+
+const createVisibleStringRestorer = ({
+  boundary,
+  resolveAssistantValueRefs,
+}: RestoreVisibleStringOptions) => {
+  const restoreString = (text: string): string => {
+    const visible =
+      boundary.type === "anonymized"
+        ? deanonymizeUnknownStringsFromBoundary(boundary, text, "lenient")
+        : text;
+    if (typeof visible !== "string") {
+      return panic("String restoration changed an AG-UI leaf's shape");
+    }
+    const resolved = resolveAssistantValueRefs?.(visible) ?? visible;
+    if (typeof resolved !== "string") {
+      return panic("Chat ref restoration changed an AG-UI leaf's shape");
+    }
+    return resolved;
+  };
+  return restoreString;
+};
+
+const restoreApplicationStringsInPlace = (
+  node: unknown,
+  restoreString: (text: string) => string,
+): void => {
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      const child: unknown = node[index];
+      if (typeof child === "string") {
+        node[index] = restoreString(child);
+      } else {
+        restoreApplicationStringsInPlace(child, restoreString);
+      }
+    }
+    return;
+  }
+  if (!isRecord(node)) {
+    return;
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (typeof child === "string") {
+      node[key] = restoreString(child);
+    } else {
+      restoreApplicationStringsInPlace(child, restoreString);
+    }
+  }
+};
+
+const restoreRecordProperty = (
+  record: Record<string, unknown>,
+  key: string,
+  restoreString: (text: string) => string,
+): void => {
+  const value = record[key];
+  if (typeof value === "string") {
+    record[key] = restoreString(value);
+    return;
+  }
+  restoreApplicationStringsInPlace(value, restoreString);
+};
+
+const restoreMetadataStringsInPlace = (
+  metadata: unknown,
+  restoreString: (text: string) => string,
+): void => {
+  if (!isRecord(metadata)) {
+    return;
+  }
+  for (const [key, value] of Object.entries(metadata)) {
+    if (key !== "tanstack:interruptBinding") {
+      if (typeof value === "string") {
+        metadata[key] = restoreString(value);
+      } else {
+        restoreApplicationStringsInPlace(value, restoreString);
+      }
+      continue;
+    }
+    if (isRecord(value)) {
+      restoreRecordProperty(value, "originalArgs", restoreString);
+    }
+  }
+};
+
+/**
+ * Restore only user/application-bearing fields in AG-UI messages. Protocol
+ * identifiers and discriminators stay byte-for-byte stable, while arbitrary
+ * application records (activity content and media metadata) restore every
+ * nested leaf, even when an application happens to use keys such as `id` or
+ * `type`.
+ */
+const restoreSnapshotMessages = <T extends object>(
+  messages: T,
+  options: RestoreVisibleStringOptions,
+): T => {
+  const restored = structuredClone(messages);
+  const restoreString = createVisibleStringRestorer(options);
+  if (!Array.isArray(restored)) {
+    return restored;
+  }
+  for (const message of restored) {
+    if (!isRecord(message)) {
+      continue;
+    }
+    const role = message["role"];
+    const content = message["content"];
+    if (role === "activity") {
+      restoreApplicationStringsInPlace(content, restoreString);
+    } else if (role === "user" && Array.isArray(content)) {
+      for (const part of content) {
+        if (!isRecord(part)) {
+          continue;
+        }
+        if (part["type"] === "text") {
+          restoreRecordProperty(part, "text", restoreString);
+        } else {
+          restoreMetadataStringsInPlace(part["metadata"], restoreString);
+          if (part["type"] === "binary") {
+            restoreRecordProperty(part, "filename", restoreString);
+          }
+        }
+      }
+    } else if (typeof content === "string") {
+      message["content"] = restoreString(content);
+    }
+    restoreMetadataStringsInPlace(message["metadata"], restoreString);
+    if (role === "tool") {
+      restoreRecordProperty(message, "error", restoreString);
+    }
+    const toolCalls = message["toolCalls"];
+    if (!Array.isArray(toolCalls)) {
+      continue;
+    }
+    for (const toolCall of toolCalls) {
+      if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
+        continue;
+      }
+      restoreRecordProperty(toolCall["function"], "arguments", restoreString);
+    }
+  }
+  return restored;
+};
+
+/** Restore interrupt display/application payloads without touching correlation
+ * ids, discriminators, expiry data, or response schemas. TanStack's binding is
+ * protocol-owned except for `originalArgs`, which is application input. */
+const restoreInterrupts = <T extends object>(
+  interrupts: T,
+  options: RestoreVisibleStringOptions,
+): T => {
+  const restored = structuredClone(interrupts);
+  const restoreString = createVisibleStringRestorer(options);
+  if (!Array.isArray(restored)) {
+    return restored;
+  }
+  for (const interrupt of restored) {
+    if (!isRecord(interrupt)) {
+      continue;
+    }
+    restoreRecordProperty(interrupt, "message", restoreString);
+    const metadata = interrupt["metadata"];
+    restoreMetadataStringsInPlace(metadata, restoreString);
+  }
+  return restored;
 };
 
 type ParsedToolResultContent =

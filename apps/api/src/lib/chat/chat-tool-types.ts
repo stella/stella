@@ -1,17 +1,41 @@
+import type { StandardTypedV1 } from "@standard-schema/spec";
 import type {
+  AnyTool,
   ClientTool,
-  InferToolInput,
-  InferToolOutput,
+  InputSchemaOf,
+  OutputSchemaOf,
   SchemaInput,
-  Tool,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-export type ChatTool = Tool;
+/**
+ * Heterogeneous chat-tool boundary. Keep each concrete tool's literal schemas
+ * at its definition site; use TanStack's broad union only when tools enter a
+ * dynamic registry, provider projection, or MCP collection.
+ */
+export type ChatTool = Omit<
+  AnyTool,
+  "inputSchema" | "name" | "outputSchema"
+> & {
+  inputSchema?: SchemaInput | undefined;
+  name: string;
+  outputSchema?: SchemaInput | undefined;
+};
 
 export type ChatToolMap = Record<string, ChatTool | undefined>;
 
-type DefinedChatTool<TTool> = Extract<TTool, ChatTool>;
+// Registry values are already constrained by `ChatToolMap`; only remove the
+// optional slot here. Re-extracting against broad `AnyTool` erases concrete
+// schema inference because its collection boundary intentionally uses `any`.
+type DefinedChatTool<TTool> = Exclude<TTool, undefined>;
+
+type InferSchemaInput<TSchema> = TSchema extends StandardTypedV1
+  ? StandardTypedV1.InferInput<TSchema>
+  : unknown;
+
+type InferSchemaOutput<TSchema> = TSchema extends StandardTypedV1
+  ? StandardTypedV1.InferOutput<TSchema>
+  : unknown;
 
 export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   [TName in keyof TTools & string as DefinedChatTool<
@@ -19,8 +43,8 @@ export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   > extends never
     ? never
     : TName]: {
-    input: InferToolInput<DefinedChatTool<TTools[TName]>>;
-    output: InferToolOutput<DefinedChatTool<TTools[TName]>>;
+    input: InferSchemaInput<InputSchemaOf<DefinedChatTool<TTools[TName]>>>;
+    output: InferSchemaOutput<OutputSchemaOf<DefinedChatTool<TTools[TName]>>>;
   };
 };
 
@@ -37,12 +61,8 @@ type ChatClientToolFor<
   TTool extends ChatTool,
   TApprovalNames extends string,
 > = ClientTool<
-  TTool extends { inputSchema?: infer TInput extends SchemaInput }
-    ? TInput
-    : SchemaInput,
-  TTool extends { outputSchema?: infer TOutput extends SchemaInput }
-    ? TOutput
-    : SchemaInput,
+  InputSchemaOf<TTool> extends SchemaInput ? InputSchemaOf<TTool> : undefined,
+  OutputSchemaOf<TTool> extends SchemaInput ? OutputSchemaOf<TTool> : undefined,
   TName,
   unknown,
   TName extends TApprovalNames ? true : InferToolNeedsApproval<TTool>
@@ -54,7 +74,11 @@ type ChatClientToolUnionFor<
 > = {
   [TName in keyof TTools & string]: DefinedChatTool<TTools[TName]> extends never
     ? never
-    : ChatClientToolFor<TName, DefinedChatTool<TTools[TName]>, TApprovalNames>;
+    : ChatClientToolFor<
+        TName,
+        Extract<DefinedChatTool<TTools[TName]>, ChatTool>,
+        TApprovalNames
+      >;
 }[keyof TTools & string];
 
 type ExternalMcpClientTool = ClientTool<

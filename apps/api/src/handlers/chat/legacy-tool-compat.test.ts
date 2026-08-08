@@ -105,9 +105,6 @@ describe("legacy chat tool input compatibility", () => {
 
   test("repairs active DOCX edit aliases through the tool schema", async () => {
     const tool = createActiveDocxEditTool();
-    if (tool.inputSchema === undefined) {
-      throw new TypeError("Expected active DOCX edit input schema");
-    }
     const result = tool.inputSchema["~standard"].validate({
       operations: [
         JSON.stringify({

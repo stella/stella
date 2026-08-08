@@ -97,17 +97,11 @@ const ACCEPTED_OPERATIONS = [
 
 const validateInput = async (input: unknown) => {
   const tool = createActiveDocxEditTool();
-  if (tool.inputSchema === undefined) {
-    throw new TypeError("Expected active DOCX edit input schema");
-  }
   return tool.inputSchema["~standard"].validate(input);
 };
 
 const validateOutput = async (output: unknown) => {
   const tool = createActiveDocxEditTool();
-  if (tool.outputSchema === undefined) {
-    throw new TypeError("Expected active DOCX edit output schema");
-  }
   return await tool.outputSchema["~standard"].validate(output);
 };
 

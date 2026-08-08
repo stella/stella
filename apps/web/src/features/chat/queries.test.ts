@@ -60,6 +60,21 @@ const parseJsonRequestBody = (init: RequestInit | undefined): unknown => {
   return JSON.parse(init.body);
 };
 
+const chatRequestRunId = (body: unknown): string => {
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("runId" in body) ||
+    typeof body.runId !== "string"
+  ) {
+    throw new TypeError("Expected chat fetch body to contain a runId");
+  }
+  return body.runId;
+};
+
+const parseChatRequestRunId = (init: RequestInit | undefined): string =>
+  chatRequestRunId(parseJsonRequestBody(init));
+
 describe("chatKeys", () => {
   test("isolates normalized history searches from the unfiltered list", () => {
     const activeOrganizationId = "org_test";
@@ -454,11 +469,56 @@ describe("buildSendRequestBody", () => {
         context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key: { scope: "global", threadId },
         messages: [createMessage()],
+        run: { runId: "run-A", threadId },
       }),
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
+  });
+
+  test("forwards the complete native AG-UI interrupt continuation", () => {
+    const threadId = toChatThreadId("thread-A");
+    const body = buildSendRequestBody({
+      context: {},
+      key: { scope: "global", threadId },
+      messages: [{ ...createMessage(), role: "assistant" }],
+      run: {
+        parentRunId: "run-parent",
+        resume: [
+          {
+            interruptId: "approval_tool-A",
+            payload: true,
+            status: "resolved",
+          },
+          {
+            interruptId: "approval_tool-B",
+            payload: "ignored-vendor-payload",
+            status: "cancelled",
+          },
+        ],
+        runId: "run-child",
+        threadId,
+      },
+    });
+
+    expect(body).toMatchObject({
+      parentRunId: "run-parent",
+      resume: [
+        {
+          interruptId: "approval_tool-A",
+          payload: true,
+          status: "resolved",
+        },
+        {
+          interruptId: "approval_tool-B",
+          status: "cancelled",
+        },
+      ],
+      runId: "run-child",
+      threadId: "thread-A",
+    });
+    expect(body.resume?.[1]).not.toHaveProperty("payload");
   });
 
   test("normalizes context values at the transport boundary", () => {
@@ -508,6 +568,7 @@ describe("buildSendRequestBody", () => {
       },
       key: { scope: "global", threadId },
       messages: [createMessage("message-A")],
+      run: { runId: "run-A", threadId },
     });
 
     expect(body).toMatchObject({
@@ -560,6 +621,7 @@ describe("buildSendRequestBody", () => {
         key,
         messages: [createMessage()],
         requestBody: { sendMode: CHAT_SEND_MODE.rawOverride },
+        run: { runId: "run-A", threadId },
       }),
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.rawOverride,
@@ -589,6 +651,7 @@ describe("buildSendRequestBody", () => {
             ],
           },
         ],
+        run: { runId: "run-B", threadId },
       }),
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.rawOverride,
@@ -612,6 +675,7 @@ describe("buildSendRequestBody", () => {
         context,
         key,
         messages: [createMessage("message-A")],
+        run: { runId: "run-A", threadId },
       }),
     ).toMatchObject({
       docxEditRepresentation: "tracked-changes",
@@ -632,6 +696,7 @@ describe("buildSendRequestBody", () => {
             parts: [],
           },
         ],
+        run: { runId: "run-B", threadId },
       }),
     ).toMatchObject({
       docxEditRepresentation: "tracked-changes",
@@ -645,6 +710,7 @@ describe("buildSendRequestBody", () => {
         context,
         key,
         messages: [createMessage("message-A"), createMessage("message-B")],
+        run: { runId: "run-C", threadId },
       }),
     ).toMatchObject({
       docxEditRepresentation: "direct",
@@ -662,6 +728,7 @@ describe("buildSendRequestBody", () => {
       },
       key,
       messages: [createMessage("message-A")],
+      run: { runId: "run-A", threadId },
     });
     expect(initial.message.metadata).toMatchObject({
       docxEditPreferences: {
@@ -690,6 +757,7 @@ describe("buildSendRequestBody", () => {
           },
           { id: "assistant-A", role: "assistant", parts: [] },
         ],
+        run: { runId: "run-B", threadId },
       }),
     ).toMatchObject({
       docxEditRepresentation: "direct",
@@ -710,6 +778,7 @@ describe("buildSendRequestBody", () => {
         docxEditRepresentation: "tracked-changes",
         editApplyMode: "auto",
       },
+      run: { runId: "run-A", threadId },
     });
 
     expect(body).toMatchObject({
@@ -741,6 +810,7 @@ describe("buildSendRequestBody", () => {
           sendMode: CHAT_SEND_MODE.rawOverride,
           truncateAfterMessageId,
         },
+        run: { runId: "run-A", threadId },
       }),
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.rawOverride,
@@ -758,6 +828,7 @@ describe("buildSendRequestBody", () => {
       key,
       messages: [createMessage("message-A")],
       requestBody: { sendMode: CHAT_SEND_MODE.rawOverride },
+      run: { runId: "run-A", threadId },
     });
 
     expect(
@@ -765,6 +836,7 @@ describe("buildSendRequestBody", () => {
         context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key,
         messages: [createMessage("message-A"), createMessage("message-B")],
+        run: { runId: "run-B", threadId },
       }),
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.anonymized,
@@ -976,17 +1048,19 @@ describe("chat runtime", () => {
     });
 
     expect(requests.at(0)).toMatchObject({
-      message: {
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-call",
-            id: "tool-draft",
-            state: "complete",
-            output: { success: true, destination: "draft" },
-          },
-          { type: "tool-result", toolCallId: "tool-draft" },
-        ],
+      forwardedProps: {
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "tool-draft",
+              state: "complete",
+              output: { success: true, destination: "draft" },
+            },
+            { type: "tool-result", toolCallId: "tool-draft" },
+          ],
+        },
       },
     });
 
@@ -1000,9 +1074,11 @@ describe("chat runtime", () => {
 
     expect(requests).toHaveLength(2);
     expect(requests.at(1)).toMatchObject({
-      message: {
-        role: "user",
-        parts: [{ type: "text", content: "Make it three pages." }],
+      forwardedProps: {
+        message: {
+          role: "user",
+          parts: [{ type: "text", content: "Make it three pages." }],
+        },
       },
     });
     expect(runtime.getSnapshot().messages.at(-1)).toMatchObject({
@@ -1067,11 +1143,13 @@ describe("chat runtime", () => {
 
     expect(requests).toHaveLength(1);
     expect(requests.at(0)).toMatchObject({
-      message: {
-        parts: [{ type: "text", content: "ahoj" }],
-        role: "user",
+      forwardedProps: {
+        message: {
+          parts: [{ type: "text", content: "ahoj" }],
+          role: "user",
+        },
+        sendMode: CHAT_SEND_MODE.rawOverride,
       },
-      sendMode: CHAT_SEND_MODE.rawOverride,
       threadId,
     });
     expect(finishCount).toBe(1);
@@ -1144,8 +1222,10 @@ describe("chat runtime", () => {
 
     expect(requests).toHaveLength(1);
     expect(requests.at(0)).toMatchObject({
-      message: { id: userMessageId, role: "user" },
-      turnIntent: CHAT_TURN_INTENT.regenerate,
+      forwardedProps: {
+        message: { id: userMessageId, role: "user" },
+        turnIntent: CHAT_TURN_INTENT.regenerate,
+      },
     });
   });
 
@@ -1404,6 +1484,202 @@ describe("chat runtime", () => {
     releaseResponse();
     await started.stream;
   });
+
+  test("batches native AG-UI approvals into one correlated child run", async () => {
+    const threadId = toChatThreadId("thread-native-interrupt");
+    const requests: unknown[] = [];
+    let responseIndex = 0;
+    let markContinuationRequested: () => void = () => {
+      throw new Error("Native interrupt continuation was not requested");
+    };
+    const continuationRequested = new Promise<void>((resolve) => {
+      markContinuationRequested = resolve;
+    });
+    let releaseContinuation: (response: Response) => void = () => {
+      throw new Error("Native interrupt continuation was not awaited");
+    };
+    const continuationResponse = new Promise<Response>((resolve) => {
+      releaseContinuation = resolve;
+    });
+
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const body = parseJsonRequestBody(init);
+      const runId = parseChatRequestRunId(init);
+      requests.push(body);
+      if (responseIndex === 0) {
+        responseIndex += 1;
+        return createSseResponse([
+          { type: "RUN_STARTED", threadId, runId },
+          {
+            type: "TOOL_CALL_START",
+            parentMessageId: assistantMessageId,
+            toolCallId: "tool-A",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
+            type: "TOOL_CALL_ARGS",
+            delta: '{"query":"Winston Churchill quotes"}',
+            toolCallId: "tool-A",
+          },
+          {
+            type: "TOOL_CALL_END",
+            input: { query: "Winston Churchill quotes" },
+            toolCallId: "tool-A",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
+            type: "TOOL_CALL_START",
+            parentMessageId: assistantMessageId,
+            toolCallId: "tool-B",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
+            type: "TOOL_CALL_ARGS",
+            delta: '{"query":"Clement Attlee quotes"}',
+            toolCallId: "tool-B",
+          },
+          {
+            type: "TOOL_CALL_END",
+            input: { query: "Clement Attlee quotes" },
+            toolCallId: "tool-B",
+            toolCallName: "web_search",
+            toolName: "web_search",
+          },
+          {
+            type: "RUN_FINISHED",
+            threadId,
+            runId,
+            finishReason: "tool_calls",
+            outcome: {
+              type: "interrupt",
+              interrupts: [
+                {
+                  id: "approval_tool-A",
+                  reason: "tool_call",
+                  toolCallId: "tool-A",
+                  metadata: {
+                    kind: "approval",
+                    toolName: "web_search",
+                    input: { query: "Winston Churchill quotes" },
+                    "tanstack:interruptBinding": {
+                      v: 1,
+                      kind: "tool-approval",
+                      interruptId: "approval_tool-A",
+                      interruptedRunId: runId,
+                      generation: 0,
+                      toolName: "web_search",
+                      toolCallId: "tool-A",
+                      originalArgs: {
+                        query: "Winston Churchill quotes",
+                      },
+                      inputSchemaHash: "server-owned",
+                      approvalSchemaHash: "server-owned",
+                      responseSchemaHash: "server-owned",
+                    },
+                  },
+                },
+                {
+                  id: "approval_tool-B",
+                  reason: "tool_call",
+                  toolCallId: "tool-B",
+                  metadata: {
+                    kind: "approval",
+                    toolName: "web_search",
+                    input: { query: "Clement Attlee quotes" },
+                    "tanstack:interruptBinding": {
+                      v: 1,
+                      kind: "tool-approval",
+                      interruptId: "approval_tool-B",
+                      interruptedRunId: runId,
+                      generation: 0,
+                      toolName: "web_search",
+                      toolCallId: "tool-B",
+                      originalArgs: {
+                        query: "Clement Attlee quotes",
+                      },
+                      inputSchemaHash: "server-owned",
+                      approvalSchemaHash: "server-owned",
+                      responseSchemaHash: "server-owned",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+      }
+
+      markContinuationRequested();
+      return await continuationResponse;
+    });
+
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("22222222-2222-4222-8222-222222222205"),
+    );
+    let resolutionSettled = false;
+    const resolution = Promise.all([
+      runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-A",
+      }),
+      runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-B",
+      }),
+    ]).finally(() => {
+      resolutionSettled = true;
+    });
+    await continuationRequested;
+    expect(resolutionSettled).toBe(false);
+    const childRunId = chatRequestRunId(requests.at(1));
+    releaseContinuation(
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: childRunId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: childRunId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]),
+    );
+    await resolution;
+
+    expect(requests).toHaveLength(2);
+    const parentRunId = chatRequestRunId(requests.at(0));
+    expect(requests.at(1)).toMatchObject({
+      parentRunId,
+      resume: [
+        {
+          interruptId: "approval_tool-A",
+          payload: { approved: true },
+          status: "resolved",
+        },
+        {
+          interruptId: "approval_tool-B",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      threadId,
+    });
+    expect(childRunId).not.toBe(parentRunId);
+  });
 });
 
 describe("chat runtime identity across query refetch", () => {
@@ -1541,8 +1817,8 @@ describe("acquireChatRuntime reconcile", () => {
     { type: "RUN_FINISHED", threadId, runId: "run-A", finishReason: "stop" },
   ];
 
-  const createApprovalSseChunks = () => [
-    { type: "RUN_STARTED", threadId, runId: "run-A" },
+  const createApprovalSseChunks = (runId: string) => [
+    { type: "RUN_STARTED", threadId, runId },
     {
       type: "TEXT_MESSAGE_START",
       messageId: assistantMessageId,
@@ -1568,20 +1844,38 @@ describe("acquireChatRuntime reconcile", () => {
       toolName: "web_search",
     },
     {
-      type: "CUSTOM",
-      name: "approval-requested",
-      value: {
-        approval: { id: "approval_tool-A", needsApproval: true },
-        input: { query: "Winston Churchill quotes" },
-        toolCallId: "tool-A",
-        toolName: "web_search",
-      },
-    },
-    {
       type: "RUN_FINISHED",
       threadId,
-      runId: "run-A",
+      runId,
       finishReason: "tool_calls",
+      outcome: {
+        type: "interrupt",
+        interrupts: [
+          {
+            id: "approval_tool-A",
+            reason: "tool_call",
+            toolCallId: "tool-A",
+            metadata: {
+              kind: "approval",
+              toolName: "web_search",
+              input: { query: "Winston Churchill quotes" },
+              "tanstack:interruptBinding": {
+                v: 1,
+                kind: "tool-approval",
+                interruptId: "approval_tool-A",
+                interruptedRunId: runId,
+                generation: 0,
+                toolName: "web_search",
+                toolCallId: "tool-A",
+                originalArgs: { query: "Winston Churchill quotes" },
+                inputSchemaHash: "server-owned",
+                approvalSchemaHash: "server-owned",
+                responseSchemaHash: "server-owned",
+              },
+            },
+          },
+        ],
+      },
     },
   ];
 
@@ -1655,7 +1949,7 @@ describe("acquireChatRuntime reconcile", () => {
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b1"),
     );
     expect(requests.at(0)).toMatchObject({
-      sendMode: CHAT_SEND_MODE.anonymized,
+      forwardedProps: { sendMode: CHAT_SEND_MODE.anonymized },
       threadId,
     });
   });
@@ -1796,8 +2090,8 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("replaces stale local approval state with a resolved authoritative transcript", async () => {
     const queryClient = new QueryClient();
-    globalThis.fetch = createFetchMock(async () =>
-      createSseResponse(createApprovalSseChunks()),
+    globalThis.fetch = createFetchMock(async (_input, init) =>
+      createSseResponse(createApprovalSseChunks(parseChatRequestRunId(init))),
     );
     const context = { allowMissingThread: true };
     const runtime = acquireChatRuntime({
@@ -1891,8 +2185,8 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("retains a local pending approval while the query still has its pre-send seed", async () => {
     const queryClient = new QueryClient();
-    globalThis.fetch = createFetchMock(async () =>
-      createSseResponse(createApprovalSseChunks()),
+    globalThis.fetch = createFetchMock(async (_input, init) =>
+      createSseResponse(createApprovalSseChunks(parseChatRequestRunId(init))),
     );
     const context = { allowMissingThread: true };
     const preSendData = buildThreadData();
@@ -1928,8 +2222,8 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("keeps a runtime awaiting approval present in the authoritative transcript", async () => {
     const queryClient = new QueryClient();
-    globalThis.fetch = createFetchMock(async () =>
-      createSseResponse(createApprovalSseChunks()),
+    globalThis.fetch = createFetchMock(async (_input, init) =>
+      createSseResponse(createApprovalSseChunks(parseChatRequestRunId(init))),
     );
     const context = { allowMissingThread: true };
     const runtime = acquireChatRuntime({
@@ -1962,10 +2256,11 @@ describe("acquireChatRuntime reconcile", () => {
   test("keeps a resolved continuation while acknowledged approval data is stale", async () => {
     const queryClient = new QueryClient();
     let responseIndex = 0;
-    globalThis.fetch = createFetchMock(async () => {
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
       const chunks =
         responseIndex === 0
-          ? createApprovalSseChunks()
+          ? createApprovalSseChunks(runId)
           : createFinishedSseChunks();
       responseIndex += 1;
       return createSseResponse(chunks);
@@ -1999,7 +2294,7 @@ describe("acquireChatRuntime reconcile", () => {
       }),
     ).toBe(runtime);
 
-    await runtime.addToolApprovalResponse({
+    await runtime.resolveToolApproval({
       approved: true,
       id: "approval_tool-A",
     });

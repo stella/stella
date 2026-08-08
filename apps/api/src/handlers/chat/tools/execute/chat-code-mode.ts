@@ -134,11 +134,19 @@ const buildChatReadTools = (
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
+    const entry = READ_TOOL_REF_FIELD_MAP[toolName];
+    if (!entry.chatProjectable) {
+      return panic(`Chat read tool ${toolName} is not projectable`);
+    }
 
     return toolDefinition({
       name: toolName,
       description: chatReadToolDescription(toolName),
       inputSchema: toToolInputSchema(definition.inputSchema),
+      // Code Mode's latest tool type requires an output schema. The concrete
+      // projection is rendered in the description above; exposing the raw
+      // Valibot schema here would reintroduce fields that projection strips.
+      outputSchema: {},
       lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
     }).server(async (args: unknown) => await runReadTool(toolName, args));
   });

@@ -4,4 +4,5 @@ import type { ChatSendRequest as PortableChatSendRequest } from "@stll/api-contr
 
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 
-expectTypeOf<ChatSendRequest>().toEqualTypeOf<PortableChatSendRequest>();
+expectTypeOf<ChatSendRequest>().toExtend<PortableChatSendRequest>();
+expectTypeOf<PortableChatSendRequest>().toExtend<ChatSendRequest>();

@@ -45,6 +45,23 @@ const inlinePdfWithoutFilenameMessages = [
   },
 ] satisfies ModelMessage[];
 
+const inlineDocxWithoutFilenameMessages = [
+  {
+    role: "user",
+    content: [
+      {
+        type: "document",
+        source: {
+          type: "data",
+          value: "UEsDBAoAAAAAA",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+      },
+    ],
+  },
+] satisfies ModelMessage[];
+
 const createRequestRecorder = (errorBody: unknown) => {
   let requestBody: unknown;
   const fetch = Object.assign(
@@ -182,6 +199,42 @@ describe("provider document transport", () => {
               type: "input_file",
               file_data: `data:application/pdf;base64,${PDF_BASE64}`,
               filename: "document.pdf",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("derives the filename extension for inline OpenAI documents", async () => {
+    const recorder = createRequestRecorder({
+      error: {
+        code: "invalid_request_error",
+        message: "synthetic stop",
+        type: "invalid_request_error",
+      },
+    });
+    const adapter = createOpenaiChat("gpt-5.2", "test-openai-key", {
+      fetch: recorder.fetch,
+    });
+
+    for await (const _chunk of chat({
+      adapter,
+      debug: false,
+      messages: inlineDocxWithoutFilenameMessages,
+      stream: true,
+    })) {
+      // The synthetic HTTP 400 ends the stream after request serialization.
+    }
+
+    expect(recorder.requestBody()).toMatchObject({
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_file",
+              filename: "document.docx",
             },
           ],
         },

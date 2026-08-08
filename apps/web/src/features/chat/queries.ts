@@ -1,7 +1,11 @@
-import { ChatClient } from "@tanstack/ai-client";
+import type { ModelMessage } from "@tanstack/ai";
+import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type {
   ChatClientState,
+  ChatInterruptState,
+  ConnectConnectionAdapter,
   MultimodalContent,
+  RunAgentInputContext,
   UIMessage,
 } from "@tanstack/ai-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -44,6 +48,7 @@ import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -434,7 +439,7 @@ const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
 export type ChatRuntime = {
   readonly [CHAT_RUNTIME_BRAND]: true;
-  addToolApprovalResponse: (
+  resolveToolApproval: (
     response: {
       approved: boolean;
       id: string;
@@ -821,29 +826,101 @@ export const createChatRuntime = ({
     captureRuntimeError(error);
   };
 
+  type PendingInterruptResolution = {
+    apply: () => void;
+    reject: (error: Error) => void;
+    resolve: () => void;
+  };
+  type InterruptSubmissionWaiter = {
+    resolutions: PendingInterruptResolution[];
+    sawResuming: boolean;
+  };
+  let interruptSubmissionWaiter: InterruptSubmissionWaiter | undefined;
+  let interruptResolutionFlushScheduled = false;
+  const pendingInterruptResolutions: PendingInterruptResolution[] = [];
+  const observeInterruptSubmission = (
+    state: ChatInterruptState<ChatClientTools>,
+  ): void => {
+    const waiter = interruptSubmissionWaiter;
+    if (waiter === undefined) {
+      return;
+    }
+    if (state.resuming) {
+      waiter.sawResuming = true;
+      return;
+    }
+    const errors = [
+      ...state.interruptErrors,
+      ...state.interrupts.flatMap((interrupt) => interrupt.errors),
+    ];
+    const firstError = errors.at(0);
+    if (firstError !== undefined) {
+      interruptSubmissionWaiter = undefined;
+      const error = new ClientOperationError({
+        action: `submit-chat-interrupt:${firstError.code}`,
+        cause: firstError,
+        message: firstError.message,
+      });
+      for (const resolution of waiter.resolutions) {
+        resolution.reject(error);
+      }
+      return;
+    }
+    if (waiter.sawResuming) {
+      interruptSubmissionWaiter = undefined;
+      for (const resolution of waiter.resolutions) {
+        resolution.resolve();
+      }
+    }
+  };
+
+  const chatFetchClient = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const { signal, ...requestInit } = init ?? {};
+      return await fetchWithTimeout(input, {
+        ...requestInit,
+        ...(signal === null ? {} : { signal }),
+        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+      });
+    },
+    // Bun augments the global fetch type with this optional optimization.
+    // TanStack accepts `typeof globalThis.fetch`; the browser transport does
+    // not need preconnection, so expose a typed no-op instead of casting.
+    { preconnect: () => undefined },
+  ) satisfies typeof globalThis.fetch;
+  const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    fetchClient: chatFetchClient,
+  });
+  const connection = {
+    connect: (messages, data, abortSignal, runContext) => {
+      if (runContext === undefined) {
+        return panic("TanStack connection omitted the AG-UI run context");
+      }
+      if (!messages.every(isChatUiMessage)) {
+        return panic("Stella chat connection received model messages");
+      }
+      return upstreamConnection.connect(
+        messages,
+        buildSendRequestBody({
+          context,
+          key,
+          messages: toPersistedChatMessages(messages),
+          run: runContext,
+          requestBody: normalizeChatContinuationRequestBody(data),
+        }),
+        abortSignal,
+        runContext,
+      );
+    },
+  } satisfies ConnectConnectionAdapter;
+
   const client = new ChatClient<ChatClientTools>({
     id: getChatThreadKey(key),
     threadId: key.threadId,
     initialMessages,
-    fetcher: async (input, { signal }) => {
-      const response = await fetchWithTimeout(getChatApiPath(), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          buildSendRequestBody({
-            context,
-            key,
-            messages: toPersistedChatMessages(input.messages),
-            requestBody: normalizeChatContinuationRequestBody(input.data),
-          }),
-        ),
-        signal,
-        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
-      });
-
-      return response;
-    },
+    connection,
     onError: (error) => {
       onError(error);
       setSnapshot({ error });
@@ -852,6 +929,7 @@ export const createChatRuntime = ({
     onFinish: () => {
       onFinish();
     },
+    onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) =>
       setSnapshot({
         isLoading,
@@ -881,6 +959,66 @@ export const createChatRuntime = ({
     }
   };
 
+  const flushInterruptResolutions = (): void => {
+    interruptResolutionFlushScheduled = false;
+    const resolutions = pendingInterruptResolutions.splice(0);
+    if (resolutions.length === 0) {
+      return;
+    }
+    let waiter = interruptSubmissionWaiter;
+    if (waiter?.sawResuming) {
+      const error = new ClientOperationError({
+        action: "submit-chat-interrupt:already-active",
+        message: "Native interrupt submission is already active",
+      });
+      for (const resolution of resolutions) {
+        resolution.reject(error);
+      }
+      return;
+    }
+
+    if (waiter === undefined) {
+      waiter = {
+        resolutions: [],
+        sawResuming: false,
+      };
+      interruptSubmissionWaiter = waiter;
+    }
+    waiter.resolutions.push(...resolutions);
+    try {
+      for (const resolution of resolutions) {
+        resolution.apply();
+        if (interruptSubmissionWaiter !== waiter) {
+          return;
+        }
+      }
+      observeInterruptSubmission(client.getInterruptState());
+    } catch (error) {
+      if (interruptSubmissionWaiter === waiter) {
+        interruptSubmissionWaiter = undefined;
+      }
+      const normalized = toError(error);
+      for (const resolution of waiter.resolutions) {
+        resolution.reject(normalized);
+      }
+    }
+  };
+
+  const resolveNativeInterrupt = async (
+    resolveInterrupt: () => void,
+  ): Promise<void> =>
+    await new Promise((resolve, reject) => {
+      pendingInterruptResolutions.push({
+        apply: resolveInterrupt,
+        reject,
+        resolve,
+      });
+      if (!interruptResolutionFlushScheduled) {
+        interruptResolutionFlushScheduled = true;
+        queueMicrotask(flushInterruptResolutions);
+      }
+    });
+
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
     const stream = client.sendMessage(message, options?.body);
 
@@ -900,8 +1038,42 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
-    addToolApprovalResponse: async (response, options) => {
+    resolveToolApproval: async (response, options) => {
       await withBody(options, async () => {
+        const interrupt = client
+          .getInterrupts()
+          .find(
+            (candidate) =>
+              (candidate.kind === "tool-approval" &&
+                candidate.toolCallId === response.id) ||
+              (candidate.kind === "generic" &&
+                (candidate.interruptId === response.id ||
+                  candidate.id === response.id)),
+          );
+        if (interrupt?.kind === "tool-approval") {
+          await resolveNativeInterrupt(() => {
+            if (response.approved) {
+              interrupt.resolveInterrupt(true);
+            } else {
+              interrupt.resolveInterrupt(false);
+            }
+          });
+          return;
+        }
+        if (interrupt?.kind === "generic") {
+          // Stella's server tool catalog is dynamic, so the browser has no
+          // runtime tool definitions with which to specialize the binding.
+          // TanStack therefore exposes the native descriptor as a generic
+          // bound interrupt; its response schema is the strict authority.
+          await resolveNativeInterrupt(() => {
+            interrupt.resolveInterrupt({ approved: response.approved });
+          });
+          return;
+        }
+
+        // Transitional reload path for turns persisted before native AG-UI
+        // interrupt descriptors were available. New live turns always resolve
+        // through the bound interrupt above.
         await client.addToolApprovalResponse(response);
       });
     },
@@ -996,6 +1168,11 @@ const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
 ): PersistedChatMessage[] => [...messages];
 
+const isChatUiMessage = (
+  message: ModelMessage | UIMessage,
+): message is UIMessage<ChatClientTools> =>
+  "parts" in message && Array.isArray(message.parts);
+
 const toChatSendDocxEditSnapshot = (
   snapshot: NonNullable<ActiveFileContext["docxEditSnapshot"]>,
 ): NonNullable<
@@ -1015,15 +1192,27 @@ const toChatSendDocxEditSnapshot = (
     : { canApplyEdits: snapshot.canApplyEdits }),
 });
 
+type ChatSendRequestDraft = Omit<
+  ChatSendRequest,
+  "message" | "parentRunId" | "resume"
+> & {
+  message: ChatSendRequest["message"];
+};
+
 export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  run,
   requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  run: Pick<
+    RunAgentInputContext,
+    "parentRunId" | "resume" | "runId" | "threadId"
+  >;
   requestBody?: ChatContinuationRequestBody | undefined;
 }): ChatSendRequest => {
   const message = messages.at(-1);
@@ -1031,7 +1220,7 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
-  const body: ChatSendRequest = {
+  const body: ChatSendRequestDraft = {
     message: {
       ...message,
       id: toSafeId<"chatMessage">(message.id),
@@ -1042,6 +1231,7 @@ export const buildSendRequestBody = ({
       messages,
       requestBody,
     }),
+    runId: run.runId,
     threadId: key.threadId,
   };
 
@@ -1203,7 +1393,38 @@ export const buildSendRequestBody = ({
     }
   }
 
-  return body;
+  if (run.resume === undefined) {
+    if (run.parentRunId !== undefined) {
+      panic("Chat continuation parent is missing native resume data");
+    }
+    return body;
+  }
+  const continuationMessage = body.message;
+  if (
+    run.parentRunId === undefined ||
+    continuationMessage.role !== "assistant"
+  ) {
+    panic("Native chat resume must continue an assistant message");
+  }
+  return {
+    ...body,
+    message: { ...continuationMessage, role: "assistant" },
+    parentRunId: run.parentRunId,
+    resume: run.resume.map((resolution) => {
+      if (resolution.status === "cancelled") {
+        return {
+          interruptId: resolution.interruptId,
+          status: resolution.status,
+        };
+      }
+      const payload: unknown = resolution.payload;
+      return {
+        interruptId: resolution.interruptId,
+        ...(payload === undefined ? {} : { payload }),
+        status: resolution.status,
+      };
+    }),
+  };
 };
 
 const getRequestSendMode = (

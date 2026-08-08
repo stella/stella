@@ -1,4 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
+import type { AnyServerTool } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -18,7 +19,7 @@ import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const inputSchema = toTanStackToolSchema(v.strictObject({}));
 
-const serverTool = (name: string, needsApproval = false) => {
+const serverTool = (name: string, needsApproval = false): AnyServerTool => {
   const tool = toolDefinition({ name, description: name, inputSchema }).server(
     async () => ({}),
   );

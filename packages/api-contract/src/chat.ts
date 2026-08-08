@@ -29,8 +29,43 @@ type DocxEditSnapshot = {
   }[];
 };
 
+export type ChatInterruptResolution =
+  | {
+      interruptId: string;
+      payload?: unknown;
+      status: "resolved";
+    }
+  | {
+      interruptId: string;
+      payload?: never;
+      status: "cancelled";
+    };
+
+type ChatSendMessage = {
+  id: SafeId<"chatMessage">;
+  metadata?: unknown;
+  parts: unknown[];
+  role: "assistant" | "system" | "user";
+};
+
+type ChatInitialTurn = {
+  message: ChatSendMessage;
+  parentRunId?: never;
+  resume?: never;
+};
+
+type ChatNativeContinuation = {
+  message: ChatSendMessage & { role: "assistant" };
+  /** The interrupted AG-UI run this continuation resolves. */
+  parentRunId: string;
+  /** Complete, all-or-nothing AG-UI interrupt resolution batch. */
+  resume: ChatInterruptResolution[];
+};
+
+export type ChatContinuation = ChatInitialTurn | ChatNativeContinuation;
+
 /** Portable projection of the Elysia chat-stream request schema. */
-export type ChatSendRequest = {
+type ChatSendRequestBase = {
   activeDecision?: {
     decisionId: SafeId<"caseLawDecision">;
   };
@@ -70,13 +105,9 @@ export type ChatSendRequest = {
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";
   editApplyMode?: "manual" | "auto";
-  message: {
-    id: SafeId<"chatMessage">;
-    metadata?: unknown;
-    parts: unknown[];
-    role: "assistant" | "system" | "user";
-  };
   runMode?: ChatRunMode;
+  /** AG-UI run correlation minted by TanStack ChatClient. */
+  runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
@@ -91,3 +122,7 @@ export type ChatSendRequest = {
   };
   workspaceId?: SafeId<"workspace">;
 };
+
+export type ChatSendRequest =
+  | (ChatSendRequestBase & ChatInitialTurn)
+  | (ChatSendRequestBase & ChatNativeContinuation);

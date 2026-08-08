@@ -50,6 +50,7 @@ import {
   normalizeFinalAssistantMessageId,
   processServerChatStream,
   pruneOrphanedToolParts,
+  prepareResumeForThirdParty,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
   toChatMessage,
@@ -351,6 +352,118 @@ describe("outgoing chat stream message ids", () => {
     expect(index).toBe(1);
   });
 
+  test("normalizes only new assistant ids in native AG-UI snapshots", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const existingMessageIds = new Set(["user-1", "assistant-previous"]);
+
+    const chunks = await collectChunks(
+      remapOutgoingMessageIds({
+        existingMessageIds,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        source: streamChunks([
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "user-1",
+                role: "user",
+                content: "Please continue",
+              },
+              {
+                id: "assistant-previous",
+                role: "assistant",
+                content: "Earlier answer",
+              },
+              {
+                id: "provider-message-1",
+                role: "assistant",
+                content: "Checking the request",
+              },
+              {
+                id: "provider-message-2",
+                role: "assistant",
+                content: "Waiting for approval",
+              },
+            ],
+          },
+          {
+            type: EventType.TOOL_CALL_RESULT,
+            content: '{"approved":true}',
+            messageId: "assistant-previous",
+            toolCallId: "tool-existing",
+          },
+          {
+            type: EventType.TOOL_CALL_START,
+            parentMessageId: "assistant-previous",
+            toolCallId: "tool-follow-up",
+            toolCallName: "web_search",
+            // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+            toolName: "web_search",
+          },
+          {
+            type: EventType.CUSTOM,
+            name: "application-event",
+            value: { messageId: "assistant-previous" },
+          },
+        ]),
+      }),
+    );
+    expect(chunks).toEqual([
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          {
+            id: "user-1",
+            role: "user",
+            content: "Please continue",
+          },
+          {
+            id: "assistant-previous",
+            role: "assistant",
+            content: "Earlier answer",
+          },
+          {
+            id: expect.any(String),
+            role: "assistant",
+            content: "Checking the request",
+          },
+          {
+            id: messageId,
+            role: "assistant",
+            content: "Waiting for approval",
+          },
+        ],
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        content: '{"approved":true}',
+        messageId: "assistant-previous",
+        toolCallId: "tool-existing",
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: "assistant-previous",
+        toolCallId: "tool-follow-up",
+        toolCallName: "web_search",
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+        toolName: "web_search",
+      },
+      {
+        type: EventType.CUSTOM,
+        name: "application-event",
+        value: { messageId: "assistant-previous" },
+      },
+    ]);
+    const snapshot = chunks.at(0);
+    expect(snapshot?.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected a native message snapshot");
+    }
+    expect(snapshot.messages.at(2)?.id).not.toBe(snapshot.messages.at(3)?.id);
+  });
+
   test("normalizes tanstack generated final assistant ids before persistence", () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
@@ -398,6 +511,64 @@ describe("outgoing chat stream message ids", () => {
         ],
       }),
     );
+  });
+
+  test("preserves a persisted owning assistant id at terminal persistence", () => {
+    const owningMessageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const replacementMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(
+      normalizeFinalAssistantMessageId({
+        mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+        message: {
+          id: owningMessageId,
+          role: "assistant",
+          parts: [{ content: "Approved action completed.", type: "text" }],
+        },
+        preservedMessageId: owningMessageId,
+      }).id,
+    ).toBe(owningMessageId);
+  });
+
+  test("passes the owning assistant id through terminal turn finalization", async () => {
+    const owningMessageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const replacementMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    let persistedMessageId: string | undefined;
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      existingMessageIds: new Set([owningMessageId]),
+      getResponseMessage: () => ({
+        id: owningMessageId,
+        role: "assistant",
+        parts: [{ content: "Approved action completed.", type: "text" }],
+      }),
+      mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+      onFinish: ({ responseMessage }) => {
+        persistedMessageId = responseMessage.id;
+      },
+      preservedTerminalMessageId: owningMessageId,
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+
+    await collectChunks(stream);
+    expect(persistedMessageId).toBe(owningMessageId);
   });
 
   test("seeds tanstack message state before reasoning-only chunks", async () => {
@@ -1542,6 +1713,7 @@ describe("chat attempt terminal classification", () => {
     expect(
       shouldAttemptChatFallback({
         hasFallbackModel: true,
+        hasNativeContinuation: false,
         primaryError: new ChatEmptyCompletionError({ message: "empty" }),
         runMode: CHAT_RUN_MODE.agent,
       }),
@@ -1552,10 +1724,22 @@ describe("chat attempt terminal classification", () => {
     expect(
       shouldAttemptChatFallback({
         hasFallbackModel: true,
+        hasNativeContinuation: false,
         primaryError: new ChatEmptyCompletionError({ message: "empty" }),
         runMode: undefined,
       }),
     ).toBe(true);
+  });
+
+  test("does not replay a native continuation through fallback", () => {
+    expect(
+      shouldAttemptChatFallback({
+        hasFallbackModel: true,
+        hasNativeContinuation: true,
+        primaryError: new ChatEmptyCompletionError({ message: "empty" }),
+        runMode: undefined,
+      }),
+    ).toBe(false);
   });
 
   test("captures empty stop completions", () => {
@@ -1642,6 +1826,58 @@ const streamChunksThenAbort = async function* ({
   abortController.abort(error);
   throw error;
 };
+
+describe("native continuation third-party boundary", () => {
+  test("anonymizes resolved payload text while preserving protocol fields", async () => {
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      ...createBoundary([]),
+      anonymizeFields: async ({ fields }) => ({
+        entityCount: fields.filter((field) => field.includes("Jan Novak"))
+          .length,
+        fields: fields.map((field) =>
+          field.replaceAll("Jan Novak", "[PERSON_1]"),
+        ),
+        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+      }),
+    };
+
+    const prepared = await prepareResumeForThirdParty({
+      boundary,
+      resume: [
+        {
+          interruptId: "interrupt-1",
+          status: "resolved",
+          payload: {
+            answer: "Jan Novak approves the filing.",
+            nested: ["Notify Jan Novak"],
+            toolCallId: "tool_1",
+          },
+        },
+        { interruptId: "interrupt-2", status: "cancelled" },
+      ],
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    expect(prepared.value).toEqual([
+      {
+        interruptId: "interrupt-1",
+        status: "resolved",
+        payload: {
+          answer: "[PERSON_1] approves the filing.",
+          nested: ["Notify [PERSON_1]"],
+          toolCallId: "tool_1",
+        },
+      },
+      { interruptId: "interrupt-2", status: "cancelled" },
+    ]);
+    expect(boundary.redactionMap).toEqual(
+      new Map([["[PERSON_1]", "Jan Novak"]]),
+    );
+  });
+});
 
 describe("chat stream refs", () => {
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
@@ -1931,6 +2167,111 @@ describe("anonymized outgoing chat stream", () => {
     ]);
     expect(restorationPairs).toEqual([
       { placeholder: "[PERSON_2]", original: "Jan Novak" },
+    ]);
+  });
+
+  test("restores native AG-UI snapshots and interrupt bindings", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = transformOutgoingStream({
+      boundary,
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
+            {
+              id: "message-1",
+              role: "assistant",
+              content: "Review [PERSON_1]",
+            },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { id: "[PERSON_1]", status: "[PERSON_1]" },
+            },
+          ],
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          threadId: "thread-1",
+          runId: "run-1",
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: "[PERSON_1]",
+                reason: "tool_call",
+                metadata: {
+                  applicationLabel: "[PERSON_1]",
+                  "tanstack:interruptBinding": {
+                    originalArgs: {
+                      assignee: "[PERSON_1]",
+                      id: "[PERSON_1]",
+                      name: "[PERSON_1]",
+                      nested: { status: "[PERSON_1]", type: "[PERSON_1]" },
+                    },
+                  },
+                  application: { id: "[PERSON_1]", type: "[PERSON_1]" },
+                },
+              },
+            ],
+          },
+        },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      {
+        type: EventType.CUSTOM,
+        name: "stella.anon-restorations",
+        value: {
+          pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
+        },
+      },
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          {
+            id: "message-1",
+            role: "assistant",
+            content: "Review Jan Novak",
+          },
+          {
+            id: "activity-1",
+            role: "activity",
+            activityType: "review",
+            content: { id: "Jan Novak", status: "Jan Novak" },
+          },
+        ],
+      },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: "thread-1",
+        runId: "run-1",
+        outcome: {
+          type: "interrupt",
+          interrupts: [
+            {
+              id: "[PERSON_1]",
+              reason: "tool_call",
+              metadata: {
+                applicationLabel: "Jan Novak",
+                "tanstack:interruptBinding": {
+                  originalArgs: {
+                    assignee: "Jan Novak",
+                    id: "Jan Novak",
+                    name: "Jan Novak",
+                    nested: { status: "Jan Novak", type: "Jan Novak" },
+                  },
+                },
+                application: { id: "Jan Novak", type: "Jan Novak" },
+              },
+            },
+          ],
+        },
+      },
     ]);
   });
 

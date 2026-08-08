@@ -1,0 +1,48 @@
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index f6d9984f4cbbd1f2f3322a732d98d4eaef50ad31..7579474cf7af63ebc641b3eef1582b2348533e7f 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -290,6 +290,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 			}
+ 			case "document": {
+ 				const metadata = part.metadata;
++				const title = typeof metadata === "object" && metadata !== null && "title" in metadata && typeof metadata.title === "string" ? metadata.title : typeof metadata === "object" && metadata !== null && "filename" in metadata && typeof metadata.filename === "string" ? metadata.filename : void 0;
+ 				return {
+ 					type: "document",
+ 					source: part.source.type === "data" ? {
+@@ -300,7 +301,10 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 						type: "url",
+ 						url: part.source.value
+ 					},
+-					...metadata
++					...typeof metadata === "object" && metadata !== null && "cache_control" in metadata ? { cache_control: metadata.cache_control } : {},
++					...typeof metadata === "object" && metadata !== null && "citations" in metadata ? { citations: metadata.citations } : {},
++					...typeof metadata === "object" && metadata !== null && "context" in metadata && typeof metadata.context === "string" ? { context: metadata.context } : {},
++					...title === void 0 ? {} : { title }
+ 				};
+ 			}
+ 			case "audio":
+diff --git a/dist/esm/tools/tool-converter.js b/dist/esm/tools/tool-converter.js
+index 3dec3eab99da0e08ba8c416cfa07159abd06dfe2..55820c1da7f935caa894b5d58318a4478407740c 100644
+--- a/dist/esm/tools/tool-converter.js
++++ b/dist/esm/tools/tool-converter.js
+@@ -7,6 +7,10 @@ import { convertTextEditorToolToAdapterFormat } from "./text-editor-tool.js";
+ import { convertWebFetchToolToAdapterFormat } from "./web-fetch-tool.js";
+ import { convertWebSearchToolToAdapterFormat } from "./web-search-tool.js";
+ //#region src/tools/tool-converter.ts
++function isAnthropicWebSearchTool(tool) {
++	const metadata = tool.metadata;
++	return typeof metadata === "object" && metadata !== null && "type" in metadata && metadata.type === "web_search_20250305" && "name" in metadata && metadata.name === "web_search";
++}
+ /**
+ * Converts standard Tool format to Anthropic-specific tool format
+ *
+@@ -40,7 +44,7 @@ function convertToolsToProviderFormat(tools) {
+ 			case "memory": return convertMemoryToolToAdapterFormat(tool);
+ 			case "str_replace_editor": return convertTextEditorToolToAdapterFormat(tool);
+ 			case "web_fetch": return convertWebFetchToolToAdapterFormat(tool);
+-			case "web_search": return convertWebSearchToolToAdapterFormat(tool);
++			case "web_search": return isAnthropicWebSearchTool(tool) ? convertWebSearchToolToAdapterFormat(tool) : convertCustomToolToAdapterFormat(tool);
+ 			default: return convertCustomToolToAdapterFormat(tool);
+ 		}
+ 	});
