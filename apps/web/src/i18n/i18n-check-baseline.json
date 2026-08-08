@@ -633,174 +633,6 @@
       "pl",
       "pt-BR"
     ],
-    "filters.contains_all": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.dateAfter": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.dateBefore": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.dateOnOrAfter": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.dateOnOrBefore": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.ends_with": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.gt": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.gte": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.in": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.is_not_empty": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.lt": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.lte": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.not_contains": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "filters.starts_with": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "flows.editor.newFlowIntro": [
       "ar",
       "de",
@@ -3898,32 +3730,6 @@
       "pl",
       "pt-BR"
     ],
-    "templates.conditionAddGroup": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "templates.conditionAnd": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.conditionCount": [
       "fr"
     ],
@@ -3944,19 +3750,6 @@
       "de",
       "pl"
     ],
-    "templates.conditionOr": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.conditionsTitle": [
       "fr"
     ],
@@ -3974,19 +3767,6 @@
       "sk"
     ],
     "templates.conditionUseFormula": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "templates.conditionWhen": [
       "ar",
       "de",
       "es",
@@ -4271,87 +4051,11 @@
     "workspaces.team": [
       "de"
     ],
-    "workspaces.views.addAdvancedFilter": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.advancedFilter": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.advancedFilterCount": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.views.calendar.addDates": [
       "fr"
     ],
     "workspaces.views.calendar.additionalDates": [
       "fr"
-    ],
-    "workspaces.views.clearFilters": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.filterByPlaceholder": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.filtersWithCount": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "workspaces.views.groupItemCount": [
       "ar",
@@ -4369,44 +4073,6 @@
     ],
     "workspaces.views.layouts.kanban": [
       "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.noFilterResults": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.noFilterResultsHint": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.views.removeAdvancedFilter": [
       "de",
       "es",
       "et",
