@@ -70,5 +70,4 @@ minimumReleaseAgeExcludes = [
   "@tanstack/openai-base",
   # First patched nanoid 3.x release for GHSA-2v37-7h3g-55p8. Remove after
   # the normal release-age quarantine admits it.
-  "nanoid", # quarantine-expires: 2026-08-08T10:39:22.487Z
 ]
