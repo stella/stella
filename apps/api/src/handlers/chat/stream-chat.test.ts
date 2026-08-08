@@ -351,19 +351,31 @@ describe("outgoing chat stream message ids", () => {
     expect(index).toBe(1);
   });
 
-  test("normalizes assistant ids carried by native AG-UI snapshots", async () => {
+  test("normalizes only new assistant ids in native AG-UI snapshots", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
+    const existingMessageIds = new Set(["user-1", "assistant-previous"]);
 
     expect(
       await collectChunks(
         remapOutgoingMessageIds({
+          existingMessageIds,
           mapMessageId: createChatMessageIdMapper(() => messageId),
           source: streamChunks([
             {
               type: EventType.MESSAGES_SNAPSHOT,
               messages: [
+                {
+                  id: "user-1",
+                  role: "user",
+                  content: "Please continue",
+                },
+                {
+                  id: "assistant-previous",
+                  role: "assistant",
+                  content: "Earlier answer",
+                },
                 {
                   id: "provider-message",
                   role: "assistant",
@@ -378,6 +390,16 @@ describe("outgoing chat stream message ids", () => {
       {
         type: EventType.MESSAGES_SNAPSHOT,
         messages: [
+          {
+            id: "user-1",
+            role: "user",
+            content: "Please continue",
+          },
+          {
+            id: "assistant-previous",
+            role: "assistant",
+            content: "Earlier answer",
+          },
           {
             id: messageId,
             role: "assistant",

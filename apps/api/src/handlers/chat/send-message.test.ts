@@ -185,7 +185,7 @@ const createContext = ({
     return await safeDb(operation, retry);
   };
 
-  const forwardedProps: SendMessageInput = {
+  const forwardedProps = {
     threadId,
     runId: "run-test",
     sendMode: CHAT_SEND_MODE.rawOverride,

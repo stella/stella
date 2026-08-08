@@ -482,7 +482,7 @@ describe("buildSendRequestBody", () => {
     const body = buildSendRequestBody({
       context: {},
       key: { scope: "global", threadId },
-      messages: [createMessage()],
+      messages: [{ ...createMessage(), role: "assistant" }],
       run: {
         parentRunId: "run-parent",
         resume: [

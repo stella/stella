@@ -147,6 +147,7 @@ const HTTP_IDLE_TIMEOUT_S = 75;
 // per-query cost. Must match the logger gate in db/root.ts.
 const DB_QUERY_COUNTER_ENABLED = env.isDev;
 const SESSION_ID_HEADER = "x-posthog-session-id";
+const TANSTACK_RUN_ID_HEADER = "X-Run-Id";
 const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
@@ -324,6 +325,7 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
+        TANSTACK_RUN_ID_HEADER,
       ],
       exposeHeaders: [
         "set-auth-token",

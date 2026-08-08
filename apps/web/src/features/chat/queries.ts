@@ -1077,6 +1077,13 @@ const toChatSendDocxEditSnapshot = (
     : { canApplyEdits: snapshot.canApplyEdits }),
 });
 
+type ChatSendRequestDraft = Omit<
+  ChatSendRequest,
+  "message" | "parentRunId" | "resume"
+> & {
+  message: ChatSendRequest["message"];
+};
+
 export const buildSendRequestBody = ({
   context,
   key,
@@ -1098,7 +1105,7 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
-  const body: ChatSendRequest = {
+  const body: ChatSendRequestDraft = {
     message: {
       ...message,
       id: toSafeId<"chatMessage">(message.id),
@@ -1111,8 +1118,6 @@ export const buildSendRequestBody = ({
     }),
     runId: run.runId,
     threadId: key.threadId,
-    ...(run.parentRunId === undefined ? {} : { parentRunId: run.parentRunId }),
-    ...(run.resume === undefined ? {} : { resume: run.resume }),
   };
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
@@ -1273,7 +1278,25 @@ export const buildSendRequestBody = ({
     }
   }
 
-  return body;
+  if (run.resume === undefined) {
+    if (run.parentRunId !== undefined) {
+      panic("Chat continuation parent is missing native resume data");
+    }
+    return body;
+  }
+  const continuationMessage = body.message;
+  if (
+    run.parentRunId === undefined ||
+    continuationMessage.role !== "assistant"
+  ) {
+    panic("Native chat resume must continue an assistant message");
+  }
+  return {
+    ...body,
+    message: continuationMessage,
+    parentRunId: run.parentRunId,
+    resume: run.resume,
+  };
 };
 
 const getRequestSendMode = (

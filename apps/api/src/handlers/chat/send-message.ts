@@ -354,6 +354,12 @@ const sendMessage = createSafeRootHandler(
     user,
   }) {
     const body = transportBody.forwardedProps;
+    const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
+    const resume = "resume" in body ? body.resume : undefined;
+    const transportParentRunId =
+      "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
+    const transportResume =
+      "resume" in transportBody ? transportBody.resume : undefined;
     const isClientConnectionAborted = () => request.signal.aborted;
 
     if (isClientConnectionAborted()) {
@@ -373,8 +379,8 @@ const sendMessage = createSafeRootHandler(
     const correlationMismatch =
       transportBody.threadId !== body.threadId ||
       transportBody.runId !== body.runId ||
-      transportBody.parentRunId !== body.parentRunId ||
-      !deepEquals(transportBody.resume, body.resume) ||
+      transportParentRunId !== parentRunId ||
+      !deepEquals(transportResume, resume) ||
       !deepEquals(transportBody.data, body) ||
       !transportBody.messages.some(
         (message) =>
@@ -390,15 +396,7 @@ const sendMessage = createSafeRootHandler(
     }
 
     yield* assertDevModelOverride(body.devModelId, orgAIConfig);
-    if (body.resume !== undefined && body.parentRunId === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "AG-UI interrupt resume requires parentRunId",
-        }),
-      );
-    }
-    if (body.parentRunId === body.runId) {
+    if (parentRunId === body.runId) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -407,9 +405,9 @@ const sendMessage = createSafeRootHandler(
       );
     }
     if (
-      body.resume !== undefined &&
-      new Set(body.resume.map(({ interruptId }) => interruptId)).size !==
-        body.resume.length
+      resume !== undefined &&
+      new Set(resume.map(({ interruptId }) => interruptId)).size !==
+        resume.length
     ) {
       return Result.err(
         new HandlerError({
@@ -706,6 +704,7 @@ const sendMessage = createSafeRootHandler(
       const validatedMessageResult = await validateMessage({
         message: body.message,
         persistedMessage: validationThreadState.persistedMessage,
+        resume,
         safeDb,
         threadId: body.threadId,
         tools: validationTools,
@@ -1537,10 +1536,8 @@ const sendMessage = createSafeRootHandler(
               const chatResponse = await streamChat({
                 abortSignal: createMeteredAIAbortSignal(),
                 runId: body.runId,
-                ...(body.parentRunId === undefined
-                  ? {}
-                  : { parentRunId: body.parentRunId }),
-                ...(body.resume === undefined ? {} : { resume: body.resume }),
+                ...(parentRunId === undefined ? {} : { parentRunId }),
+                ...(resume === undefined ? {} : { resume }),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,
                 onFinish: async ({ outcome, responseMessage }) => {

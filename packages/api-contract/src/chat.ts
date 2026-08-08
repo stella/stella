@@ -76,17 +76,23 @@ export type ChatSendRequest = {
     parts: unknown[];
     role: "assistant" | "system" | "user";
   };
-  runMode?: ChatRunMode;
-  /** AG-UI run correlation minted by TanStack ChatClient. */
-  runId: string;
   /** The interrupted AG-UI run this continuation resolves. */
   parentRunId?: string;
   /** Complete, all-or-nothing AG-UI interrupt resolution batch. */
-  resume?: {
-    interruptId: string;
-    payload?: unknown;
-    status: "cancelled" | "resolved";
-  }[];
+  resume?: (
+    | {
+        interruptId: string;
+        payload?: unknown;
+        status: "resolved";
+      }
+    | {
+        interruptId: string;
+        status: "cancelled";
+      }
+  )[];
+  runMode?: ChatRunMode;
+  /** AG-UI run correlation minted by TanStack ChatClient. */
+  runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];

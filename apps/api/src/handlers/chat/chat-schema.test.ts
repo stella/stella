@@ -184,22 +184,31 @@ describe("native AG-UI request envelope", () => {
   };
 
   test("accepts the canonical envelope with a complete native resume batch", () => {
+    const resume = [
+      {
+        interruptId: "approval-1",
+        status: "resolved" as const,
+        payload: { approved: true },
+      },
+    ];
+    const continuationForwardedProps = {
+      ...forwardedProps,
+      message: { ...forwardedProps.message, role: "assistant" as const },
+      parentRunId: "run-parent",
+      resume,
+    };
     expect(
       Value.Check(agUiSendMessageBodySchema, {
         ...request,
         parentRunId: "run-parent",
-        resume: [
-          {
-            interruptId: "approval-1",
-            status: "resolved",
-            payload: { approved: true },
-          },
-        ],
+        resume,
+        forwardedProps: continuationForwardedProps,
+        data: continuationForwardedProps,
       }),
     ).toBe(true);
   });
 
-  test("rejects untyped top-level transport fields and incomplete resume items", () => {
+  test("rejects untyped fields, incomplete resume items, and user-message resumes", () => {
     expect(
       Value.Check(agUiSendMessageBodySchema, {
         ...request,
@@ -211,6 +220,19 @@ describe("native AG-UI request envelope", () => {
         ...request,
         parentRunId: "run-parent",
         resume: [{ interruptId: "approval-1" }],
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume: [
+          {
+            interruptId: "approval-1",
+            status: "resolved",
+            payload: { approved: true },
+          },
+        ],
       }),
     ).toBe(false);
   });
@@ -535,8 +557,28 @@ describe("validateMessage", () => {
     const accepted = await validateMessageWithPersistence({
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-2",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
     });
     expect(Result.isOk(accepted)).toBe(true);
+
+    const rejectedUnknownInterrupt = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+      resume: [
+        {
+          interruptId: "approval-forged",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+    });
+    expect(Result.isError(rejectedUnknownInterrupt)).toBe(true);
 
     const rejected = await validateMessageWithPersistence({
       ...sharedProps,

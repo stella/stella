@@ -46,17 +46,26 @@ import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 export { CHAT_RUN_MODE };
 export type { ChatRunMode };
 
+const rawMessageProperties = {
+  id: tSafeId("chatMessage"),
+  metadata: t.Optional(t.Unknown()),
+  parts: t.Array(t.Unknown()),
+};
+
 const rawMessageSchema = t.Object(
   {
-    id: tSafeId("chatMessage"),
+    ...rawMessageProperties,
     role: t.Union([
       t.Literal("system"),
       t.Literal("user"),
       t.Literal("assistant"),
     ]),
-    metadata: t.Optional(t.Unknown()),
-    parts: t.Array(t.Unknown()),
   },
+  { additionalProperties: true },
+);
+
+const rawAssistantContinuationMessageSchema = t.Object(
+  { ...rawMessageProperties, role: t.Literal("assistant") },
   { additionalProperties: true },
 );
 
@@ -182,90 +191,123 @@ export const DEFAULT_DOCX_EDIT_REPRESENTATION: DocxEditRepresentation =
 
 const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
 const agUiResumeSchema = t.Array(
-  t.Object(
-    {
-      interruptId: t.String({ minLength: 1, maxLength: 512 }),
-      status: t.Union([t.Literal("resolved"), t.Literal("cancelled")]),
-      // AG-UI intentionally defines resume payloads as application-owned JSON.
-      payload: t.Optional(t.Unknown()),
-    },
-    { additionalProperties: false },
-  ),
+  t.Union([
+    t.Object(
+      {
+        interruptId: t.String({ minLength: 1, maxLength: 512 }),
+        status: t.Literal("resolved"),
+        // AG-UI intentionally defines resume payloads as application-owned JSON.
+        payload: t.Optional(t.Unknown()),
+      },
+      { additionalProperties: false },
+    ),
+    t.Object(
+      {
+        interruptId: t.String({ minLength: 1, maxLength: 512 }),
+        status: t.Literal("cancelled"),
+      },
+      { additionalProperties: false },
+    ),
+  ]),
   { minItems: 1, maxItems: 128 },
+);
+
+const sendMessageCommonProperties = {
+  threadId: tSafeId("chatThread"),
+  runId: agUiRunIdSchema,
+  workspaceId: t.Optional(tSafeId("workspace")),
+  sendMode: t.Union([
+    t.Literal(CHAT_SEND_MODE.anonymized),
+    t.Literal(CHAT_SEND_MODE.rawOverride),
+  ]),
+  /**
+   * Matters the chat draws context from. Empty (or omitted) means
+   * "no matters pinned" — the AI discovers matters lazily via the
+   * readonly read API. Non-empty narrows tool authorization so
+   * requested matterRefs must be a subset of this set. The set is
+   * persisted on the chat thread so subsequent turns reuse it
+   * without re-sending.
+   */
+  contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
+  truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
+  /**
+   * Optional named tool scope for this turn. Only server-defined
+   * scope names validate; the server maps the name to a fixed tool
+   * allowlist (see `tools/tool-scope.ts`), so a client can narrow
+   * but never widen the turn's tool surface.
+   */
+  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+  /**
+   * Execution mode for this turn. Absent runs normal server-side chat;
+   * `"agent"` explicitly requests the configured agent sandbox.
+   */
+  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
+  userContext: t.Optional(userContextSchema),
+  activeDraft: t.Optional(activeDraftSchema),
+  activeFile: t.Optional(activeFileSchema),
+  activeTemplate: t.Optional(activeTemplateSchema),
+  activeDecision: t.Optional(activeDecisionSchema),
+  activeExternal: t.Optional(activeExternalSchema),
+  activeSkill: t.Optional(activeSkillSchema),
+  /**
+   * Which DOCX-edit review mode this turn uses; omitted means
+   * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
+   * registers exactly one of `apply-active-docx-edits` (manual) /
+   * `edit_workspace_document` (auto) accordingly -- never both.
+   */
+  editApplyMode: t.Optional(
+    t.Union([
+      t.Literal(CHAT_EDIT_APPLY_MODE.manual),
+      t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+    ]),
+  ),
+  /**
+   * Redline representation for the `auto` review mode only; omitted means
+   * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
+   * human picks the representation at accept time.
+   */
+  docxEditRepresentation: t.Optional(
+    t.Union([
+      t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
+      t.Literal(DOCX_EDIT_REPRESENTATION.direct),
+    ]),
+  ),
+  devModelId: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 160,
+      pattern: "^[A-Za-z0-9._:/-]+$",
+    }),
+  ),
+};
+
+const noResumeBodySchema = t.Object(
+  {
+    ...sendMessageCommonProperties,
+    message: rawMessageSchema,
+    parentRunId: t.Optional(t.Undefined()),
+    resume: t.Optional(t.Undefined()),
+  },
+  { additionalProperties: false },
+);
+
+const nativeAssistantContinuationBodySchema = t.Object(
+  {
+    ...sendMessageCommonProperties,
+    message: rawAssistantContinuationMessageSchema,
+    parentRunId: agUiRunIdSchema,
+    resume: agUiResumeSchema,
+  },
+  { additionalProperties: false },
 );
 
 export const sendMessageBodySchema = t.Object(
   {
-    threadId: tSafeId("chatThread"),
-    runId: agUiRunIdSchema,
+    ...sendMessageCommonProperties,
+    message: rawMessageSchema,
     parentRunId: t.Optional(agUiRunIdSchema),
     resume: t.Optional(agUiResumeSchema),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    sendMode: t.Union([
-      t.Literal(CHAT_SEND_MODE.anonymized),
-      t.Literal(CHAT_SEND_MODE.rawOverride),
-    ]),
-    /**
-     * Matters the chat draws context from. Empty (or omitted) means
-     * "no matters pinned" — the AI discovers matters lazily via the
-     * readonly read API. Non-empty narrows tool authorization so
-     * requested matterRefs must be a subset of this set. The set is
-     * persisted on the chat thread so subsequent turns reuse it
-     * without re-sending.
-     */
-    contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
-    message: rawMessageSchema,
-    truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
-    turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
-    /**
-     * Optional named tool scope for this turn. Only server-defined
-     * scope names validate; the server maps the name to a fixed tool
-     * allowlist (see `tools/tool-scope.ts`), so a client can narrow
-     * but never widen the turn's tool surface.
-     */
-    toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
-    /**
-     * Execution mode for this turn. Absent runs normal server-side chat;
-     * `"agent"` explicitly requests the configured agent sandbox.
-     */
-    runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
-    userContext: t.Optional(userContextSchema),
-    activeDraft: t.Optional(activeDraftSchema),
-    activeFile: t.Optional(activeFileSchema),
-    activeTemplate: t.Optional(activeTemplateSchema),
-    activeDecision: t.Optional(activeDecisionSchema),
-    activeExternal: t.Optional(activeExternalSchema),
-    activeSkill: t.Optional(activeSkillSchema),
-    /**
-     * Which DOCX-edit review mode this turn uses; omitted means
-     * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
-     * registers exactly one of `apply-active-docx-edits` (manual) /
-     * `edit_workspace_document` (auto) accordingly -- never both.
-     */
-    editApplyMode: t.Optional(
-      t.Union([
-        t.Literal(CHAT_EDIT_APPLY_MODE.manual),
-        t.Literal(CHAT_EDIT_APPLY_MODE.auto),
-      ]),
-    ),
-    /**
-     * Redline representation for the `auto` review mode only; omitted means
-     * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
-     * human picks the representation at accept time.
-     */
-    docxEditRepresentation: t.Optional(
-      t.Union([
-        t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
-        t.Literal(DOCX_EDIT_REPRESENTATION.direct),
-      ]),
-    ),
-    devModelId: t.Optional(
-      t.String({
-        minLength: 1,
-        maxLength: 160,
-        pattern: "^[A-Za-z0-9._:/-]+$",
-      }),
-    ),
   },
   { additionalProperties: false },
 );
@@ -298,45 +340,62 @@ const agUiMessageEnvelopeSchema = t.Object(
  * adapter. Stella-specific, strictly validated inputs live in forwardedProps;
  * correlation and resume fields stay protocol-native at the top level.
  */
-export const agUiSendMessageBodySchema = t.Object(
-  {
-    threadId: tSafeId("chatThread"),
-    runId: agUiRunIdSchema,
-    parentRunId: t.Optional(agUiRunIdSchema),
-    resume: t.Optional(agUiResumeSchema),
-    state: t.Object({}, { additionalProperties: true }),
-    messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
-    tools: t.Array(
-      t.Object(
-        {
-          name: t.String({ minLength: 1, maxLength: 512 }),
-          description: t.String({ maxLength: 16_384 }),
-          parameters: t.Optional(t.Unknown()),
-          metadata: t.Optional(t.Record(t.String(), t.Unknown())),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: 512 },
+const agUiEnvelopeCommonProperties = {
+  threadId: tSafeId("chatThread"),
+  runId: agUiRunIdSchema,
+  state: t.Object({}, { additionalProperties: true }),
+  messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
+  tools: t.Array(
+    t.Object(
+      {
+        name: t.String({ minLength: 1, maxLength: 512 }),
+        description: t.String({ maxLength: 16_384 }),
+        parameters: t.Optional(t.Unknown()),
+        metadata: t.Optional(t.Record(t.String(), t.Unknown())),
+      },
+      { additionalProperties: false },
     ),
-    context: t.Array(
-      t.Object(
-        {
-          description: t.String({ maxLength: 16_384 }),
-          value: t.String({ maxLength: 1_000_000 }),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: 512 },
+    { maxItems: 512 },
+  ),
+  context: t.Array(
+    t.Object(
+      {
+        description: t.String({ maxLength: 16_384 }),
+        value: t.String({ maxLength: 1_000_000 }),
+      },
+      { additionalProperties: false },
     ),
-    forwardedProps: sendMessageBodySchema,
-    // TanStack mirrors forwardedProps under legacy `data`; validating both
-    // prevents an untyped shadow payload from crossing the route boundary.
-    data: sendMessageBodySchema,
-  },
-  { additionalProperties: false },
-);
+    { maxItems: 512 },
+  ),
+};
+
+export const agUiSendMessageBodySchema = t.Union([
+  t.Object(
+    {
+      ...agUiEnvelopeCommonProperties,
+      forwardedProps: noResumeBodySchema,
+      // TanStack mirrors forwardedProps under legacy `data`; validating both
+      // prevents an untyped shadow payload from crossing the route boundary.
+      data: noResumeBodySchema,
+      parentRunId: t.Optional(t.Undefined()),
+      resume: t.Optional(t.Undefined()),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      ...agUiEnvelopeCommonProperties,
+      forwardedProps: nativeAssistantContinuationBodySchema,
+      data: nativeAssistantContinuationBodySchema,
+      parentRunId: agUiRunIdSchema,
+      resume: agUiResumeSchema,
+    },
+    { additionalProperties: false },
+  ),
+]);
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
+type AgUiResume = Static<typeof agUiResumeSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
 export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
@@ -355,6 +414,7 @@ type ValidateMessageInput = {
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
   userId: SafeId<"user">;
+  resume?: AgUiResume | undefined;
 };
 
 type ValidateMessageResult = Result<
@@ -411,6 +471,7 @@ type ValidatedToolCallPart =
 export const validateMessage = async ({
   message,
   persistedMessage,
+  resume,
   safeDb,
   threadId,
   tools,
@@ -420,6 +481,7 @@ export const validateMessage = async ({
     const partsResult = validateIncomingChatParts({
       message,
       persistedMessage,
+      resume,
     });
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
@@ -546,9 +608,11 @@ const restoreServerOwnedChatMetadata = ({
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
+  resume,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
+  resume: AgUiResume | undefined;
 }): Result<ChatPart[], HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
   for (const part of message.parts) {
@@ -582,6 +646,7 @@ const validateIncomingChatParts = ({
     const continuationIntegrityResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedParts,
+      resume,
     });
     if (Result.isError(continuationIntegrityResult)) {
       return Result.err(continuationIntegrityResult.error);
@@ -603,9 +668,11 @@ const validateIncomingChatParts = ({
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedParts,
+  resume,
 }: {
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
+  resume: AgUiResume | undefined;
 }): Result<void, HandlerError<400>> => {
   const canonicalCalls = persistedParts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
@@ -641,6 +708,59 @@ const validateContinuationToolCallIntegrity = ({
     parts: [...persistedParts],
     role: "assistant",
   });
+  if (resume !== undefined) {
+    const awaitedInterrupts: {
+      interaction: (typeof awaitedInteractions)[number];
+      interruptId: string;
+    }[] = [];
+    for (const awaited of awaitedInteractions) {
+      const call = canonicalCalls.find(
+        (candidate) => candidate.id === awaited.toolCallId,
+      );
+      if (call === undefined) {
+        continue;
+      }
+      if (awaited.type === "approval") {
+        if (!("approval" in call)) {
+          continue;
+        }
+        awaitedInterrupts.push({
+          interaction: awaited,
+          interruptId: call.approval.id,
+        });
+        continue;
+      }
+      awaitedInterrupts.push({
+        interaction: awaited,
+        interruptId: `client_tool_${call.id}`,
+      });
+    }
+    const resumedInteractions = incomingCalls.flatMap((call) => {
+      const resumed = getResumedUserInteraction({
+        parts: [call],
+        role: "assistant",
+      });
+      return resumed === null ? [] : [resumed];
+    });
+    if (
+      awaitedInterrupts.length !== awaitedInteractions.length ||
+      resume.some(({ interruptId }) => {
+        const awaited = awaitedInterrupts.find(
+          (candidate) => candidate.interruptId === interruptId,
+        );
+        return (
+          awaited === undefined ||
+          !resumedInteractions.some(
+            (resumed) =>
+              resumed.toolCallId === awaited.interaction.toolCallId &&
+              resumed.type === awaited.interaction.type,
+          )
+        );
+      })
+    ) {
+      return invalidContinuationToolCall();
+    }
+  }
   const interaction = awaitedInteractions.find(
     (candidate) =>
       candidate.toolCallId === resumedInteraction.toolCallId &&

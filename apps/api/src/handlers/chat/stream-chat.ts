@@ -424,6 +424,7 @@ export const streamChat = async ({
 
   const output = processServerChatStream({
     abortSignal,
+    existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     onFinish,
     processor,
     source: transformOutgoingStream({
@@ -974,6 +975,9 @@ const runChatAttempt = async function* ({
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
+      ...(runId === undefined ? {} : { runId }),
+      ...(parentRunId === undefined ? {} : { parentRunId }),
+      ...(resume === undefined ? {} : { resume }),
       middleware: [
         analytics.middleware,
         createChatRuntimeMiddleware({
@@ -1215,6 +1219,7 @@ const createChatRuntimeMiddleware = ({
 
 type ProcessServerChatStreamProps = {
   abortSignal: AbortSignal;
+  existingMessageIds?: ReadonlySet<string> | undefined;
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
@@ -1301,6 +1306,7 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
 
 export const processServerChatStream = async function* ({
   abortSignal,
+  existingMessageIds = new Set(),
   getResponseMessage,
   mapMessageId,
   onFinish,
@@ -1341,6 +1347,7 @@ export const processServerChatStream = async function* ({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
+        existingMessageIds,
         mapMessageId,
         source,
       }),
@@ -1559,16 +1566,18 @@ export const normalizeFinalAssistantMessageId = ({
 };
 
 type RemapOutgoingMessageIdsProps = {
+  existingMessageIds?: ReadonlySet<string> | undefined;
   mapMessageId: MessageIdMapper;
   source: AsyncIterable<StreamChunk>;
 };
 
 export const remapOutgoingMessageIds = async function* ({
+  existingMessageIds = new Set(),
   mapMessageId,
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
   for await (const chunk of source) {
-    yield remapChunkMessageId({ chunk, mapMessageId });
+    yield remapChunkMessageId({ chunk, existingMessageIds, mapMessageId });
   }
 };
 
@@ -1641,18 +1650,21 @@ const hasMessageId = (chunk: StreamChunk): chunk is StreamChunkWithMessageId =>
 
 const remapChunkMessageId = ({
   chunk,
+  existingMessageIds,
   mapMessageId,
 }: {
   chunk: StreamChunk;
+  existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
 }): StreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
     return {
       ...chunk,
-      messages: chunk.messages.map((message) => ({
-        ...message,
-        id: mapMessageId(message.id),
-      })),
+      messages: chunk.messages.map((message) =>
+        message.role !== "assistant" || existingMessageIds.has(message.id)
+          ? message
+          : { ...message, id: mapMessageId(message.id) },
+      ),
     };
   }
   const remappedChunk = hasMessageId(chunk)
