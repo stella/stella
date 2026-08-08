@@ -333,6 +333,51 @@ describe("lookupByIco optional VR enrichment", () => {
 
     expect(outcome).toBe(reason);
   });
+
+  test("preserves caller cancellation while the required RES body is stalled", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    let resHeadersArrived: (() => void) | undefined;
+    const headersArrived = new Promise<void>((resolve) => {
+      resHeadersArrived = resolve;
+    });
+    const stub = async (
+      _input: URL | RequestInfo,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const signal = init?.signal;
+      const response = new Response(
+        new ReadableStream({
+          start(streamController) {
+            signal?.addEventListener(
+              "abort",
+              () => streamController.error(signal.reason),
+              { once: true },
+            );
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+      resHeadersArrived?.();
+      return response;
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const lookup = lookupByIco("27082440", {
+      includeVr: false,
+      signal: controller.signal,
+    });
+    await headersArrived;
+    controller.abort(reason);
+    const outcome = await lookup.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toBe(reason);
+  });
 });
 
 describe.skipIf(SKIP_LIVE)("searchByName live", () => {

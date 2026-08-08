@@ -222,6 +222,34 @@ describe("readRegistryJson", () => {
     expect(error).toBeInstanceOf(ParseMarkerError);
   });
 
+  test("preserves caller cancellation during body decoding", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    const response = new Response(
+      new ReadableStream({
+        start(streamController) {
+          controller.signal.addEventListener(
+            "abort",
+            () => streamController.error(controller.signal.reason),
+            { once: true },
+          );
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+    const read = readRegistryJson({
+      response,
+      signal: controller.signal,
+      isExpectedShape: isShape,
+      wrapParseError: (cause) => new ParseMarkerError("parse", { cause }),
+      wrapShapeError: () => new ShapeMarkerError("shape"),
+    });
+
+    controller.abort(reason);
+
+    expect(await captureThrown(read)).toBe(reason);
+  });
+
   test("maps an unexpected shape to the shape error", async () => {
     const error = await captureThrown(
       readRegistryJson({

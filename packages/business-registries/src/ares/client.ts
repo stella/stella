@@ -121,11 +121,13 @@ const parseErrorBody = (value: unknown): AresErrorResponse => {
 const handleAresError = async (
   response: Response,
   url: string,
+  signal?: AbortSignal,
 ): Promise<never> => {
   let body: AresErrorResponse = {};
   try {
     body = parseErrorBody(await response.json());
   } catch {
+    signal?.throwIfAborted();
     // non-JSON error body; leave defaults
   }
 
@@ -147,9 +149,11 @@ const handleAresError = async (
 const readAresJson = async <T>(
   response: Response,
   isExpectedShape: (value: unknown) => value is T,
+  signal?: AbortSignal,
 ): Promise<T> =>
   await readRegistryJson({
     response,
+    signal,
     isExpectedShape,
     wrapParseError: (cause) =>
       new AresAPIError({
@@ -187,6 +191,7 @@ const aresGet = async <T>({
     try {
       body = parseErrorBody(await response.json());
     } catch {
+      signal?.throwIfAborted();
       // ignore
     }
     if (body.kod === "NENALEZENO") {
@@ -201,10 +206,10 @@ const aresGet = async <T>({
   }
 
   if (!response.ok) {
-    await handleAresError(response, url);
+    await handleAresError(response, url, signal);
   }
 
-  return readAresJson(response, isExpectedShape);
+  return readAresJson(response, isExpectedShape, signal);
 };
 
 type AresPostOptions<T> = AresGetOptions<T> & {
@@ -233,10 +238,10 @@ const aresPost = async <T>({
   });
 
   if (!response.ok) {
-    await handleAresError(response, url);
+    await handleAresError(response, url, signal);
   }
 
-  return readAresJson(response, isExpectedShape);
+  return readAresJson(response, isExpectedShape, signal);
 };
 
 // ---------------------------------------------------------------------------

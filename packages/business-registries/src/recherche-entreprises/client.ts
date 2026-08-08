@@ -96,6 +96,7 @@ const rechercheEntreprisesGet = async (
     try {
       body = parseErrorBody(await response.json());
     } catch {
+      signal?.throwIfAborted();
       // non-JSON body
     }
     const upstreamMessage = body.message ?? body.erreur ?? null;
@@ -108,6 +109,7 @@ const rechercheEntreprisesGet = async (
 
   return readRegistryJson({
     response,
+    signal,
     isExpectedShape: isRechercheSearchResponse,
     // A malformed body on an otherwise-200 response (the upstream very
     // occasionally serves truncated JSON during peak load) would

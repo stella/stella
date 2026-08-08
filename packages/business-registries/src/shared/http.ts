@@ -90,6 +90,8 @@ export const performRegistryRequest = async (
 
 export type ReadRegistryJsonOptions<T> = {
   response: Response;
+  /** Preserve caller cancellation that arrives while the body is decoding. */
+  signal?: AbortSignal | undefined;
   isExpectedShape: (value: unknown) => value is T;
   /** Thrown when the body is not valid JSON. */
   wrapParseError: (cause: unknown) => Error;
@@ -108,6 +110,7 @@ export const readRegistryJson = async <T>(
   try {
     body = await options.response.json();
   } catch (error) {
+    options.signal?.throwIfAborted();
     throw options.wrapParseError(error);
   }
   if (!options.isExpectedShape(body)) {
@@ -160,6 +163,7 @@ export const registryFetch = async <T>(
   }
   return readRegistryJson({
     response,
+    signal: options.signal,
     isExpectedShape: options.isExpectedShape,
     wrapParseError: (cause) => options.wrapParseError(response, cause),
     wrapShapeError: () => options.wrapShapeError(response),
