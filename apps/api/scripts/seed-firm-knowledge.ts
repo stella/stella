@@ -37,6 +37,8 @@ const DEFAULT_API_PORT = 3001;
 const DEFAULT_MATTER_COUNT = 15;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
+const GIT_TIMEOUT_MS = 600_000;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 /** What the web client names a new matter's file property. */
 const FILE_PROPERTY_NAME = "Documents";
@@ -185,15 +187,18 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   if (!cloned) {
     console.log(`Cloning ${CORPUS_REPOSITORY} into ${CACHE_DIRECTORY} ...`);
     // No --depth: a shallow tip cannot be moved to an arbitrary commit later.
-    const clone = Bun.spawnSync([
-      "git",
-      "clone",
-      "--filter=blob:none",
-      "--sparse",
-      "--no-checkout",
-      CORPUS_REPOSITORY,
-      cache,
-    ]);
+    const clone = Bun.spawnSync(
+      [
+        "git",
+        "clone",
+        "--filter=blob:none",
+        "--sparse",
+        "--no-checkout",
+        CORPUS_REPOSITORY,
+        cache,
+      ],
+      { timeout: GIT_TIMEOUT_MS },
+    );
     if (clone.exitCode !== 0) {
       fail(`Corpus clone failed: ${clone.stderr.toString()}`);
     }
@@ -204,7 +209,7 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   if (head.stdout.toString().trim() !== CORPUS_COMMIT) {
     const fetched = Bun.spawnSync(
       ["git", "fetch", "--filter=blob:none", "origin", CORPUS_COMMIT],
-      { cwd: cache },
+      { cwd: cache, timeout: GIT_TIMEOUT_MS },
     );
     if (fetched.exitCode !== 0) {
       fail(`Could not fetch corpus commit: ${fetched.stderr.toString()}`);
@@ -322,9 +327,14 @@ const readSessionCookie = async (apiOrigin: string): Promise<string> => {
     fail(`${STORAGE_STATE} carries no ${SESSION_COOKIE_SUFFIX} cookie.`);
   }
 
-  const { port } = new URL(apiOrigin);
+  const { hostname, port } = new URL(apiOrigin);
   if (!port) {
     fail(`--api origin '${apiOrigin}' must include a port.`);
+  }
+  // The session token below is a real credential; a typo in --api would post it
+  // to whatever host was named.
+  if (!LOOPBACK_HOSTS.has(hostname)) {
+    fail(`--api must point at a loopback host, got '${hostname}'.`);
   }
   return `${sessionCookieNameForDevPort(port)}=${sessionCookie.value}`;
 };
@@ -385,6 +395,7 @@ const main = async () => {
 
   let seededFiles = 0;
   let skipped = 0;
+  let empty = 0;
 
   for (const matterDirectory of matterDirectories) {
     // oxlint-disable-next-line no-await-in-loop -- one matter at a time keeps the queue depth sane
@@ -392,6 +403,7 @@ const main = async () => {
       path.join(corpusRoot, matterDirectory.name),
     );
     if (manifest.files.length === 0) {
+      empty += 1;
       continue;
     }
     const expectedEntities =
@@ -464,7 +476,9 @@ const main = async () => {
       // oxlint-disable-next-line no-await-in-loop -- sequential, as the browser uploads
       const put = await fetch(url, {
         body,
-        headers: { ...headers, "content-type": file.mimeType },
+        // Sent verbatim: content-type is part of the signed set, so composing
+        // our own would break the signature.
+        headers,
         method: "PUT",
         signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
       });
@@ -485,7 +499,7 @@ const main = async () => {
     );
   }
 
-  const seededMatters = matterDirectories.length - skipped;
+  const seededMatters = matterDirectories.length - skipped - empty;
   console.log(
     `\nSeeded ${seededFiles} files across ${seededMatters} ${
       seededMatters === 1 ? "matter" : "matters"
