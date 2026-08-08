@@ -75,10 +75,10 @@ const nalusIdentities = ({
   aliases: readonly string[] | undefined;
 } | null => {
   const identities = [
-    recordId === undefined ? undefined : `nalus-record:${recordId}`,
-    sz === undefined ? undefined : `nalus-sz:${sz}`,
-    ecli === undefined ? undefined : `nalus-ecli:${ecli}`,
-    quarantineId === undefined ? undefined : `nalus-quarantine:${quarantineId}`,
+    recordId ? `nalus-record:${recordId}` : undefined,
+    sz ? `nalus-sz:${sz}` : undefined,
+    ecli ? `nalus-ecli:${ecli}` : undefined,
+    quarantineId ? `nalus-quarantine:${quarantineId}` : undefined,
   ].filter(
     (identity): identity is string =>
       identity !== undefined && isPersistableSourceDocumentId(identity),
@@ -850,7 +850,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     let sz: string | undefined;
     if (rawUrl) {
       try {
-        sz = new URL(rawUrl).searchParams.get("sz") ?? undefined;
+        sz = new URL(rawUrl).searchParams.get("sz") || undefined;
       } catch {
         // A malformed or withdrawn text action does not erase the stable
         // ResultDetail record identity exposed by the listing.

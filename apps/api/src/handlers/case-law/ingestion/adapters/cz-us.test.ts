@@ -823,6 +823,31 @@ describe("czUsAdapter.fetchPage", () => {
     );
   });
 
+  test("discards an empty retrieval identity without merging malformed rows", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "7393",
+          sz: "",
+          caseNumber: "II.ÚS 93/24",
+          date: "4. 1. 2024",
+          textUrl: "https://nalus.usoud.cz:443/Search/GetText.aspx?sz=&foo=x",
+        },
+      ],
+    });
+
+    const decision = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+
+    expect(decision?.sourceDocumentId).toBe("nalus-record:7393");
+    expect(decision?.sourceDocumentIdAliases).not.toContain("nalus-sz:");
+    expect(decision).toMatchObject({
+      isListingOnly: true,
+      metadata: { listedOnlyReason: "missing-text-action" },
+    });
+  });
+
   test("publishes overlapping identities before a record link disappears", async () => {
     installSearchMock({
       rows: [
