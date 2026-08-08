@@ -1,8 +1,4 @@
-import {
-  isStandardSchema,
-  parseWithStandardSchema,
-  type SchemaInput,
-} from "@tanstack/ai";
+import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -184,82 +180,161 @@ export type DocxEditRepresentation =
 export const DEFAULT_DOCX_EDIT_REPRESENTATION: DocxEditRepresentation =
   DOCX_EDIT_REPRESENTATION.trackedChanges;
 
-export const sendMessageBodySchema = t.Object({
-  threadId: tSafeId("chatThread"),
-  workspaceId: t.Optional(tSafeId("workspace")),
-  sendMode: t.Union([
-    t.Literal(CHAT_SEND_MODE.anonymized),
-    t.Literal(CHAT_SEND_MODE.rawOverride),
-  ]),
-  /**
-   * Matters the chat draws context from. Empty (or omitted) means
-   * "no matters pinned" — the AI discovers matters lazily via the
-   * readonly read API. Non-empty narrows tool authorization so
-   * requested matterRefs must be a subset of this set. The set is
-   * persisted on the chat thread so subsequent turns reuse it
-   * without re-sending.
-   */
-  contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
-  message: rawMessageSchema,
-  truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
-  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
-  /**
-   * Optional named tool scope for this turn. Only server-defined
-   * scope names validate; the server maps the name to a fixed tool
-   * allowlist (see `tools/tool-scope.ts`), so a client can narrow
-   * but never widen the turn's tool surface.
-   */
-  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
-  /**
-   * Execution mode for this turn. Absent (the default) runs the normal
-   * server-side chat model with the user's selected model, tools, and MCP.
-   * `"agent"` explicitly requests an agent-sandbox run; the request
-   * fails when the deployment has not enabled and fully configured that
-   * engine. Making this an explicit opt-in means a normal, BYOK, or
-   * model-selected chat is never silently rerouted into a sandbox just because
-   * the engine is enabled.
-   */
-  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
-  userContext: t.Optional(userContextSchema),
-  activeDraft: t.Optional(activeDraftSchema),
-  activeFile: t.Optional(activeFileSchema),
-  activeTemplate: t.Optional(activeTemplateSchema),
-  activeDecision: t.Optional(activeDecisionSchema),
-  activeExternal: t.Optional(activeExternalSchema),
-  activeSkill: t.Optional(activeSkillSchema),
-  /**
-   * Which DOCX-edit review mode this turn uses; omitted means
-   * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
-   * registers exactly one of `apply-active-docx-edits` (manual) /
-   * `edit_workspace_document` (auto) accordingly -- never both.
-   */
-  editApplyMode: t.Optional(
-    t.Union([
-      t.Literal(CHAT_EDIT_APPLY_MODE.manual),
-      t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
+const agUiResumeSchema = t.Array(
+  t.Object(
+    {
+      interruptId: t.String({ minLength: 1, maxLength: 512 }),
+      status: t.Union([t.Literal("resolved"), t.Literal("cancelled")]),
+      // AG-UI intentionally defines resume payloads as application-owned JSON.
+      payload: t.Optional(t.Unknown()),
+    },
+    { additionalProperties: false },
+  ),
+  { minItems: 1, maxItems: 128 },
+);
+
+export const sendMessageBodySchema = t.Object(
+  {
+    threadId: tSafeId("chatThread"),
+    runId: agUiRunIdSchema,
+    parentRunId: t.Optional(agUiRunIdSchema),
+    resume: t.Optional(agUiResumeSchema),
+    workspaceId: t.Optional(tSafeId("workspace")),
+    sendMode: t.Union([
+      t.Literal(CHAT_SEND_MODE.anonymized),
+      t.Literal(CHAT_SEND_MODE.rawOverride),
     ]),
-  ),
-  /**
-   * Redline representation for the `auto` review mode only; omitted means
-   * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
-   * human picks the representation at accept time.
-   */
-  docxEditRepresentation: t.Optional(
-    t.Union([
-      t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
-      t.Literal(DOCX_EDIT_REPRESENTATION.direct),
-    ]),
-  ),
-  devModelId: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 160,
-      pattern: "^[A-Za-z0-9._:/-]+$",
-    }),
-  ),
-});
+    /**
+     * Matters the chat draws context from. Empty (or omitted) means
+     * "no matters pinned" — the AI discovers matters lazily via the
+     * readonly read API. Non-empty narrows tool authorization so
+     * requested matterRefs must be a subset of this set. The set is
+     * persisted on the chat thread so subsequent turns reuse it
+     * without re-sending.
+     */
+    contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
+    message: rawMessageSchema,
+    truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+    turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
+    /**
+     * Optional named tool scope for this turn. Only server-defined
+     * scope names validate; the server maps the name to a fixed tool
+     * allowlist (see `tools/tool-scope.ts`), so a client can narrow
+     * but never widen the turn's tool surface.
+     */
+    toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+    /**
+     * Execution mode for this turn. Absent runs normal server-side chat;
+     * `"agent"` explicitly requests the configured agent sandbox.
+     */
+    runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
+    userContext: t.Optional(userContextSchema),
+    activeDraft: t.Optional(activeDraftSchema),
+    activeFile: t.Optional(activeFileSchema),
+    activeTemplate: t.Optional(activeTemplateSchema),
+    activeDecision: t.Optional(activeDecisionSchema),
+    activeExternal: t.Optional(activeExternalSchema),
+    activeSkill: t.Optional(activeSkillSchema),
+    /**
+     * Which DOCX-edit review mode this turn uses; omitted means
+     * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
+     * registers exactly one of `apply-active-docx-edits` (manual) /
+     * `edit_workspace_document` (auto) accordingly -- never both.
+     */
+    editApplyMode: t.Optional(
+      t.Union([
+        t.Literal(CHAT_EDIT_APPLY_MODE.manual),
+        t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+      ]),
+    ),
+    /**
+     * Redline representation for the `auto` review mode only; omitted means
+     * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
+     * human picks the representation at accept time.
+     */
+    docxEditRepresentation: t.Optional(
+      t.Union([
+        t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
+        t.Literal(DOCX_EDIT_REPRESENTATION.direct),
+      ]),
+    ),
+    devModelId: t.Optional(
+      t.String({
+        minLength: 1,
+        maxLength: 160,
+        pattern: "^[A-Za-z0-9._:/-]+$",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
 
 export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
+
+const agUiMessageEnvelopeSchema = t.Object(
+  {
+    id: t.String({ minLength: 1, maxLength: 512 }),
+    role: t.Union([
+      t.Literal("developer"),
+      t.Literal("system"),
+      t.Literal("assistant"),
+      t.Literal("user"),
+      t.Literal("tool"),
+      t.Literal("activity"),
+      t.Literal("reasoning"),
+    ]),
+  },
+  {
+    // Message bodies are the upstream AG-UI discriminated union plus
+    // TanStack's `parts` extension. Stella does not consume this mirrored
+    // history: `forwardedProps.message` below is the strict mutation input.
+    additionalProperties: true,
+  },
+);
+
+/**
+ * Canonical AG-UI RunAgentInput envelope emitted by TanStack's connection
+ * adapter. Stella-specific, strictly validated inputs live in forwardedProps;
+ * correlation and resume fields stay protocol-native at the top level.
+ */
+export const agUiSendMessageBodySchema = t.Object(
+  {
+    threadId: tSafeId("chatThread"),
+    runId: agUiRunIdSchema,
+    parentRunId: t.Optional(agUiRunIdSchema),
+    resume: t.Optional(agUiResumeSchema),
+    state: t.Object({}, { additionalProperties: true }),
+    messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
+    tools: t.Array(
+      t.Object(
+        {
+          name: t.String({ minLength: 1, maxLength: 512 }),
+          description: t.String({ maxLength: 16_384 }),
+          parameters: t.Optional(t.Unknown()),
+          metadata: t.Optional(t.Record(t.String(), t.Unknown())),
+        },
+        { additionalProperties: false },
+      ),
+      { maxItems: 512 },
+    ),
+    context: t.Array(
+      t.Object(
+        {
+          description: t.String({ maxLength: 16_384 }),
+          value: t.String({ maxLength: 1_000_000 }),
+        },
+        { additionalProperties: false },
+      ),
+      { maxItems: 512 },
+    ),
+    forwardedProps: sendMessageBodySchema,
+    // TanStack mirrors forwardedProps under legacy `data`; validating both
+    // prevents an untyped shadow payload from crossing the route boundary.
+    data: sendMessageBodySchema,
+  },
+  { additionalProperties: false },
+);
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
@@ -290,7 +365,6 @@ type ValidateMessageResult = Result<
   HandlerError<400 | 403 | 404> | SafeDbError
 >;
 
-type ChatToolSchema = SchemaInput | undefined;
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
 const CONTINUATION_TOOL_CALL_TRANSITIONS = {
@@ -1187,7 +1261,7 @@ const validateToolPayload = ({
 }: {
   payload: unknown;
   payloadName: "arguments" | "input" | "output" | "result";
-  schema: ChatToolSchema;
+  schema: unknown;
   toolName: string;
 }): Result<unknown, HandlerError<400>> => {
   if (schema === undefined || !isStandardSchema(schema)) {

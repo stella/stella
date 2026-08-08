@@ -15,6 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   activeDraftSchema,
+  agUiSendMessageBodySchema,
   sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
@@ -135,6 +136,7 @@ describe("active draft request context", () => {
 describe("chat turn intent", () => {
   const request = {
     threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-regenerate-1",
     sendMode: CHAT_SEND_MODE.rawOverride,
     message: {
       id: "019fc771-8b17-7000-b85e-559afc54cfe5",
@@ -154,6 +156,61 @@ describe("chat turn intent", () => {
       Value.Check(sendMessageBodySchema, {
         ...request,
         turnIntent: "retry",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("native AG-UI request envelope", () => {
+  const forwardedProps = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-1",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "Continue" }],
+    },
+  };
+  const request = {
+    threadId: forwardedProps.threadId,
+    runId: forwardedProps.runId,
+    state: {},
+    messages: [forwardedProps.message],
+    tools: [],
+    context: [],
+    forwardedProps,
+    data: forwardedProps,
+  };
+
+  test("accepts the canonical envelope with a complete native resume batch", () => {
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume: [
+          {
+            interruptId: "approval-1",
+            status: "resolved",
+            payload: { approved: true },
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects untyped top-level transport fields and incomplete resume items", () => {
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        shadowPayload: {},
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(agUiSendMessageBodySchema, {
+        ...request,
+        parentRunId: "run-parent",
+        resume: [{ interruptId: "approval-1" }],
       }),
     ).toBe(false);
   });

@@ -77,6 +77,16 @@ export type ChatSendRequest = {
     role: "assistant" | "system" | "user";
   };
   runMode?: ChatRunMode;
+  /** AG-UI run correlation minted by TanStack ChatClient. */
+  runId: string;
+  /** The interrupted AG-UI run this continuation resolves. */
+  parentRunId?: string;
+  /** Complete, all-or-nothing AG-UI interrupt resolution batch. */
+  resume?: {
+    interruptId: string;
+    payload?: unknown;
+    status: "cancelled" | "resolved";
+  }[];
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];

@@ -6,10 +6,11 @@ import {
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
+  AnyServerTool,
   ChatMiddleware,
   ChatMiddlewareConfig,
   ModelMessage,
-  ServerTool,
+  RunAgentResumeItem,
   StreamChunk,
   TokenUsage,
   UIMessage,
@@ -167,6 +168,9 @@ type StreamChatProps = {
   /** Explicit effort for a validated manual model selection. */
   reasoningEffort?: ReasoningEffort | undefined;
   latestMessageId: string;
+  runId: string;
+  parentRunId?: string | undefined;
+  resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   organizationId: SafeId<"organization">;
@@ -239,6 +243,9 @@ export const streamChat = async ({
   abortSignal,
   devModelId,
   latestMessageId,
+  runId,
+  parentRunId,
+  resume,
   messages: rawMessages,
   onFinish,
   organizationId,
@@ -399,6 +406,9 @@ export const streamChat = async ({
     promptCachingEnabled,
     runMode,
     sandboxRun,
+    runId,
+    parentRunId,
+    resume,
     safeDb,
     surfaces: {
       messages: preparedMessageList,
@@ -552,13 +562,13 @@ const projectServerToolsForProvider = ({
   serverTools,
 }: {
   provider: string;
-  serverTools: readonly ServerTool[];
-}): ServerTool[] => {
+  serverTools: readonly AnyServerTool[];
+}): AnyServerTool[] => {
   const projectionOptions = providerSafeJsonSchemaOptionsForTanStackProvider(
     provider,
     "tool",
   );
-  const projectedTools: ServerTool[] = [];
+  const projectedTools: AnyServerTool[] = [];
   for (const tool of serverTools) {
     const projectedTool = { ...tool };
     if (tool.inputSchema !== undefined) {
@@ -736,6 +746,9 @@ type RunChatAttemptsProps = {
   promptCachingEnabled: boolean;
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  runId: string;
+  parentRunId: string | undefined;
+  resume: RunAgentResumeItem[] | undefined;
   safeDb: SafeDb;
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
@@ -757,6 +770,9 @@ const runChatAttempts = async function* ({
   promptCachingEnabled,
   runMode,
   sandboxRun,
+  runId,
+  parentRunId,
+  resume,
   safeDb,
   surfaces,
   thirdPartyBoundary,
@@ -780,6 +796,9 @@ const runChatAttempts = async function* ({
     orgAIConfig,
     promptCacheKey,
     promptCachingEnabled,
+    runId,
+    parentRunId,
+    resume,
     role: "chat",
     safeDb,
     sandboxRun,
@@ -853,6 +872,9 @@ type RunChatAttemptProps = {
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
+  runId?: string | undefined;
+  parentRunId?: string | undefined;
+  resume?: RunAgentResumeItem[] | undefined;
   role: ChatAttemptRole;
   safeDb: SafeDb;
   /**
@@ -883,6 +905,9 @@ const runChatAttempt = async function* ({
   orgAIConfig,
   promptCacheKey,
   promptCachingEnabled,
+  runId,
+  parentRunId,
+  resume,
   role,
   safeDb,
   sandboxRun,
@@ -995,6 +1020,9 @@ const runChatAttempt = async function* ({
     agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
     abortController,
     threadId,
+    ...(runId === undefined ? {} : { runId }),
+    ...(parentRunId === undefined ? {} : { parentRunId }),
+    ...(resume === undefined ? {} : { resume }),
     ...systemPromptsPatch({ caching, model, system: baseSystem }),
     modelOptions: mergeGenerationOptions({
       caching,
@@ -1113,8 +1141,8 @@ const createChatRuntimeMiddleware = ({
           usage: event.info.usage,
         });
         return;
+      case "aborted":
       case "failed":
-      case "interrupted":
         return;
       default:
         event satisfies never;
@@ -1351,7 +1379,7 @@ export const processServerChatStream = async function* ({
           ? normalizeRunErrorChunk(sourceChunk)
           : sourceChunk;
       const lifecycle = tanStackStreamEventLifecycle(chunk);
-      if (lifecycle === "completed") {
+      if (lifecycle === "completed" || lifecycle === "waiting") {
         if (chunk.type !== EventType.RUN_FINISHED) {
           panic("Unhandled TanStack completed stream event");
         }
@@ -1618,6 +1646,15 @@ const remapChunkMessageId = ({
   chunk: StreamChunk;
   mapMessageId: MessageIdMapper;
 }): StreamChunk => {
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    return {
+      ...chunk,
+      messages: chunk.messages.map((message) => ({
+        ...message,
+        id: mapMessageId(message.id),
+      })),
+    };
+  }
   const remappedChunk = hasMessageId(chunk)
     ? { ...chunk, messageId: mapMessageId(chunk.messageId) }
     : chunk;
@@ -1837,6 +1874,45 @@ const createOutgoingChunkTransformer = ({
   };
 
   const transform = (chunk: StreamChunk): StreamChunk[] => {
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      return [
+        ...emitRestorationDelta(
+          collectUnknownStringPlaceholders(chunk.messages, lenientCollector),
+        ),
+        {
+          ...chunk,
+          messages: restoreVisibleStringLeaves(chunk.messages, {
+            boundary,
+            resolveAssistantValueRefs,
+          }),
+        },
+      ];
+    }
+
+    if (
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+    ) {
+      return [
+        ...emitRestorationDelta(
+          collectUnknownStringPlaceholders(
+            chunk.outcome.interrupts,
+            lenientCollector,
+          ),
+        ),
+        {
+          ...chunk,
+          outcome: {
+            ...chunk.outcome,
+            interrupts: restoreVisibleStringLeaves(chunk.outcome.interrupts, {
+              boundary,
+              resolveAssistantValueRefs,
+            }),
+          },
+        },
+      ];
+    }
+
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
@@ -2187,6 +2263,64 @@ const transformToolCallInput = ({
   return resolveAssistantValueRefs
     ? resolveAssistantValueRefs(visibleInput)
     : visibleInput;
+};
+
+/**
+ * Restore strings inside an AG-UI snapshot/interrupt without widening its
+ * protocol type. `structuredClone` preserves the object shape; the walker only
+ * replaces string leaves with strings, so ids, bindings, and schemas retain
+ * their exact structural contract.
+ */
+const restoreVisibleStringLeaves = <T extends object>(
+  value: T,
+  {
+    boundary,
+    resolveAssistantValueRefs,
+  }: {
+    boundary: ChatThirdPartyBoundary;
+    resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  },
+): T => {
+  const restored = structuredClone(value);
+  const restoreString = (text: string): string => {
+    const visible =
+      boundary.type === "anonymized"
+        ? deanonymizeUnknownStringsFromBoundary(boundary, text, "lenient")
+        : text;
+    if (typeof visible !== "string") {
+      return panic("String restoration changed an AG-UI leaf's shape");
+    }
+    const resolved = resolveAssistantValueRefs?.(visible) ?? visible;
+    if (typeof resolved !== "string") {
+      return panic("Chat ref restoration changed an AG-UI leaf's shape");
+    }
+    return resolved;
+  };
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (let index = 0; index < node.length; index += 1) {
+        const child: unknown = node[index];
+        if (typeof child === "string") {
+          node[index] = restoreString(child);
+        } else {
+          visit(child);
+        }
+      }
+      return;
+    }
+    if (!isRecord(node)) {
+      return;
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (typeof child === "string") {
+        node[key] = restoreString(child);
+      } else {
+        visit(child);
+      }
+    }
+  };
+  visit(restored);
+  return restored;
 };
 
 type ParsedToolResultContent =

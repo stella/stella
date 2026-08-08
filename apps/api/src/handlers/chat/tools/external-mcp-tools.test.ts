@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import type { ServerTool } from "@tanstack/ai";
+import type { AnyServerTool } from "@tanstack/ai";
 import { describe, expect, mock, test } from "bun:test";
 
 import { selectAllowedExternalMcpToolDefinitions } from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
@@ -250,7 +250,7 @@ describe("createLazyExternalMcpToolsLoader", () => {
   });
 });
 
-const serverTool = (name: string): ServerTool => ({
+const serverTool = (name: string): AnyServerTool => ({
   __toolSide: "server",
   name,
   description: `Tool ${name}`,

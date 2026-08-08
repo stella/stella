@@ -139,14 +139,25 @@ const createContext = ({
 }: {
   message: ChatSendRequest["message"];
   threadId: SafeId<"chatThread">;
-}): SendMessageCtx =>
-  asTestRaw<SendMessageCtx>({
+}): SendMessageCtx => {
+  const forwardedProps = {
+    contextMatterIds: [],
+    message,
+    runId: `run-${message.id}`,
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    threadId,
+    turnIntent: CHAT_TURN_INTENT.regenerate,
+  };
+  return asTestRaw<SendMessageCtx>({
     body: {
-      contextMatterIds: [],
-      message,
-      sendMode: CHAT_SEND_MODE.rawOverride,
       threadId,
-      turnIntent: CHAT_TURN_INTENT.regenerate,
+      runId: forwardedProps.runId,
+      state: {},
+      messages: [message],
+      tools: [],
+      context: [],
+      forwardedProps,
+      data: forwardedProps,
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -167,6 +178,7 @@ const createContext = ({
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });
+};
 
 describe("explicit chat regeneration", () => {
   test("replaces the stale assistant tail and claims a fresh turn", async () => {

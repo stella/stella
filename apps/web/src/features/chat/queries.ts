@@ -1,7 +1,10 @@
-import { ChatClient } from "@tanstack/ai-client";
+import type { ModelMessage } from "@tanstack/ai";
+import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type {
   ChatClientState,
+  ConnectConnectionAdapter,
   MultimodalContent,
+  RunAgentInputContext,
   UIMessage,
 } from "@tanstack/ai-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -434,7 +437,7 @@ const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
 export type ChatRuntime = {
   readonly [CHAT_RUNTIME_BRAND]: true;
-  addToolApprovalResponse: (
+  resolveToolApproval: (
     response: {
       approved: boolean;
       id: string;
@@ -821,29 +824,53 @@ export const createChatRuntime = ({
     captureRuntimeError(error);
   };
 
+  const chatFetchClient = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const { signal, ...requestInit } = init ?? {};
+      return await fetchWithTimeout(input, {
+        ...requestInit,
+        ...(signal === null ? {} : { signal }),
+        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+      });
+    },
+    // Bun augments the global fetch type with this optional optimization.
+    // TanStack accepts `typeof globalThis.fetch`; the browser transport does
+    // not need preconnection, so expose a typed no-op instead of casting.
+    { preconnect: () => undefined },
+  ) satisfies typeof globalThis.fetch;
+  const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    fetchClient: chatFetchClient,
+  });
+  const connection = {
+    connect: (messages, data, abortSignal, runContext) => {
+      if (runContext === undefined) {
+        return panic("TanStack connection omitted the AG-UI run context");
+      }
+      if (!messages.every(isChatUiMessage)) {
+        return panic("Stella chat connection received model messages");
+      }
+      return upstreamConnection.connect(
+        messages,
+        buildSendRequestBody({
+          context,
+          key,
+          messages: toPersistedChatMessages(messages),
+          run: runContext,
+          requestBody: normalizeChatContinuationRequestBody(data),
+        }),
+        abortSignal,
+        runContext,
+      );
+    },
+  } satisfies ConnectConnectionAdapter;
+
   const client = new ChatClient<ChatClientTools>({
     id: getChatThreadKey(key),
     threadId: key.threadId,
     initialMessages,
-    fetcher: async (input, { signal }) => {
-      const response = await fetchWithTimeout(getChatApiPath(), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          buildSendRequestBody({
-            context,
-            key,
-            messages: toPersistedChatMessages(input.messages),
-            requestBody: normalizeChatContinuationRequestBody(input.data),
-          }),
-        ),
-        signal,
-        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
-      });
-
-      return response;
-    },
+    connection,
     onError: (error) => {
       onError(error);
       setSnapshot({ error });
@@ -900,8 +927,38 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
-    addToolApprovalResponse: async (response, options) => {
+    resolveToolApproval: async (response, options) => {
       await withBody(options, async () => {
+        const interrupt = client
+          .getInterrupts()
+          .find(
+            (candidate) =>
+              (candidate.kind === "tool-approval" &&
+                candidate.toolCallId === response.id) ||
+              (candidate.kind === "generic" &&
+                (candidate.interruptId === response.id ||
+                  candidate.id === response.id)),
+          );
+        if (interrupt?.kind === "tool-approval") {
+          if (response.approved) {
+            interrupt.resolveInterrupt(true);
+          } else {
+            interrupt.resolveInterrupt(false);
+          }
+          return;
+        }
+        if (interrupt?.kind === "generic") {
+          // Stella's server tool catalog is dynamic, so the browser has no
+          // runtime tool definitions with which to specialize the binding.
+          // TanStack therefore exposes the native descriptor as a generic
+          // bound interrupt; its response schema is the strict authority.
+          interrupt.resolveInterrupt({ approved: response.approved });
+          return;
+        }
+
+        // Transitional reload path for turns persisted before native AG-UI
+        // interrupt descriptors were available. New live turns always resolve
+        // through the bound interrupt above.
         await client.addToolApprovalResponse(response);
       });
     },
@@ -996,6 +1053,11 @@ const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
 ): PersistedChatMessage[] => [...messages];
 
+const isChatUiMessage = (
+  message: ModelMessage | UIMessage,
+): message is UIMessage<ChatClientTools> =>
+  "parts" in message && Array.isArray(message.parts);
+
 const toChatSendDocxEditSnapshot = (
   snapshot: NonNullable<ActiveFileContext["docxEditSnapshot"]>,
 ): NonNullable<
@@ -1019,11 +1081,16 @@ export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  run,
   requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  run: Pick<
+    RunAgentInputContext,
+    "parentRunId" | "resume" | "runId" | "threadId"
+  >;
   requestBody?: ChatContinuationRequestBody | undefined;
 }): ChatSendRequest => {
   const message = messages.at(-1);
@@ -1042,7 +1109,10 @@ export const buildSendRequestBody = ({
       messages,
       requestBody,
     }),
+    runId: run.runId,
     threadId: key.threadId,
+    ...(run.parentRunId === undefined ? {} : { parentRunId: run.parentRunId }),
+    ...(run.resume === undefined ? {} : { resume: run.resume }),
   };
 
   if (requestBody?.truncateAfterMessageId !== undefined) {

@@ -19,7 +19,7 @@ const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isProjectableJsonSchemaInput = (
-  value: SchemaInput | undefined,
+  value: unknown,
 ): value is StandardJSONSchemaV1 => {
   if (!isJsonObject(value)) {
     return false;
@@ -37,9 +37,7 @@ const isProjectableJsonSchemaInput = (
   );
 };
 
-const isStandardSchemaInput = (
-  value: SchemaInput | undefined,
-): value is StandardSchemaV1 => {
+const isStandardSchemaInput = (value: unknown): value is StandardSchemaV1 => {
   if (!isJsonObject(value)) {
     return false;
   }
@@ -123,7 +121,7 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
 };
 
 export const projectSchemaInputJsonSchema = (
-  schema: SchemaInput | undefined,
+  schema: unknown,
   projectionOptions: ProviderSafeJsonSchemaProjectionOptions,
 ): SchemaInput | undefined => {
   if (isProjectableJsonSchemaInput(schema)) {
@@ -147,8 +145,12 @@ export const projectSchemaInputJsonSchema = (
     };
   }
 
-  if (!isJsonObject(schema) || isStandardSchemaInput(schema)) {
+  if (schema === undefined || isStandardSchemaInput(schema)) {
     return schema;
+  }
+
+  if (!isJsonObject(schema)) {
+    return undefined;
   }
 
   return projectToProviderSafeJsonSchema(schema, projectionOptions).schema;

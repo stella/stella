@@ -10,6 +10,7 @@ import {
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
@@ -21,6 +22,7 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -134,13 +136,27 @@ const buildChatReadTools = (
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
+    const entry = READ_TOOL_REF_FIELD_MAP[toolName];
+    if (!entry.chatProjectable) {
+      return panic(`Chat read tool ${toolName} is not projectable`);
+    }
 
     return toolDefinition({
       name: toolName,
       description: chatReadToolDescription(toolName),
       inputSchema: toToolInputSchema(definition.inputSchema),
+      // The same strict projection that strips and ref-hydrates registry
+      // output also validates the Code Mode result at the TanStack boundary.
+      // This keeps the provider-visible contract and runtime egress contract
+      // derived from one schema.
+      outputSchema: toTanStackToolSchema(entry.projection),
       lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
-    }).server(async (args: unknown) => await runReadTool(toolName, args));
+    }).server(async (args: unknown) =>
+      // `runReadTool` is dynamic because the registry name is selected at
+      // runtime. Re-parse at that dynamic boundary so TanStack receives the
+      // concrete projection output type as well as its runtime guarantee.
+      v.parse(entry.projection, await runReadTool(toolName, args)),
+    );
   });
 
 type BuildChatCodeModeProps = Omit<

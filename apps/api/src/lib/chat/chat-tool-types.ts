@@ -1,17 +1,26 @@
 import type {
+  AnyTool,
   ClientTool,
-  InferToolInput,
-  InferToolOutput,
+  InferSchemaType,
+  InputSchemaOf,
+  OutputSchemaOf,
   SchemaInput,
-  Tool,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-export type ChatTool = Tool;
+/**
+ * Heterogeneous chat-tool boundary. Keep each concrete tool's literal schemas
+ * at its definition site; use TanStack's broad union only when tools enter a
+ * dynamic registry, provider projection, or MCP collection.
+ */
+export type ChatTool = AnyTool;
 
 export type ChatToolMap = Record<string, ChatTool | undefined>;
 
-type DefinedChatTool<TTool> = Extract<TTool, ChatTool>;
+// Registry values are already constrained by `ChatToolMap`; only remove the
+// optional slot here. Re-extracting against broad `AnyTool` erases concrete
+// schema inference because its collection boundary intentionally uses `any`.
+type DefinedChatTool<TTool> = Exclude<TTool, undefined>;
 
 export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   [TName in keyof TTools & string as DefinedChatTool<
@@ -19,8 +28,8 @@ export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   > extends never
     ? never
     : TName]: {
-    input: InferToolInput<DefinedChatTool<TTools[TName]>>;
-    output: InferToolOutput<DefinedChatTool<TTools[TName]>>;
+    input: InferSchemaType<InputSchemaOf<DefinedChatTool<TTools[TName]>>>;
+    output: InferSchemaType<OutputSchemaOf<DefinedChatTool<TTools[TName]>>>;
   };
 };
 
@@ -54,7 +63,11 @@ type ChatClientToolUnionFor<
 > = {
   [TName in keyof TTools & string]: DefinedChatTool<TTools[TName]> extends never
     ? never
-    : ChatClientToolFor<TName, DefinedChatTool<TTools[TName]>, TApprovalNames>;
+    : ChatClientToolFor<
+        TName,
+        Extract<DefinedChatTool<TTools[TName]>, ChatTool>,
+        TApprovalNames
+      >;
 }[keyof TTools & string];
 
 type ExternalMcpClientTool = ClientTool<

@@ -1,4 +1,4 @@
-import type { MCPToolSource, ServerTool } from "@tanstack/ai";
+import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import { Result } from "better-result";
 
 import {
@@ -1134,8 +1134,8 @@ export const prepareMcpToolSourceForThirdParty = ({
 
 const prepareMcpServerToolForThirdParty = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
-  tool: ServerTool,
-): ServerTool => {
+  tool: AnyServerTool,
+): AnyServerTool => {
   const execute = tool.execute;
   if (!execute) {
     return tool;

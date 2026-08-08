@@ -351,6 +351,43 @@ describe("outgoing chat stream message ids", () => {
     expect(index).toBe(1);
   });
 
+  test("normalizes assistant ids carried by native AG-UI snapshots", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+
+    expect(
+      await collectChunks(
+        remapOutgoingMessageIds({
+          mapMessageId: createChatMessageIdMapper(() => messageId),
+          source: streamChunks([
+            {
+              type: EventType.MESSAGES_SNAPSHOT,
+              messages: [
+                {
+                  id: "provider-message",
+                  role: "assistant",
+                  content: "Waiting for approval",
+                },
+              ],
+            },
+          ]),
+        }),
+      ),
+    ).toEqual([
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          {
+            id: messageId,
+            role: "assistant",
+            content: "Waiting for approval",
+          },
+        ],
+      },
+    ]);
+  });
+
   test("normalizes tanstack generated final assistant ids before persistence", () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
@@ -1931,6 +1968,85 @@ describe("anonymized outgoing chat stream", () => {
     ]);
     expect(restorationPairs).toEqual([
       { placeholder: "[PERSON_2]", original: "Jan Novak" },
+    ]);
+  });
+
+  test("restores native AG-UI snapshots and interrupt bindings", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = transformOutgoingStream({
+      boundary,
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
+            {
+              id: "message-1",
+              role: "assistant",
+              content: "Review [PERSON_1]",
+            },
+          ],
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          threadId: "thread-1",
+          runId: "run-1",
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: "approval_tool-1",
+                reason: "tool_call",
+                metadata: {
+                  "tanstack:interruptBinding": {
+                    originalArgs: { assignee: "[PERSON_1]" },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      {
+        type: EventType.CUSTOM,
+        name: "stella.anon-restorations",
+        value: {
+          pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
+        },
+      },
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          {
+            id: "message-1",
+            role: "assistant",
+            content: "Review Jan Novak",
+          },
+        ],
+      },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: "thread-1",
+        runId: "run-1",
+        outcome: {
+          type: "interrupt",
+          interrupts: [
+            {
+              id: "approval_tool-1",
+              reason: "tool_call",
+              metadata: {
+                "tanstack:interruptBinding": {
+                  originalArgs: { assignee: "Jan Novak" },
+                },
+              },
+            },
+          ],
+        },
+      },
     ]);
   });
 
