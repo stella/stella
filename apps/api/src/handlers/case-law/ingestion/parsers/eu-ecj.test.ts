@@ -22,7 +22,10 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import {
+  ecjDocumentHtml,
+  parseEcjDecisionHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   normalizeOracleText,
   parseFormex,
@@ -30,6 +33,10 @@ import {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 
 const FIXTURES_DIR = new URL("__fixtures__/eu-ecj/", import.meta.url);
+
+/** The container the publisher's portal wraps an embedded decision in. */
+const PORTAL_CONTAINER = 'id="document1"';
+
 const decoder = new TextDecoder();
 
 const readFixture = async (name: string): Promise<string | undefined> => {
@@ -218,6 +225,72 @@ describe("parseEcjDecisionHtml", () => {
     // They are most of the pre-2019 corpus, and they parsed to a
     // structureless wall of text until the parser accepted both.
     expect([...spellings].sort()).toEqual(["coj-prefixed", "unprefixed"]);
+  });
+
+  /**
+   * The publisher serves the same converter output twice: on its own,
+   * and embedded in a portal page that adds navigation, inline scripts,
+   * a contact block and a footer around it. Those are the site's, not
+   * the Court's, so the parse must be the same either way.
+   */
+  test("reads only the decision out of the page carrying it", async () => {
+    const decision = await readFixture("62022CJ0128.en.html.gz");
+    const page = await readFixture("62022CJ0128.en.page.html.gz");
+    if (decision === undefined || page === undefined) {
+      throw new Error("Missing the 62022CJ0128.en pair");
+    }
+
+    // Both halves are the publisher's own output for one decision, and
+    // the page is mostly not the decision. Without that the comparison
+    // below would hold over nothing.
+    expect(page).toContain(PORTAL_CONTAINER);
+    expect(decision).not.toContain(PORTAL_CONTAINER);
+    expect(page.length).toBeGreaterThan(decision.length * 1.5);
+
+    const parseEn = (html: string) =>
+      parseEcjDecisionHtml({
+        caseNumber: "C-128/22",
+        ecli: undefined,
+        court: "Court of Justice",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        language: "en",
+        celex: "62022CJ0128",
+        html,
+      });
+
+    const parsedDecision = parseEn(decision);
+    const parsedPage = parseEn(page);
+
+    // One equality carries both halves of the guarantee: nothing the
+    // page adds may reach the AST, and nothing the decision holds may
+    // be lost on the way. Stating it this way also keeps the parser
+    // honest, since no list of things to ignore can satisfy it — and a
+    // list would only ever be right in the language it was written in.
+    // The right-hand side is oracle-checked against Formex above.
+    expect(
+      parsedPage.documentAst.blocks.map((block) => block.plainText),
+    ).toEqual(
+      parsedDecision.documentAst.blocks.map((block) => block.plainText),
+    );
+    expect(parsedPage.fulltext).toEqual(parsedDecision.fulltext);
+    expect(parsedPage.keywords).toEqual(parsedDecision.keywords);
+
+    // Completeness is measured against the decision, not the page. An
+    // issue here would read as a lost-content parse and send a correct
+    // AST down the caller's fallback, which stores the page's text.
+    expect(parsedPage.validationIssues).toEqual([]);
+
+    // That fallback takes the same boundary without parsing, so it
+    // cannot store the page either.
+    const bounded = ecjDocumentHtml(page);
+    expect(bounded).not.toContain(PORTAL_CONTAINER);
+    expect(parseEn(bounded).fulltext).toEqual(parsedDecision.fulltext);
+
+    // A decision served on its own is already the whole document, so
+    // bounding must leave it byte-identical.
+    expect(ecjDocumentHtml(decision)).toBe(decision);
   });
 
   test("reads the keyword chain in a non-Latin script", async () => {

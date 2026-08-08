@@ -19,7 +19,10 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import {
+  ecjDocumentHtml,
+  parseEcjDecisionHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -441,7 +444,10 @@ const parseManifestation = (
     );
   }
 
-  const text = stripHtml(input.html).trim();
+  // Bounded to the decision, as a parse would have been: a page that
+  // carries the decision also carries its own navigation and footer,
+  // and neither belongs in a decision's stored text.
+  const text = stripHtml(ecjDocumentHtml(input.html)).trim();
   return {
     documentAst: EMPTY_AST,
     sections: undefined,

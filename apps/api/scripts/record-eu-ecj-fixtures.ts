@@ -47,8 +47,8 @@ const PARSER_CORPUS = [
   },
   {
     celex: "62022CJ0128",
-    languages: ["EL"],
-    why: "Judgment in a non-Latin script, with guillemets rather than parentheses around the keyword chain. Shorter than Schrems II, which is the point: script coverage does not need document length.",
+    languages: ["EL", "EN"],
+    why: "Judgment in a non-Latin script, with guillemets rather than parentheses around the keyword chain. Shorter than Schrems II, which is the point: script coverage does not need document length. EN is the baseline the portal-page recording of the same decision is compared against.",
   },
   {
     celex: "62018CC0311",
@@ -76,6 +76,18 @@ const PARSER_CORPUS = [
     why: "General Court judgment: a different signature block (per-judge cells rather than one [Signatures] line).",
   },
 ] as const;
+
+/**
+ * Decisions to record a second time as the publisher's portal serves
+ * them: the same converter output, embedded in a page that surrounds it
+ * with navigation, contact and footer blocks.
+ *
+ * Recorded as `<celex>.<lang>.page.html.gz`, next to the manifestation
+ * of the same decision, so the parse of the two can be compared. Every
+ * entry must also be in `PARSER_CORPUS` for its language, or there is
+ * nothing to compare against.
+ */
+const PORTAL_CORPUS = [{ celex: "62022CJ0128", language: "EN" }] as const;
 
 /**
  * Decisions seeded into a dev database, and shown in the reader.
@@ -260,6 +272,53 @@ const recordParserFixtures = async (): Promise<void> => {
   }
 };
 
+/**
+ * The container the portal wraps a decision in. Used to recognise a
+ * served document: the portal answers an automated request with a
+ * challenge page under a success status, and overwriting a fixture with
+ * one would leave the comparison passing over nothing.
+ */
+const PORTAL_DOCUMENT_CONTAINER = 'id="document1"';
+
+const recordPortalFixtures = async (): Promise<void> => {
+  for (const { celex, language } of PORTAL_CORPUS) {
+    const stem = `${celex}.${language.toLowerCase()}.page`;
+    // oxlint-disable-next-line no-await-in-loop -- sequential by design: the portal is rate-limited and this is a recorder, not a hot path
+    const [decision] = await fetchDecisionsByCelex({
+      celexNumbers: [celex],
+      languages: [language],
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+
+    const url = decision?.sourceUrl;
+    if (url === undefined) {
+      log(`  ${stem}: no portal URL, kept existing fixture`);
+      continue;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- one portal request per recorded variant
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      headers: { "User-Agent": INGESTION_USER_AGENT },
+    });
+    // oxlint-disable-next-line no-await-in-loop -- body read belongs to the request above
+    const html = response.ok ? await response.text() : "";
+    if (!html.includes(PORTAL_DOCUMENT_CONTAINER)) {
+      log(
+        `  ${stem}: portal served no document (${response.status}), kept existing fixture`,
+      );
+      continue;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- one write per recorded variant
+    await Bun.write(
+      new URL(`${stem}.html.gz`, PARSER_FIXTURES_DIR),
+      Bun.gzipSync(Buffer.from(html)),
+    );
+    log(`  ${stem}: portal page`);
+  }
+};
+
 /** Row shape `seed-case-law.ts` reads. */
 const toSeedRow = (decision: IngestionResult, sourceId: string) => ({
   id: seedId(`case-law-dec-eu-ecj-${decision.caseNumber}-${decision.language}`),
@@ -332,6 +391,7 @@ if (import.meta.main) {
       `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
     );
     await recordParserFixtures();
+    await recordPortalFixtures();
   }
 
   if (!parserOnly) {

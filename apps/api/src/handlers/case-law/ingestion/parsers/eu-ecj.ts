@@ -11,6 +11,11 @@
  * own `id="pointN"` paragraph anchors, never off wording, so the same
  * parser handles Bulgarian, Greek and Irish without a language table.
  *
+ * The same markup is served both on its own and embedded in a portal
+ * page that surrounds it with navigation, contact and footer blocks, so
+ * the parse is bounded to the subtree the converter's vocabulary lives
+ * in before anything else happens — see `ecjDocumentRoot`.
+ *
  * Structure:
  *   p.coj-sum-title-1      leading run: court + date (decision title)
  *                          later:       top-level section headings
@@ -36,7 +41,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, isTag } from "domhandler";
+import { type AnyNode, type Element, isTag } from "domhandler";
 
 import type {
   Block,
@@ -89,8 +94,9 @@ export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
   const $ = cheerio.load(input.html);
-  const blocks = buildBlocks($);
-  const keywords = extractKeywords($);
+  const $document = ecjDocumentRoot($);
+  const blocks = buildBlocks($, $document);
+  const keywords = extractKeywords($document);
 
   const validation = validateAndLog(
     {
@@ -99,7 +105,7 @@ export const parseEcjDecisionHtml = (
       language: input.language,
       url: input.sourceUrl,
     },
-    input.html,
+    documentSource($, $document, input.html),
     blocks,
   );
 
@@ -189,6 +195,138 @@ const GRSEQ_CLASS = /^title-grseq-(?<depth>\d+)$/u;
 const SIGNATURE_CLASS_PREFIX = "signat";
 /** Publisher paragraph anchor, e.g. `id="point42"`. */
 const POINT_ID = /^point(?<number>\d+)$/u;
+
+// ── Document boundary ──────────────────────────────────────
+
+/**
+ * Classes that only ever sit on converter output. Every decision the
+ * Court publishes carries several of them: a title line, a keyword
+ * chain, a marker cell, a body paragraph.
+ */
+const DOCUMENT_MARKER_CLASSES = [
+  CLASS.title,
+  CLASS.index,
+  CLASS.count,
+  CLASS.normal,
+] as const;
+
+const classSelector = (prefix: string): string =>
+  DOCUMENT_MARKER_CLASSES.map((name) => `.${prefix}${name}`).join(", ");
+
+/** The oldest layout's wrapper, the only structure it annotates. */
+const LEGACY_DOCUMENT_CONTAINER = "div.texte";
+
+/**
+ * Selectors that mark converter output, most specific first.
+ *
+ * A document is converted once and so carries one spelling throughout,
+ * which is why these are tried in order rather than unioned: the
+ * prefixed vocabulary belongs to the converter alone and cannot be
+ * confused with a hosting page's own markup, so it decides the boundary
+ * whenever it is present. The last entry covers the oldest layout,
+ * which puts no classes on its paragraphs at all and instead wraps the
+ * whole decision in one container.
+ */
+const DOCUMENT_MARKER_SELECTORS = [
+  classSelector(CLASS_PREFIX),
+  classSelector(""),
+  LEGACY_DOCUMENT_CONTAINER,
+] as const;
+
+/** Ancestor chain of a node, outermost first, the node itself last. */
+const ancestorChain = (node: AnyNode): AnyNode[] => {
+  const chain: AnyNode[] = [];
+  for (let current: AnyNode | null = node; current; current = current.parent) {
+    chain.unshift(current);
+  }
+  return chain;
+};
+
+/** Deepest element that contains every one of `nodes`. */
+const commonAncestor = (nodes: readonly Element[]): Element | undefined => {
+  let chain = nodes[0] === undefined ? [] : ancestorChain(nodes[0]);
+  for (const node of nodes.slice(1)) {
+    const other = ancestorChain(node);
+    let depth = 0;
+    while (
+      depth < chain.length &&
+      depth < other.length &&
+      chain[depth] === other[depth]
+    ) {
+      depth += 1;
+    }
+    chain = chain.slice(0, depth);
+  }
+  const deepest = chain.at(-1);
+  // The chain bottoms out at the document node, which is not an
+  // element and cannot be walked as one.
+  return deepest !== undefined && isTag(deepest) ? deepest : undefined;
+};
+
+/**
+ * The subtree holding the decision.
+ *
+ * A manifestation served on its own is the decision and nothing else,
+ * so this is its `<body>`. The same markup is also published embedded
+ * in a portal page, where the decision is one panel among navigation,
+ * contact and footer blocks that are the site's, not the Court's. Those
+ * blocks are not document text at all, so they are excluded by a
+ * boundary rather than by recognising what they say: the decision is
+ * the deepest element containing every one of the converter's own
+ * marker elements, and page furniture is by construction outside it.
+ *
+ * Reading the boundary off the converter's vocabulary keeps this
+ * working in all 24 languages, where a wording-based rule would hold in
+ * one. Where no marker is found the whole body is the document, so an
+ * unrecognised layout still contributes all of its text.
+ */
+export const ecjDocumentRoot = (
+  $: cheerio.CheerioAPI,
+): cheerio.Cheerio<AnyNode> => {
+  const $body = $("body");
+  for (const selector of DOCUMENT_MARKER_SELECTORS) {
+    const marked = $body.find(selector).toArray();
+    const ancestor = commonAncestor(marked);
+    if (ancestor === undefined) {
+      continue;
+    }
+    // A layout whose only marker is its own wrapper is its own common
+    // ancestor; the decision is then that wrapper's container.
+    const parent = ancestor.parent;
+    if (marked.includes(ancestor) && parent !== null && isTag(parent)) {
+      return $(parent);
+    }
+    return $(ancestor);
+  }
+  return $body;
+};
+
+/**
+ * Source text the AST is measured against: the decision, not the page
+ * that carried it. Measuring against the page would read the furniture
+ * the boundary excluded as lost content, and send a correct parse down
+ * the caller's fallback path.
+ *
+ * Serializing is skipped when the decision is the whole body, which is
+ * what a manifestation served on its own looks like.
+ */
+const documentSource = (
+  $: cheerio.CheerioAPI,
+  $document: cheerio.Cheerio<AnyNode>,
+  html: string,
+): string =>
+  tagNameOf($document.get(0)) === "body" ? html : $.html($document);
+
+/**
+ * The decision's own markup, lifted out of whatever page carried it.
+ *
+ * For callers that need the source text without a parse, so that a
+ * fallback path keeps the same boundary a successful parse would have.
+ */
+export const ecjDocumentHtml = (html: string): string => {
+  const $ = cheerio.load(html);
+  return documentSource($, ecjDocumentRoot($), html);
+};
 
 /** Semantic heading tags, mapped onto the AST's three levels. */
 const HEADING_TAGS: Record<string, 1 | 2 | 3 | undefined> = {
@@ -315,10 +453,10 @@ const LOOSE_KEYWORD_SEPARATOR = /\s[–—]\s/u;
  * The `coj-index` line is a bracketed chain of subject-matter keywords,
  * the same list the publisher marks up as `INDEX/KEYWORD` in Formex.
  */
-const extractKeywords = ($: cheerio.CheerioAPI): string[] => {
+const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
   // Read the raw text rather than `textOf`: the separator is defined by
   // its exact spacing, which whitespace collapsing would destroy.
-  const raw = $(sel(CLASS.index)).first().text().trim();
+  const raw = $document.find(sel(CLASS.index)).first().text().trim();
   if (!raw) {
     return [];
   }
@@ -430,8 +568,11 @@ const flattenChildren = (
   return flat;
 };
 
-const buildBlocks = ($: cheerio.CheerioAPI): Block[] => {
-  const children = flattenChildren($, $("body").children().toArray());
+const buildBlocks = (
+  $: cheerio.CheerioAPI,
+  $document: cheerio.Cheerio<AnyNode>,
+): Block[] => {
+  const children = flattenChildren($, $document.children().toArray());
   const builder: BlockBuilder = {
     blocks: [],
     sequence: 0,
