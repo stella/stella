@@ -955,10 +955,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     listed.push({
       caseNumber,
       ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
-      counter:
-        counterText === undefined && szCounter === undefined
-          ? 1
-          : parseCounter(counterText ?? szCounter),
+      counter: parseCounter(counterText ?? szCounter),
       sourceDocumentId,
       quarantineId,
       quarantineRepairIds,

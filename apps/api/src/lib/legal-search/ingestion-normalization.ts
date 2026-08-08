@@ -102,6 +102,12 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
 
   const sourceDocumentId = strip(result.sourceDocumentId);
   if (
+    result.sourceDocumentId !== undefined &&
+    sourceDocumentId !== result.sourceDocumentId
+  ) {
+    throw new TypeError("Publisher document identity cannot be sanitized");
+  }
+  if (
     sourceDocumentId !== undefined &&
     !isPersistableSourceDocumentId(sourceDocumentId)
   ) {
@@ -112,18 +118,14 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
     sourceDocumentId,
-    sourceDocumentIdAliases: result.sourceDocumentIdAliases
-      ?.map((identity) => strip(identity))
-      .filter(
-        (identity): identity is string =>
-          identity !== undefined && isPersistableSourceDocumentId(identity),
-      ),
-    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases
-      ?.map((identity) => strip(identity))
-      .filter(
-        (identity): identity is string =>
-          identity !== undefined && isPersistableSourceDocumentId(identity),
-      ),
+    sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
+      (identity): identity is string =>
+        strip(identity) === identity && isPersistableSourceDocumentId(identity),
+    ),
+    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases?.filter(
+      (identity): identity is string =>
+        strip(identity) === identity && isPersistableSourceDocumentId(identity),
+    ),
     legacySourceUrls: result.legacySourceUrls
       ?.map((url) => strip(url))
       .filter((url): url is string => url !== undefined),

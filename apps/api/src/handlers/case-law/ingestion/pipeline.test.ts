@@ -169,6 +169,32 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       }),
     ).toThrow("Publisher document identity exceeds storage limits");
   });
+
+  test("drops aliases changed by sanitization instead of merging identities", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sourceDocumentId: "publisher:canonical",
+      sourceDocumentIdAliases: ["publisher:a\u200Bb", "publisher:ab"],
+      sourceDocumentIdRepairAliases: [
+        "publisher:repair\u200Bchanged",
+        "publisher:repair-clean",
+      ],
+    });
+
+    expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
+    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+      "publisher:repair-clean",
+    ]);
+  });
+
+  test("rejects a canonical id changed by sanitization", () => {
+    expect(() =>
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        sourceDocumentId: "publisher:a\u200Bb",
+      }),
+    ).toThrow("Publisher document identity cannot be sanitized");
+  });
 });
 
 describe("sanitizeResult — documentAst text fields", () => {

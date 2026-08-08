@@ -20,7 +20,7 @@ type ResultRow = {
   sz: string;
   caseNumber: string;
   listedCaseNumber?: string | undefined;
-  listedCounter?: string | undefined;
+  listedCounter?: string | null | undefined;
   date: string;
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
@@ -90,6 +90,10 @@ const makeResultsPage = (
         row.id === undefined
           ? `ResultDetail.aspx?malformed=true&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}`
           : `ResultDetail.aspx?id=${row.id}&pos=${rangeFrom + index + renderPositionOffset}&cnt=${reported}&typ=result`;
+      const counterLabel =
+        row.listedCounter === null
+          ? ""
+          : ` #${row.listedCounter ?? counter ?? "1"}`;
       let textAction = "";
       if (textUrl) {
         textAction =
@@ -100,7 +104,7 @@ const makeResultsPage = (
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
-  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber} #${row.listedCounter ?? counter ?? "1"}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
   <td>${textAction}</td>
@@ -404,6 +408,44 @@ describe("czUsAdapter.fetchPage", () => {
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["nalus-record:2003", "nalus-record:2004"]);
+    expect(page.decisions.every(({ ecli }) => ecli === undefined)).toBe(true);
+    expect(
+      page.decisions.every(
+        ({ sourceDocumentIdAliases }) =>
+          sourceDocumentIdAliases?.every(
+            (identity) => !identity.startsWith("nalus-ecli:"),
+          ) ?? true,
+      ),
+    ).toBe(true);
+  });
+
+  test("does not invent ECLI aliases when sibling counters are absent", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "2005",
+          sz: "document-without-counter-a",
+          caseNumber: "I.ÚS 44/24",
+          listedCounter: null,
+          date: "4. 1. 2024",
+        },
+        {
+          id: "2006",
+          sz: "document-without-counter-b",
+          caseNumber: "I.ÚS 44/24",
+          listedCounter: null,
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["nalus-record:2005", "nalus-record:2006"]);
     expect(page.decisions.every(({ ecli }) => ecli === undefined)).toBe(true);
     expect(
       page.decisions.every(

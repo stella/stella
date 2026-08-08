@@ -398,7 +398,10 @@ limit at the publisher boundary. Normalize an invalid component before it can
 be used in a retrieval URL, metadata field or fallback path; dropping only its
 derived alias still lets an oversized value pin the page or fail persistence.
 The shared normalizer enforces the same rule for every court as a final safety
-net.
+net. Publisher identities are opaque and byte-exact: if general text
+sanitization would change an identity, reject the canonical value or discard
+the alias. Never reserve the rewritten value, which may be another document's
+legitimate exact key.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
 one poison row pin every later record in the slice. Continue emitting that
@@ -418,7 +421,9 @@ repair-only aliases after recovery. A low-information form must never be
 reserved as an exact identity.
 Likewise, preserve the digit string of any numeric publisher component used to
 synthesize an exact alias, or reject it unless it is a safe bounded integer;
-rounding two counters to one JavaScript number silently merges documents.
+rounding two counters to one JavaScript number silently merges documents. An
+absent component stays absent—never invent a default counter merely to produce
+an alias.
 Mark every listing-only result with
 `isListingOnly`, and, if the list also lacks a real docket, mark the durable
 label with `caseNumberIsPlaceholder`. Persist every discriminator already
