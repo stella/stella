@@ -1952,6 +1952,7 @@
     "openChat": "Otwórz czat",
     "reopenTab": "Otwórz ponownie {name}",
     "review": {
+      "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
       "addTopic": "Dodaj temat",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Dokumenty referencyjne (opcjonalnie)",
       "removeReference": "Usuń referencję {name}",
       "removeTopic": "Usuń temat {name}",
+      "results": "Wyniki weryfikacji",
       "reviewAgain": "Uruchom kolejną weryfikację",
       "reviewing": "Weryfikacja w toku…",
       "reviewingHint": "W przypadku obszernych dokumentów może to potrwać kilka minut.",

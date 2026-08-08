@@ -1952,6 +1952,7 @@
     "openChat": "Otevřít chat",
     "reopenTab": "Znovu otevřít {name}",
     "review": {
+      "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addTopic": "Přidat téma",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Referenční dokumenty (volitelné)",
       "removeReference": "Odebrat referenci {name}",
       "removeTopic": "Odebrat téma {name}",
+      "results": "Výsledky kontroly",
       "reviewAgain": "Spustit další kontrolu",
       "reviewing": "Kontrola probíhá…",
       "reviewingHint": "U rozsáhlých dokumentů to může trvat až několik minut.",

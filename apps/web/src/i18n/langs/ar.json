@@ -1952,6 +1952,7 @@
     "openChat": "فتح المحادثة",
     "reopenTab": "إعادة فتح {name}",
     "review": {
+      "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
       "addTopic": "إضافة موضوع",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "المستندات المرجعية (اختياري)",
       "removeReference": "إزالة المرجع {name}",
       "removeTopic": "إزالة الموضوع {name}",
+      "results": "نتائج المراجعة",
       "reviewAgain": "إجراء مراجعة أخرى",
       "reviewing": "المراجعة قيد التنفيذ…",
       "reviewingHint": "قد يستغرق ذلك بضع دقائق للمستندات الكبيرة.",

@@ -1952,6 +1952,7 @@
     "openChat": "Otvoriť chat",
     "reopenTab": "Znova otvoriť {name}",
     "review": {
+      "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",
       "addTopic": "Pridať tému",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Referenčné dokumenty (voliteľné)",
       "removeReference": "Odstrániť referenciu {name}",
       "removeTopic": "Odstrániť tému {name}",
+      "results": "Výsledky kontroly",
       "reviewAgain": "Spustiť ďalšiu kontrolu",
       "reviewing": "Kontrola prebieha…",
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",

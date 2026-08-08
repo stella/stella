@@ -1952,6 +1952,7 @@
     "openChat": "Ava vestlus",
     "reopenTab": "Ava {name} uuesti",
     "review": {
+      "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
       "addTopic": "Lisa teema",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Võrdlusdokumendid (valikuline)",
       "removeReference": "Eemalda võrdlus {name}",
       "removeTopic": "Eemalda teema {name}",
+      "results": "Ülevaatuse tulemused",
       "reviewAgain": "Alusta uut ülevaatust",
       "reviewing": "Ülevaatamine käib…",
       "reviewingHint": "Suurte dokumentide puhul võib selleks kuluda mõni minut.",

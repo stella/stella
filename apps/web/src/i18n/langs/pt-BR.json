@@ -1952,6 +1952,7 @@
     "openChat": "Abrir bate-papo",
     "reopenTab": "Reabrir {name}",
     "review": {
+      "actionNeeded": "Requer ação",
       "addComment": "Adicionar como comentário",
       "addTopic": "Adicionar tópico",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Documentos de referência (opcional)",
       "removeReference": "Remover referência {name}",
       "removeTopic": "Remover tópico {name}",
+      "results": "Resultados da revisão",
       "reviewAgain": "Iniciar outra revisão",
       "reviewing": "Revisão em andamento…",
       "reviewingHint": "Isso pode levar alguns minutos para documentos grandes.",

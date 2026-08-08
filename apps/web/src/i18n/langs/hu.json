@@ -1952,6 +1952,7 @@
     "openChat": "Chat megnyitása",
     "reopenTab": "{name} újranyitása",
     "review": {
+      "actionNeeded": "Teendő",
       "addComment": "Hozzáadás megjegyzésként",
       "addTopic": "Téma hozzáadása",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Referenciadokumentumok (nem kötelező)",
       "removeReference": "{name} referencia eltávolítása",
       "removeTopic": "{name} téma eltávolítása",
+      "results": "Ellenőrzési eredmények",
       "reviewAgain": "Új ellenőrzés indítása",
       "reviewing": "Ellenőrzés folyamatban…",
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",

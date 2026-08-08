@@ -1952,6 +1952,7 @@
     "openChat": "Atvērt tērzēšanu",
     "reopenTab": "Atkārtoti atvērt {name}",
     "review": {
+      "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addTopic": "Pievienot tēmu",
       "assessment": {
@@ -1985,6 +1986,7 @@
       "referencesLabel": "Atsauces dokumenti (nav obligāti)",
       "removeReference": "Noņemt atsauci {name}",
       "removeTopic": "Noņemt tēmu {name}",
+      "results": "Pārbaudes rezultāti",
       "reviewAgain": "Sākt citu pārbaudi",
       "reviewing": "Pārbaude notiek…",
       "reviewingHint": "Lielu dokumentu pārbaude var aizņemt dažas minūtes.",

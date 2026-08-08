@@ -1,7 +1,8 @@
 /**
  * In-memory document-review sessions. A review can use an authored playbook,
- * reference documents, or both. The two result groups stay separate so
- * reference examples can never change an authoritative playbook verdict.
+ * reference documents, or both. Transport keeps the result groups separate so
+ * reference examples can never change an authoritative playbook verdict; the
+ * result UI joins them by confirmed topic into one composable review card.
  */
 
 import { Result } from "better-result";

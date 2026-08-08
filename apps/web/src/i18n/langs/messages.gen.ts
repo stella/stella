@@ -1955,6 +1955,7 @@ type Messages = {
     "openChat": "Open chat";
     "reopenTab": "Reopen {name}";
     "review": {
+      "actionNeeded": "Action needed";
       "addComment": "Add as comment";
       "addTopic": "Add topic";
       "assessment": {
@@ -1988,6 +1989,7 @@ type Messages = {
       "referencesLabel": "Reference documents (optional)";
       "removeReference": "Remove reference {name}";
       "removeTopic": "Remove topic {name}";
+      "results": "Review results";
       "reviewAgain": "Run another review";
       "reviewing": "Review in progress…";
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
