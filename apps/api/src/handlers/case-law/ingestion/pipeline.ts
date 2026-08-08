@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
+  caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawIngestionFailures,
   caseLawSources,
@@ -180,6 +181,9 @@ const DECISION_ROW_WRITE_STATUS = {
 
 type DecisionRowWriteStatus =
   (typeof DECISION_ROW_WRITE_STATUS)[keyof typeof DECISION_ROW_WRITE_STATUS];
+
+/** One canonical identity plus a small, explicit set of publisher aliases. */
+const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
 
 type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
@@ -535,100 +539,109 @@ const processDecisionAttempt = async ({
   contentionReconciliation,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
+  const proposedDecisionId = createSafeId<"caseLawDecision">();
+  const sourceIdentityCandidates = result.sourceDocumentId
+    ? [
+        ...new Set([
+          result.sourceDocumentId,
+          ...(result.sourceDocumentIdAliases ?? []),
+        ]),
+      ].sort()
+    : [];
+  if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
+    panic("Too many publisher identities for one decision");
+  }
 
-  // Match on the publisher's id where the adapter supplies one, and only
-  // fall back to the case number where it does not. The two are the halves
-  // of the uniqueness key, so the lookup has to split the same way the
-  // index does or it would find a row the insert cannot replace.
-  const existing = await scopedDb(async (tx) => {
+  // Reserve every exact publisher identity before slow raw/corpus work. The
+  // sorted transaction locks make overlapping alias sets atomic: concurrent
+  // canonical and fallback observations receive one durable decision UUID,
+  // even before either worker has inserted the decision row.
+  const identityResolution = await scopedDb(async (tx) => {
+    for (const identity of sourceIdentityCandidates) {
+      // SAFETY: candidates are hard-capped at eight above; sorted sequential
+      // acquisition prevents deadlocks between overlapping identity sets.
+      // eslint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded identity lock set must be sequential
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
+      );
+    }
+
+    const claims =
+      sourceIdentityCandidates.length === 0
+        ? []
+        : await tx.query.caseLawDecisionSourceIdentities.findMany({
+            where: {
+              sourceId: { eq: sourceId },
+              sourceDocumentId: { in: sourceIdentityCandidates },
+            },
+            columns: { decisionId: true },
+            limit: MAX_SOURCE_IDENTITY_CANDIDATES,
+          });
+    const claimedDecisionIds = [
+      ...new Set(claims.map(({ decisionId }) => decisionId)),
+    ];
+    if (claimedDecisionIds.length > 1) {
+      panic("Publisher identities have conflicting decision owners");
+    }
+    const claimedDecisionId = claimedDecisionIds.at(0);
+    const identityColumns = {
+      id: true,
+      sourceDocumentId: true,
+      ecli: true,
+      metadata: true,
+      sourceHash: true,
+      sourceObservedAt: true,
+      sourceObservationHash: true,
+      redactedAt: true,
+      corpusMirrorStatus: true,
+      sourceRawS3Key: true,
+      sourceRawContentType: true,
+      sourceUrl: true,
+    } as const;
     const exactIdentified = await tx.query.caseLawDecisions.findFirst({
-      where: caseLawDecisionIdentityWhere({
-        caseNumber: result.caseNumber,
-        language: result.language,
-        sourceDocumentId: result.sourceDocumentId,
-        sourceId,
-      }),
-      columns: {
-        id: true,
-        ecli: true,
-        metadata: true,
-        sourceHash: true,
-        sourceObservedAt: true,
-        sourceObservationHash: true,
-        redactedAt: true,
-        corpusMirrorStatus: true,
-        sourceRawS3Key: true,
-        sourceRawContentType: true,
-        sourceUrl: true,
-      },
+      where:
+        claimedDecisionId === undefined
+          ? caseLawDecisionIdentityWhere({
+              caseNumber: result.caseNumber,
+              language: result.language,
+              sourceDocumentId: result.sourceDocumentId,
+              sourceId,
+            })
+          : { id: { eq: claimedDecisionId } },
+      columns: identityColumns,
     });
     const identified =
       exactIdentified ??
-      (result.sourceDocumentIdAliases !== undefined &&
-      result.sourceDocumentIdAliases.length > 0
+      (claimedDecisionId === undefined && sourceIdentityCandidates.length > 1
         ? await tx.query.caseLawDecisions.findFirst({
             where: {
               sourceId: { eq: sourceId },
-              sourceDocumentId: { in: [...result.sourceDocumentIdAliases] },
+              sourceDocumentId: {
+                in: sourceIdentityCandidates.filter(
+                  (identity) => identity !== result.sourceDocumentId,
+                ),
+              },
             },
-            columns: {
-              id: true,
-              ecli: true,
-              metadata: true,
-              sourceHash: true,
-              sourceObservedAt: true,
-              sourceObservationHash: true,
-              redactedAt: true,
-              corpusMirrorStatus: true,
-              sourceRawS3Key: true,
-              sourceRawContentType: true,
-              sourceUrl: true,
-            },
+            columns: identityColumns,
           })
         : undefined);
-    if (!exactIdentified && identified) {
-      // Bind the canonical publisher identity as soon as an exact alias finds
-      // the row. This identity-only step is also safe for a tombstone and for
-      // a partial placeholder refresh, both of which intentionally skip the
-      // ordinary metadata/payload update below.
-      // audit: skip — background identity repair for public case-law data
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          sourceDocumentId: result.sourceDocumentId,
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
-        .where(eq(caseLawDecisions.id, identified.id));
-    }
-    if (identified || !result.sourceDocumentId) {
-      return identified;
-    }
 
     // Adapters that learned the publisher's document id after their first
     // release may adopt a legacy null-id row, but only after proving which
     // publisher document produced it. A docket can publish siblings, so
     // encounter order is not identity.
-    const legacy = await tx.query.caseLawDecisions.findFirst({
-      where: {
-        sourceId: { eq: sourceId },
-        caseNumber: result.caseNumber,
-        language: result.language,
-        sourceDocumentId: { isNull: true },
-      },
-      columns: {
-        id: true,
-        ecli: true,
-        metadata: true,
-        sourceHash: true,
-        sourceObservedAt: true,
-        sourceObservationHash: true,
-        redactedAt: true,
-        corpusMirrorStatus: true,
-        sourceRawS3Key: true,
-        sourceRawContentType: true,
-        sourceUrl: true,
-      },
-    });
+    const legacy =
+      identified || !result.sourceDocumentId || claimedDecisionId !== undefined
+        ? undefined
+        : await tx.query.caseLawDecisions.findFirst({
+            where: {
+              sourceId: { eq: sourceId },
+              caseNumber: result.caseNumber,
+              language: result.language,
+              sourceDocumentId: { isNull: true },
+            },
+            columns: identityColumns,
+          });
     const ecliMatches =
       legacy !== undefined &&
       result.ecli !== undefined &&
@@ -644,28 +657,55 @@ const processDecisionAttempt = async ({
       legacy.sourceUrl !== null &&
       result.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     const legacyMatches = ecliMatches || sourceUrlMatches;
-    if (!legacyMatches) {
-      return undefined;
+    const existing = identified ?? (legacyMatches ? legacy : undefined);
+    const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
+    const existingIdentity = existing?.sourceDocumentId ?? undefined;
+    const incomingSupersedesExisting =
+      result.sourceDocumentId !== undefined &&
+      (existing?.sourceDocumentId === null ||
+        existing?.sourceDocumentId === result.sourceDocumentId ||
+        (existingIdentity !== undefined &&
+          result.sourceDocumentIdAliases?.includes(existingIdentity) === true));
+    const persistedSourceDocumentId = incomingSupersedesExisting
+      ? result.sourceDocumentId
+      : (existingIdentity ?? result.sourceDocumentId);
+
+    if (
+      existing &&
+      incomingSupersedesExisting &&
+      existing.sourceDocumentId !== persistedSourceDocumentId
+    ) {
+      // Bind a newly learned canonical identity before any partial or
+      // tombstone fast return. An inverse fallback observation never replaces
+      // a previously bound canonical ID; the registry resolves it instead.
+      // audit: skip — background identity repair for public case-law data
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          sourceDocumentId: persistedSourceDocumentId,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(eq(caseLawDecisions.id, existing.id));
     }
 
-    // Bind the verified publisher identity before any partial-observation or
-    // tombstone fast path can return. Otherwise a later listing that loses its
-    // ECLI/legacy URL hint can insert the same publisher document again.
-    // audit: skip — background identity repair for public case-law data
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        sourceDocumentId: result.sourceDocumentId,
-        updatedAt: sql`${caseLawDecisions.updatedAt}`,
-      })
-      .where(
-        and(
-          eq(caseLawDecisions.id, legacy.id),
-          isNull(caseLawDecisions.sourceDocumentId),
-        ),
-      );
-    return legacy;
+    if (sourceIdentityCandidates.length > 0) {
+      // audit: skip — background publisher-identity ownership; public data
+      await tx
+        .insert(caseLawDecisionSourceIdentities)
+        .values(
+          sourceIdentityCandidates.map((sourceDocumentId) => ({
+            sourceId,
+            sourceDocumentId,
+            decisionId,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
+    return { existing, decisionId, persistedSourceDocumentId };
   });
+  const { existing, decisionId, persistedSourceDocumentId } =
+    identityResolution;
 
   if (existing?.redactedAt) {
     return {
@@ -1065,10 +1105,8 @@ const processDecisionAttempt = async ({
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
-  // Corpus objects are keyed on the decision id, so a canonical write needs
-  // that id before the row exists. Minting it here is what the column
-  // default (`pUuid`) would do at insert time anyway.
-  const decisionId = existing?.id ?? createSafeId<"caseLawDecision">();
+  // Corpus objects and every publisher alias now share the UUID reserved by
+  // identity resolution before any external write.
 
   const corpusPayload: CorpusWritePayload =
     pendingMirrorPayload === null
@@ -1161,7 +1199,7 @@ const processDecisionAttempt = async ({
               : {
                   caseNumber: result.caseNumber,
                   citationKey: citationKeyOf(result.caseNumber),
-                  sourceDocumentId: result.sourceDocumentId,
+                  sourceDocumentId: persistedSourceDocumentId,
                   ecli: result.ecli,
                   court: result.court,
                   country: result.country,
@@ -1297,7 +1335,7 @@ const processDecisionAttempt = async ({
           id: decisionId,
           sourceId,
           caseNumber: result.caseNumber,
-          sourceDocumentId: result.sourceDocumentId,
+          sourceDocumentId: persistedSourceDocumentId,
           sheetNumber: result.sheetNumber,
           citationKey: citationKeyOf(result.caseNumber),
           slug,
@@ -1341,8 +1379,8 @@ const processDecisionAttempt = async ({
 
   // Pass the original error through: the pipeline's halt semantics inspect
   // its type (a TimeoutError holds the cursor), which a wrapper would hide.
-  const slugIdentity = result.sourceDocumentId
-    ? `${sourceId}\u0000document\u0000${result.sourceDocumentId}`
+  const slugIdentity = persistedSourceDocumentId
+    ? `${sourceId}\u0000document\u0000${persistedSourceDocumentId}`
     : `${sourceId}\u0000case\u0000${result.caseNumber}\u0000${result.language}`;
   const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
 
@@ -1390,6 +1428,11 @@ const processDecisionAttempt = async ({
         rowWrite.error,
         PG_ERROR.UNIQUE_VIOLATION,
         "case_law_decisions_source_case_lang_null_idx",
+      ) ||
+      isPgConstraintError(
+        rowWrite.error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_pkey",
       );
     if (isConcurrentIdentityInsert) {
       if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {

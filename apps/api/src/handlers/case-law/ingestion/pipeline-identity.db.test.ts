@@ -485,6 +485,124 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test("keeps canonical ownership when a later observation has only a fallback", async () => {
+      const canonicalId = "nalus-record:inverse-7391";
+      const fallbackId = "nalus-sz:inverse-2-91-24_1";
+      const canonical = {
+        ...decisionAt("Inverse publisher alias", canonicalId),
+        sourceDocumentIdAliases: [fallbackId],
+      };
+      await processDecision({
+        input: canonical,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      await processDecision({
+        input: {
+          ...canonical,
+          sourceDocumentId: fallbackId,
+          sourceDocumentIdAliases: undefined,
+          rawHash: "hash-inverse-fallback",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{
+        count: number;
+        canonicalCount: number;
+        fallbackCount: number;
+      }>`
+        SELECT count(*)::int AS count,
+               count(*) FILTER (
+                 WHERE source_document_id = ${canonicalId}
+               )::int AS "canonicalCount",
+               count(*) FILTER (
+                 WHERE source_document_id = ${fallbackId}
+               )::int AS "fallbackCount"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND court = ${canonical.court}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["canonicalCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
+    });
+
+    test("atomically reserves one row for concurrent canonical and fallback observations", async () => {
+      const canonicalId = "nalus-record:concurrent-7391";
+      const fallbackId = "nalus-sz:concurrent-2-91-24_1";
+      const base = decisionAt("Concurrent publisher alias", canonicalId);
+      let reservationsCompleted = 0;
+      let releaseReservations = (): void => undefined;
+      const bothReserved = new Promise<void>((resolve) => {
+        releaseReservations = resolve;
+      });
+      const concurrentDb: ScopedDb = async (transactionWork) => {
+        const value = await scopedDb(transactionWork);
+        reservationsCompleted += 1;
+        if (reservationsCompleted <= 2) {
+          if (reservationsCompleted === 2) {
+            releaseReservations();
+          }
+          await bothReserved;
+        }
+        return value;
+      };
+
+      const outcomes = await Promise.all([
+        processDecision({
+          input: {
+            ...base,
+            sourceDocumentIdAliases: [fallbackId],
+          },
+          observationOrder: 1n,
+          sourceId,
+          scopedDb: concurrentDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        }),
+        processDecision({
+          input: {
+            ...base,
+            sourceDocumentId: fallbackId,
+            rawHash: "hash-concurrent-fallback",
+          },
+          observationOrder: 2n,
+          sourceId,
+          scopedDb: concurrentDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        }),
+      ]);
+
+      expect(outcomes.every(({ status }) => status === "complete")).toBe(true);
+      const rows = await db.execute(sql<{
+        decisionCount: number;
+        ownerCount: number;
+      }>`
+        SELECT (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = ${base.court}
+               ) AS "decisionCount",
+               (
+                 SELECT count(DISTINCT decision_id)::int
+                 FROM case_law_decision_source_identities
+                 WHERE source_id = ${sourceId}
+                   AND source_document_id IN (${canonicalId}, ${fallbackId})
+               ) AS "ownerCount"
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["decisionCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["ownerCount"]) : 0).toBe(1);
+    });
+
     test("preserves recovered detail on a listing-only refresh with a valid docket", async () => {
       const publisherId = "listing-only-preserves-detail";
       const recovered = decisionAt("Recovered detail court", publisherId);

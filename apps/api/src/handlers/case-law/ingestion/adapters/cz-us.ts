@@ -57,6 +57,34 @@ const SEARCH_URL = "https://nalus.usoud.cz/Search/Search.aspx";
 const RESULTS_URL = "https://nalus.usoud.cz/Search/Results.aspx";
 const TEXT_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
 
+const nalusIdentities = ({
+  recordId,
+  sz,
+  ecli,
+}: {
+  recordId: string | undefined;
+  sz: string | undefined;
+  ecli: string | undefined;
+}): {
+  sourceDocumentId: string;
+  aliases: readonly string[] | undefined;
+} | null => {
+  const identities = [
+    recordId === undefined ? undefined : `nalus-record:${recordId}`,
+    sz === undefined ? undefined : `nalus-sz:${sz}`,
+    ecli === undefined ? undefined : `nalus-ecli:${ecli}`,
+  ].filter((identity): identity is string => identity !== undefined);
+  const sourceDocumentId = identities.at(0);
+  if (sourceDocumentId === undefined) {
+    return null;
+  }
+  const aliases = identities.slice(1);
+  return {
+    sourceDocumentId,
+    aliases: aliases.length === 0 ? undefined : aliases,
+  };
+};
+
 /** Largest result size that keeps one page's text fetches reasonably bounded. */
 const RESULTS_PAGE_SIZE = 40;
 
@@ -375,10 +403,11 @@ const parseDecisionPage = ({
   return {
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
-    sourceDocumentIdAliases:
-      nalusRecordId === undefined || nalusSz === undefined
-        ? undefined
-        : [`nalus-sz:${nalusSz}`],
+    sourceDocumentIdAliases: nalusIdentities({
+      recordId: nalusRecordId,
+      sz: nalusSz,
+      ecli,
+    })?.aliases,
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
       ecliCounter,
@@ -821,8 +850,13 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     // withdrawn row exposes neither of NALUS's normal identities. Give that
     // terminal listing a content-addressed quarantine identity derived from
     // semantic fields so one poison row cannot pin the reconciliation slice.
+    const publisherIdentity = nalusIdentities({
+      recordId: nalusRecordId,
+      sz,
+      ecli,
+    });
     const quarantineId =
-      nalusRecordId === undefined && sz === undefined
+      publisherIdentity === null
         ? quarantineFingerprint({
             primaryText: primary.text(),
             actionsText: actions.text(),
@@ -837,17 +871,11 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
     const fallbackCaseNumber =
       quarantineId === undefined
-        ? `NALUS record ${nalusRecordId ?? sz}`
+        ? `NALUS record ${nalusRecordId ?? sz ?? ecli}`
         : `NALUS listing ${quarantineId}`;
     const caseNumber = listedCaseNumber || fallbackCaseNumber;
-    let sourceDocumentId: string;
-    if (nalusRecordId !== undefined) {
-      sourceDocumentId = `nalus-record:${nalusRecordId}`;
-    } else if (sz !== undefined) {
-      sourceDocumentId = `nalus-sz:${sz}`;
-    } else {
-      sourceDocumentId = `nalus-quarantine:${quarantineId}`;
-    }
+    const sourceDocumentId =
+      publisherIdentity?.sourceDocumentId ?? `nalus-quarantine:${quarantineId}`;
 
     let sourceUrl: URL;
     if (sz !== undefined) {
@@ -858,7 +886,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       sourceUrl.searchParams.set("id", nalusRecordId);
     } else {
       sourceUrl = new URL(RESULTS_URL);
-      sourceUrl.hash = `listing-${quarantineId}`;
+      sourceUrl.hash = `listing-${quarantineId ?? hashContent(sourceDocumentId)}`;
     }
     listed.push({
       caseNumber,
@@ -1055,10 +1083,11 @@ const listedOnlyDecision = (
   caseNumberIsPlaceholder: listed.listingDocketMissing === true,
   isListingOnly: true,
   sourceDocumentId: listed.sourceDocumentId,
-  sourceDocumentIdAliases:
-    listed.nalusRecordId === undefined || listed.sz === undefined
-      ? undefined
-      : [`nalus-sz:${listed.sz}`],
+  sourceDocumentIdAliases: nalusIdentities({
+    recordId: listed.nalusRecordId,
+    sz: listed.sz,
+    ecli: listed.ecli,
+  })?.aliases,
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,
     listed.counter,

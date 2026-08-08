@@ -384,14 +384,20 @@ and server failures must fail the page so its cursor is retried.
 If the preferred list identity is malformed but the row exposes another exact
 publisher key (for example, a retrieval identifier), persist a namespaced
 fallback identity rather than poisoning the page, and expose it as an alias
-when the preferred identity recovers so the pipeline migrates the same row.
+whenever both are visible. The shared pipeline durably reserves the canonical
+identity and every exact alias to one decision UUID before inserting the row;
+this mapping must work in both directions and remain atomic when canonical and
+fallback observations overlap. A sequential lookup-and-migrate hint is not
+sufficient: two workers can otherwise insert under different uniqueness keys.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
 one poison row pin every later record in the slice. Mark every listing-only
 result with `isListingOnly`, and, if the list also lacks a real docket, mark
 the durable label with `caseNumberIsPlaceholder`. A later partial refresh must
-advance only the observation watermark, never replace any previously recovered
-detail metadata, dates, raw payload pointers, docket or derived citation key.
+never replace previously recovered detail metadata, dates, raw payload
+pointers, docket or derived citation key. It may enrich an earlier partial row;
+the pipeline persists adapter-neutral observation quality so that rule applies
+to every court without depending on court-specific metadata keys.
 If the existing row has a pending corpus mirror, replay its stored payload to
 settlement before allowing the source page to advance.
 

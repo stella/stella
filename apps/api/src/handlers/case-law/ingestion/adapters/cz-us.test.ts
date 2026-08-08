@@ -785,7 +785,48 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]).toMatchObject({
       caseNumber: "II.ÚS 91/24",
       sourceDocumentId: "nalus-sz:2-91-24_1",
+      sourceDocumentIdAliases: ["nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1"],
       sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=2-91-24_1",
+    });
+  });
+
+  test("publishes overlapping identities before a record link disappears", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "7391",
+          sz: "2-91-24_1",
+          caseNumber: "II.ÚS 91/24",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+    const canonical = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+    expect(canonical).toMatchObject({
+      sourceDocumentId: "nalus-record:7391",
+      sourceDocumentIdAliases: [
+        "nalus-sz:2-91-24_1",
+        "nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1",
+      ],
+    });
+
+    installSearchMock({
+      rows: [
+        {
+          sz: "2-91-24_1",
+          caseNumber: "II.ÚS 91/24",
+          date: "4. 1. 2024",
+        },
+      ],
+    });
+    const fallback = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions[0];
+    expect(fallback).toMatchObject({
+      sourceDocumentId: "nalus-sz:2-91-24_1",
+      sourceDocumentIdAliases: ["nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1"],
     });
   });
 

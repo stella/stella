@@ -37,9 +37,10 @@ export type IngestionResult = {
    */
   sourceDocumentId?: string | undefined;
   /**
-   * Older exact publisher identifiers for this same document. The pipeline
-   * may migrate an identified row from one of these aliases to the canonical
-   * `sourceDocumentId` without inserting a duplicate.
+   * Other exact publisher identifiers for this same document. Emit every
+   * alternate identity visible with the canonical `sourceDocumentId`; the
+   * pipeline atomically reserves all of them to one durable decision UUID, so
+   * canonical/fallback observations converge in either order.
    */
   sourceDocumentIdAliases?: readonly string[] | undefined;
   /**
