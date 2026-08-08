@@ -1,5 +1,9 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -54,6 +58,8 @@ import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
+import type { TextDirection } from "@/i18n/i18n-store";
+import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -61,6 +67,11 @@ import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceI
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
+import type { ViewDropPosition } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
+import {
+  reorderViewIds,
+  toViewDropPosition,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic";
 import {
   useConvertView,
   useCreateView,
@@ -70,6 +81,17 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const VIEW_DRAG_TYPE = "stella/view-id";
+
+type ViewDropTarget = {
+  data: Record<string | symbol, unknown>;
+};
+
+// The strip mirrors under RTL, so the nearest physical edge only names a
+// position once read against the writing direction.
+const resolveDropPosition = (
+  { data }: ViewDropTarget,
+  direction: TextDirection,
+) => toViewDropPosition(extractClosestEdge(data), direction);
 
 const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = Object.freeze([
   "overview",
@@ -186,18 +208,40 @@ export const ViewSwitcher = ({
   const disallowedTemplateLayouts = new Set<ViewLayoutType>(
     hasOverviewView ? ["overview"] : [],
   );
+  const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
 
-  const handleReorder = (draggedId: string, targetId: string) => {
-    const ids = views.map((v) => v.id);
-    const fromIdx = ids.indexOf(draggedId);
-    const toIdx = ids.indexOf(targetId);
+  // Bounds the tabs' stickiness: a sticky target survives the pointer leaving
+  // it only while its parent target is unchanged. Without this the tabs stay
+  // sticky page-wide, keeping the insertion line lit over unrelated chrome and
+  // reordering on release there. Not sticky itself, so leaving the strip
+  // clears the tab with it.
+  useExternalSyncEffect(() => {
+    if (!stripContainer) {
+      return undefined;
+    }
+    return dropTargetForElements({
+      element: stripContainer,
+      canDrop: ({ source }) => source.data["type"] === VIEW_DRAG_TYPE,
+    });
+  }, [stripContainer]);
 
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) {
+  const handleReorder = (
+    draggedId: string,
+    targetId: string,
+    position: ViewDropPosition,
+  ) => {
+    const reordered = reorderViewIds({
+      ids: views.map((view) => view.id),
+      draggedId,
+      targetId,
+      position,
+    });
+
+    if (!reordered) {
       return;
     }
-
-    const reordered = ids.toSpliced(fromIdx, 1);
-    reordered.splice(toIdx, 0, draggedId);
 
     reorderViews.mutate(
       { viewIds: reordered },
@@ -213,7 +257,10 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      ref={setStripContainer}
+    >
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
@@ -232,6 +279,7 @@ export const ViewSwitcher = ({
                       })
                     : null
                 }
+                isAnyMenuOpen={viewActions.isAnyMenuOpen}
                 isRenaming={renamingViewId === view.id}
                 key={view.id}
                 onOpenContextMenu={(event) =>
@@ -354,9 +402,14 @@ type ViewTabProps = {
   workspaceId: string;
   view: WorkspaceView;
   isRenaming: boolean;
+  isAnyMenuOpen: boolean;
   actions: React.ReactNode;
   onSelect: () => void;
-  onReorder: (draggedId: string, targetId: string) => void;
+  onReorder: (
+    draggedId: string,
+    targetId: string,
+    position: ViewDropPosition,
+  ) => void;
   onStartRename: () => void;
   onStopRename: () => void;
   onOpenContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
@@ -366,6 +419,7 @@ const ViewTab = ({
   workspaceId,
   view,
   isRenaming,
+  isAnyMenuOpen,
   actions,
   onSelect,
   onReorder,
@@ -378,10 +432,20 @@ const ViewTab = ({
   const canUpdateView = usePermissions({ view: ["update"] });
   const [renameValue, setRenameValue] = useState(name);
   const [wasRenaming, setWasRenaming] = useState(isRenaming);
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [dropPosition, setDropPosition] = useState<ViewDropPosition | null>(
+    null,
+  );
   const updateView = useUpdateView(workspaceId);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Held as state rather than a ref so registration follows the node: the
+  // wrapper is replaced whenever the tab enters or leaves rename mode.
+  const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
   const handleReorder = useLatestCallback(onReorder);
+  // Read at drag start so opening a menu does not re-register the draggable.
+  // A press on the menu's dismiss layer still reaches the tab, and the drag it
+  // starts previews that layer instead of the tab. The layer spans the strip,
+  // so any open menu gates every tab.
+  const canDragTab = useLatestCallback(() => !isAnyMenuOpen);
+  const direction = useI18nStore((state) => getLangDir(state.lang));
 
   // Seed the draft from the current name each time rename begins,
   // since the trigger now lives in the parent (menu or double-click).
@@ -393,15 +457,15 @@ const ViewTab = ({
   }
 
   useExternalSyncEffect(() => {
-    const el = containerRef.current;
-    if (!el) {
+    if (!tabContainer) {
       return undefined;
     }
     return combine(
       ...(canUpdateView
         ? [
             draggable({
-              element: el,
+              element: tabContainer,
+              canDrag: canDragTab,
               getInitialData: () => ({
                 type: VIEW_DRAG_TYPE,
                 viewId: id,
@@ -410,23 +474,33 @@ const ViewTab = ({
           ]
         : []),
       dropTargetForElements({
-        element: el,
+        element: tabContainer,
         canDrop: ({ source }) =>
           source.data["type"] === VIEW_DRAG_TYPE &&
           source.data["viewId"] !== id,
-        onDragEnter: () => setIsDropTarget(true),
-        onDragLeave: () => setIsDropTarget(false),
-        onDrop: ({ source }) => {
-          setIsDropTarget(false);
+        getData: ({ input, element }) =>
+          attachClosestEdge(
+            { viewId: id },
+            { element, input, allowedEdges: ["left", "right"] },
+          ),
+        // Hold the target while the pointer crosses the gap to the next tab so
+        // the insertion line does not flicker. The strip's target bounds it.
+        getIsSticky: () => true,
+        onDrag: ({ self }) =>
+          setDropPosition(resolveDropPosition(self, direction)),
+        onDragLeave: () => setDropPosition(null),
+        onDrop: ({ source, self }) => {
+          setDropPosition(null);
           const draggedViewId = source.data["viewId"];
-          if (typeof draggedViewId !== "string") {
+          const position = resolveDropPosition(self, direction);
+          if (typeof draggedViewId !== "string" || position === null) {
             return;
           }
-          handleReorder(draggedViewId, id);
+          handleReorder(draggedViewId, id, position);
         },
       }),
     );
-  }, [id, canUpdateView, handleReorder]);
+  }, [id, canUpdateView, canDragTab, direction, handleReorder, tabContainer]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -473,10 +547,16 @@ const ViewTab = ({
   }
 
   return (
-    <div
-      className={cn("relative", isDropTarget && "ring-primary rounded ring-2")}
-      ref={containerRef}
-    >
+    <div className="relative" ref={setTabContainer}>
+      {dropPosition !== null && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "bg-primary pointer-events-none absolute inset-y-1 z-20 w-0.5 rounded-full",
+            dropPosition === "before" ? "-start-0.5" : "-end-0.5",
+          )}
+        />
+      )}
       <TabsTab
         className="pe-6.5"
         onClick={onSelect}
@@ -530,6 +610,7 @@ const useViewActionsMenu = ({
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
   const [target, setTarget] = useState<ViewActionsTarget | null>(null);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [convertPreview, setConvertPreview] = useState<ViewLayoutType | null>(
@@ -691,6 +772,7 @@ const useViewActionsMenu = ({
     return (
       <Menu
         onOpenChange={(open) => {
+          setIsActionsOpen(open);
           if (open) {
             setTarget({ view, canDelete });
           }
@@ -701,6 +783,10 @@ const useViewActionsMenu = ({
           render={
             <Button
               className="absolute inset-e-0 top-1/2 -translate-y-1/2"
+              // The surrounding tab is a draggable; this button is not a drag
+              // affordance. Only covers presses on the button itself, which is
+              // why the tab separately refuses to drag while the menu is open.
+              draggable={false}
               size="icon-xs"
               variant="ghost"
             />
@@ -760,5 +846,9 @@ const useViewActionsMenu = ({
     </>
   );
 
-  return { openFor, renderActions, overlays };
+  // The dismiss layer covers the whole strip, so an open menu anywhere gates
+  // dragging on every tab, not just its own.
+  const isAnyMenuOpen = isActionsOpen || contextMenu.open;
+
+  return { openFor, renderActions, overlays, isAnyMenuOpen };
 };

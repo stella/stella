@@ -45,14 +45,15 @@ import {
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { composeRefs } from "@stll/ui/lib/utils";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { ReviewBar } from "@/components/ai-suggestions/review-bar";
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import "@stll/folio-react/editor.css";
 
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import {
   useDocxFitZoom,
@@ -83,7 +84,6 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
-import { composeRefs } from "@/lib/utils";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import "@/components/pdf/peek/peek-docx.css";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";

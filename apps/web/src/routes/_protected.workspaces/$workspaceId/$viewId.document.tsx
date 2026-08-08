@@ -39,7 +39,7 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import "@stll/folio-react/editor.css";
-import { cn } from "@stll/ui/lib/utils";
+import { cn, composeRefs } from "@stll/ui/lib/utils";
 
 import {
   useDocxFitZoom,
@@ -69,7 +69,6 @@ import {
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { composeRefs } from "@/lib/utils";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {

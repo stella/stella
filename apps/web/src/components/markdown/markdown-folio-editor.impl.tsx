@@ -9,7 +9,7 @@ import { fromMarkdown, toMarkdown } from "@stll/folio-react";
 import type { Document, MarkdownOptions } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
-import { cn } from "@stll/ui/lib/utils";
+import { cn, composeRefs } from "@stll/ui/lib/utils";
 
 import {
   DOCX_PAGE_WIDTH,
@@ -18,7 +18,6 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
-import { composeRefs } from "@/lib/utils";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
 // clean: drop comments/annotations, flatten tracked changes, inline links,

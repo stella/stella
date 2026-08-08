@@ -13,6 +13,8 @@ import type {
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
 
+import { viewOrderCache } from "./views.logic";
+
 type CreateViewVars = {
   id: string;
   name: string;
@@ -155,6 +157,7 @@ type ReorderViewsVars = {
 export const useReorderViews = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const cache = viewOrderCache({ queryClient, workspaceId });
 
   return useMutation({
     mutationFn: async ({ viewIds }: ReorderViewsVars) => {
@@ -165,14 +168,12 @@ export const useReorderViews = (workspaceId: string) => {
         });
       return unwrapEden(response);
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
-    },
-    onError: (error) => {
+    onMutate: async ({ viewIds }) => await cache.apply(viewIds),
+    onError: (error, _variables, context) => {
+      cache.restore(context);
       analytics.captureError(error);
     },
+    onSettled: cache.settle,
   });
 };
 

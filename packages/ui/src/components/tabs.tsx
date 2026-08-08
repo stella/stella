@@ -1,10 +1,18 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
-import { cn } from "@stll/ui/lib/utils";
+import { hasTabOrderChanged } from "@stll/ui/lib/tab-order";
+import { cn, composeRefs } from "@stll/ui/lib/utils";
 
 type TabsVariant = "default" | "underline";
+
+// Layout effects never run while rendering on the server, so fall back to
+// `useEffect` there to avoid React's server-side layout-effect warning.
+const useIsoLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
   return (
@@ -23,10 +31,28 @@ function TabsList({
   variant = "default",
   className,
   children,
+  ref,
   ...props
 }: TabsPrimitive.List.Props & {
   variant?: TabsVariant;
 }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const tabOrderRef = useRef<readonly Element[]>([]);
+  const [, setRemeasureToken] = useState(0);
+
+  // Re-render once the new order is committed so Base UI's render-time
+  // measurement sees where the active tab actually is. `hasTabOrderChanged`
+  // explains which case the library misses.
+  useIsoLayoutEffect(() => {
+    const tabs = listRef.current ? [...listRef.current.children] : [];
+    const previousTabs = tabOrderRef.current;
+    tabOrderRef.current = tabs;
+
+    if (hasTabOrderChanged(previousTabs, tabs)) {
+      setRemeasureToken((token) => token + 1);
+    }
+  });
+
   return (
     <TabsPrimitive.List
       className={cn(
@@ -38,6 +64,7 @@ function TabsList({
         className,
       )}
       data-slot="tabs-list"
+      ref={composeRefs(listRef, ref)}
       {...props}
     >
       {children}
