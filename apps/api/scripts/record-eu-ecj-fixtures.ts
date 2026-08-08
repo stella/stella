@@ -8,7 +8,10 @@
  *    Formex is the Publications Office's semantic encoding — it states
  *    heading levels, paragraph numbers and the keyword chain outright —
  *    so the parser's reading of the class-annotated XHTML can be
- *    checked against the publisher rather than against itself.
+ *    checked against the publisher rather than against itself. The
+ *    decisions in `PORTAL_CORPUS` get a second recording in the same
+ *    pass: the page encoding of the same converter output, written only
+ *    together with the manifestation it is compared against.
  * 2. The seed fixture (`scripts/__fixtures__/case-law/eu-ecj.json`) in
  *    the shape `seed-case-law.ts` loads.
  *
@@ -31,6 +34,13 @@ import path from "node:path";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  PORTAL_CORPUS,
+  PORTAL_DOCUMENT_CONTAINER,
+  type PortalPair,
+  manifestationStem,
+  portalStem,
+} from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 
 import { seedId } from "./seed-utils";
 
@@ -47,8 +57,8 @@ const PARSER_CORPUS = [
   },
   {
     celex: "62022CJ0128",
-    languages: ["EL"],
-    why: "Judgment in a non-Latin script, with guillemets rather than parentheses around the keyword chain. Shorter than Schrems II, which is the point: script coverage does not need document length.",
+    languages: ["EL", "EN"],
+    why: "Judgment in a non-Latin script, with guillemets rather than parentheses around the keyword chain. Shorter than Schrems II, which is the point: script coverage does not need document length. EN is the baseline the portal-page recording of the same decision is compared against.",
   },
   {
     celex: "62018CC0311",
@@ -222,6 +232,70 @@ const celexOf = (decision: IngestionResult): string => {
   return typeof celex === "string" ? celex : "";
 };
 
+/** One fixture file, held back until its whole group is in hand. */
+type StagedFixture = { name: string; bytes: Uint8Array };
+
+/**
+ * Outcome of asking the portal for the page half of a pair.
+ *
+ * Carried back rather than logged where it happens, because the caller
+ * is what knows which decision was being recorded — and, more to the
+ * point, what has to decide that nothing gets written.
+ */
+type PortalFetch =
+  | { outcome: "served"; html: string }
+  | { outcome: "no-url" }
+  | { outcome: "no-document"; httpStatus: number };
+
+const fetchPortalPage = async (
+  decision: IngestionResult,
+): Promise<PortalFetch> => {
+  const url = decision.sourceUrl;
+  if (url === undefined) {
+    return { outcome: "no-url" };
+  }
+
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "User-Agent": INGESTION_USER_AGENT },
+  });
+  // The portal answers an automated request with a challenge page under
+  // a success status, so the container, not the status, is what says a
+  // document arrived.
+  const html = response.ok ? await response.text() : "";
+  return html.includes(PORTAL_DOCUMENT_CONTAINER)
+    ? { outcome: "served", html }
+    : { outcome: "no-document", httpStatus: response.status };
+};
+
+const portalFailureReason = (
+  failure: Exclude<PortalFetch, { outcome: "served" }>,
+): string => {
+  switch (failure.outcome) {
+    case "no-url":
+      return "the query returned no portal URL";
+    case "no-document":
+      return `the portal served no document (${failure.httpStatus})`;
+    default:
+      return failure satisfies never;
+  }
+};
+
+const portalPairFor = (stem: string): PortalPair | undefined =>
+  PORTAL_CORPUS.find((pair) => manifestationStem(pair) === stem);
+
+/**
+ * Record the parser corpus, and the portal encoding of the decisions
+ * declared as pairs alongside it.
+ *
+ * A pair's two halves are one converter output, and the test that
+ * compares them holds them to that, so they may never come from
+ * different runs: the publisher can revise a document between two
+ * fetches, and the comparison would then be measuring the revision
+ * rather than the parse. Both halves are therefore fetched and checked
+ * before either is written, and a portal fetch that returns no document
+ * leaves the pair exactly as it was.
+ */
 const recordParserFixtures = async (): Promise<void> => {
   for (const { celex, languages } of PARSER_CORPUS) {
     // oxlint-disable-next-line no-await-in-loop -- sequential by design: Cellar is rate-limited and this is a recorder, not a hot path
@@ -238,24 +312,45 @@ const recordParserFixtures = async (): Promise<void> => {
         continue;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- one write per recorded variant
-      await Bun.write(
-        new URL(`${stem}.html.gz`, PARSER_FIXTURES_DIR),
-        Bun.gzipSync(Buffer.from(decision.sourceRaw)),
-      );
+      const staged: StagedFixture[] = [
+        {
+          name: `${stem}.html.gz`,
+          bytes: Bun.gzipSync(Buffer.from(decision.sourceRaw)),
+        },
+      ];
 
       // oxlint-disable-next-line no-await-in-loop -- sequential Cellar lookup per variant
       const formex = await fetchFormex(celex, languageUriOf(decision));
       if (formex === undefined) {
-        log(`  ${stem}: XHTML only (no Formex published)`);
-        continue;
+        log(`  ${stem}: no Formex published`);
+      } else {
+        staged.push({
+          name: `${stem}.fmx.xml.gz`,
+          bytes: Bun.gzipSync(new Uint8Array(formex)),
+        });
       }
-      // oxlint-disable-next-line no-await-in-loop -- one write per recorded variant
-      await Bun.write(
-        new URL(`${stem}.fmx.xml.gz`, PARSER_FIXTURES_DIR),
-        Bun.gzipSync(new Uint8Array(formex)),
-      );
-      log(`  ${stem}: XHTML + Formex`);
+
+      const pair = portalPairFor(stem);
+      if (pair !== undefined) {
+        // oxlint-disable-next-line no-await-in-loop -- one portal request per declared pair
+        const portal = await fetchPortalPage(decision);
+        if (portal.outcome !== "served") {
+          log(
+            `  ${stem}: ${portalFailureReason(portal)}, pair left as recorded`,
+          );
+          continue;
+        }
+        staged.push({
+          name: `${portalStem(pair)}.html.gz`,
+          bytes: Bun.gzipSync(Buffer.from(portal.html)),
+        });
+      }
+
+      for (const { name, bytes } of staged) {
+        // oxlint-disable-next-line no-await-in-loop -- one write per staged fixture
+        await Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes);
+      }
+      log(`  ${stem}: ${staged.map((fixture) => fixture.name).join(", ")}`);
     }
   }
 };

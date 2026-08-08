@@ -22,14 +22,28 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import {
+  ecjDocumentHtml,
+  parseEcjDecisionHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
   normalizeOracleText,
   parseFormex,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 
+import {
+  PORTAL_CORPUS,
+  PORTAL_DOCUMENT_CONTAINER,
+  PORTAL_STEM_SUFFIX,
+  type PortalPair,
+  manifestationStem,
+  portalStem,
+} from "./__fixtures__/eu-ecj/corpus";
+
 const FIXTURES_DIR = new URL("__fixtures__/eu-ecj/", import.meta.url);
+
 const decoder = new TextDecoder();
 
 const readFixture = async (name: string): Promise<string | undefined> => {
@@ -49,6 +63,87 @@ if (fixtureStems.length === 0) {
     "No eu-ecj parser fixtures found; run scripts/record-eu-ecj-fixtures.ts",
   );
 }
+
+/** Replace every link inline with the text it carries. */
+const flattenLinks = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((node): Inline[] => {
+    if (node.type === "link") {
+      return flattenLinks(node.children);
+    }
+    if (node.type === "text" || node.type === "line-break") {
+      return [node];
+    }
+    return [{ ...node, children: flattenLinks(node.children) }];
+  });
+
+/**
+ * Join runs of text inlines into one, so that text arrived at by
+ * flattening a link compares equal to text the walk never split.
+ */
+const mergeAdjacentText = (inlines: readonly Inline[]): Inline[] => {
+  const merged: Inline[] = [];
+  for (const node of inlines) {
+    const previous = merged.at(-1);
+    if (
+      node.type === "text" &&
+      previous?.type === "text" &&
+      previous.anonymized === node.anonymized
+    ) {
+      merged[merged.length - 1] = {
+        ...previous,
+        text: previous.text + node.text,
+      };
+      continue;
+    }
+    merged.push(
+      node.type === "text" || node.type === "line-break"
+        ? node
+        : { ...node, children: mergeAdjacentText(node.children) },
+    );
+  }
+  return merged;
+};
+
+/**
+ * Blocks with cross-reference targets dropped, their text kept.
+ *
+ * The publisher addresses the same cross-references differently in its
+ * two encodings: a manifestation links them by absolute Cellar ECLI
+ * URL, a portal page by a path relative to itself, which means nothing
+ * once the decision is stored and so is flattened to text. That is the
+ * publisher's difference, and it is the only one a comparison between
+ * the two encodings may tolerate.
+ */
+const withoutLinkTargets = (blocks: readonly Block[]): Block[] =>
+  blocks.map((block) =>
+    block.type === "table"
+      ? block
+      : { ...block, inlines: mergeAdjacentText(flattenLinks(block.inlines)) },
+  );
+
+const countLinks = (inlines: readonly Inline[]): number => {
+  let total = 0;
+  for (const node of inlines) {
+    if (node.type === "text" || node.type === "line-break") {
+      continue;
+    }
+    if (node.type === "link") {
+      total += 1;
+    }
+    total += countLinks(node.children);
+  }
+  return total;
+};
+
+const countBlockLinks = (blocks: readonly Block[]): number => {
+  let total = 0;
+  for (const block of blocks) {
+    if (block.type !== "table") {
+      total += countLinks(block.inlines);
+    }
+  }
+  return total;
+};
 
 describe("parseEcjDecisionHtml", () => {
   test.each(fixtureStems)("%s", async (stem) => {
@@ -218,6 +313,169 @@ describe("parseEcjDecisionHtml", () => {
     // They are most of the pre-2019 corpus, and they parsed to a
     // structureless wall of text until the parser accepted both.
     expect([...spellings].sort()).toEqual(["coj-prefixed", "unprefixed"]);
+  });
+
+  /**
+   * The publisher serves the same converter output twice: on its own,
+   * and embedded in a portal page that adds navigation, inline scripts,
+   * a contact block and a footer around it. Those are the site's, not
+   * the Court's, so the parse must be the same either way.
+   *
+   * Driven off `PORTAL_CORPUS`, the same list the recorder writes from,
+   * so a declared pair cannot be recorded without being compared.
+   */
+  test.each(
+    PORTAL_CORPUS.map((pair) => [manifestationStem(pair), pair] as const),
+  )(
+    "reads only the decision out of the page carrying it: %s",
+    async (_stem: string, pair: PortalPair) => {
+      const decision = await readFixture(`${manifestationStem(pair)}.html.gz`);
+      const page = await readFixture(`${portalStem(pair)}.html.gz`);
+      if (decision === undefined || page === undefined) {
+        throw new Error(
+          `Missing the ${manifestationStem(pair)} pair; run scripts/record-eu-ecj-fixtures.ts`,
+        );
+      }
+
+      // Both halves are the publisher's own output for one decision, and
+      // the page is mostly not the decision. Without that the comparison
+      // below would hold over nothing.
+      expect(page).toContain(PORTAL_DOCUMENT_CONTAINER);
+      expect(decision).not.toContain(PORTAL_DOCUMENT_CONTAINER);
+      expect(page.length).toBeGreaterThan(decision.length * 1.5);
+
+      const parsePair = (html: string) =>
+        parseEcjDecisionHtml({
+          caseNumber: pair.celex,
+          ecli: undefined,
+          court: "Court of Justice",
+          decisionDate: undefined,
+          decisionType: undefined,
+          sourceUrl: undefined,
+          language: pair.language.toLowerCase(),
+          celex: pair.celex,
+          html,
+        });
+
+      const parsedDecision = parsePair(decision);
+      const parsedPage = parsePair(page);
+
+      // One equality carries both halves of the guarantee: nothing the
+      // page adds may reach the AST, and nothing the decision holds may
+      // be lost on the way. Stating it this way also keeps the parser
+      // honest, since no list of things to ignore can satisfy it — and a
+      // list would only ever be right in the language it was written in.
+      //
+      // Whole blocks rather than their text: type, role, heading level,
+      // paragraph number, anchor and inline structure all decide how a
+      // decision renders and cites, and every one of them can change
+      // while the text stays identical. Block ids and anchors are
+      // counter-derived, so two parses of one decision produce the same
+      // ones. The right-hand side is oracle-checked against Formex above.
+      expect(withoutLinkTargets(parsedPage.documentAst.blocks)).toEqual(
+        withoutLinkTargets(parsedDecision.documentAst.blocks),
+      );
+      // The one tolerated difference has to be doing real work, or the
+      // comparison above would be equally true of two link-free ASTs.
+      expect(
+        countBlockLinks(parsedDecision.documentAst.blocks),
+      ).toBeGreaterThan(0);
+      expect(parsedPage.fulltext).toEqual(parsedDecision.fulltext);
+      expect(parsedPage.keywords).toEqual(parsedDecision.keywords);
+
+      // Completeness is measured against the decision, not the page. An
+      // issue here would read as a lost-content parse and send a correct
+      // AST down the caller's fallback, which stores the page's text.
+      expect(parsedPage.validationIssues).toEqual([]);
+
+      // That fallback takes the same boundary without parsing, so it
+      // cannot store the page either.
+      const bounded = ecjDocumentHtml(page);
+      expect(bounded).not.toContain(PORTAL_DOCUMENT_CONTAINER);
+      expect(parsePair(bounded).fulltext).toEqual(parsedDecision.fulltext);
+
+      // A decision served on its own is already the whole document, so
+      // bounding must leave it byte-identical.
+      expect(ecjDocumentHtml(decision)).toBe(decision);
+    },
+  );
+
+  test("compares every portal recording it holds", () => {
+    // The other direction of the check above: a recording on disk that
+    // no entry declares is never compared against anything, and would
+    // sit there reading as coverage.
+    const recorded = fixtureStems
+      .filter((stem) => stem.endsWith(PORTAL_STEM_SUFFIX))
+      .sort();
+
+    expect(recorded).toEqual(PORTAL_CORPUS.map(portalStem).sort());
+  });
+
+  /**
+   * The boundary is the deepest element holding every marker, and a
+   * marked element that holds the others is that boundary itself. Taking
+   * its container instead — which is what the oldest layout needs, since
+   * its one marker is its own wrapper — would step back out into the
+   * page around it.
+   */
+  test("keeps the boundary at a marked element that holds the rest", () => {
+    const html = [
+      "<html><body><div class='page'>",
+      "<p class='site-nav'>Navigation, contact and telephone options</p>",
+      "<div class='coj-normal' lang='en'>",
+      "<p class='coj-sum-title-1'>ORDER OF THE COURT</p>",
+      "<p class='coj-normal'>Body paragraph.</p>",
+      "</div>",
+      "<p class='site-footer'>Legal notice and cookies</p>",
+      "</div></body></html>",
+    ].join("");
+
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "ORDER OF THE COURT",
+      "Body paragraph.",
+    ]);
+  });
+
+  /**
+   * The counterpart of the test above, and the reason the promotion it
+   * pins is not simply removed: the oldest layout annotates nothing but
+   * its wrapper, so the document is the wrapper's container, and text
+   * the publisher put beside the wrapper is still the decision's.
+   */
+  test("keeps container text when only the wrapper is marked", () => {
+    const html = [
+      "<html><body><div class='listNotice'>",
+      "<p>Case reference line</p>",
+      "<div class='texte'><p>Body paragraph.</p></div>",
+      "</div></body></html>",
+    ].join("");
+
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Case reference line",
+      "Body paragraph.",
+    ]);
   });
 
   test("reads the keyword chain in a non-Latin script", async () => {
