@@ -99,6 +99,7 @@ export type ReferenceConsensus = "single" | "consistent" | "mixed";
 
 export type ReferenceFinding = {
   findingId: string;
+  topicId: string;
   issue: string;
   assessment: ReferenceAssessment;
   consensus: ReferenceConsensus;
@@ -118,7 +119,29 @@ export type ReviewFixState = {
   revisionIds: readonly number[] | null;
 };
 
-export type ReviewStatus = "idle" | "reviewing" | "error";
+export type ReviewTopic =
+  | {
+      type: "playbook";
+      topicId: string;
+      positionId: string;
+      title: string;
+      context: string;
+      included: boolean;
+    }
+  | {
+      type: "reference" | "custom";
+      topicId: string;
+      title: string;
+      context: string;
+      included: boolean;
+    };
+
+export type ReviewStatus =
+  | "idle"
+  | "proposing-topics"
+  | "editing-topics"
+  | "reviewing"
+  | "error";
 
 export type ReviewResults = {
   playbook: PlaybookFinding[] | null;
@@ -133,6 +156,8 @@ export type DocumentReviewSession = {
   error: string | null;
   reviewedAt: number | null;
   runId: string | null;
+  topics: ReviewTopic[];
+  workspaceId: string;
 };
 
 type ReviewRequestError = Parameters<typeof toAPIError>[0];
@@ -152,6 +177,7 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  seededTopics: ReviewTopic[];
 };
 
 type State = {
@@ -160,6 +186,17 @@ type State = {
 
 type Actions = {
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
+  confirmTopics: (
+    workspaceId: string,
+    entityId: string,
+    fileFieldId: string,
+    unexpectedErrorMessage: string,
+  ) => Promise<StartReviewResult>;
+  setTopics: (
+    entityId: string,
+    fileFieldId: string,
+    topics: ReviewTopic[],
+  ) => void;
   setFixState: (
     entityId: string,
     fileFieldId: string,
@@ -174,6 +211,74 @@ const EMPTY_RESULTS: ReviewResults = {
   references: null,
 };
 
+type ExecuteReviewArgs = {
+  workspaceId: string;
+  basis: ReviewBasis;
+  entityId: string;
+  fileFieldId: string;
+  topics: readonly ReviewTopic[];
+};
+
+const executeReview = async ({
+  workspaceId,
+  basis,
+  entityId,
+  fileFieldId,
+  topics,
+}: ExecuteReviewArgs) => {
+  const playbookId = playbookIdFromBasis(basis);
+  const references = referencesFromBasis(basis);
+  const includedTopics = topics.filter((topic) => topic.included);
+  const playbookRequest =
+    playbookId === null
+      ? Promise.resolve(null)
+      : api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks({
+            playbookId: toSafeId<"playbookDefinition">(playbookId),
+          })
+          .review.post(
+            {
+              entityId: toSafeId<"entity">(entityId),
+              fileFieldId: toSafeId<"field">(fileFieldId),
+              ...(references.length > 0 && {
+                positionIds: includedTopics.flatMap((topic) =>
+                  topic.type === "playbook" ? [topic.positionId] : [],
+                ),
+              }),
+            },
+            {
+              fetch: {
+                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
+              },
+            },
+          );
+  const referenceRequest =
+    references.length === 0
+      ? Promise.resolve(null)
+      : api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["document-reviews"].references.post(
+            {
+              target: {
+                entityId: toSafeId<"entity">(entityId),
+                fileFieldId: toSafeId<"field">(fileFieldId),
+              },
+              references: references.map((reference) => ({
+                entityId: toSafeId<"entity">(reference.entityId),
+                fileFieldId: toSafeId<"field">(reference.fileFieldId),
+              })),
+              topics: includedTopics,
+            },
+            {
+              fetch: {
+                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
+              },
+            },
+          );
+  return await Promise.all([playbookRequest, referenceRequest]);
+};
+
 export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
   sessions: {},
 
@@ -183,10 +288,14 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     entityId,
     fileFieldId,
     unexpectedErrorMessage,
+    seededTopics,
   }) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     const existing = get().sessions[key];
-    if (existing?.status === "reviewing") {
+    if (
+      existing?.status === "reviewing" ||
+      existing?.status === "proposing-topics"
+    ) {
       return { ok: true };
     }
     const runId = crypto.randomUUID();
@@ -195,68 +304,103 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       sessions: {
         ...state.sessions,
         [key]: {
-          status: "reviewing",
+          status:
+            referencesFromBasis(basis).length > 0
+              ? "proposing-topics"
+              : "reviewing",
           basis,
           results: existing?.results ?? EMPTY_RESULTS,
           fixState: existing?.fixState ?? {},
           error: null,
           reviewedAt: existing?.reviewedAt ?? null,
           runId,
+          topics: seededTopics,
+          workspaceId,
         },
       },
     }));
 
-    const playbookId = playbookIdFromBasis(basis);
     const references = referencesFromBasis(basis);
-    const requestResult = await Result.tryPromise(async () => {
-      const playbookRequest =
-        playbookId === null
-          ? Promise.resolve(null)
-          : api
-              .workspaces({
-                workspaceId: toSafeId<"workspace">(workspaceId),
-              })
-              .playbooks({
-                playbookId: toSafeId<"playbookDefinition">(playbookId),
-              })
-              .review.post(
-                {
+    if (references.length > 0) {
+      const proposalResult = await Result.tryPromise(
+        async () =>
+          await api
+            .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            ["document-reviews"].topics.post(
+              {
+                target: {
                   entityId: toSafeId<"entity">(entityId),
                   fileFieldId: toSafeId<"field">(fileFieldId),
                 },
-                {
-                  fetch: {
-                    signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-                  },
+                references: references.map((reference) => ({
+                  entityId: toSafeId<"entity">(reference.entityId),
+                  fileFieldId: toSafeId<"field">(reference.fileFieldId),
+                })),
+                seededTopics,
+              },
+              {
+                fetch: {
+                  signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
                 },
-              );
-      const referenceRequest =
-        references.length === 0
-          ? Promise.resolve(null)
-          : api
-              .workspaces({
-                workspaceId: toSafeId<"workspace">(workspaceId),
-              })
-              ["document-reviews"].references.post(
-                {
-                  target: {
-                    entityId: toSafeId<"entity">(entityId),
-                    fileFieldId: toSafeId<"field">(fileFieldId),
-                  },
-                  references: references.map((reference) => ({
-                    entityId: toSafeId<"entity">(reference.entityId),
-                    fileFieldId: toSafeId<"field">(reference.fileFieldId),
-                  })),
-                },
-                {
-                  fetch: {
-                    signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-                  },
-                },
-              );
+              },
+            ),
+      );
+      const proposalError = Result.isError(proposalResult)
+        ? null
+        : proposalResult.value.error;
+      if (Result.isError(proposalResult) || proposalError) {
+        const message = proposalError
+          ? userErrorMessage(proposalError, unexpectedErrorMessage)
+          : unexpectedErrorMessage;
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.runId !== runId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "error",
+                error: message,
+                runId: null,
+              },
+            },
+          };
+        });
+        return { ok: false, message, error: proposalError };
+      }
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.runId !== runId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              status: "editing-topics",
+              topics: proposalResult.value.data?.topics ?? seededTopics,
+              runId: null,
+            },
+          },
+        };
+      });
+      return { ok: true };
+    }
 
-      return await Promise.all([playbookRequest, referenceRequest]);
-    });
+    const requestResult = await Result.tryPromise(
+      async () =>
+        await executeReview({
+          workspaceId,
+          basis,
+          entityId,
+          fileFieldId,
+          topics: seededTopics,
+        }),
+    );
 
     if (Result.isError(requestResult)) {
       set((state) => {
@@ -275,6 +419,8 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               error: unexpectedErrorMessage,
               reviewedAt: current.reviewedAt,
               runId: null,
+              topics: current.topics,
+              workspaceId,
             },
           },
         };
@@ -306,6 +452,8 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               error: message,
               reviewedAt: current.reviewedAt,
               runId: null,
+              topics: current.topics,
+              workspaceId,
             },
           },
         };
@@ -332,6 +480,8 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             error: null,
             reviewedAt: Date.now(),
             runId: null,
+            topics: seededTopics,
+            workspaceId,
           },
         },
       };
@@ -347,6 +497,106 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     }
 
     return { ok: true };
+  },
+
+  confirmTopics: async (
+    workspaceId,
+    entityId,
+    fileFieldId,
+    unexpectedErrorMessage,
+  ) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    const session = get().sessions[key];
+    if (!session?.basis || session.status !== "editing-topics") {
+      return { ok: true };
+    }
+    const basis = session.basis;
+    const runId = crypto.randomUUID();
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [key]: { ...session, status: "reviewing", error: null, runId },
+      },
+    }));
+    const requestResult = await Result.tryPromise(
+      async () =>
+        await executeReview({
+          workspaceId,
+          basis,
+          entityId,
+          fileFieldId,
+          topics: session.topics,
+        }),
+    );
+    const responseError = Result.isError(requestResult)
+      ? null
+      : (requestResult.value.at(0)?.error ??
+        requestResult.value.at(1)?.error ??
+        null);
+    if (Result.isError(requestResult) || responseError) {
+      const message = responseError
+        ? userErrorMessage(responseError, unexpectedErrorMessage)
+        : unexpectedErrorMessage;
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.runId !== runId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              status: "editing-topics",
+              error: message,
+              runId: null,
+            },
+          },
+        };
+      });
+      return { ok: false, message, error: responseError };
+    }
+    const [playbookResponse, referenceResponse] = requestResult.value;
+    set((state) => {
+      const current = state.sessions[key];
+      if (current?.runId !== runId) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...current,
+            status: "idle",
+            results: {
+              playbook: playbookResponse?.data ?? null,
+              references: referenceResponse?.data?.findings ?? null,
+            },
+            fixState: {},
+            error: null,
+            reviewedAt: Date.now(),
+            runId: null,
+          },
+        },
+      };
+    });
+    return { ok: true };
+  },
+
+  setTopics: (entityId, fileFieldId, topics) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (!current || current.status !== "editing-topics") {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, topics, error: null },
+        },
+      };
+    });
   },
 
   setFixState: (entityId, fileFieldId, findingId, next) => {

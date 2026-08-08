@@ -11,10 +11,50 @@ export const documentReviewRefSchema = t.Object({
 
 export type DocumentReviewRef = Static<typeof documentReviewRefSchema>;
 
-export const compareReferencesBodySchema = t.Object({
+const reviewTopicBase = {
+  topicId: t.String({ format: "uuid" }),
+  title: t.String({ minLength: 1, maxLength: 256 }),
+  context: t.String({ maxLength: 2000 }),
+  included: t.Boolean(),
+};
+
+export const documentReviewTopicSchema = t.Union([
+  t.Object({
+    ...reviewTopicBase,
+    type: t.Literal("playbook"),
+    positionId: t.String({ format: "uuid" }),
+  }),
+  t.Object({
+    ...reviewTopicBase,
+    type: t.Literal("reference"),
+  }),
+  t.Object({
+    ...reviewTopicBase,
+    type: t.Literal("custom"),
+  }),
+]);
+
+export type DocumentReviewTopic = Static<typeof documentReviewTopicSchema>;
+
+const reviewDocumentsSchema = {
   target: documentReviewRefSchema,
   references: t.Array(documentReviewRefSchema, {
     minItems: 1,
     maxItems: LIMITS.documentReviewReferencesMax,
+  }),
+};
+
+export const proposeReviewTopicsBodySchema = t.Object({
+  ...reviewDocumentsSchema,
+  seededTopics: t.Array(documentReviewTopicSchema, {
+    maxItems: LIMITS.documentReviewFindingsMax,
+  }),
+});
+
+export const compareReferencesBodySchema = t.Object({
+  ...reviewDocumentsSchema,
+  topics: t.Array(documentReviewTopicSchema, {
+    minItems: 1,
+    maxItems: LIMITS.documentReviewFindingsMax,
   }),
 });

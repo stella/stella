@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { DocumentReviewTopic } from "@/api/handlers/document-reviews/schemas";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -9,14 +10,13 @@ import {
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
 const REFERENCE_REVIEW_TIMEOUT_MS = 120_000;
 const REFERENCE_REVIEW_ROLE = "pdf" as const;
-const MAX_CITATIONS_PER_FINDING = 8;
+const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 
 const assessmentValues = [
   "aligned",
@@ -35,26 +35,19 @@ const rawCitationSchema = v.strictObject({
 });
 
 const rawFindingSchema = v.strictObject({
-  issue: v.string(),
+  topicId: v.string(),
   assessment: v.picklist(assessmentValues),
   consensus: v.picklist(consensusValues),
   rationale: v.string(),
-  targetCitations: v.pipe(
-    v.array(rawCitationSchema),
-    v.maxLength(MAX_CITATIONS_PER_FINDING),
-  ),
-  referenceCitations: v.pipe(
-    v.array(rawCitationSchema),
-    v.maxLength(MAX_CITATIONS_PER_FINDING),
-  ),
+  // Model-owned arrays are normalized below. A provider may ignore JSON Schema
+  // cardinality constraints; rejecting the whole run would discard valid output.
+  targetCitations: v.array(rawCitationSchema),
+  referenceCitations: v.array(rawCitationSchema),
   proposedText: v.nullable(v.string()),
 });
 
-const referenceReviewSchema = v.strictObject({
-  findings: v.pipe(
-    v.array(rawFindingSchema),
-    v.maxLength(LIMITS.documentReviewFindingsMax),
-  ),
+export const referenceReviewSchema = v.strictObject({
+  findings: v.array(rawFindingSchema),
 });
 
 type RawReferenceFinding = v.InferOutput<typeof rawFindingSchema>;
@@ -75,6 +68,7 @@ export type ReferenceReviewFix = {
 
 export type ReferenceReviewFinding = {
   findingId: string;
+  topicId: string;
   issue: string;
   assessment: ReferenceAssessment;
   consensus: ReferenceConsensus;
@@ -89,6 +83,7 @@ export type ReferenceReviewFinding = {
 
 type NormalizeReferenceReviewArgs = {
   rawFindings: readonly RawReferenceFinding[];
+  topics: readonly DocumentReviewTopic[];
   target: PreparedDocxFile;
   references: readonly PreparedDocxFile[];
 };
@@ -117,6 +112,9 @@ const collectVerifiedCitations = (
     }
     seen.add(citation.blockId);
     verified.push(normalized);
+    if (verified.length === MAX_VERIFIED_CITATIONS_PER_FINDING) {
+      break;
+    }
   }
   return verified;
 };
@@ -150,6 +148,7 @@ const buildReferenceFix = ({
 
 export const normalizeReferenceReview = ({
   rawFindings,
+  topics,
   target,
   references,
 }: NormalizeReferenceReviewArgs): ReferenceReviewFinding[] => {
@@ -169,8 +168,14 @@ export const normalizeReferenceReview = ({
   );
   const targetLastBlockId = target.blocks.at(-1)?.id ?? null;
   const findings: ReferenceReviewFinding[] = [];
+  const topicById = new Map(topics.map((topic) => [topic.topicId, topic]));
+  const seenTopicIds = new Set<string>();
 
   for (const raw of rawFindings) {
+    const topic = topicById.get(raw.topicId);
+    if (!topic || seenTopicIds.has(topic.topicId)) {
+      continue;
+    }
     const targetCitations = collectVerifiedCitations(
       raw.targetCitations.filter(
         (citation) => citation.sourceKey === target.simplifiedName,
@@ -182,7 +187,13 @@ export const normalizeReferenceReview = ({
       SafeId<"field">,
       ReferenceCitation[]
     >();
+    let verifiedReferenceCitationCount = 0;
     for (const citation of raw.referenceCitations) {
+      if (
+        verifiedReferenceCitationCount === MAX_VERIFIED_CITATIONS_PER_FINDING
+      ) {
+        break;
+      }
       const reference = referenceBySourceKey.get(citation.sourceKey);
       if (!reference) {
         continue;
@@ -204,6 +215,7 @@ export const normalizeReferenceReview = ({
       } else {
         citationsByFileFieldId.set(reference.fileFieldId, [normalized]);
       }
+      verifiedReferenceCitationCount += 1;
     }
 
     const referenceCitations = references.flatMap((reference) => {
@@ -213,24 +225,47 @@ export const normalizeReferenceReview = ({
         : [];
     });
 
-    if (targetCitations.length === 0 && referenceCitations.length === 0) {
-      continue;
-    }
+    const hasGroundedEvidence =
+      targetCitations.length > 0 || referenceCitations.length > 0;
 
     findings.push({
-      findingId: `reference-${String(findings.length + 1)}`,
-      issue: raw.issue.trim(),
-      assessment: raw.assessment,
+      findingId: `reference-${topic.topicId}`,
+      topicId: topic.topicId,
+      issue: topic.title,
+      assessment: hasGroundedEvidence ? raw.assessment : "not-comparable",
       consensus: references.length === 1 ? "single" : raw.consensus,
-      rationale: raw.rationale.trim(),
+      rationale: hasGroundedEvidence
+        ? raw.rationale.trim()
+        : "The supplied documents do not provide grounded evidence for this topic.",
       targetCitations,
       referenceCitations,
-      fix: buildReferenceFix({
-        assessment: raw.assessment,
-        proposedText: raw.proposedText,
-        targetCitations,
-        targetLastBlockId,
-      }),
+      fix: hasGroundedEvidence
+        ? buildReferenceFix({
+            assessment: raw.assessment,
+            proposedText: raw.proposedText,
+            targetCitations,
+            targetLastBlockId,
+          })
+        : null,
+    });
+    seenTopicIds.add(topic.topicId);
+  }
+
+  for (const topic of topics) {
+    if (seenTopicIds.has(topic.topicId)) {
+      continue;
+    }
+    findings.push({
+      findingId: `reference-${topic.topicId}`,
+      topicId: topic.topicId,
+      issue: topic.title,
+      assessment: "not-comparable",
+      consensus: references.length === 1 ? "single" : "consistent",
+      rationale:
+        "The supplied documents do not provide grounded evidence for this topic.",
+      targetCitations: [],
+      referenceCitations: [],
+      fix: null,
     });
   }
 
@@ -241,11 +276,12 @@ const SYSTEM_PROMPT = `You compare one target legal document with one or more re
 
 References are examples, not policy and not proof of market practice. Never call the target compliant, non-compliant, standard, or non-standard. Compare substantive drafting only.
 
-For each material issue, classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. Return no unsupported finding.`;
+Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. Use not-comparable when the documents do not support a grounded conclusion.`;
 
 const buildReferencePrompt = (
   target: PreparedDocxFile,
   references: readonly PreparedDocxFile[],
+  topics: readonly DocumentReviewTopic[],
 ): string => {
   const sourceGuide = [
     `${target.simplifiedName}: target document`,
@@ -262,12 +298,19 @@ const buildReferencePrompt = (
       }),
     )
     .join("\n\n");
-  return `Source roles:\n${sourceGuide}\n\n${documents}`;
+  const topicGuide = topics
+    .map(
+      (topic) =>
+        `- topicId=${topic.topicId}\n  title=${topic.title}\n  reviewer context=${topic.context || "(none)"}`,
+    )
+    .join("\n");
+  return `Review topics:\n${topicGuide}\n\nSource roles:\n${sourceGuide}\n\n${documents}`;
 };
 
 type CompareReferenceDocumentsArgs = {
   target: PreparedDocxFile;
   references: readonly PreparedDocxFile[];
+  topics: readonly DocumentReviewTopic[];
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
@@ -282,6 +325,7 @@ type CompareReferenceDocumentsArgs = {
 export const compareReferenceDocuments = async ({
   target,
   references,
+  topics,
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
@@ -328,7 +372,7 @@ export const compareReferenceDocuments = async ({
         serviceTier,
         tenantWorkspaceIds: [workspaceId],
         system: SYSTEM_PROMPT,
-        prompt: buildReferencePrompt(target, references),
+        prompt: buildReferencePrompt(target, references, topics),
         abortSignal: AbortSignal.any([
           abortSignal,
           AbortSignal.timeout(REFERENCE_REVIEW_TIMEOUT_MS),
@@ -338,6 +382,7 @@ export const compareReferenceDocuments = async ({
 
       return normalizeReferenceReview({
         rawFindings: output.findings,
+        topics,
         target,
         references,
       });

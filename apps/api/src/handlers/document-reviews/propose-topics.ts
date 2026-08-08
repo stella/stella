@@ -1,9 +1,8 @@
 import { panic, Result } from "better-result";
 
-import { compareReferenceDocuments } from "@/api/handlers/document-reviews/reference-compare";
-import { buildReferenceReviewAuditEvent } from "@/api/handlers/document-reviews/reference-review-audit";
+import { proposeReferenceTopics } from "@/api/handlers/document-reviews/reference-topics";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
-import { compareReferencesBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { proposeReviewTopicsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -14,16 +13,16 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
-const DOCUMENT_REVIEW_TIMEOUT_MS = 120_000;
+const TIMEOUT_MS = 120_000;
 
 const config = {
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  body: compareReferencesBodySchema,
+  body: proposeReviewTopicsBodySchema,
 } satisfies HandlerConfig;
 
-const compareReferences = createSafeHandler(
+const proposeTopics = createSafeHandler(
   config,
   async function* ({
     safeDb,
@@ -32,11 +31,9 @@ const compareReferences = createSafeHandler(
     session,
     orgAIConfig,
     promptCachingEnabled,
-    recordAuditEvent,
     user,
   }) {
     const organizationId = session.activeOrganizationId;
-
     yield* requireTanStackAIAvailableForRole({
       orgConfig: orgAIConfig,
       role: "pdf",
@@ -59,16 +56,13 @@ const compareReferences = createSafeHandler(
             currentVersion: {
               columns: { id: true },
               with: {
-                fields: {
-                  columns: { id: true, content: true },
-                },
+                fields: { columns: { id: true, content: true } },
               },
             },
           },
         }),
       ),
     );
-
     const selection = resolveReviewSelection({
       target: body.target,
       references: body.references,
@@ -107,32 +101,23 @@ const compareReferences = createSafeHandler(
     if (Result.isError(preparedResult)) {
       return Result.err(preparedResult.error);
     }
-
-    const targetPrepared = preparedResult.value.at(0);
-    if (targetPrepared?.kind !== "docx") {
+    const target = preparedResult.value.at(0);
+    if (target?.kind !== "docx") {
       return panic("DOCX review target was not prepared as DOCX blocks");
     }
-    const referencePrepared: PreparedDocxFile[] = [];
+    const references: PreparedDocxFile[] = [];
     for (const file of preparedResult.value.slice(1)) {
       if (file.kind !== "docx") {
         return panic("DOCX review reference was not prepared as DOCX blocks");
       }
-      referencePrepared.push(file);
+      references.push(file);
     }
 
     const serviceTier = "standard" as const;
-    const usageMetering = {
-      actionType: "chat" as const,
-      organizationId,
-      safeDb,
-      serviceTier,
-      userId: user.id,
-      workspaceId,
-    };
-    const comparison = await compareReferenceDocuments({
-      target: targetPrepared,
-      references: referencePrepared,
-      topics: body.topics,
+    const proposal = await proposeReferenceTopics({
+      target,
+      references,
+      seededTopics: body.seededTopics,
       targetEntityVersionId: selection.value.target.entityVersionId,
       referenceEntityVersionIds: selection.value.references.map(
         (reference) => reference.entityVersionId,
@@ -142,35 +127,27 @@ const compareReferences = createSafeHandler(
       orgAIConfig,
       promptCachingEnabled,
       serviceTier,
-      usageMetering,
-      abortSignal: AbortSignal.timeout(DOCUMENT_REVIEW_TIMEOUT_MS),
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier,
+        userId: user.id,
+        workspaceId,
+      },
+      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (Result.isError(comparison)) {
+    if (Result.isError(proposal)) {
       return Result.err(
         new HandlerError({
           status: 500,
           message: "Internal server error",
-          cause: comparison.error,
+          cause: proposal.error,
         }),
       );
     }
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await recordAuditEvent(
-          tx,
-          buildReferenceReviewAuditEvent({
-            target: selection.value.target,
-            references: selection.value.references,
-            findingCount: comparison.value.length,
-          }),
-        );
-        return undefined;
-      }),
-    );
-
-    return Result.ok({ findings: comparison.value });
+    return Result.ok({ topics: proposal.value });
   },
 );
 
-export default compareReferences;
+export default proposeTopics;

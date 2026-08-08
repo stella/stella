@@ -70,6 +70,15 @@ describe("reference review AI boundary", () => {
           ],
         },
       ],
+      topics: [
+        {
+          type: "custom",
+          topicId: "11111111-1111-4111-8111-111111111111",
+          title: "Payment timing",
+          context: "Compare timing mechanics.",
+          included: true,
+        },
+      ],
       targetEntityVersionId: toSafeId<"entityVersion">(
         "target-version-fixture",
       ),
