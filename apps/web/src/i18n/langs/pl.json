@@ -1935,6 +1935,7 @@
           "words": "Liczba wyrazów"
         },
         "passwordProtected": "Plik jest chroniony hasłem, więc nie można odczytać jego właściwości",
+        "saveFailed": "Nie udało się zapisać tej właściwości.",
         "tooLarge": "Plik jest zbyt duży, aby odczytać jego właściwości",
         "unreadable": "Nie udało się odczytać właściwości pliku",
         "unsupportedFormat": "Ten typ pliku nie zawiera właściwości dokumentu"

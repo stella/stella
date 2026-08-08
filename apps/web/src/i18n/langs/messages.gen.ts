@@ -1938,6 +1938,7 @@ type Messages = {
           "words": "Word count";
         };
         "passwordProtected": "The file is password-protected, so its properties cannot be read";
+        "saveFailed": "Couldn't save that property.";
         "tooLarge": "The file is too large to read its properties";
         "unreadable": "The file's properties could not be read";
         "unsupportedFormat": "This file type does not carry document properties";

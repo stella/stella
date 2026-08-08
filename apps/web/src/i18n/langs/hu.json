@@ -1935,6 +1935,7 @@
           "words": "Szavak száma"
         },
         "passwordProtected": "A fájl jelszóval védett, ezért a tulajdonságai nem olvashatók",
+        "saveFailed": "Nem sikerült menteni ezt a tulajdonságot.",
         "tooLarge": "A fájl túl nagy a tulajdonságai beolvasásához",
         "unreadable": "A fájl tulajdonságai nem olvashatók be",
         "unsupportedFormat": "Ez a fájltípus nem tartalmaz dokumentumtulajdonságokat"

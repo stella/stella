@@ -1935,6 +1935,7 @@
           "words": "Vārdu skaits"
         },
         "passwordProtected": "Fails ir aizsargāts ar paroli, tāpēc tā rekvizītus nevar nolasīt",
+        "saveFailed": "Neizdevās saglabāt šo rekvizītu.",
         "tooLarge": "Fails ir pārāk liels, lai nolasītu tā rekvizītus",
         "unreadable": "Neizdevās nolasīt faila rekvizītus",
         "unsupportedFormat": "Šāda veida failā nav dokumenta rekvizītu"

@@ -100,7 +100,16 @@ export type DocumentProperty = {
  * panel says which one it is instead of showing the same blank state for all.
  */
 export type DocumentPropertiesResult =
-  | { status: "available"; properties: DocumentProperty[] }
+  | {
+      status: "available";
+      properties: DocumentProperty[];
+      /**
+       * Whether this file's authored properties can be written back. Decided by
+       * the server that would do the writing, not inferred by the client from
+       * the MIME type, so the panel cannot offer an edit the endpoint refuses.
+       */
+      editable: boolean;
+    }
   | { status: "unsupported-format" }
   | { status: "password-protected" }
   | { status: "too-large" }

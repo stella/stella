@@ -1935,6 +1935,7 @@
           "words": "Número de palabras"
         },
         "passwordProtected": "El archivo está protegido con contraseña, por lo que no se pueden leer sus propiedades",
+        "saveFailed": "No se pudo guardar esa propiedad.",
         "tooLarge": "El archivo es demasiado grande para leer sus propiedades",
         "unreadable": "No se pudieron leer las propiedades del archivo",
         "unsupportedFormat": "Este tipo de archivo no incluye propiedades de documento"

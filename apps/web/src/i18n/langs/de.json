@@ -1935,6 +1935,7 @@
           "words": "Wortanzahl"
         },
         "passwordProtected": "Die Datei ist passwortgeschützt, ihre Eigenschaften lassen sich daher nicht lesen",
+        "saveFailed": "Die Eigenschaft konnte nicht gespeichert werden.",
         "tooLarge": "Die Datei ist zu groß, um ihre Eigenschaften zu lesen",
         "unreadable": "Die Eigenschaften der Datei konnten nicht gelesen werden",
         "unsupportedFormat": "Dieser Dateityp enthält keine Dokumenteigenschaften"

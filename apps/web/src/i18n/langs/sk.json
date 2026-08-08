@@ -1935,6 +1935,7 @@
           "words": "Počet slov"
         },
         "passwordProtected": "Súbor je chránený heslom, jeho vlastnosti preto nemožno prečítať",
+        "saveFailed": "Vlastnosť sa nepodarilo uložiť.",
         "tooLarge": "Súbor je príliš veľký na to, aby sa dali prečítať jeho vlastnosti",
         "unreadable": "Vlastnosti súboru sa nepodarilo prečítať",
         "unsupportedFormat": "Tento typ súboru neobsahuje vlastnosti dokumentu"

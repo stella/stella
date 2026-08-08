@@ -315,7 +315,7 @@ const readPdfProperties = async (
   out.date("modifiedAt", pdf.getModificationDate());
   out.count("pages", pdf.getPageCount());
 
-  return { status: "available", properties: out.properties() };
+  return { status: "available", properties: out.properties(), editable: false };
 };
 
 type ExtractDocumentPropertiesOptions = {
@@ -339,15 +339,18 @@ export const extractDocumentProperties = async ({
 
   try {
     switch (format) {
+      // Only OOXML is writable; see writeDocumentProperties for why.
       case "ooxml":
         return {
           status: "available",
           properties: await readOoxmlProperties(bytes),
+          editable: true,
         };
       case "odf":
         return {
           status: "available",
           properties: await readOdfProperties(bytes),
+          editable: false,
         };
       case "pdf":
         return await readPdfProperties(bytes);

@@ -1,15 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
+  type AuthoredDocumentPropertyKey,
   type DocumentPropertiesResult,
   type DocumentPropertyKey,
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
 } from "@stll/api-contract";
+import { Input } from "@stll/ui/components/input";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { documentPropertiesOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
@@ -135,12 +142,87 @@ export const DocumentPropertiesSection = ({
           <span className="text-muted-foreground text-xs font-medium">
             {t(PROPERTY_LABEL_KEYS[property.key])}
           </span>
-          <span className="text-foreground text-sm break-words">
-            {renderValue(property.value)}
-          </span>
+          {data.editable && property.value.type === "text" ? (
+            <EditablePropertyValue
+              fileFieldId={fileFieldId}
+              propertyKey={property.key}
+              value={property.value.value}
+              workspaceId={workspaceId}
+            />
+          ) : (
+            <span className="text-foreground text-sm break-words">
+              {renderValue(property.value)}
+            </span>
+          )}
         </div>
       ))}
     </div>
+  );
+};
+
+type EditablePropertyValueProps = {
+  fileFieldId: string;
+  propertyKey: AuthoredDocumentPropertyKey;
+  value: string;
+  workspaceId: string;
+};
+
+/**
+ * One authored property, editable in place. Saves on blur or Enter, and only
+ * when the value actually changed: every save writes a new document version, so
+ * a stray focus must not add one.
+ */
+const EditablePropertyValue = ({
+  fileFieldId,
+  propertyKey,
+  value,
+  workspaceId,
+}: EditablePropertyValueProps) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (draft === value) {
+      return;
+    }
+    setSaving(true);
+    const { error } = await api
+      .files({ workspaceId })
+      ["document-properties"]({ fieldId: fileFieldId })
+      .patch({ [propertyKey]: draft });
+    setSaving(false);
+
+    if (error) {
+      setDraft(value);
+      stellaToast.add({
+        title: t("inspector.metadata.documentProperties.saveFailed"),
+        type: "error",
+      });
+      return;
+    }
+    await queryClient.invalidateQueries();
+  };
+
+  return (
+    <Input
+      className="h-7 text-sm"
+      disabled={saving}
+      onBlur={() => {
+        detached(save(), "DocumentPropertiesSection");
+      }}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+        if (event.key === "Escape") {
+          setDraft(value);
+        }
+      }}
+      value={draft}
+    />
   );
 };
 

@@ -1935,6 +1935,7 @@
           "words": "Sõnade arv"
         },
         "passwordProtected": "Fail on parooliga kaitstud, seetõttu ei saa selle atribuute lugeda",
+        "saveFailed": "Atribuudi salvestamine ebaõnnestus.",
         "tooLarge": "Fail on liiga suur, et selle atribuute lugeda",
         "unreadable": "Faili atribuute ei õnnestunud lugeda",
         "unsupportedFormat": "Seda tüüpi fail ei sisalda dokumendi atribuute"

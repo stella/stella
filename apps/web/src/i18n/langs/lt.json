@@ -1935,6 +1935,7 @@
           "words": "Žodžių skaičius"
         },
         "passwordProtected": "Failas apsaugotas slaptažodžiu, todėl jo ypatybių perskaityti negalima",
+        "saveFailed": "Nepavyko išsaugoti šios savybės.",
         "tooLarge": "Failas per didelis, kad būtų galima perskaityti jo ypatybes",
         "unreadable": "Nepavyko perskaityti failo ypatybių",
         "unsupportedFormat": "Šio tipo faile nėra dokumento ypatybių"
