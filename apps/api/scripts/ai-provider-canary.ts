@@ -1,5 +1,5 @@
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
-import type { ModelMessage, Tool } from "@tanstack/ai";
+import type { AnyClientTool, AnyServerTool, ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
@@ -972,7 +972,7 @@ type RunToolProbeOptions = {
   prompt: string;
   role: ModelRole;
   signal: AbortSignal;
-  tool: Tool;
+  tool: AnyClientTool | AnyServerTool;
 };
 
 const runToolProbe = async ({

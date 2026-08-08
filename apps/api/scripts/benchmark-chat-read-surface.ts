@@ -10,7 +10,7 @@
  */
 
 import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
-import type { TokenUsage, Tool } from "@tanstack/ai";
+import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -761,7 +761,7 @@ const getSurfaceTools = ({
 }: {
   surface: Surface;
   trace: BenchTrace;
-}): Tool[] => {
+}): AnyServerTool[] => {
   if (surface === "old-mixed") {
     return Object.values(buildOldTools(trace));
   }

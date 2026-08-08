@@ -288,9 +288,6 @@ const validateInput = async (input: unknown) => {
     docxEditRepresentation: "tracked-changes",
     expectedCurrentVersionId: entityVersionId,
   })[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
-  if (!tool.inputSchema) {
-    throw new TypeError("Expected edit workspace document input schema");
-  }
   return await tool.inputSchema["~standard"].validate(input);
 };
 

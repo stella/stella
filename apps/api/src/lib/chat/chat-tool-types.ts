@@ -13,7 +13,14 @@ import { panic } from "better-result";
  * at its definition site; use TanStack's broad union only when tools enter a
  * dynamic registry, provider projection, or MCP collection.
  */
-export type ChatTool = AnyTool;
+export type ChatTool = Omit<
+  AnyTool,
+  "inputSchema" | "name" | "outputSchema"
+> & {
+  inputSchema?: SchemaInput | undefined;
+  name: string;
+  outputSchema?: SchemaInput | undefined;
+};
 
 export type ChatToolMap = Record<string, ChatTool | undefined>;
 

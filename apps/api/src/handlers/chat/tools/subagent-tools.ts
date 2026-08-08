@@ -56,7 +56,7 @@ const buildProposalWrapper = (
   const wrapper = { ...tool };
   delete wrapper.needsApproval;
   delete wrapper.outputSchema;
-  wrapper.execute = (args) => {
+  wrapper.execute = (args: unknown) => {
     proposalSink.record({ toolName: tool.name, args });
     return buildQueuedResultMessage(tool.name);
   };
