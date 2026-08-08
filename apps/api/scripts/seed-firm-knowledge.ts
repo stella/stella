@@ -1,8 +1,8 @@
 /**
  * Seed matters from Harvey LAB (https://github.com/harveyai/harvey-labs), a
  * public corpus of synthetic legal documents, MIT licensed,
- * Copyright (c) 2026 Harvey AI. Fetched at run time into a gitignored cache;
- * nothing is vendored into this repository.
+ * Copyright (c) 2026 Harvey AI. Fetched at a pinned commit into a gitignored
+ * cache; nothing is vendored into this repository.
  *
  * Uploads through the real upload path:
  * `entity-create/tree` -> presigned PUT -> finalize. Writing rows and S3 bytes
@@ -27,6 +27,9 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { sessionCookieNameForDevPort } from "@/api/lib/auth-cookie-name";
 
 const CORPUS_REPOSITORY = "https://github.com/harveyai/harvey-labs.git";
+// Pinned so every machine seeds identical documents and an upstream change
+// cannot arrive unreviewed. Bump deliberately.
+const CORPUS_COMMIT = "55510f0e609ffa5cf6f5df17d9a813ce4bb33d0c"; // 2026-08-07
 const CORPUS_SUBPATH = "tasks/firm-knowledge/dms/matters";
 const CACHE_DIRECTORY = ".cache/firm-knowledge";
 const STORAGE_STATE = ".playwright/storage-state.json";
@@ -181,12 +184,13 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
 
   if (!cloned) {
     console.log(`Cloning ${CORPUS_REPOSITORY} into ${CACHE_DIRECTORY} ...`);
+    // No --depth: a shallow tip cannot be moved to an arbitrary commit later.
     const clone = Bun.spawnSync([
       "git",
       "clone",
       "--filter=blob:none",
       "--sparse",
-      "--depth=1",
+      "--no-checkout",
       CORPUS_REPOSITORY,
       cache,
     ]);
@@ -195,9 +199,21 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
     }
   }
 
+  // A cache left at an older pin needs the new commit fetched before checkout.
+  const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: cache });
+  if (head.stdout.toString().trim() !== CORPUS_COMMIT) {
+    const fetched = Bun.spawnSync(
+      ["git", "fetch", "--filter=blob:none", "origin", CORPUS_COMMIT],
+      { cwd: cache },
+    );
+    if (fetched.exitCode !== 0) {
+      fail(`Could not fetch corpus commit: ${fetched.stderr.toString()}`);
+    }
+  }
+
   // ls-tree reads the manifest without materialising anything.
   const list = Bun.spawnSync(
-    ["git", "ls-tree", "--name-only", "HEAD", `${CORPUS_SUBPATH}/`],
+    ["git", "ls-tree", "--name-only", CORPUS_COMMIT, `${CORPUS_SUBPATH}/`],
     { cwd: cache },
   );
   if (list.exitCode !== 0) {
@@ -226,6 +242,16 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   );
   if (sparse.exitCode !== 0) {
     fail(`Sparse checkout failed: ${sparse.stderr.toString()}`);
+  }
+
+  // After the patterns, never before: the clone uses --no-checkout, so this is
+  // what creates the working tree, and it also re-pins a stale cache.
+  const checkout = Bun.spawnSync(
+    ["git", "checkout", "--force", CORPUS_COMMIT],
+    { cwd: cache },
+  );
+  if (checkout.exitCode !== 0) {
+    fail(`Could not check out corpus commit: ${checkout.stderr.toString()}`);
   }
 
   console.log(`Corpus ready: ${matters.length} matters in ${CACHE_DIRECTORY}`);
@@ -370,10 +396,18 @@ const main = async () => {
     }
     const expectedEntities =
       manifest.files.length + manifest.directories.length;
-    if (
-      (seededCounts.get(matterName(manifest.reference)) ?? 0) >=
-      expectedEntities
-    ) {
+    const presentEntities = seededCounts.get(matterName(manifest.reference));
+    if (presentEntities !== undefined) {
+      // Seeding again would not fill the existing matter, it would create a
+      // second one beside it, so a short matter is reported rather than
+      // silently duplicated. Recovering in place needs per-file reconciliation.
+      if (presentEntities < expectedEntities) {
+        console.log(
+          `${manifest.reference}: present but incomplete ` +
+            `(${String(presentEntities)}/${String(expectedEntities)} entities). ` +
+            `Delete the matter and re-run to reseed it.`,
+        );
+      }
       skipped += 1;
       continue;
     }
