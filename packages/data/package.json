@@ -71,7 +71,7 @@
   },
   "devDependencies": {
     "stopwords-iso": "1.1.0",
-    "tsdown": "0.22.12",
+    "tsdown": "0.22.14",
     "typescript": "7.0.2"
   }
 }
