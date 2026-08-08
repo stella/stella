@@ -175,7 +175,7 @@ run_capability_catalog() {
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
-    bun run knip --production --strict --no-progress \
+    MCP_APP_INPUT=app.html bun run knip --production --strict --no-progress \
       --include unlisted,unresolved --workspace "$workspace" || return 1
   done
 }
