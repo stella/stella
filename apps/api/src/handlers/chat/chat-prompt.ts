@@ -371,7 +371,7 @@ export const buildChatSystemPromptParts = async ({
 > =>
   await Result.gen(async function* () {
     const skillMetadata =
-      env.FEATURE_AI_MEMORY && organizationId && userId
+      organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
               organizationId,
@@ -499,7 +499,7 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      organizationId && userId
+      env.FEATURE_AI_MEMORY && organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,

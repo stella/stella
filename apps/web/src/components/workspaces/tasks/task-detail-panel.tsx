@@ -29,7 +29,6 @@ import {
   isTaskPriority,
   isListItemType,
   isTaskStatus,
-  localISODate,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import {
@@ -57,10 +56,12 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
+import { myTasksKeys } from "@/lib/workspaces/queries/my-tasks";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
 import type {
@@ -155,6 +156,7 @@ const TaskDetailPanelContent = ({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
         queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+        queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
         queryClient.invalidateQueries({
           queryKey: legalListKeys.all(workspaceId),
         }),
@@ -172,6 +174,7 @@ const TaskDetailPanelContent = ({
         queryKey: taskKeys.detail(workspaceId, taskId),
       }),
       queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+      queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       }),
@@ -295,6 +298,9 @@ const TaskDetailPanelContent = ({
                   queryClient.invalidateQueries({
                     queryKey: workspacesKeys.overview(workspaceId),
                   }),
+                  queryClient.invalidateQueries({
+                    queryKey: myTasksKeys.all,
+                  }),
                 ]);
               } catch (error: unknown) {
                 analytics.captureError(error);
@@ -351,7 +357,11 @@ const TaskDetailPanelContent = ({
   };
 
   const handleDueDateChange = (value: string | null) => {
-    workflowMutation.mutate({ workingTargetDate: value });
+    if (env.VITE_FEATURE_GOVERNED_WORKFLOW) {
+      workflowMutation.mutate({ workingTargetDate: value });
+      return;
+    }
+    updateMutation.mutate({ taskId, dueDate: value });
   };
 
   const handleItemTypeChange = (value: ListItemType | null) => {

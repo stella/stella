@@ -33,11 +33,11 @@ export const resolveComposerMenuShortcut = ({
   if (isComposing || hasBlockingModifier) {
     return null;
   }
-  if (hasSkills && key === "/") {
-    return COMPOSER_MENU_SHORTCUT.skills;
-  }
   if (!isEditorEmpty) {
     return null;
+  }
+  if (hasSkills && key === "/") {
+    return COMPOSER_MENU_SHORTCUT.skills;
   }
   if (hasContext && key === "@") {
     return COMPOSER_MENU_SHORTCUT.context;

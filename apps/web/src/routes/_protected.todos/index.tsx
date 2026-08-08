@@ -45,6 +45,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { localISODate } from "@/lib/local-iso-date";
 import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteInfiniteQueryData,
@@ -143,14 +144,6 @@ const groupByWorkspace = (tasks: readonly MyWorkItem[]): GroupedTasks[] => {
   }
 
   return Array.from(map.values());
-};
-
-const localISODate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 };
 
 function MyWorkPage() {

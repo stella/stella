@@ -12,6 +12,10 @@ const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,
   legalLists: true,
 } as const;
+const TASK_FEATURES_DISABLED = {
+  governedWorkflow: false,
+  legalLists: false,
+} as const;
 const createTaskHandler = createTaskForFeatures(TASK_FEATURES_ENABLED).handler;
 
 type CreateTaskCtx = Parameters<typeof createTaskHandler>[0];
@@ -147,6 +151,29 @@ describe("createTaskHandler validation", () => {
       code: 400,
       response: { message: "Working target cannot be after the hard deadline" },
     });
+  });
+
+  test("rejects workflow-only fields while Governed Workflow is disabled", async () => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb: toSafeDbMock(scopedDb),
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "File response", ownerUserId: userId },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 404,
+        message: "Governed Workflow is disabled",
+      });
+    }
   });
 
   test("valid status and priority proceeds to DB call", async () => {

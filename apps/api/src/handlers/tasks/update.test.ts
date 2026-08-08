@@ -18,6 +18,92 @@ const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,
   legalLists: true,
 } as const;
+const TASK_FEATURES_DISABLED = {
+  governedWorkflow: false,
+  legalLists: false,
+} as const;
+
+describe("updateTaskHandler feature compatibility", () => {
+  test("permits the ordinary task item type while Legal Lists is disabled", async () => {
+    const taskId = createSafeId<"entity">();
+    const workspaceId = createSafeId<"workspace">();
+    const userId = createSafeId<"user">();
+    const { safeDb } = createScopedDbMock({
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ id: taskId }] }),
+        }),
+      }),
+    });
+
+    const result = await Result.gen(() =>
+      updateTaskHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { taskId, listItemType: "task" },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("keeps an existing obligation synchronized while enforcement is disabled", async () => {
+    const taskId = createSafeId<"entity">();
+    const workspaceId = createSafeId<"workspace">();
+    const userId = createSafeId<"user">();
+    const workflowUpdates: Record<string, unknown>[] = [];
+    const workflow = {
+      entityId: taskId,
+      workspaceId,
+      type: WORK_OBLIGATION_TYPE.TASK,
+      status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+      ownerUserId: null,
+      acknowledgedAt: null,
+      workingTargetDate: null,
+      hardDeadlineDate: null,
+    };
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: () => ({ for: async () => [workflow] }) }),
+        }),
+      }),
+      update: (table: unknown) => ({
+        set: (values: Record<string, unknown>) => {
+          if (table === workObligations) {
+            workflowUpdates.push(values);
+          }
+          return {
+            where: () => ({
+              returning: async () =>
+                table === entities ? [{ id: taskId }] : [{ entityId: taskId }],
+            }),
+          };
+        },
+      }),
+      insert: () => ({ values: async () => {} }),
+    });
+
+    const result = await Result.gen(() =>
+      updateTaskHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { taskId, status: "done" },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(workflowUpdates).toEqual([
+      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
+    ]);
+  });
+});
 
 describe("updateTaskHandler legacy deadline compatibility", () => {
   test("moves the working target and hard deadline together", async () => {

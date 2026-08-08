@@ -29,14 +29,14 @@ describe("resolveComposerMenuShortcut", () => {
     );
   });
 
-  test("opens Skills for slash after the composer has content", () => {
+  test("keeps slash literal after the composer has content", () => {
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
         isEditorEmpty: false,
         key: "/",
       }),
-    ).toBe(COMPOSER_MENU_SHORTCUT.skills);
+    ).toBeNull();
   });
 
   test("keeps at-sign literal after the composer has content", () => {

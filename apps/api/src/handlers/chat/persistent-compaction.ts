@@ -11,6 +11,7 @@ import {
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
@@ -137,6 +138,11 @@ export const shouldInvalidateChatCompactionCheckpoint = ({
   }
 };
 
+export const memoryExtractionExclusionStamp = (
+  memoryEnabled: boolean,
+  createdAt = new Date(),
+): Date | null => (memoryEnabled ? null : createdAt);
+
 type MarkActiveChatCompactionCheckpointStaleProps = {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
@@ -254,6 +260,10 @@ export const persistChatCompactionCheckpoint = async ({
       totalTokens: checkpoint.plan.totalTokens,
       preservedTokens: checkpoint.plan.preservedTokens,
       promptVersion: CHAT_COMPACTION_PROMPT_VERSION,
+      // The extraction trigger queues only rows whose completion stamp is
+      // null. Stamp checkpoints created during a deployment opt-out so a
+      // later re-enable cannot retrospectively mine those conversations.
+      memoryExtractedAt: memoryExtractionExclusionStamp(env.FEATURE_AI_MEMORY),
     });
   });
 

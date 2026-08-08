@@ -157,6 +157,21 @@ export const createTaskEntityHandler = async function* ({
   const listItemType = body.listItemType ?? "task";
 
   if (
+    !features.governedWorkflow &&
+    (body.ownerUserId !== undefined ||
+      body.workingTargetDate !== undefined ||
+      body.hardDeadlineDate !== undefined ||
+      body.sourceDescription !== undefined)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Governed Workflow is disabled",
+      }),
+    );
+  }
+
+  if (
     !features.legalLists &&
     (listItemType !== "task" ||
       body.listId !== undefined ||

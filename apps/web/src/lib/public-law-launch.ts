@@ -1,13 +1,18 @@
 import { env } from "@/env";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { betaFeaturesHostDefaultEnabled } from "@/lib/beta-features";
+import { previewRouteAvailable } from "@/lib/beta-features.logic";
 
-// Beta hosts always serve the /law routes; the Settings toggle only
-// governs discoverability (sidebar entry, search kinds). The gate must
-// not depend on the localStorage-backed toggle because /law paths are
-// server-rendered and the server cannot see it — host and env flag
-// resolve identically on both sides.
+// Deployment-enabled and beta-host routes resolve during SSR. On other hosts,
+// client navigation is available only after this browser opts into the preview;
+// a direct server load remains closed because localStorage is intentionally not
+// treated as server-visible deployment configuration.
 export const isPublicLawRouteEnabled = (): boolean =>
-  import.meta.env.DEV || env.VITE_PUBLIC_LAW_ENABLED || betaFeaturesAvailable();
+  previewRouteAvailable({
+    browserPreviewEnabled: isPublicLawPreviewEnabled(),
+    deploymentEnabled: env.VITE_PUBLIC_LAW_ENABLED,
+    hostDefaultEnabled: betaFeaturesHostDefaultEnabled(),
+  });
 
 // Sitemap XML serving: a deployment builds and serves the case-law sitemaps
 // once the public-law surface is indexing-ready. This keeps today's semantics

@@ -73,8 +73,7 @@ const listLayout = (): ViewLayout => ({
 
 export const viewIncludesListItems = (
   filters: ViewLayout["filters"],
-  legalListsEnabled = env.FEATURE_LEGAL_LISTS,
-): boolean => legalListsEnabled && conditionIncludesKind(filters, "task");
+): boolean => conditionIncludesKind(filters, "task");
 
 export const excludedEntityKindsForView = (
   filters: ViewLayout["filters"],
@@ -187,7 +186,7 @@ const defaultViewTemplates = (
   { nameKey: "files", layout: emptyLayout("filesystem"), position: 2 },
   legalListsEnabled
     ? { nameKey: "lists", layout: listLayout(), position: 3 }
-    : { nameKey: "todos", layout: emptyLayout("kanban"), position: 3 },
+    : { nameKey: "todos", layout: listLayout(), position: 3 },
 ];
 
 type DefaultView = {
@@ -341,16 +340,13 @@ const DEFAULT_NAME_SETS: Record<
  * suddenly appearing or list items disappearing.
  */
 export const normalizeDefaultViewLayout = ({
-  legalListsEnabled = env.FEATURE_LEGAL_LISTS,
   layout,
   name,
 }: {
-  legalListsEnabled?: boolean;
   layout: ViewLayout;
   name: string;
 }): ViewLayout => {
   if (
-    !legalListsEnabled ||
     layout.type !== "kanban" ||
     layout.groupByPropertyId !== "_status" ||
     !DEFAULT_NAME_SETS.lists.has(name) ||

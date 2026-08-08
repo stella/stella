@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
@@ -22,6 +22,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -29,14 +30,17 @@ import { MatterRefLink } from "@/components/matter-ref-link";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { localISODate } from "@/lib/local-iso-date";
+import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import type { TaskItem } from "@/routes/_protected.todos/-legacy-queries";
-import { myTasksOptions } from "@/routes/_protected.todos/-legacy-queries";
+import type { TaskItem } from "@/lib/workspaces/queries/my-tasks";
+import { myTasksKeys, myTasksOptions } from "@/lib/workspaces/queries/my-tasks";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -106,11 +110,18 @@ const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
 export function LegacyTodosPage() {
   const t = useTranslations();
   const navigate = useNavigate();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId, userId } = protectedRouteApi.useRouteContext({
+    select: (ctx) => ({
+      activeOrganizationId: ctx.user.activeOrganizationId,
+      userId: ctx.user.id,
+    }),
   });
   const [filter, setFilter] = useState<TaskFilter>("all");
-  const { data: tasks, isLoading } = useQuery(myTasksOptions);
+  const { data: tasks, isLoading } = useQuery(
+    myTasksOptions(activeOrganizationId),
+  );
   const { data: workspaces } = useQuery(
     workspacesOptions(activeOrganizationId),
   );
@@ -132,22 +143,32 @@ export function LegacyTodosPage() {
 
   const groups = groupByWorkspace(filtered);
 
-  const handleCreateTask = async (wsId: string) => {
-    const response = await api.tasks({ workspaceId: wsId }).put({
-      queryKey: entitiesKeys.all(wsId),
-      name: t("tasks.untitled"),
-    });
+  const createTaskMutation = useMutation({
+    mutationFn: async (wsId: string) => {
+      const response = await api.tasks({ workspaceId: wsId }).put({
+        assigneeIds: [toSafeId<"user">(userId)],
+        queryKey: entitiesKeys.all(wsId),
+        name: t("tasks.untitled"),
+      });
 
-    const entityId = unwrapEden(response).entityId;
+      const entityId = unwrapEden(response).entityId;
+      await queryClient.invalidateQueries({ queryKey: myTasksKeys.all });
 
-    await navigate({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: wsId },
-    });
-    useInspectorTabsStore
-      .getState()
-      .openTask({ taskId: entityId, workspaceId: wsId, isNew: true });
-  };
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: wsId },
+      });
+      useInspectorTabsStore
+        .getState()
+        .openTask({ taskId: entityId, workspaceId: wsId, isNew: true });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.error(
+        userErrorFromThrown(error, t("common.unexpectedError")),
+      );
+    },
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
@@ -166,12 +187,7 @@ export function LegacyTodosPage() {
                 <MenuItem
                   key={ws.id}
                   onClick={() => {
-                    detached(
-                      (async () => {
-                        await handleCreateTask(ws.id);
-                      })(),
-                      "MyTodosPage",
-                    );
+                    createTaskMutation.mutate(ws.id);
                   }}
                 >
                   {ws.name}
@@ -225,12 +241,7 @@ export function LegacyTodosPage() {
                   <MenuItem
                     key={ws.id}
                     onClick={() => {
-                      detached(
-                        (async () => {
-                          await handleCreateTask(ws.id);
-                        })(),
-                        "MyTodosPage",
-                      );
+                      createTaskMutation.mutate(ws.id);
                     }}
                   >
                     {ws.name}
@@ -293,7 +304,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
     task.dueDate !== null &&
     task.status !== "done" &&
     task.status !== "cancelled" &&
-    task.dueDate < new Date().toISOString().slice(0, 10);
+    task.dueDate < localISODate();
 
   return (
     <MatterRefLink

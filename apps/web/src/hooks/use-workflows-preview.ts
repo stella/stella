@@ -1,5 +1,9 @@
 import { env } from "@/env";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
+import {
+  betaFeaturesAvailable,
+  betaFeaturesHostDefaultEnabled,
+} from "@/lib/beta-features";
+import { previewRouteAvailable } from "@/lib/beta-features.logic";
 import { useDevStore } from "@/lib/dev-store";
 
 const isWorkflowsPreviewEnabledForDevState = (
@@ -7,13 +11,19 @@ const isWorkflowsPreviewEnabledForDevState = (
 ): boolean =>
   env.VITE_WORKFLOWS_ENABLED || (betaFeaturesAvailable() && devPreviewEnabled);
 
+export const isWorkflowsPreviewEnabled = (): boolean =>
+  isWorkflowsPreviewEnabledForDevState(useDevStore.getState().workflowsPreview);
+
 export const useWorkflowsPreviewEnabled = (): boolean => {
   const devPreviewEnabled = useDevStore((s) => s.workflowsPreview);
   return isWorkflowsPreviewEnabledForDevState(devPreviewEnabled);
 };
 
-// Route-level gate: env/host availability only, without the per-browser toggle,
-// so the workflows routes resolve identically on server and client. The
-// entry-point cards layer the toggle on top for the in-app UX.
+// Deployment-enabled and beta-host routes resolve during SSR. Elsewhere, only
+// an opted-in browser may navigate to the preview route.
 export const workflowsRouteAvailable = (): boolean =>
-  env.VITE_WORKFLOWS_ENABLED || betaFeaturesAvailable();
+  previewRouteAvailable({
+    browserPreviewEnabled: isWorkflowsPreviewEnabled(),
+    deploymentEnabled: env.VITE_WORKFLOWS_ENABLED,
+    hostDefaultEnabled: betaFeaturesHostDefaultEnabled(),
+  });

@@ -252,7 +252,11 @@ export const updateTaskHandler = async function* ({
   body,
   features = deployedTaskFeatures(),
 }: UpdateTaskHandlerProps) {
-  if (!features.legalLists && body.listItemType !== undefined) {
+  if (
+    !features.legalLists &&
+    body.listItemType !== undefined &&
+    body.listItemType !== "task"
+  ) {
     return Result.err(
       new HandlerError({ status: 404, message: "Legal Lists are disabled" }),
     );
@@ -276,18 +280,17 @@ export const updateTaskHandler = async function* ({
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       const workflowRelevant =
-        features.governedWorkflow &&
-        (body.status !== undefined ||
-          body.dueDate !== undefined ||
-          agendaKind === "task" ||
-          agendaKind === "deadline");
+        body.status !== undefined ||
+        body.dueDate !== undefined ||
+        agendaKind === "task" ||
+        agendaKind === "deadline";
       let workflow = workflowRelevant
         ? await lockWorkObligation(tx, {
             entityId: body.taskId,
             workspaceId,
           })
         : undefined;
-      if (workflowRelevant && !workflow) {
+      if (features.governedWorkflow && workflowRelevant && !workflow) {
         await ensureLegacyWorkObligation({
           tx,
           entityId: body.taskId,
@@ -298,7 +301,7 @@ export const updateTaskHandler = async function* ({
           workspaceId,
         });
       }
-      if (workflowRelevant && !workflow) {
+      if (features.governedWorkflow && workflowRelevant && !workflow) {
         return {
           status: "workflow_error" as const,
           code: 409 as const,
@@ -329,8 +332,9 @@ export const updateTaskHandler = async function* ({
 
         if (body.status === "done" && workflow.status !== "completed") {
           if (
-            workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
-            workflow.ownerUserId !== userId
+            features.governedWorkflow &&
+            (workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
+              workflow.ownerUserId !== userId)
           ) {
             return {
               status: "workflow_error" as const,
@@ -346,6 +350,7 @@ export const updateTaskHandler = async function* ({
           workflow.status !== WORK_OBLIGATION_STATUS.CANCELLED
         ) {
           if (
+            features.governedWorkflow &&
             workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
             !workflowReason
           ) {
@@ -406,6 +411,7 @@ export const updateTaskHandler = async function* ({
           body.dueDate !== workflow.workingTargetDate
         ) {
           if (
+            features.governedWorkflow &&
             body.dueDate !== null &&
             workflow.hardDeadlineDate !== null &&
             !updatesLegacyDeadline &&

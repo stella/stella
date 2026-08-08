@@ -167,7 +167,6 @@ describe("table export", () => {
         ],
       }),
       [],
-      { legalListsEnabled: true },
     );
     const table = buildExportTable(
       columns,

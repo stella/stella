@@ -61,14 +61,12 @@ describe("getDefaultViews", () => {
 
     expect(
       normalizeDefaultViewLayout({
-        legalListsEnabled: true,
         layout: legacyLayout,
         name: "Todos",
       }),
     ).toMatchObject({ filters: [{ operand: { type: "kind" } }] });
     expect(
       normalizeDefaultViewLayout({
-        legalListsEnabled: true,
         layout: legacyLayout,
         name: "My board",
       }),
@@ -86,7 +84,6 @@ describe("getDefaultViews", () => {
     } satisfies Extract<ViewLayout, { type: "kanban" }>;
 
     const normalized = normalizeDefaultViewLayout({
-      legalListsEnabled: true,
       layout: legacyLayout,
       name: "Todos",
     });
@@ -127,20 +124,26 @@ describe("getDefaultViews", () => {
 
     expect(
       normalizeDefaultViewLayout({
-        legalListsEnabled: true,
         layout,
         name: "Lists",
       }),
     ).toBe(layout);
   });
 
-  test("keeps Todos unchanged while Legal Lists are disabled", () => {
+  test("seeds Todos as a task-scoped view while Legal Lists are disabled", () => {
     const views = getDefaultViews("en", { legalListsEnabled: false });
     const todosView = views.find((view) => view.name === "Todos");
 
     expect(todosView?.layout).toMatchObject({
       type: "kanban",
-      filters: [],
+      filters: [
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["task"],
+        },
+      ],
     });
   });
 });
