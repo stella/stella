@@ -346,7 +346,7 @@ describe("public law sitemap", () => {
   test("case-law shard sitemaps fail before exceeding the protocol byte limit", () => {
     expect(() =>
       assertPublicLawSitemapXmlWithinProtocolLimits("<urlset />", 5),
-    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
+    ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
@@ -370,7 +370,7 @@ describe("public law sitemap", () => {
         maxBytes: 5,
         publicLawIndexingEnabled: true,
       }),
-    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
+    ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
   test("sitemap XML responses are publicly cacheable", () => {
@@ -426,6 +426,7 @@ describe("public law sitemap", () => {
   test("robots default-denies the whole host when indexable without crawl permission", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: false,
+      publicToolsCrawlAllowed: false,
       seoIndexable: true,
     });
     const lines = robots.split("\n");
@@ -466,11 +467,31 @@ describe("public law sitemap", () => {
     expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
   });
 
+  test("robots allow-lists public tools independently of public law", () => {
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: false,
+      publicToolsCrawlAllowed: true,
+      seoIndexable: true,
+    });
+    const allowLines = robots
+      .split("\n")
+      .filter((line) => line.startsWith("Allow:"));
+
+    expect(allowLines).toEqual(["Allow: /tools/", "Allow: /tools$"]);
+    expect(robots).toContain("Disallow: /");
+  });
+
   test("robots always default-denies for every flag combination", () => {
     for (const publicLawCrawlAllowed of [false, true]) {
-      for (const seoIndexable of [false, true]) {
-        const robots = createRobotsTxt({ publicLawCrawlAllowed, seoIndexable });
-        expect(robots.split("\n")).toContain("Disallow: /");
+      for (const publicToolsCrawlAllowed of [false, true]) {
+        for (const seoIndexable of [false, true]) {
+          const robots = createRobotsTxt({
+            publicLawCrawlAllowed,
+            publicToolsCrawlAllowed,
+            seoIndexable,
+          });
+          expect(robots.split("\n")).toContain("Disallow: /");
+        }
       }
     }
   });
@@ -618,7 +639,7 @@ describe("public law sitemap", () => {
   test("public and protected workspace sidebars share the same primary nav model", async () => {
     const sources = await Promise.all([
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(WORKSPACE_PRIMARY_NAV_ITEMS.map((item) => item.id)).toEqual([
@@ -626,6 +647,7 @@ describe("public law sitemap", () => {
       "chat",
       "matters",
       "caseLaw",
+      "tools",
       "knowledge",
       "contacts",
     ]);
@@ -639,11 +661,12 @@ describe("public law sitemap", () => {
     const [navSource, appSidebarSource, publicShellSource] = await Promise.all([
       readSource("apps/web/src/components/workspace-primary-nav.ts"),
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
-    expect(navSource).toContain('item.id !== "caseLaw"');
+    expect(navSource).toContain('if (item.id === "caseLaw")');
+    expect(navSource).toContain("return includePublicLaw");
     expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
     // The server-rendered shell must use the isomorphic host/env gate;
     // the browser-only preview hook would mismatch hydration there.

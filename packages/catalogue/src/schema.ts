@@ -36,6 +36,21 @@ export const CATALOGUE_LICENSES = [
 ] as const;
 export type CatalogueLicense = (typeof CATALOGUE_LICENSES)[number];
 
+/**
+ * Compare untrusted upstream SPDX identifiers with the reviewed canonical
+ * catalogue spelling. Upstream frontmatter is allowed to vary only in ASCII
+ * case and surrounding whitespace; persisted values still come from the
+ * catalogue manifest.
+ */
+export const catalogueLicensesMatch = ({
+  catalogueLicense,
+  upstreamLicense,
+}: {
+  catalogueLicense: CatalogueLicense;
+  upstreamLicense: string | null | undefined;
+}): boolean =>
+  upstreamLicense?.trim().toLowerCase() === catalogueLicense.toLowerCase();
+
 export const MCP_AUTH_TYPES = ["none", "bearer", "oauth"] as const;
 export type McpAuthType = (typeof MCP_AUTH_TYPES)[number];
 
@@ -77,11 +92,66 @@ export type PracticeArea = (typeof PRACTICE_AREAS)[number];
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ISO_COUNTRY_OR_UNION = /^[A-Z]{2}$/u;
 
+/**
+ * Max slug length. Exported so the contribute form's slug derivation
+ * caps to the same limit the schema enforces (single source of truth).
+ */
+export const MAX_SLUG_LENGTH = 64;
+
 const slug = v.pipe(
   v.string(),
   v.minLength(2),
-  v.maxLength(64),
+  v.maxLength(MAX_SLUG_LENGTH),
   v.regex(SLUG_PATTERN, "slug must be kebab-case"),
+);
+
+/**
+ * GitHub `owner/name`. Owner: 1–39 chars, alphanumeric or hyphen, no
+ * leading hyphen. Name: 1–100 chars from GitHub's allowed set. Storing
+ * the bare identifier (not a URL) makes "GitHub only" structural — the
+ * URL builders in the loader are the sole way it becomes a URL. Named
+ * `owner`/`name` groups let the contribute form's normalizer reuse this
+ * one pattern instead of re-declaring its own copy.
+ */
+export const GITHUB_REPO_PATTERN =
+  /^(?<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})\/(?<name>[A-Za-z0-9._-]{1,100})$/u;
+/** Full 40-character lowercase hex commit SHA; abbreviated refs rejected. */
+export const GITHUB_REV_PATTERN = /^[0-9a-f]{40}$/u;
+/** Relative path segments; dot segments rejected by an extra check. */
+const GITHUB_DIRECTORY_PATTERN = /^[\w.-]+(?:\/[\w.-]+)*$/u;
+
+const githubRepo = v.pipe(
+  v.string(),
+  v.regex(GITHUB_REPO_PATTERN, "repo must be a GitHub 'owner/name' identifier"),
+);
+
+const githubRev = v.pipe(
+  v.string(),
+  v.regex(
+    GITHUB_REV_PATTERN,
+    "rev must be a full 40-character lowercase hex commit SHA",
+  ),
+);
+
+/**
+ * Location of the skill directory inside the upstream repo; the entry
+ * file is `SKILL.md` inside it, and it defaults to the repo root when
+ * omitted. Deliberately the only locator knob for github skills: no
+ * per-file entryPath and no resource list, since content is fetched
+ * from the pinned tree rather than mirrored into this repo.
+ */
+const githubDirectory = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.regex(
+    GITHUB_DIRECTORY_PATTERN,
+    "directory must be a relative path within the repo",
+  ),
+  v.check(
+    (value) =>
+      value.split("/").every((segment) => segment !== "." && segment !== ".."),
+    "directory must not contain '.' or '..' segments",
+  ),
 );
 
 const jurisdiction = v.pipe(
@@ -112,12 +182,36 @@ const commonFields = {
   jurisdictions: v.optional(v.array(jurisdiction), []),
 };
 
-export const skillEntrySchema = v.strictObject({
+/**
+ * Skill whose content lives in this repo next to the manifest. Subject
+ * to the 10 MB per-entry cap and entryPath/resource existence checks.
+ */
+export const inTreeSkillEntrySchema = v.strictObject({
   kind: v.literal("skill"),
+  source: v.literal("in-tree"),
   ...commonFields,
   entryPath: v.pipe(v.string(), v.minLength(1)),
   resources: v.optional(v.array(v.pipe(v.string(), v.minLength(1))), []),
 });
+
+/**
+ * Skill whose content stays upstream on GitHub, pinned to an immutable
+ * commit SHA. No content enters this repo, so the size cap does not
+ * apply; curation still endorses specific bytes because `rev` is fixed.
+ */
+export const githubSkillEntrySchema = v.strictObject({
+  kind: v.literal("skill"),
+  source: v.literal("github"),
+  ...commonFields,
+  repo: githubRepo,
+  rev: githubRev,
+  directory: v.optional(githubDirectory),
+});
+
+export const skillEntrySchema = v.variant("source", [
+  inTreeSkillEntrySchema,
+  githubSkillEntrySchema,
+]);
 
 export const mcpEntrySchema = v.strictObject({
   kind: v.literal("mcp"),
@@ -158,6 +252,8 @@ export const catalogueEntrySchema = v.variant("kind", [
 
 export type CatalogueEntry = v.InferOutput<typeof catalogueEntrySchema>;
 export type SkillEntry = v.InferOutput<typeof skillEntrySchema>;
+export type InTreeSkillEntry = v.InferOutput<typeof inTreeSkillEntrySchema>;
+export type GithubSkillEntry = v.InferOutput<typeof githubSkillEntrySchema>;
 export type McpEntry = v.InferOutput<typeof mcpEntrySchema>;
 export type NativeToolEntry = v.InferOutput<typeof nativeToolEntrySchema>;
 

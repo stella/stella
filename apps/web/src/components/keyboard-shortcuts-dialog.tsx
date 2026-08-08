@@ -31,11 +31,9 @@ import type {
 } from "@/lib/hotkeys";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import type { RebindError } from "@/lib/shortcut-overrides";
-import {
-  useEffectiveShortcutGroups,
-  useShortcutRebinding,
-} from "@/lib/use-effective-shortcuts";
+import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
 import { useShortcutEchoStore } from "@/lib/use-shortcut-echo";
+import { useShortcutRebinding } from "@/lib/use-shortcut-rebinding";
 
 /**
  * A browsable reference of every app-level keyboard shortcut, opened with `?`

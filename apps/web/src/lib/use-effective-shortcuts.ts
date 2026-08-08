@@ -1,20 +1,25 @@
 import type { Hotkey } from "@tanstack/react-hotkeys";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic, Result, TaggedError } from "better-result";
+import { skipToken, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 
-import { authClient } from "@/lib/auth";
-import { sessionOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
 import {
   applyOverridesToGroups,
   parseUserShortcuts,
-  resetShortcutOverride,
-  serializeUserShortcuts,
-  validateRebind,
 } from "@/lib/shortcut-overrides";
-import type { RebindError, ShortcutOverrides } from "@/lib/shortcut-overrides";
+import type { ShortcutOverrides } from "@/lib/shortcut-overrides";
+
+type ShortcutSessionData = {
+  user: {
+    userShortcuts?: string | null;
+  };
+};
+
+// This mirrors the auth session cache key without importing its query module.
+// Public SSR shells use the read-only shortcut hooks, so this module must not
+// statically pull the authenticated query or browser auth client into SSR.
+const SESSION_QUERY_KEY = ["session"] as const;
 
 /**
  * The user's shortcut rebindings, read off the shared `["session"]` query that
@@ -26,9 +31,13 @@ import type { RebindError, ShortcutOverrides } from "@/lib/shortcut-overrides";
  * anything.
  */
 export const useShortcutOverrides = (): ShortcutOverrides => {
-  const { data: raw } = useQuery({
-    ...sessionOptions,
-    enabled: false,
+  const { data: raw } = useQuery<
+    ShortcutSessionData | null,
+    Error,
+    string | null
+  >({
+    queryKey: SESSION_QUERY_KEY,
+    queryFn: skipToken,
     select: (data) => data?.user.userShortcuts ?? null,
   });
   return parseUserShortcuts(raw);
@@ -80,70 +89,4 @@ export const useEffectiveHotkey = (id: ShortcutId): Hotkey => {
     panic(`No default hotkey for shortcut "${id}"`);
   }
   return fallback;
-};
-
-export class ShortcutPersistError extends TaggedError("ShortcutPersistError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
-export type ShortcutRebinding = {
-  readonly overrides: ShortcutOverrides;
-  readonly groups: ShortcutGroup[];
-  readonly rebind: (
-    id: ShortcutId,
-    hotkey: Hotkey,
-  ) => Promise<RebindError | null>;
-  readonly reset: (id: ShortcutId) => Promise<void>;
-};
-
-/**
- * Rebind and reset shortcuts, persisted per-user through
- * `authClient.updateUser` and optimistically reflected in the session cache so
- * every surface updates immediately. `rebind` returns a typed
- * {@link RebindError} on rejection (collision / not rebindable) without
- * persisting; persistence failures throw {@link ShortcutPersistError}.
- */
-export const useShortcutRebinding = (): ShortcutRebinding => {
-  const queryClient = useQueryClient();
-  const overrides = useShortcutOverrides();
-  const groups = applyOverridesToGroups(SHORTCUT_GROUPS, overrides);
-
-  const persist = async (next: ShortcutOverrides): Promise<void> => {
-    const serialized = serializeUserShortcuts(next);
-    queryClient.setQueryData(sessionOptions.queryKey, (previous) =>
-      previous
-        ? { ...previous, user: { ...previous.user, userShortcuts: serialized } }
-        : previous,
-    );
-    const result = await authClient.updateUser({ userShortcuts: serialized });
-    if (result.error) {
-      // Optimistic write diverged from the server; re-sync from source.
-      await queryClient.invalidateQueries({
-        queryKey: sessionOptions.queryKey,
-      });
-      throw new ShortcutPersistError({
-        message: "Failed to persist keyboard shortcuts",
-        cause: toAuthClientError(result.error),
-      });
-    }
-  };
-
-  const rebind = async (
-    id: ShortcutId,
-    hotkey: Hotkey,
-  ): Promise<RebindError | null> => {
-    const validated = validateRebind({ id, hotkey, groups, overrides });
-    if (Result.isError(validated)) {
-      return validated.error;
-    }
-    await persist(validated.value);
-    return null;
-  };
-
-  const reset = async (id: ShortcutId): Promise<void> => {
-    await persist(resetShortcutOverride(overrides, id));
-  };
-
-  return { overrides, groups, rebind, reset };
 };

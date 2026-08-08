@@ -51,6 +51,8 @@ export const envWebClientSchema = {
   VITE_FEATURE_CASE_LAW: featureFlagSchema,
   VITE_PUBLIC_LAW_ENABLED: featureFlagSchema,
   VITE_PUBLIC_LAW_INDEXING_ENABLED: featureFlagSchema,
+  VITE_PUBLIC_TOOLS_ENABLED: featureFlagSchema,
+  VITE_PUBLIC_TOOLS_INDEXING_ENABLED: featureFlagSchema,
   // Whether search engines are allowed to index this deployment.
   // Off by default so deployments that should not be crawled can still
   // serve sitemaps for verification while staying non-indexable.
@@ -80,14 +82,21 @@ export const envWebClientSchema = {
 type EnvWebInvariantInput = {
   VITE_PUBLIC_LAW_ENABLED: boolean;
   VITE_PUBLIC_LAW_INDEXING_ENABLED: boolean;
+  VITE_PUBLIC_TOOLS_ENABLED: boolean;
+  VITE_PUBLIC_TOOLS_INDEXING_ENABLED: boolean;
 };
 
 export const envWebInvariantViolation = ({
   VITE_PUBLIC_LAW_ENABLED,
   VITE_PUBLIC_LAW_INDEXING_ENABLED,
+  VITE_PUBLIC_TOOLS_ENABLED,
+  VITE_PUBLIC_TOOLS_INDEXING_ENABLED,
 }: EnvWebInvariantInput): string | null => {
   if (VITE_PUBLIC_LAW_INDEXING_ENABLED && !VITE_PUBLIC_LAW_ENABLED) {
     return "VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.";
+  }
+  if (VITE_PUBLIC_TOOLS_INDEXING_ENABLED && !VITE_PUBLIC_TOOLS_ENABLED) {
+    return "VITE_PUBLIC_TOOLS_INDEXING_ENABLED requires VITE_PUBLIC_TOOLS_ENABLED.";
   }
   return null;
 };

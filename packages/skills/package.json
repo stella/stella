@@ -9,6 +9,14 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./streaming": {
+      "types": "./src/streaming.ts",
+      "import": "./src/streaming.ts"
+    },
+    "./package-limits": {
+      "types": "./src/package-limits.ts",
+      "import": "./src/package-limits.ts"
     }
   },
   "scripts": {

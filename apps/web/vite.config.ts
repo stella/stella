@@ -286,6 +286,9 @@ export default defineConfig(({ mode }) => {
               // chunk so users without MCP App output never download it.
               return "mcp-app";
             }
+            if (id.includes("node_modules/@tanstack/start-client-core/")) {
+              return "vendor-tanstack-server-fn";
+            }
             if (id.includes("node_modules/@tanstack/")) {
               return "vendor-tanstack";
             }
@@ -348,6 +351,7 @@ export default defineConfig(({ mode }) => {
         //    (lib/beta-features.ts) reach these only at runtime.
         "@tanstack/history",
         "@tanstack/router-core",
+        "@tanstack/router-core/isServer",
         "@tanstack/router-core/ssr/client",
         "@tanstack/router-core/ssr/server",
         "h3-v2",

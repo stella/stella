@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "skill",
+  "source": "github",
+  "slug": "contract-review",
+  "displayName": "Contract Review",
+  "description": "Reviews commercial agreements clause by clause against an organization's negotiation playbook, classifying deviations by severity and generating redline suggestions. Falls back to general commercial standards when no playbook is configured.",
+  "author": "Anthropic",
+  "authorUrl": "https://www.anthropic.com",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://github.com/lawve-ai/awesome-legal-skills/tree/main/skills/contract-review-anthropic",
+  "tags": ["commercial", "corporate"],
+  "repo": "lawve-ai/awesome-legal-skills",
+  "rev": "a5334c66dda1a909c8ad3ef61892de446d6b68c4",
+  "directory": "skills/contract-review-anthropic"
+}

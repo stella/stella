@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "skill",
+  "source": "github",
+  "slug": "jurisrank-csjn-analysis",
+  "displayName": "JurisRank — Argentine Supreme Court Analysis",
+  "description": "Analyzes Argentine Supreme Court (CSJN) and federal citation networks using JurisRank, a PageRank-style algorithm with temporal decay for measuring jurisprudential authority. Ranks precedents by citation influence, traces doctrinal evolution, and helps assess whether a cited precedent is genuinely authoritative.",
+  "author": "Adrián Lerer",
+  "license": "CC-BY-4.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://github.com/lawve-ai/awesome-legal-skills/tree/main/skills/jurisrank-argentine-supreme-court-analysis-adrian-lerer",
+  "tags": ["litigation", "dispute-resolution"],
+  "jurisdictions": ["AR"],
+  "repo": "lawve-ai/awesome-legal-skills",
+  "rev": "7f58aaf1fbc7b12904b15b622edb1f8ac0742f5a",
+  "directory": "skills/jurisrank-argentine-supreme-court-analysis-adrian-lerer"
+}
