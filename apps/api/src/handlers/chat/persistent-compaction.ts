@@ -230,13 +230,14 @@ export const persistChatCompactionCheckpoint = async ({
   const persistResult = await safeDb(async (tx) => {
     await lockChatThreadForCompaction({ threadId, tx });
 
-    const snapshotIsCurrent = await isChatCompactionSnapshotCurrent({
+    const snapshot = await validateChatCompactionSnapshot({
       dataWorkspaceIds,
       messages,
+      summarizedMessageCount: checkpoint.plan.messagesToSummarize.length,
       threadId,
       tx,
     });
-    if (!snapshotIsCurrent) {
+    if (!snapshot.isCurrent) {
       return;
     }
 
@@ -263,7 +264,9 @@ export const persistChatCompactionCheckpoint = async ({
       // The extraction trigger queues only rows whose completion stamp is
       // null. Stamp checkpoints created during a deployment opt-out so a
       // later re-enable cannot retrospectively mine those conversations.
-      memoryExtractedAt: memoryExtractionExclusionStamp(env.FEATURE_AI_MEMORY),
+      memoryExtractedAt: memoryExtractionExclusionStamp(
+        env.FEATURE_AI_MEMORY && snapshot.summarizedMessagesEligible,
+      ),
     });
   });
 
@@ -290,22 +293,42 @@ type ChatCompactionSnapshotMessageRow = {
   content: PersistedChatMessageContent;
 };
 
-type IsChatCompactionSnapshotCurrentProps = {
+type ValidateChatCompactionSnapshotProps = {
   dataWorkspaceIds: readonly SafeId<"workspace">[];
   messages: readonly ChatMessage[];
+  summarizedMessageCount: number;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 };
 
-const isChatCompactionSnapshotCurrent = async ({
+type ChatCompactionSnapshotValidation = {
+  isCurrent: boolean;
+  summarizedMessagesEligible: boolean;
+};
+
+const invalidChatCompactionSnapshot = (): ChatCompactionSnapshotValidation => ({
+  isCurrent: false,
+  summarizedMessagesEligible: false,
+});
+
+export const summarizedMessagesAreMemoryEligible = (
+  rows: readonly { memoryExtractionEligible: boolean }[],
+  summarizedMessageCount: number,
+): boolean =>
+  rows
+    .slice(0, summarizedMessageCount)
+    .every(({ memoryExtractionEligible }) => memoryExtractionEligible);
+
+const validateChatCompactionSnapshot = async ({
   dataWorkspaceIds,
   messages,
+  summarizedMessageCount,
   threadId,
   tx,
-}: IsChatCompactionSnapshotCurrentProps): Promise<boolean> => {
+}: ValidateChatCompactionSnapshotProps): Promise<ChatCompactionSnapshotValidation> => {
   const firstSnapshotMessage = messages.at(0);
   if (!firstSnapshotMessage) {
-    return false;
+    return invalidChatCompactionSnapshot();
   }
 
   const thread = await tx.query.chatThreads.findFirst({
@@ -316,7 +339,7 @@ const isChatCompactionSnapshotCurrent = async ({
     !thread ||
     !workspaceIdsEqual(thread.dataWorkspaceIds, dataWorkspaceIds)
   ) {
-    return false;
+    return invalidChatCompactionSnapshot();
   }
 
   const firstPersistedMessage = await tx.query.chatMessages.findFirst({
@@ -327,7 +350,7 @@ const isChatCompactionSnapshotCurrent = async ({
     columns: { id: true },
   });
   if (!firstPersistedMessage) {
-    return false;
+    return invalidChatCompactionSnapshot();
   }
 
   const rows = await tx
@@ -335,6 +358,7 @@ const isChatCompactionSnapshotCurrent = async ({
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
+      memoryExtractionEligible: chatMessages.memoryExtractionEligible,
     })
     .from(chatMessages)
     .where(
@@ -348,7 +372,13 @@ const isChatCompactionSnapshotCurrent = async ({
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(messages.length + 1);
 
-  return chatCompactionSnapshotMessagesEqual(rows, messages);
+  const isCurrent = chatCompactionSnapshotMessagesEqual(rows, messages);
+  return {
+    isCurrent,
+    summarizedMessagesEligible:
+      isCurrent &&
+      summarizedMessagesAreMemoryEligible(rows, summarizedMessageCount),
+  };
 };
 
 export const chatCompactionSnapshotMessagesEqual = (

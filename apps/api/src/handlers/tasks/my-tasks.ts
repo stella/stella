@@ -3,13 +3,19 @@ import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, taskAssignees } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { TASK_STATUS } from "@/api/lib/entity-constants";
+import type { TaskStatus } from "@/api/lib/entity-constants";
+import { TASK_STATUS, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { createCursorPage, encodePaginationCursor } from "@/api/lib/pagination";
 
 const MY_TASKS_LAST_SORT_DATE = "9999-12-31";
 const myTasksSortDate = sql<string>`COALESCE(${entities.dueDate}, ${MY_TASKS_LAST_SORT_DATE}::date)`;
 
-export type MyTasksStatus = "done" | "in_progress" | "open";
+export type MyTasksStatus = Exclude<TaskStatus, typeof TASK_STATUS.CANCELLED>;
+
+const isMyTasksStatus = (status: TaskStatus): status is MyTasksStatus =>
+  status !== TASK_STATUS.CANCELLED;
+
+export const MY_TASKS_STATUSES = TASK_STATUSES.filter(isMyTasksStatus);
 
 export type MyTasksCursor = {
   entityId: SafeId<"entity">;

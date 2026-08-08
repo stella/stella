@@ -460,6 +460,13 @@ type GetChatToolsProps = {
    * the model still receives exactly one DOCX edit tool.
    */
   includeAllDocxEditToolsForValidation?: boolean | undefined;
+  /**
+   * Validation-only compatibility for persisted turns. Historical `remember`
+   * calls must remain schema-valid after the deployment feature is disabled,
+   * even though the live provider toolset must no longer advertise or execute
+   * the tool.
+   */
+  includeRememberToolForValidation?: boolean | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -648,6 +655,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     includeAllDocxEditToolsForValidation = false,
+    includeRememberToolForValidation = false,
   } = props;
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -757,7 +765,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // (schema-only construction) get no remember tool rather than an
   // unaudited or cross-matter write path.
   const rememberTools =
-    !memoryEnabled ||
+    !(memoryEnabled || includeRememberToolForValidation) ||
     recordAuditEvent === undefined ||
     resolveMemorySourceWorkspaceIds === undefined
       ? {}

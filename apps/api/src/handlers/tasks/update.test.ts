@@ -24,6 +24,36 @@ const TASK_FEATURES_DISABLED = {
 } as const;
 
 describe("updateTaskHandler feature compatibility", () => {
+  test("rejects non-task item types while Legal Lists is disabled", async () => {
+    const taskId = createSafeId<"entity">();
+    const workspaceId = createSafeId<"workspace">();
+    const userId = createSafeId<"user">();
+    const { safeDb } = createScopedDbMock({
+      update: () => {
+        throw new Error("database should not be accessed");
+      },
+    });
+
+    const result = await Result.gen(() =>
+      updateTaskHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { taskId, listItemType: "fact" },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 404,
+        message: "Legal Lists are disabled",
+      });
+    }
+  });
+
   test("permits the ordinary task item type while Legal Lists is disabled", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();

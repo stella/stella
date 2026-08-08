@@ -275,10 +275,10 @@ export const createTaskEntityHandler = async function* ({
         }
       }
 
-      const validAssigneeIds =
+      const requestedAssigneeIds =
         body.assigneeIds === undefined ? [] : [...new Set(body.assigneeIds)];
       const memberIdsToValidate = body.ownerUserId ? [body.ownerUserId] : [];
-      memberIdsToValidate.push(...validAssigneeIds);
+      memberIdsToValidate.push(...requestedAssigneeIds);
       const memberIdsToLoad = [...memberIdsToValidate];
       if (!memberIdsToLoad.includes(userId)) {
         memberIdsToLoad.push(userId);
@@ -304,6 +304,12 @@ export const createTaskEntityHandler = async function* ({
           message: "The owner and assignees must be workspace members",
         };
       }
+      const validAssigneeIds =
+        body.assigneeIds === undefined &&
+        !features.governedWorkflow &&
+        workspaceMemberIds.has(userId)
+          ? [userId]
+          : requestedAssigneeIds;
       const ownerUserId =
         body.ownerUserId ?? (workspaceMemberIds.has(userId) ? userId : null);
 

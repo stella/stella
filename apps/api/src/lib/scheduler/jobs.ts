@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -174,6 +175,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description: "Periodically repair governed work rows for legacy tasks",
+    enabled: env.FEATURE_GOVERNED_WORKFLOW,
     id: "workObligations.backfillLegacyTasks.v1",
     mode: "recurring",
     payloadUpdate: "preserve",
@@ -226,6 +228,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
+    enabled: env.FEATURE_AI_MEMORY,
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -239,6 +242,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
+    enabled: env.FEATURE_AI_MEMORY,
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { workObligations } from "@/api/db/schema";
+import { taskAssignees, workObligations } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -174,6 +174,71 @@ describe("createTaskHandler validation", () => {
         message: "Governed Workflow is disabled",
       });
     }
+  });
+
+  test("rejects List-only fields while Legal Lists is disabled", async () => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb: toSafeDbMock(scopedDb),
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Witness fact", listItemType: "fact" },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 404,
+        message: "Legal Lists are disabled",
+      });
+    }
+  });
+
+  test("assigns legacy task creation to its workspace-member creator", async () => {
+    const assigneeRows: Record<string, unknown>[] = [];
+    const { safeDb } = createScopedDbMock({
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({ for: async () => [{ userId }] }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: async (
+          values: Record<string, unknown> | Record<string, unknown>[],
+        ) => {
+          if (table === taskAssignees) {
+            assigneeRows.push(...(Array.isArray(values) ? values : [values]));
+          }
+        },
+      }),
+      update: () => ({
+        set: () => ({ where: async () => [] }),
+      }),
+    });
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Prepare filing" },
+        features: TASK_FEATURES_DISABLED,
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(assigneeRows).toEqual([
+      expect.objectContaining({ userId, role: "assignee" }),
+    ]);
   });
 
   test("valid status and priority proceeds to DB call", async () => {

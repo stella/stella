@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { myTasksHandler } from "@/api/handlers/tasks/my-tasks";
-import type { MyTasksCursor } from "@/api/handlers/tasks/my-tasks";
+import {
+  myTasksHandler,
+  type MyTasksCursor,
+  type MyTasksStatus,
+} from "@/api/handlers/tasks/my-tasks";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro } from "@/api/lib/auth";
+import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -15,13 +19,25 @@ import {
 } from "@/api/lib/pagination";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
+const myTasksStatusSchemas = {
+  [TASK_STATUS.OPEN]: t.Literal(TASK_STATUS.OPEN),
+  [TASK_STATUS.IN_PROGRESS]: t.Literal(TASK_STATUS.IN_PROGRESS),
+  [TASK_STATUS.IN_REVIEW]: t.Literal(TASK_STATUS.IN_REVIEW),
+  [TASK_STATUS.DONE]: t.Literal(TASK_STATUS.DONE),
+} as const satisfies Record<MyTasksStatus, ReturnType<typeof t.Literal>>;
+
 const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.myTasksPageSizeMax }),
   ),
   status: t.Optional(
-    t.Union([t.Literal("open"), t.Literal("in_progress"), t.Literal("done")]),
+    t.Union([
+      myTasksStatusSchemas.open,
+      myTasksStatusSchemas.in_progress,
+      myTasksStatusSchemas.in_review,
+      myTasksStatusSchemas.done,
+    ]),
   ),
 });
 

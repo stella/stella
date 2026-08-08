@@ -140,8 +140,16 @@ describe("search summary chat", () => {
     });
     expect(insertedValues.at(1)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ role: "user", workspaceId: null }),
-        expect.objectContaining({ role: "assistant", workspaceId: null }),
+        expect.objectContaining({
+          memoryExtractionEligible: false,
+          role: "user",
+          workspaceId: null,
+        }),
+        expect.objectContaining({
+          memoryExtractionEligible: false,
+          role: "assistant",
+          workspaceId: null,
+        }),
       ]),
     );
   });

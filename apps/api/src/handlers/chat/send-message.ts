@@ -653,6 +653,7 @@ const sendMessage = createSafeRootHandler(
         editApplyMode,
         docxEditRepresentation,
         includeAllDocxEditToolsForValidation: true,
+        includeRememberToolForValidation: true,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
         externalTools: externalToolsForValidation,
@@ -2701,6 +2702,7 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
+        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
       })),
     );
     await tx
@@ -2911,6 +2913,7 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
+          ...(!env.FEATURE_AI_MEMORY && { memoryExtractionEligible: false }),
         })
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
@@ -3043,6 +3046,7 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
+      memoryExtractionEligible: env.FEATURE_AI_MEMORY,
     });
     await tx
       .update(chatThreads)

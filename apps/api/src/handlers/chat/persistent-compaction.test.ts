@@ -8,6 +8,7 @@ import {
   chatCompactionSnapshotMessagesEqual,
   memoryExtractionExclusionStamp,
   shouldInvalidateChatCompactionCheckpoint,
+  summarizedMessagesAreMemoryEligible,
 } from "./persistent-compaction";
 
 const message = (id: string, text: string): ChatMessage => ({
@@ -171,5 +172,17 @@ describe("persistent chat compaction", () => {
 
     expect(memoryExtractionExclusionStamp(false, createdAt)).toBe(createdAt);
     expect(memoryExtractionExclusionStamp(true, createdAt)).toBeNull();
+  });
+
+  test("excludes a summarized prefix containing an opted-out message", () => {
+    const rows = [
+      { memoryExtractionEligible: true },
+      { memoryExtractionEligible: false },
+      { memoryExtractionEligible: true },
+    ];
+
+    expect(summarizedMessagesAreMemoryEligible(rows, 1)).toBe(true);
+    expect(summarizedMessagesAreMemoryEligible(rows, 2)).toBe(false);
+    expect(summarizedMessagesAreMemoryEligible(rows, 3)).toBe(false);
   });
 });

@@ -49,7 +49,11 @@ import type {
   MyTasksStatus,
   TaskItem,
 } from "@/lib/workspaces/queries/my-tasks";
-import { myTasksKeys, myTasksOptions } from "@/lib/workspaces/queries/my-tasks";
+import {
+  MY_TASKS_STATUSES,
+  myTasksKeys,
+  myTasksOptions,
+} from "@/lib/workspaces/queries/my-tasks";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -240,21 +244,14 @@ export function LegacyTodosPage() {
             label={t("common.all")}
             onClick={() => setFilter("all")}
           />
-          <FilterButton
-            active={filter === "open"}
-            label={t("tasks.statusValues.open")}
-            onClick={() => setFilter("open")}
-          />
-          <FilterButton
-            active={filter === "in_progress"}
-            label={t("tasks.statusValues.in_progress")}
-            onClick={() => setFilter("in_progress")}
-          />
-          <FilterButton
-            active={filter === "done"}
-            label={t("tasks.statusValues.done")}
-            onClick={() => setFilter("done")}
-          />
+          {MY_TASKS_STATUSES.map((status) => (
+            <FilterButton
+              active={filter === status}
+              key={status}
+              label={t(`tasks.statusValues.${status}`)}
+              onClick={() => setFilter(status)}
+            />
+          ))}
         </div>
       </div>
 
