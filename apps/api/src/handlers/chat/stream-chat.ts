@@ -172,6 +172,7 @@ type StreamChatProps = {
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
+  owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -247,6 +248,7 @@ export const streamChat = async ({
   parentRunId,
   resume,
   messages: rawMessages,
+  owningAssistantMessageId,
   onFinish,
   organizationId,
   orgAIConfig,
@@ -425,6 +427,7 @@ export const streamChat = async ({
   const output = processServerChatStream({
     abortSignal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
+    preservedTerminalMessageId: owningAssistantMessageId,
     onFinish,
     processor,
     source: transformOutgoingStream({
@@ -1227,6 +1230,7 @@ type ProcessServerChatStreamProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  preservedTerminalMessageId?: SafeId<"chatMessage"> | undefined;
   processor: StreamProcessor;
   source: AsyncIterable<StreamChunk>;
 };
@@ -1314,6 +1318,7 @@ export const processServerChatStream = async function* ({
   getResponseMessage,
   mapMessageId,
   onFinish,
+  preservedTerminalMessageId,
   processor,
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
@@ -1341,6 +1346,7 @@ export const processServerChatStream = async function* ({
       getResponseMessage,
       mapMessageId,
       outcome,
+      preservedTerminalMessageId,
       usage,
     });
     terminal.state = "settled";
@@ -1497,6 +1503,7 @@ type FinishResponseMessageProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
+  preservedTerminalMessageId: SafeId<"chatMessage"> | undefined;
   usage: TokenUsage | undefined;
 };
 
@@ -1504,6 +1511,7 @@ const createTerminalResponseMessage = ({
   getResponseMessage,
   mapMessageId,
   outcome,
+  preservedTerminalMessageId,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   const responseMessage = getResponseMessage();
@@ -1527,6 +1535,7 @@ const createTerminalResponseMessage = ({
           message: normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
+            preservedMessageId: preservedTerminalMessageId,
           }),
           usage,
         });
@@ -1561,11 +1570,16 @@ export const createChatMessageIdMapper = (
 export const normalizeFinalAssistantMessageId = ({
   mapMessageId,
   message,
+  preservedMessageId,
 }: {
   mapMessageId: MessageIdMapper;
   message: ChatMessage;
+  preservedMessageId?: SafeId<"chatMessage"> | undefined;
 }): PersistableChatMessage => {
-  const id = mapMessageId(message.id);
+  const id =
+    preservedMessageId !== undefined && message.id === preservedMessageId
+      ? preservedMessageId
+      : mapMessageId(message.id);
   return toPersistableChatMessage({ ...message, id });
 };
 
@@ -2396,7 +2410,11 @@ const restoreMetadataStringsInPlace = (
   }
   for (const [key, value] of Object.entries(metadata)) {
     if (key !== "tanstack:interruptBinding") {
-      restoreApplicationStringsInPlace(value, restoreString);
+      if (typeof value === "string") {
+        metadata[key] = restoreString(value);
+      } else {
+        restoreApplicationStringsInPlace(value, restoreString);
+      }
       continue;
     }
     if (isRecord(value)) {

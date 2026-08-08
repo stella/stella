@@ -1553,6 +1553,9 @@ const sendMessage = createSafeRootHandler(
                 ...(resume === undefined ? {} : { resume }),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,
+                ...(owningAssistantMessage === undefined
+                  ? {}
+                  : { owningAssistantMessageId: owningAssistantMessage.id }),
                 onFinish: async ({ outcome, responseMessage }) => {
                   const resolvedMessages = resolveAssistantMessageRefs({
                     messages: [responseMessage],

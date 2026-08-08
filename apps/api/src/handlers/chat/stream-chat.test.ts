@@ -512,6 +512,64 @@ describe("outgoing chat stream message ids", () => {
     );
   });
 
+  test("preserves a persisted owning assistant id at terminal persistence", () => {
+    const owningMessageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const replacementMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(
+      normalizeFinalAssistantMessageId({
+        mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+        message: {
+          id: owningMessageId,
+          role: "assistant",
+          parts: [{ content: "Approved action completed.", type: "text" }],
+        },
+        preservedMessageId: owningMessageId,
+      }).id,
+    ).toBe(owningMessageId);
+  });
+
+  test("passes the owning assistant id through terminal turn finalization", async () => {
+    const owningMessageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const replacementMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    let persistedMessageId: string | undefined;
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      existingMessageIds: new Set([owningMessageId]),
+      getResponseMessage: () => ({
+        id: owningMessageId,
+        role: "assistant",
+        parts: [{ content: "Approved action completed.", type: "text" }],
+      }),
+      mapMessageId: createChatMessageIdMapper(() => replacementMessageId),
+      onFinish: ({ responseMessage }) => {
+        persistedMessageId = responseMessage.id;
+      },
+      preservedTerminalMessageId: owningMessageId,
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+
+    await collectChunks(stream);
+    expect(persistedMessageId).toBe(owningMessageId);
+  });
+
   test("seeds tanstack message state before reasoning-only chunks", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
@@ -2093,6 +2151,7 @@ describe("anonymized outgoing chat stream", () => {
                 id: "[PERSON_1]",
                 reason: "tool_call",
                 metadata: {
+                  applicationLabel: "[PERSON_1]",
                   "tanstack:interruptBinding": {
                     originalArgs: {
                       assignee: "[PERSON_1]",
@@ -2145,6 +2204,7 @@ describe("anonymized outgoing chat stream", () => {
               id: "[PERSON_1]",
               reason: "tool_call",
               metadata: {
+                applicationLabel: "Jan Novak",
                 "tanstack:interruptBinding": {
                   originalArgs: {
                     assignee: "Jan Novak",
