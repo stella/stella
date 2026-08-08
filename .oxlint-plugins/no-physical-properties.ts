@@ -8,7 +8,11 @@
 //
 // Replaces: scripts/lint-logical-properties.sh
 
-import { hasPhysicalProperty } from "./physical-properties";
+// Extension is required, not stylistic. Plugin sources are loaded by Node's
+// ESM resolver as well as Bun's, and Node does not infer one. Without it the
+// whole plugin set fails to load under Node, and the error names this file's
+// import rather than whatever the caller was linting.
+import { hasPhysicalProperty } from "./physical-properties.ts";
 
 export default {
   meta: { name: "no-physical-properties" },
