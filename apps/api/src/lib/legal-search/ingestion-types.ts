@@ -52,6 +52,13 @@ export type IngestionResult = {
    */
   sourceDocumentIdAliases?: readonly string[] | undefined;
   /**
+   * Deterministic identities emitted by an older or degraded observation that
+   * may adopt an existing registry owner but are not exact enough to reserve
+   * when unclaimed. Use this for content-addressed repair fingerprints, never
+   * for an alternate publisher key.
+   */
+  sourceDocumentIdRepairAliases?: readonly string[] | undefined;
+  /**
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to

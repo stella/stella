@@ -540,7 +540,7 @@ const processDecisionAttempt = async ({
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
   const proposedDecisionId = createSafeId<"caseLawDecision">();
-  const sourceIdentityCandidates = (() => {
+  const exactSourceIdentityCandidates = (() => {
     if (!result.sourceDocumentId) {
       return [];
     }
@@ -550,14 +550,29 @@ const processDecisionAttempt = async ({
     }
     return [...new Set(identities)].sort();
   })();
+  const repairSourceIdentityCandidates =
+    result.sourceDocumentId &&
+    result.sourceDocumentIdRepairAliases !== undefined
+      ? [
+          ...new Set(
+            result.sourceDocumentIdRepairAliases.filter(
+              (identity) => !exactSourceIdentityCandidates.includes(identity),
+            ),
+          ),
+        ].sort()
+      : [];
+  const sourceIdentityCandidates = [
+    ...exactSourceIdentityCandidates,
+    ...repairSourceIdentityCandidates,
+  ].sort();
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
 
-  // Reserve every exact publisher identity before slow raw/corpus work. The
-  // sorted transaction locks make overlapping alias sets atomic: concurrent
-  // canonical and fallback observations receive one durable decision UUID,
-  // even before either worker has inserted the decision row.
+  // Lock exact and repair-only identities before slow raw/corpus work. Exact
+  // publisher aliases are reserved below. A heuristic repair alias may adopt
+  // an existing owner, but is never claimed when absent: otherwise two normal
+  // identified rows with the same degraded fingerprint could collapse.
   const identityResolution = await scopedDb(async (tx) => {
     for (const identity of sourceIdentityCandidates) {
       // SAFETY: candidates are hard-capped at eight above; sorted sequential
@@ -576,16 +591,37 @@ const processDecisionAttempt = async ({
               sourceId: { eq: sourceId },
               sourceDocumentId: { in: sourceIdentityCandidates },
             },
-            columns: { decisionId: true },
+            columns: { decisionId: true, sourceDocumentId: true },
             limit: MAX_SOURCE_IDENTITY_CANDIDATES,
           });
-    const claimedDecisionIds = [
-      ...new Set(claims.map(({ decisionId }) => decisionId)),
+    const exactClaimedDecisionIds = [
+      ...new Set(
+        claims
+          .filter(({ sourceDocumentId }) =>
+            exactSourceIdentityCandidates.includes(sourceDocumentId),
+          )
+          .map(({ decisionId }) => decisionId),
+      ),
     ];
-    if (claimedDecisionIds.length > 1) {
+    if (exactClaimedDecisionIds.length > 1) {
       panic("Publisher identities have conflicting decision owners");
     }
-    const claimedDecisionId = claimedDecisionIds.at(0);
+    const exactClaimedDecisionId = exactClaimedDecisionIds.at(0);
+    const repairClaimedDecisionIds = [
+      ...new Set(
+        claims
+          .filter(({ sourceDocumentId }) =>
+            repairSourceIdentityCandidates.includes(sourceDocumentId),
+          )
+          .map(({ decisionId }) => decisionId),
+      ),
+    ];
+    const repairClaimedDecisionId =
+      repairClaimedDecisionIds.length === 1
+        ? repairClaimedDecisionIds.at(0)
+        : undefined;
+    const provisionalClaimedDecisionId =
+      exactClaimedDecisionId ?? repairClaimedDecisionId;
     const identityColumns = {
       id: true,
       sourceDocumentId: true,
@@ -600,26 +636,53 @@ const processDecisionAttempt = async ({
       sourceRawContentType: true,
       sourceUrl: true,
     } as const;
-    const exactIdentified = await tx.query.caseLawDecisions.findFirst({
+    const provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
       where:
-        claimedDecisionId === undefined
+        provisionalClaimedDecisionId === undefined
           ? caseLawDecisionIdentityWhere({
               caseNumber: result.caseNumber,
               language: result.language,
               sourceDocumentId: result.sourceDocumentId,
               sourceId,
             })
-          : { id: { eq: claimedDecisionId } },
+          : { id: { eq: provisionalClaimedDecisionId } },
       columns: identityColumns,
     });
+    // A repair-only claim is consumable only while the decision is still
+    // stored under that degraded identity. Once upgraded, the retained audit
+    // mapping must not let an unrelated row reuse the heuristic fingerprint.
+    const repairClaimIsCurrent =
+      exactClaimedDecisionId !== undefined ||
+      repairClaimedDecisionId === undefined ||
+      (provisionalIdentified?.sourceDocumentId !== null &&
+        provisionalIdentified?.sourceDocumentId !== undefined &&
+        repairSourceIdentityCandidates.includes(
+          provisionalIdentified.sourceDocumentId,
+        ));
+    const claimedDecisionId = repairClaimIsCurrent
+      ? provisionalClaimedDecisionId
+      : undefined;
+    const exactIdentified =
+      claimedDecisionId === provisionalClaimedDecisionId
+        ? provisionalIdentified
+        : await tx.query.caseLawDecisions.findFirst({
+            where: caseLawDecisionIdentityWhere({
+              caseNumber: result.caseNumber,
+              language: result.language,
+              sourceDocumentId: result.sourceDocumentId,
+              sourceId,
+            }),
+            columns: identityColumns,
+          });
     const identified =
       exactIdentified ??
-      (claimedDecisionId === undefined && sourceIdentityCandidates.length > 1
+      (claimedDecisionId === undefined &&
+      exactSourceIdentityCandidates.length > 1
         ? await tx.query.caseLawDecisions.findFirst({
             where: {
               sourceId: { eq: sourceId },
               sourceDocumentId: {
-                in: sourceIdentityCandidates.filter(
+                in: exactSourceIdentityCandidates.filter(
                   (identity) => identity !== result.sourceDocumentId,
                 ),
               },
@@ -667,7 +730,10 @@ const processDecisionAttempt = async ({
       (existing?.sourceDocumentId === null ||
         existing?.sourceDocumentId === result.sourceDocumentId ||
         (existingIdentity !== undefined &&
-          result.sourceDocumentIdAliases?.includes(existingIdentity) === true));
+          (result.sourceDocumentIdAliases?.includes(existingIdentity) ===
+            true ||
+            result.sourceDocumentIdRepairAliases?.includes(existingIdentity) ===
+              true)));
     const persistedSourceDocumentId = incomingSupersedesExisting
       ? result.sourceDocumentId
       : (existingIdentity ?? result.sourceDocumentId);
@@ -690,12 +756,12 @@ const processDecisionAttempt = async ({
         .where(eq(caseLawDecisions.id, existing.id));
     }
 
-    if (sourceIdentityCandidates.length > 0) {
+    if (exactSourceIdentityCandidates.length > 0) {
       // audit: skip — background publisher-identity ownership; public data
       await tx
         .insert(caseLawDecisionSourceIdentities)
         .values(
-          sourceIdentityCandidates.map((sourceDocumentId) => ({
+          exactSourceIdentityCandidates.map((sourceDocumentId) => ({
             sourceId,
             sourceDocumentId,
             decisionId,

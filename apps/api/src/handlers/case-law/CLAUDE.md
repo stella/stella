@@ -396,12 +396,15 @@ same rule for every court as a final safety net.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
 one poison row pin every later record in the slice. Continue emitting that
-quarantine fingerprint as an alias after a publisher identity recovers, so the
-repair enriches the audited row instead of inserting a duplicate. Mark every
-listing-only result with `isListingOnly`, and, if the list also lacks a real
-docket, mark the durable label with `caseNumberIsPlaceholder`. A later partial
-refresh must never replace previously recovered detail metadata, dates, raw
-payload pointers, docket or derived citation key. It may enrich an earlier partial row;
+quarantine fingerprint as a repair-only alias after a publisher identity
+recovers, so the repair enriches the audited row instead of inserting a
+duplicate. Repair-only aliases may adopt an existing row only while it is still
+stored under that degraded identity; never reserve an unclaimed heuristic as
+if it were an exact publisher key. Mark every listing-only result with
+`isListingOnly`, and, if the list also lacks a real docket, mark the durable
+label with `caseNumberIsPlaceholder`. A later partial refresh must never replace
+previously recovered detail metadata, dates, raw payload pointers, docket or
+derived citation key. It may enrich an earlier partial row;
 the pipeline persists adapter-neutral observation quality so that rule applies
 to every court without depending on court-specific metadata keys.
 If the existing row has a pending corpus mirror, replay its stored payload to

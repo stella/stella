@@ -790,7 +790,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]?.sourceDocumentIdAliases).toContain(
       "nalus-ecli:ECLI:CZ:US:2024:2.US.91.24.1",
     );
-    expect(page.decisions[0]?.sourceDocumentIdAliases?.at(-1)).toMatch(
+    expect(page.decisions[0]?.sourceDocumentIdRepairAliases?.at(0)).toMatch(
       /^nalus-quarantine:[a-f0-9]+$/u,
     );
   });
@@ -841,7 +841,7 @@ describe("czUsAdapter.fetchPage", () => {
     ).decisions[0];
 
     expect(decision?.sourceDocumentId).toBe("nalus-record:7393");
-    expect(decision?.sourceDocumentIdAliases).not.toContain("nalus-sz:");
+    expect(decision?.sourceDocumentIdAliases).toBeUndefined();
     expect(decision).toMatchObject({
       isListingOnly: true,
       metadata: { listedOnlyReason: "missing-text-action" },
@@ -960,7 +960,7 @@ describe("czUsAdapter.fetchPage", () => {
       sourceDocumentId: "nalus-record:7401",
       isListingOnly: true,
     });
-    expect(recovered?.sourceDocumentIdAliases).toContain(
+    expect(recovered?.sourceDocumentIdRepairAliases).toContain(
       page.decisions[0]?.sourceDocumentId,
     );
   });

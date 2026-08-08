@@ -64,12 +64,10 @@ const nalusIdentities = ({
   recordId,
   sz,
   ecli,
-  quarantineId,
 }: {
   recordId: string | undefined;
   sz: string | undefined;
   ecli: string | undefined;
-  quarantineId?: string | undefined;
 }): {
   sourceDocumentId: string;
   aliases: readonly string[] | undefined;
@@ -78,7 +76,6 @@ const nalusIdentities = ({
     recordId ? `nalus-record:${recordId}` : undefined,
     sz ? `nalus-sz:${sz}` : undefined,
     ecli ? `nalus-ecli:${ecli}` : undefined,
-    quarantineId ? `nalus-quarantine:${quarantineId}` : undefined,
   ].filter(
     (identity): identity is string =>
       identity !== undefined && isPersistableSourceDocumentId(identity),
@@ -418,8 +415,11 @@ const parseDecisionPage = ({
       recordId: nalusRecordId,
       sz: nalusSz,
       ecli,
-      quarantineId: nalusQuarantineId,
     })?.aliases,
+    sourceDocumentIdRepairAliases:
+      nalusQuarantineId === undefined
+        ? undefined
+        : [`nalus-quarantine:${nalusQuarantineId}`],
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
       ecliCounter,
@@ -878,15 +878,10 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
       registrySign,
       ecli: undefined,
     });
-    const publisherIdentity = nalusIdentities({
-      recordId: nalusRecordId,
-      sz,
-      ecli,
-      quarantineId,
-    });
-    if (publisherIdentity === null) {
-      throw new TypeError("NALUS row has no persistable identity");
-    }
+    const publisherIdentity = exactPublisherIdentity ?? {
+      sourceDocumentId: `nalus-quarantine:${quarantineId}`,
+      aliases: undefined,
+    };
     const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
       "counter"
     ];
@@ -1111,8 +1106,11 @@ const listedOnlyDecision = (
     recordId: listed.nalusRecordId,
     sz: listed.sz,
     ecli: listed.ecli,
-    quarantineId: listed.quarantineId,
   })?.aliases,
+  sourceDocumentIdRepairAliases:
+    listed.identityQuarantined === true
+      ? undefined
+      : [`nalus-quarantine:${listed.quarantineId}`],
   legacySourceUrls: legacySourceUrlsFor(
     listed.caseNumber,
     listed.counter,

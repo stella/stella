@@ -149,9 +149,16 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:fallback",
         "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
       ],
+      sourceDocumentIdRepairAliases: [
+        "publisher:repair",
+        "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      ],
     });
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
+    expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
+      "publisher:repair",
+    ]);
   });
 
   test("rejects an oversized canonical id instead of truncating identity", () => {

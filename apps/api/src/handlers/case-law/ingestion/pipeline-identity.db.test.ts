@@ -485,6 +485,102 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test("uses heuristic repair aliases only when an owner already exists", async () => {
+      const quarantineId = "nalus-quarantine:known-repair";
+      const recoveredId = "nalus-record:known-repair";
+      const quarantined = decisionAt("Known repair alias", quarantineId);
+      await processDecision({
+        input: quarantined,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...quarantined,
+          sourceDocumentId: recoveredId,
+          sourceDocumentIdRepairAliases: [quarantineId],
+          rawHash: "hash-known-repair-recovered",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...decisionAt(
+            "Distinct row after repair",
+            "nalus-record:known-repair-collision",
+          ),
+          sourceDocumentIdRepairAliases: [quarantineId],
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      const unclaimedRepairId = "nalus-quarantine:shared-but-unclaimed";
+      await Promise.all(
+        ["nalus-record:distinct-a", "nalus-record:distinct-b"].map(
+          async (publisherId, index) =>
+            await processDecision({
+              input: {
+                ...decisionAt(`Distinct repair row ${index}`, publisherId),
+                sourceDocumentIdRepairAliases: [unclaimedRepairId],
+              },
+              observationOrder: BigInt(index + 4),
+              sourceId,
+              scopedDb,
+              observedAt: new Date(`2026-07-31T12:00:0${index + 2}.000Z`),
+            }),
+        ),
+      );
+
+      const rows = await db.execute(sql<{
+        recoveredCount: number;
+        postRepairDistinctCount: number;
+        distinctCount: number;
+        unclaimedRepairCount: number;
+      }>`
+        SELECT (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = ${quarantined.court}
+                   AND source_document_id = ${recoveredId}
+               ) AS "recoveredCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court = 'Distinct row after repair'
+                   AND source_document_id = 'nalus-record:known-repair-collision'
+               ) AS "postRepairDistinctCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decisions
+                 WHERE source_id = ${sourceId}
+                   AND court LIKE 'Distinct repair row %'
+               ) AS "distinctCount",
+               (
+                 SELECT count(*)::int
+                 FROM case_law_decision_source_identities
+                 WHERE source_id = ${sourceId}
+                   AND source_document_id = ${unclaimedRepairId}
+               ) AS "unclaimedRepairCount"
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["recoveredCount"]) : 0).toBe(1);
+      expect(isRecord(row) ? Number(row["postRepairDistinctCount"]) : 0).toBe(
+        1,
+      );
+      expect(isRecord(row) ? Number(row["distinctCount"]) : 0).toBe(2);
+      expect(isRecord(row) ? Number(row["unclaimedRepairCount"]) : -1).toBe(0);
+    });
+
     test("keeps canonical ownership when a later observation has only a fallback", async () => {
       const canonicalId = "nalus-record:inverse-7391";
       const fallbackId = "nalus-sz:inverse-2-91-24_1";

@@ -118,6 +118,12 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
         (identity): identity is string =>
           identity !== undefined && isPersistableSourceDocumentId(identity),
       ),
+    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases
+      ?.map((identity) => strip(identity))
+      .filter(
+        (identity): identity is string =>
+          identity !== undefined && isPersistableSourceDocumentId(identity),
+      ),
     legacySourceUrls: result.legacySourceUrls
       ?.map((url) => strip(url))
       .filter((url): url is string => url !== undefined),
