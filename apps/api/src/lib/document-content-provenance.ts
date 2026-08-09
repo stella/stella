@@ -91,8 +91,7 @@ export const resolveCurrentFileSourceField = <T extends FileFieldRow>({
   }
 
   const persistedSourceIsFromAnotherVersion =
-    extracted?.sourceEntityVersionId !== null &&
-    extracted?.sourceEntityVersionId !== undefined &&
+    extracted.sourceEntityVersionId !== null &&
     extracted.sourceEntityVersionId !== currentVersionId;
   return persistedSourceIsFromAnotherVersion ? findOnlyFileField(fields) : null;
 };
