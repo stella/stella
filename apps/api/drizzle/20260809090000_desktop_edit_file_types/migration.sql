@@ -4,8 +4,8 @@ SET LOCAL statement_timeout = '10s';--> statement-breakpoint
 ALTER TABLE "desktop_edit_sessions"
   ADD COLUMN "file_type" text DEFAULT 'docx' NOT NULL;--> statement-breakpoint
 
-ALTER TABLE "desktop_edit_sessions"
-  ALTER COLUMN "file_type" DROP DEFAULT;--> statement-breakpoint
+-- Mixed-version API deployments still have writers that omit file_type.
+-- Remove this default in a later release after every supported writer sets it.
 
 ALTER TABLE "desktop_edit_sessions"
   ADD CONSTRAINT "desktop_edit_sessions_file_type_check"

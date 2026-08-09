@@ -461,7 +461,12 @@ export const desktopEditSessions = p.pgTable(
       .text("status", { enum: DESKTOP_EDIT_SESSION_STATUSES })
       .notNull()
       .default("open"),
-    fileType: p.text("file_type", { enum: DESKTOP_EDIT_FILE_TYPES }).notNull(),
+    // Supports older API replicas during the mixed-version rollout. Remove the
+    // default after every supported writer sets fileType explicitly.
+    fileType: p
+      .text("file_type", { enum: DESKTOP_EDIT_FILE_TYPES })
+      .notNull()
+      .default("docx"),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     checkpointFileId: safeUuid<"userFile">("checkpoint_file_id").notNull(),
     checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
