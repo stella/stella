@@ -8,14 +8,14 @@ import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
-export type RateLookup = {
+type RateLookup = {
   dateWorked: string;
   userId: SafeId<"user">;
 };
 
-export type ResolvedRate = { hourlyRate: number; currency: string };
+type ResolvedRate = { hourlyRate: number; currency: string };
 
-export const rateLookupKey = ({ dateWorked, userId }: RateLookup): string =>
+export const rateLookupKey = ({ dateWorked, userId }: RateLookup) =>
   `${userId}:${dateWorked}`;
 
 /**
@@ -31,7 +31,7 @@ export const resolveRatesInTransaction = async ({
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   lookups: readonly RateLookup[];
-}): Promise<Map<string, ResolvedRate>> => {
+}) => {
   const resolved = new Map<string, ResolvedRate>();
   if (lookups.length === 0) {
     return resolved;

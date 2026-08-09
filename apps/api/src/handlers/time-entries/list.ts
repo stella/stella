@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { TimeEntryListPage } from "@stll/api-contract/time-entries";
+import type { TimeEntryListPage } from "@stll/api-contract/time-entry-types";
 
 import { member, user } from "@/api/db/auth-schema";
 import {

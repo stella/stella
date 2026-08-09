@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./entity-options": "./src/entity-options.ts",
+    "./time-entry-types": "./src/time-entry-types.ts",
     "./time-entries": "./src/time-entries.ts",
     "./workflow-status": "./src/workflow-status.ts"
   },
