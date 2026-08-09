@@ -8,6 +8,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
 
 // The actual implementation pulls in `host.tsx`, `file-chat-overlay.tsx`,
@@ -24,6 +25,7 @@ const createLazyFileChatOverlayHost = () =>
   });
 
 export const FileViewerWithAI = ({
+  overlayActivation = FILE_CHAT_OVERLAY_ACTIVATION.active,
   workspaceId,
   chatThreadId,
   onChatThreadIdChange,
@@ -40,6 +42,8 @@ export const FileViewerWithAI = ({
   requestDocxEditMode,
   children,
 }: FileViewerWithAIProps) => {
+  const overlayIsActive =
+    overlayActivation === FILE_CHAT_OVERLAY_ACTIVATION.active;
   const overlayKey = [
     chatThreadId ?? "mapped-file-chat",
     workspaceId ?? "",
@@ -63,45 +67,50 @@ export const FileViewerWithAI = ({
   return (
     <div
       className={cn("@container/file-viewer relative h-full w-full", className)}
-      data-file-viewer-ai="true"
+      data-file-viewer-ai={overlayIsActive ? "true" : undefined}
+      data-file-viewer-root="true"
     >
       {children}
-      <QuerySuspenseBoundary
-        area="file-chat-overlay"
-        errorFallback={({ reset }) => (
-          <FileChatOverlayErrorFallback
-            onRetry={() => {
-              // React.lazy caches a rejected thenable. Recreate the lazy type
-              // before resetting the boundary so a transient chunk failure
-              // gets a genuinely fresh import attempt.
-              setLazyFileChatOverlayHost(() => createLazyFileChatOverlayHost());
-              reset();
+      {overlayIsActive && (
+        <QuerySuspenseBoundary
+          area="file-chat-overlay"
+          errorFallback={({ reset }) => (
+            <FileChatOverlayErrorFallback
+              onRetry={() => {
+                // React.lazy caches a rejected thenable. Recreate the lazy type
+                // before resetting the boundary so a transient chunk failure
+                // gets a genuinely fresh import attempt.
+                setLazyFileChatOverlayHost(() =>
+                  createLazyFileChatOverlayHost(),
+                );
+                reset();
+              }}
+            />
+          )}
+          resetKeys={[overlayKey]}
+          suspenseFallback={null}
+        >
+          <LazyFileChatOverlayHost
+            activeExternal={activeExternal}
+            activeDraft={activeDraft}
+            activeFile={activeFile}
+            chatThreadId={activeChatThreadId}
+            docxComments={docxComments}
+            docxEditable={docxEditable}
+            docxEditSafety={docxEditSafety}
+            docxEditorRef={docxEditorRef}
+            key={overlayKey}
+            onChatThreadIdChange={(threadId) => {
+              setOverlayThread({ overlayKey, threadId });
+              onChatThreadIdChange?.(threadId);
             }}
+            onActiveDraftChatBound={onActiveDraftChatBound}
+            onDocxCommentsChange={onDocxCommentsChange}
+            requestDocxEditMode={requestDocxEditMode}
+            workspaceId={workspaceId}
           />
-        )}
-        resetKeys={[overlayKey]}
-        suspenseFallback={null}
-      >
-        <LazyFileChatOverlayHost
-          activeExternal={activeExternal}
-          activeDraft={activeDraft}
-          activeFile={activeFile}
-          chatThreadId={activeChatThreadId}
-          docxComments={docxComments}
-          docxEditable={docxEditable}
-          docxEditSafety={docxEditSafety}
-          docxEditorRef={docxEditorRef}
-          key={overlayKey}
-          onChatThreadIdChange={(threadId) => {
-            setOverlayThread({ overlayKey, threadId });
-            onChatThreadIdChange?.(threadId);
-          }}
-          onActiveDraftChatBound={onActiveDraftChatBound}
-          onDocxCommentsChange={onDocxCommentsChange}
-          requestDocxEditMode={requestDocxEditMode}
-          workspaceId={workspaceId}
-        />
-      </QuerySuspenseBoundary>
+        </QuerySuspenseBoundary>
+      )}
       {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
     </div>
   );

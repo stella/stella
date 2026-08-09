@@ -626,10 +626,26 @@ describe("MCP anonymization canary corpus", () => {
             kind: "document",
             name: nameSeed,
             workspaceId: "ws_1",
+            extractedContent: {
+              sourceEntityVersionId: "ver_current",
+              sourceFieldId: "field_current",
+              sourceFileId: "file_current",
+              sourceSha256Hex: "a".repeat(64),
+            },
             currentVersion: {
               createdAt: new Date("2026-01-01T00:00:00.000Z"),
               id: "ver_current",
-              fields: [],
+              fields: [
+                {
+                  id: "field_current",
+                  content: {
+                    type: "file",
+                    id: "file_current",
+                    mimeType: "application/pdf",
+                    sha256Hex: "a".repeat(64),
+                  },
+                },
+              ],
             },
           }),
         },
@@ -638,10 +654,10 @@ describe("MCP anonymization canary corpus", () => {
             ciphertext: "cipher",
             extractedAt: new Date("2026-01-02T00:00:00.000Z"),
             iv: "iv",
-            sourceEntityVersionId: null,
-            sourceFieldId: null,
-            sourceFileId: null,
-            sourceSha256Hex: null,
+            sourceEntityVersionId: "ver_current",
+            sourceFieldId: "field_current",
+            sourceFileId: "file_current",
+            sourceSha256Hex: "a".repeat(64),
           }),
         },
         entityVersions: {
@@ -749,6 +765,7 @@ describe("MCP anonymization canary corpus", () => {
             kind: "document",
             name: nameSeed,
             updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            extractedContent: null,
             // readEntityByIdHandler reads the current version's fields via the
             // `currentVersion` relation (folded into one tombstone-safe query).
             currentVersion: {
@@ -762,6 +779,7 @@ describe("MCP anonymization canary corpus", () => {
                 },
               ],
             },
+            versions: [{ id: "ver_current" }],
           }),
         },
         documentProcessingRuns: { findMany: async () => [] },

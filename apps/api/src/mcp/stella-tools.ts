@@ -41,7 +41,11 @@ import type {
 } from "@/api/lib/chat/projections";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
-import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import {
+  resolveCurrentFileSourceField,
+  selectCurrentExtractedContent,
+  type ExtractedContentSourceProvenance,
+} from "@/api/lib/document-content-provenance";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -59,7 +63,6 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
-import { findExtractionFileField } from "@/api/lib/search/types";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -1247,10 +1250,11 @@ type CurrentDocument = {
     fields: {
       id: SafeId<"field">;
       propertyId: SafeId<"property">;
-      content: FieldContent;
+      content: FieldContent | null;
     }[];
     id: SafeId<"entityVersion">;
   };
+  extractedContent: ExtractedContentSourceProvenance | null;
   kind: string;
   name: string;
   workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
@@ -1294,13 +1298,10 @@ type DocxMarkdownOutcome =
  * current version atomically before invoking this helper, so the conversion
  * never depends on a stale extracted-content projection existing first.
  *
- * File selection uses `findExtractionFileField`, the SAME first-file-field
- * selection `processExtraction` uses to produce the cached `extractedContent`
- * plaintext (and what search hits reference). Scanning fields for the first
- * DOCX instead would let an auxiliary DOCX field outrank the entity's actual
- * indexed file (e.g. a PDF system file with an unrelated DOCX attachment),
- * returning markdown for a different document than the plaintext fallback
- * and search results describe.
+ * File selection follows the persisted extraction source. Scanning fields for
+ * the first DOCX instead would let an auxiliary DOCX field outrank the entity's
+ * indexed file, returning markdown for a different document than the plaintext
+ * fallback and search results describe.
  *
  * The S3 read and conversion are bounded by `docxMarkdownConversionTimeoutMs`
  * (`withTimeout`) so a stalled fetch or hung conversion cannot hang the
@@ -1311,7 +1312,12 @@ const loadCurrentVersionDocxMarkdown = async ({
   context,
   document,
 }: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
-  const file = findExtractionFileField(document.currentVersion.fields);
+  const fileField = resolveCurrentFileSourceField({
+    currentVersionId: document.currentVersion.id,
+    extracted: document.extractedContent,
+    fields: document.currentVersion.fields,
+  });
+  const file = fileField?.content?.type === "file" ? fileField.content : null;
   if (!isDocxFileContent(file)) {
     return { kind: "not-docx" };
   }
@@ -1375,6 +1381,14 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
       },
       columns: { kind: true, name: true, workspaceId: true },
       with: {
+        extractedContent: {
+          columns: {
+            sourceEntityVersionId: true,
+            sourceFieldId: true,
+            sourceFileId: true,
+            sourceSha256Hex: true,
+          },
+        },
         currentVersion: {
           columns: { createdAt: true, id: true },
           with: {
@@ -1393,6 +1407,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   }
   const currentDocument = {
     currentVersion: document.currentVersion,
+    extractedContent: document.extractedContent,
     kind: document.kind,
     name: document.name,
     workspaceId: document.workspaceId,

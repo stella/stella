@@ -5,6 +5,11 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  resolveCurrentExtractionFileField,
+  resolveCurrentFileSourceField,
+  selectCurrentExtractedContent,
+} from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -46,6 +51,15 @@ export const readEntityByIdHandler = async function* ({
           name: true,
         },
         with: {
+          extractedContent: {
+            columns: {
+              extractedAt: true,
+              sourceEntityVersionId: true,
+              sourceFieldId: true,
+              sourceFileId: true,
+              sourceSha256Hex: true,
+            },
+          },
           currentVersion: {
             columns: { createdAt: true, id: true },
             with: {
@@ -54,17 +68,20 @@ export const readEntityByIdHandler = async function* ({
               // structurally bounded by properties-per-workspace; `limit`
               // pins that same bound explicitly for the lint rule below.
               // `id` is a Bun.randomUUIDv7() primary key (time-ordered), so
-              // ordering by it gives a stable field-creation order. This
-              // MUST match the ordering `processExtraction` applies to the
-              // same relation -- both feed `findExtractionFileField`'s
-              // "first file field" selection, which must resolve to the
-              // SAME field wherever it runs (see findExtractionFileField).
+              // ordering by it gives a stable field-creation order.
               fields: {
                 columns: { id: true, propertyId: true, content: true },
                 orderBy: { id: "asc" },
                 limit: LIMITS.propertiesCount,
               },
             },
+          },
+          // Include tombstones so a rollback cannot make withdrawn legacy
+          // extraction appear current again. This remains bounded to one row.
+          versions: {
+            columns: { id: true },
+            orderBy: { versionNumber: "desc", id: "desc" },
+            limit: 1,
           },
         },
       }),
@@ -86,12 +103,32 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
+  const currentExtracted = selectCurrentExtractedContent({
+    extracted: entity.extractedContent,
+    allowLegacy: entity.versions.at(0)?.id === entity.currentVersion.id,
+    currentVersionCreatedAt: entity.currentVersion.createdAt,
+    currentVersionId: entity.currentVersion.id,
+    fields: entity.currentVersion.fields,
+  });
+  const extractionFileField = resolveCurrentExtractionFileField({
+    currentVersionId: entity.currentVersion.id,
+    extracted: currentExtracted,
+    fields: entity.currentVersion.fields,
+  });
+  const processingFileField = resolveCurrentFileSourceField({
+    currentVersionId: entity.currentVersion.id,
+    extracted: entity.extractedContent,
+    fields: entity.currentVersion.fields,
+  });
+
   return Result.ok({
     entityId,
     kind: entity.kind,
     name: entity.name,
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
+    extractionFileFieldId: extractionFileField?.id ?? null,
+    processingFileFieldId: processingFileField?.id ?? null,
     fields: entity.currentVersion.fields,
   });
 };
@@ -106,10 +143,24 @@ const config = {
 const readEntityById = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params }) {
-    return yield* readEntityByIdHandler({
+    const entityResult = yield* readEntityByIdHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
+    });
+    if (entityResult.status === "error") {
+      return entityResult;
+    }
+
+    const entity = entityResult.value;
+    return Result.ok({
+      entityId: entity.entityId,
+      kind: entity.kind,
+      name: entity.name,
+      currentVersionId: entity.currentVersionId,
+      currentVersionCreatedAt: entity.currentVersionCreatedAt,
+      extractionFileFieldId: entity.extractionFileFieldId,
+      fields: entity.fields,
     });
   },
 );

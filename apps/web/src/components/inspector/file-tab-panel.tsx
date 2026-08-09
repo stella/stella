@@ -25,7 +25,13 @@ import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.lo
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
-import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
+import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
+import {
+  EMAIL_CHAT_MODE,
+  getEmailChatMode,
+  getEmailExtractionRefetchInterval,
+  shouldSurfaceEmailChatResolutionError,
+} from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
 import {
@@ -68,7 +74,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 type MatterOrigin = {
   color: string | null;
@@ -182,7 +188,27 @@ export const FileTabPanel = ({
     mimeType: tab.mimeType,
   });
   const isEmailDisplay = nativePreviewKind === "email";
+  const isEmailViewerActive =
+    isEmailDisplay && tab.id === activeId && !minimized;
   const isMarkdownDisplay = nativePreviewKind === "markdown";
+  const emailEntityQuery = useQuery({
+    ...entityOptions(tab.workspaceId, tab.entityId),
+    enabled: isEmailViewerActive,
+    refetchInterval: ({ state }) =>
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: state.data?.extractionFileFieldId,
+        isEmailViewerActive,
+      }),
+  });
+  const emailChatMode = getEmailChatMode({
+    extractionFileFieldId: emailEntityQuery.data?.extractionFileFieldId,
+    fieldId: tab.id,
+  });
+  const shouldSurfaceEmailResolutionError =
+    shouldSurfaceEmailChatResolutionError({
+      hasData: emailEntityQuery.data !== undefined,
+      isError: emailEntityQuery.isError,
+    });
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
@@ -732,7 +758,29 @@ export const FileTabPanel = ({
 
   const fileViewer = (() => {
     if (isEmailDisplay) {
-      return <EmailHtmlViewer fieldId={tab.id} workspaceId={tab.workspaceId} />;
+      if (shouldSurfaceEmailResolutionError) {
+        return (
+          <EmailFileViewer
+            chatMode={EMAIL_CHAT_MODE.resolutionError}
+            entityId={tab.entityId}
+            fieldId={tab.id}
+            fileName={tab.fileName}
+            onRetryChatResolution={() => {
+              detached(emailEntityQuery.refetch(), "FileTabPanel");
+            }}
+            workspaceId={tab.workspaceId}
+          />
+        );
+      }
+      return (
+        <EmailFileViewer
+          chatMode={emailChatMode}
+          entityId={tab.entityId}
+          fieldId={tab.id}
+          fileName={tab.fileName}
+          workspaceId={tab.workspaceId}
+        />
+      );
     }
     if (isMarkdownDisplay) {
       if (markdownTextQuery.isPending) {

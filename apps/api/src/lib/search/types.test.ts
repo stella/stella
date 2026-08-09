@@ -4,6 +4,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   assertAuthorizedSearchScope,
   findExtractionFileField,
+  findExtractionFileFieldRow,
 } from "@/api/lib/search/types";
 
 const firstPropertyId = toSafeId<"property">("property_1");
@@ -30,7 +31,7 @@ describe("findExtractionFileField", () => {
   const fields = [
     { propertyId: firstPropertyId, content: fileContent("first") },
     { propertyId: targetPropertyId, content: fileContent("target") },
-  ];
+  ] as const;
 
   test("uses the first file field by default", () => {
     expect(findExtractionFileField(fields)?.id).toBe("first");
@@ -40,6 +41,10 @@ describe("findExtractionFileField", () => {
     expect(findExtractionFileField(fields, targetPropertyId)?.id).toBe(
       "target",
     );
+  });
+
+  test("returns the canonical source row without duplicating selection", () => {
+    expect(findExtractionFileFieldRow(fields)).toBe(fields[0]);
   });
 });
 

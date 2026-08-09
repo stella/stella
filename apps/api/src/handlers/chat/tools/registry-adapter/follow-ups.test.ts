@@ -68,9 +68,11 @@ describe("follow-up (b): read_document propertyId path", () => {
             workspaceId: WS_UUID,
             kind: "document",
             name: "Doc",
+            extractedContent: null,
             // readEntityByIdHandler reads the current version's fields via the
             // `currentVersion` relation (folded into one tombstone-safe query).
             currentVersion: {
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
               id: "ver_current",
               fields: [
                 {
@@ -80,6 +82,7 @@ describe("follow-up (b): read_document propertyId path", () => {
                 },
               ],
             },
+            versions: [{ id: "ver_current" }],
           }),
         },
         entityVersions: {

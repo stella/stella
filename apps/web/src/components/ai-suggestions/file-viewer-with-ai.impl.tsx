@@ -29,11 +29,11 @@ import {
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId, type ChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
+import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import {
   buildFolioReviewDecorations,
   resolveFolioReviewFocusId,
@@ -68,6 +68,10 @@ export type ActiveDocumentDraft = {
 };
 
 export type FileViewerWithAIProps = {
+  /**
+   * Controls whether the lazy overlay is mounted without changing the viewer root.
+   */
+  overlayActivation?: FileChatOverlayActivation;
   /**
    * Workspace this viewer belongs to. Used to scope the chat
    * thread + `@`-mention sources when present.
@@ -119,7 +123,7 @@ export type FileViewerWithAIProps = {
 
 type FileChatOverlayHostProps = Omit<
   FileViewerWithAIProps,
-  "children" | "className" | "onChatThreadIdChange"
+  "children" | "className" | "onChatThreadIdChange" | "overlayActivation"
 > & {
   onChatThreadIdChange: (threadId: ChatThreadId) => void;
 };

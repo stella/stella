@@ -6,7 +6,19 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
+import {
+  EmailFileViewer,
+  EmailHtmlViewer,
+} from "@/components/inspector/email-html-viewer";
+import {
+  EMAIL_CHAT_MODE,
+  EMAIL_EXTRACTION_POLL_INTERVAL_MS,
+  EMAIL_VIEWER_LAYOUT,
+  getEmailChatMode,
+  getEmailExtractionRefetchInterval,
+  getEmailFileChatContext,
+  shouldSurfaceEmailChatResolutionError,
+} from "@/components/inspector/email-html-viewer.logic";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -34,6 +46,129 @@ const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
   );
 
 describe("email viewer", () => {
+  test("passes the complete file identity to contextual chat", () => {
+    expect(
+      getEmailFileChatContext({
+        entityId: "entity-1",
+        fieldId: "field-1",
+        fileName: "message.eml",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      activeFile: {
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        fileName: "message.eml",
+      },
+      workspaceId: "workspace-1",
+    });
+
+    const html = renderWithProviders(
+      <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.contextual}
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).toContain("flex min-h-0 flex-1 flex-col");
+    expect(html).toContain('role="status"');
+  });
+
+  test("keeps historical and unresolved versions preview-only", () => {
+    expect(
+      getEmailChatMode({
+        extractionFileFieldId: "field-current-primary",
+        fieldId: "field-current-primary",
+      }),
+    ).toBe(EMAIL_CHAT_MODE.contextual);
+    expect(
+      getEmailChatMode({
+        extractionFileFieldId: "field-current-primary",
+        fieldId: "field-current-secondary",
+      }),
+    ).toBe(EMAIL_CHAT_MODE.previewOnly);
+    expect(
+      getEmailChatMode({
+        extractionFileFieldId: undefined,
+        fieldId: "field-current-primary",
+      }),
+    ).toBe(EMAIL_CHAT_MODE.previewOnly);
+  });
+
+  test("preserves chat when a background resolution refresh fails", () => {
+    expect(
+      shouldSurfaceEmailChatResolutionError({ hasData: true, isError: true }),
+    ).toBe(false);
+    expect(
+      shouldSurfaceEmailChatResolutionError({ hasData: false, isError: true }),
+    ).toBe(true);
+  });
+
+  test("polls only while an open email is awaiting extraction", () => {
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: null,
+        isEmailViewerActive: true,
+      }),
+    ).toBe(EMAIL_EXTRACTION_POLL_INTERVAL_MS);
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: "field-current",
+        isEmailViewerActive: true,
+      }),
+    ).toBe(false);
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: null,
+        isEmailViewerActive: false,
+      }),
+    ).toBe(false);
+  });
+
+  test("does not load the AI host for preview-only email fields", () => {
+    const html = renderWithProviders(
+      <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.previewOnly}
+        entityId="entity-1"
+        fieldId="field-sibling"
+        fileName="message.eml"
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).not.toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).not.toContain("pb-40");
+    expect(html).toContain('role="status"');
+  });
+
+  test("surfaces contextual chat resolution failures with retry", () => {
+    const html = renderWithProviders(
+      <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.resolutionError}
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        onRetryChatResolution={() => undefined}
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Try again");
+    expect(html).not.toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).not.toContain("pb-40");
+  });
+
   test("renders native metadata and keeps attachments informational", () => {
     const queryClient = new QueryClient();
     const options = emailHtmlPreviewOptions({
@@ -63,7 +198,11 @@ describe("email viewer", () => {
     });
 
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-1" workspaceId="workspace-1" />,
+      <EmailHtmlViewer
+        fieldId="field-1"
+        layout={EMAIL_VIEWER_LAYOUT.contextualChat}
+        workspaceId="workspace-1"
+      />,
       queryClient,
     );
 
@@ -77,6 +216,7 @@ describe("email viewer", () => {
     expect(html).toContain("contract.pdf");
     expect(html).toContain(">٢ kB</span>");
     expect(html).toContain('sandbox=""');
+    expect(html).toContain("pb-40");
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
     expect(html).toContain("Show previous messages");

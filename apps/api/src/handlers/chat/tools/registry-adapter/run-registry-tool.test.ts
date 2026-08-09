@@ -182,11 +182,13 @@ describe("runRegistryReadTool", () => {
             kind: "document",
             name: "NDA draft",
             updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            extractedContent: null,
             currentVersion: {
               id: "version-1",
               createdAt: new Date("2026-01-01T00:00:00.000Z"),
               fields: fieldRows,
             },
+            versions: [{ id: "version-1" }],
           }),
         },
         documentProcessingRuns: { findMany: async () => [] },

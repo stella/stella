@@ -5,6 +5,73 @@ import type {
   EmailBodyFoldKind,
 } from "@/lib/files/email-preview";
 
+export const EMAIL_CHAT_MODE = {
+  contextual: "contextual",
+  previewOnly: "preview-only",
+  resolutionError: "resolution-error",
+} as const;
+
+export const EMAIL_VIEWER_LAYOUT = {
+  contextualChat: "contextual-chat",
+  standard: "standard",
+} as const;
+
+export type EmailChatMode =
+  (typeof EMAIL_CHAT_MODE)[keyof typeof EMAIL_CHAT_MODE];
+export type EmailResolvedChatMode = Exclude<
+  EmailChatMode,
+  typeof EMAIL_CHAT_MODE.resolutionError
+>;
+export type EmailViewerLayout =
+  (typeof EMAIL_VIEWER_LAYOUT)[keyof typeof EMAIL_VIEWER_LAYOUT];
+
+export const EMAIL_EXTRACTION_POLL_INTERVAL_MS = 2000;
+
+export const getEmailChatMode = ({
+  extractionFileFieldId,
+  fieldId,
+}: {
+  extractionFileFieldId: string | null | undefined;
+  fieldId: string;
+}): EmailResolvedChatMode =>
+  extractionFileFieldId === fieldId
+    ? EMAIL_CHAT_MODE.contextual
+    : EMAIL_CHAT_MODE.previewOnly;
+
+export const shouldSurfaceEmailChatResolutionError = ({
+  hasData,
+  isError,
+}: {
+  hasData: boolean;
+  isError: boolean;
+}): boolean => isError && !hasData;
+
+export const getEmailExtractionRefetchInterval = ({
+  extractionFileFieldId,
+  isEmailViewerActive,
+}: {
+  extractionFileFieldId: string | null | undefined;
+  isEmailViewerActive: boolean;
+}): number | false =>
+  isEmailViewerActive && extractionFileFieldId === null
+    ? EMAIL_EXTRACTION_POLL_INTERVAL_MS
+    : false;
+
+export const getEmailFileChatContext = ({
+  entityId,
+  fieldId,
+  fileName,
+  workspaceId,
+}: {
+  entityId: string;
+  fieldId: string;
+  fileName: string;
+  workspaceId: string;
+}) => ({
+  activeFile: { entityId, fileFieldId: fieldId, fileName },
+  workspaceId,
+});
+
 export const parseEmailDate = (value: string | null): Date | null => {
   if (!value) {
     return null;
