@@ -37,12 +37,12 @@ type EmailAttachmentLoadResult =
   | { status: typeof EMAIL_ATTACHMENT_LOAD_STATUS.tooLarge }
   | { status: typeof EMAIL_ATTACHMENT_LOAD_STATUS.unreadable };
 
-const emailAttachmentFieldQuery = (
+const emailAttachmentFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
   workspaceId: SafeId<"workspace">,
 ) =>
-  scopedDb((tx) =>
+  await scopedDb((tx) =>
     tx
       .select({
         content: fields.content,
