@@ -13,6 +13,7 @@ describe("readEntityByIdHandler", () => {
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Share Purchase Agreement",
+      extractedContent: null,
       currentVersion: {
         id: "entity_version_1",
         fields: [
@@ -26,7 +27,7 @@ describe("readEntityByIdHandler", () => {
     });
   });
 
-  test("orders the current version's fields by id, matching processExtraction, so 'first file field' selection is deterministic", async () => {
+  test("loads extraction provenance with the bounded current fields", async () => {
     const { safeDb } = createScopedDbMock({
       query: { entities: { findFirst: findFirstMock } },
     });
@@ -43,15 +44,16 @@ describe("readEntityByIdHandler", () => {
     expect(findFirstMock).toHaveBeenCalledWith(
       expect.objectContaining({
         with: expect.objectContaining({
+          extractedContent: {
+            columns: {
+              sourceEntityVersionId: true,
+              sourceFieldId: true,
+              sourceFileId: true,
+              sourceSha256Hex: true,
+            },
+          },
           currentVersion: expect.objectContaining({
             with: expect.objectContaining({
-              // The `fields` table has no createdAt/position column; `id` is
-              // a Bun.randomUUIDv7() primary key (time-ordered), so ordering
-              // by it is the only way to get a stable "first field" across
-              // repeated reads. `processExtraction` (process-extraction.ts)
-              // MUST request the exact same ordering on the same relation,
-              // or `findExtractionFileField` could resolve to a different
-              // "first" field there than it does here.
               fields: expect.objectContaining({
                 orderBy: { id: "asc" },
               }),
@@ -62,10 +64,16 @@ describe("readEntityByIdHandler", () => {
     );
   });
 
-  test("returns the exact field used as the entity extraction source", async () => {
+  test("returns the persisted field used as the entity extraction source", async () => {
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Share Purchase Agreement",
+      extractedContent: {
+        sourceEntityVersionId: "entity_version_1",
+        sourceFieldId: "field_sibling",
+        sourceFileId: "file_sibling",
+        sourceSha256Hex: "b".repeat(64),
+      },
       currentVersion: {
         id: "entity_version_1",
         fields: [
@@ -77,12 +85,20 @@ describe("readEntityByIdHandler", () => {
           {
             id: "field_email",
             propertyId: "property_email",
-            content: { type: "file" },
+            content: {
+              type: "file",
+              id: "file_email",
+              sha256Hex: "a".repeat(64),
+            },
           },
           {
             id: "field_sibling",
             propertyId: "property_sibling",
-            content: { type: "file" },
+            content: {
+              type: "file",
+              id: "file_sibling",
+              sha256Hex: "b".repeat(64),
+            },
           },
         ],
       },
@@ -102,7 +118,7 @@ describe("readEntityByIdHandler", () => {
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value.extractionFileFieldId).toBe(
-        toSafeId<"field">("field_email"),
+        toSafeId<"field">("field_sibling"),
       );
     }
   });

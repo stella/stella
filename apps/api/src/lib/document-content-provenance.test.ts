@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import {
+  resolveCurrentExtractionFileField,
+  selectCurrentExtractedContent,
+} from "@/api/lib/document-content-provenance";
 
 const currentVersionId = toSafeId<"entityVersion">("version_current");
 const fieldId = toSafeId<"field">("field_current");
@@ -75,6 +78,41 @@ describe("selectCurrentExtractedContent", () => {
     ).toBeNull();
   });
 
+  test("uses the persisted non-first source field", () => {
+    const sibling = {
+      content: { ...file, id: "file_sibling" },
+      id: toSafeId<"field">("field_sibling"),
+      propertyId: toSafeId<"property">("property_sibling"),
+    };
+    const selected = {
+      content: { ...file, id: "file_selected" },
+      id: toSafeId<"field">("field_selected"),
+      propertyId: toSafeId<"property">("property_selected"),
+    };
+    const selectedProjection = {
+      ...projection,
+      sourceFieldId: selected.id,
+      sourceFileId: selected.content.id,
+    };
+
+    expect(
+      resolveCurrentExtractionFileField({
+        currentVersionId,
+        extracted: selectedProjection,
+        fields: [sibling, selected],
+      }),
+    ).toBe(selected);
+    expect(
+      selectCurrentExtractedContent({
+        extracted: selectedProjection,
+        allowLegacy: true,
+        currentVersionCreatedAt,
+        currentVersionId,
+        fields: [sibling, selected],
+      }),
+    ).toBe(selectedProjection);
+  });
+
   test("accepts a legacy row only when it is not older than the current version", () => {
     const legacy = {
       ...projection,
@@ -103,6 +141,33 @@ describe("selectCurrentExtractedContent", () => {
         currentVersionCreatedAt,
         currentVersionId,
         fields,
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects ambiguous legacy extraction for a multi-file version", () => {
+    const legacy = {
+      ...projection,
+      sourceEntityVersionId: null,
+      sourceFieldId: null,
+      sourceFileId: null,
+      sourceSha256Hex: null,
+    };
+
+    expect(
+      selectCurrentExtractedContent({
+        extracted: legacy,
+        allowLegacy: true,
+        currentVersionCreatedAt,
+        currentVersionId,
+        fields: [
+          ...fields,
+          {
+            content: { ...file, id: "file_sibling" },
+            id: toSafeId<"field">("field_sibling"),
+            propertyId: toSafeId<"property">("property_sibling"),
+          },
+        ],
       }),
     ).toBeNull();
   });

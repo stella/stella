@@ -456,6 +456,12 @@ type MockMcpTransaction = {
         name: string;
         updatedAt: Date;
         workspaceId: string;
+        extractedContent: {
+          sourceEntityVersionId: string | null;
+          sourceFieldId: string | null;
+          sourceFileId: string | null;
+          sourceSha256Hex: string | null;
+        } | null;
         currentVersion: {
           createdAt: Date;
           id: string;
@@ -500,11 +506,19 @@ const createExtractedContentRow = ({
   entityId = "entity_1",
   name = "Share Purchase Agreement",
   workspaceId = "ws_1",
+  sourceEntityVersionId = null,
+  sourceFieldId = null,
+  sourceFileId = null,
+  sourceSha256Hex = null,
 }: {
   charCount?: number;
   entityId?: string;
   name?: string;
   workspaceId?: string;
+  sourceEntityVersionId?: string | null;
+  sourceFieldId?: string | null;
+  sourceFileId?: string | null;
+  sourceSha256Hex?: string | null;
 } = {}): ExtractedContentRow => ({
   charCount,
   ciphertext: "ciphertext",
@@ -516,10 +530,10 @@ const createExtractedContentRow = ({
     workspaceId,
   },
   iv: "iv",
-  sourceEntityVersionId: null,
-  sourceFieldId: null,
-  sourceFileId: null,
-  sourceSha256Hex: null,
+  sourceEntityVersionId,
+  sourceFieldId,
+  sourceFileId,
+  sourceSha256Hex,
   workspaceId,
 });
 
@@ -534,9 +548,8 @@ const createScopedDb = (
   extractedContentRow: ExtractedContentRow | null = null,
   // The current version's field contents, in field order. Pass a DOCX
   // `FieldContent` as the sole entry to exercise the live docx-to-markdown
-  // branch, or list a non-DOCX field before a DOCX one to exercise the
-  // "first file field wins" selection (mirroring `processExtraction`, which
-  // produced `extractedContentRow`'s plaintext from that same first field).
+  // branch, or provide provenance that selects one entry in a multi-file
+  // version.
   currentVersionFields: MockFieldContent[] = [
     DEFAULT_CURRENT_VERSION_FILE_CONTENT,
   ],
@@ -588,6 +601,15 @@ const createScopedDb = (
                   name: currentDocument.name,
                   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
                   workspaceId: currentDocument.workspaceId,
+                  extractedContent: extractedContentRow
+                    ? {
+                        sourceEntityVersionId:
+                          extractedContentRow.sourceEntityVersionId,
+                        sourceFieldId: extractedContentRow.sourceFieldId,
+                        sourceFileId: extractedContentRow.sourceFileId,
+                        sourceSha256Hex: extractedContentRow.sourceSha256Hex,
+                      }
+                    : null,
                   currentVersion: {
                     createdAt: new Date("2026-01-01T00:00:00.000Z"),
                     id: "entity_version_1",
@@ -1804,28 +1826,35 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("read_content_across_matters selects the SAME file the extraction pipeline indexed, not just any DOCX field", async () => {
-    // The current version's first file field (the one `processExtraction`
-    // would extract `extractedContentRow`'s plaintext from) is a non-DOCX
-    // system document; a later auxiliary field happens to hold a DOCX. The
-    // markdown branch must not scan past the first file field looking for a
-    // DOCX -- doing so would return a different document than the plaintext
-    // fallback and search hits reference.
+    // The persisted source is a non-DOCX system document; an auxiliary field
+    // happens to hold a DOCX. The markdown branch must not scan for another
+    // DOCX and return a different document than the plaintext projection.
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
-      scopedDb: createScopedDb([], createExtractedContentRow(), [
-        {
-          type: "file",
-          id: "file_system",
-          fileName: "agreement.pdf",
-          mimeType: "application/pdf",
-        },
-        {
-          type: "file",
-          id: "file_auxiliary",
-          fileName: "exhibit.docx",
-          mimeType: DOCX_MIME_TYPE,
-        },
-      ]),
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow({
+          sourceEntityVersionId: "entity_version_1",
+          sourceFieldId: "field_1",
+          sourceFileId: "file_system",
+          sourceSha256Hex: "a".repeat(64),
+        }),
+        [
+          {
+            type: "file",
+            id: "file_system",
+            fileName: "agreement.pdf",
+            mimeType: "application/pdf",
+            sha256Hex: "a".repeat(64),
+          },
+          {
+            type: "file",
+            id: "file_auxiliary",
+            fileName: "exhibit.docx",
+            mimeType: DOCX_MIME_TYPE,
+          },
+        ],
+      ),
     });
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
@@ -1845,6 +1874,46 @@ describe("OpenAI-compatible MCP tools", () => {
     // no longer on this path at all, so asserting against it would hold even
     // if the auxiliary DOCX were read.
     expect(s3ArrayBufferMock).not.toHaveBeenCalled();
+  });
+
+  test("read_content_across_matters follows a persisted non-first DOCX source", async () => {
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow({
+          sourceEntityVersionId: "entity_version_1",
+          sourceFieldId: "field_2",
+          sourceFileId: "file_selected",
+          sourceSha256Hex: "b".repeat(64),
+        }),
+        [
+          {
+            type: "file",
+            id: "file_sibling",
+            fileName: "sibling.pdf",
+            mimeType: "application/pdf",
+            sha256Hex: "a".repeat(64),
+          },
+          {
+            type: "file",
+            id: "file_selected",
+            fileName: "selected.docx",
+            mimeType: DOCX_MIME_TYPE,
+            sha256Hex: "b".repeat(64),
+          },
+        ],
+      ),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({ text: "# Agreement" });
+    expect(s3ArrayBufferMock).toHaveBeenCalledTimes(1);
   });
 
   test("read_content_across_matters falls back to plaintext when docx-to-markdown conversion fails", async () => {

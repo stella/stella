@@ -1,6 +1,5 @@
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { findExtractionFileField } from "@/api/lib/search/types";
 
 type ExtractedContentProvenance = {
   extractedAt: Date;
@@ -8,6 +7,49 @@ type ExtractedContentProvenance = {
   sourceFieldId: string | null;
   sourceFileId: string | null;
   sourceSha256Hex: string | null;
+};
+
+export type ExtractedContentSourceProvenance = Pick<
+  ExtractedContentProvenance,
+  "sourceEntityVersionId" | "sourceFieldId" | "sourceFileId" | "sourceSha256Hex"
+>;
+
+type FileFieldRow = {
+  content: FieldContent;
+  id: SafeId<"field">;
+  propertyId?: SafeId<"property"> | undefined;
+};
+
+export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
+  currentVersionId,
+  extracted,
+  fields,
+}: {
+  currentVersionId: SafeId<"entityVersion">;
+  extracted: ExtractedContentSourceProvenance | null | undefined;
+  fields: readonly T[];
+}): T | null => {
+  const legacyOrMissingSource =
+    !extracted ||
+    (extracted.sourceEntityVersionId === null &&
+      extracted.sourceFieldId === null &&
+      extracted.sourceFileId === null &&
+      extracted.sourceSha256Hex === null);
+  if (legacyOrMissingSource) {
+    const fileFields = fields.filter(({ content }) => content.type === "file");
+    return fileFields.length === 1 ? (fileFields.at(0) ?? null) : null;
+  }
+
+  const field = fields.find(
+    ({ id }) =>
+      extracted.sourceEntityVersionId === currentVersionId &&
+      id === extracted.sourceFieldId,
+  );
+  return field?.content.type === "file" &&
+    field.content.id === extracted.sourceFileId &&
+    field.content.sha256Hex === extracted.sourceSha256Hex
+    ? field
+    : null;
 };
 
 /**
@@ -47,22 +89,22 @@ export const selectCurrentExtractedContent = <
     extracted.sourceFileId === null &&
     extracted.sourceSha256Hex === null;
   if (legacySource) {
-    return allowLegacy && extracted.extractedAt >= currentVersionCreatedAt
+    return allowLegacy &&
+      extracted.extractedAt >= currentVersionCreatedAt &&
+      resolveCurrentExtractionFileField({
+        currentVersionId,
+        extracted,
+        fields,
+      })
       ? extracted
       : null;
   }
 
-  const file = findExtractionFileField(fields);
-  const field = fields.find(
-    (candidate) =>
-      candidate.id === extracted.sourceFieldId &&
-      candidate.content.type === "file" &&
-      candidate.content.id === file?.id,
-  );
-  return extracted.sourceEntityVersionId === currentVersionId &&
-    field?.content.type === "file" &&
-    field.content.id === extracted.sourceFileId &&
-    field.content.sha256Hex === extracted.sourceSha256Hex
+  return resolveCurrentExtractionFileField({
+    currentVersionId,
+    extracted,
+    fields,
+  })
     ? extracted
     : null;
 };
