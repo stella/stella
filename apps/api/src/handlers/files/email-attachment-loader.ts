@@ -37,12 +37,12 @@ type EmailAttachmentLoadResult =
   | { status: typeof EMAIL_ATTACHMENT_LOAD_STATUS.tooLarge }
   | { status: typeof EMAIL_ATTACHMENT_LOAD_STATUS.unreadable };
 
-const emailAttachmentFieldQuery = async (
+const emailAttachmentFieldQuery = (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
   workspaceId: SafeId<"workspace">,
 ) =>
-  await scopedDb((tx) =>
+  scopedDb((tx) =>
     tx
       .select({
         content: fields.content,
@@ -70,7 +70,7 @@ const normalizedAttachmentMimeType = ({
 }: {
   fileName: string;
   mimeType: string | null;
-}): string =>
+}) =>
   resolveUploadMime({
     declaredMime:
       mimeType?.split(";").at(0)?.trim().toLowerCase() ||
