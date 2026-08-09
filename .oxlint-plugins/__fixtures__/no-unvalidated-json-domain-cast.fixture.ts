@@ -61,6 +61,13 @@ export const annotatedParse = () => {
   return parsed;
 };
 
+export const indirectlyAnnotatedParse = () => {
+  const rawValue = JSON.parse(raw);
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const parsed: RegistryCompany = rawValue;
+  return parsed;
+};
+
 export const assignedParse = () => {
   let parsed: RegistryCompany;
   if (raw === "") {
@@ -70,6 +77,26 @@ export const assignedParse = () => {
     parsed = JSON.parse(raw);
   }
   return parsed;
+};
+
+export const indirectlyAssignedParse = () => {
+  const rawValue = JSON.parse(raw);
+  let parsed: RegistryCompany;
+  if (raw !== "") {
+    // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+    parsed = rawValue;
+  } else {
+    parsed = v.parse(schema, null);
+  }
+  return parsed;
+};
+
+export const indirectlyAssertedParse = () => {
+  const rawValue = JSON.parse(raw);
+  return (
+    // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast, typescript/no-unsafe-type-assertion
+    rawValue as RegistryCompany
+  );
 };
 
 // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast

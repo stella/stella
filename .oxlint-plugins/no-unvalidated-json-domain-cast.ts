@@ -232,7 +232,7 @@ export default eslintCompatPlugin({
             return;
           }
           if (
-            isRawJsonBoundary(node.expression) &&
+            isUnvalidatedJsonValue(node.expression) &&
             !isRawJsonType(node.typeAnnotation)
           ) {
             context.report({ node, messageId: "unvalidatedDomain" });
@@ -301,7 +301,7 @@ export default eslintCompatPlugin({
             if (
               node.operator === "=" &&
               node.left.type === "Identifier" &&
-              isRawJsonBoundary(node.right) &&
+              isUnvalidatedJsonValue(node.right) &&
               hasClosedTypeAnnotation(node.left)
             ) {
               context.report({ node, messageId: "unvalidatedDomain" });
@@ -314,7 +314,7 @@ export default eslintCompatPlugin({
               jsonParseAliases.add(node.id.name);
             }
             if (
-              isRawJsonBoundary(node.init) &&
+              isUnvalidatedJsonValue(node.init) &&
               node.id.typeAnnotation &&
               !isRawJsonType(node.id.typeAnnotation)
             ) {
