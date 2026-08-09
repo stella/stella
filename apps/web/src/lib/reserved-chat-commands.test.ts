@@ -106,10 +106,42 @@ describe("runReservedChatCommand", () => {
     ).toBe(false);
     expect(calls).toEqual([]);
   });
+
+  test("passes trailing text to the handler as args", () => {
+    const seen: string[] = [];
+    const handlers: ReservedChatCommandHandlers = {
+      new: () => {
+        throw new Error("wrong handler");
+      },
+      "rename-chat": (args) => {
+        seen.push(args);
+      },
+    };
+    expect(
+      runReservedChatCommand(
+        "<p>/rename-chat  Quarterly NDA review </p>",
+        handlers,
+      ),
+    ).toBe(true);
+    expect(seen).toEqual(["Quarterly NDA review"]);
+  });
 });
 
 describe("matchReservedChatCommand", () => {
   test("trims surrounding whitespace", () => {
-    expect(matchReservedChatCommand("<p> /new </p>")?.id).toBe("new");
+    expect(matchReservedChatCommand("<p> /new </p>")?.command.id).toBe("new");
+  });
+
+  test("matches the bare command with empty args", () => {
+    expect(matchReservedChatCommand("<p>/rename-chat</p>")).toMatchObject({
+      args: "",
+      command: { id: "rename-chat" },
+    });
+  });
+
+  test("requires a whitespace boundary after the command token", () => {
+    // A longer word sharing a command prefix is a prompt, not a command.
+    expect(matchReservedChatCommand("<p>/newest gadgets</p>")).toBeNull();
+    expect(matchReservedChatCommand("<p>/rename-chats</p>")).toBeNull();
   });
 });
