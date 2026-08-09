@@ -63321,6 +63321,7 @@ export const generatedRouteMap: RouteNode = {
                       properties: {
                         viewIds: {
                           minItems: 1,
+                          maxItems: 20,
                           type: "array",
                           items: {
                             minLength: 36,
