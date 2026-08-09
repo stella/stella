@@ -420,6 +420,52 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).not.toContain("<form");
   });
 
+  test("caps descriptors after removing referenced inline parts", () => {
+    const inlineAttachments = Array.from({ length: 100 }, (_, index) => ({
+      contentId: `inline-${String(index)}`,
+      fileName: `inline-${String(index)}.png`,
+      mimeType: "image/png",
+      bytes: new Uint8Array([index]),
+    }));
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: inlineAttachments
+            .map(
+              ({ contentId }) =>
+                `<img src="cid:${contentId}" alt="inline image">`,
+            )
+            .join(""),
+        },
+        inlineImages: inlineAttachments.map(({ contentId }) => ({
+          cid: contentId,
+          mimeType: "image/png",
+          dataBase64: PNG_BASE64,
+        })),
+        attachments: [
+          ...inlineAttachments,
+          {
+            contentId: null,
+            fileName: "evidence.pdf",
+            mimeType: "application/pdf",
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+        ],
+      }),
+    );
+
+    expect(preview.attachments).toEqual([
+      {
+        id: "attachment-100",
+        fileName: "evidence.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 3,
+        previewable: true,
+      },
+    ]);
+  });
+
   test("folds trailing HTML history and signatures without removing content", () => {
     const preview = buildEmailPreview(
       htmlEmail({

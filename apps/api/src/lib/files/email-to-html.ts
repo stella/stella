@@ -178,11 +178,10 @@ export const buildEmailPreview = (
     attachments: parsed.attachments
       .map((attachment, attachmentIndex) => ({ attachment, attachmentIndex }))
       .filter(
-        ({ attachment: { contentId }, attachmentIndex }) =>
-          attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS &&
-          (!contentId ||
-            !inlineContentIds.has(contentId.toLowerCase()) ||
-            !renderedBody.referencedContentIds.has(contentId.toLowerCase())),
+        ({ attachment: { contentId } }) =>
+          !contentId ||
+          !inlineContentIds.has(contentId.toLowerCase()) ||
+          !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
       .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
       .map(({ attachment, attachmentIndex }) => ({

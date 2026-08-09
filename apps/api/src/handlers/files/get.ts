@@ -305,7 +305,7 @@ const pdfFileName = (fileName: string): string => {
 };
 
 const inlineContentDisposition = (fileName: string): string =>
-  contentDisposition(fileName).replace(/^attachment;/u, "inline;");
+  contentDisposition(fileName, "inline");
 
 const fetchStoredFileResponse = async (
   key: string,

@@ -9,6 +9,12 @@ describe("contentDisposition", () => {
     );
   });
 
+  test("supports inline responses without rewriting the header", () => {
+    expect(contentDisposition("report.pdf", "inline")).toBe(
+      'inline; filename="report.pdf"',
+    );
+  });
+
   test("uses fallback and UTF-8 filename* for non-ASCII names", () => {
     expect(contentDisposition("nález ÚS.pdf")).toBe(
       "attachment; filename=\"n_lez _S.pdf\"; filename*=UTF-8''n%C3%A1lez%20%C3%9AS.pdf",

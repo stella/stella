@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -137,7 +138,7 @@ const AttachmentPreview = ({
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowLeftIcon aria-hidden="true" className="size-3.5" />
+          <DirectionalIcon className="size-3.5" icon={ArrowLeftIcon} />
         </Button>
         <BidiText as="span" className="min-w-0 truncate text-sm font-medium">
           {fileName}

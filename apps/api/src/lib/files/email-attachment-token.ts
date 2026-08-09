@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /** Maximum descriptors exposed by one email preview. */
 export const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
@@ -25,11 +25,7 @@ export const createEmailAttachmentDescriptor = ({
   sourceVersionId,
   secret,
 }: EmailAttachmentDescriptorInput & { secret: string }): string => {
-  if (
-    !Number.isInteger(attachmentIndex) ||
-    attachmentIndex < 0 ||
-    attachmentIndex >= MAX_EMAIL_ATTACHMENT_DESCRIPTORS
-  ) {
+  if (!Number.isSafeInteger(attachmentIndex) || attachmentIndex < 0) {
     throw new RangeError("Email attachment index is out of bounds");
   }
 
@@ -38,7 +34,7 @@ export const createEmailAttachmentDescriptor = ({
       descriptorMessage({ attachmentIndex, sourceFileId, sourceVersionId }),
     )
     .digest("base64url");
-  return `${DESCRIPTOR_PREFIX}.${digest}`;
+  return `${DESCRIPTOR_PREFIX}.${String(attachmentIndex)}.${digest}`;
 };
 
 export const findEmailAttachmentIndex = ({
@@ -52,26 +48,25 @@ export const findEmailAttachmentIndex = ({
   sourceFileId: string;
   sourceVersionId: string;
 }): number | null => {
-  if (!/^ea1\.[A-Za-z0-9_-]{43}$/u.test(descriptor)) {
+  const match = /^ea1\.([0-9]{1,16})\.[A-Za-z0-9_-]{43}$/u.exec(descriptor);
+  const attachmentIndexText = match?.at(1);
+  if (!attachmentIndexText) {
     return null;
   }
-
-  for (
-    let attachmentIndex = 0;
-    attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS;
-    attachmentIndex += 1
+  const attachmentIndex = Number(attachmentIndexText);
+  if (
+    !Number.isSafeInteger(attachmentIndex) ||
+    String(attachmentIndex) !== attachmentIndexText
   ) {
-    if (
-      createEmailAttachmentDescriptor({
-        attachmentIndex,
-        secret,
-        sourceFileId,
-        sourceVersionId,
-      }) === descriptor
-    ) {
-      return attachmentIndex;
-    }
+    return null;
   }
-
-  return null;
+  const expected = createEmailAttachmentDescriptor({
+    attachmentIndex,
+    secret,
+    sourceFileId,
+    sourceVersionId,
+  });
+  return timingSafeEqual(Buffer.from(descriptor), Buffer.from(expected))
+    ? attachmentIndex
+    : null;
 };

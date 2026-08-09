@@ -24,11 +24,12 @@ describe("email attachment descriptors", () => {
     );
     expect(descriptor).not.toContain(source.sourceFileId);
     expect(findEmailAttachmentIndex({ ...source, descriptor })).toBe(2);
-    for (
-      let attachmentIndex = 0;
-      attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS;
-      attachmentIndex += 1
-    ) {
+    for (const attachmentIndex of [
+      0,
+      MAX_EMAIL_ATTACHMENT_DESCRIPTORS - 1,
+      MAX_EMAIL_ATTACHMENT_DESCRIPTORS,
+      10_000,
+    ]) {
       const indexedDescriptor = createEmailAttachmentDescriptor({
         ...source,
         attachmentIndex,
@@ -73,7 +74,13 @@ describe("email attachment descriptors", () => {
     expect(() =>
       createEmailAttachmentDescriptor({
         ...source,
-        attachmentIndex: 100,
+        attachmentIndex: -1,
+      }),
+    ).toThrow();
+    expect(() =>
+      createEmailAttachmentDescriptor({
+        ...source,
+        attachmentIndex: Number.MAX_SAFE_INTEGER + 1,
       }),
     ).toThrow();
   });

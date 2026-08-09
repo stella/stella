@@ -5,11 +5,13 @@ import { status, t } from "elysia";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -24,6 +26,7 @@ import {
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
@@ -37,6 +40,7 @@ const emailAttachmentFieldQuery = async (
     tx
       .select({
         content: fields.content,
+        entityId: entities.id,
         entityVersionId: entityVersions.id,
       })
       .from(fields)
@@ -48,13 +52,15 @@ const emailAttachmentFieldQuery = async (
           eq(entities.workspaceId, workspaceId),
         ),
       )
+      // Withdrawn versions remain under legal hold, but their bytes must not
+      // remain reachable through a previously captured field identifier.
       .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
       .limit(1),
   );
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "internal", reason: "upload_mechanics" },
+  mcp: { type: "internal", reason: "document_processing" },
   query: t.Object({ disposition: t.UnionEnum(["inline", "download"]) }),
   params: workspaceParams({
     fieldId: tSafeId("field"),
@@ -64,12 +70,15 @@ const config = {
 
 const attachmentNotFound = () => status(404);
 const attachmentNotPreviewable = () => status(415);
+const attachmentSourceTooLarge = () =>
+  status(413, { message: "Email exceeds the preview size limit" });
 const attachmentUnreadable = () =>
   status(422, { message: "Failed to parse email attachment" });
 
 type EmailAttachmentResult =
   | ReturnType<typeof attachmentNotFound>
   | ReturnType<typeof attachmentNotPreviewable>
+  | ReturnType<typeof attachmentSourceTooLarge>
   | ReturnType<typeof attachmentUnreadable>
   | Response;
 
@@ -78,6 +87,7 @@ export default createSafeHandler(
   async function* ({
     params: { attachmentId, fieldId },
     query: { disposition },
+    recordAuditEvent,
     scopedDb,
     session,
     workspaceId,
@@ -111,6 +121,9 @@ export default createSafeHandler(
     if (attachmentIndex === null) {
       return Result.ok(attachmentNotFound());
     }
+    if (content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document) {
+      return Result.ok(attachmentSourceTooLarge());
+    }
 
     const sourceBuffer = yield* Result.await(
       Result.tryPromise(
@@ -130,6 +143,11 @@ export default createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(parsedResult)) {
+      captureError(parsedResult.error, {
+        fieldId,
+        mimeType: emailMimeType,
+        workspaceId,
+      });
       return Result.ok(attachmentUnreadable());
     }
     const preview = buildEmailPreview(parsedResult.value, {
@@ -161,10 +179,28 @@ export default createSafeHandler(
           "application/octet-stream")
         : "application/octet-stream";
     const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
-    const safeDisposition = contentDisposition(fileName).replace(
-      /^attachment;/u,
-      () => `${disposition};`,
-    );
+    const safeDisposition = contentDisposition(fileName, disposition);
+    if (disposition === "download") {
+      yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await scopedDb(
+              async (tx) =>
+                await recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.DOWNLOAD,
+                  resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                  resourceId: row.entityId,
+                  metadata: {
+                    attachmentId,
+                    fieldId,
+                    mimeType,
+                    sizeBytes: attachment.bytes.byteLength,
+                  },
+                }),
+            ),
+        ),
+      );
+    }
     return Result.ok(
       new Response(new Uint8Array(attachment.bytes), {
         headers: {

@@ -7,12 +7,15 @@ const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/u;
  * `filename="..."` form. All others get a sanitised ASCII
  * fallback plus `filename*=UTF-8''...` for correct decoding.
  */
-export const contentDisposition = (name: string): string => {
+export const contentDisposition = (
+  name: string,
+  disposition: "attachment" | "inline" = "attachment",
+): string => {
   const isSafeAscii =
     ASCII_FILENAME_RE.test(name) && !name.includes('"') && !name.includes("\\");
 
   if (isSafeAscii) {
-    return `attachment; filename="${name}"`;
+    return `${disposition}; filename="${name}"`;
   }
 
   // Sanitise fallback: strip non-ASCII and unsafe chars
@@ -22,5 +25,5 @@ export const contentDisposition = (name: string): string => {
     .replaceAll("\\", "_");
   const encoded = encodeURIComponent(name).replaceAll("'", "%27");
 
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 };
