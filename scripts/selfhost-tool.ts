@@ -34,6 +34,8 @@ const RELEASE_DOC_PATH = "docs/releases.md";
 const RELEASE_WORKFLOW_PATH = ".github/workflows/release.yml";
 const RELEASE_MANIFEST_SCRIPT_PATH = "scripts/create-release-manifest.sh";
 const IMAGE_DIGEST_PATTERN = /@sha256:[a-f0-9]{64}$/u;
+const LOCAL_API_READINESS_ALIAS_PATTERN =
+  /(?:localhost|127\.0\.0\.1):3001\/health/u;
 
 const SELFHOST_ACTIVE_API_ENV_NAMES = [
   "BETTER_AUTH_SECRET",
@@ -281,6 +283,37 @@ const releaseContractIssues = () => {
   return issues;
 };
 
+type WorkflowSource = {
+  content: string;
+  path: string;
+};
+
+export const workflowHealthContractIssues = (
+  workflows: Iterable<WorkflowSource>,
+) => {
+  const issues: string[] = [];
+  for (const workflow of workflows) {
+    if (LOCAL_API_READINESS_ALIAS_PATTERN.test(workflow.content)) {
+      issues.push(
+        `${workflow.path} must use /live when waiting for a local API process to boot.`,
+      );
+    }
+  }
+  return issues;
+};
+
+const repositoryWorkflowSources = () =>
+  Array.from(
+    new Bun.Glob(".github/**/*.{yml,yaml}").scanSync({
+      cwd: REPO_ROOT,
+      onlyFiles: true,
+    }),
+    (workflowPath) => ({
+      content: readFileSync(path.join(REPO_ROOT, workflowPath), "utf-8"),
+      path: workflowPath,
+    }),
+  );
+
 const generate = () => {
   for (const artifact of generatedArtifacts()) {
     const absolutePath = path.join(REPO_ROOT, artifact.path);
@@ -307,6 +340,7 @@ const check = () => {
     ),
     ...templateContractIssues(renderSelfhostEnvExample()),
     ...releaseContractIssues(),
+    ...workflowHealthContractIssues(repositoryWorkflowSources()),
   );
   if (issues.length === 0) {
     console.log("Self-host production contract is valid.");

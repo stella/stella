@@ -13,6 +13,7 @@ import {
   isImmutableApplicationImage,
   materializeSelfhostTemplateForValidation,
   renderSelfhostEnvExample,
+  workflowHealthContractIssues,
 } from "./selfhost-tool";
 
 const repositoryCompose = async () =>
@@ -150,5 +151,29 @@ describe("self-host production environment", () => {
     expect(doctor.exitCode).toBe(0);
     expect(configured.stderr.toString()).toBe("");
     expect(configured.exitCode).toBe(0);
+  });
+});
+
+describe("self-host workflow contract", () => {
+  test("rejects readiness aliases used as local API bootstrap probes", () => {
+    const workflowPath = ".github/actions/setup-e2e-stack/action.yml";
+    expect(
+      workflowHealthContractIssues([
+        {
+          content: "curl -sf http://localhost:3001/health",
+          path: workflowPath,
+        },
+      ]),
+    ).toEqual([
+      `${workflowPath} must use /live when waiting for a local API process to boot.`,
+    ]);
+    expect(
+      workflowHealthContractIssues([
+        {
+          content: "curl -sf http://localhost:3001/live",
+          path: workflowPath,
+        },
+      ]),
+    ).toEqual([]);
   });
 });
