@@ -384,9 +384,9 @@ export const uncheckedConditionalResponse = async () => {
 export const siblingDeclaratorConsumesDataFirst = async () => {
   // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: sibling initializer consumes data before error inspection
   const response = await api.tasks.get(),
-    data = response.data;
+    selectedData = response.data;
   consume(response.error);
-  return data;
+  return selectedData;
 };
 
 // MUST flag: a dynamic direct-await property can select data at runtime.
