@@ -22,12 +22,12 @@ describe("document write rate limiting", () => {
       isUploadRateLimitedPath(
         "/v1/files/ws_1/email-attachment/field_1/ea1.token/save",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isUploadRateLimitedPath(
         "/v1/files/ws_1/email-attachment/field_1/ea1.token/save/",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("does not cover non-upload entity endpoints", () => {

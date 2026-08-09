@@ -9,6 +9,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { broadcastQueryInvalidationToOrganization } from "@/api/lib/invalidate-query-macro";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
@@ -17,6 +18,8 @@ import {
 } from "../email-attachment-loader";
 import { consumeEmailAttachmentSaveRateLimit } from "../email-attachment-save-rate-limit";
 import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
+
+const WORKSPACES_QUERY_KEY = ["workspaces"];
 
 const config = {
   description:
@@ -170,6 +173,10 @@ export default createSafeHandler(
         workspaceId: destinationWorkspaceId,
       });
     });
+    broadcastQueryInvalidationToOrganization(
+      session.activeOrganizationId,
+      WORKSPACES_QUERY_KEY,
+    );
 
     return Result.ok({
       entityId: created.entityId,

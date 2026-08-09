@@ -37,6 +37,7 @@ import {
   type MatterTarget,
 } from "@/components/matter-target-picker";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import {
   emailAttachmentPreviewOptions,
@@ -72,6 +73,7 @@ export const EmailAttachmentsFacet = ({
   workspaceId,
 }: EmailAttachmentsFacetProps) => {
   const t = useTranslations();
+  const canSave = usePermissions({ entity: ["create"] });
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
@@ -137,6 +139,7 @@ export const EmailAttachmentsFacet = ({
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.overview(saved.workspaceId),
             }),
+            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
           ]);
         });
         savingRef.current = false;
@@ -171,6 +174,7 @@ export const EmailAttachmentsFacet = ({
     selected !== undefined ? (
       <AttachmentPreview
         attachment={selected}
+        canSave={canSave}
         fieldId={fieldId}
         onBack={() => setSelectedId(null)}
         onChooseMatter={() => openMatterPicker(selected.id)}
@@ -186,6 +190,7 @@ export const EmailAttachmentsFacet = ({
     ) : (
       <AttachmentList
         attachments={previewQuery.data.attachments}
+        canSave={canSave}
         fieldId={fieldId}
         onChooseMatter={openMatterPicker}
         onSave={(attachment) =>
@@ -251,6 +256,7 @@ export const EmailAttachmentsFacet = ({
 
 const AttachmentPreview = ({
   attachment,
+  canSave,
   fieldId,
   onBack,
   onChooseMatter,
@@ -259,6 +265,7 @@ const AttachmentPreview = ({
   workspaceId,
 }: {
   attachment: EmailAttachmentDescriptor;
+  canSave: boolean;
   fieldId: string;
   onBack: () => void;
   onChooseMatter: () => void;
@@ -314,13 +321,15 @@ const AttachmentPreview = ({
         >
           {fileName}
         </BidiText>
-        <AttachmentSaveControls
-          compact={false}
-          descriptionId={fileNameId}
-          disabled={saving}
-          onChooseMatter={onChooseMatter}
-          onSave={onSave}
-        />
+        {canSave ? (
+          <AttachmentSaveControls
+            compact={false}
+            descriptionId={fileNameId}
+            disabled={saving}
+            onChooseMatter={onChooseMatter}
+            onSave={onSave}
+          />
+        ) : null}
       </div>
       <div className="bg-muted/30 flex min-h-0 flex-1 items-center justify-center p-2">
         <AttachmentPreviewContent
@@ -411,6 +420,7 @@ const AttachmentPreviewContent = ({
 
 const AttachmentList = ({
   attachments,
+  canSave,
   fieldId,
   onChooseMatter,
   onSave,
@@ -418,6 +428,7 @@ const AttachmentList = ({
   saving,
 }: {
   attachments: readonly EmailAttachmentDescriptor[];
+  canSave: boolean;
   fieldId: string;
   onChooseMatter: (id: string) => void;
   onSave: (attachment: EmailAttachmentDescriptor) => void;
@@ -445,6 +456,7 @@ const AttachmentList = ({
           {attachments.map((attachment) => (
             <AttachmentListItem
               attachment={attachment}
+              canSave={canSave}
               key={attachment.id}
               onChooseMatter={onChooseMatter}
               onSave={onSave}
@@ -460,12 +472,14 @@ const AttachmentList = ({
 
 const AttachmentListItem = ({
   attachment,
+  canSave,
   onChooseMatter,
   onSave,
   onSelect,
   saving,
 }: {
   attachment: EmailAttachmentDescriptor;
+  canSave: boolean;
   onChooseMatter: (id: string) => void;
   onSave: (attachment: EmailAttachmentDescriptor) => void;
   onSelect: (id: string) => void;
@@ -503,13 +517,15 @@ const AttachmentListItem = ({
             </span>
           ) : null}
         </button>
-        <AttachmentSaveControls
-          compact
-          descriptionId={fileNameId}
-          disabled={saving}
-          onChooseMatter={() => onChooseMatter(attachment.id)}
-          onSave={() => onSave(attachment)}
-        />
+        {canSave ? (
+          <AttachmentSaveControls
+            compact
+            descriptionId={fileNameId}
+            disabled={saving}
+            onChooseMatter={() => onChooseMatter(attachment.id)}
+            onSave={() => onSave(attachment)}
+          />
+        ) : null}
       </div>
     </li>
   );
@@ -535,7 +551,7 @@ const AttachmentSaveControls = ({
       <Button
         aria-describedby={descriptionId}
         aria-label={t("common.save")}
-        className={compact ? "min-h-11 min-w-11" : undefined}
+        className="min-h-11 min-w-11"
         disabled={disabled}
         onClick={onSave}
         size={compact ? "icon-sm" : "sm"}
@@ -550,7 +566,7 @@ const AttachmentSaveControls = ({
             <Button
               aria-describedby={descriptionId}
               aria-label={t("common.selectAMatter")}
-              className={compact ? "min-h-11 min-w-11" : undefined}
+              className="min-h-11 min-w-11"
               disabled={disabled}
               size="icon-sm"
               variant="ghost"
