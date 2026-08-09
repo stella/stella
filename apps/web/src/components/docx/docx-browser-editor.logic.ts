@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 
 import { selectStableArrayBuffer } from "./array-buffer-utils";
@@ -178,8 +180,10 @@ export const getDocxEditSafety = ({
       return "unsafe";
     case "pendingCompatibility":
       return "checking";
-    default:
+    case null:
       return "safe";
+    default:
+      return panic("Unsupported DOCX edit safety state");
   }
 };
 

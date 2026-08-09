@@ -120,4 +120,33 @@ describe("template value-source state", () => {
       ]).fields,
     ).toEqual([{ path: "name", label: "Name", inputType: "text" }]);
   });
+
+  test("preserves an empty formula while editing, then omits it on save", () => {
+    const field = {
+      path: "amount",
+      kind: "number",
+      label: "Amount",
+      inputType: "number",
+      required: false,
+      options: [],
+      formula: "",
+      valueSource: { type: "input" },
+    } satisfies TemplateEditableField;
+    const draft = {
+      ...field,
+      ...templateValueSourcePatch(field, { preserveDraft: true }),
+    };
+
+    expect(draft.valueSource).toEqual({ type: "formula", formula: "" });
+    expect(
+      buildManifest({}, [
+        {
+          ...draft,
+          aiPrompt: undefined,
+          aiAdapt: false,
+          aiSeesDocument: false,
+        },
+      ]).fields,
+    ).toEqual([{ path: "amount", label: "Amount", inputType: "number" }]);
+  });
 });

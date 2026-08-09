@@ -26,6 +26,7 @@ import {
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`
@@ -266,7 +267,7 @@ type StubAdapterOptions = {
 };
 
 const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
-  key: "replay-stub",
+  key: ADAPTER_KEYS.EU_ECJ,
   name: "replay stub",
   country: "EU",
   language: "en",

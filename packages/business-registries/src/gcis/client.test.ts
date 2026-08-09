@@ -139,7 +139,7 @@ describe("lookupByTaxId (fixture)", () => {
         }),
     );
 
-    await expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
       name: "GcisAPIError",
       httpStatus: 500,
     });
@@ -286,7 +286,7 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    await expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
       name: "GcisAPIError",
       message: "GCIS returned no rows with the fields required by stella",
     });

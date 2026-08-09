@@ -17,6 +17,8 @@
 //   v.parse(schema, await response.json())
 //   v.safeParse(openSchema, JSON.parse(raw))
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   filenameForContext,
   getPropertyName,
@@ -34,6 +36,7 @@ const isProductionBoundaryFile = (filename: string): boolean => {
   }
   return !(
     filename.includes("/e2e/") ||
+    filename.includes("/tests/") ||
     filename.includes("/scripts/") ||
     filename.includes("/packages/scripts/") ||
     /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filename)
@@ -77,7 +80,7 @@ const isJsonParseCall = (
   const callee = peelRuntimeExpression(current.callee);
   return (
     isJsonParseMember(callee) ||
-    (callee?.type === "Identifier" && jsonParseAliases.has(callee.name))
+    (isIdentifier(callee) && jsonParseAliases.has(callee.name))
   );
 };
 
@@ -118,7 +121,7 @@ const isRawJsonType = (node: unknown): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-unvalidated-json-domain-cast" },
   rules: {
     "no-unvalidated-json-domain-cast": {
@@ -129,16 +132,15 @@ export default {
             "Raw JSON is not a validated domain value. Keep it as `unknown`/`JsonValue`, then parse only the consumed fields with a runtime schema (use a loose/open schema for evolving upstream payloads).",
         },
       },
-      create(context) {
-        if (!isProductionBoundaryFile(filenameForContext(context))) {
-          return {};
-        }
-
+      createOnce(context) {
         const jsonParseAliases = new Set<string>();
         const isRawJsonBoundary = (node: unknown): boolean =>
           isJsonParseCall(node, jsonParseAliases) || isResponseJsonCall(node);
 
-        const checkAssertion = (node) => {
+        const checkAssertion = (node: unknown) => {
+          if (!isAstNode(node)) {
+            return;
+          }
           if (
             isRawJsonBoundary(node.expression) &&
             !isRawJsonType(node.typeAnnotation)
@@ -148,8 +150,12 @@ export default {
         };
 
         return {
+          before() {
+            jsonParseAliases.clear();
+            return isProductionBoundaryFile(filenameForContext(context));
+          },
           CallExpression(node) {
-            const typeArgument = node.typeArguments?.params?.at(0);
+            const typeArgument = node.typeArguments?.params.at(0);
             if (
               typeArgument &&
               isRawJsonBoundary(node) &&
@@ -159,15 +165,12 @@ export default {
             }
           },
           VariableDeclarator(node) {
-            if (
-              node.id?.type === "Identifier" &&
-              isJsonParseMember(node.init)
-            ) {
+            if (node.id.type === "Identifier" && isJsonParseMember(node.init)) {
               jsonParseAliases.add(node.id.name);
             }
             if (
               isRawJsonBoundary(node.init) &&
-              node.id?.typeAnnotation &&
+              node.id.typeAnnotation &&
               !isRawJsonType(node.id.typeAnnotation)
             ) {
               context.report({ node, messageId: "unvalidatedDomain" });
@@ -179,4 +182,4 @@ export default {
       },
     },
   },
-};
+});

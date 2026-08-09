@@ -52,19 +52,15 @@ export const isEntityPriority = (value: unknown): value is EntityPriority =>
   ENTITY_PRIORITIES.some((priority) => priority === value);
 
 /** Values accepted by a task's legal-list item discriminator. */
-export const LIST_ITEM_TYPE = {
-  TASK: "task",
-  FACT: "fact",
-  ISSUE: "issue",
-  REQUIREMENT: "requirement",
-  EVENT: "event",
-} as const;
+export const LIST_ITEM_TYPES = Object.freeze([
+  "task",
+  "fact",
+  "issue",
+  "requirement",
+  "event",
+] as const);
 
-export type ListItemType = (typeof LIST_ITEM_TYPE)[keyof typeof LIST_ITEM_TYPE];
-
-export const LIST_ITEM_TYPES: readonly ListItemType[] = Object.freeze(
-  Object.values(LIST_ITEM_TYPE),
-);
+export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
 
 export const isListItemType = (value: unknown): value is ListItemType =>
   typeof value === "string" &&

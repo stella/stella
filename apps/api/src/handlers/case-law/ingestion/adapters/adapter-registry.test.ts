@@ -24,7 +24,7 @@ describe("case-law adapter registries", () => {
   test("lazy loading returns the adapter selected by the closed key", async () => {
     const keys = listLazyAdapterKeys();
     const adapters = await Promise.all(keys.map(loadAdapterByKey));
-    expect(adapters.map((adapter) => adapter?.key)).toEqual(keys);
-    await expect(loadAdapterByKey("not-an-adapter")).resolves.toBeUndefined();
+    expect(adapters.map((adapter) => adapter?.key)).toEqual([...keys]);
+    expect(loadAdapterByKey("not-an-adapter")).resolves.toBeUndefined();
   });
 });

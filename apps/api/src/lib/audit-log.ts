@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
@@ -276,8 +278,46 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
         event.changes?.["membersRemoved"] !== undefined
         ? "team"
         : "matter";
-    default:
+    case "audit_log":
+    case "agent_skill":
+    case "ai_memory":
+    case "billing_code":
+    case "chat_file":
+    case "chat_message":
+    case "chat_thread":
+    case "clause":
+    case "clause_category":
+    case "clause_template_link":
+    case "clause_variant":
+    case "contact":
+    case "document_type":
+    case "usage_allocation":
+    case "usage_entitlement":
+    case "usage_event":
+    case "desktop_edit_session":
+    case "expense":
+    case "flow_definition":
+    case "folio_collab_session":
+    case "invoice":
+    case "machine_api_key":
+    case "legal_list":
+    case "legal_list_generation":
+    case "legal_list_item":
+    case "mcp_gateway_tool":
+    case "organization_settings":
+    case "property":
+    case "rate_entry":
+    case "report_export":
+    case "rate_table":
+    case "saved_search":
+    case "style_set":
+    case "template":
+    case "time_entry":
+    case "view":
+    case "view_template":
       return "other";
+    default:
+      return panic("Unsupported audit resource type");
   }
 };
 

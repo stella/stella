@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -172,8 +173,15 @@ const findingSubject = (finding: CheckFinding): string => {
       return finding.conditionName;
     case "invalidMarker":
       return finding.marker;
-    default:
+    case "markerWithoutField":
+    case "unplacedField":
+    case "fieldMissingLabel":
+    case "fieldMissingInputType":
+    case "selectWithoutOptions":
+    case "formulaUnknownPath":
       return finding.path;
+    default:
+      return panic("Unsupported template check finding");
   }
 };
 

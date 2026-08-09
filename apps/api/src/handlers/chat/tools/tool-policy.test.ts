@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const captureErrorMock = mock();
 
@@ -101,6 +101,18 @@ describe("getChatToolPolicy", () => {
 });
 
 describe("applyChatToolPolicies", () => {
+  test("preserves a policy assigned before a dynamic tool joins the built-in map", () => {
+    const dynamic = tool("dynamic-connector");
+    applyChatToolPolicy(dynamic, CHAT_TOOL_POLICY_KIND.external);
+    const tools: ChatToolMap = { dynamic };
+
+    expect(applyChatToolPolicies({ policyKinds: {}, tools })).toBe(tools);
+    expect(getChatToolPolicy(dynamic).kind).toBe(
+      CHAT_TOOL_POLICY_KIND.external,
+    );
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
   test("rejects a tool whose policy is omitted instead of silently skipping it", () => {
     expect(() =>
       // @ts-expect-error Deliberately exercises the runtime defense for JS callers.

@@ -118,19 +118,18 @@ const compareValues = (
     if (ln === undefined) {
       return false;
     }
-    if (op === "gt") {
-      return ln > rn;
+    switch (op) {
+      case "gt":
+        return ln > rn;
+      case "lt":
+        return ln < rn;
+      case "gte":
+        return ln >= rn;
+      case "lte":
+        return ln <= rn;
+      default:
+        return assertNever(op);
     }
-    if (op === "lt") {
-      return ln < rn;
-    }
-    if (op === "gte") {
-      return ln >= rn;
-    }
-    if (op === "lte") {
-      return ln <= rn;
-    }
-    return assertNever(op);
   }
 
   const ls = normScalar(left);
@@ -141,19 +140,18 @@ const compareValues = (
   if (ls === "") {
     return false;
   }
-  if (op === "gt") {
-    return ls > rs;
+  switch (op) {
+    case "gt":
+      return ls > rs;
+    case "lt":
+      return ls < rs;
+    case "gte":
+      return ls >= rs;
+    case "lte":
+      return ls <= rs;
+    default:
+      return assertNever(op);
   }
-  if (op === "lt") {
-    return ls < rs;
-  }
-  if (op === "gte") {
-    return ls >= rs;
-  }
-  if (op === "lte") {
-    return ls <= rs;
-  }
-  return assertNever(op);
 };
 
 // ── Predicates ────────────────────────────────────────────

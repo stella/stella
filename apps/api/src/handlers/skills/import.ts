@@ -47,6 +47,10 @@ const importSkillScopeValues = [
 const importFailureCodeFromInstallError = (
   code: string | undefined,
 ): SkillImportFailureCode => {
+  if (code === undefined) {
+    return SKILL_IMPORT_FAILURE_CODE.INSTALL_FAILED;
+  }
+
   switch (code) {
     case SKILL_INSTALL_ERROR_CODE.NAME_CONFLICT:
       return SKILL_IMPORT_FAILURE_CODE.NAME_CONFLICT;

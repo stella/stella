@@ -27,7 +27,6 @@ export {
   isEntityPriority,
   isListItemType,
   isTaskStatus,
-  LIST_ITEM_TYPE,
   LIST_ITEM_TYPES,
   TASK_STATUS,
   TASK_STATUSES,

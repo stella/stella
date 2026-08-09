@@ -160,8 +160,12 @@ export const applyChatToolPolicies = <TTools extends ChatToolMap>({
     }
 
     const policyKind = policyKinds[name] ?? defaultPolicyKind;
-    if (!policyKind) {
-      missingChatToolPolicy(toolDefinition);
+    if (policyKind === undefined) {
+      // Dynamic tools can arrive pre-classified before this total built-in
+      // pass. Preserve that registration; an unregistered tool still fails
+      // closed through the same lookup.
+      getChatToolPolicy(toolDefinition);
+      continue;
     }
 
     applyChatToolPolicy(toolDefinition, policyKind);

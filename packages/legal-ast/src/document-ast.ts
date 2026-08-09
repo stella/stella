@@ -196,14 +196,12 @@ const persistedDocumentAstWireSchema = v.object({
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   v.pipe(
     persistedDocumentAstWireSchema,
-    v.transform(
-      ({ blocks, metadata, source }): DocumentAst => ({
-        version: 1,
-        source: source ?? emptyDocumentAstSource(),
-        metadata: metadata ?? emptyDocumentAstMetadata(),
-        blocks,
-      }),
-    ),
+    v.transform(({ blocks, metadata, source }): DocumentAst => ({
+      version: 1,
+      source: source ?? emptyDocumentAstSource(),
+      metadata: metadata ?? emptyDocumentAstMetadata(),
+      blocks,
+    })),
   );
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>

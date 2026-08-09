@@ -264,8 +264,11 @@ export const templateValueSourceOf = (
       format: field.format ?? "",
     };
   }
-  if (field.formula?.trim()) {
-    return { type: "formula", formula: field.formula.trim() };
+  if (field.formula !== undefined) {
+    const formula = field.formula.trim();
+    if (formula !== "" || options.preserveDraft === true) {
+      return { type: "formula", formula };
+    }
   }
   if (field.inputType === "boolean" && field.conditionAst !== undefined) {
     return { type: "condition", conditionAst: field.conditionAst };
@@ -418,6 +421,7 @@ const buildEditableFields = (
       ...templateValueSourcePatch(
         {
           ...f,
+          inputType: inferInputType(f),
           parts,
         },
         { preserveDraft: true },

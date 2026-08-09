@@ -351,7 +351,7 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     case "condition":
       if (f.valueSource.conditionAst !== undefined) {
         field.conditionAst = f.valueSource.conditionAst;
-      } else if (f.valueSource.condition !== undefined) {
+      } else {
         field.condition = f.valueSource.condition;
       }
       return field;

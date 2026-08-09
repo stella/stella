@@ -127,7 +127,7 @@ describe("BOE client", () => {
       }),
     );
 
-    await expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
       name: "BoeAPIError",
       message: "BOE returned an unexpected JSON payload shape",
     });
@@ -142,7 +142,7 @@ describe("BOE client", () => {
         }),
     );
 
-    await expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
       name: "BoeAPIError",
       message: "BOE returned malformed JSON",
     });

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   BYOK_MODEL_OPTIONS,
   resolveWorkingBYOKModelForRole,
@@ -143,11 +145,19 @@ export const normalizeOrgAIProviderConfig = (
     case "azure_foundry":
     case "huggingface":
       return config;
-    default:
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
       return {
         ...config,
         region: normalizeProviderRegion(config.provider, config.region),
       };
+    default:
+      return panic("Unsupported AI provider configuration");
   }
 };
 

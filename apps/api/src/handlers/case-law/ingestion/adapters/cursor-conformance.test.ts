@@ -412,7 +412,9 @@ describe("adapter cursor conformance covers the registry", () => {
   });
 
   test("every declared adapter is registered", () => {
-    const unregistered = declared.filter((key) => !registered.includes(key));
+    const unregistered = declared.filter(
+      (key) => !registered.some((registeredKey) => registeredKey === key),
+    );
     expect(
       unregistered,
       "entries in ADAPTER_CONFORMANCE that name no adapter in " +

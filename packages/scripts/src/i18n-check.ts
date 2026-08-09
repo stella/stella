@@ -284,8 +284,12 @@ const extractLiteralText = (elements: MessageFormatElement[]): string => {
       case TYPE.tag:
         text += extractLiteralText(element.children);
         break;
-      default:
-        // argument, number, date, time, pound: interpolated, not translatable text.
+      case TYPE.argument:
+      case TYPE.number:
+      case TYPE.date:
+      case TYPE.time:
+      case TYPE.pound:
+        // Interpolated/control syntax, not translatable text.
         break;
     }
   }
