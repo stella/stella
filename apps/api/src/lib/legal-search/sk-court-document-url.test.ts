@@ -19,5 +19,20 @@ describe("Slovak court document URL restriction", () => {
         "https://obcan.justice.sk/private/item/document-id",
       ),
     ).toBeNull();
+    expect(
+      restrictSkCourtDocumentUrl(
+        "https://obcan.justice.sk.evil.example/content/public/item/document-id",
+      ),
+    ).toBeNull();
+    expect(
+      restrictSkCourtDocumentUrl(
+        "https://evil.obcan.justice.sk/content/public/item/document-id",
+      ),
+    ).toBeNull();
+    expect(
+      restrictSkCourtDocumentUrl(
+        "https://obcan.justice.sk/content/public/itemised/document-id",
+      ),
+    ).toBeNull();
   });
 });

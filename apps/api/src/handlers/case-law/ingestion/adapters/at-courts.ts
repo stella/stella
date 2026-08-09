@@ -384,6 +384,12 @@ const parseRisItem = async (
         hostPolicy: RIS_DOCUMENT_HOST_POLICY,
       })
     : null;
+  if (rawHtmlUrl && htmlUrl === null) {
+    logger.warn("case_law.ingestion.outbound_url_rejected", {
+      adapterKey: ADAPTER_KEYS.AT_COURTS,
+      caseNumber,
+    });
+  }
   const fulltext = htmlUrl
     ? await fetchFulltext(htmlUrl.toString(), signal)
     : undefined;

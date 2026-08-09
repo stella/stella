@@ -35,8 +35,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
 import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -56,18 +56,6 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
-const CZ_REGIONAL_ORIGIN = "https://rozhodnuti.justice.cz";
-const CZ_REGIONAL_FINALDOC_PATH = "/api/finaldoc/";
-
-const restrictCzRegionalFinaldocUrl = (rawUrl: string): URL | null =>
-  restrictOutboundUrl({
-    rawUrl,
-    hostPolicy: {
-      type: "exact-origin",
-      origins: [CZ_REGIONAL_ORIGIN],
-    },
-    pathPrefixes: [CZ_REGIONAL_FINALDOC_PATH],
-  });
 
 /**
  * Concurrent finaldoc fetches per page. The court server
@@ -281,15 +269,12 @@ const fetchFinaldoc = async (
     richMetadata: {},
   };
 
-  const target = restrictOutboundUrl({
-    rawUrl: docUrl,
-    hostPolicy: {
-      type: "exact-origin",
-      origins: [CZ_REGIONAL_ORIGIN],
-    },
-    pathPrefixes: [CZ_REGIONAL_FINALDOC_PATH],
-  });
+  const target = restrictCzRegionalFinaldocUrl(docUrl);
   if (target === null) {
+    logger.warn("case_law.ingestion.outbound_url_rejected", {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      caseNumber: item.caseNumber,
+    });
     return empty;
   }
 

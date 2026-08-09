@@ -49,6 +49,10 @@ const TRUSTED_RESTRICTION_MODULE = "@/api/lib/restrict-outbound-url";
 const TRUSTED_RESTRICTION_HELPER = "restrictOutboundUrl";
 const TRUSTED_PROVIDER_RESTRICTIONS = new Map([
   [
+    "@/api/lib/legal-search/cz-regional-finaldoc-url",
+    new Set(["restrictCzRegionalFinaldocUrl"]),
+  ],
+  [
     "@/api/lib/legal-search/sk-court-document-url",
     new Set(["restrictSkCourtDocumentUrl"]),
   ],
