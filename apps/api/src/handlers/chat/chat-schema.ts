@@ -658,7 +658,7 @@ const applyValidatedContinuationTransitions = ({
     }
     const incomingCall = incomingCalls.get(part.id);
     if (incomingCall === undefined) {
-      return normalizeContinuationToolInput({
+      return normalizeContinuationToolArguments({
         call: part,
         canonicalCall: part,
       });
@@ -666,7 +666,7 @@ const applyValidatedContinuationTransitions = ({
     if (incomingCall.state !== part.state) {
       transitionedCallIds.add(part.id);
     }
-    return normalizeContinuationToolInput({
+    return normalizeContinuationToolArguments({
       call: incomingCall,
       canonicalCall: part,
     });
@@ -866,7 +866,7 @@ const toClientVisibleCanonicalToolCall = (
     : canonicalCall;
 };
 
-const normalizeContinuationToolInput = ({
+const normalizeContinuationToolArguments = ({
   call,
   canonicalCall,
 }: {
@@ -880,7 +880,6 @@ const normalizeContinuationToolInput = ({
   return {
     ...call,
     arguments: clientCanonicalCall.arguments,
-    input: canonicalCall.input,
   };
 };
 
