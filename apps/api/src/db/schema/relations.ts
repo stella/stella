@@ -897,8 +897,8 @@ export const relations = defineRelations(
         from: r.timeEntries.workspaceId,
         to: r.workspaces.id,
       }),
-      matter: r.one.entities({
-        from: r.timeEntries.matterId,
+      workItem: r.one.entities({
+        from: r.timeEntries.workItemId,
         to: r.entities.id,
       }),
       invoice: r.one.invoices({

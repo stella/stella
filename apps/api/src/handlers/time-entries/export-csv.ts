@@ -20,7 +20,7 @@ export const exportCsvQuerySchema = t.Object({
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   status: t.Optional(timeEntryStatusSchema),
-  matterId: t.Optional(tSafeId("entity")),
+  workItemId: t.Optional(tSafeId("entity")),
 });
 
 type ExportCsvQuerySchema = Static<typeof exportCsvQuerySchema>;
@@ -49,8 +49,8 @@ export const exportCsvHandler = async ({
   if (query.status) {
     conditions.push(eq(timeEntries.status, query.status));
   }
-  if (query.matterId) {
-    conditions.push(eq(timeEntries.matterId, query.matterId));
+  if (query.workItemId) {
+    conditions.push(eq(timeEntries.workItemId, query.workItemId));
   }
 
   const rows = await scopedDb((tx) =>
@@ -58,7 +58,7 @@ export const exportCsvHandler = async ({
       .select({
         id: timeEntries.id,
         userId: timeEntries.userId,
-        matterId: timeEntries.matterId,
+        workItemId: timeEntries.workItemId,
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
@@ -107,6 +107,7 @@ export const exportCsvHandler = async ({
     "Date",
     "User",
     "Matter ID",
+    "Work Item ID",
     "Duration (min)",
     "Billed (min)",
     "Rate",
@@ -131,7 +132,8 @@ export const exportCsvHandler = async ({
       [
         escapeCSV(row.dateWorked),
         escapeCSV(row.userId ? (userMap.get(row.userId) ?? "") : ""),
-        escapeCSV(row.matterId),
+        escapeCSV(workspaceId),
+        escapeCSV(row.workItemId ?? ""),
         String(row.durationMinutes),
         String(row.billedMinutes),
         (row.rateAtEntry / 100).toFixed(2),
@@ -151,7 +153,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
   query: exportCsvQuerySchema,

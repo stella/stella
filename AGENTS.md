@@ -53,6 +53,11 @@ details unless they are already public in the repository.
   unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
   drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
   to comments, commits, PRs, and docs.
+- Do not add backward-compatibility machinery by default. First identify the concrete
+  older clients, persisted data, integrations, or deployment states that must remain
+  supported. When none exist, prefer a clean migration or cutover; aliases, dual
+  reads/writes, and staged paths add permanent complexity. When compatibility is
+  required, document its boundary and removal condition.
 - Prefer explicit over implicit; when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,
   component props) instead of hardcoding a default on the frontend

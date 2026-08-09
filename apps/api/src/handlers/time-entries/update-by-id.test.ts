@@ -49,7 +49,8 @@ describe("updateTimeEntryById (audit diff privacy)", () => {
             invoiceNarrative: "Old invoice narrative",
             billable: true,
             noCharge: false,
-            matterId: toSafeId<"entity">("matter_test"),
+            workItemId: toSafeId<"entity">("matter_test"),
+            userId: toSafeId<"user">("user_test"),
             taskCode: null,
             activityCode: null,
             rateAtEntry: 10_000,
@@ -59,7 +60,11 @@ describe("updateTimeEntryById (audit diff privacy)", () => {
       },
       update: () => ({
         set: () => ({
-          where: async () => undefined,
+          where: () => ({
+            returning: async () => [
+              { id: toSafeId<"timeEntry">("time_entry_test") },
+            ],
+          }),
         }),
       }),
     });

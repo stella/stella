@@ -48,7 +48,7 @@ describe("createTimeEntryHandler (timezone validation)", () => {
         userId: toSafeId<"user">("user_test"),
         recordAuditEvent: async () => {},
         body: {
-          matterId: toSafeId<"entity">("matter_test"),
+          workItemId: toSafeId<"entity">("matter_test"),
           dateWorked: "2026-07-01",
           timezoneId: "Not/A_Real_Zone",
           durationMinutes: 30,

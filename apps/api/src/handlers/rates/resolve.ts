@@ -10,7 +10,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const resolveRateQuerySchema = t.Object({
@@ -29,7 +28,7 @@ const resolveRateHandler = createSafeHandler(
       "first, then the table default). Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
-    permissions: { workspace: ["read"] },
+    permissions: { rate: ["read"] },
     mcp: { type: "tool", name: "resolve_rate" },
     access: "read",
     query: resolveRateQuerySchema,
@@ -78,7 +77,9 @@ export const resolveRate = async function* ({
 }: {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  userId: ValidatedOrgUserId;
+  // Request-provided IDs are validated by the route handler above. Other
+  // callers pass the authenticated server-context user ID directly.
+  userId: SafeId<"user">;
   dateWorked: string;
 }): AsyncGenerator<
   Err<never, SafeDbError>,

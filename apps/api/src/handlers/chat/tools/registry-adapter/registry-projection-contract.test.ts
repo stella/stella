@@ -1096,7 +1096,7 @@ const CONTRACT_CORPUS = {
               timeEntries: [
                 {
                   id: uid(47),
-                  matterId: uid(48),
+                  workItemId: uid(48),
                   dateWorked: "2026-02-01",
                   billedMinutes: 60,
                   rateAtEntry: 100,
@@ -1104,7 +1104,7 @@ const CONTRACT_CORPUS = {
                   narrative: "Drafted the NDA",
                   invoiceNarrative: null,
                   status: "invoiced",
-                  matter: { id: uid(48), name: "NDA draft" },
+                  workItem: { id: uid(48), name: "NDA draft" },
                 },
               ],
               expenses: [

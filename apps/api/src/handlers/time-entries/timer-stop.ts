@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import {
   BILLING_STATUS,
@@ -16,45 +16,40 @@ const timerStop = createSafeHandler(
     permissions: { timeEntry: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
   },
-  async function* ({ safeDb, user, recordAuditEvent }) {
-    const [activeEntry] = yield* Result.await(
-      safeDb((tx) =>
-        tx
+  async function* ({ safeDb, user, workspaceId, recordAuditEvent }) {
+    const stoppedEntry = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`,
+        );
+        const [activeEntry] = await tx
           .select({
             id: timeEntries.id,
-            workspaceId: timeEntries.workspaceId,
             timerStartedAt: timeEntries.timerStartedAt,
           })
           .from(timeEntries)
           .where(
             and(
               eq(timeEntries.userId, user.id),
+              eq(timeEntries.workspaceId, workspaceId),
               eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
               eq(timeEntries.status, BILLING_STATUS.DRAFT),
               isNotNull(timeEntries.timerStartedAt),
             ),
           )
-          .limit(1),
-      ),
-    );
+          .limit(1)
+          .for("update");
 
-    if (!activeEntry?.timerStartedAt) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "No active timer found",
-        }),
-      );
-    }
+        if (!activeEntry?.timerStartedAt) {
+          return null;
+        }
 
-    const now = new Date();
-    const startedAt = activeEntry.timerStartedAt;
-    const elapsedMs = now.getTime() - startedAt.getTime();
-    const rawMinutes = Math.max(1, Math.round(elapsedMs / 60_000));
-    const billedMinutes = roundToIncrement(rawMinutes);
+        const now = new Date();
+        const startedAt = activeEntry.timerStartedAt;
+        const elapsedMs = now.getTime() - startedAt.getTime();
+        const rawMinutes = Math.max(1, Math.round(elapsedMs / 60_000));
+        const billedMinutes = roundToIncrement(rawMinutes);
 
-    yield* Result.await(
-      safeDb(async (tx) => {
         await tx
           .update(timeEntries)
           .set({
@@ -67,7 +62,7 @@ const timerStop = createSafeHandler(
           .where(
             and(
               eq(timeEntries.id, activeEntry.id),
-              eq(timeEntries.workspaceId, activeEntry.workspaceId),
+              eq(timeEntries.workspaceId, workspaceId),
             ),
           );
 
@@ -75,7 +70,7 @@ const timerStop = createSafeHandler(
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
           resourceId: activeEntry.id,
-          workspaceId: activeEntry.workspaceId,
+          workspaceId,
           changes: {
             timerStartedAt: {
               old: startedAt.toISOString(),
@@ -86,14 +81,22 @@ const timerStop = createSafeHandler(
             billedMinutes: { old: 0, new: billedMinutes },
           },
         });
+
+        return {
+          id: activeEntry.id,
+          durationMinutes: rawMinutes,
+          billedMinutes,
+        };
       }),
     );
 
-    return Result.ok({
-      id: activeEntry.id,
-      durationMinutes: rawMinutes,
-      billedMinutes,
-    });
+    if (!stoppedEntry) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "No active timer found" }),
+      );
+    }
+
+    return Result.ok(stoppedEntry);
   },
 );
 

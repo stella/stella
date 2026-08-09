@@ -5,6 +5,10 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/handlers/time-entries/authorization";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,7 +16,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { cents } from "@/api/lib/money";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateTimeEntryBodySchema = t.Object({
@@ -23,22 +27,18 @@ const updateTimeEntryBodySchema = t.Object({
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   noCharge: t.Optional(t.Boolean()),
-  matterId: t.Optional(tSafeId("entity")),
+  workItemId: t.Optional(t.Nullable(tSafeId("entity"))),
   taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  status: t.Optional(
-    t.Union([
-      t.Literal(BILLING_STATUS.DRAFT),
-      t.Literal(BILLING_STATUS.APPROVED),
-    ]),
-  ),
-  rateAtEntry: t.Optional(t.Integer({ minimum: 0 })),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
 });
 
 export type UpdateTimeEntryHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  actor: {
+    userId: SafeId<"user">;
+    memberRole: AuthorizedMemberRole;
+  };
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateTimeEntryBodySchema>;
 };
@@ -49,6 +49,7 @@ export type UpdateTimeEntryHandlerProps = {
 export const updateTimeEntryHandler = async function* ({
   safeDb,
   workspaceId,
+  actor,
   recordAuditEvent,
   body,
 }: UpdateTimeEntryHandlerProps) {
@@ -68,7 +69,8 @@ export const updateTimeEntryHandler = async function* ({
           invoiceNarrative: true,
           billable: true,
           noCharge: true,
-          matterId: true,
+          workItemId: true,
+          userId: true,
           taskCode: true,
           activityCode: true,
           rateAtEntry: true,
@@ -85,6 +87,30 @@ export const updateTimeEntryHandler = async function* ({
   }
 
   if (
+    !canManageTimeEntry({
+      memberRole: actor.memberRole,
+      currentUserId: actor.userId,
+      entryUserId: existing.userId,
+    })
+  ) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Time entry not found" }),
+    );
+  }
+
+  if (
+    existing.status !== BILLING_STATUS.DRAFT &&
+    !canApproveTimeEntries(actor.memberRole)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Only draft time entries can be edited",
+      }),
+    );
+  }
+
+  if (
     existing.status === BILLING_STATUS.BILLED ||
     existing.status === BILLING_STATUS.WRITTEN_OFF
   ) {
@@ -96,12 +122,12 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
-  if (body.matterId !== undefined) {
-    const matter = yield* Result.await(
+  if (body.workItemId) {
+    const workItem = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: { eq: body.matterId },
+            id: { eq: body.workItemId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true },
@@ -109,11 +135,11 @@ export const updateTimeEntryHandler = async function* ({
       ),
     );
 
-    if (!matter) {
+    if (!workItem) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "Matter not found in this workspace",
+          message: "Work item not found in this matter",
         }),
       );
     }
@@ -127,32 +153,36 @@ export const updateTimeEntryHandler = async function* ({
       "invoiceNarrative",
       "billable",
       "noCharge",
-      "matterId",
+      "workItemId",
       "taskCode",
       "activityCode",
-      "status",
-      "currency",
     ]),
-    ...(body.rateAtEntry === undefined
-      ? {}
-      : { rateAtEntry: cents(body.rateAtEntry) }),
     ...(body.durationMinutes !== undefined
       ? { billedMinutes: roundToIncrement(body.durationMinutes) }
       : {}),
     updatedAt: new Date(),
   };
 
-  yield* Result.await(
+  const updated = yield* Result.await(
     safeDb(async (tx) => {
-      await tx
+      const rows = await tx
         .update(timeEntries)
         .set(updates)
         .where(
           and(
             eq(timeEntries.id, body.id),
             eq(timeEntries.workspaceId, workspaceId),
+            eq(timeEntries.status, existing.status),
+            canApproveTimeEntries(actor.memberRole)
+              ? undefined
+              : eq(timeEntries.userId, actor.userId),
           ),
-        );
+        )
+        .returning({ id: timeEntries.id });
+
+      if (!rows.at(0)) {
+        return false;
+      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -160,8 +190,18 @@ export const updateTimeEntryHandler = async function* ({
         resourceId: body.id,
         changes: buildTimeEntryDiff(existing, updates),
       });
+      return true;
     }),
   );
+
+  if (!updated) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Time entry changed; reload and try again",
+      }),
+    );
+  }
 
   return Result.ok({ id: body.id });
 };
@@ -172,10 +212,18 @@ const updateTimeEntryById = createSafeHandler(
     mcp: { type: "covered", by: "save_time_entry" },
     body: updateTimeEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    memberRole,
+    safeDb,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* updateTimeEntryHandler({
       safeDb,
       workspaceId,
+      actor: { userId: user.id, memberRole },
       recordAuditEvent,
       body,
     });

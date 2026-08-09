@@ -18,7 +18,7 @@ const splitEntryBodySchema = t.Object({
   id: tSafeId("timeEntry"),
   splits: t.Array(
     t.Object({
-      matterId: tSafeId("entity"),
+      workItemId: tSafeId("entity"),
       percentage: t.Integer({ minimum: 1, maximum: 100 }),
     }),
     { minItems: 2, maxItems: 10 },
@@ -27,8 +27,9 @@ const splitEntryBodySchema = t.Object({
 
 const splitEntry = createSafeHandler(
   {
-    permissions: { timeEntry: ["update"] },
+    permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
+    access: "write",
     body: splitEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
@@ -86,12 +87,12 @@ const splitEntry = createSafeHandler(
       );
     }
 
-    const targetMatterIds = body.splits.map((split) => split.matterId);
-    const targetMatters = yield* Result.await(
+    const targetWorkItemIds = body.splits.map((split) => split.workItemId);
+    const targetWorkItems = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findMany({
           where: {
-            id: { in: targetMatterIds },
+            id: { in: targetWorkItemIds },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true },
@@ -99,15 +100,15 @@ const splitEntry = createSafeHandler(
         }),
       ),
     );
-    const foundMatterIds = new Set(targetMatters.map((matter) => matter.id));
-    const missingMatterId = targetMatterIds.find(
-      (matterId) => !foundMatterIds.has(matterId),
+    const foundWorkItemIds = new Set(targetWorkItems.map((item) => item.id));
+    const missingWorkItemId = targetWorkItemIds.find(
+      (workItemId) => !foundWorkItemIds.has(workItemId),
     );
-    if (missingMatterId) {
+    if (missingWorkItemId) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: `Matter ${missingMatterId} not found`,
+          message: `Work item ${missingWorkItemId} not found`,
         }),
       );
     }
@@ -151,7 +152,7 @@ const splitEntry = createSafeHandler(
 
         const createdEntries: {
           id: SafeId<"timeEntry">;
-          matterId: SafeId<"entity">;
+          workItemId: SafeId<"entity">;
           durationMinutes: number;
           billedMinutes: number;
         }[] = [];
@@ -172,7 +173,7 @@ const splitEntry = createSafeHandler(
               organizationId: original.organizationId,
               workspaceId,
               userId: original.userId,
-              matterId: split.matterId,
+              workItemId: split.workItemId,
               dateWorked: original.dateWorked,
               timezoneId: original.timezoneId,
               durationMinutes,
@@ -197,7 +198,7 @@ const splitEntry = createSafeHandler(
             newEntryIds.push(entry.id);
             createdEntries.push({
               id: entry.id,
-              matterId: split.matterId,
+              workItemId: split.workItemId,
               durationMinutes,
               billedMinutes,
             });
@@ -212,7 +213,7 @@ const splitEntry = createSafeHandler(
             changes: {
               deleted: {
                 old: {
-                  matterId: original.matterId,
+                  workItemId: original.workItemId,
                   durationMinutes: original.durationMinutes,
                   billedMinutes: original.billedMinutes,
                   reason: "split",
@@ -230,7 +231,7 @@ const splitEntry = createSafeHandler(
               created: {
                 old: null,
                 new: {
-                  matterId: row.matterId,
+                  workItemId: row.workItemId,
                   durationMinutes: row.durationMinutes,
                   billedMinutes: row.billedMinutes,
                   splitGroupId,

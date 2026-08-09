@@ -7,8 +7,6 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 
-const BILLING_INCREMENT = 6;
-
 const RE_HM = /^(?:(?<hours>\d+)h)?\s*(?:(?<mins>\d+)m)?$/iu;
 const RE_COLON = /^(?<hours>\d+):(?<mins>\d{1,2})$/u;
 const RE_DECIMAL = /^(?<value>\d+(?:\.\d+))$/u;
@@ -19,7 +17,7 @@ const RE_PLAIN = /^(?<value>\d+)$/u;
  * Accepts: "1.5" (hours), "1:30" (h:mm), "90m", "1h30m",
  * "1h", or a plain integer (interpreted as minutes).
  */
-const parseDuration = (raw: string): number | null => {
+export const parseDuration = (raw: string): number | null => {
   const s = raw.trim();
   if (s.length === 0) {
     return null;
@@ -56,9 +54,6 @@ const parseDuration = (raw: string): number | null => {
   return null;
 };
 
-const snapToIncrement = (minutes: number): number =>
-  Math.ceil(minutes / BILLING_INCREMENT) * BILLING_INCREMENT;
-
 /**
  * ASCII decimal hours for the editable input hint. The hint must round-trip
  * through parseDuration, which only accepts ASCII digits and a "." separator;
@@ -88,9 +83,8 @@ export const DurationInput = ({
     setIsFocused(false);
     const parsed = parseDuration(displayValue);
     if (parsed !== null && parsed > 0) {
-      const snapped = snapToIncrement(parsed);
-      onChange(snapped);
-      setDisplayValue(formatMinutes(snapped));
+      onChange(parsed);
+      setDisplayValue(formatMinutes(parsed));
     } else {
       setDisplayValue(formatMinutes(value));
     }

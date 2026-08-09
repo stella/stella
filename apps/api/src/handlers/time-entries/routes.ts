@@ -12,6 +12,7 @@ import exportPdf from "@/api/handlers/time-entries/export-pdf";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readTimeEntries from "@/api/handlers/time-entries/list";
 import splitEntry from "@/api/handlers/time-entries/split";
+import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
 import timerStart from "@/api/handlers/time-entries/timer-start";
 import timerStop from "@/api/handlers/time-entries/timer-stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
@@ -37,6 +38,10 @@ export const timeEntriesRoute = new Elysia({
   .get("/", readTimeEntries.handler, {
     permissions: readTimeEntries.config.permissions,
     query: readTimeEntries.config.query,
+  })
+  .get("/summary", readTimeEntrySummary.handler, {
+    permissions: readTimeEntrySummary.config.permissions,
+    query: readTimeEntrySummary.config.query,
   })
   .get("/:id", readTimeEntryById.handler, {
     params: readTimeEntryById.config.params,

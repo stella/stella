@@ -12,6 +12,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -177,6 +178,7 @@ const addEntries = createSafeHandler(
         (entry) =>
           entry.status !== BILLING_STATUS.APPROVED ||
           !entry.billable ||
+          entry.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
           entry.invoiceId !== null,
       );
       if (invalid) {

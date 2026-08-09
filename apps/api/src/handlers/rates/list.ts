@@ -24,7 +24,7 @@ const rateTableCursor = createTimestampIdCursorCodec({
 
 const readRateTables = createSafeHandler(
   {
-    permissions: { workspace: ["read"] },
+    permissions: { rate: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "read",
     query: readRateTablesQuerySchema,

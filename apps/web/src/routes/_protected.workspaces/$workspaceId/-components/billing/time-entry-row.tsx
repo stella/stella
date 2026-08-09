@@ -24,7 +24,7 @@ import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-comp
 
 type TimeEntry = {
   id: string;
-  matterId: string;
+  workItemId: string | null;
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
@@ -40,7 +40,7 @@ type TimeEntry = {
 
 type TimeEntryRowProps = {
   entry: TimeEntry;
-  matterName: string;
+  matterName?: string;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onStatusChange?: (id: string, status: "draft" | "approved") => void;
@@ -88,9 +88,11 @@ export const TimeEntryRow = ({
 
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <BidiText as="span" className="truncate text-sm font-medium">
-              {matterName}
-            </BidiText>
+            {matterName && (
+              <BidiText as="span" className="truncate text-sm font-medium">
+                {matterName}
+              </BidiText>
+            )}
             {!entry.billable && (
               <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
                 {t("billing.nonBillable")}

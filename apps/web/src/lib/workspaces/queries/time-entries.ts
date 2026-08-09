@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -11,7 +11,7 @@ type TimeEntrySource = "manual" | "timer";
 
 type TimeEntriesFilters = {
   userId?: string;
-  matterId?: string;
+  workItemId?: string;
   dateFrom?: string;
   dateTo?: string;
   status?: TimeEntryStatus;
@@ -22,7 +22,7 @@ type TimeEntriesFilters = {
 
 type TimeEntriesListKey = {
   userId?: string | undefined;
-  matterId?: string | undefined;
+  workItemId?: string | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
   status?: TimeEntryStatus | undefined;
@@ -37,7 +37,7 @@ export const timeEntriesKeys = {
     ...timeEntriesKeys.all(workspaceId),
     {
       userId: key.userId,
-      matterId: key.matterId,
+      workItemId: key.workItemId,
       dateFrom: key.dateFrom,
       dateTo: key.dateTo,
       status: key.status,
@@ -54,6 +54,40 @@ export const timeEntriesKeys = {
     ...timeEntriesKeys.all(workspaceId),
     "timer",
   ],
+  summary: (workspaceId: string, dateFrom: string, dateTo: string) => [
+    ...timeEntriesKeys.all(workspaceId),
+    "summary",
+    { dateFrom, dateTo },
+  ],
+};
+
+const listTimeEntries = async ({
+  workspaceId,
+  filters,
+  cursor,
+  signal,
+}: {
+  workspaceId: string;
+  filters: TimeEntriesFilters;
+  cursor?: string;
+  signal?: AbortSignal;
+}) => {
+  const { workItemId, userId, ...restFilters } = filters;
+  const response = await api["time-entries"]({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  }).get({
+    query: {
+      ...restFilters,
+      ...(cursor !== undefined && { cursor }),
+      ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
+      ...(workItemId !== undefined && {
+        workItemId: toSafeId<"entity">(workItemId),
+      }),
+    },
+    fetch: { signal },
+  });
+
+  return unwrapEden(response);
 };
 
 export const timeEntriesOptions = (
@@ -62,22 +96,42 @@ export const timeEntriesOptions = (
 ) =>
   queryOptions({
     queryKey: timeEntriesKeys.list(workspaceId, filters),
+    queryFn: async ({ signal }) =>
+      (await listTimeEntries({ workspaceId, filters, signal })).items,
+  });
+
+export const timeEntriesInfiniteOptions = (
+  workspaceId: string,
+  filters: TimeEntriesFilters = {},
+) =>
+  infiniteQueryOptions({
+    queryKey: [...timeEntriesKeys.list(workspaceId, filters), "infinite"],
+    initialPageParam: "",
+    queryFn: ({ pageParam, signal }) =>
+      listTimeEntries({
+        workspaceId,
+        filters,
+        ...(pageParam.length > 0 && { cursor: pageParam }),
+        signal,
+      }),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  });
+
+export const timeEntrySummaryOptions = (
+  workspaceId: string,
+  dateFrom: string,
+  dateTo: string,
+) =>
+  queryOptions({
+    queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const { matterId, userId, ...restFilters } = filters;
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).get({
-        query: {
-          ...restFilters,
-          ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
-          ...(matterId !== undefined && {
-            matterId: toSafeId<"entity">(matterId),
-          }),
-        },
+      }).summary.get({
+        query: { dateFrom, dateTo },
         fetch: { signal },
       });
-
-      return unwrapEden(response).items;
+      return unwrapEden(response);
     },
   });
 

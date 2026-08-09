@@ -1275,7 +1275,7 @@ describe("MCP anonymization canary corpus", () => {
             timeEntries: [
               {
                 id: "te_1",
-                matterId: "entity_1",
+                workItemId: "entity_1",
                 dateWorked: "2026-01-01",
                 billedMinutes: 60,
                 rateAtEntry: 100,
@@ -1283,7 +1283,7 @@ describe("MCP anonymization canary corpus", () => {
                 narrative: teNarrativeSeed,
                 invoiceNarrative: teInvoiceNarrativeSeed,
                 status: "invoiced",
-                matter: { id: "entity_1", name: teEntityNameSeed },
+                workItem: { id: "entity_1", name: teEntityNameSeed },
               },
             ],
             expenses: [

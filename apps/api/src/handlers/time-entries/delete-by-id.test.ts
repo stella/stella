@@ -36,7 +36,7 @@ describe("deleteTimeEntryById", () => {
         timeEntries: {
           findFirst: async () => ({
             status: BILLING_STATUS.BILLED,
-            matterId: toSafeId<"entity">("matter_test"),
+            workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",
             durationMinutes: 30,
             billedMinutes: 30,
@@ -74,7 +74,7 @@ describe("deleteTimeEntryById", () => {
         timeEntries: {
           findFirst: async () => ({
             status: BILLING_STATUS.WRITTEN_OFF,
-            matterId: toSafeId<"entity">("matter_test"),
+            workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",
             durationMinutes: 30,
             billedMinutes: 30,

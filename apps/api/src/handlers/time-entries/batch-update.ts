@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -66,8 +67,9 @@ const batchChangesFor = (
 
 const batchUpdate = createSafeHandler(
   {
-    permissions: { timeEntry: ["update"] },
+    permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
+    access: "write",
     body: batchUpdateBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
@@ -82,6 +84,42 @@ const batchUpdate = createSafeHandler(
       case "approve": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const blockers = await tx
+              .select({
+                billable: timeEntries.billable,
+                currency: timeEntries.currency,
+                timerStartedAt: timeEntries.timerStartedAt,
+              })
+              .from(timeEntries)
+              .where(
+                and(
+                  condition,
+                  eq(timeEntries.status, BILLING_STATUS.DRAFT),
+                  or(
+                    and(
+                      eq(timeEntries.billable, true),
+                      eq(
+                        timeEntries.currency,
+                        UNPRICED_TIME_ENTRY_CURRENCY,
+                      ),
+                    ),
+                    isNotNull(timeEntries.timerStartedAt),
+                  ),
+                ),
+              )
+              .limit(ids.length);
+            if (blockers.some((entry) => entry.timerStartedAt !== null)) {
+              return { type: "running_timer" as const, rows: [] };
+            }
+            if (
+              blockers.some(
+                (entry) =>
+                  entry.billable &&
+                  entry.currency === UNPRICED_TIME_ENTRY_CURRENCY,
+              )
+            ) {
+              return { type: "unpriced" as const, rows: [] };
+            }
             const updated = await tx
               .update(timeEntries)
               .set({ status: BILLING_STATUS.APPROVED, updatedAt: new Date() })
@@ -90,10 +128,26 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
-            return updated;
+            return { type: "updated" as const, rows: updated };
           }),
         );
-        return Result.ok({ updated: rows.length });
+        if (rows.type === "unpriced") {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Billable time entries need a rate before approval",
+            }),
+          );
+        }
+        if (rows.type === "running_timer") {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Stop running timers before approval",
+            }),
+          );
+        }
+        return Result.ok({ updated: rows.rows.length });
       }
 
       case "revert_to_draft": {

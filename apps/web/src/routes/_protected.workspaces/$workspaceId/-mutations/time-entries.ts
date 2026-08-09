@@ -7,12 +7,10 @@ import { toSafeId } from "@/lib/safe-id";
 
 type CreateTimeEntryVars = {
   workspaceId: string;
-  matterId: string;
+  workItemId?: string | null;
   dateWorked: string;
   timezoneId: string;
   durationMinutes: number;
-  rateAtEntry: number;
-  currency: string;
   narrative: string;
   billable?: boolean;
   taskCode?: string | null;
@@ -28,7 +26,9 @@ export const useCreateTimeEntry = () => {
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put({
         ...body,
-        matterId: toSafeId<"entity">(body.matterId),
+        ...(body.workItemId && {
+          workItemId: toSafeId<"entity">(body.workItemId),
+        }),
       });
 
       return unwrapEden(response);
@@ -48,12 +48,9 @@ type UpdateTimeEntryVars = {
   invoiceNarrative?: string | null;
   billable?: boolean;
   noCharge?: boolean;
-  matterId?: string;
+  workItemId?: string | null;
   taskCode?: string | null;
   activityCode?: string | null;
-  status?: "draft" | "approved";
-  rateAtEntry?: number;
-  currency?: string;
 };
 
 export const useUpdateTimeEntry = () => {
@@ -61,14 +58,14 @@ export const useUpdateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
-      const { id, matterId, ...restBody } = body;
+      const { id, workItemId, ...restBody } = body;
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).patch({
         ...restBody,
         id: toSafeId<"timeEntry">(id),
-        ...(matterId !== undefined && {
-          matterId: toSafeId<"entity">(matterId),
+        ...(workItemId !== undefined && {
+          workItemId: workItemId ? toSafeId<"entity">(workItemId) : null,
         }),
       });
 
@@ -106,10 +103,8 @@ export const useDeleteTimeEntry = () => {
 
 type StartTimerVars = {
   workspaceId: string;
-  matterId: string;
+  workItemId: string;
   timezoneId: string;
-  rateAtEntry: number;
-  currency: string;
   narrative?: string;
 };
 
@@ -122,7 +117,7 @@ export const useStartTimer = () => {
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.start.post({
         ...body,
-        matterId: toSafeId<"entity">(body.matterId),
+        workItemId: toSafeId<"entity">(body.workItemId),
       });
 
       return unwrapEden(response);
@@ -207,7 +202,7 @@ export const useBatchDeleteTimeEntries = () => {
 type SplitTimeEntryVars = {
   workspaceId: string;
   id: string;
-  splits: { matterId: string; percentage: number }[];
+  splits: { workItemId: string; percentage: number }[];
 };
 
 export const useSplitTimeEntry = () => {
@@ -222,7 +217,7 @@ export const useSplitTimeEntry = () => {
         id: toSafeId<"timeEntry">(body.id),
         splits: body.splits.map((split) => ({
           ...split,
-          matterId: toSafeId<"entity">(split.matterId),
+          workItemId: toSafeId<"entity">(split.workItemId),
         })),
       });
 

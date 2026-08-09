@@ -5,12 +5,17 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const deleteTimeEntryBodySchema = t.Object({
   id: tSafeId("timeEntry", {
@@ -21,6 +26,10 @@ const deleteTimeEntryBodySchema = t.Object({
 export type DeleteTimeEntryHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  actor: {
+    userId: SafeId<"user">;
+    memberRole: AuthorizedMemberRole;
+  };
   recordAuditEvent: AuditRecorder;
   body: Static<typeof deleteTimeEntryBodySchema>;
 };
@@ -31,6 +40,7 @@ export type DeleteTimeEntryHandlerProps = {
 export const deleteTimeEntryHandler = async function* ({
   safeDb,
   workspaceId,
+  actor,
   recordAuditEvent,
   body,
 }: DeleteTimeEntryHandlerProps) {
@@ -43,7 +53,8 @@ export const deleteTimeEntryHandler = async function* ({
         },
         columns: {
           status: true,
-          matterId: true,
+          workItemId: true,
+          userId: true,
           dateWorked: true,
           durationMinutes: true,
           billedMinutes: true,
@@ -61,6 +72,30 @@ export const deleteTimeEntryHandler = async function* ({
     );
   }
 
+  if (
+    !canManageTimeEntry({
+      memberRole: actor.memberRole,
+      currentUserId: actor.userId,
+      entryUserId: existing.userId,
+    })
+  ) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Time entry not found" }),
+    );
+  }
+
+  if (
+    existing.status !== BILLING_STATUS.DRAFT &&
+    !canApproveTimeEntries(actor.memberRole)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Only draft time entries can be deleted",
+      }),
+    );
+  }
+
   // A billed entry is attached to an invoice; writing it off here would leave
   // the invoice total stale. Match batch-delete, which excludes BILLED.
   if (existing.status === BILLING_STATUS.BILLED) {
@@ -73,16 +108,25 @@ export const deleteTimeEntryHandler = async function* ({
   }
 
   if (existing.status === BILLING_STATUS.DRAFT) {
-    yield* Result.await(
+    const deleted = yield* Result.await(
       safeDb(async (tx) => {
-        await tx
+        const rows = await tx
           .delete(timeEntries)
           .where(
             and(
               eq(timeEntries.id, body.id),
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.status, BILLING_STATUS.DRAFT),
+              canApproveTimeEntries(actor.memberRole)
+                ? undefined
+                : eq(timeEntries.userId, actor.userId),
             ),
-          );
+          )
+          .returning({ id: timeEntries.id });
+
+        if (!rows.at(0)) {
+          return false;
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DELETE,
@@ -91,7 +135,7 @@ export const deleteTimeEntryHandler = async function* ({
           changes: {
             deleted: {
               old: {
-                matterId: existing.matterId,
+                workItemId: existing.workItemId,
                 dateWorked: existing.dateWorked,
                 durationMinutes: existing.durationMinutes,
                 billedMinutes: existing.billedMinutes,
@@ -103,8 +147,17 @@ export const deleteTimeEntryHandler = async function* ({
             },
           },
         });
+        return true;
       }),
     );
+    if (!deleted) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Time entry changed; reload and try again",
+        }),
+      );
+    }
     return Result.ok({ deleted: true });
   }
 
@@ -115,9 +168,9 @@ export const deleteTimeEntryHandler = async function* ({
   }
 
   // Non-draft entries get written off instead of deleted
-  yield* Result.await(
+  const writtenOff = yield* Result.await(
     safeDb(async (tx) => {
-      await tx
+      const rows = await tx
         .update(timeEntries)
         .set({
           status: BILLING_STATUS.WRITTEN_OFF,
@@ -127,8 +180,14 @@ export const deleteTimeEntryHandler = async function* ({
           and(
             eq(timeEntries.id, body.id),
             eq(timeEntries.workspaceId, workspaceId),
+            eq(timeEntries.status, existing.status),
           ),
-        );
+        )
+        .returning({ id: timeEntries.id });
+
+      if (!rows.at(0)) {
+        return false;
+      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -141,8 +200,18 @@ export const deleteTimeEntryHandler = async function* ({
           },
         },
       });
+      return true;
     }),
   );
+
+  if (!writtenOff) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Time entry changed; reload and try again",
+      }),
+    );
+  }
 
   return Result.ok({ deleted: false });
 };
@@ -158,10 +227,18 @@ const deleteTimeEntryById = createSafeHandler(
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    memberRole,
+    safeDb,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* deleteTimeEntryHandler({
       safeDb,
       workspaceId,
+      actor: { userId: user.id, memberRole },
       recordAuditEvent,
       body,
     });

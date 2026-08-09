@@ -94,12 +94,10 @@ export const TimesheetDayView = ({
     createEntry.mutate(
       {
         workspaceId,
-        matterId: values.matterId,
+        workItemId: values.matterId,
         dateWorked: values.dateWorked,
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
         durationMinutes: values.durationMinutes,
-        rateAtEntry: values.rateAtEntry,
-        currency: values.currency,
         narrative: values.narrative,
         billable: values.billable,
         taskCode: values.taskCode || null,
@@ -125,7 +123,7 @@ export const TimesheetDayView = ({
       {
         workspaceId,
         id: editingId,
-        matterId: values.matterId,
+        workItemId: values.matterId,
         dateWorked: values.dateWorked,
         durationMinutes: values.durationMinutes,
         narrative: values.narrative,
@@ -133,8 +131,6 @@ export const TimesheetDayView = ({
         billable: values.billable,
         taskCode: values.taskCode || null,
         activityCode: values.activityCode || null,
-        rateAtEntry: values.rateAtEntry,
-        currency: values.currency,
       },
       {
         onSuccess: () => setEditingId(null),
@@ -151,20 +147,6 @@ export const TimesheetDayView = ({
   const handleDelete = (id: string) => {
     deleteEntry.mutate(
       { workspaceId, id },
-      {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        },
-      },
-    );
-  };
-
-  const handleStatusChange = (id: string, status: "draft" | "approved") => {
-    updateEntry.mutate(
-      { workspaceId, id, status },
       {
         onError: () => {
           stellaToast.add({
@@ -247,12 +229,13 @@ export const TimesheetDayView = ({
               entry={entry}
               key={entry.id}
               matterName={
-                matterNameMap.get(entry.matterId) ?? t("workspaces.defaultName")
+                entry.workItemId
+                  ? matterNameMap.get(entry.workItemId)
+                  : undefined
               }
               onDelete={handleDelete}
               onEdit={setEditingId}
               onSelect={handleSelect}
-              onStatusChange={handleStatusChange}
               selected={selectedIds.has(entry.id)}
               workspaceId={workspaceId}
             />
@@ -299,7 +282,7 @@ export const TimesheetDayView = ({
             {editingEntry && (
               <TimeEntryForm
                 defaultValues={{
-                  matterId: editingEntry.matterId,
+                  matterId: editingEntry.workItemId ?? "",
                   dateWorked: editingEntry.dateWorked,
                   durationMinutes: editingEntry.durationMinutes,
                   narrative: editingEntry.narrative,

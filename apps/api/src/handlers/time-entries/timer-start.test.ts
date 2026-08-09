@@ -15,10 +15,7 @@ const createContext = ({
 }): TimerStartCtx =>
   asTestRaw<TimerStartCtx>({
     body: {
-      matterId: toSafeId<"entity">("matter_test"),
       timezoneId: "Not/A_Real_Zone",
-      rateAtEntry: 10_000,
-      currency: "USD",
     },
     safeDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),

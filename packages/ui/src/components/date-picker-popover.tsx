@@ -195,6 +195,7 @@ type PickerView = "days" | "months" | "years";
 // ---------------------------------------------------------------------------
 
 type DatePickerPopoverProps = {
+  id?: string;
   value: string | Date | null;
   onChange: (value: string | null) => void;
   locale?: string;
@@ -217,6 +218,7 @@ type DatePickerPopoverProps = {
 };
 
 const DatePickerPopover = ({
+  id,
   value: rawValue,
   onChange,
   locale: localeProp,
@@ -495,6 +497,7 @@ const DatePickerPopover = ({
                 return "text-muted-foreground";
               })(),
             )}
+            id={id}
             type="button"
           />
         }

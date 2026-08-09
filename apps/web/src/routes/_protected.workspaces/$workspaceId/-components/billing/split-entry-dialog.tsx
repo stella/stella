@@ -66,7 +66,7 @@ export const SplitEntryDialog = ({
         workspaceId,
         id: entryId,
         splits: splits.map((s) => ({
-          matterId: s.matterId,
+          workItemId: s.matterId,
           percentage: s.percentage,
         })),
       },

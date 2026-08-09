@@ -16,6 +16,7 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -35,9 +36,8 @@ import {
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import { timeEntrySummaryOptions } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -97,6 +97,10 @@ export const Route = createFileRoute(
 
       await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
 
+      if (!isTimeBillingRouteEnabled()) {
+        return;
+      }
+
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
@@ -108,10 +112,11 @@ export const Route = createFileRoute(
       detached(
         prefetchRouteQuery(
           queryClient,
-          timeEntriesOptions(workspaceId, {
-            dateFrom: toISODate(weekStart),
-            dateTo: toISODate(weekEnd),
-          }),
+          timeEntrySummaryOptions(
+            workspaceId,
+            toISODate(weekStart),
+            toISODate(weekEnd),
+          ),
           (error: unknown) => {
             getAnalytics().captureError(error);
           },
@@ -121,20 +126,11 @@ export const Route = createFileRoute(
       detached(
         prefetchRouteQuery(
           queryClient,
-          timeEntriesOptions(workspaceId, {
-            dateFrom: toISODate(prevWeekStart),
-            dateTo: toISODate(prevWeekEnd),
-          }),
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        ),
-        "loader",
-      );
-      detached(
-        prefetchRouteQuery(
-          queryClient,
-          workspaceMembersOptions(workspaceId),
+          timeEntrySummaryOptions(
+            workspaceId,
+            toISODate(prevWeekStart),
+            toISODate(prevWeekEnd),
+          ),
           (error: unknown) => {
             getAnalytics().captureError(error);
           },

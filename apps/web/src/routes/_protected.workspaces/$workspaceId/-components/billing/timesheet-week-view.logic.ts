@@ -5,7 +5,7 @@ import { type CentsAmount, prorateHourlyCents } from "@stll/money";
  * Structural so the query result (which has more fields) satisfies it.
  */
 export type TimesheetTotalEntry = {
-  matterId: string;
+  workItemId: string | null;
   currency: string;
   billable: boolean;
   billedMinutes: number;
@@ -53,16 +53,16 @@ export const summarizeBillableAmountByCurrency = (
  */
 export const summarizeBillableAmountByMatterAndCurrency = (
   entries: readonly TimesheetTotalEntry[],
-): Map<string, CurrencyAmount[]> => {
-  const byMatter = new Map<string, Map<string, number>>();
+): Map<string | null, CurrencyAmount[]> => {
+  const byMatter = new Map<string | null, Map<string, number>>();
   for (const entry of entries) {
     if (!entry.billable) {
       continue;
     }
-    let byCurrency = byMatter.get(entry.matterId);
+    let byCurrency = byMatter.get(entry.workItemId);
     if (!byCurrency) {
       byCurrency = new Map<string, number>();
-      byMatter.set(entry.matterId, byCurrency);
+      byMatter.set(entry.workItemId, byCurrency);
     }
     const amount = prorateHourlyCents({
       billedMinutes: entry.billedMinutes,
@@ -75,8 +75,8 @@ export const summarizeBillableAmountByMatterAndCurrency = (
   }
 
   return new Map(
-    [...byMatter.entries()].map(([matterId, byCurrency]) => [
-      matterId,
+    [...byMatter.entries()].map(([workItemId, byCurrency]) => [
+      workItemId,
       sortedCurrencyAmounts(byCurrency),
     ]),
   );

@@ -51,7 +51,7 @@ const decodeRateEntryCursor = (cursor: string): RateEntryCursor | null => {
 
 const readRateEntries = createSafeHandler(
   {
-    permissions: { workspace: ["read"] },
+    permissions: { rate: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "read",
     params: rateEntryParamsSchema,

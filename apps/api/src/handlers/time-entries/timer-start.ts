@@ -7,6 +7,8 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
+import { resolveRate } from "@/api/handlers/rates/resolve";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -16,10 +18,8 @@ import { cents } from "@/api/lib/money";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStartBodySchema = t.Object({
-  matterId: tSafeId("entity"),
+  workItemId: t.Optional(t.Nullable(tSafeId("entity"))),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  rateAtEntry: t.Integer({ minimum: 0 }),
-  currency: t.String({ minLength: 3, maxLength: 3 }),
   narrative: t.Optional(t.String({ maxLength: 10_000 })),
 });
 
@@ -43,10 +43,47 @@ const timerStart = createSafeHandler(
       now,
     });
 
-    // Check active timer limit
-    const activeTimerCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
+    // Validate the optional work context belongs to this matter.
+    const workItem = body.workItemId
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx.query.entities.findFirst({
+              where: {
+                id: { eq: body.workItemId },
+                workspaceId: { eq: workspaceId },
+              },
+              columns: { id: true },
+            }),
+          ),
+        )
+      : null;
+
+    if (body.workItemId && !workItem) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Work item not found in this matter",
+        }),
+      );
+    }
+
+    const resolvedRate = yield* resolveRate({
+      safeDb,
+      workspaceId,
+      userId: user.id,
+      dateWorked: todayStr,
+    });
+    const rateAtEntry = resolvedRate?.hourlyRate ?? 0;
+    const currency = resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY;
+
+    // Advisory lock + count + insert in one transaction to
+    // prevent TOCTOU on the workspace time entry limit.
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`,
+        );
+        const activeTimerCount = await tx.$count(
           timeEntries,
           and(
             eq(timeEntries.userId, user.id),
@@ -54,45 +91,11 @@ const timerStart = createSafeHandler(
             eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
             eq(timeEntries.status, BILLING_STATUS.DRAFT),
           ),
-        ),
-      ),
-    );
+        );
+        if (activeTimerCount >= LIMITS.activeTimersPerUser) {
+          return { type: "active_timer" as const };
+        }
 
-    if (activeTimerCount >= LIMITS.activeTimersPerUser) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "You already have an active timer. Stop it first.",
-        }),
-      );
-    }
-
-    // Validate matter exists in workspace
-    const matter = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: body.matterId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!matter) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Matter not found in this workspace",
-        }),
-      );
-    }
-
-    // Advisory lock + count + insert in one transaction to
-    // prevent TOCTOU on the workspace time entry limit.
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
         );
@@ -102,7 +105,7 @@ const timerStart = createSafeHandler(
         );
 
         if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
-          return null;
+          return { type: "limit" as const };
         }
 
         const [entry] = await tx
@@ -111,13 +114,13 @@ const timerStart = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             userId: user.id,
-            matterId: body.matterId,
+            workItemId: body.workItemId ?? null,
             dateWorked: todayStr,
             timezoneId: body.timezoneId,
             durationMinutes: 0,
             billedMinutes: 0,
-            rateAtEntry: cents(body.rateAtEntry),
-            currency: body.currency,
+            rateAtEntry: cents(rateAtEntry),
+            currency,
             narrative: body.narrative ?? "",
             source: TIME_ENTRY_SOURCE.TIMER,
             status: BILLING_STATUS.DRAFT,
@@ -137,24 +140,35 @@ const timerStart = createSafeHandler(
               created: {
                 old: null,
                 new: {
-                  matterId: body.matterId,
+                  workItemId: body.workItemId ?? null,
                   dateWorked: todayStr,
                   source: TIME_ENTRY_SOURCE.TIMER,
                   status: BILLING_STATUS.DRAFT,
                   timerStartedAt: now.toISOString(),
-                  rateAtEntry: cents(body.rateAtEntry),
-                  currency: body.currency,
+                  rateAtEntry: cents(rateAtEntry),
+                  currency,
                 },
               },
             },
           });
         }
 
-        return entry;
+        return entry
+          ? { type: "created" as const, entry }
+          : { type: "limit" as const };
       }),
     );
 
-    if (!txResult) {
+    if (txResult.type === "active_timer") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "You already have an active timer. Stop it first.",
+        }),
+      );
+    }
+
+    if (txResult.type === "limit") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -164,8 +178,8 @@ const timerStart = createSafeHandler(
     }
 
     return Result.ok({
-      id: txResult.id,
-      timerStartedAt: txResult.timerStartedAt?.toISOString(),
+      id: txResult.entry.id,
+      timerStartedAt: txResult.entry.timerStartedAt?.toISOString(),
     });
   },
 );

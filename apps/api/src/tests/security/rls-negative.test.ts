@@ -534,7 +534,7 @@ describe("workspace INSERT — wrong scope", () => {
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           userId: ids.userA1,
-          matterId: ids.entityA1,
+          workItemId: ids.entityA1,
           dateWorked: "2025-06-01",
           timezoneId: "UTC",
           durationMinutes: 30,
@@ -1452,30 +1452,26 @@ describe("cross-org isolation", () => {
 // ════════════════════════════════════════════════════════
 
 describe("dual-scope integrity (ws + org columns)", () => {
-  // Tables with both workspace_id and organization_id
-  // where RLS only checks workspace_id. This documents
-  // that org_id is not enforced at the RLS level; it is
-  // safe because explicit workspace IDs are server-set by trusted code.
-
-  test("INSERT timeEntry with correct ws but wrong org → succeeds (ws policy only)", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      await tx.insert(timeEntries).values({
-        id: testId(),
-        organizationId: ids.orgB,
-        workspaceId: ids.wsA1,
-        userId: ids.userA1,
-        matterId: ids.entityA1,
-        dateWorked: "2025-06-01",
-        timezoneId: "UTC",
-        durationMinutes: 30,
-        billedMinutes: 30,
-        rateAtEntry: cents(100),
-        currency: "USD",
-        narrative: "dual-scope test",
-      });
-      // If we got here without error, the insert succeeded.
-      // This is the expected behavior; the test documents it.
-    });
+  test("INSERT timeEntry with correct ws but wrong org → policy violation", async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () =>
+        tx.insert(timeEntries).values({
+          id: testId(),
+          organizationId: ids.orgB,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+          workItemId: ids.entityA1,
+          dateWorked: "2025-06-01",
+          timezoneId: "UTC",
+          durationMinutes: 30,
+          billedMinutes: 30,
+          rateAtEntry: cents(100),
+          currency: "USD",
+          narrative: "dual-scope test",
+        }),
+      ),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
   test("INSERT expense with correct ws but wrong org → succeeds (ws policy only)", async () => {
@@ -1485,7 +1481,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
         organizationId: ids.orgB,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
-        matterId: ids.entityA1,
+        workItemId: ids.entityA1,
         dateIncurred: "2025-06-01",
         amount: cents(50),
         currency: "USD",

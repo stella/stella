@@ -1032,10 +1032,12 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     timeEntries: v.array(
       v.strictObject({
         id: passthroughId(),
-        entityId: chatEntityRef({
-          from: "outputPath",
-          path: "invoice.workspaceId",
-        }),
+        entityId: v.nullable(
+          chatEntityRef({
+            from: "outputPath",
+            path: "invoice.workspaceId",
+          }),
+        ),
         dateWorked: v.string(),
         billedMinutes: v.number(),
         rateAtEntry: v.number(),
@@ -1043,7 +1045,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         narrative: v.string(),
         invoiceNarrative: v.nullable(v.string()),
         status: v.string(),
-        entity: invoiceLineEntityProjection(),
+        entity: v.nullable(invoiceLineEntityProjection()),
       }),
     ),
     expenses: v.array(
