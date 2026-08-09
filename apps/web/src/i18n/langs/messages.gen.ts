@@ -3613,13 +3613,13 @@ type Messages = {
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
         "forceRelease": "Force release";
-        "notOpenedDescription": "stella desktop did not confirm that {application} opened. Start stella desktop and try again.";
+        "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.";
         "openAction": "Open in desktop";
-        "openedDescription": "{application} opens a local copy. When you finish editing, a new revision is created automatically.";
+        "openedDescription": "<bdi>{application}</bdi> opens a local copy. When you finish editing, a new revision is created automatically.";
         "openedTitle": "Opened in stella desktop";
         "opening": "Opening...";
         "releaseLock": "Release lock";
-        "sentDescription": "Waiting for {application} to open the local copy.";
+        "sentDescription": "Waiting for <bdi>{application}</bdi> to open the local copy.";
         "sentTitle": "Sent to stella desktop";
         "takeoverNoResponse": "No response";
         "takeoverNoResponseDescription": "The lock holder did not respond. You can force release the lock.";
