@@ -17,6 +17,10 @@ declare const response: { json: () => Promise<never> };
 declare const genericResponse: { json: <T>() => Promise<T> };
 declare const raw: string;
 declare const schema: unknown;
+declare const useFallback: boolean;
+declare const fallbackCompany: RegistryCompany;
+declare const maybeFallbackCompany: RegistryCompany | undefined;
+declare const state: { company: RegistryCompany; raw: unknown };
 declare const isRegistryCompany: (value: unknown) => value is RegistryCompany;
 declare const v: {
   parse: (inputSchema: unknown, input: unknown) => RegistryCompany;
@@ -68,6 +72,20 @@ export const indirectlyAnnotatedParse = () => {
   return parsed;
 };
 
+export const conditionallyAnnotatedParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const parsed: RegistryCompany = useFallback
+    ? fallbackCompany
+    : JSON.parse(raw);
+  return parsed;
+};
+
+export const logicallyAnnotatedParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const parsed: RegistryCompany = maybeFallbackCompany ?? JSON.parse(raw);
+  return parsed;
+};
+
 export const assignedParse = () => {
   let parsed: RegistryCompany;
   if (raw === "") {
@@ -89,6 +107,17 @@ export const indirectlyAssignedParse = () => {
     parsed = v.parse(schema, null);
   }
   return parsed;
+};
+
+export const assignedMemberParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  state.company = JSON.parse(raw);
+};
+
+export const indirectlyAssignedMemberParse = () => {
+  const rawValue = JSON.parse(raw);
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  state.company = rawValue;
 };
 
 export const indirectlyAssertedParse = () => {
@@ -183,6 +212,11 @@ export const rawJsonAssignment = () => {
     value = JSON.parse(raw);
   }
   return value;
+};
+
+export const rawJsonMemberAssignment = () => {
+  const value: unknown = JSON.parse(raw);
+  state.raw = value;
 };
 
 export const inferredUnknownAssignment = (input: unknown) => {

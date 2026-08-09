@@ -6,6 +6,8 @@
  * imports to avoid pulling in the full app dependency graph.
  */
 
+import { panic } from "better-result";
+
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_KEYS,
@@ -39,8 +41,8 @@ const adapterKeyFromString = (key: string): AdapterKey | undefined =>
   Object.values(ADAPTER_KEYS).find((candidate) => candidate === key);
 
 /**
- * Load a single adapter by key. Returns undefined if the
- * key is not registered or the module fails to import.
+ * Load a single adapter by key. Returns undefined if the key is not
+ * registered. Import failures propagate to the caller.
  */
 export const loadAdapterByKey = async (
   key: string,
@@ -50,7 +52,10 @@ export const loadAdapterByKey = async (
     return undefined;
   }
   const adapter = await ADAPTER_MODULES[adapterKey]();
-  return adapter.key === adapterKey ? adapter : undefined;
+  if (adapter.key !== adapterKey) {
+    return panic(`Adapter registry key mismatch for ${adapterKey}`);
+  }
+  return adapter;
 };
 
 /** List all registered adapter keys. */

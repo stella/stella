@@ -21,6 +21,7 @@ import {
   type FieldSource,
   type FieldValidation,
   type TemplateEditableField,
+  type TemplateValueSource,
   templateValueSourcePatch,
 } from "@/routes/_protected.knowledge/-components/template-value-source";
 // ── Manifest <-> state ───────────────────────────────────
@@ -313,6 +314,18 @@ type ManifestField = {
   validation?: FieldValidation;
 };
 
+type AiSettingsDisposition = "all" | "adapt-only" | "none";
+
+const AI_SETTINGS_DISPOSITION = {
+  input: "all",
+  "composite-draft": "all",
+  composite: "adapt-only",
+  lookup: "adapt-only",
+  formula: "none",
+  condition: "none",
+  binding: "none",
+} as const satisfies Record<TemplateValueSource["type"], AiSettingsDisposition>;
+
 /** One session field as it is persisted: only the settings that are
  *  actually set, in the manifest's `FieldMeta` shape. Shared by the
  *  template manifest build and recipe snapshots. */
@@ -342,6 +355,20 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   if (f.validation !== undefined && Object.keys(f.validation).length > 0) {
     field.validation = f.validation;
   }
+  // The value-source union owns which AI settings are compatible. Keeping
+  // this map total forces every new source kind to make that decision.
+  const aiSettingsDisposition = AI_SETTINGS_DISPOSITION[f.valueSource.type];
+  if (f.aiPrompt && (aiSettingsDisposition === "all" || f.aiAdapt)) {
+    field.aiPrompt = f.aiPrompt;
+  }
+  if (f.aiAdapt && aiSettingsDisposition !== "none") {
+    field.aiAdapt = true;
+  }
+  // Only an AI-drafted input reads the document; adaptation runs on the
+  // source's rendered value and never needs the original document.
+  if (f.aiSeesDocument && f.aiPrompt && aiSettingsDisposition === "all") {
+    field.aiSeesDocument = true;
+  }
   // Emit exactly one value source. The discriminator is recomputed by the
   // parser/store at every boundary, so stale optional siblings from a legacy
   // manifest cannot leak into the persisted union.
@@ -366,15 +393,6 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
       return field;
     case "lookup":
       field.lookup = f.valueSource.lookup;
-      // Registry lookup resolves the submitted identifier first, then the
-      // per-occurrence AI adapter rewrites the rendered company text. Keep
-      // that supported composition, including its optional instruction.
-      if (f.aiAdapt) {
-        field.aiAdapt = true;
-        if (f.aiPrompt) {
-          field.aiPrompt = f.aiPrompt;
-        }
-      }
       return field;
     case "composite":
       field.parts = f.valueSource.parts;
@@ -392,17 +410,6 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
         `Unsupported template value source: ${JSON.stringify(unsupported)}`,
       );
     }
-  }
-  if (f.aiPrompt) {
-    field.aiPrompt = f.aiPrompt;
-  }
-  if (f.aiAdapt) {
-    field.aiAdapt = true;
-  }
-  // Only an AI-drafted field (aiPrompt) reads the document; the flag is
-  // meaningless without one, so do not persist a stale opt-in.
-  if (f.aiSeesDocument && f.aiPrompt) {
-    field.aiSeesDocument = true;
   }
   if (f.optionsFrom !== undefined && f.inputType === "select") {
     field.optionsFrom = f.optionsFrom;

@@ -106,6 +106,42 @@ describe("template value-source state", () => {
     ]);
   });
 
+  test("preserves AI adaptation for a composite field", () => {
+    const [field] = parseFields({
+      fields: [
+        {
+          path: "company",
+          inputType: "text",
+          aiPrompt: "Match the surrounding grammatical case.",
+          aiAdapt: true,
+          parts: [{ key: "name", inputType: "text" }],
+          format: "{{name}}",
+        },
+      ],
+    });
+
+    expect(
+      buildManifest({}, field === undefined ? [] : [field]).fields,
+    ).toEqual([
+      {
+        path: "company",
+        inputType: "text",
+        aiPrompt: "Match the surrounding grammatical case.",
+        aiAdapt: true,
+        parts: [
+          {
+            key: "name",
+            inputType: "text",
+            options: [],
+            label: undefined,
+            pattern: undefined,
+          },
+        ],
+        format: "{{name}}",
+      },
+    ]);
+  });
+
   test("does not serialize a stale legacy sibling against the discriminator", () => {
     const [field] = parseFields({
       fields: [{ path: "amount", inputType: "number" }],

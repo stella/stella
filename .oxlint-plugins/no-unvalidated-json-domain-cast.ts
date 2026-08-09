@@ -199,6 +199,18 @@ export default eslintCompatPlugin({
           if (isRawJsonBoundary(current)) {
             return true;
           }
+          if (current?.type === "ConditionalExpression") {
+            return (
+              isUnvalidatedJsonValue(current.consequent, seenVariables) ||
+              isUnvalidatedJsonValue(current.alternate, seenVariables)
+            );
+          }
+          if (current?.type === "LogicalExpression") {
+            return (
+              isUnvalidatedJsonValue(current.left, seenVariables) ||
+              isUnvalidatedJsonValue(current.right, seenVariables)
+            );
+          }
           if (!isIdentifierReference(current)) {
             return false;
           }
@@ -300,9 +312,10 @@ export default eslintCompatPlugin({
           AssignmentExpression(node) {
             if (
               node.operator === "=" &&
-              node.left.type === "Identifier" &&
               isUnvalidatedJsonValue(node.right) &&
-              hasClosedTypeAnnotation(node.left)
+              ((node.left.type === "Identifier" &&
+                hasClosedTypeAnnotation(node.left)) ||
+                node.left.type === "MemberExpression")
             ) {
               context.report({ node, messageId: "unvalidatedDomain" });
             }
