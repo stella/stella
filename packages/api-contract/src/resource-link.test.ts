@@ -83,9 +83,9 @@ describe("chat resource links", () => {
       resource: target.resource,
       location: { type: "render_context" },
     } as const;
-    expect(
-      parseChatResourceHref(toChatResourceHref(relativeTarget)),
-    ).toEqual(relativeTarget);
+    expect(parseChatResourceHref(toChatResourceHref(relativeTarget))).toEqual(
+      relativeTarget,
+    );
   });
 
   test("rejects malformed and unrelated links", () => {
