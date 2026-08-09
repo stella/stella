@@ -13,6 +13,7 @@ import type {
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { isEmailFile } from "@/lib/consts";
 
 export const buildSkillResourceTabId = ({
   skillName,
@@ -98,6 +99,12 @@ const upsertFileTab = (
   existing.fileName = tab.fileName;
   if (tab.mimeType !== undefined) {
     existing.mimeType = tab.mimeType;
+  }
+  if (
+    existing.facet === "attachments" &&
+    !isEmailFile({ fileName: tab.fileName, mimeType: tab.mimeType })
+  ) {
+    existing.facet = "preview";
   }
   existing.pdfFileId = tab.pdfFileId;
   if (

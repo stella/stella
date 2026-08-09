@@ -411,6 +411,36 @@ describe("replaceFileFieldId", () => {
     expect(useInspectorTabsStore.getState().activeId).toBe("field-v2");
   });
 
+  test("resets the attachments facet when the reused tab stops showing an email", () => {
+    useInspectorTabsStore.getState().openFile({
+      id: "field-email",
+      entityId: "entity-1",
+      label: "Message",
+      fileName: "message.eml",
+      mimeType: "message/rfc822",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorTabsStore.getState().setFileFacet("field-email", "attachments");
+
+    useInspectorTabsStore.getState().openFile({
+      id: "field-pdf",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    const tab = useInspectorTabsStore
+      .getState()
+      .tabs.find((item) => item.id === "field-pdf");
+    expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-shared",
