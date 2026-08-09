@@ -7,6 +7,7 @@ import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -99,6 +100,16 @@ const timerStart = createSafeHandler(
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
+      const [activeWorkspace] = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(
+          and(eq(workspaces.id, workspaceId), eq(workspaces.status, "active")),
+        )
+        .limit(1);
+      if (!activeWorkspace) {
+        return { type: "workspace_inactive" as const };
+      }
       const totalEntries = await tx.$count(
         timeEntries,
         eq(timeEntries.workspaceId, workspaceId),
@@ -193,6 +204,15 @@ const timerStart = createSafeHandler(
         new HandlerError({
           status: 400,
           message: "Time entries limit reached for this workspace",
+        }),
+      );
+    }
+
+    if (txValue.type === "workspace_inactive") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "This matter is no longer active",
         }),
       );
     }

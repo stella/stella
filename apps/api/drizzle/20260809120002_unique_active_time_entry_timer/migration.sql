@@ -1,6 +1,8 @@
 SET lock_timeout = '1s';
 --> statement-breakpoint
-SET statement_timeout = '5s';
+-- Duplicate repair scans the retained ledger before the supporting index
+-- exists, so keep only the lock timeout while allowing the scan to finish.
+SET statement_timeout = 0;
 --> statement-breakpoint
 
 -- Older timer starts were not serialized. Preserve the newest running timer
@@ -21,6 +23,7 @@ WITH ranked_active_timers AS (
 UPDATE "time_entries" AS "entry"
 SET
   "duration_minutes" = GREATEST("entry"."duration_minutes", 1),
+  "billed_minutes" = GREATEST("entry"."billed_minutes", 6),
   "timer_started_at" = NULL,
   "timer_stopped_at" = "entry"."timer_started_at" + INTERVAL '1 minute',
   "updated_at" = NOW()

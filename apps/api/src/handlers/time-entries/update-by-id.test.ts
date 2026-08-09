@@ -150,6 +150,7 @@ describe("updateTimeEntryById", () => {
         body: {
           id: toSafeId<"timeEntry">("time_entry_test"),
           dateWorked: "2026-06-14",
+          timezoneId: "Europe/Prague",
           billable: true,
           narrative: "Updated narrative",
         },
@@ -162,6 +163,7 @@ describe("updateTimeEntryById", () => {
     });
     expect(appliedUpdates).not.toHaveProperty("rateAtEntry");
     expect(appliedUpdates).not.toHaveProperty("currency");
+    expect(appliedUpdates).not.toHaveProperty("timezoneId");
   });
 
   test("persists the timezone used to validate an edited date", async () => {

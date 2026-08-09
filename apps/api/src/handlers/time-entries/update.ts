@@ -144,6 +144,7 @@ export const updateTimeEntryHandler = async function* ({
     body.dateWorked !== undefined && body.dateWorked !== existing.dateWorked
       ? body.dateWorked
       : null;
+  let changedTimezoneId: string | null = null;
   if (changedDateWorked !== null) {
     if (body.timezoneId === undefined) {
       return Result.err(
@@ -165,6 +166,7 @@ export const updateTimeEntryHandler = async function* ({
         new HandlerError({ status: 400, message: dateValidationError }),
       );
     }
+    changedTimezoneId = body.timezoneId;
   }
 
   const workItemId = body.workItemId;
@@ -233,7 +235,6 @@ export const updateTimeEntryHandler = async function* ({
   const updates = {
     ...pickDefined(body, [
       "dateWorked",
-      "timezoneId",
       "durationMinutes",
       "narrative",
       "invoiceNarrative",
@@ -243,6 +244,9 @@ export const updateTimeEntryHandler = async function* ({
       "taskCode",
       "activityCode",
     ]),
+    ...(changedTimezoneId !== null
+      ? { timezoneId: changedTimezoneId }
+      : {}),
     ...(body.durationMinutes !== undefined
       ? { billedMinutes: roundToBillingIncrement(body.durationMinutes) }
       : {}),

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  getGatewayMcpToolDefinition,
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
@@ -9,14 +10,19 @@ import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definition
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-// Only `enabledRegistrySlugs` drives the narrowing; the rest of the context is
-// unused on this path. `scopes: ["stella:read"]` grants the read-scoped lookup
-// tool while withholding stella:external_mcps / stella:skills, so the dynamic
-// gateway loaders never run and no DB is touched.
+// Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
+// `scopes: ["stella:read"]` grants the read-scoped lookup tool while
+// withholding stella:external_mcps / stella:skills, so the dynamic gateway
+// loaders never run and no DB is touched.
 const contextWith = (
   enabledRegistrySlugs: readonly string[] | undefined,
+  memberRole: McpRequestContext["memberRole"] = "owner",
 ): McpRequestContext =>
-  asTestRaw<McpRequestContext>({ enabledRegistrySlugs, grantedScopes: [] });
+  asTestRaw<McpRequestContext>({
+    enabledRegistrySlugs,
+    grantedScopes: [],
+    memberRole,
+  });
 
 // Snapshot the advertised registry enum into a fresh array. The unresolved and
 // anonymized paths return the shared static definition by reference (correct:
@@ -158,6 +164,44 @@ describe("listGatewayMcpToolDefinitions compound scope discovery", () => {
         (definition) => definition.name === "save_filled_template",
       ),
     ).toBe(true);
+  });
+});
+
+describe("listGatewayMcpToolDefinitions role visibility", () => {
+  test("hides rate resolution from roles that cannot read billing rates", async () => {
+    const ownerDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "owner"),
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    const memberDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "member"),
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+
+    expect(ownerDefinitions.some(({ name }) => name === "resolve_rate")).toBe(
+      true,
+    );
+    expect(memberDefinitions.some(({ name }) => name === "resolve_rate")).toBe(
+      false,
+    );
+  });
+
+  test("rejects exact-name resolution when the role cannot read rates", async () => {
+    const ownerDefinition = await getGatewayMcpToolDefinition({
+      context: contextWith(undefined, "owner"),
+      mode: "default",
+      toolName: "resolve_rate",
+    });
+    const memberDefinition = await getGatewayMcpToolDefinition({
+      context: contextWith(undefined, "member"),
+      mode: "default",
+      toolName: "resolve_rate",
+    });
+
+    expect(ownerDefinition?.name).toBe("resolve_rate");
+    expect(memberDefinition).toBeUndefined();
   });
 });
 
