@@ -13,6 +13,7 @@ import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -490,6 +491,49 @@ describe("extractThreadDataWorkspaceIds", () => {
     expect(
       extractThreadDataWorkspaceIds(messagesBeforeTruncation.slice(0, 1)),
     ).toEqual([wsA]);
+  });
+
+  test("retains entity-only tool scope from replay context", () => {
+    const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000001");
+    const messages = [
+      {
+        id: "assistant-entity-only",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-1",
+            name: "read_document",
+            arguments: JSON.stringify({ entity_id: entityId }),
+            state: "complete",
+            input: { entity_id: entityId },
+            output: { entityId, text: "retained content" },
+          },
+        ],
+        metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+          refContext: {
+            version: 1,
+            entities: [
+              {
+                entity: resourceRef({
+                  type: RESOURCE_TYPE.ENTITY,
+                  id: entityId,
+                }),
+                toolCallId: "tool-1",
+                workspace: resourceRef({
+                  type: RESOURCE_TYPE.WORKSPACE,
+                  id: wsB,
+                }),
+              },
+            ],
+            unresolvedInputs: [],
+          },
+        },
+      },
+    ] satisfies ChatMessage[];
+
+    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
   });
 });
 

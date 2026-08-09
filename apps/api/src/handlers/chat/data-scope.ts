@@ -54,6 +54,12 @@ export const extractMessageWorkspaceIds = (
     ids.add(id);
   }
   collectStructuralWorkspaceIds(message.metadata?.sourceDocuments, ids);
+  const refContext = message.metadata?.refContext;
+  if (refContext !== undefined) {
+    for (const context of refContext.entities) {
+      ids.add(brandPersistedWorkspaceId(context.workspace.id));
+    }
+  }
   return Array.from(ids);
 };
 
