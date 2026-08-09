@@ -23,6 +23,7 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
+import { toSafeId } from "@/lib/safe-id";
 
 const FORMATTING_LOCALE = "en-u-nu-arab";
 
@@ -189,13 +190,13 @@ describe("email viewer", () => {
       date: "Mon, 02 Jun 2026 10:00:00 +0000",
       from: "Sender <sender@example.org>",
       source: {
-        entityId: "entity-1",
+        entityId: toSafeId<"entity">("entity-1"),
         entityName: "Contract",
-        fieldId: "field-1",
+        fieldId: toSafeId<"field">("field-1"),
         fileName: "message.eml",
         mimeType: "message/rfc822",
         pdfFileId: null,
-        propertyId: "property-1",
+        propertyId: toSafeId<"property">("property-1"),
       },
       subject: "Contract draft",
       to: ["client@example.org", "عائشة <aisha@example.ae>"],
