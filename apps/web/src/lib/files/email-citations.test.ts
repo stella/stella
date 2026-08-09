@@ -40,6 +40,7 @@ describe("email citation hrefs", () => {
   });
 
   test("recognizes only blocks registered by the active email viewer", () => {
+    const eventTarget = new EventTarget();
     const knownTarget = {
       blockId: "body-0001",
       entityId: ENTITY_ID,
@@ -48,26 +49,33 @@ describe("email citation hrefs", () => {
     const cleanup = registerEmailCitationBlocks({
       blockIds: [knownTarget.blockId],
       entityId: ENTITY_ID,
+      eventTarget,
       fieldId: FIELD_ID,
     });
 
-    expect(isKnownEmailCitationTarget(knownTarget)).toBe(true);
+    expect(isKnownEmailCitationTarget(knownTarget, eventTarget)).toBe(true);
     expect(
-      isKnownEmailCitationTarget({
-        blockId: "body-9999",
-        entityId: ENTITY_ID,
-        fieldId: FIELD_ID,
-      }),
+      isKnownEmailCitationTarget(
+        {
+          blockId: "body-9999",
+          entityId: ENTITY_ID,
+          fieldId: FIELD_ID,
+        },
+        eventTarget,
+      ),
     ).toBe(false);
     expect(
-      isKnownEmailCitationTarget({
-        blockId: knownTarget.blockId,
-        entityId: "00000000-0000-4000-8000-000000000003",
-        fieldId: FIELD_ID,
-      }),
+      isKnownEmailCitationTarget(
+        {
+          blockId: knownTarget.blockId,
+          entityId: "00000000-0000-4000-8000-000000000003",
+          fieldId: FIELD_ID,
+        },
+        eventTarget,
+      ),
     ).toBe(false);
     cleanup();
-    expect(isKnownEmailCitationTarget(knownTarget)).toBe(false);
+    expect(isKnownEmailCitationTarget(knownTarget, eventTarget)).toBe(false);
   });
 
   test("requires both the exact source field and a server-returned block", () => {

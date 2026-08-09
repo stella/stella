@@ -428,7 +428,7 @@ const scrollToEmailCitation = ({
     for (const active of bodyDocument.querySelectorAll<HTMLElement>(
       "[data-stella-email-citation-active]",
     )) {
-      delete active.dataset.stellaEmailCitationActive;
+      delete active.dataset["stellaEmailCitationActive"];
     }
   }
 
@@ -447,7 +447,7 @@ const scrollToEmailCitation = ({
     return;
   }
   openAncestorDetails(bodyTarget);
-  bodyTarget.dataset.stellaEmailCitationActive = "";
+  bodyTarget.dataset["stellaEmailCitationActive"] = "";
   bodyTarget.scrollIntoView({ behavior: "smooth", block: "center" });
 };
 

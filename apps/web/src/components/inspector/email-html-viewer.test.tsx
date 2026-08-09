@@ -188,6 +188,15 @@ describe("email viewer", () => {
       cc: ["copy@example.org"],
       date: "Mon, 02 Jun 2026 10:00:00 +0000",
       from: "Sender <sender@example.org>",
+      source: {
+        entityId: "entity-1",
+        entityName: "Contract",
+        fieldId: "field-1",
+        fileName: "message.eml",
+        mimeType: "message/rfc822",
+        pdfFileId: null,
+        propertyId: "property-1",
+      },
       subject: "Contract draft",
       to: ["client@example.org", "عائشة <aisha@example.ae>"],
     });

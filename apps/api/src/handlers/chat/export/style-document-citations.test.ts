@@ -127,6 +127,37 @@ describe("styleDocumentCitations", () => {
     expect(styled.package.footnotes).toEqual([]);
   });
 
+  test("email citations unwrap or become unverified footnotes", () => {
+    const emailCitation =
+      "[message passage](#email:11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222:body-0001)";
+    const withoutCitations = styleDocumentCitations(
+      markdownToStellaDocument(emailCitation),
+      "none",
+      options,
+    );
+    const withFootnotes = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument(emailCitation),
+      "footnotes",
+      options,
+    );
+
+    expect(collectText(withoutCitations.package.document.content)).toBe(
+      "message passage",
+    );
+    expect(
+      collectHyperlinkTargets(withoutCitations.package.document.content),
+    ).toEqual([]);
+    expect(withFootnotes.citationCounts).toEqual({
+      unverified: 1,
+      verified: 0,
+    });
+    expect(
+      withFootnotes.document.package.footnotes?.map(({ content }) =>
+        collectText(content),
+      ),
+    ).toEqual(["Unverified citation: message passage"]);
+  });
+
   test("marked search-summary links become verified citations", () => {
     const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(

@@ -41,27 +41,49 @@ export const parseEmailCitationHref = (
 
 let pendingCitationTarget: EmailCitationTarget | null = null;
 
-const dispatchEmailCitationScroll = (target: EmailCitationTarget): void => {
-  window.dispatchEvent(
+const dispatchEmailCitationScroll = (
+  target: EmailCitationTarget,
+  eventTarget: EventTarget = window,
+): void => {
+  eventTarget.dispatchEvent(
     new CustomEvent(EMAIL_CITATION_SCROLL_EVENT, { detail: target }),
   );
 };
 
-const emitCitationRegistrationChange = (): void => {
-  window.dispatchEvent(new Event(EMAIL_CITATION_REGISTRATION_EVENT));
+const emitCitationRegistrationChange = (
+  eventTarget: EventTarget = window,
+): void => {
+  eventTarget.dispatchEvent(new Event(EMAIL_CITATION_REGISTRATION_EVENT));
 };
+
+const isEmailCitationTargetDetail = (
+  value: unknown,
+): value is EmailCitationTarget =>
+  typeof value === "object" &&
+  value !== null &&
+  "blockId" in value &&
+  typeof value.blockId === "string" &&
+  "entityId" in value &&
+  typeof value.entityId === "string" &&
+  "fieldId" in value &&
+  typeof value.fieldId === "string";
 
 export const registerEmailCitationBlocks = ({
   blockIds,
   entityId,
+  eventTarget = window,
   fieldId,
 }: {
   blockIds: readonly string[];
   entityId: string;
+  eventTarget?: EventTarget;
   fieldId: string;
 }): (() => void) => {
   const registeredBlockIds = new Set(blockIds);
-  const handleLookup = (event: CustomEvent<EmailCitationTarget>): void => {
+  const handleLookup = (event: Event): void => {
+    if (!("detail" in event) || !isEmailCitationTargetDetail(event.detail)) {
+      return;
+    }
     const target = event.detail;
     if (
       target.entityId === entityId &&
@@ -71,8 +93,8 @@ export const registerEmailCitationBlocks = ({
       event.preventDefault();
     }
   };
-  window.addEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
-  emitCitationRegistrationChange();
+  eventTarget.addEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
+  emitCitationRegistrationChange(eventTarget);
 
   const pendingTarget = pendingCitationTarget;
   if (
@@ -82,20 +104,21 @@ export const registerEmailCitationBlocks = ({
   ) {
     pendingCitationTarget = null;
     queueMicrotask(() => {
-      dispatchEmailCitationScroll(pendingTarget);
+      dispatchEmailCitationScroll(pendingTarget, eventTarget);
     });
   }
 
   return () => {
-    window.removeEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
-    emitCitationRegistrationChange();
+    eventTarget.removeEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
+    emitCitationRegistrationChange(eventTarget);
   };
 };
 
 export const isKnownEmailCitationTarget = (
   target: EmailCitationTarget,
+  eventTarget: EventTarget = window,
 ): boolean =>
-  !window.dispatchEvent(
+  !eventTarget.dispatchEvent(
     new CustomEvent(EMAIL_CITATION_LOOKUP_EVENT, {
       cancelable: true,
       detail: target,

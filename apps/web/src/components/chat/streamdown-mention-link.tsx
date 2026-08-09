@@ -625,6 +625,7 @@ const EmailCitationChip = ({
 }) => {
   const tCommon = useTranslations("common");
   const { target } = citation;
+  const retryLabel = tCommon("retry");
   const handleActivate = (): void => {
     if (citation.type === "error") {
       detached(citation.retry(), "email-citation.retry");
@@ -653,7 +654,10 @@ const EmailCitationChip = ({
 
   return (
     <InlinePill
-      ariaLabel={citation.type === "error" ? tCommon("retry") : undefined}
+      {...(citation.type === "error" ? { ariaLabel: retryLabel } : {})}
+      {...(citation.type === "error" && interactive
+        ? { tooltip: retryLabel }
+        : {})}
       data-block-id={target.blockId}
       leadingIcon={<MailIcon className="size-3 shrink-0" />}
       onActivate={
@@ -662,9 +666,6 @@ const EmailCitationChip = ({
           : undefined
       }
       tone={citation.type === "error" ? "info" : "accent"}
-      tooltip={
-        citation.type === "error" && interactive ? tCommon("retry") : undefined
-      }
       truncate
     >
       {children}

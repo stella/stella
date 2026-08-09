@@ -14,6 +14,7 @@ import type { ChatExportCitationStyle } from "@/api/handlers/chat/export/citatio
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 
 const FOLIO_CITATION_PREFIX = "#folio:";
+const EMAIL_CITATION_PREFIX = "#email:";
 const SEARCH_SUMMARY_CITATION_TARGET_PREFIX = "#stella-search-summary=";
 const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
 const SEARCH_SUMMARY_SOURCE_NUMBER = /^\[(?<number>[1-9]\d*)\]/u;
@@ -34,6 +35,7 @@ const isCitationHyperlink = (
     href.startsWith("https://") ||
     href.startsWith("http://") ||
     href.startsWith(FOLIO_CITATION_PREFIX) ||
+    href.startsWith(EMAIL_CITATION_PREFIX) ||
     href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision) ||
     (internalReferenceMode !== "references" &&
       (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
