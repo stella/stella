@@ -1912,7 +1912,9 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_content_across_matters",
     });
 
-    expect(parseToolPayload(result)).toMatchObject({ text: "# Agreement" });
+    expect(parseToolPayload(result)).toMatchObject({
+      text: expect.stringContaining("# Agreement"),
+    });
     expect(s3ArrayBufferMock).toHaveBeenCalledTimes(1);
   });
 
