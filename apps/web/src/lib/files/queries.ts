@@ -2,7 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   fileContentQueryKey,
@@ -148,15 +149,17 @@ export const emailAttachmentPdfOptions = ({
       attachmentId,
     ],
     queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId })
-        ["email-attachment"]({ fieldId })({ attachmentId })
-        .get({ query: { disposition: "inline" }, fetch: { signal } });
-      const data = unwrapEden(response);
-      if (!(data instanceof Response)) {
-        throw new TypeError("Email attachment preview returned no bytes");
+      const response = await fetchWithTimeout(
+        emailAttachmentPreviewUrl({ attachmentId, fieldId, workspaceId }),
+        { credentials: "include", signal, timeoutMs: 60_000 },
+      );
+      if (!response.ok) {
+        throw new APIError({
+          status: response.status,
+          message: "Failed to preview email attachment",
+        });
       }
-      return await data.arrayBuffer();
+      return await response.arrayBuffer();
     },
   });
 

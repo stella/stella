@@ -408,7 +408,7 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
-        id: "attachment-0",
+        id: "attachment-1",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: 3,
@@ -796,7 +796,7 @@ describe("emailToHtml (.eml)", () => {
         previewable: false,
       },
       {
-        id: "attachment-1",
+        id: "attachment-2",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: Buffer.from(PNG_BASE64, "base64").byteLength,
