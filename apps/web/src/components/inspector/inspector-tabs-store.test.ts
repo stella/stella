@@ -542,6 +542,32 @@ describe("replaceFileFieldId", () => {
     expect(tab.pdfFileId).toBe("pdf-1");
     expect(tab.propertyId).toBe("property-2");
   });
+
+  test("resets attachments when a version replacement stops being an email", () => {
+    useInspectorTabsStore.getState().openFile({
+      id: "field-old",
+      entityId: "entity-1",
+      label: "Message",
+      fileName: "message.eml",
+      mimeType: "message/rfc822",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorTabsStore.getState().setFileFacet("field-old", "attachments");
+
+    useInspectorTabsStore.getState().replaceFileFieldId("field-old", {
+      id: "field-new",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+    });
+
+    expect(
+      useInspectorTabsStore
+        .getState()
+        .tabs.find(({ id }) => id === "field-new"),
+    ).toMatchObject({ facet: "preview", type: "pdf" });
+  });
 });
 
 const openFullscreenFileTab = () => {

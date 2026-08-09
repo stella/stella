@@ -65,6 +65,15 @@ type UpsertFileTabOptions = {
   renderIdPolicy: (typeof FILE_TAB_RENDER_ID_POLICY)[keyof typeof FILE_TAB_RENDER_ID_POLICY];
 };
 
+const normalizeFileTabFacet = (tab: Draft<FileTab>): void => {
+  if (
+    tab.facet === "attachments" &&
+    !isEmailFile({ fileName: tab.fileName, mimeType: tab.mimeType })
+  ) {
+    tab.facet = "preview";
+  }
+};
+
 const upsertFileTab = (
   state: Draft<InspectorTabsStore>,
   tab: Omit<FileTab, "type">,
@@ -100,12 +109,7 @@ const upsertFileTab = (
   if (tab.mimeType !== undefined) {
     existing.mimeType = tab.mimeType;
   }
-  if (
-    existing.facet === "attachments" &&
-    !isEmailFile({ fileName: tab.fileName, mimeType: tab.mimeType })
-  ) {
-    existing.facet = "preview";
-  }
+  normalizeFileTabFacet(existing);
   existing.pdfFileId = tab.pdfFileId;
   if (
     renderIdPolicy === FILE_TAB_RENDER_ID_POLICY.always ||
@@ -545,6 +549,7 @@ export const createInspectorTabsSlice = (
       if (next.propertyId !== undefined) {
         tab.propertyId = next.propertyId;
       }
+      normalizeFileTabFacet(tab);
       if (state.activeId === oldFieldId) {
         state.activeId = next.id;
       }
