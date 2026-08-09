@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
+  findCanonicalChatResourceHrefs,
   parseCanonicalChatResourceHref,
   parseChatResourceHref,
+  replaceCanonicalChatResourceHrefs,
   toChatResourceHref,
 } from "./resource-link";
 import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
@@ -117,5 +122,40 @@ describe("chat resource links", () => {
     expect(
       parseCanonicalChatResourceHref("#stella-workspace=matter:eu"),
     ).toBeNull();
+  });
+
+  test("keeps opaque IDs separate from trailing prose punctuation", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
+        (id) => {
+          const target = {
+            type: RESOURCE_TYPE.WORKSPACE,
+            resource: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: toSafeId<"workspace">(id),
+            }),
+          } as const;
+          const href = toChatResourceHref(target);
+          const text = `See ${href}.`;
+
+          expect(findCanonicalChatResourceHrefs(text)).toEqual([
+            { href, index: 4, target },
+          ]);
+          expect(
+            replaceCanonicalChatResourceHrefs(text, () => "matter_ref"),
+          ).toBe("See matter_ref.");
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
+
+  test("does not partially accept an unencoded opaque ID", () => {
+    expect(
+      findCanonicalChatResourceHrefs(
+        "Ignore #stella-workspace=workspace-1/child.",
+      ),
+    ).toEqual([]);
   });
 });

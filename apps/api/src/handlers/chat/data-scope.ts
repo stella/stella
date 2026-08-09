@@ -1,6 +1,5 @@
 import {
-  CHAT_RESOURCE_HREF_PREFIX,
-  parseCanonicalChatResourceHref,
+  findCanonicalChatResourceHrefs,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 
@@ -137,15 +136,6 @@ const collectStructuralWorkspaceIds = (
   }
 };
 
-const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
-const escapeRegex = (value: string) =>
-  value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
-
-const STELLA_TEXT_REF_REGEX = new RegExp(
-  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)})[^\\s)]+`,
-  "gu",
-);
-
 const collectTextRefWorkspaceIds = (
   part: unknown,
   ids: Set<SafeId<"workspace">>,
@@ -159,11 +149,7 @@ const collectTextRefWorkspaceIds = (
   if (!("content" in part) || typeof part.content !== "string") {
     return;
   }
-  for (const match of part.content.matchAll(STELLA_TEXT_REF_REGEX)) {
-    const target = parseCanonicalChatResourceHref(match[0]);
-    if (target === null) {
-      continue;
-    }
+  for (const { target } of findCanonicalChatResourceHrefs(part.content)) {
     switch (target.type) {
       case RESOURCE_TYPE.ENTITY:
         if (target.location.type === "workspace") {

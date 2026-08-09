@@ -81,12 +81,15 @@ export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
 export {
   CHAT_RESOURCE_HREF_PREFIX,
   CHAT_RESOURCE_LINK_DISPOSITION,
+  findCanonicalChatResourceHrefs,
   parseCanonicalChatResourceHref,
   parseChatResourceHref,
+  replaceCanonicalChatResourceHrefs,
   toChatMentionResourceHref,
   toChatResourceHref,
 } from "./resource-link";
 export type {
+  CanonicalChatResourceHrefMatch,
   ChatResourceHref,
   ChatResourceLinkTarget,
   ChatMentionResourceHref,

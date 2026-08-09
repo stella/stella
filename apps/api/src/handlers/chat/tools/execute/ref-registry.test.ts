@@ -212,6 +212,9 @@ describe("chat ref registry", () => {
       `[Matter](#stella-workspace-ref=${workspaceRef}) ` +
         `[Supplement](#stella-entity-ref=${entityRef})`,
     );
+    expect(registry.hydrateAssistantTextRefs(`See ${workspaceHref}.`)).toBe(
+      `See #stella-workspace-ref=${workspaceRef}.`,
+    );
   });
 
   test("mints distinct refs for arbitrary opaque entity identity tuples", () => {

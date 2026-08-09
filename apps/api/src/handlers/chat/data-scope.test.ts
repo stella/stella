@@ -199,6 +199,21 @@ describe("extractAssistantWorkspaceIds", () => {
     expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
   });
 
+  test("bare links stop before sentence punctuation", () => {
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsA }),
+    });
+    const parts = [
+      {
+        type: "text" as const,
+        content: `See ${workspaceHref}.`,
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
+  });
+
   test("does not partially accept malformed canonical links", () => {
     const parts = [
       {

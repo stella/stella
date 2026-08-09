@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 
 import {
-  CHAT_RESOURCE_HREF_PREFIX,
-  parseCanonicalChatResourceHref,
+  replaceCanonicalChatResourceHrefs,
   resourceRef,
   RESOURCE_TYPE,
   toChatResourceHref,
@@ -43,10 +42,6 @@ const createRefLinkRegex = (prefix: string) =>
 const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
 const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "iu");
-const PERSISTED_CHAT_RESOURCE_LINK_REGEX = new RegExp(
-  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)})[^\\s)]+`,
-  "gu",
-);
 
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
@@ -320,12 +315,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   const hydrateAssistantTextRefs = (text: string) =>
-    text.replaceAll(PERSISTED_CHAT_RESOURCE_LINK_REGEX, (href) => {
-      const target = parseCanonicalChatResourceHref(href);
-      if (target === null) {
-        return href;
-      }
-
+    replaceCanonicalChatResourceHrefs(text, ({ href, target }) => {
       switch (target.type) {
         case RESOURCE_TYPE.WORKSPACE:
           return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(

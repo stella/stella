@@ -129,6 +129,21 @@ export type ChatMentionResourceHref =
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.entity}${string}`
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.workspace}${string}`;
 
+const CHAT_RESOURCE_HREF_CANDIDATE_REGEX = new RegExp(
+  `(?:${Object.values(CHAT_RESOURCE_HREF_PREFIX).join("|")})[^\\s)]+`,
+  "gu",
+);
+const TRAILING_PROSE_PUNCTUATION_REGEX =
+  /(?:[!"',.;:?`*>\]}،؛，、]|\p{Pe}|\p{Pf}|\p{Sentence_Terminal})$/u;
+
+/**
+ * A literal dot is legal in an RFC 3986 component, but it is ambiguous at
+ * the end of a bare link in prose. Encoding it keeps opaque IDs distinct from
+ * sentence punctuation while retaining the existing UUID wire format.
+ */
+const encodeChatResourceId = (value: string): string =>
+  encodeRfc3986Component(value).replaceAll(".", "%2E");
+
 const decodeChatResourceId = (value: string): string | null => {
   try {
     const id = decodeURIComponent(value);
@@ -143,15 +158,15 @@ export const toChatMentionResourceHref = (
 ): ChatMentionResourceHref => {
   switch (target.type) {
     case RESOURCE_TYPE.ENTITY: {
-      const entityId = encodeRfc3986Component(target.resource.id);
+      const entityId = encodeChatResourceId(target.resource.id);
       if (target.location.type === "render_context") {
         return `${CHAT_RESOURCE_HREF_PREFIX.entity}${entityId}`;
       }
-      const workspaceId = encodeRfc3986Component(target.location.workspace.id);
+      const workspaceId = encodeChatResourceId(target.location.workspace.id);
       return `${CHAT_RESOURCE_HREF_PREFIX.entity}${workspaceId}:${entityId}`;
     }
     case RESOURCE_TYPE.WORKSPACE:
-      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeRfc3986Component(target.resource.id)}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeChatResourceId(target.resource.id)}`;
     default:
       return target satisfies never;
   }
@@ -162,7 +177,7 @@ export const toChatResourceHref = (
 ): ChatResourceHref => {
   switch (target.type) {
     case RESOURCE_TYPE.CASE_LAW_DECISION:
-      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeRfc3986Component(target.resource.id)}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeChatResourceId(target.resource.id)}`;
     case RESOURCE_TYPE.ENTITY:
     case RESOURCE_TYPE.WORKSPACE:
       return toChatMentionResourceHref(target);
@@ -266,4 +281,70 @@ export const parseCanonicalChatResourceHref = (
   }
 
   return target;
+};
+
+export type CanonicalChatResourceHrefMatch = {
+  readonly href: ChatResourceHref;
+  readonly index: number;
+  readonly target: ChatResourceLinkTarget;
+};
+
+const parseCanonicalChatResourceHrefCandidate = (
+  candidate: string,
+): Omit<CanonicalChatResourceHrefMatch, "index"> | null => {
+  let href = candidate;
+
+  while (href.length > 0) {
+    const target = parseCanonicalChatResourceHref(href);
+    if (target !== null) {
+      return { href: toChatResourceHref(target), target };
+    }
+
+    const withoutTrailingPunctuation = href.replace(
+      TRAILING_PROSE_PUNCTUATION_REGEX,
+      "",
+    );
+    if (withoutTrailingPunctuation === href) {
+      return null;
+    }
+    href = withoutTrailingPunctuation;
+  }
+
+  return null;
+};
+
+/** Find complete canonical hrefs without absorbing adjacent prose punctuation. */
+export const findCanonicalChatResourceHrefs = (
+  text: string,
+): CanonicalChatResourceHrefMatch[] => {
+  const matches: CanonicalChatResourceHrefMatch[] = [];
+
+  for (const candidate of text.matchAll(CHAT_RESOURCE_HREF_CANDIDATE_REGEX)) {
+    const parsed = parseCanonicalChatResourceHrefCandidate(candidate[0]);
+    if (parsed === null) {
+      continue;
+    }
+    matches.push({ ...parsed, index: candidate.index });
+  }
+
+  return matches;
+};
+
+export const replaceCanonicalChatResourceHrefs = (
+  text: string,
+  replace: (match: CanonicalChatResourceHrefMatch) => string,
+): string => {
+  const matches = findCanonicalChatResourceHrefs(text);
+  if (matches.length === 0) {
+    return text;
+  }
+
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const match of matches) {
+    parts.push(text.slice(cursor, match.index), replace(match));
+    cursor = match.index + match.href.length;
+  }
+  parts.push(text.slice(cursor));
+  return parts.join("");
 };
