@@ -37,11 +37,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import {
-  timeEntries,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { timeEntries, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -63,6 +59,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth-paths";
+import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -85,7 +82,6 @@ import {
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
 } from "@/api/lib/limits";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import {
   MACHINE_API_KEY_CONFIG_ID,
@@ -1159,21 +1155,19 @@ const createAuth = () => {
             // rows by the plugin itself (the membership it just removed), not
             // supplied by the caller, so this is where they become ownership
             // ids for the tenant predicates the helper applies.
-            await rootDb.transaction(
-              async (tx) => {
-                const organizationId = brandPersistedOrganizationId(org.id);
-                const userId = brandPersistedUserId(removedMember.userId);
-                await closeRemovedMemberActiveTimers({
-                  organizationId,
-                  tx,
-                  userId,
-                });
-                await revokeOrganizationMemberAuthArtifacts(tx, {
-                  organizationId,
-                  userId,
-                });
-              },
-            );
+            await rootDb.transaction(async (tx) => {
+              const organizationId = brandPersistedOrganizationId(org.id);
+              const userId = brandPersistedUserId(removedMember.userId);
+              await closeRemovedMemberActiveTimers({
+                organizationId,
+                tx,
+                userId,
+              });
+              await revokeOrganizationMemberAuthArtifacts(tx, {
+                organizationId,
+                userId,
+              });
+            });
           },
         },
         async sendInvitationEmail(data, request) {
