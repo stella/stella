@@ -28,11 +28,12 @@ const FUNCTION_TYPES = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
 ]);
-const ABRUPT_COMPLETION_TYPES = new Set([
-  "BreakStatement",
-  "ContinueStatement",
-  "ReturnStatement",
-  "ThrowStatement",
+const LOOP_TYPES = new Set([
+  "DoWhileStatement",
+  "ForInStatement",
+  "ForOfStatement",
+  "ForStatement",
+  "WhileStatement",
 ]);
 const CONDITIONAL_EXECUTION_TYPES = new Set([
   "CatchClause",
@@ -68,6 +69,7 @@ type Creation = {
 };
 
 type Revocation = {
+  aliasPositions: number[];
   binding: ScopeVariable | null;
   node: Ranged;
   position: number;
@@ -143,8 +145,49 @@ const statementSite = (node: unknown): StatementSite | null => {
   return null;
 };
 
-const containsAbruptCompletion = (
+const abruptCompletionTarget = (node: AstNode): AstNode | null => {
+  if (node.type !== "BreakStatement" && node.type !== "ContinueStatement") {
+    return null;
+  }
+  const labelName = isIdentifier(node.label) ? node.label.name : null;
+  let current = isAstNode(node.parent) ? node.parent : null;
+  while (current !== null) {
+    if (
+      labelName !== null &&
+      current.type === "LabeledStatement" &&
+      isIdentifier(current.label, labelName)
+    ) {
+      return current;
+    }
+    if (
+      labelName === null &&
+      (LOOP_TYPES.has(current.type) ||
+        (node.type === "BreakStatement" && current.type === "SwitchStatement"))
+    ) {
+      return current;
+    }
+    if (FUNCTION_TYPES.has(current.type)) {
+      return null;
+    }
+    current = isAstNode(current.parent) ? current.parent : null;
+  }
+  return null;
+};
+
+const abruptCompletionBypasses = (
+  node: AstNode,
+  destination: unknown,
+): boolean => {
+  if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+    return true;
+  }
+  const target = abruptCompletionTarget(node);
+  return target !== null && isDescendantOf(destination, target);
+};
+
+const containsBypassingAbruptCompletion = (
   node: unknown,
+  destination: unknown,
   root: unknown = node,
   seen = new Set<unknown>(),
 ): boolean => {
@@ -155,7 +198,13 @@ const containsAbruptCompletion = (
   if (node !== root && FUNCTION_TYPES.has(node.type)) {
     return false;
   }
-  if (ABRUPT_COMPLETION_TYPES.has(node.type)) {
+  if (
+    (node.type === "BreakStatement" ||
+      node.type === "ContinueStatement" ||
+      node.type === "ReturnStatement" ||
+      node.type === "ThrowStatement") &&
+    abruptCompletionBypasses(node, destination)
+  ) {
     return true;
   }
   for (const [key, value] of Object.entries(node)) {
@@ -163,12 +212,16 @@ const containsAbruptCompletion = (
       continue;
     }
     if (Array.isArray(value)) {
-      if (value.some((child) => containsAbruptCompletion(child, root, seen))) {
+      if (
+        value.some((child) =>
+          containsBypassingAbruptCompletion(child, destination, root, seen),
+        )
+      ) {
         return true;
       }
       continue;
     }
-    if (containsAbruptCompletion(value, root, seen)) {
+    if (containsBypassingAbruptCompletion(value, destination, root, seen)) {
       return true;
     }
   }
@@ -206,6 +259,24 @@ const isDescendantOf = (node: unknown, ancestor: unknown): boolean => {
     current = isAstNode(current.parent) ? current.parent : null;
   }
   return false;
+};
+
+const repeatingLoopForNode = (node: unknown): AstNode | null => {
+  let child = isAstNode(node) ? node : null;
+  while (child !== null) {
+    const parent = isAstNode(child.parent) ? child.parent : null;
+    if (parent === null || FUNCTION_TYPES.has(parent.type)) {
+      return null;
+    }
+    if (
+      LOOP_TYPES.has(parent.type) &&
+      (parent.type !== "ForStatement" || parent.init !== child)
+    ) {
+      return parent;
+    }
+    child = parent;
+  }
+  return null;
 };
 
 const isReturnedCleanupFunction = (
@@ -252,7 +323,7 @@ const functionAlwaysReachesNode = (
     revocationIndex !== -1 &&
     !functionNode.body.body
       .slice(0, revocationIndex)
-      .some((statement) => containsAbruptCompletion(statement))
+      .some((statement) => containsBypassingAbruptCompletion(statement, node))
   );
 };
 
@@ -289,7 +360,9 @@ const isRevokedByEnclosingFinally = (
         tryIndex > creationIndex &&
         !creationSite.block.body
           .slice(creationIndex + 1, tryIndex)
-          .some((statement) => containsAbruptCompletion(statement))
+          .some((statement) =>
+            containsBypassingAbruptCompletion(statement, revocation.node),
+          )
       );
     }
     child = parent;
@@ -308,7 +381,11 @@ const revocationCoversCreation = (
     revocationFunction,
     creationFunction,
   );
-  if (isRevokedByEnclosingFinally(creation, revocation)) {
+  const repeatingLoop = repeatingLoopForNode(creation.node);
+  if (
+    isRevokedByEnclosingFinally(creation, revocation) &&
+    (repeatingLoop === null || isDescendantOf(revocation.node, repeatingLoop))
+  ) {
     return true;
   }
   if (
@@ -326,6 +403,12 @@ const revocationCoversCreation = (
     : [revocation.node];
 
   return coverageNodes.some((coverageNode) => {
+    if (
+      repeatingLoop !== null &&
+      !isDescendantOf(coverageNode, repeatingLoop)
+    ) {
+      return false;
+    }
     const creationSite = statementSite(creation.node);
     const revocationSite = statementSite(coverageNode);
     if (
@@ -349,7 +432,9 @@ const revocationCoversCreation = (
     }
     return !creationSite.block.body
       .slice(creationIndex + 1, revocationIndex)
-      .some((statement) => containsAbruptCompletion(statement));
+      .some((statement) =>
+        containsBypassingAbruptCompletion(statement, coverageNode),
+      );
   });
 };
 
@@ -466,17 +551,23 @@ export default eslintCompatPlugin({
           );
         };
 
-        const canonicalBinding = (
+        const canonicalBindingInfo = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
-        ): ScopeVariable | null => {
+        ): {
+          aliasPositions: number[];
+          binding: ScopeVariable;
+        } | null => {
           const expression = unwrapExpression(node);
           if (!isIdentifier(expression)) {
             return null;
           }
           const variable = resolveVariable(expression);
-          if (variable === null || visited.has(variable)) {
-            return variable;
+          if (variable === null) {
+            return null;
+          }
+          if (visited.has(variable)) {
+            return { aliasPositions: [], binding: variable };
           }
           visited.add(variable);
           for (const definition of variable.defs) {
@@ -490,14 +581,25 @@ export default eslintCompatPlugin({
             ) {
               continue;
             }
-            const aliasedBinding = canonicalBinding(
+            const aliasedBinding = canonicalBindingInfo(
               definition.node.init,
               visited,
             );
-            return aliasedBinding ?? variable;
+            if (aliasedBinding !== null) {
+              return {
+                aliasPositions: [
+                  ...aliasedBinding.aliasPositions,
+                  nodePosition(definition.node),
+                ],
+                binding: aliasedBinding.binding,
+              };
+            }
           }
-          return variable;
+          return { aliasPositions: [], binding: variable };
         };
+
+        const canonicalBinding = (node: unknown): ScopeVariable | null =>
+          canonicalBindingInfo(node)?.binding ?? null;
 
         const directRevokedCreation = (argument) => {
           const expression = unwrapExpression(argument);
@@ -603,8 +705,10 @@ export default eslintCompatPlugin({
             const argument = Array.isArray(node.arguments)
               ? node.arguments.at(0)
               : null;
+            const bindingInfo = canonicalBindingInfo(argument);
             revocations.push({
-              binding: canonicalBinding(argument),
+              aliasPositions: bindingInfo?.aliasPositions ?? [],
+              binding: bindingInfo?.binding ?? null,
               node,
               position: nodePosition(node),
               revokedCreation: directRevokedCreation(argument),
@@ -633,6 +737,13 @@ export default eslintCompatPlugin({
                 const hasOneOwnershipWrite = ownerSets.get(binding)?.size === 1;
                 const matchingRevocation = revocations.find((revocation) => {
                   if (revocation.binding !== binding) {
+                    return false;
+                  }
+                  if (
+                    revocation.aliasPositions.some(
+                      (position) => position < creation.position,
+                    )
+                  ) {
                     return false;
                   }
                   return (

@@ -7,8 +7,13 @@
 
 declare const credential: string;
 declare const dynamicKey: string;
+declare const getTokenKey: () => string;
+declare const setItem: keyof Storage;
 
 const ACCESS_TOKEN_KEY = "access_token";
+const ID_TOKEN_KEY = "id_token";
+const SET_ITEM_METHOD = "setItem";
+let mutableTokenKey = "access_token";
 
 // MUST flag: direct localStorage.setItem with a credential-like literal key.
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: browser-readable access token
@@ -39,6 +44,18 @@ sessionStorage.authToken = credential;
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, typescript/dot-notation -- fixture: computed property cannot bypass the rule
 globalThis.sessionStorage["private_key"] = credential;
 
+// MUST flag: a static template key is equivalent to a string literal.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, typescript/dot-notation -- fixture: a static template remains a known credential key
+sessionStorage[`refreshToken`] = credential;
+
+// MUST flag: a const-bound computed key remains statically resolvable.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: const key aliases cannot bypass assignment detection
+localStorage[ID_TOKEN_KEY] = credential;
+
+// MUST flag: a const-bound computed method preserves the setItem sink.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: const method aliases cannot bypass setItem detection
+localStorage[SET_ITEM_METHOD]("accessToken", credential);
+
 // Allowed: ordinary preferences and deliberately JavaScript-readable CSRF or
 // push tokens are not authentication credentials.
 localStorage.setItem("theme", "dark");
@@ -48,6 +65,24 @@ localStorage.designTokens = credential;
 
 // Allowed: a dynamic key is not statically known to be credential storage.
 localStorage.setItem(dynamicKey, credential);
+
+// Allowed: function parameters are runtime values even when their names look
+// credential-like.
+export const writeParameterKey = (tokenKey: string) => {
+  localStorage[tokenKey] = credential;
+};
+
+// Allowed: mutable bindings can change between analysis and execution.
+export const writeMutableKey = () => {
+  localStorage[mutableTokenKey] = credential;
+  mutableTokenKey = dynamicKey;
+};
+
+// Allowed: a call result is opaque without executing application code.
+localStorage[getTokenKey()] = credential;
+
+// Allowed: a computed method identifier is not the static setItem method.
+localStorage[setItem]("accessToken", credential);
 
 // Allowed: a same-named injected object is not the browser storage global.
 export const writeInjectedStorage = (localStorage: {

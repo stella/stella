@@ -69,17 +69,6 @@ const staticTemplateValue = (node: unknown): string | null => {
   return typeof quasi.value.cooked === "string" ? quasi.value.cooked : null;
 };
 
-const staticPropertyName = (node: unknown): string | null =>
-  getPropertyName(node) ?? staticTemplateValue(node);
-
-const staticMemberName = (node: unknown): string | null => {
-  const member = unwrapExpression(node);
-  if (member === null || member.type !== "MemberExpression") {
-    return null;
-  }
-  return staticPropertyName(member.property);
-};
-
 const isCredentialKey = (key: string): boolean => {
   if (!CREDENTIAL_KEY_PATTERN.test(key)) {
     return false;
@@ -125,53 +114,6 @@ export default eslintCompatPlugin({
           return variable === null || variable.defs.length === 0;
         };
 
-        const isWebStorage = (
-          node: unknown,
-          visited = new Set<ScopeVariable>(),
-        ): boolean => {
-          const expression = unwrapExpression(node);
-          if (expression === null) {
-            return false;
-          }
-          if (isIdentifier(expression) && STORAGE_NAMES.has(expression.name)) {
-            return isGlobalReference(expression, expression.name);
-          }
-          if (isIdentifier(expression)) {
-            const variable = resolveVariable(expression);
-            if (variable === null || visited.has(variable)) {
-              return false;
-            }
-            visited.add(variable);
-            for (const definition of variable.defs) {
-              if (
-                definition.type !== "Variable" ||
-                !isAstNode(definition.node) ||
-                definition.node.type !== "VariableDeclarator" ||
-                !isAstNode(definition.parent) ||
-                definition.parent.type !== "VariableDeclaration" ||
-                definition.parent.kind !== "const"
-              ) {
-                continue;
-              }
-              return isWebStorage(definition.node.init, visited);
-            }
-            return false;
-          }
-          if (expression.type !== "MemberExpression") {
-            return false;
-          }
-          const storageName = staticMemberName(expression);
-          if (storageName === null || !STORAGE_NAMES.has(storageName)) {
-            return false;
-          }
-          const host = unwrapExpression(expression.object);
-          return (
-            isIdentifier(host) &&
-            GLOBAL_HOST_NAMES.has(host.name) &&
-            isGlobalReference(host, host.name)
-          );
-        };
-
         const resolveStaticString = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
@@ -211,6 +153,63 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const resolveMemberName = (node: unknown): string | null => {
+          const member = unwrapExpression(node);
+          if (member === null || member.type !== "MemberExpression") {
+            return null;
+          }
+          return member.computed === true
+            ? resolveStaticString(member.property)
+            : getPropertyName(member.property);
+        };
+
+        const isWebStorage = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (expression === null) {
+            return false;
+          }
+          if (isIdentifier(expression) && STORAGE_NAMES.has(expression.name)) {
+            return isGlobalReference(expression, expression.name);
+          }
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visited.has(variable)) {
+              return false;
+            }
+            visited.add(variable);
+            for (const definition of variable.defs) {
+              if (
+                definition.type !== "Variable" ||
+                !isAstNode(definition.node) ||
+                definition.node.type !== "VariableDeclarator" ||
+                !isAstNode(definition.parent) ||
+                definition.parent.type !== "VariableDeclaration" ||
+                definition.parent.kind !== "const"
+              ) {
+                continue;
+              }
+              return isWebStorage(definition.node.init, visited);
+            }
+            return false;
+          }
+          if (expression.type !== "MemberExpression") {
+            return false;
+          }
+          const storageName = resolveMemberName(expression);
+          if (storageName === null || !STORAGE_NAMES.has(storageName)) {
+            return false;
+          }
+          const host = unwrapExpression(expression.object);
+          return (
+            isIdentifier(host) &&
+            GLOBAL_HOST_NAMES.has(host.name) &&
+            isGlobalReference(host, host.name)
+          );
+        };
+
         const reportCredentialKeyValue = (
           node,
           keyValue: string | null,
@@ -238,7 +237,7 @@ export default eslintCompatPlugin({
             if (
               callee === null ||
               callee.type !== "MemberExpression" ||
-              staticMemberName(callee) !== "setItem" ||
+              resolveMemberName(callee) !== "setItem" ||
               !isWebStorage(callee.object) ||
               !Array.isArray(node.arguments) ||
               node.arguments.length < 2
@@ -256,7 +255,7 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            reportCredentialKeyValue(node, staticMemberName(target));
+            reportCredentialKeyValue(node, resolveMemberName(target));
           },
         };
       },

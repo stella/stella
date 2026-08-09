@@ -5,7 +5,9 @@
 // cover the supported local disposal and shadowing patterns.
 
 declare const blob: Blob;
+declare const blobs: readonly Blob[];
 declare const condition: boolean;
+declare const mode: "keep" | "skip";
 
 // MUST flag: an escaped Blob URL has no visible owner or cleanup.
 export const escapedUrl = () =>
@@ -32,6 +34,16 @@ export const revokeBeforeCreate = () => {
   // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: revocation precedes this creation
   url = URL.createObjectURL(blob);
   return url;
+};
+
+// MUST flag: an immutable alias captured before the ownership write still
+// points at the old value and cannot revoke the newly created URL.
+export const staleAliasCleanup = () => {
+  let url = "blob:old";
+  const staleUrl = url;
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, eslint/no-useless-assignment -- fixture: pre-creation alias cannot dispose the new assigned value
+  url = URL.createObjectURL(blob);
+  URL.revokeObjectURL(staleUrl);
 };
 
 // MUST flag: an early return can bypass the lexically later revocation.
@@ -100,6 +112,61 @@ export const conditionalFinallyCleanup = () => {
   }
 };
 
+// MUST flag: a loop can overwrite the same ownership binding on every
+// iteration; one revocation after the loop only disposes the final URL.
+export const repeatedLoopWithPostCleanup = () => {
+  let url = "blob:initial";
+  for (const currentBlob of blobs)
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, eslint/curly -- fixture: unbraced loop exposes the post-loop cleanup false proof
+    url = URL.createObjectURL(currentBlob);
+  URL.revokeObjectURL(url);
+};
+
+// MUST flag: a continue targeting the creation loop bypasses that iteration's
+// lexically later cleanup.
+export const outerContinueBypassesCleanup = () => {
+  for (const currentBlob of blobs) {
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: outer-loop continue skips per-iteration cleanup
+    const url = URL.createObjectURL(currentBlob);
+    if (condition) {
+      continue;
+    }
+    URL.revokeObjectURL(url);
+  }
+};
+
+// MUST flag: labeled control targeting the creation loop also bypasses the
+// current iteration's cleanup.
+export const labeledBreakBypassesCleanup = () => {
+  // oxlint-disable-next-line eslint/no-labels -- fixture: labeled outer-loop exit is the control-flow shape under test
+  creationLoop: for (const currentBlob of blobs) {
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: labeled break exits before cleanup
+    const url = URL.createObjectURL(currentBlob);
+    for (const candidate of blobs) {
+      if (condition && candidate === currentBlob) {
+        // oxlint-disable-next-line eslint/no-labels -- fixture: labeled break targets the creation loop
+        break creationLoop;
+      }
+    }
+    URL.revokeObjectURL(url);
+  }
+};
+
+export const labeledContinueBypassesCleanup = () => {
+  // oxlint-disable-next-line eslint/no-labels -- fixture: labeled outer-loop continue is the control-flow shape under test
+  creationLoop: for (const currentBlob of blobs) {
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: labeled continue skips cleanup
+    const url = URL.createObjectURL(currentBlob);
+    for (const candidate of blobs) {
+      if (condition && candidate === currentBlob) {
+        // oxlint-disable-next-line eslint/no-labels -- fixture: labeled continue targets the creation loop
+        continue creationLoop;
+      }
+    }
+    URL.revokeObjectURL(url);
+  }
+};
+
 // Allowed: direct local pairing with the same binding.
 export const downloadUrl = () => {
   const url = URL.createObjectURL(blob);
@@ -127,6 +194,37 @@ export const scheduledCleanup = () => {
   setTimeout(cleanup, 1000);
 };
 
+// Allowed: nested-loop break/continue inside a returned cleanup callback do
+// not bypass the callback's later revocation.
+export const returnedCleanupWithNestedLoop = () => {
+  const url = URL.createObjectURL(blob);
+  return () => {
+    for (const candidate of blobs) {
+      if (candidate === blob) {
+        continue;
+      }
+      break;
+    }
+    URL.revokeObjectURL(url);
+  };
+};
+
+// Allowed: the same target-aware proof applies inside a registered timer
+// cleanup callback.
+export const timerCleanupWithNestedLoop = () => {
+  const url = URL.createObjectURL(blob);
+  const cleanup = () => {
+    for (const candidate of blobs) {
+      if (candidate === blob) {
+        continue;
+      }
+      break;
+    }
+    URL.revokeObjectURL(url);
+  };
+  setTimeout(cleanup, 1000);
+};
+
 // Allowed: conditional creation has one ownership write and revokes whichever
 // branch produced the value.
 export const conditionalCleanup = () => {
@@ -144,6 +242,60 @@ export const finallyCleanup = () => {
       return;
     }
   } finally {
+    URL.revokeObjectURL(url);
+  }
+};
+
+// Allowed: a finally nested inside the creation loop runs once for every
+// ownership write, including continue/return paths through that iteration.
+export const perIterationFinallyCleanup = () => {
+  for (const currentBlob of blobs) {
+    const url = URL.createObjectURL(currentBlob);
+    try {
+      if (condition) {
+        continue;
+      }
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+};
+
+// Allowed: a ForStatement initializer executes once, so one unconditional
+// cleanup after the loop covers that ownership write.
+export const forInitializerCleanup = () => {
+  let url: string;
+  let iteration = 0;
+  for (url = URL.createObjectURL(blob); iteration < 1; iteration += 1) {
+    void url;
+  }
+  URL.revokeObjectURL(url);
+};
+
+// Allowed: break/continue inside a nested loop and break inside a nested
+// switch target those nested constructs; all paths still reach the outer
+// iteration's later cleanup.
+export const nestedAbruptCompletionsStillCleanUp = () => {
+  for (const currentBlob of blobs) {
+    const url = URL.createObjectURL(currentBlob);
+    for (const candidate of blobs) {
+      if (candidate === currentBlob) {
+        continue;
+      }
+      break;
+    }
+    for (const candidate of blobs) {
+      if (candidate === currentBlob) {
+        break;
+      }
+    }
+    switch (mode) {
+      case "skip":
+        break;
+      case "keep":
+        void currentBlob;
+        break;
+    }
     URL.revokeObjectURL(url);
   }
 };
