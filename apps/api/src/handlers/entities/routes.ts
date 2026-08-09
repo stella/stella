@@ -45,10 +45,6 @@ import updateVersionLabel from "@/api/handlers/entities/update-version-label";
 import uploadEntity, {
   uploadGeneratedDocument,
 } from "@/api/handlers/entities/upload";
-import {
-  isTranslateRateLimitedPath,
-  isUploadRateLimitedPath,
-} from "@/api/handlers/entities/upload-rate-limit";
 import uploadVersion from "@/api/handlers/entities/upload-version";
 import versionDiff from "@/api/handlers/entities/version-diff";
 import versionSummarize from "@/api/handlers/entities/version-summarize";
@@ -56,6 +52,10 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import {
+  isTranslateRateLimitedPath,
+  isUploadRateLimitedPath,
+} from "@/api/lib/upload-rate-limit";
 
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",

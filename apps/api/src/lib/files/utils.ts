@@ -28,23 +28,18 @@ const GENERIC_UPLOAD_MIME_TYPES = new Set([
   "binary/octet-stream",
 ]);
 
-/**
- * Extensions worth recovering from a generic MIME type. Outlook
- * `.msg` in particular is usually reported as octet-stream on
- * machines without Outlook; `.eml` occasionally too. Without this
- * the file would never get a PDF derivative for preview.
- */
-const EXTENSION_MIME_OVERRIDES: Record<string, string> = {
-  eml: "message/rfc822",
-  markdown: "text/markdown",
-  md: "text/markdown",
-  msg: "application/vnd.ms-outlook",
-};
+const UPLOAD_MIME_TYPE_ALIASES = new Map([
+  ["application/x-pdf", "application/pdf"],
+  ["image/jpg", "image/jpeg"],
+]);
 
 type ResolveUploadMimeProps = {
   declaredMime: string;
   fileName: string;
 };
+
+const MAX_MIME_EXTENSION_LENGTH = 32;
+const SAFE_MIME_EXTENSION_RE = /^[a-z0-9]{1,32}$/u;
 
 /**
  * Normalize a client-declared upload MIME type: when the browser
@@ -56,15 +51,25 @@ export const resolveUploadMime = ({
   declaredMime,
   fileName,
 }: ResolveUploadMimeProps): string => {
-  if (!GENERIC_UPLOAD_MIME_TYPES.has(declaredMime)) {
-    return declaredMime;
+  const canonicalDeclaredMime =
+    UPLOAD_MIME_TYPE_ALIASES.get(declaredMime) ?? declaredMime;
+  if (!GENERIC_UPLOAD_MIME_TYPES.has(canonicalDeclaredMime)) {
+    return canonicalDeclaredMime;
   }
   const dotIndex = fileName.lastIndexOf(".");
   if (dotIndex === -1) {
-    return declaredMime;
+    return canonicalDeclaredMime;
   }
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EXTENSION_MIME_OVERRIDES[extension] ?? declaredMime;
+  const extension = fileName
+    .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
+    .toLowerCase();
+  if (!SAFE_MIME_EXTENSION_RE.test(extension)) {
+    return canonicalDeclaredMime;
+  }
+  const lookupName = `file.${extension}`;
+  return (
+    Bun.file(lookupName).type.split(";").at(0)?.trim() || canonicalDeclaredMime
+  );
 };
 
 /**

@@ -64,8 +64,18 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  encrypted?: boolean | undefined;
   parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
+  provenance?:
+    | {
+        type: "email_attachment";
+        attachmentId: string;
+        sourceEntityId: SafeId<"entity">;
+        sourceFieldId: SafeId<"field">;
+        sourceWorkspaceId: SafeId<"workspace">;
+      }
+    | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -118,8 +128,10 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  encrypted = false,
   parentId,
   scanWarnings,
+  provenance,
   afterCreate,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -305,16 +317,16 @@ export const createEntityFromBuffer = async ({
             fileName,
             mimeType,
             sizeBytes: bytes.byteLength,
-            encrypted: false,
+            encrypted,
             sha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
-              encrypted: false,
+              encrypted,
               mimeType,
             }),
             thumbnailFileId: null,
             thumbnailDerivative: thumbnailDerivativeStateForFile({
-              encrypted: false,
+              encrypted,
               mimeType,
             }),
             ...(scanWarnings !== undefined && { scanWarnings }),
@@ -343,6 +355,7 @@ export const createEntityFromBuffer = async ({
               },
             },
           },
+          ...(provenance && { metadata: { provenance } }),
         });
 
         await afterCreate?.(tx, {
@@ -414,7 +427,7 @@ export const createEntityFromBuffer = async ({
   processExtraction(entityId).catch(captureError);
 
   enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
+    encrypted,
     entityId,
     fieldId,
     mimeType,
@@ -424,7 +437,7 @@ export const createEntityFromBuffer = async ({
   }).catch(captureError);
 
   enqueueImageThumbnailOrMarkFailed({
-    encrypted: false,
+    encrypted,
     entityId,
     fieldId,
     mimeType,
@@ -436,6 +449,10 @@ export const createEntityFromBuffer = async ({
   broadcast(workspaceId, {
     type: "invalidate-query",
     data: ["entities", workspaceId],
+  });
+  broadcast(workspaceId, {
+    type: "invalidate-query",
+    data: ["workspaces", workspaceId, "overview"],
   });
 
   return Result.ok({ entityId, entityVersionId, fieldId, fileName });

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
+import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -200,8 +201,8 @@ export const filesRoute = new Elysia({
     response: ocrExportEndpoint.config.response,
   });
 
-// This raw-response endpoint intentionally stays outside the exported Eden
-// contract. Elysia still registers it with the same guards and macros above.
+// These UI-only endpoints intentionally stay outside the exported Eden
+// contract. Elysia still registers them with the same guards and macros above.
 filesRoute.get(
   "/email-attachment/:fieldId/:attachmentId",
   emailAttachmentEndpoint.handler,
@@ -209,5 +210,15 @@ filesRoute.get(
     params: emailAttachmentEndpoint.config.params,
     permissions: emailAttachmentEndpoint.config.permissions,
     query: emailAttachmentEndpoint.config.query,
+  },
+);
+
+filesRoute.post(
+  "/email-attachment/:fieldId/:attachmentId/save",
+  saveEmailAttachmentEndpoint.handler,
+  {
+    body: saveEmailAttachmentEndpoint.config.body,
+    params: saveEmailAttachmentEndpoint.config.params,
+    permissions: saveEmailAttachmentEndpoint.config.permissions,
   },
 );

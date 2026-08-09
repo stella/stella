@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import * as v from "valibot";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -24,6 +25,14 @@ type FileData = {
   buffer: ArrayBuffer;
 };
 
+export type EmailAttachmentDescriptor = {
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number;
+  previewable: boolean;
+};
+
 type EmailHtmlPreviewData = {
   subject: string | null;
   from: string | null;
@@ -31,13 +40,7 @@ type EmailHtmlPreviewData = {
   cc: string[];
   bcc: string[];
   date: string | null;
-  attachments: {
-    id: string;
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-    previewable: boolean;
-  }[];
+  attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
@@ -49,6 +52,13 @@ type TextFileData = {
   originalMimeType: string;
   text: string;
 };
+
+const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
+  entityId: v.string(),
+  fieldId: v.string(),
+  fileName: v.string(),
+  workspaceId: v.string(),
+});
 
 export const filesKeys = {
   all: filesQueryRoot,
@@ -162,6 +172,53 @@ export const emailAttachmentPreviewOptions = ({
       return await response.arrayBuffer();
     },
   });
+
+export const saveEmailAttachment = async ({
+  attachmentId,
+  destinationWorkspaceId,
+  fieldId,
+  parentId,
+  sourceWorkspaceId,
+}: {
+  attachmentId: string;
+  destinationWorkspaceId: string;
+  fieldId: string;
+  parentId: string | null;
+  sourceWorkspaceId: string;
+}) => {
+  const response = await fetchWithTimeout(
+    apiUrl(
+      `/files/${encodeURIComponent(sourceWorkspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}/save`,
+    ),
+    {
+      body: JSON.stringify({
+        destinationWorkspaceId,
+        parentId,
+      }),
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      timeoutMs: 60_000,
+    },
+  );
+  if (!response.ok) {
+    throw new APIError({
+      status: response.status,
+      message: "Failed to save email attachment",
+    });
+  }
+  const parsed = v.safeParse(
+    EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
+    await response.json(),
+  );
+  if (!parsed.success) {
+    throw new APIError({
+      status: 502,
+      message: "Invalid email attachment save response",
+    });
+  }
+  return parsed.output;
+};
 
 export const textFileOptions = (props: FileOptionsProps) =>
   queryOptions({

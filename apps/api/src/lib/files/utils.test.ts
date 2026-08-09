@@ -34,6 +34,69 @@ describe("resolveUploadMime", () => {
     ).toBe("text/markdown");
   });
 
+  test("strips parameters from inferred text MIME types", () => {
+    for (const [fileName, mimeType] of [
+      ["notes.txt", "text/plain"],
+      ["page.html", "text/html"],
+      ["data.json", "application/json"],
+    ] as const) {
+      expect(
+        resolveUploadMime({
+          declaredMime: "application/octet-stream",
+          fileName,
+        }),
+      ).toBe(mimeType);
+    }
+  });
+
+  test("canonicalizes supported MIME aliases", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/x-pdf",
+        fileName: "contract.pdf",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "image/jpg",
+        fileName: "photo.jpg",
+      }),
+    ).toBe("image/jpeg");
+  });
+
+  test("recovers previewable documents reported as generic", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "CONTRACT.PDF",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "contract.docx",
+      }),
+    ).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  });
+
+  test("recovers previewable images without a mirrored extension map", () => {
+    for (const [fileName, mimeType] of [
+      ["photo.PNG", "image/png"],
+      ["photo.JPG", "image/jpeg"],
+      ["photo.GIF", "image/gif"],
+      ["photo.WEBP", "image/webp"],
+    ] as const) {
+      expect(
+        resolveUploadMime({
+          declaredMime: "application/octet-stream",
+          fileName,
+        }),
+      ).toBe(mimeType);
+    }
+  });
+
   test("leaves a well-typed MIME unchanged", () => {
     expect(
       resolveUploadMime({
@@ -57,6 +120,30 @@ describe("resolveUploadMime", () => {
       resolveUploadMime({
         declaredMime: "application/octet-stream",
         fileName: "msg",
+      }),
+    ).toBe("application/octet-stream");
+  });
+
+  test("bounds untrusted filenames before MIME lookup", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: `${"a".repeat(10_000)}.PDF`,
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: `file.${"a".repeat(10_000)}`,
+      }),
+    ).toBe("application/octet-stream");
+  });
+
+  test("rejects unsafe extension characters before MIME lookup", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "evidence.\0pdf",
       }),
     ).toBe("application/octet-stream");
   });

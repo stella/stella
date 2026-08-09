@@ -33,7 +33,6 @@ import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
-import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
@@ -136,6 +135,7 @@ import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
+import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATH = "/health";
