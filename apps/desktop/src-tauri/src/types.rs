@@ -272,9 +272,8 @@ mod tests {
 
   #[test]
   fn shared_desktop_edit_file_contract_matches_rust() {
-    let source = include_str!(
-      "../../../../packages/api-contract/src/desktop-edit-file-types.ts"
-    );
+    let source =
+      include_str!("../../../../packages/api-contract/src/desktop-edit-file-types.ts");
     for (key, file_type) in [
       ("docx", DesktopEditFileType::Docx),
       ("xlsx", DesktopEditFileType::Xlsx),
@@ -635,5 +634,4 @@ mod fixture_tests {
     assert_eq!(pptx.remote_session.file_type, DesktopEditFileType::Pptx);
     assert_eq!(pptx.remote_session.file_type.mime_type(), PPTX_MIME_TYPE);
   }
-
 }

@@ -95,6 +95,7 @@ const insertLiveSession = async ({
     baseVersionId: ids.entityVersionA1,
     createdBy,
     fileName: "active.docx",
+    fileType: "docx",
     checkpointFileId: toSafeId<"userFile">(Bun.randomUUIDv7()),
     sessionTokenHash: Bun.randomUUIDv7().replaceAll("-", ""),
     tokenExpiresAt,

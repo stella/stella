@@ -112,6 +112,16 @@ struct DesktopSession {
   sse_listener: Option<JoinHandle<()>>,
 }
 
+struct SyncCheckpointInput {
+  session_id: String,
+  file_type: DesktopEditFileType,
+  file_path: String,
+  api_base_url: String,
+  session_token: String,
+  file_name: String,
+  last_checkpoint_sha: Option<String>,
+}
+
 impl DesktopSession {
   fn to_persisted(&self) -> PersistedDesktopSession {
     PersistedDesktopSession {
@@ -1288,28 +1298,20 @@ impl SessionManager {
     session.checkpoint_in_flight = true;
     session.last_error = None;
     session.status = SessionStatus::Syncing;
-    let file_path = session.file_path.clone();
-    let api_base_url = session.api_base_url.clone();
-    let sid = session.id.clone();
-    let session_token = session.session_token.clone();
-    let file_type = session.file_type;
-    let file_name = session.file_name.clone();
-    let last_checkpoint_sha = session.last_checkpoint_sha.clone();
+    let input = SyncCheckpointInput {
+      session_id: session.id.clone(),
+      file_type: session.file_type,
+      file_path: session.file_path.clone(),
+      api_base_url: session.api_base_url.clone(),
+      session_token: session.session_token.clone(),
+      file_name: session.file_name.clone(),
+      last_checkpoint_sha: session.last_checkpoint_sha.clone(),
+    };
 
     self.persist_sessions().await;
     self.emit_state_change();
 
-    let result = self
-      .do_sync_checkpoint(
-        &sid,
-        file_type,
-        &file_path,
-        &api_base_url,
-        &session_token,
-        &file_name,
-        last_checkpoint_sha.as_deref(),
-      )
-      .await;
+    let result = self.do_sync_checkpoint(input).await;
 
     let Some(session) = self.sessions.get_mut(session_id) else {
       return false;
@@ -1400,24 +1402,15 @@ impl SessionManager {
     }
   }
 
-  async fn do_sync_checkpoint(
-    &self,
-    session_id: &str,
-    file_type: DesktopEditFileType,
-    file_path: &str,
-    api_base_url: &str,
-    session_token: &str,
-    file_name: &str,
-    last_checkpoint_sha: Option<&str>,
-  ) -> CheckpointResult {
-    let file_bytes = match tokio::fs::read(file_path).await {
+  async fn do_sync_checkpoint(&self, input: SyncCheckpointInput) -> CheckpointResult {
+    let file_bytes = match tokio::fs::read(&input.file_path).await {
       Ok(b) => b,
       Err(e) => return CheckpointResult::Error(format!("Failed to read file: {e}")),
     };
 
     let next_sha = hash_bytes(&file_bytes);
 
-    if Some(next_sha.as_str()) == last_checkpoint_sha {
+    if Some(next_sha.as_str()) == input.last_checkpoint_sha.as_deref() {
       return CheckpointResult::Unchanged;
     }
 
@@ -1425,14 +1418,16 @@ impl SessionManager {
       .part(
         "file",
         reqwest::multipart::Part::bytes(file_bytes)
-          .file_name(file_name.to_string())
-          .mime_str(file_type.mime_type())
+          .file_name(input.file_name)
+          .mime_str(input.file_type.mime_type())
           .unwrap(),
       )
-      .text("sessionToken", session_token.to_string());
+      .text("sessionToken", input.session_token);
 
-    let url =
-      format!("{api_base_url}/v1/desktop-edit-sessions/{session_id}/checkpoint");
+    let url = format!(
+      "{}/v1/desktop-edit-sessions/{}/checkpoint",
+      input.api_base_url, input.session_id
+    );
 
     let response = match self
       .http_client
@@ -1478,7 +1473,7 @@ impl SessionManager {
 
     match response.json::<CheckpointResponse>().await {
       Ok(cp) => {
-        let current_sha = match tokio::fs::read(file_path).await {
+        let current_sha = match tokio::fs::read(&input.file_path).await {
           Ok(bytes) => hash_bytes(&bytes),
           Err(e) => {
             return CheckpointResult::Error(format!(

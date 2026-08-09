@@ -4,7 +4,7 @@ use tauri::{
 };
 
 use crate::i18n::{t, t_plural};
-use crate::types::{AppSnapshot, DesktopEditFileType, SessionSnapshot};
+use crate::types::{AppSnapshot, SessionSnapshot};
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
@@ -276,7 +276,8 @@ pub enum MenuAction {
 mod tests {
   use super::*;
   use crate::types::{
-    DesktopNotificationPreferences, DesktopUpdateSnapshot, SessionStatus,
+    DesktopEditFileType, DesktopNotificationPreferences, DesktopUpdateSnapshot,
+    SessionStatus,
   };
 
   fn init_i18n() {
