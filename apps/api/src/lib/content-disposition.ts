@@ -1,4 +1,6 @@
 const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/u;
+const HTTP_CONTROL_CHARACTER_RE = /[\u0000-\u001F\u007F-\u009F]/gu;
+const FALLBACK_FILENAME = "attachment";
 
 /**
  * Build a Content-Disposition header value per RFC 6266.
@@ -11,19 +13,23 @@ export const contentDisposition = (
   name: string,
   disposition: "attachment" | "inline" = "attachment",
 ): string => {
+  const headerSafeName =
+    name.replaceAll(HTTP_CONTROL_CHARACTER_RE, "") || FALLBACK_FILENAME;
   const isSafeAscii =
-    ASCII_FILENAME_RE.test(name) && !name.includes('"') && !name.includes("\\");
+    ASCII_FILENAME_RE.test(headerSafeName) &&
+    !headerSafeName.includes('"') &&
+    !headerSafeName.includes("\\");
 
   if (isSafeAscii) {
-    return `${disposition}; filename="${name}"`;
+    return `${disposition}; filename="${headerSafeName}"`;
   }
 
   // Sanitise fallback: strip non-ASCII and unsafe chars
-  const fallback = name
+  const fallback = headerSafeName
     .replaceAll(/[^\u0020-\u007E]/gu, "_")
     .replaceAll('"', "_")
     .replaceAll("\\", "_");
-  const encoded = encodeURIComponent(name).replaceAll("'", "%27");
+  const encoded = encodeURIComponent(headerSafeName).replaceAll("'", "%27");
 
   return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 };

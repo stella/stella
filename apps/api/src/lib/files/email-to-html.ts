@@ -33,6 +33,21 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
   msg: MSG_MIME_TYPE,
 };
 
+const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  pdf: "application/pdf",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+const GENERIC_ATTACHMENT_MIME_TYPES = {
+  "": null,
+  "application/octet-stream": null,
+  "binary/octet-stream": null,
+} as const satisfies Record<string, null>;
+
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
   ltr: null,
@@ -184,13 +199,19 @@ export const buildEmailPreview = (
           !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
       .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
-      .map(({ attachment, attachmentIndex }) => ({
-        id: createAttachmentId(attachmentIndex),
-        fileName: attachment.fileName,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.bytes.byteLength,
-        previewable: isEmailAttachmentPreviewable(attachment.mimeType),
-      })),
+      .map(({ attachment, attachmentIndex }) => {
+        const mimeType = resolveEmailAttachmentMimeType({
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+        });
+        return {
+          id: createAttachmentId(attachmentIndex),
+          fileName: attachment.fileName,
+          mimeType,
+          sizeBytes: attachment.bytes.byteLength,
+          previewable: isEmailAttachmentPreviewable(mimeType),
+        };
+      }),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
   };
@@ -204,6 +225,25 @@ export const isEmailAttachmentPreviewable = (
     normalized === "application/pdf" ||
     /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
   );
+};
+
+export const resolveEmailAttachmentMimeType = ({
+  fileName,
+  mimeType,
+}: {
+  fileName: string | null;
+  mimeType: string | null;
+}): string | null => {
+  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
+  if (!Object.hasOwn(GENERIC_ATTACHMENT_MIME_TYPES, normalized)) {
+    return normalized;
+  }
+  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
+  if (!fileName || dotIndex === -1) {
+    return mimeType;
+  }
+  const extension = fileName.slice(dotIndex + 1).toLowerCase();
+  return EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES[extension] ?? mimeType;
 };
 
 export const parseEmail = async (

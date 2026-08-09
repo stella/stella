@@ -10,6 +10,7 @@ import {
   type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
+  resolveEmailAttachmentMimeType,
   resolveEmailMimeType,
   isEmailAttachmentPreviewable,
 } from "./email-to-html";
@@ -72,6 +73,27 @@ describe("email attachment preview policy", () => {
     expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
     expect(isEmailAttachmentPreviewable("text/html")).toBe(false);
     expect(isEmailAttachmentPreviewable(null)).toBe(false);
+  });
+
+  test("recovers passive preview types from generic MIME declarations", () => {
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "EVIDENCE.PDF",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "scan.PNG",
+        mimeType: null,
+      }),
+    ).toBe("image/png");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "payload.SVG",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("application/octet-stream");
   });
 });
 

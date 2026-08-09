@@ -23,6 +23,7 @@ import {
   parseEmail,
   buildEmailPreview,
   isEmailAttachmentPreviewable,
+  resolveEmailAttachmentMimeType,
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -166,17 +167,20 @@ export default createSafeHandler(
     if (!descriptor || !attachment) {
       return Result.ok(attachmentNotFound());
     }
+    const attachmentMimeType = resolveEmailAttachmentMimeType({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+    });
     if (
       disposition === "inline" &&
-      !isEmailAttachmentPreviewable(attachment.mimeType)
+      !isEmailAttachmentPreviewable(attachmentMimeType)
     ) {
       return Result.ok(attachmentNotPreviewable());
     }
 
     const mimeType =
       disposition === "inline"
-        ? (attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ??
-          "application/octet-stream")
+        ? (attachmentMimeType ?? "application/octet-stream")
         : "application/octet-stream";
     const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
     const safeDisposition = contentDisposition(
