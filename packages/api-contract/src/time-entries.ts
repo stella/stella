@@ -52,7 +52,46 @@ export type TimeEntrySummary =
       viewerTotalMinutes: number;
     };
 
-type UnknownRecord = Record<string, unknown>;
+type UnknownRecord = Record<string, unknown> & {
+  activityCode?: unknown;
+  billable?: unknown;
+  billedMinutes?: unknown;
+  createdAt?: unknown;
+  currency?: unknown;
+  daily?: unknown;
+  dateWorked?: unknown;
+  deleted?: unknown;
+  durationMinutes?: unknown;
+  email?: unknown;
+  entryCount?: unknown;
+  entryIds?: unknown;
+  id?: unknown;
+  image?: unknown;
+  invoiceNarrative?: unknown;
+  items?: unknown;
+  limit?: unknown;
+  members?: unknown;
+  name?: unknown;
+  narrative?: unknown;
+  nextCursor?: unknown;
+  noCharge?: unknown;
+  rateAtEntry?: unknown;
+  scope?: unknown;
+  source?: unknown;
+  splitGroupId?: unknown;
+  status?: unknown;
+  taskCode?: unknown;
+  timerStartedAt?: unknown;
+  timerStoppedAt?: unknown;
+  timezoneId?: unknown;
+  totalMinutes?: unknown;
+  updated?: unknown;
+  updatedAt?: unknown;
+  userId?: unknown;
+  userName?: unknown;
+  viewerTotalMinutes?: unknown;
+  workItemId?: unknown;
+};
 
 const isRecord = (input: unknown): input is UnknownRecord =>
   typeof input === "object" && input !== null && !Array.isArray(input);
