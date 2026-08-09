@@ -94,9 +94,15 @@ export const AiRewriteControl = ({
         variant="ghost"
       >
         {isPending ? (
-          <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+          <Loader2Icon
+            aria-hidden
+            className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
+          />
         ) : (
-          <WandSparklesIcon aria-hidden className="size-3.5" />
+          <WandSparklesIcon
+            aria-hidden
+            className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
+          />
         )}
       </Button>
       <Popover onOpenChange={setOpen} open={open}>
@@ -113,7 +119,10 @@ export const AiRewriteControl = ({
             />
           }
         >
-          <ChevronDownIcon aria-hidden className="size-3" />
+          <ChevronDownIcon
+            aria-hidden
+            className="size-3 ltr:-translate-x-1 rtl:translate-x-1"
+          />
         </PopoverTrigger>
         <PopoverPopup align="end" className="w-80" side="bottom">
           <div className="flex flex-col gap-1">
