@@ -209,7 +209,7 @@ publishing. Check these items before the first publish:
 - SMTP/SES variables are absent from the template by default and can be added
   later by operators who want email OTP sign-in or invitations.
 - Gotenberg has no public domain.
-- Both public domains pass `/health`.
+- The API passes `/ready`; both public domains pass `/health`.
 - The marketplace overview uses `railway/template-readme.md`.
 
 After editing the draft variables, validate that no unintended user prompts
@@ -280,11 +280,11 @@ For the default Railway environment, the deployment environment is usually
 `production`. If the variable is unset, automatic post-deploy checks are skipped
 and manual dispatch still works.
 
-The smoke checks `api` `/health`, `web` `/health`, and, when GitHub provides a
-manual `expected_commit`, the exact commit reported by API `/health` and web
-`/version.json`. Automatic `deployment_status` runs do not enforce a single
-commit across both services because API-only and web-only changes can deploy
-independently. The API and web builds both honor Railway's
+The smoke checks `api` `/ready`, `api` `/health`, `web` `/health`, and, when
+GitHub provides a manual `expected_commit`, the exact commit reported by API
+`/health` and web `/version.json`. Automatic `deployment_status` runs do not
+enforce a single commit across both services because API-only and web-only
+changes can deploy independently. The API and web builds both honor Railway's
 `RAILWAY_GIT_COMMIT_SHA` so source-backed deploys can be tied back to GitHub
 commits when the stricter manual check is used.
 

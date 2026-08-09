@@ -116,10 +116,12 @@ const getStringRecord = (
 const validateServiceConfig = ({
   path,
   dockerfilePath,
+  healthcheckPath,
   requiredWatchPatterns,
 }: {
   path: string;
   dockerfilePath: string;
+  healthcheckPath: string;
   requiredWatchPatterns: string[];
 }) => {
   const config = readJson(path);
@@ -139,8 +141,8 @@ const validateServiceConfig = ({
     expect(watchPatterns.includes(pattern), `${path} must watch ${pattern}`);
   }
   expect(
-    getString(deploy, "healthcheckPath") === "/health",
-    `${path} must healthcheck /health`,
+    getString(deploy, "healthcheckPath") === healthcheckPath,
+    `${path} must healthcheck ${healthcheckPath}`,
   );
   expect(
     deploy["restartPolicyType"] === "ON_FAILURE",
@@ -164,6 +166,7 @@ expect(existsSync(TEMPLATE_MANIFEST_PATH), "Template manifest must exist");
 validateServiceConfig({
   path: API_CONFIG_PATH,
   dockerfilePath: "apps/api/Dockerfile",
+  healthcheckPath: "/ready",
   requiredWatchPatterns: [
     "/railway/api.railway.json",
     "/apps/api/**",
@@ -174,6 +177,7 @@ validateServiceConfig({
 validateServiceConfig({
   path: WEB_CONFIG_PATH,
   dockerfilePath: "apps/web/Dockerfile",
+  healthcheckPath: "/health",
   requiredWatchPatterns: [
     "/railway/web.railway.json",
     "/apps/web/**",
@@ -219,6 +223,10 @@ expect(
   railwayDoc.includes("## Template Source Drift Guard"),
   "Railway docs must describe the template-source drift guard",
 );
+expect(
+  railwayDoc.includes("The API passes `/ready`"),
+  "Railway docs must use API readiness for deployment verification",
+);
 
 const railwaySyncScript = readText(RAILWAY_SYNC_SCRIPT_PATH);
 expect(
@@ -253,6 +261,10 @@ for (const requiredText of [
 }
 
 const templateReadme = readText(TEMPLATE_README_PATH);
+expect(
+  templateReadme.includes("API `/ready` endpoint is passing"),
+  "Template README must use API readiness for post-deploy verification",
+);
 for (const heading of [
   "# Deploy and Host stella on Railway",
   "## About Hosting stella",
@@ -331,6 +343,7 @@ for (const requiredText of [
   "RAILWAY_SMOKE_WEB_URL",
   "RAILWAY_SMOKE_EXPECTED_COMMIT",
   "/health",
+  "/ready",
   "/version.json",
 ]) {
   expect(

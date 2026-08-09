@@ -78,7 +78,7 @@ the self-hosting model: the deployer owns the Railway project and its data.
 1. Open the `web` public domain.
 2. Copy `SELFHOST_BOOTSTRAP_TOKEN` from the `api` service variables.
 3. Create the first account with your email, a password, and the setup token.
-4. Confirm the API `/health` endpoint is passing.
+4. Confirm the API `/ready` endpoint is passing.
 5. Upload a small test document to confirm storage and Gotenberg are reachable.
 6. Connect the signed desktop app if local document editing is needed.
 
