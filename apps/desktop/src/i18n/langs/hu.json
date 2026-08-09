@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Szerkesztés befejezése",
     "sessionMovedToAnotherDevice": "Másik eszközre áthelyezve",
     "sessionNeedsAttention": "Figyelmet igényel",
-    "sessionOpeningInWord": "Megnyitás Word-ben",
+    "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Általános",
     "lastVerified": "Utoljára ellenőrizve",
     "linkDevice": "Nyisson meg egy dokumentumot a stella-ból az eszköz összekapcsolásához.",
-    "managedWordEditing": "Felügyelt Word szerkesztés a stella számára.",
+    "managedOfficeEditing": "Felügyelt Office-fájl szerkesztés a stella számára.",
     "notAvailableYet": "Még nem érhető el",
     "notConnected": "Nincs csatlakozva",
     "notificationDocumentReady": "Dokumentum kész",

@@ -3,6 +3,73 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_BRIDGE_PORT: u16 = 45_901;
 pub const DOCX_MIME_TYPE: &str =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+pub const XLSX_MIME_TYPE: &str =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+pub const PPTX_MIME_TYPE: &str =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+macro_rules! define_desktop_edit_file_types {
+  ($($variant:ident => $wire_name:literal),+ $(,)?) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum DesktopEditFileType {
+      $(
+        #[serde(rename = $wire_name)]
+        $variant,
+      )+
+    }
+
+    #[cfg(test)]
+    impl DesktopEditFileType {
+      pub const ALL: &[Self] = &[$(Self::$variant),+];
+
+      pub const fn wire_name(self) -> &'static str {
+        match self {
+          $(Self::$variant => $wire_name),+
+        }
+      }
+    }
+  };
+}
+
+define_desktop_edit_file_types!(
+  Docx => "docx",
+  Xlsx => "xlsx",
+  Pptx => "pptx",
+);
+
+impl DesktopEditFileType {
+  pub const fn mime_type(self) -> &'static str {
+    match self {
+      Self::Docx => DOCX_MIME_TYPE,
+      Self::Xlsx => XLSX_MIME_TYPE,
+      Self::Pptx => PPTX_MIME_TYPE,
+    }
+  }
+
+  pub const fn extension(self) -> &'static str {
+    match self {
+      Self::Docx => ".docx",
+      Self::Xlsx => ".xlsx",
+      Self::Pptx => ".pptx",
+    }
+  }
+
+  pub const fn default_file_name(self) -> &'static str {
+    match self {
+      Self::Docx => "document.docx",
+      Self::Xlsx => "workbook.xlsx",
+      Self::Pptx => "presentation.pptx",
+    }
+  }
+
+  pub const fn main_part_path(self) -> &'static str {
+    match self {
+      Self::Docx => "word/document.xml",
+      Self::Xlsx => "xl/workbook.xml",
+      Self::Pptx => "ppt/presentation.xml",
+    }
+  }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -19,6 +86,7 @@ pub enum SessionStatus {
 pub struct SessionSnapshot {
   pub base_version_number: i64,
   pub entity_id: String,
+  pub file_type: DesktopEditFileType,
   pub file_name: String,
   pub file_path: String,
   pub id: String,
@@ -59,9 +127,10 @@ pub struct LinkedAccountSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenDocxRemoteSession {
+pub struct OpenFileRemoteSession {
   pub base_version_number: i64,
   pub download_url: String,
+  pub file_type: DesktopEditFileType,
   pub file_name: String,
   pub last_checkpoint_at: Option<String>,
   pub resumed_from_checkpoint: bool,
@@ -116,19 +185,14 @@ pub struct TrustedSelfHostConnection {
   pub web_origin: String,
 }
 
-/// Monotonic integer the web app uses to feature-detect the
-/// bridge protocol it's talking to. Increment by 1 every time a
-/// new bridge endpoint or backwards-compatible field is added so
-/// the web side can gate features on `snapshot.bridgeVersion >= N`
-/// without coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 8;
+/// Monotonic bridge contract revision. Increment whenever the bridge
+/// surface changes so the web app can require a minimum revision without
+/// coupling to the desktop's literal app version.
+pub const BRIDGE_VERSION: u32 = 9;
 
-/// Feature flags advertised to the web app. Add a string here
-/// whenever a new capability lands on the bridge so the web app
-/// can check for it explicitly (e.g. `caps.includes("docx.v2")`).
-/// Strictly additive — never remove a string once shipped or older
-/// web builds will assume the capability is gone and degrade.
-pub const BRIDGE_CAPABILITIES: &[&str] = &["self-host.connect"];
+/// Versioned contracts advertised to the web app. A client requires the
+/// capability it uses; breaking semantics receive a new capability id.
+pub const BRIDGE_CAPABILITIES: &[&str] = &["office-edit.v1", "self-host.connect"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -148,14 +212,14 @@ pub struct AppSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenDocxRequest {
+pub struct OpenFileRequest {
   pub api_base_url: String,
   pub entity_id: String,
   #[serde(default)]
   pub handoff_id: Option<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub property_id: String,
-  pub remote_session: OpenDocxRemoteSession,
+  pub remote_session: OpenFileRemoteSession,
   pub workspace_id: String,
 }
 
@@ -186,7 +250,7 @@ pub fn is_safe_session_id(value: &str) -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenDocxResponse {
+pub struct OpenFileResponse {
   pub already_open: bool,
   pub file_path: String,
   pub session_id: String,
@@ -226,6 +290,53 @@ pub struct ErrorResponse {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn shared_desktop_edit_file_contract_matches_rust() {
+    let source =
+      include_str!("../../../../packages/api-contract/src/desktop-edit-file-types.ts");
+    let list_prefix = "export const DESKTOP_EDIT_FILE_TYPES = [";
+    let list_start = source
+      .find(list_prefix)
+      .unwrap_or_else(|| panic!("shared contract has no file type list"));
+    let list = &source[list_start + list_prefix.len()..];
+    let list_end = list
+      .find("] as const;")
+      .unwrap_or_else(|| panic!("shared contract file type list has no end"));
+    let shared_file_types = list[..list_end]
+      .split(',')
+      .map(str::trim)
+      .filter(|value| !value.is_empty())
+      .map(|value| {
+        value
+          .strip_prefix('"')
+          .and_then(|value| value.strip_suffix('"'))
+          .unwrap_or_else(|| panic!("invalid shared file type {value}"))
+      })
+      .collect::<Vec<_>>();
+    let rust_file_types = DesktopEditFileType::ALL
+      .iter()
+      .map(|file_type| file_type.wire_name())
+      .collect::<Vec<_>>();
+
+    assert_eq!(shared_file_types, rust_file_types);
+
+    for file_type in DesktopEditFileType::ALL {
+      let key = file_type.wire_name();
+      let block_start = source
+        .find(&format!("  {key}: {{"))
+        .unwrap_or_else(|| panic!("shared contract is missing {key}"));
+      let block = &source[block_start..];
+      let block_end = block
+        .find("\n  },")
+        .unwrap_or_else(|| panic!("shared contract has no end for {key}"));
+      let block = &block[..block_end];
+
+      assert!(block.contains(file_type.extension()));
+      assert!(block.contains(file_type.mime_type()));
+      assert!(block.contains(file_type.main_part_path()));
+    }
+  }
 
   // -- SessionStatus serde --
 
@@ -291,6 +402,7 @@ mod tests {
       sessions: vec![SessionSnapshot {
         base_version_number: 3,
         entity_id: "ent-1".into(),
+        file_type: DesktopEditFileType::Docx,
         file_name: "brief.docx".into(),
         file_path: "/tmp/brief.docx".into(),
         id: "sess-42".into(),
@@ -323,19 +435,20 @@ mod tests {
     );
   }
 
-  // -- OpenDocxRequest round-trip --
+  // -- OpenFileRequest round-trip --
 
   #[test]
-  fn test_open_docx_request_roundtrip() {
-    let req = OpenDocxRequest {
+  fn test_open_file_request_roundtrip() {
+    let req = OpenFileRequest {
       api_base_url: "https://api.example.com".into(),
       entity_id: "ent-1".into(),
       handoff_id: None,
       linked_account: None,
       property_id: "prop-1".into(),
-      remote_session: OpenDocxRemoteSession {
+      remote_session: OpenFileRemoteSession {
         base_version_number: 2,
         download_url: "https://s3.example.com/doc.docx".into(),
+        file_type: DesktopEditFileType::Docx,
         file_name: "motion.docx".into(),
         last_checkpoint_at: None,
         resumed_from_checkpoint: false,
@@ -347,25 +460,25 @@ mod tests {
     };
 
     let json = serde_json::to_string(&req).unwrap();
-    let deserialized: OpenDocxRequest = serde_json::from_str(&json).unwrap();
+    let deserialized: OpenFileRequest = serde_json::from_str(&json).unwrap();
 
     assert_eq!(deserialized.entity_id, "ent-1");
     assert_eq!(deserialized.remote_session.session_id, "rs-1");
     assert_eq!(deserialized.remote_session.file_name, "motion.docx");
   }
 
-  // -- OpenDocxResponse round-trip --
+  // -- OpenFileResponse round-trip --
 
   #[test]
-  fn test_open_docx_response_roundtrip() {
-    let resp = OpenDocxResponse {
+  fn test_open_file_response_roundtrip() {
+    let resp = OpenFileResponse {
       already_open: true,
       file_path: "/tmp/motion.docx".into(),
       session_id: "sess-99".into(),
     };
 
     let json = serde_json::to_string(&resp).unwrap();
-    let deserialized: OpenDocxResponse = serde_json::from_str(&json).unwrap();
+    let deserialized: OpenFileResponse = serde_json::from_str(&json).unwrap();
 
     assert!(deserialized.already_open);
     assert_eq!(deserialized.session_id, "sess-99");
@@ -410,7 +523,7 @@ mod tests {
 
   #[test]
   fn test_camel_case_field_names() {
-    let resp = OpenDocxResponse {
+    let resp = OpenFileResponse {
       already_open: false,
       file_path: "/tmp/a.docx".into(),
       session_id: "s1".into(),
@@ -450,6 +563,10 @@ mod fixture_tests {
     include_str!("../../fixtures/rpc/session-snapshot-error.json");
   const OPEN_DOCX_REQUEST: &str =
     include_str!("../../fixtures/rpc/open-docx-request.json");
+  const OPEN_XLSX_REQUEST: &str =
+    include_str!("../../fixtures/rpc/open-xlsx-request.json");
+  const OPEN_PPTX_REQUEST: &str =
+    include_str!("../../fixtures/rpc/open-pptx-request.json");
   const OPEN_DOCX_RESPONSE: &str =
     include_str!("../../fixtures/rpc/open-docx-response.json");
   const LINKED_ACCOUNT: &str = include_str!("../../fixtures/rpc/linked-account.json");
@@ -500,8 +617,8 @@ mod fixture_tests {
   }
 
   #[test]
-  fn open_docx_response_fixture_roundtrips() {
-    assert_roundtrip::<OpenDocxResponse>(OPEN_DOCX_RESPONSE);
+  fn open_file_response_fixture_roundtrips() {
+    assert_roundtrip::<OpenFileResponse>(OPEN_DOCX_RESPONSE);
   }
 
   #[test]
@@ -526,17 +643,17 @@ mod fixture_tests {
     assert_roundtrip::<DesktopNotificationPreferences>(NOTIFICATION_PREFERENCES);
   }
 
-  /// `OpenDocxRequest` is intentionally deserialize-only here: the Rust
+  /// `OpenFileRequest` is intentionally deserialize-only here: the Rust
   /// struct carries a `#[serde(default)] handoff_id` that the TypeScript
-  /// `OpenDocxRequest` type (and the HTTP bridge payload the web sends)
+  /// `OpenFileRequest` type (and the HTTP bridge payload the web sends)
   /// omit. Since the field has no `skip_serializing_if`, re-serializing
   /// injects `"handoffId": null`, which the shared fixture deliberately
   /// does not contain, so a strict round-trip would not hold. We assert
   /// the fixture deserializes and the required fields decode correctly;
   /// the asymmetry is documented rather than papered over.
   #[test]
-  fn open_docx_request_fixture_deserializes() {
-    let request: OpenDocxRequest =
+  fn open_file_request_fixture_deserializes() {
+    let request: OpenFileRequest =
       serde_json::from_str(OPEN_DOCX_REQUEST).expect("fixture deserializes");
     assert_eq!(request.api_base_url, "https://api.example.com");
     assert_eq!(request.entity_id, "11111111-1111-4111-8111-111111111111");
@@ -549,5 +666,16 @@ mod fixture_tests {
     assert_eq!(request.remote_session.file_name, "motion.docx");
     let linked = request.linked_account.expect("linked account present");
     assert_eq!(linked.email, "counsel@example.com");
+  }
+
+  #[test]
+  fn office_file_request_fixtures_preserve_the_closed_file_type() {
+    let xlsx: OpenFileRequest = serde_json::from_str(OPEN_XLSX_REQUEST).unwrap();
+    assert_eq!(xlsx.remote_session.file_type, DesktopEditFileType::Xlsx);
+    assert_eq!(xlsx.remote_session.file_type.mime_type(), XLSX_MIME_TYPE);
+
+    let pptx: OpenFileRequest = serde_json::from_str(OPEN_PPTX_REQUEST).unwrap();
+    assert_eq!(pptx.remote_session.file_type, DesktopEditFileType::Pptx);
+    assert_eq!(pptx.remote_session.file_type.mime_type(), PPTX_MIME_TYPE);
   }
 }

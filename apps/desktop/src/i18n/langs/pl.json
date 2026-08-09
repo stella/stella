@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Kończenie edycji",
     "sessionMovedToAnotherDevice": "Przeniesiono na inne urządzenie",
     "sessionNeedsAttention": "Wymaga uwagi",
-    "sessionOpeningInWord": "Otwieranie w Word",
+    "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Ogólne",
     "lastVerified": "Ostatnio zweryfikowano",
     "linkDevice": "Otwórz dokument ze stella, aby powiązać to urządzenie.",
-    "managedWordEditing": "Zarządzana edycja Word dla stella.",
+    "managedOfficeEditing": "Zarządzana edycja plików Office dla stella.",
     "notAvailableYet": "Jeszcze niedostępne",
     "notConnected": "Niepołączono",
     "notificationDocumentReady": "Dokument gotowy",

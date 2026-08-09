@@ -1,13 +1,15 @@
+import type { ReactNode } from "react";
+
 import { stellaToast } from "@stll/ui/components/toast";
 
-import type { OpenDocxInDesktopResult } from "@/lib/desktop-bridge";
+import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
 
 type DesktopEditToastMessages = {
-  notOpenedDescription: string;
-  openedDescription: string;
+  notOpenedDescription: ReactNode;
+  openedDescription: ReactNode;
   openedTitle: string;
-  sentDescription: string;
+  sentDescription: ReactNode;
   sentTitle: string;
   unavailableTitle: string;
   updateRequiredDescription: string;
@@ -19,7 +21,7 @@ export const showDesktopEditOpenResultToast = async ({
   result,
 }: {
   messages: DesktopEditToastMessages;
-  result: OpenDocxInDesktopResult;
+  result: OpenFileInDesktopResult;
 }) => {
   if (result.type === "opened") {
     stellaToast.add({

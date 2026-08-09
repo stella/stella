@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Muudatuse lõpetamine",
     "sessionMovedToAnotherDevice": "Teisaldatud teise seadmesse",
     "sessionNeedsAttention": "Vajab tähelepanu",
-    "sessionOpeningInWord": "Avamine Word-is",
+    "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Üldine",
     "lastVerified": "Viimati kontrollitud",
     "linkDevice": "Avage dokument stella-st, et see seade siduda.",
-    "managedWordEditing": "Hallatud Word-i muutmine stella jaoks.",
+    "managedOfficeEditing": "Hallatud Office'i failide muutmine stella jaoks.",
     "notAvailableYet": "Pole veel saadaval",
     "notConnected": "Ühendamata",
     "notificationDocumentReady": "Dokument valmis",

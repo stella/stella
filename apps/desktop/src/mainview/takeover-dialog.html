@@ -136,7 +136,7 @@
       <div class="subtitle">
         They'll continue from your latest saved checkpoint.
       </div>
-      <div class="file-name" id="fileName">document.docx</div>
+      <div class="file-name" id="fileName">Office file</div>
       <div class="actions">
         <button class="deny" id="denyBtn">Deny</button>
         <button class="allow" id="allowBtn">Allow</button>
@@ -146,7 +146,7 @@
       // Read params from URL hash (set by Rust when opening the window)
       const params = new URLSearchParams(window.location.hash.slice(1));
       const requester = params.get("requester") || "Someone";
-      const fileName = params.get("fileName") || "document.docx";
+      const fileName = params.get("fileName") || "Office file";
       const initials = requester
         .split(" ")
         .map((w) => w[0])

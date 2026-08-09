@@ -19,6 +19,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
@@ -28,8 +29,8 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
-import { findDocxFieldForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
-import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -46,7 +47,6 @@ import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -91,7 +91,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     return status(401, {
       code: "desktop_edit_session_token_expired",
       message:
-        "Desktop edit session token has expired. Reopen the document from stella.",
+        "Desktop edit session token has expired. Reopen the file from stella.",
     });
   }
 
@@ -99,10 +99,13 @@ export const finalizeDesktopEditSessionHandler = async ({
     return status(403, {
       code: "desktop_edit_session_permission_revoked",
       message:
-        "Desktop edit permission was revoked. Reopen the document from stella.",
+        "Desktop edit permission was revoked. Reopen the file from stella.",
     });
   }
 
+  const canonicalMimeType = desktopEditMimeTypeForFileType(
+    authorizedSession.value.fileType,
+  );
   const uploadedKeys: string[] = [];
   let checkpointKeyToDelete: string | null = null;
   let shouldRollbackUploadedKeys = true;
@@ -146,7 +149,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
   try {
     // The session + entity FOR UPDATE locks are deliberately held across the
-    // checkpoint S3 read, DOCX validation, and source-object write below.
+    // checkpoint S3 read, OOXML validation, and source-object write below.
     // This keeps new-version creation atomic: the base version's fields and
     // the entity's currentVersionId are read and committed under one lock, so
     // a concurrent in-app field edit or checkpoint cannot interleave. Moving
@@ -166,6 +169,7 @@ export const finalizeDesktopEditSessionHandler = async ({
           checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
           entityId: desktopEditSessions.entityId,
           fileName: desktopEditSessions.fileName,
+          fileType: desktopEditSessions.fileType,
           id: desktopEditSessions.id,
           propertyId: desktopEditSessions.propertyId,
           sessionTokenHash: desktopEditSessions.sessionTokenHash,
@@ -211,6 +215,15 @@ export const finalizeDesktopEditSessionHandler = async ({
         return {
           error: {
             message: "Desktop edit session is already closed.",
+            statusCode: 409,
+          },
+        } as const;
+      }
+
+      if (editSession.fileType !== authorizedSession.value.fileType) {
+        return {
+          error: {
+            message: "Desktop edit session file type changed while finalizing.",
             statusCode: 409,
           },
         } as const;
@@ -272,7 +285,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       const checkpointKey = createFileKey({
         fileId: editSession.checkpointFileId,
-        mimeType: DOCX_MIME_TYPE,
+        mimeType: canonicalMimeType,
         organizationId: authorizedSession.value.organizationId,
         workspaceId: authorizedSession.value.workspaceId,
       });
@@ -301,7 +314,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         return {
           error: {
             message:
-              "This document changed in stella while you were editing. Your local copy is preserved.",
+              "This file changed in stella while you were editing. Your local copy is preserved.",
             statusCode: 409,
           },
         } as const;
@@ -335,12 +348,12 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const baseFileField = findDocxFieldForProperty({
+      const baseFileTarget = findDesktopEditableFileForProperty({
         fieldEntries: baseVersion.fields,
         propertyId: editSession.propertyId,
       });
 
-      if (!baseFileField) {
+      if (!baseFileTarget || baseFileTarget.fileType !== editSession.fileType) {
         return {
           error: {
             message: "Desktop edit session source file is no longer available.",
@@ -349,7 +362,9 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      if (editSession.checkpointSha256Hex === baseFileField.sha256Hex) {
+      if (
+        editSession.checkpointSha256Hex === baseFileTarget.fileContent.sha256Hex
+      ) {
         await tx
           .update(desktopEditSessions)
           .set({
@@ -380,11 +395,14 @@ export const finalizeDesktopEditSessionHandler = async ({
         request.signal,
       );
 
-      const validation = await validateDocxBuffer(checkpointBuffer);
+      const validation = await validateDesktopEditFileBuffer({
+        buffer: checkpointBuffer,
+        fileType: editSession.fileType,
+      });
       if (!validation.valid) {
         return {
           error: {
-            message: `Document validation failed: ${validation.error}`,
+            message: `File validation failed: ${validation.error}`,
             statusCode: 422 as const,
           },
         } as const;
@@ -421,13 +439,12 @@ export const finalizeDesktopEditSessionHandler = async ({
       const sourceFileId = allocateFileObject();
       const sourceKey = createFileKey({
         fileId: sourceFileId,
-        mimeType: DOCX_MIME_TYPE,
+        mimeType: canonicalMimeType,
         organizationId: authorizedSession.value.organizationId,
         workspaceId: authorizedSession.value.workspaceId,
       });
       uploadedKeys.push(sourceKey);
 
-      // DOCX is rendered natively by Folio; do not create a PDF twin.
       await getS3().write(sourceKey, storedBytes);
 
       await tx.insert(entityVersions).values({
@@ -448,11 +465,11 @@ export const finalizeDesktopEditSessionHandler = async ({
           encrypted: false,
           fileName: editSession.fileName,
           id: sourceFileId,
-          mimeType: DOCX_MIME_TYPE,
+          mimeType: canonicalMimeType,
           pdfFileId: null,
           pdfDerivative: pdfDerivativeStateForFile({
             encrypted: false,
-            mimeType: DOCX_MIME_TYPE,
+            mimeType: canonicalMimeType,
           }),
           sha256Hex: editSession.checkpointSha256Hex,
           sizeBytes: editSession.checkpointSizeBytes,
@@ -509,6 +526,7 @@ export const finalizeDesktopEditSessionHandler = async ({
                 entityId: editSession.entityId,
                 versionNumber: nextVersionNumber,
                 fileName: editSession.fileName,
+                fileType: editSession.fileType,
                 sha256Hex: editSession.checkpointSha256Hex,
                 sizeBytes: editSession.checkpointSizeBytes,
               },
@@ -517,6 +535,7 @@ export const finalizeDesktopEditSessionHandler = async ({
           metadata: {
             source: "desktop_edit_session",
             desktopEditSessionId: editSession.id,
+            fileType: editSession.fileType,
           },
         },
         {
@@ -548,6 +567,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         fieldId:
           nextField?.id ??
           panic("Finalized desktop edit session field was not inserted"),
+        fileType: editSession.fileType,
         outcome: "finalized",
         versionId: nextVersionId,
         versionNumber: nextVersionNumber,
@@ -586,7 +606,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         encrypted: false,
         entityId: result.entityId,
         fieldId: result.fieldId,
-        mimeType: DOCX_MIME_TYPE,
+        mimeType: desktopEditMimeTypeForFileType(result.fileType),
         organizationId: authorizedSession.value.organizationId,
         userId: brandPersistedUserId(authorizedSession.value.userId),
         workspaceId: authorizedSession.value.workspaceId,
@@ -594,19 +614,21 @@ export const finalizeDesktopEditSessionHandler = async ({
         captureError(error, {
           entityId: result.entityId,
           fieldId: result.fieldId,
-          mimeType: DOCX_MIME_TYPE,
+          mimeType: desktopEditMimeTypeForFileType(result.fileType),
         });
       });
 
-      computeVersionDiffStats({
-        versionId: result.versionId,
-        entityId: result.entityId,
-        scopedDb: authorizedSession.value.scopedDb,
-        workspaceId: authorizedSession.value.workspaceId,
-        organizationId: authorizedSession.value.organizationId,
-      }).catch((error: unknown) => {
-        captureError(error, { versionId: result.versionId });
-      });
+      if (result.fileType === "docx") {
+        computeVersionDiffStats({
+          versionId: result.versionId,
+          entityId: result.entityId,
+          scopedDb: authorizedSession.value.scopedDb,
+          workspaceId: authorizedSession.value.workspaceId,
+          organizationId: authorizedSession.value.organizationId,
+        }).catch((error: unknown) => {
+          captureError(error, { versionId: result.versionId });
+        });
+      }
     }
 
     return result;

@@ -2,14 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { DESKTOP_EDIT_FILE_TYPES } from "@stll/api-contract";
+
 import {
   isAppSnapshot,
   type AppSnapshot,
   type DesktopNotificationPreferences,
   type DesktopUpdateSnapshot,
   type LinkedAccountSnapshot,
-  type OpenDocxRequest,
-  type OpenDocxResponse,
+  type OpenFileRequest,
+  type OpenFileResponse,
   type SessionSnapshot,
   type TrustedSelfHostConnection,
 } from "../src/shared/rpc";
@@ -78,8 +80,8 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 7,
-  capabilities: ["self-host.connect"],
+  bridgeVersion: 9,
+  capabilities: ["office-edit.v1", "self-host.connect"],
   linkedAccount: {
     email: "counsel@example.com",
     name: "Jane Counsel",
@@ -95,6 +97,7 @@ const appSnapshot = {
     {
       baseVersionNumber: 3,
       entityId: "8f3b2c1a-9d4e-4f6a-8b2c-1a9d4e4f6a8b",
+      fileType: "docx",
       fileName: "merger-agreement.docx",
       filePath: "/Users/jane/Stella/merger-agreement.docx",
       id: "b2d4f6a8-1c3e-4a5b-9c7d-2e4f6a8b0c1d",
@@ -134,6 +137,7 @@ const appSnapshot = {
 const sessionSyncing = {
   baseVersionNumber: 0,
   entityId: "44444444-4444-4444-8444-444444444444",
+  fileType: "docx",
   fileName: "settlement-draft.docx",
   filePath: "/Users/jane/Stella/settlement-draft.docx",
   id: "55555555-5555-4555-8555-555555555555",
@@ -149,6 +153,7 @@ const sessionSyncing = {
 const sessionError = {
   baseVersionNumber: 12,
   entityId: "88888888-8888-4888-8888-888888888888",
+  fileType: "docx",
   fileName: "nda.docx",
   filePath: "/Users/jane/Stella/nda.docx",
   id: "99999999-9999-4999-8999-999999999999",
@@ -173,6 +178,7 @@ const openDocxRequest = {
   remoteSession: {
     baseVersionNumber: 2,
     downloadUrl: "https://s3.example.com/doc.docx?sig=abc123",
+    fileType: "docx",
     fileName: "motion.docx",
     lastCheckpointAt: null,
     resumedFromCheckpoint: false,
@@ -181,13 +187,43 @@ const openDocxRequest = {
     tookOverExistingSession: false,
   },
   workspaceId: "33333333-3333-4333-8333-333333333333",
-} as const satisfies OpenDocxRequest;
+} as const satisfies OpenFileRequest;
 
 const openDocxResponse = {
   alreadyOpen: false,
   filePath: "/Users/jane/Stella/motion.docx",
   sessionId: "e8400e29-1d4a-4716-8a3a-2c83de7ab2e6",
-} as const satisfies OpenDocxResponse;
+} as const satisfies OpenFileResponse;
+
+const openXlsxRequest = {
+  apiBaseUrl: "https://api.example.com",
+  entityId: "11111111-1111-4111-8111-111111111111",
+  linkedAccount: null,
+  propertyId: "22222222-2222-4222-8222-222222222222",
+  remoteSession: {
+    baseVersionNumber: 4,
+    downloadUrl: "https://s3.example.com/workbook.xlsx?sig=abc123",
+    fileType: "xlsx",
+    fileName: "financial-model.xlsx",
+    lastCheckpointAt: null,
+    resumedFromCheckpoint: false,
+    sessionId: "e8400e29-1d4a-4716-8a3a-2c83de7ab2e6",
+    sessionToken: "sess-tok-abc123",
+    tookOverExistingSession: false,
+  },
+  workspaceId: "33333333-3333-4333-8333-333333333333",
+} as const satisfies OpenFileRequest;
+
+const openPptxRequest = {
+  ...openXlsxRequest,
+  remoteSession: {
+    ...openXlsxRequest.remoteSession,
+    baseVersionNumber: 5,
+    downloadUrl: "https://s3.example.com/board-deck.pptx?sig=abc123",
+    fileType: "pptx",
+    fileName: "board-deck.pptx",
+  },
+} as const satisfies OpenFileRequest;
 
 const linkedAccount = {
   email: "solo@example.com",
@@ -236,12 +272,22 @@ const cases: { expected: unknown; file: string; name: string }[] = [
   {
     expected: openDocxRequest,
     file: "open-docx-request.json",
-    name: "OpenDocxRequest",
+    name: "OpenFileRequest (DOCX)",
   },
   {
     expected: openDocxResponse,
     file: "open-docx-response.json",
-    name: "OpenDocxResponse",
+    name: "OpenFileResponse",
+  },
+  {
+    expected: openXlsxRequest,
+    file: "open-xlsx-request.json",
+    name: "OpenFileRequest (XLSX)",
+  },
+  {
+    expected: openPptxRequest,
+    file: "open-pptx-request.json",
+    name: "OpenFileRequest (PPTX)",
   },
   {
     expected: linkedAccount,
@@ -291,6 +337,17 @@ describe("desktop bridge RPC golden fixtures", () => {
 
   test("isAppSnapshot accepts the canonical app-snapshot fixture", () => {
     expect(isAppSnapshot(readFixture("app-snapshot.json"))).toBe(true);
+  });
+
+  test("isAppSnapshot accepts every canonical session file type", () => {
+    for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
+      expect(
+        isAppSnapshot({
+          ...appSnapshot,
+          sessions: [{ ...appSnapshot.sessions[0], fileType }],
+        }),
+      ).toBe(true);
+    }
   });
 
   test("isAppSnapshot rejects a snapshot missing a required field", () => {

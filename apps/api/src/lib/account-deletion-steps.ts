@@ -64,6 +64,7 @@ import {
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
@@ -752,6 +753,7 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
   const desktopCheckpointRows = await tx
     .select({
       checkpointFileId: desktopEditSessions.checkpointFileId,
+      fileType: desktopEditSessions.fileType,
       organizationId: workspaces.organizationId,
       workspaceId: desktopEditSessions.workspaceId,
     })
@@ -767,7 +769,7 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
     ...desktopCheckpointRows.map((row) =>
       createFileKey({
         fileId: row.checkpointFileId,
-        mimeType: DOCX_MIME_TYPE,
+        mimeType: desktopEditMimeTypeForFileType(row.fileType),
         organizationId: brandPersistedOrganizationId(row.organizationId),
         workspaceId: brandPersistedWorkspaceId(row.workspaceId),
       }),

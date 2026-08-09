@@ -2,7 +2,7 @@
 name = "stella-desktop"
 version = "0.0.1"
 edition = "2024"
-description = "stella desktop — managed Word editing for stella"
+description = "stella desktop — managed Office file editing for stella"
 license = "Apache-2.0"
 
 [lib]

@@ -1,6 +1,6 @@
 ## stella desktop
 
-Tauri 2 companion app for managed DOCX editing from stella.
+Tauri 2 companion app for managed Office file editing from stella.
 
 ### Local development
 

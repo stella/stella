@@ -188,7 +188,7 @@ it. Enable `FEATURE_DESKTOP_EDITING="true"` on the API and
 `VITE_FEATURE_DESKTOP_EDITING="true"` in the web build. Users then install
 stella desktop, open **Settings → Account → Desktop** in the self-hosted web
 app, and click **Connect**. The desktop app shows a local approval prompt and
-stores the exact trusted web/API origin before accepting DOCX edit handoffs.
+stores the exact trusted web/API origin before accepting Office file handoffs.
 
 ## Database migrations
 

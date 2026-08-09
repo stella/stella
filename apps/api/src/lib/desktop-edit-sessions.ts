@@ -12,6 +12,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -20,6 +21,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type AuthorizedDesktopEditSession = {
   fileName: string;
+  fileType: DesktopEditFileType;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -141,6 +143,7 @@ export const authorizeDesktopEditSession = async ({
     .select({
       createdBy: desktopEditSessions.createdBy,
       fileName: desktopEditSessions.fileName,
+      fileType: desktopEditSessions.fileType,
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
       sessionStatus: desktopEditSessions.status,
@@ -204,6 +207,7 @@ export const authorizeDesktopEditSession = async ({
     status: "authorized",
     value: {
       fileName: session.fileName,
+      fileType: session.fileType,
       organizationId: session.organizationId,
       scopedDb: createRootScopedDb({
         organizationId: session.organizationId,

@@ -1,6 +1,15 @@
+import {
+  DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  isDesktopEditFileType,
+} from "@stll/api-contract";
+import type { DesktopEditFileType } from "@stll/api-contract";
+
 export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
-export const DOCX_MIME_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+export const DOCX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
+export const XLSX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
+export const PPTX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
+export { DESKTOP_EDIT_FILE_TYPE_CONFIG as DESKTOP_EDIT_FILE_TYPES };
+export type { DesktopEditFileType } from "@stll/api-contract";
 
 export type SessionStatus =
   | "opening"
@@ -12,6 +21,7 @@ export type SessionStatus =
 export type SessionSnapshot = {
   baseVersionNumber: number;
   entityId: string;
+  fileType: DesktopEditFileType;
   fileName: string;
   filePath: string;
   id: string;
@@ -36,9 +46,10 @@ export type LinkedAccountSnapshot = {
   verifiedAt: string;
 };
 
-export type OpenDocxRemoteSession = {
+export type OpenFileRemoteSession = {
   baseVersionNumber: number;
   downloadUrl: string;
+  fileType: DesktopEditFileType;
   fileName: string;
   lastCheckpointAt: string | null;
   resumedFromCheckpoint: boolean;
@@ -79,18 +90,14 @@ export type TrustedSelfHostConnection = {
 export type AppSnapshot = {
   bridgePort: number;
   /**
-   * Monotonic integer the web app uses to feature-detect the bridge
-   * protocol. Increment on every backwards-compatible change to the
-   * bridge surface. Web code gates on `bridgeVersion >= N` instead
-   * of coupling to the desktop's literal app version, so a web
-   * release can ship that requires a minimum bridge without
-   * waiting for every user's auto-update to land.
+   * Monotonic bridge contract revision. Web code gates on a minimum
+   * revision and required capability instead of coupling to the
+   * desktop's literal app version.
    */
   bridgeVersion: number;
   /**
-   * Feature flags the desktop advertises. Strictly additive — once
-   * a string ships, it stays forever, otherwise older web builds
-   * that depend on it would silently degrade.
+   * Versioned contracts advertised by the desktop. Breaking semantics
+   * receive a new capability id.
    */
   capabilities: string[];
   linkedAccount: LinkedAccountSnapshot | null;
@@ -101,16 +108,16 @@ export type AppSnapshot = {
   update: DesktopUpdateSnapshot;
 };
 
-export type OpenDocxRequest = {
+export type OpenFileRequest = {
   apiBaseUrl: string;
   entityId: string;
   linkedAccount: LinkedAccountSnapshot | null;
   propertyId: string;
-  remoteSession: OpenDocxRemoteSession;
+  remoteSession: OpenFileRemoteSession;
   workspaceId: string;
 };
 
-export type OpenDocxResponse = {
+export type OpenFileResponse = {
   alreadyOpen: boolean;
   filePath: string;
   sessionId: string;
@@ -132,6 +139,10 @@ export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
     isStringArray(value["capabilities"]) &&
     typeof value["runningSince"] === "string" &&
     Array.isArray(value["sessions"]) &&
+    value["sessions"].every(
+      (session) =>
+        isRecord(session) && isDesktopEditFileType(session["fileType"]),
+    ) &&
     Array.isArray(value["trustedSelfHostConnections"]) &&
     isRecord(value["notificationPreferences"]) &&
     isRecord(value["update"])

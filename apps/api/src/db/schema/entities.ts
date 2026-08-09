@@ -1,3 +1,5 @@
+import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
+
 import {
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
@@ -428,6 +430,10 @@ export const FOLIO_COLLAB_SESSION_STATUSES = [
   "cancelled",
 ] as const;
 
+const DESKTOP_EDIT_FILE_TYPE_SQL_VALUES = sql.raw(
+  DESKTOP_EDIT_FILE_TYPES.map((fileType) => `'${fileType}'`).join(", "),
+);
+
 export type FolioCollabTokenPermissions = {
   canEdit: boolean;
 };
@@ -455,6 +461,7 @@ export const desktopEditSessions = p.pgTable(
       .text("status", { enum: DESKTOP_EDIT_SESSION_STATUSES })
       .notNull()
       .default("open"),
+    fileType: p.text("file_type", { enum: DESKTOP_EDIT_FILE_TYPES }).notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     checkpointFileId: safeUuid<"userFile">("checkpoint_file_id").notNull(),
     checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
@@ -509,6 +516,10 @@ export const desktopEditSessions = p.pgTable(
       .where(
         sql`${table.status} = 'expired' AND ${table.expiryNotificationPublishedAt} IS NULL`,
       ),
+    p.check(
+      "desktop_edit_sessions_file_type_check",
+      sql`${table.fileType} in (${DESKTOP_EDIT_FILE_TYPE_SQL_VALUES})`,
+    ),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],

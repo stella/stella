@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Dokončování úprav",
     "sessionMovedToAnotherDevice": "Přesunuto na jiné zařízení",
     "sessionNeedsAttention": "Vyžaduje pozornost",
-    "sessionOpeningInWord": "Otevírání ve Word",
+    "sessionOpeningInOffice": "Otevírání v Office",
     "sessionSavingDraft": "Ukládání konceptu"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Obecné",
     "lastVerified": "Naposledy ověřeno",
     "linkDevice": "Otevřete dokument ze stella pro propojení tohoto zařízení.",
-    "managedWordEditing": "Spravované úpravy ve Word pro stella.",
+    "managedOfficeEditing": "Spravované úpravy souborů Office pro stella.",
     "notAvailableYet": "Zatím nedostupné",
     "notConnected": "Nepřipojeno",
     "notificationDocumentReady": "Dokument připraven",

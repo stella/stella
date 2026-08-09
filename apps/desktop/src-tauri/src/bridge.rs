@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
 use crate::types::{
-  BRIDGE_CAPABILITIES, BRIDGE_VERSION, OpenDocxRequest, is_safe_session_id,
+  BRIDGE_CAPABILITIES, BRIDGE_VERSION, OpenFileRequest, is_safe_session_id,
 };
 
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
@@ -155,7 +155,7 @@ async fn self_host_connection(
   .into_response()
 }
 
-async fn open_docx(
+async fn open_file_request(
   State(state): State<BridgeState>,
   headers: HeaderMap,
   Json(body): Json<serde_json::Value>,
@@ -176,12 +176,12 @@ async fn open_docx(
     .into_response();
   }
 
-  let request: OpenDocxRequest = match serde_json::from_value(body) {
+  let request: OpenFileRequest = match serde_json::from_value(body) {
     Ok(r) => r,
     Err(_) => {
       return json_response(
         StatusCode::BAD_REQUEST,
-        serde_json::json!({ "message": "Invalid open-docx payload" }),
+        serde_json::json!({ "message": "Invalid desktop file payload" }),
         origin_ref,
         allowed,
       )
@@ -192,7 +192,7 @@ async fn open_docx(
   if !is_safe_session_id(&request.remote_session.session_id) {
     return json_response(
       StatusCode::BAD_REQUEST,
-      serde_json::json!({ "message": "Invalid open-docx payload" }),
+      serde_json::json!({ "message": "Invalid desktop file payload" }),
       origin_ref,
       allowed,
     )
@@ -235,7 +235,8 @@ async fn open_docx(
     mgr.http_client().clone()
   };
 
-  let prefetched = crate::session_manager::download_docx_standalone(
+  let prefetched = crate::session_manager::download_file_standalone(
+    request.remote_session.file_type,
     &http_client,
     &request.remote_session.download_url,
   )
@@ -256,7 +257,7 @@ async fn open_docx(
 
   let result = {
     let mut manager = state.manager.lock().await;
-    manager.open_docx(request, prefetched_buffer).await
+    manager.open_file(request, prefetched_buffer).await
   };
 
   match result {
@@ -287,6 +288,14 @@ async fn open_docx(
   }
 }
 
+async fn open_file(
+  state: State<BridgeState>,
+  headers: HeaderMap,
+  body: Json<serde_json::Value>,
+) -> impl IntoResponse {
+  open_file_request(state, headers, body).await
+}
+
 async fn not_found(
   State(state): State<BridgeState>,
   headers: HeaderMap,
@@ -308,7 +317,7 @@ fn build_router(state: BridgeState) -> Router {
   Router::new()
     .route("/health", get(health))
     .route("/v1/self-host-connection", get(self_host_connection))
-    .route("/v1/open-docx", post(open_docx))
+    .route("/v1/open-file", post(open_file))
     .fallback(not_found)
     .layer(axum::middleware::from_fn_with_state(
       state.clone(),
@@ -387,7 +396,7 @@ mod tests {
     }
   }
 
-  fn open_docx_body(session_id: &str) -> serde_json::Value {
+  fn open_file_body(session_id: &str) -> serde_json::Value {
     serde_json::json!({
       "apiBaseUrl": "https://api.example.com",
       "entityId": "11111111-1111-1111-1111-111111111111",
@@ -396,6 +405,7 @@ mod tests {
       "remoteSession": {
         "baseVersionNumber": 1,
         "downloadUrl": "https://example.com/doc.docx",
+        "fileType": "docx",
         "fileName": "doc.docx",
         "lastCheckpointAt": null,
         "resumedFromCheckpoint": false,
@@ -464,11 +474,11 @@ mod tests {
     assert_eq!(value["trusted"], serde_json::json!(true));
   }
 
-  async fn post_open_docx(state: BridgeState, body: serde_json::Value) -> StatusCode {
+  async fn post_open_file(state: BridgeState, body: serde_json::Value) -> StatusCode {
     let app = build_router(state);
     let request = Request::builder()
       .method("POST")
-      .uri("/v1/open-docx")
+      .uri("/v1/open-file")
       .header("origin", "http://localhost:3000")
       .header("content-type", "application/json")
       .body(Body::from(serde_json::to_vec(&body).unwrap()))
@@ -482,13 +492,27 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn open_docx_rejects_invalid_session_id() {
-    let status = post_open_docx(test_state(), open_docx_body("../etc/passwd")).await;
+  async fn open_file_rejects_invalid_session_id() {
+    let status = post_open_file(test_state(), open_file_body("../etc/passwd")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
   }
 
   #[tokio::test]
-  async fn open_docx_rejects_self_host_origin_with_unapproved_api() {
+  async fn generic_open_file_route_is_exposed() {
+    let app = build_router(test_state());
+    let request = Request::builder()
+      .method(Method::OPTIONS)
+      .uri("/v1/open-file")
+      .header("origin", "http://localhost:3000")
+      .body(Body::empty())
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+  }
+
+  #[tokio::test]
+  async fn open_file_rejects_self_host_origin_with_unapproved_api() {
     let state = test_state();
     {
       let mut manager = state.manager.lock().await;
@@ -504,11 +528,11 @@ mod tests {
     let app = build_router(state);
     let request = Request::builder()
       .method("POST")
-      .uri("/v1/open-docx")
+      .uri("/v1/open-file")
       .header("origin", "https://web-production.example")
       .header("content-type", "application/json")
       .body(Body::from(
-        serde_json::to_vec(&open_docx_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
+        serde_json::to_vec(&open_file_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
           .unwrap(),
       ))
       .unwrap();
@@ -517,15 +541,15 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn open_docx_rejects_disallowed_origin() {
+  async fn open_file_rejects_disallowed_origin() {
     let app = build_router(test_state());
     let request = Request::builder()
       .method("POST")
-      .uri("/v1/open-docx")
+      .uri("/v1/open-file")
       .header("origin", "https://evil.example")
       .header("content-type", "application/json")
       .body(Body::from(
-        serde_json::to_vec(&open_docx_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
+        serde_json::to_vec(&open_file_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
           .unwrap(),
       ))
       .unwrap();

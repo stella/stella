@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Finalisation de la modification",
     "sessionMovedToAnotherDevice": "Déplacé vers un autre appareil",
     "sessionNeedsAttention": "Nécessite une attention",
-    "sessionOpeningInWord": "Ouverture dans Word",
+    "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Général",
     "lastVerified": "Dernière vérification",
     "linkDevice": "Ouvrez un document depuis stella pour associer cet appareil.",
-    "managedWordEditing": "Modification Word gérée pour stella.",
+    "managedOfficeEditing": "Modification de fichiers Office gérée pour stella.",
     "notAvailableYet": "Pas encore disponible",
     "notConnected": "Non connecté",
     "notificationDocumentReady": "Document prêt",
