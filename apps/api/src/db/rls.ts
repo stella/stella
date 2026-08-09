@@ -2,9 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 
-import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
-
-export const stella = p.pgRole(APPLICATION_RLS_ROLE_NAME).existing();
+export const stella = p.pgRole("stella").existing();
 
 // Narrow write role used only by the case-law ingestion daemon.
 // Bootstrapped in 20260516000000_case_law_ingestion_role.
