@@ -31,7 +31,7 @@ describe("findExtractionFileField", () => {
   const fields = [
     { propertyId: firstPropertyId, content: fileContent("first") },
     { propertyId: targetPropertyId, content: fileContent("target") },
-  ];
+  ] as const;
 
   test("uses the first file field by default", () => {
     expect(findExtractionFileField(fields)?.id).toBe("first");
