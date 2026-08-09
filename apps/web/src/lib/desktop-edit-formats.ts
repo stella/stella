@@ -45,9 +45,16 @@ export const canOpenDesktopEdit = ({
 type DesktopEditFile = {
   fileName: string | null | undefined;
   mimeType: string | null | undefined;
+  multiFormatEnabled: boolean;
 };
 
 export const getDesktopEditFileType = ({
   mimeType,
-}: DesktopEditFile): DesktopEditFileType | null =>
-  mimeType ? desktopEditFileTypeForMimeType(mimeType) : null;
+  multiFormatEnabled,
+}: DesktopEditFile): DesktopEditFileType | null => {
+  const fileType = mimeType ? desktopEditFileTypeForMimeType(mimeType) : null;
+  if (fileType === null || fileType === "docx" || multiFormatEnabled) {
+    return fileType;
+  }
+  return null;
+};

@@ -10,15 +10,24 @@ import {
 describe("desktop-edit format detection", () => {
   test("recognizes every supported Office MIME type", () => {
     expect(
-      getDesktopEditFileType({ fileName: "brief.docx", mimeType: DOCX_MIME }),
+      getDesktopEditFileType({
+        fileName: "brief.docx",
+        mimeType: DOCX_MIME,
+        multiFormatEnabled: true,
+      }),
     ).toBe("docx");
     expect(
-      getDesktopEditFileType({ fileName: "budget.xlsx", mimeType: XLSX_MIME }),
+      getDesktopEditFileType({
+        fileName: "budget.xlsx",
+        mimeType: XLSX_MIME,
+        multiFormatEnabled: true,
+      }),
     ).toBe("xlsx");
     expect(
       getDesktopEditFileType({
         fileName: "hearing.pptx",
         mimeType: PPTX_MIME,
+        multiFormatEnabled: true,
       }),
     ).toBe("pptx");
   });
@@ -28,10 +37,15 @@ describe("desktop-edit format detection", () => {
       getDesktopEditFileType({
         fileName: "BUDGET.XLSX",
         mimeType: `${XLSX_MIME}; charset=binary`,
+        multiFormatEnabled: true,
       }),
     ).toBe("xlsx");
     expect(
-      getDesktopEditFileType({ fileName: "Slides.PPTX", mimeType: null }),
+      getDesktopEditFileType({
+        fileName: "Slides.PPTX",
+        mimeType: null,
+        multiFormatEnabled: true,
+      }),
     ).toBeNull();
   });
 
@@ -40,15 +54,45 @@ describe("desktop-edit format detection", () => {
       getDesktopEditFileType({
         fileName: "scan.pdf",
         mimeType: "application/pdf",
+        multiFormatEnabled: true,
       }),
     ).toBeNull();
     expect(
-      getDesktopEditFileType({ fileName: null, mimeType: null }),
+      getDesktopEditFileType({
+        fileName: null,
+        mimeType: null,
+        multiFormatEnabled: true,
+      }),
     ).toBeNull();
     expect(
       getDesktopEditFileType({
         fileName: "brief.docx",
         mimeType: "application/pdf",
+        multiFormatEnabled: true,
+      }),
+    ).toBeNull();
+  });
+
+  test("keeps new formats hidden until the rollout gate is enabled", () => {
+    expect(
+      getDesktopEditFileType({
+        fileName: "brief.docx",
+        mimeType: DOCX_MIME,
+        multiFormatEnabled: false,
+      }),
+    ).toBe("docx");
+    expect(
+      getDesktopEditFileType({
+        fileName: "budget.xlsx",
+        mimeType: XLSX_MIME,
+        multiFormatEnabled: false,
+      }),
+    ).toBeNull();
+    expect(
+      getDesktopEditFileType({
+        fileName: "hearing.pptx",
+        mimeType: PPTX_MIME,
+        multiFormatEnabled: false,
       }),
     ).toBeNull();
   });
