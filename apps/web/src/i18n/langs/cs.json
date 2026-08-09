@@ -149,7 +149,7 @@
     },
     "decimalHours": "({hours} h)",
     "deleteSelected": "Smazat vybrané",
-    "duration": "Doba trvání",
+    "duration": "Trvání",
     "editEntry": "Upravit záznam",
     "elapsed": "Uběhlý čas",
     "expenses": {
@@ -211,6 +211,7 @@
     "markBillableSelected": "Označit jako fakturovatelné",
     "markNonBillableSelected": "Označit jako nefakturovatelné",
     "matterRequired": "Vyberte prosím spis",
+    "minutes": "Minuty",
     "narrative": "Popis",
     "narrativePlaceholder": "Popište provedenou práci...",
     "noActiveTimer": "Žádný aktivní časovač",

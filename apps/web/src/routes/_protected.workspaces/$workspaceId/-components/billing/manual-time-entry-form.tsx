@@ -4,12 +4,12 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
-import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { Textarea } from "@stll/ui/components/textarea";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 
 export type ManualTimeEntryValues = {
   dateWorked: string;
@@ -34,18 +34,15 @@ export const ManualTimeEntryForm = ({
   const t = useTranslations();
   const [dateWorked, setDateWorked] = useState(defaultValues.dateWorked);
   const [durationMinutes, setDurationMinutes] = useState(
-    defaultValues.durationMinutes > 0
-      ? String(defaultValues.durationMinutes)
-      : "",
+    defaultValues.durationMinutes,
   );
   const [narrative, setNarrative] = useState(defaultValues.narrative);
   const [billable, setBillable] = useState(defaultValues.billable);
 
-  const parsedDuration = Number(durationMinutes);
   const valid =
     dateWorked.length > 0 &&
-    Number.isInteger(parsedDuration) &&
-    parsedDuration > 0 &&
+    Number.isInteger(durationMinutes) &&
+    durationMinutes > 0 &&
     narrative.trim().length > 0;
 
   return (
@@ -59,7 +56,7 @@ export const ManualTimeEntryForm = ({
         detached(
           onSubmit({
             dateWorked,
-            durationMinutes: parsedDuration,
+            durationMinutes,
             narrative: narrative.trim(),
             billable,
           }),
@@ -77,14 +74,13 @@ export const ManualTimeEntryForm = ({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="time-entry-duration">{t("billing.duration")}</Label>
-          <Input
+          <Label id="time-entry-duration-label">
+            {t("billing.duration")}
+          </Label>
+          <DurationInput
             id="time-entry-duration"
-            inputMode="numeric"
-            min={1}
-            onChange={(event) => setDurationMinutes(event.currentTarget.value)}
-            required
-            type="number"
+            labelledBy="time-entry-duration-label"
+            onChange={setDurationMinutes}
             value={durationMinutes}
           />
         </div>

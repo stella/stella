@@ -167,10 +167,14 @@ export const TimeEntryForm = ({
         </div>
 
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("billing.duration")}</Label>
+          <Label id="billing-time-entry-duration-label">
+            {t("billing.duration")}
+          </Label>
           <form.Field name="durationMinutes">
             {(field) => (
               <DurationInput
+                id="billing-time-entry-duration"
+                labelledBy="billing-time-entry-duration-label"
                 onChange={field.handleChange}
                 value={field.state.value}
               />

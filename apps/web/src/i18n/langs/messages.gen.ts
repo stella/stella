@@ -214,6 +214,7 @@ type Messages = {
     "markBillableSelected": "Mark billable";
     "markNonBillableSelected": "Mark non-billable";
     "matterRequired": "Please select a matter";
+    "minutes": "Minutes";
     "narrative": "Narrative";
     "narrativePlaceholder": "Describe the work performed...";
     "noActiveTimer": "No active timer";
