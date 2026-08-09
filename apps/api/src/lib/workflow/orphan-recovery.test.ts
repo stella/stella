@@ -9,8 +9,8 @@ import {
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 
-const LEGACY_RUNNING_LOCK_VALUE = "1";
 const RECOVERY_LOCK_VALUE = "recovery";
+const TRANSITIONAL_RUNNING_LOCK_VALUE = "1";
 
 describe("selectExpiredStaleRunWorkspaceIds", () => {
   test("uses stale rows only after both Redis run-state keys expire", () => {
@@ -40,7 +40,9 @@ describe("parseRunningLockWorkspaceId", () => {
   });
 
   test("ignores sibling run-state keys so only locks are reconciled", () => {
-    expect(parseRunningLockWorkspaceId("workflow:ws-123:completed")).toBeNull();
+    expect(
+      parseRunningLockWorkspaceId("workflow:ws-123:completed-entities"),
+    ).toBeNull();
     expect(
       parseRunningLockWorkspaceId("workflow:ws-123:request-id"),
     ).toBeNull();
@@ -155,20 +157,20 @@ describe("isCurrentWorkflowRequestState", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-a",
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
     ).toBe(true);
   });
 
-  test("keeps legacy locks current for in-flight workers", () => {
+  test("accepts transitional constant-valued running locks", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
-        runningValue: LEGACY_RUNNING_LOCK_VALUE,
+        runningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
     ).toBe(true);
   });
@@ -177,9 +179,9 @@ describe("isCurrentWorkflowRequestState", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
         runningValue: RECOVERY_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
     ).toBe(false);
   });
@@ -190,10 +192,10 @@ describe("selectRunningLockReservation", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-a",
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
     ).toEqual({ status: "reserve", expectedRunningValue: "request-a" });
   });
@@ -202,23 +204,53 @@ describe("selectRunningLockReservation", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-b",
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
     ).toEqual({ status: "skip" });
   });
 
-  test("settles legacy locks before reserving them", () => {
+  test("reserves a recovery-owned lock", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
-        runningValue: LEGACY_RUNNING_LOCK_VALUE,
+        runningValue: RECOVERY_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       }),
-    ).toEqual({ status: "settle-legacy" });
+    ).toEqual({
+      status: "reserve",
+      expectedRunningValue: RECOVERY_LOCK_VALUE,
+    });
+  });
+
+  test("reserves transitional constant-valued running locks", () => {
+    expect(
+      selectRunningLockReservation({
+        expectedRequestId: "request-a",
+        recoveryLockValue: RECOVERY_LOCK_VALUE,
+        requestId: "request-a",
+        runningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+      }),
+    ).toEqual({
+      status: "reserve",
+      expectedRunningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+    });
+  });
+
+  test("does not reserve a transitional lock without a request binding", () => {
+    expect(
+      selectRunningLockReservation({
+        expectedRequestId: null,
+        recoveryLockValue: RECOVERY_LOCK_VALUE,
+        requestId: null,
+        runningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+      }),
+    ).toEqual({ status: "skip" });
   });
 });

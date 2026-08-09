@@ -6,7 +6,7 @@ const RUNNING_LOCK_KEY = /^workflow:(?<workspaceId>[^:]+):running$/u;
 
 /**
  * Extract the workspace id from a `workflow:<workspaceId>:running` lock
- * key. Returns null for any other workflow key (e.g. `:completed`,
+ * key. Returns null for any other workflow key (e.g. `:completed-entities`,
  * `:request-id`) or a malformed key, so only genuine locks are ever
  * considered for reconciliation.
  */
@@ -33,22 +33,21 @@ type ExpiredStaleRunSelectionInput = {
 
 type CurrentWorkflowRequestStateInput = {
   currentRequestId: string | null;
-  legacyRunningLockValue: string;
   requestId: string;
   runningValue: string | null;
+  transitionalRunningLockValue: string;
 };
 
 type RunningLockReservationInput = {
   expectedRequestId: string | null;
-  legacyRunningLockValue: string;
   recoveryLockValue: string;
   requestId: string | null;
   runningValue: string | null;
+  transitionalRunningLockValue: string;
 };
 
 type RunningLockReservation =
   | { status: "reserve"; expectedRunningValue: string }
-  | { status: "settle-legacy" }
   | { status: "skip" };
 
 /**
@@ -80,8 +79,7 @@ export const selectOrphanWorkspaceIds = ({
  * when it still has no live job, its request id did not change during the
  * window, and it is tied to pending cells or a recovery-owned lock. The
  * evidence requirement avoids reclaiming a healthy workflow that is still
- * planning before its first queue job exists, including legacy starters that
- * set the running lock before the request id.
+ * planning before its first queue job exists.
  */
 export const selectRecoverableOrphanWorkspaceIds = ({
   candidateWorkspaceIds,
@@ -146,19 +144,19 @@ export const selectExpiredStaleRunWorkspaceIds = ({
 
 export const isCurrentWorkflowRequestState = ({
   currentRequestId,
-  legacyRunningLockValue,
   requestId,
   runningValue,
+  transitionalRunningLockValue,
 }: CurrentWorkflowRequestStateInput): boolean =>
   currentRequestId === requestId &&
-  (runningValue === requestId || runningValue === legacyRunningLockValue);
+  (runningValue === requestId || runningValue === transitionalRunningLockValue);
 
 export const selectRunningLockReservation = ({
   expectedRequestId,
-  legacyRunningLockValue,
   recoveryLockValue,
   requestId,
   runningValue,
+  transitionalRunningLockValue,
 }: RunningLockReservationInput): RunningLockReservation => {
   if (runningValue === null || requestId !== expectedRequestId) {
     return { status: "skip" };
@@ -168,8 +166,14 @@ export const selectRunningLockReservation = ({
     return { status: "reserve", expectedRunningValue: recoveryLockValue };
   }
 
-  if (runningValue === legacyRunningLockValue) {
-    return { status: "settle-legacy" };
+  if (
+    expectedRequestId !== null &&
+    runningValue === transitionalRunningLockValue
+  ) {
+    return {
+      status: "reserve",
+      expectedRunningValue: transitionalRunningLockValue,
+    };
   }
 
   if (expectedRequestId === null || runningValue !== expectedRequestId) {
