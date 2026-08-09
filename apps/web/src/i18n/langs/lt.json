@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Dokumentai",
       "desktopEdit": {
         "action": "Redaguoti darbalaukio programoje",
+        "editLocallyPrompt": "Norėdami redaguoti šį failą vietoje ir sinchronizuoti su stella, spustelėkite čia.",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
         "forceRelease": "Priverstinai atlaisvinti",

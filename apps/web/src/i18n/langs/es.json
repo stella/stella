@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar en la app de escritorio",
+        "editLocallyPrompt": "Para editar este archivo localmente y sincronizarlo con stella, haz clic aquí.",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
         "forceRelease": "Forzar liberación",

@@ -4,6 +4,25 @@ export const DOCX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
 export const XLSX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
 export const PPTX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
 
+export type NativeOfficeViewerFormat = "pptx" | "xlsx";
+
+export const getNativeOfficeViewerFormat = (
+  mimeType: string | null | undefined,
+): NativeOfficeViewerFormat | null => {
+  const normalizedMimeType = mimeType
+    ?.split(";", 1)
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+  if (normalizedMimeType === XLSX_MIME) {
+    return "xlsx";
+  }
+  if (normalizedMimeType === PPTX_MIME) {
+    return "pptx";
+  }
+  return null;
+};
+
 export const isDocxFile = (file: Pick<File, "name" | "type">): boolean =>
   file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");
 

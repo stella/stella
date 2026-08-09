@@ -38,6 +38,7 @@
     "@mcp-ui/client": "catalog:",
     "@posthog/react": "^1.10.3",
     "@pydantic/genai-prices": "^0.1.1",
+    "@silurus/ooxml": "catalog:",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",

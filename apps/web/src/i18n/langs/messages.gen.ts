@@ -3610,6 +3610,7 @@ type Messages = {
       "defaultPropertyName": "Documents";
       "desktopEdit": {
         "action": "Edit in desktop";
+        "editLocallyPrompt": "To edit this file locally and sync with stella, click here.";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
         "forceRelease": "Force release";

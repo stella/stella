@@ -6,6 +6,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 
 beforeEach(() => {
   useInspectorCommandStore.setState({
+    desktopOpenAttention: null,
     pendingRenameTabId: null,
     pendingBlockScroll: null,
     pendingDocxEditTabId: null,
@@ -36,16 +37,38 @@ describe("inspector commands", () => {
     const commands = useInspectorCommandStore.getState();
     commands.requestRename("missing-tab");
     commands.requestDocxEdit("missing-tab");
+    commands.requestDesktopOpenAttention("missing-tab");
     commands.requestBlockScroll({ tabId: "open-tab", blockId: "block-1" });
 
     commands.clearCommandsForMissingTabs(new Set(["open-tab"]));
 
     expect(useInspectorCommandStore.getState().pendingRenameTabId).toBeNull();
     expect(useInspectorCommandStore.getState().pendingDocxEditTabId).toBeNull();
+    expect(
+      useInspectorCommandStore.getState().desktopOpenAttention,
+    ).toBeNull();
     expect(useInspectorCommandStore.getState().pendingBlockScroll).toEqual({
       tabId: "open-tab",
       blockId: "block-1",
       text: undefined,
+    });
+  });
+
+  test("desktop-open attention clears only the matching pulse", () => {
+    const commands = useInspectorCommandStore.getState();
+    commands.requestDesktopOpenAttention("file-1");
+    const firstSequence =
+      useInspectorCommandStore.getState().desktopOpenAttention?.sequence;
+    commands.requestDesktopOpenAttention("file-1");
+
+    if (firstSequence === undefined) {
+      throw new Error("Expected a desktop-open attention sequence");
+    }
+    commands.clearDesktopOpenAttention(firstSequence);
+
+    expect(useInspectorCommandStore.getState().desktopOpenAttention).toEqual({
+      fieldId: "file-1",
+      sequence: firstSequence + 1,
     });
   });
 });

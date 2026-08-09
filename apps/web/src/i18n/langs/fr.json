@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Modifier dans l’app de bureau",
+        "editLocallyPrompt": "Pour modifier ce fichier localement et le synchroniser avec stella, cliquez ici.",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
         "forceRelease": "Forcer la libération",

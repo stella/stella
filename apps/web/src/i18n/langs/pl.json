@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Edytuj w aplikacji desktopowej",
+        "editLocallyPrompt": "Aby edytować ten plik lokalnie i zsynchronizować go ze stella, kliknij tutaj.",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
         "forceRelease": "Wymuś zwolnienie",

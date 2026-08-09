@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "المستندات",
       "desktopEdit": {
         "action": "التحرير في تطبيق سطح المكتب",
+        "editLocallyPrompt": "لتحرير هذا الملف محليًا ومزامنته مع stella، انقر هنا.",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",
         "forceRelease": "فرض التحرير",

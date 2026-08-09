@@ -82,6 +82,31 @@ export const XlsxIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const PptxIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    viewBox="0 0 48 48"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <OfficePage />
+    <path d="M39.5 21H28v2h11.5a.5.5 0 0 0 0-1z" fill="#D24726" />
+    <path d="M33 25h-5v6h5z" fill="#FF8F6B" />
+    <path d="M39.5 25H35v1h4.5a.5.5 0 0 0 0-1z" fill="#D24726" />
+    <path d="M39.5 28H35v1h4.5a.5.5 0 0 0 0-1z" fill="#E86F45" />
+    <path d="M39.5 31H35v1h4.5a.5.5 0 0 0 0-1z" fill="#FF8F6B" />
+    <path
+      d="M6 37h18a2 2 0 0 0 2-2V17a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2z"
+      fill="#D24726"
+    />
+    <path
+      d="M10 20h5.59c3.47 0 5.41 1.78 5.41 4.82 0 3.2-2.08 5.08-5.63 5.08h-1.94V33H10V20zm3.43 2.78v4.35h1.62c1.63 0 2.47-.73 2.47-2.2 0-1.44-.84-2.15-2.47-2.15h-1.62z"
+      fill="#F9F7F7"
+    />
+  </svg>
+);
+
 // The CSV mark pairs the spreadsheet badge with an "a," glyph: same workbook
 // family, marked as delimited text.
 export const CsvIcon = (props: SVGProps<SVGSVGElement>) => (
@@ -495,6 +520,10 @@ export const DocumentIcon = ({
 
   if (iconKind === "excel") {
     return <XlsxIcon className={className} />;
+  }
+
+  if (iconKind === "powerpoint") {
+    return <PptxIcon className={className} />;
   }
 
   if (iconKind === "openDocumentSheet") {

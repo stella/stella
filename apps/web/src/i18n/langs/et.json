@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Dokumendid",
       "desktopEdit": {
         "action": "Muuda töölauarakenduses",
+        "editLocallyPrompt": "Faili kohalikuks muutmiseks ja stellaga sünkroonimiseks klõpsake siin.",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",
         "forceRelease": "Sunni vabastamine",

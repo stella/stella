@@ -6,23 +6,29 @@ import {
   pdfDerivativeStateForFile,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOCX_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 
 describe("PDF derivative policy", () => {
-  test("does not generate derivatives for natively renderable DOCX files", () => {
-    expect(
-      shouldGeneratePdfDerivative({
-        encrypted: false,
-        mimeType: DOCX_MIME_TYPE,
-      }),
-    ).toBe(false);
+  test("does not generate derivatives for natively renderable OOXML files", () => {
+    for (const mimeType of [DOCX_MIME_TYPE, PPTX_MIME_TYPE, XLSX_MIME_TYPE]) {
+      expect(
+        shouldGeneratePdfDerivative({
+          encrypted: false,
+          mimeType,
+        }),
+      ).toBe(false);
 
-    expect(
-      pdfDerivativeStateForFile({
-        encrypted: false,
-        mimeType: DOCX_MIME_TYPE,
-      }),
-    ).toEqual({ status: "not-required" });
+      expect(
+        pdfDerivativeStateForFile({
+          encrypted: false,
+          mimeType,
+        }),
+      ).toEqual({ status: "not-required" });
+    }
   });
 
   test("generates derivatives for convertible files that are not native", () => {

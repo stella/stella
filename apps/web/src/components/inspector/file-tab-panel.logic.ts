@@ -2,7 +2,11 @@ import {
   FILE_FACETS,
   type FileFacet as Facet,
 } from "@/components/inspector/inspector-store-types";
-import { isEmailFile, isMarkdownFile } from "@/lib/consts";
+import {
+  getNativeOfficeViewerFormat,
+  isEmailFile,
+  isMarkdownFile,
+} from "@/lib/consts";
 
 // Sidepeek shows every facet, including Preview (the file viewer
 // itself). Fullscreen drops Preview entirely — the main view IS
@@ -15,7 +19,11 @@ export const FULLVIEW_FACETS: readonly Facet[] = FILE_FACETS.filter(
   (facet) => facet !== "preview",
 );
 
-export type FileTabNativePreviewKind = "email" | "markdown" | "pdf";
+export type FileTabNativePreviewKind =
+  | "email"
+  | "markdown"
+  | "office"
+  | "pdf";
 
 export const getFileTabNativePreviewKind = ({
   fileName,
@@ -29,6 +37,9 @@ export const getFileTabNativePreviewKind = ({
   }
   if (isMarkdownFile({ fileName, mimeType })) {
     return "markdown";
+  }
+  if (getNativeOfficeViewerFormat(mimeType) !== null) {
+    return "office";
   }
   return "pdf";
 };

@@ -384,7 +384,7 @@ export default defineConfig(({ mode }) => {
         "fast-xml-parser",
         "marked",
       ],
-      // @stll/*-wasm packages load their .wasm binaries via
+      // @stll/*-wasm packages and @silurus/ooxml load their .wasm binaries via
       // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
       // optimizer would rewrite that URL into .vite/deps/, where the .wasm
       // binary doesn't exist and the dev server falls back to index.html —
@@ -395,6 +395,7 @@ export default defineConfig(({ mode }) => {
       // above), which does the same thing for its napi-rs wasm32-wasip1-threads
       // binding + glue.
       exclude: [
+        "@silurus/ooxml",
         "@stll/text-search-wasm",
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",

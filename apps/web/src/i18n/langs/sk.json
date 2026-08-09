@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upraviť v desktopovej aplikácii",
+        "editLocallyPrompt": "Ak chcete tento súbor upraviť lokálne a synchronizovať so stellou, kliknite sem.",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",
         "forceRelease": "Vynútiť uvoľnenie",

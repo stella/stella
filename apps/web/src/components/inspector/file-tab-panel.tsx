@@ -1,4 +1,4 @@
-import { Suspense, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,7 +68,12 @@ import Tooltip from "@/components/tooltip";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import {
+  DOCX_MIME,
+  getNativeOfficeViewerFormat,
+  MARKDOWN_MIME,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -76,6 +81,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
+
+const OfficeFileViewer = lazy(async () => {
+  const m = await import("@/components/office/office-file-viewer");
+  return { default: m.OfficeFileViewer };
+});
 
 type MatterOrigin = {
   color: string | null;
@@ -192,6 +202,8 @@ export const FileTabPanel = ({
   const isEmailViewerActive =
     isEmailDisplay && tab.id === activeId && !minimized;
   const isMarkdownDisplay = nativePreviewKind === "markdown";
+  const officeViewerFormat = getNativeOfficeViewerFormat(tab.mimeType);
+  const isOfficeDisplay = nativePreviewKind === "office";
   const emailEntityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
     enabled: isEmailViewerActive,
@@ -341,14 +353,19 @@ export const FileTabPanel = ({
     fileName: tab.fileName,
     mimeType: tab.mimeType,
   });
-  const desktopOpenButton =
+  const desktopEditTarget =
     canUpdateEntity &&
     desktopEditFileType !== null &&
-    tab.propertyId !== undefined ? (
+    tab.propertyId !== undefined
+      ? { fileType: desktopEditFileType, propertyId: tab.propertyId }
+      : null;
+  const desktopOpenButton =
+    desktopEditTarget !== null ? (
       <DesktopOpenButton
         entityId={tab.entityId}
-        fileType={desktopEditFileType}
-        propertyId={tab.propertyId}
+        fieldId={tab.id}
+        fileType={desktopEditTarget.fileType}
+        propertyId={desktopEditTarget.propertyId}
         workspaceId={tab.workspaceId}
       />
     ) : null;
@@ -404,25 +421,29 @@ export const FileTabPanel = ({
         />
         <InspectorTabHeader
           actions={
-            <Tooltip
-              content={t("workspaces.pdf.backToPeek")}
-              render={
-                <Button
-                  className={cn(
-                    "transition-[color,background-color,box-shadow]",
-                    flashingMinimizeTabId === tab.id &&
-                      "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                  )}
-                  onClick={() => {
-                    handleMinimizeFromFullView(tab);
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <Minimize2Icon className="size-3.5" />
-                </Button>
-              }
-            />
+            <>
+              {downloadButton}
+              {desktopOpenButton}
+              <Tooltip
+                content={t("workspaces.pdf.backToPeek")}
+                render={
+                  <Button
+                    className={cn(
+                      "transition-[color,background-color,box-shadow]",
+                      flashingMinimizeTabId === tab.id &&
+                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                    )}
+                    onClick={() => {
+                      handleMinimizeFromFullView(tab);
+                    }}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <Minimize2Icon className="size-3.5" />
+                  </Button>
+                }
+              />
+            </>
           }
           label={stripExtension(tab.label)}
           matter={
@@ -700,7 +721,8 @@ export const FileTabPanel = ({
     (tab.facet ?? "preview") === "preview" &&
     !isEditingNativeDocx &&
     !isEmailDisplay &&
-    !isMarkdownDisplay ? (
+    !isMarkdownDisplay &&
+    !isOfficeDisplay ? (
       <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
         <PeekPdfControls
           canResetZoom={scaleOffsets.get(tab.id) !== 0}
@@ -826,6 +848,27 @@ export const FileTabPanel = ({
           onMarkdownChange={setMarkdownDraft}
           readOnly={!canUpdateEntity}
         />
+      );
+    }
+    if (isOfficeDisplay && officeViewerFormat !== null) {
+      return (
+        <Suspense
+          fallback={
+            <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
+              {t("common.loading")}
+            </div>
+          }
+        >
+          <OfficeFileViewer
+            desktopEditTarget={desktopEditTarget}
+            entityId={tab.entityId}
+            fieldId={tab.id}
+            fileName={tab.fileName}
+            format={officeViewerFormat}
+            key={tab.id}
+            workspaceId={tab.workspaceId}
+          />
+        </Suspense>
       );
     }
     if (isNativeDocxDisplay && tab.propertyId !== undefined) {
@@ -1144,7 +1187,7 @@ export const FileTabPanel = ({
       key={tab.renderId ?? tab.id}
       ref={isActive ? pdfContentRef : undefined}
     >
-      {isNativeDocxDisplay ? (
+      {isNativeDocxDisplay || isOfficeDisplay ? (
         <>
           {contextBar}
           {facetBar}

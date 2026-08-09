@@ -20,6 +20,23 @@ describe("file tab native preview kind", () => {
       }),
     ).toBe("markdown");
   });
+
+  test("routes XLSX and PPTX files to the native office viewer", () => {
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "workbook.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    ).toBe("office");
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "deck.pptx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      }),
+    ).toBe("office");
+  });
 });
 
 describe("markdown draft sync", () => {

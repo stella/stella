@@ -3607,6 +3607,7 @@
       "defaultPropertyName": "Dokumenti",
       "desktopEdit": {
         "action": "Rediģēt datora lietotnē",
+        "editLocallyPrompt": "Lai rediģētu šo failu lokāli un sinhronizētu ar stella, noklikšķiniet šeit.",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
         "forceRelease": "Piespiedu atbrīvošana",
