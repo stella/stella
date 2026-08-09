@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { member } from "@/api/db/auth-schema";
 import {
   ACTIVE_TIMER_INDEX_NAME,
   BILLING_STATUS,
@@ -39,7 +40,6 @@ const timerStart = createSafeHandler(
     workspaceId,
     user,
     body,
-    memberRole,
     recordAuditEvent,
   }) {
     const now = new Date();
@@ -104,9 +104,18 @@ const timerStart = createSafeHandler(
       );
       const [activeWorkspace] = await tx
         .select({
+          clientId: workspaces.clientId,
+          organizationRole: member.role,
           workspaceMemberId: workspaceMembers.id,
         })
         .from(workspaces)
+        .leftJoin(
+          member,
+          and(
+            eq(member.organizationId, workspaces.organizationId),
+            eq(member.userId, user.id),
+          ),
+        )
         .leftJoin(
           workspaceMembers,
           and(
@@ -126,8 +135,13 @@ const timerStart = createSafeHandler(
         return { type: "workspace_inactive" as const };
       }
       const hasAdminBypass =
-        memberRole.role === "owner" || memberRole.role === "admin";
-      if (activeWorkspace.workspaceMemberId === null && !hasAdminBypass) {
+        (activeWorkspace.organizationRole === "owner" ||
+          activeWorkspace.organizationRole === "admin") &&
+        activeWorkspace.clientId !== null;
+      if (
+        activeWorkspace.organizationRole === null ||
+        (activeWorkspace.workspaceMemberId === null && !hasAdminBypass)
+      ) {
         return { type: "workspace_inaccessible" as const };
       }
       const totalEntries = await tx.$count(
