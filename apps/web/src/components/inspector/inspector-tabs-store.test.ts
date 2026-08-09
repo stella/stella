@@ -8,6 +8,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { isPdfFacet } from "@/components/inspector/inspector-broadcast";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
@@ -805,6 +806,11 @@ describe("closeTabsForEntities", () => {
 });
 
 describe("Inspector tab broadcast", () => {
+  test("preserves the email attachments facet in the broadcast domain", () => {
+    expect(isPdfFacet("attachments")).toBe(true);
+    expect(isPdfFacet("unknown")).toBe(false);
+  });
+
   test("publishes tab set metadata without sharing local active state", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };

@@ -159,11 +159,12 @@ const isOptionalString = (value: unknown): value is string | undefined =>
 const isOptionalNumber = (value: unknown): value is number | undefined =>
   value === undefined || typeof value === "number";
 
-const isPdfFacet = (
+export const isPdfFacet = (
   value: unknown,
 ): value is NonNullable<FileTab["facet"]> | undefined =>
   value === undefined ||
   value === "preview" ||
+  value === "attachments" ||
   value === "metadata" ||
   value === "versions" ||
   value === "suggestions" ||

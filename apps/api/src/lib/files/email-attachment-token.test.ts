@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
+  MAX_EMAIL_ATTACHMENT_DESCRIPTORS,
 } from "./email-attachment-token";
 
 const source = {
@@ -23,11 +24,40 @@ describe("email attachment descriptors", () => {
     );
     expect(descriptor).not.toContain(source.sourceFileId);
     expect(findEmailAttachmentIndex({ ...source, descriptor })).toBe(2);
+    for (let attachmentIndex = 0; attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS; attachmentIndex += 1) {
+      const indexedDescriptor = createEmailAttachmentDescriptor({
+        ...source,
+        attachmentIndex,
+      });
+      expect(findEmailAttachmentIndex({ ...source, descriptor: indexedDescriptor })).toBe(
+        attachmentIndex,
+      );
+    }
     expect(
       findEmailAttachmentIndex({
         ...source,
         descriptor,
         sourceVersionId: "version-2",
+      }),
+    ).toBeNull();
+    expect(
+      findEmailAttachmentIndex({
+        ...source,
+        descriptor,
+        sourceFileId: "file-2",
+      }),
+    ).toBeNull();
+    expect(
+      findEmailAttachmentIndex({
+        ...source,
+        descriptor,
+        secret: "tampered-secret",
+      }),
+    ).toBeNull();
+    expect(
+      findEmailAttachmentIndex({
+        ...source,
+        descriptor: `${descriptor.slice(0, -1)}x`,
       }),
     ).toBeNull();
   });

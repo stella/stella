@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import { unwrapEden } from "@/lib/errors/api";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
@@ -122,14 +123,30 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
     },
   });
 
-export const emailAttachmentPreviewOptions = ({
+export const emailAttachmentPreviewUrl = ({
+  attachmentId,
+  fieldId,
+  workspaceId,
+}: FileOptionsProps & { attachmentId: string }): string =>
+  apiUrl(
+    `/files/${encodeURIComponent(workspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}?disposition=inline`,
+  );
+
+export const emailAttachmentPdfOptions = ({
   attachmentId,
   fieldId,
   workspaceId,
 }: FileOptionsProps & { attachmentId: string }) =>
   queryOptions({
     enabled: attachmentId.length > 0,
-    queryKey: [...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }), "attachment", attachmentId],
+    gcTime: 0,
+    retry: false,
+    staleTime: 0,
+    queryKey: [
+      ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
+      "attachment-pdf",
+      attachmentId,
+    ],
     queryFn: async ({ signal }) => {
       const response = await api
         .files({ workspaceId })
@@ -139,10 +156,7 @@ export const emailAttachmentPreviewOptions = ({
       if (!(data instanceof Response)) {
         throw new TypeError("Email attachment preview returned no bytes");
       }
-      return {
-        buffer: await data.arrayBuffer(),
-        mimeType: data.headers.get("content-type") ?? "application/octet-stream",
-      };
+      return await data.arrayBuffer();
     },
   });
 
