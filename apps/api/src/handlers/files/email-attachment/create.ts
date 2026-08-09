@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler, type HandlerConfig } from "@/api/lib/api-handlers";
@@ -9,7 +11,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
-import { broadcastQueryInvalidationToOrganization } from "@/api/lib/invalidate-query-macro";
+import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
@@ -18,8 +20,6 @@ import {
 } from "../email-attachment-loader";
 import { consumeEmailAttachmentSaveRateLimit } from "../email-attachment-save-rate-limit";
 import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
-
-const WORKSPACES_QUERY_KEY = ["workspaces"];
 
 const config = {
   description:
@@ -173,9 +173,9 @@ export default createSafeHandler(
         workspaceId: destinationWorkspaceId,
       });
     });
-    broadcastQueryInvalidationToOrganization(
+    broadcastOrganizationResourceSetUpdated(
       session.activeOrganizationId,
-      WORKSPACES_QUERY_KEY,
+      RESOURCE_TYPE.WORKSPACE,
     );
 
     return Result.ok({
