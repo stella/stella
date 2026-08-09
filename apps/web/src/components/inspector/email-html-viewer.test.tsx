@@ -76,29 +76,40 @@ describe("email viewer", () => {
   });
 
   test("keeps historical and unresolved versions preview-only", () => {
-    const currentFields = [
-      { id: "field-current-primary" },
-      { id: "field-current-secondary" },
-    ];
-
     expect(
       getEmailChatMode({
-        currentFields,
-        fieldId: "field-current-secondary",
+        extractionFileFieldId: "field-current-primary",
+        fieldId: "field-current-primary",
       }),
     ).toBe(EMAIL_CHAT_MODE.contextual);
     expect(
       getEmailChatMode({
-        currentFields,
-        fieldId: "field-old",
+        extractionFileFieldId: "field-current-primary",
+        fieldId: "field-current-secondary",
       }),
     ).toBe(EMAIL_CHAT_MODE.previewOnly);
     expect(
       getEmailChatMode({
-        currentFields: undefined,
+        extractionFileFieldId: undefined,
         fieldId: "field-current-primary",
       }),
     ).toBe(EMAIL_CHAT_MODE.previewOnly);
+  });
+
+  test("does not load the AI host for preview-only email fields", () => {
+    const html = renderWithProviders(
+      <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.previewOnly}
+        entityId="entity-1"
+        fieldId="field-sibling"
+        fileName="message.eml"
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).not.toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('role="status"');
   });
 
   test("surfaces contextual chat resolution failures with retry", () => {
@@ -116,6 +127,7 @@ describe("email viewer", () => {
 
     expect(html).toContain('role="alert"');
     expect(html).toContain("Try again");
+    expect(html).not.toContain('data-file-viewer-ai="true"');
   });
 
   test("renders native metadata and keeps attachments informational", () => {

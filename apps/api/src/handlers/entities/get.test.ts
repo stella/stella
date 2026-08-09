@@ -61,4 +61,47 @@ describe("readEntityByIdHandler", () => {
       }),
     );
   });
+
+  test("returns the exact field used as the entity extraction source", async () => {
+    findFirstMock.mockResolvedValue({
+      kind: "document",
+      name: "Share Purchase Agreement",
+      currentVersion: {
+        id: "entity_version_1",
+        fields: [
+          {
+            id: "field_text",
+            propertyId: "property_text",
+            content: { type: "text", value: "Reference" },
+          },
+          {
+            id: "field_email",
+            propertyId: "property_email",
+            content: { type: "file" },
+          },
+          {
+            id: "field_sibling",
+            propertyId: "property_sibling",
+            content: { type: "file" },
+          },
+        ],
+      },
+    });
+    const { safeDb } = createScopedDbMock({
+      query: { entities: { findFirst: findFirstMock } },
+    });
+
+    const result = await Result.gen(() =>
+      readEntityByIdHandler({
+        safeDb,
+        workspaceId: toSafeId("ws_1"),
+        entityId: toSafeId("entity_1"),
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.extractionFileFieldId).toBe("field_email");
+    }
+  });
 });

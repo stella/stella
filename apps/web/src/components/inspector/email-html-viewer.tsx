@@ -49,16 +49,27 @@ type EmailFileViewerProps = EmailFileViewerBaseProps &
 export const EmailFileViewer = (props: EmailFileViewerProps) => {
   const t = useTranslations();
   const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
-  const fileChatContext =
-    chatMode === EMAIL_CHAT_MODE.contextual
-      ? getEmailFileChatContext({ entityId, fieldId, fileName, workspaceId })
-      : { workspaceId };
+
+  if (chatMode === EMAIL_CHAT_MODE.contextual) {
+    const fileChatContext = getEmailFileChatContext({
+      entityId,
+      fieldId,
+      fileName,
+      workspaceId,
+    });
+
+    return (
+      <FileViewerWithAI
+        {...fileChatContext}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
+      </FileViewerWithAI>
+    );
+  }
 
   return (
-    <FileViewerWithAI
-      {...fileChatContext}
-      className="flex min-h-0 flex-1 flex-col"
-    >
+    <div className="flex min-h-0 flex-1 flex-col">
       <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
       {chatMode === EMAIL_CHAT_MODE.resolutionError ? (
         <div
@@ -77,7 +88,7 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
           </Button>
         </div>
       ) : null}
-    </FileViewerWithAI>
+    </div>
   );
 };
 

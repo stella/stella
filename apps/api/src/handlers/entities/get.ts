@@ -7,6 +7,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
 const readEntityByIdParamsSchema = workspaceParams({
   entityId: tSafeId("entity", { description: "Document entity ID" }),
@@ -86,12 +87,17 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
+  const extractionFileField = findExtractionFileFieldRow(
+    entity.currentVersion.fields,
+  );
+
   return Result.ok({
     entityId,
     kind: entity.kind,
     name: entity.name,
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
+    extractionFileFieldId: extractionFileField?.id ?? null,
     fields: entity.currentVersion.fields,
   });
 };

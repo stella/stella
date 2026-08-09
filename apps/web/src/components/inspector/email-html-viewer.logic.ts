@@ -18,16 +18,14 @@ export type EmailResolvedChatMode = Exclude<
   typeof EMAIL_CHAT_MODE.resolutionError
 >;
 
-type EmailCurrentFieldIdentity = { id: string };
-
 export const getEmailChatMode = ({
-  currentFields,
+  extractionFileFieldId,
   fieldId,
 }: {
-  currentFields: readonly EmailCurrentFieldIdentity[] | undefined;
+  extractionFileFieldId: string | null | undefined;
   fieldId: string;
 }): EmailResolvedChatMode =>
-  currentFields?.some((field) => field.id === fieldId)
+  extractionFileFieldId === fieldId
     ? EMAIL_CHAT_MODE.contextual
     : EMAIL_CHAT_MODE.previewOnly;
 

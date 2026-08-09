@@ -34,6 +34,26 @@ export const parseEntityKind = (value: unknown): EntityKind => {
  * `orderBy`, Postgres/Drizzle give no ordering guarantee, and two callers
  * could observe different "first" fields for the same version.
  */
+export const findExtractionFileFieldRow = <
+  T extends {
+    content: FieldContent;
+    propertyId?: SafeId<"property"> | undefined;
+  },
+>(
+  fields: readonly T[],
+  filePropertyId?: SafeId<"property">,
+): T | null => {
+  for (const field of fields) {
+    if (
+      field.content.type === "file" &&
+      (filePropertyId === undefined || field.propertyId === filePropertyId)
+    ) {
+      return field;
+    }
+  }
+  return null;
+};
+
 export const findExtractionFileField = (
   fields: readonly {
     content: FieldContent;
@@ -41,15 +61,8 @@ export const findExtractionFileField = (
   }[],
   filePropertyId?: SafeId<"property">,
 ): Extract<FieldContent, { type: "file" }> | null => {
-  for (const field of fields) {
-    if (
-      field.content.type === "file" &&
-      (filePropertyId === undefined || field.propertyId === filePropertyId)
-    ) {
-      return field.content;
-    }
-  }
-  return null;
+  const field = findExtractionFileFieldRow(fields, filePropertyId);
+  return field?.content.type === "file" ? field.content : null;
 };
 
 type SearchQueryBase = {

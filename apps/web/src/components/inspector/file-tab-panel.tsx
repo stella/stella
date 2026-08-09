@@ -192,7 +192,7 @@ export const FileTabPanel = ({
     enabled: isEmailDisplay,
   });
   const emailChatMode = getEmailChatMode({
-    currentFields: emailEntityQuery.data?.fields,
+    extractionFileFieldId: emailEntityQuery.data?.extractionFileFieldId,
     fieldId: tab.id,
   });
   const markdownTextQuery = useQuery({
