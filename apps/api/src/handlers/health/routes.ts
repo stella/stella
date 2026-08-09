@@ -59,6 +59,10 @@ export const createHealthRoute = ({
     { ttlMs: PROBE_CACHE_TTL_MS },
   );
   const readinessResponse = async () => await probeCache.run();
+  const livenessHandler = () => ({
+    status: "ok" as const,
+    ...BUILD_METADATA,
+  });
   const readinessHandler = async ({ set }: Pick<Context, "set">) => {
     const outcome = await readinessResponse();
     if (!outcome.ok) {
@@ -73,9 +77,9 @@ export const createHealthRoute = ({
   };
 
   return new Elysia()
-    .get("/live", () => ({ status: "ok" as const, ...BUILD_METADATA }))
+    .get("/live", livenessHandler)
     .get("/ready", readinessHandler)
-    .get("/health", readinessHandler);
+    .get("/health", livenessHandler);
 };
 
 export const healthRoute = createHealthRoute();

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createHealthRoute } from "@/api/handlers/health/routes";
 
 describe("health routes", () => {
-  test("liveness reports the process without touching dependencies", async () => {
+  test("liveness and compatibility health do not touch dependencies", async () => {
     let readinessCalls = 0;
     const route = createHealthRoute({
       probeReadiness: async () => {
@@ -12,13 +12,22 @@ describe("health routes", () => {
       },
     });
 
-    const response = await route.handle(new Request("http://localhost/live"));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ status: "ok" });
+    const responses = await Promise.all(
+      ["live", "health"].map(async (path) => {
+        const response = await route.handle(
+          new Request(`http://localhost/${path}`),
+        );
+        return { body: await response.json(), status: response.status };
+      }),
+    );
+    for (const response of responses) {
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ status: "ok" });
+    }
     expect(readinessCalls).toBe(0);
   });
 
-  test("readiness and the compatibility health path fail closed", async () => {
+  test("readiness fails closed", async () => {
     let readinessCalls = 0;
     const route = createHealthRoute({
       probeReadiness: async () => {
@@ -27,21 +36,12 @@ describe("health routes", () => {
       },
     });
 
-    const results = await Promise.all(
-      ["ready", "health"].map(async (path) => {
-        const response = await route.handle(
-          new Request(`http://localhost/${path}`),
-        );
-        return { body: await response.json(), status: response.status };
-      }),
-    );
-    for (const result of results) {
-      expect(result.status).toBe(503);
-      expect(result.body).toMatchObject({
-        status: "error",
-        message: "Required dependency unavailable",
-      });
-    }
+    const response = await route.handle(new Request("http://localhost/ready"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      status: "error",
+      message: "Required dependency unavailable",
+    });
     expect(readinessCalls).toBe(1);
   });
 

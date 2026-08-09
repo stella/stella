@@ -280,8 +280,8 @@ STELLA_API_HOST_PORT=8080 \
 - `/ready` checks Postgres, Redis/Valkey, object storage, authenticated
   Gotenberg health, and scheduled-job registration. It returns 503 if any
   required component is unavailable.
-- `/health` is a compatibility alias for `/ready` and carries the same build
-  metadata used by release verification.
+- `/health` is a compatibility alias for `/live` and carries the same build
+  metadata used by release verification. Do not use it as a readiness probe.
 
 Compose uses `/ready` for the API. The worker healthcheck runs only while the
 worker process is alive and also requires API readiness. Queue latency and
