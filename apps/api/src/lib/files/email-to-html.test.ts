@@ -707,6 +707,7 @@ describe("renderEmailHtml", () => {
             "<p>Visible</p>",
             "<dialog><p>Closed dialog</p></dialog>",
             "<template><p>Template content</p></template>",
+            "<div popover><p>Closed popover</p></div>",
             "<dialog open><p>Open dialog</p></dialog>",
           ].join(""),
         },
@@ -723,8 +724,45 @@ describe("renderEmailHtml", () => {
     expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
       "Template content",
     );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Closed popover",
+    );
     expect(preview.bodyHtml).toContain("Closed dialog");
     expect(preview.bodyHtml).toContain("Template content");
+    expect(preview.bodyHtml).toContain("Closed popover");
+  });
+
+  test("does not fabricate wrapper text around nested citation blocks", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: "<div>Before<p>Middle</p>After</div>",
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain("Middle");
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "BeforeAfter",
+    );
+  });
+
+  test("extracts deeply nested inline citation text iteratively", () => {
+    const depth = 3000;
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `<p>${"<span>".repeat(depth)}Deep text${"</span>".repeat(depth)}</p>`,
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Deep text",
+    });
   });
 
   test("excludes replaced-element fallback text from citations", () => {

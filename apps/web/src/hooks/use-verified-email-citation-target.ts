@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { shouldRetryAPIRequest } from "@/lib/errors/api";
 import {
   isVerifiedEmailCitationTarget,
   parseEmailCitationHref,
@@ -45,6 +46,9 @@ export const useVerifiedEmailCitationTarget = (
     return null;
   }
   if (previewQuery.isError && !previewQuery.data) {
+    if (!shouldRetryAPIRequest(0, previewQuery.error)) {
+      return null;
+    }
     return { retry: previewQuery.refetch, target, type: "error" };
   }
   if (!previewQuery.data) {

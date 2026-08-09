@@ -1130,6 +1130,7 @@ const EMAIL_CITATION_REPLACED_ELEMENT_TAGS = new Set([
 const isEmailCitationInert = (element: Element): boolean =>
   element.name === "template" ||
   (element.name === "dialog" && element.attribs["open"] === undefined) ||
+  element.attribs["popover"] !== undefined ||
   EMAIL_CITATION_REPLACED_ELEMENT_TAGS.has(element.name);
 
 const isEmailCitationExcluded = (element: Element): boolean =>
@@ -1153,6 +1154,10 @@ const annotateEmailCitationBlocks = (
     ) {
       return;
     }
+    if (hasNestedEmailCitationBlock(element)) {
+      $(element).removeAttr("data-stella-email-citation-unit");
+      return;
+    }
 
     const text = normalizeEmailCitationText(collectEmailCitationText(element));
     if (text.length === 0) {
@@ -1172,9 +1177,39 @@ const annotateEmailCitationBlocks = (
   return blocks;
 };
 
+type EmailCitationTraversalNode = Element["children"][number];
+
+const hasNestedEmailCitationBlock = (element: Element): boolean => {
+  const stack = [...element.children].reverse();
+  while (stack.length > 0) {
+    const child = stack.pop();
+    if (!child || !isTag(child) || isEmailCitationExcluded(child)) {
+      continue;
+    }
+    if (
+      EMAIL_CITATION_BLOCK_TAGS.has(child.name) ||
+      child.attribs["data-stella-email-citation-unit"] !== undefined
+    ) {
+      return true;
+    }
+    for (let index = child.children.length - 1; index >= 0; index--) {
+      const descendant = child.children.at(index);
+      if (descendant) {
+        stack.push(descendant);
+      }
+    }
+  }
+  return false;
+};
+
 const collectEmailCitationText = (element: Element): string => {
   const parts: string[] = [];
-  for (const child of element.children) {
+  const stack: EmailCitationTraversalNode[] = [...element.children].reverse();
+  while (stack.length > 0) {
+    const child = stack.pop();
+    if (!child) {
+      continue;
+    }
     if (isText(child)) {
       parts.push(child.data);
       continue;
@@ -1195,7 +1230,12 @@ const collectEmailCitationText = (element: Element): string => {
     ) {
       continue;
     }
-    parts.push(collectEmailCitationText(child));
+    for (let index = child.children.length - 1; index >= 0; index--) {
+      const descendant = child.children.at(index);
+      if (descendant) {
+        stack.push(descendant);
+      }
+    }
   }
   return parts.join("");
 };
