@@ -532,7 +532,7 @@ export const throwingSequenceBeforeRelease = async (
   try {
     await reader.read();
   } finally {
-    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: sequence ordering is the unsafe cleanup shape under test
+    // oxlint-disable-next-line eslint/no-unused-expressions, typescript/no-confusing-void-expression -- fixture: sequence ordering is the unsafe cleanup shape under test
     (mightThrow(), reader.releaseLock());
   }
 };
