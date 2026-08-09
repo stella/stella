@@ -708,6 +708,7 @@ describe("renderEmailHtml", () => {
             "<dialog><p>Closed dialog</p></dialog>",
             "<template><p>Template content</p></template>",
             "<div popover><p>Closed popover</p></div>",
+            "<p>Visible before<datalist><option>Hidden option</option></datalist> visible after</p>",
             "<dialog open><p>Open dialog</p></dialog>",
           ].join(""),
         },
@@ -727,9 +728,16 @@ describe("renderEmailHtml", () => {
     expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
       "Closed popover",
     );
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain(
+      "Visible before visible after",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Visible beforeHidden option visible after",
+    );
     expect(preview.bodyHtml).toContain("Closed dialog");
     expect(preview.bodyHtml).toContain("Template content");
     expect(preview.bodyHtml).toContain("Closed popover");
+    expect(preview.bodyHtml).toContain("Hidden option");
   });
 
   test("does not fabricate wrapper text around nested citation blocks", () => {
@@ -762,6 +770,23 @@ describe("renderEmailHtml", () => {
     expect(preview.citationBlocks).toContainEqual({
       id: "body-0001",
       text: "Deep text",
+    });
+  });
+
+  test("selects a deeply nested leaf block in one traversal", () => {
+    const depth = 3000;
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `${"<div>".repeat(depth)}Deep block${"</div>".repeat(depth)}`,
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Deep block",
     });
   });
 

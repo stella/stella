@@ -21,6 +21,11 @@ export type {
   DesktopEditMimeType,
 } from "./desktop-edit-file-types";
 export {
+  EMAIL_HEADER_CITATION_ID,
+  isEmailCitationBlockId,
+} from "./email-citations";
+export type { EmailHeaderCitationId } from "./email-citations";
+export {
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,

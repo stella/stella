@@ -189,7 +189,8 @@ export const openEmailCitationSource = ({
   source: EmailCitationSource;
   workspaceId: string;
 }): void => {
-  useInspectorTabsStore.getState().openFile({
+  const inspector = useInspectorTabsStore.getState();
+  inspector.openFile({
     id: source.fieldId,
     entityId: source.entityId,
     label: source.entityName ?? source.fileName,
@@ -199,4 +200,5 @@ export const openEmailCitationSource = ({
     propertyId: source.propertyId,
     workspaceId,
   });
+  inspector.setFileFacet(source.fieldId, "preview");
 };

@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, PaperclipIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  EMAIL_HEADER_CITATION_ID,
+  type EmailHeaderCitationId,
+} from "@stll/api-contract";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
@@ -238,23 +242,23 @@ export const EmailHtmlViewer = ({
         <h1
           className={cn(
             "text-foreground text-base font-semibold text-balance",
-            activeCitationBlockId === "header-subject" &&
+            activeCitationBlockId === EMAIL_HEADER_CITATION_ID.subject &&
               "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
           )}
-          data-stella-email-anchor="header-subject"
+          data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.subject}
         >
           <BidiText as="span">{subject}</BidiText>
         </h1>
         <dl className="mt-3 grid min-w-0 gap-1.5 text-xs">
           <EmailParticipantRow
             activeCitationBlockId={activeCitationBlockId}
-            citationBlockId="header-from"
+            citationBlockId={EMAIL_HEADER_CITATION_ID.from}
             label={t("emailViewer.from")}
             values={preview.from ? [preview.from] : []}
           />
           <EmailParticipantRow
             activeCitationBlockId={activeCitationBlockId}
-            citationBlockId="header-to"
+            citationBlockId={EMAIL_HEADER_CITATION_ID.to}
             label={t("emailViewer.to")}
             values={preview.to}
           />
@@ -262,10 +266,10 @@ export const EmailHtmlViewer = ({
             <div
               className={cn(
                 "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
-                activeCitationBlockId === "header-date" &&
+                activeCitationBlockId === EMAIL_HEADER_CITATION_ID.date &&
                   "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
               )}
-              data-stella-email-anchor="header-date"
+              data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.date}
             >
               <dt>{t("common.date")}</dt>
               <dd className="min-w-0 truncate">
@@ -287,13 +291,13 @@ export const EmailHtmlViewer = ({
             <dl className="grid gap-1.5 pb-1">
               <EmailParticipantRow
                 activeCitationBlockId={activeCitationBlockId}
-                citationBlockId="header-cc"
+                citationBlockId={EMAIL_HEADER_CITATION_ID.cc}
                 label={t("emailViewer.cc")}
                 values={preview.cc}
               />
               <EmailParticipantRow
                 activeCitationBlockId={activeCitationBlockId}
-                citationBlockId="header-bcc"
+                citationBlockId={EMAIL_HEADER_CITATION_ID.bcc}
                 label={t("emailViewer.bcc")}
                 values={preview.bcc}
               />
@@ -383,7 +387,7 @@ const EmailParticipantRow = ({
   values,
 }: {
   activeCitationBlockId: string | null;
-  citationBlockId: string;
+  citationBlockId: EmailHeaderCitationId;
   label: string;
   values: readonly string[];
 }) => {

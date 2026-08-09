@@ -16,6 +16,8 @@ import { type Cheerio, load } from "cheerio";
 import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
+import { EMAIL_HEADER_CITATION_ID } from "@stll/api-contract";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import {
@@ -245,12 +247,12 @@ const buildEmailHeaderCitationBlocks = (
   parsed: ParsedEmail,
 ): EmailCitationBlock[] => {
   const values = [
-    ["header-subject", parsed.subject],
-    ["header-from", parsed.from],
-    ["header-to", parsed.to.join(", ")],
-    ["header-cc", parsed.cc.join(", ")],
-    ["header-bcc", parsed.bcc.join(", ")],
-    ["header-date", parsed.date],
+    [EMAIL_HEADER_CITATION_ID.subject, parsed.subject],
+    [EMAIL_HEADER_CITATION_ID.from, parsed.from],
+    [EMAIL_HEADER_CITATION_ID.to, parsed.to.join(", ")],
+    [EMAIL_HEADER_CITATION_ID.cc, parsed.cc.join(", ")],
+    [EMAIL_HEADER_CITATION_ID.bcc, parsed.bcc.join(", ")],
+    [EMAIL_HEADER_CITATION_ID.date, parsed.date],
   ] as const;
 
   return values.flatMap(([id, value]) => {
@@ -1108,12 +1110,6 @@ const EMAIL_CITATION_BLOCK_TAG_NAMES = [
 const EMAIL_CITATION_BLOCK_TAGS = new Set<string>(
   EMAIL_CITATION_BLOCK_TAG_NAMES,
 );
-const EMAIL_CITATION_BLOCK_SELECTOR = [
-  "body *[data-stella-email-citation-unit]",
-  ...EMAIL_CITATION_BLOCK_TAG_NAMES.map((tag) =>
-    tag === "body" ? tag : `body ${tag}`,
-  ),
-].join(", ");
 
 const isEmailCitationHidden = (element: Element): boolean =>
   element.attribs["hidden"] !== undefined ||
@@ -1126,11 +1122,13 @@ const EMAIL_CITATION_REPLACED_ELEMENT_TAGS = new Set([
   "progress",
   "video",
 ]);
+const EMAIL_CITATION_HIDDEN_CONTAINER_TAGS = new Set(["datalist"]);
 
 const isEmailCitationInert = (element: Element): boolean =>
   element.name === "template" ||
   (element.name === "dialog" && element.attribs["open"] === undefined) ||
   element.attribs["popover"] !== undefined ||
+  EMAIL_CITATION_HIDDEN_CONTAINER_TAGS.has(element.name) ||
   EMAIL_CITATION_REPLACED_ELEMENT_TAGS.has(element.name);
 
 const isEmailCitationExcluded = (element: Element): boolean =>
@@ -1141,36 +1139,27 @@ const annotateEmailCitationBlocks = (
   maxBlocks: number,
 ): EmailCitationBlock[] => {
   const blocks: EmailCitationBlock[] = [];
-  $(EMAIL_CITATION_BLOCK_SELECTOR).each((_, element) => {
-    if (!isTag(element) || blocks.length >= maxBlocks) {
-      return;
+  for (const candidate of collectEmailCitationCandidates($)) {
+    if (blocks.length >= maxBlocks) {
+      break;
     }
-    if (
-      isEmailCitationExcluded(element) ||
-      $(element)
-        .parents()
-        .toArray()
-        .some((parent) => isTag(parent) && isEmailCitationExcluded(parent))
-    ) {
-      return;
-    }
-    if (hasNestedEmailCitationBlock(element)) {
-      $(element).removeAttr("data-stella-email-citation-unit");
-      return;
+    if (candidate.hasNestedCandidate) {
+      continue;
     }
 
-    const text = normalizeEmailCitationText(collectEmailCitationText(element));
+    const text = normalizeEmailCitationText(
+      collectEmailCitationText(candidate.element),
+    );
     if (text.length === 0) {
-      $(element).removeAttr("data-stella-email-citation-unit");
-      return;
+      continue;
     }
 
     const id = `body-${String(blocks.length + 1).padStart(4, "0")}`;
-    $(element)
+    $(candidate.element)
       .removeAttr("data-stella-email-citation-unit")
       .attr("data-stella-email-anchor", id);
     blocks.push({ id, text });
-  });
+  }
   $("[data-stella-email-citation-unit]").removeAttr(
     "data-stella-email-citation-unit",
   );
@@ -1179,27 +1168,58 @@ const annotateEmailCitationBlocks = (
 
 type EmailCitationTraversalNode = Element["children"][number];
 
-const hasNestedEmailCitationBlock = (element: Element): boolean => {
-  const stack = element.children.toReversed();
+type EmailCitationCandidate = {
+  element: Element;
+  hasNestedCandidate: boolean;
+};
+
+type EmailCitationCandidateFrame = {
+  element: Element;
+  nearestCandidate: EmailCitationCandidate | null;
+};
+
+const collectEmailCitationCandidates = (
+  $: CheerioApi,
+): EmailCitationCandidate[] => {
+  const body = $("body").get(0);
+  if (!body || !isTag(body)) {
+    return [];
+  }
+
+  const candidates: EmailCitationCandidate[] = [];
+  const stack: EmailCitationCandidateFrame[] = [
+    { element: body, nearestCandidate: null },
+  ];
   while (stack.length > 0) {
-    const child = stack.pop();
-    if (!child || !isTag(child) || isEmailCitationExcluded(child)) {
+    const frame = stack.pop();
+    if (!frame || isEmailCitationExcluded(frame.element)) {
       continue;
     }
+
+    let nearestCandidate = frame.nearestCandidate;
     if (
-      EMAIL_CITATION_BLOCK_TAGS.has(child.name) ||
-      child.attribs["data-stella-email-citation-unit"] !== undefined
+      EMAIL_CITATION_BLOCK_TAGS.has(frame.element.name) ||
+      frame.element.attribs["data-stella-email-citation-unit"] !== undefined
     ) {
-      return true;
+      const candidate = {
+        element: frame.element,
+        hasNestedCandidate: false,
+      };
+      candidates.push(candidate);
+      if (nearestCandidate) {
+        nearestCandidate.hasNestedCandidate = true;
+      }
+      nearestCandidate = candidate;
     }
-    for (let index = child.children.length - 1; index >= 0; index--) {
-      const descendant = child.children.at(index);
-      if (descendant) {
-        stack.push(descendant);
+
+    for (let index = frame.element.children.length - 1; index >= 0; index--) {
+      const child = frame.element.children.at(index);
+      if (child && isTag(child)) {
+        stack.push({ element: child, nearestCandidate });
       }
     }
   }
-  return false;
+  return candidates;
 };
 
 const collectEmailCitationText = (element: Element): string => {

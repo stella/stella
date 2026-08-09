@@ -646,6 +646,7 @@ const EmailCitationChip = ({
       );
       if (mountedTab) {
         inspector.setActive(mountedTab.id);
+        inspector.setFileFacet(mountedTab.id, "preview");
         inspector.setMinimized(false);
       }
     }
