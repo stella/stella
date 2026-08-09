@@ -140,6 +140,31 @@ describe("search recents", () => {
     ]);
   });
 
+  test("drops recent file records with empty identity fields", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      "stella-search-recent-files:org-1:user-1",
+      JSON.stringify([
+        {
+          entityId: "",
+          openedAt: new Date().toISOString(),
+          title: "Missing entity.pdf",
+          workspaceId: "workspace-1",
+          workspaceName: "Matter A",
+        },
+        {
+          entityId: "entity-1",
+          openedAt: new Date().toISOString(),
+          title: "Missing workspace.pdf",
+          workspaceId: "",
+          workspaceName: "Matter A",
+        },
+      ]),
+    );
+
+    expect(readRecentFiles(scope, storage)).toEqual([]);
+  });
+
   test("scopes recents by organization and user", () => {
     const storage = new MemoryStorage();
     const otherScope: SearchRecentsScope = {

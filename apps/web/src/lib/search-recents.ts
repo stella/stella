@@ -41,6 +41,9 @@ const scopedKey = (key: string, scope: SearchRecentsScope): string =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
 const isRecentSearch = (value: unknown): value is RecentSearch =>
   isRecord(value) &&
   typeof value["query"] === "string" &&
@@ -48,14 +51,14 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
 
 const isRecentFile = (value: unknown): value is RecentFile =>
   isRecord(value) &&
-  typeof value["entityId"] === "string" &&
+  isNonEmptyString(value["entityId"]) &&
   (value["fileFieldId"] === undefined ||
     value["fileFieldId"] === null ||
     typeof value["fileFieldId"] === "string") &&
   (value["filePropertyId"] === undefined ||
     value["filePropertyId"] === null ||
     typeof value["filePropertyId"] === "string") &&
-  typeof value["workspaceId"] === "string" &&
+  isNonEmptyString(value["workspaceId"]) &&
   typeof value["workspaceName"] === "string" &&
   typeof value["title"] === "string" &&
   (value["mimeType"] === undefined ||
@@ -138,7 +141,7 @@ export const recordRecentFile = (
   storage: Storage | null = getStorage(),
 ): RecentFile[] => {
   const title = file.title.trim();
-  if (!title) {
+  if (file.entityId.length === 0 || file.workspaceId.length === 0 || !title) {
     return readRecentFiles(scope, storage);
   }
 
