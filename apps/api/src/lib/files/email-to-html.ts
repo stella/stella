@@ -32,6 +32,12 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
   msg: MSG_MIME_TYPE,
 };
 
+const EMAIL_WRITING_DIRECTIONS = {
+  auto: null,
+  ltr: null,
+  rtl: null,
+} as const;
+
 export const isEmailMimeType = (mimeType: string): boolean =>
   mimeType in EMAIL_MIME_TYPES;
 
@@ -559,9 +565,21 @@ export const renderEmailBodyHtml = (parsed: ParsedEmail): string => {
   );
   $("head").append('<meta name="color-scheme" content="light">');
   $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
-  $("body").attr("dir", "auto");
+  if (!hasExplicitWritingDirection($)) {
+    $("body").attr("dir", "auto");
+  }
 
   return `<!DOCTYPE html>${$.html()}`;
+};
+
+const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
+  const htmlDirection = $("html").attr("dir")?.trim().toLowerCase();
+  const bodyDirection = $("body").attr("dir")?.trim().toLowerCase();
+  return (
+    (htmlDirection !== undefined &&
+      htmlDirection in EMAIL_WRITING_DIRECTIONS) ||
+    (bodyDirection !== undefined && bodyDirection in EMAIL_WRITING_DIRECTIONS)
+  );
 };
 
 const emailBodyToText = (body: EmailBody): string => {

@@ -8,6 +8,7 @@ import {
   parsedEmailToText,
   parseEmail,
   type ParsedEmail,
+  renderEmailBodyHtml,
   renderEmailHtml,
   resolveEmailMimeType,
 } from "./email-to-html";
@@ -117,6 +118,38 @@ describe("renderEmailHtml", () => {
   test("keeps benign body markup", () => {
     const html = renderEmailHtml(htmlEmail());
     expect(html).toContain("Hello <b>world</b>");
+  });
+
+  test("preserves explicit body direction and defaults direction when absent", () => {
+    const bodyDirection = renderEmailBodyHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<html><body dir="rtl"><p>Hello مرحبا</p></body></html>',
+        },
+      }),
+    );
+    const documentDirection = renderEmailBodyHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<html dir="ltr"><body><p>Hello مرحبا</p></body></html>',
+        },
+      }),
+    );
+    const inferredDirection = renderEmailBodyHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: "<html><body><p>Hello مرحبا</p></body></html>",
+        },
+      }),
+    );
+
+    expect(bodyDirection).toContain('<body dir="rtl">');
+    expect(documentDirection).toContain('<html dir="ltr">');
+    expect(documentDirection).not.toContain('<body dir="auto">');
+    expect(inferredDirection).toContain('<body dir="auto">');
   });
 
   test("inlines cid: images and drops the cid reference", () => {

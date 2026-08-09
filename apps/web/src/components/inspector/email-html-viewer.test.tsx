@@ -82,4 +82,37 @@ describe("email viewer", () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-label="Loading"');
   });
+
+  test("renders the scoped error state with a retry control", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          refetchOnMount: false,
+          retry: false,
+          retryOnMount: false,
+        },
+      },
+    });
+    const options = emailHtmlPreviewOptions({
+      fieldId: "field-3",
+      workspaceId: "workspace-3",
+    });
+    await expect(
+      queryClient.fetchQuery({
+        ...options,
+        queryFn: async () => {
+          throw new Error("preview unavailable");
+        },
+      }),
+    ).rejects.toThrow("preview unavailable");
+
+    const html = renderWithProviders(
+      <EmailHtmlViewer fieldId="field-3" workspaceId="workspace-3" />,
+      queryClient,
+    );
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Something went wrong");
+    expect(html).toContain(">Try again</button>");
+  });
 });
