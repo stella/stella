@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   ChatRefRegistry,
@@ -7,6 +7,7 @@ import type {
 import type {
   ChatEntityRefContext,
   ChatRefInputState,
+  ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
 
 import type { InputRefParam, RegistryRefFieldMapEntry } from "./ref-field-map";
@@ -20,12 +21,10 @@ import {
  * a later turn.
  *
  * A turn's refs are minted per turn, so an assistant tool call is persisted
- * with its input refs already resolved to real ids
- * (`resolveAssistantMessageRefs`); a `mat_3` written into the row would point
- * at whatever the *next* turn happened to number third. Replaying that row
- * therefore has to mint the ref again, or the call reaches `dehydrateRefs` as a
- * raw UUID it cannot resolve, and reaches the model as an id the ingress guard
- * redacts.
+ * with successful input refs resolved to real ids (`resolveAssistantMessageRefs`).
+ * Unknown refs retain their model token and are declared in `refContext`.
+ * Replaying the row therefore re-mints only resolved refs; a failed call stays
+ * failed instead of turning its unknown token into an invented resource id.
  *
  * `hydrateAssistantValueRefs` cannot do this on its own: it recognizes the
  * *output* projection's key names (`matterRef`, `entityRef`, ...), while a tool
@@ -107,13 +106,42 @@ export type HydrateRegistryToolInputRefsProps = {
   inputState: ChatRefInputState;
   refRegistry: ChatRefRegistry;
   toolName: string;
+  unresolvedInputRefs?: readonly ChatUnresolvedInputRefContext[] | undefined;
 };
 
 export type ResolveRegistryToolInputRefsProps = {
   input: unknown;
   onEntityRefResolved?: ((target: EntityTarget) => void) | undefined;
+  onRefUnresolved?:
+    | ((
+        ref: Pick<ChatUnresolvedInputRefContext, "kind" | "param" | "ref">,
+      ) => void)
+    | undefined;
   refRegistry: ChatRefRegistry;
   toolName: string;
+};
+
+const isKnownRef = ({
+  kind,
+  ref,
+  refRegistry,
+}: {
+  kind: InputRefParam["kind"];
+  ref: string;
+  refRegistry: ChatRefRegistry;
+}): boolean => {
+  switch (kind) {
+    case "matter":
+      return Result.isOk(refRegistry.resolveMatterRefs([ref]));
+    case "entity":
+      return Result.isOk(refRegistry.resolveEntityRefTargets([ref]));
+    case "property":
+      return Result.isOk(refRegistry.resolvePropertyRefs([ref]));
+    case "contact":
+      return Result.isOk(refRegistry.resolveContactRefs([ref]));
+    default:
+      return kind satisfies never;
+  }
 };
 
 /**
@@ -124,6 +152,7 @@ export type ResolveRegistryToolInputRefsProps = {
 export const resolveRegistryToolInputRefs = ({
   input,
   onEntityRefResolved,
+  onRefUnresolved,
   refRegistry,
   toolName,
 }: ResolveRegistryToolInputRefsProps): unknown => {
@@ -138,6 +167,13 @@ export const resolveRegistryToolInputRefs = ({
       continue;
     }
     const value = resolved[param];
+    if (
+      typeof value === "string" &&
+      !isKnownRef({ kind, ref: value, refRegistry })
+    ) {
+      onRefUnresolved?.({ kind, param, ref: value });
+      continue;
+    }
     if (
       kind === "entity" &&
       typeof value === "string" &&
@@ -165,6 +201,7 @@ export const hydrateRegistryToolInputRefs = ({
   inputState,
   refRegistry,
   toolName,
+  unresolvedInputRefs = [],
 }: HydrateRegistryToolInputRefsProps): unknown => {
   const inputRefs = INPUT_REFS_BY_TOOL.get(toolName);
   if (inputRefs === undefined || !isRecord(input)) {
@@ -175,6 +212,18 @@ export const hydrateRegistryToolInputRefs = ({
   const hydrated = { ...input };
   for (const { kind, param } of inputRefs) {
     if (!(param in hydrated)) {
+      continue;
+    }
+    const unresolvedInputRef = unresolvedInputRefs.find(
+      (context) => context.param === param,
+    );
+    if (unresolvedInputRef !== undefined) {
+      if (
+        unresolvedInputRef.kind !== kind ||
+        unresolvedInputRef.ref !== hydrated[param]
+      ) {
+        panic("Stored unresolved chat reference context does not match input");
+      }
       continue;
     }
     hydrated[param] = refRegistry.hydrateRefId({

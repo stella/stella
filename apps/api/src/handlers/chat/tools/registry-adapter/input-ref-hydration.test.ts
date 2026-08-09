@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
@@ -7,6 +8,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_INPUT_STATE,
   type ChatEntityRefContext,
+  type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
 
 import {
@@ -164,6 +166,51 @@ describe("registry tool input ref hydration", () => {
         refRegistry: registry,
       }).unwrap().args,
     ).toEqual({ matter_id: tokenShapedId });
+  });
+
+  test("preserves an unresolved ref as unresolved across v2 replay", () => {
+    const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
+    const input = { matter_id: "mat_999", name: "draft" };
+    const persistedInput = resolveRegistryToolInputRefs({
+      input,
+      onRefUnresolved: (unresolved) => {
+        unresolvedInputRefs.push({
+          ...unresolved,
+          toolCallId: "tool-1",
+        });
+      },
+      refRegistry: createChatRefRegistry(),
+      toolName: "save_task",
+    });
+
+    expect(persistedInput).toEqual(input);
+    expect(unresolvedInputRefs).toEqual([
+      {
+        kind: "matter",
+        param: "matter_id",
+        ref: "mat_999",
+        toolCallId: "tool-1",
+      },
+    ]);
+
+    const hydrated = hydrateRegistryToolInputRefs({
+      input: persistedInput,
+      inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+      refRegistry: createChatRefRegistry(),
+      toolName: "save_task",
+      unresolvedInputRefs,
+    });
+
+    expect(hydrated).toEqual(input);
+    expect(
+      Result.isError(
+        dehydrateRefs({
+          args: asArgs(hydrated),
+          inputRefs: SAVE_TASK_INPUT_REFS,
+          refRegistry: createChatRefRegistry(),
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("round-trips an entity-only input with its workspace context", () => {

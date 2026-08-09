@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CHAT_REF_ENCODING,
   CHAT_REF_INPUT_STATE,
+  isChatRefContext,
   isChatRefEncoding,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
@@ -33,5 +34,23 @@ describe("chat ref encoding validation", () => {
     expect(() => resolveChatRefInputState("future-ref-encoding")).toThrow(
       "Unknown persisted chat ref encoding",
     );
+  });
+
+  test("requires explicit unresolved-input state in v2 context", () => {
+    expect(
+      isChatRefContext({
+        version: 1,
+        entities: [],
+        unresolvedInputs: [
+          {
+            kind: "matter",
+            param: "matter_id",
+            ref: "mat_999",
+            toolCallId: "tool-1",
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(isChatRefContext({ version: 1, entities: [] })).toBe(false);
   });
 });

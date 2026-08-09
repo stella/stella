@@ -54,9 +54,17 @@ export type ChatEntityRefContext = {
   workspace: ResourceRef<"workspace">;
 };
 
+export type ChatUnresolvedInputRefContext = {
+  kind: ChatRefTokenKind;
+  param: string;
+  ref: string;
+  toolCallId: string;
+};
+
 export type ChatRefContext = {
   version: 1;
   entities: ChatEntityRefContext[];
+  unresolvedInputs: ChatUnresolvedInputRefContext[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -72,11 +80,22 @@ const isChatEntityRefContext = (
   isResourceRef(value["workspace"]) &&
   value["workspace"].type === RESOURCE_TYPE.WORKSPACE;
 
+const isChatUnresolvedInputRefContext = (
+  value: unknown,
+): value is ChatUnresolvedInputRefContext =>
+  isRecord(value) &&
+  typeof value["toolCallId"] === "string" &&
+  typeof value["param"] === "string" &&
+  typeof value["ref"] === "string" &&
+  Object.keys(CHAT_REF_TOKEN_PREFIX).some((kind) => kind === value["kind"]);
+
 export const isChatRefContext = (value: unknown): value is ChatRefContext =>
   isRecord(value) &&
   value["version"] === 1 &&
   Array.isArray(value["entities"]) &&
-  value["entities"].every(isChatEntityRefContext);
+  value["entities"].every(isChatEntityRefContext) &&
+  Array.isArray(value["unresolvedInputs"]) &&
+  value["unresolvedInputs"].every(isChatUnresolvedInputRefContext);
 
 /** Classify persisted message metadata before it controls ref hydration. */
 export const resolveChatRefInputState = (

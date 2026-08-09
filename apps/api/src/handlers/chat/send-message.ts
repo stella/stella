@@ -172,6 +172,7 @@ import {
   resolveChatRefInputState,
   type ChatEntityRefContext,
   type ChatRefInputState,
+  type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
@@ -2507,6 +2508,7 @@ const resolveAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
     entityContexts: ChatEntityRefContext[],
     toolNamesByCallId: ReadonlyMap<string, string>,
+    unresolvedInputRefs: ChatUnresolvedInputRefContext[],
   ): ChatMessage["parts"][number] => {
     let withDeclaredToolRefs: unknown =
       part.type === "tool-call"
@@ -2527,6 +2529,12 @@ const resolveAssistantMessageRefs = ({
                           type: RESOURCE_TYPE.WORKSPACE,
                           id: target.workspaceId,
                         }),
+                      });
+                    },
+                    onRefUnresolved: (unresolved) => {
+                      unresolvedInputRefs.push({
+                        ...unresolved,
+                        toolCallId: part.id,
                       });
                     },
                     refRegistry,
@@ -2575,6 +2583,7 @@ const resolveAssistantMessageRefs = ({
       return message;
     }
     const entityContexts: ChatEntityRefContext[] = [];
+    const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
     const toolNamesByCallId = new Map<string, string>();
     for (const part of message.parts) {
       if (part.type === "tool-call") {
@@ -2582,13 +2591,17 @@ const resolveAssistantMessageRefs = ({
       }
     }
     const parts = message.parts.map((part) =>
-      resolvePart(part, entityContexts, toolNamesByCallId),
+      resolvePart(part, entityContexts, toolNamesByCallId, unresolvedInputRefs),
     );
     return {
       ...message,
       metadata: {
         ...message.metadata,
-        refContext: { version: 1, entities: entityContexts },
+        refContext: {
+          version: 1,
+          entities: entityContexts,
+          unresolvedInputs: unresolvedInputRefs,
+        },
         refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
       },
       parts,
@@ -2612,6 +2625,7 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
     entityContexts: readonly ChatEntityRefContext[],
     inputState: ChatRefInputState,
+    unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
     if (part.type !== "tool-call") {
       return part;
@@ -2626,6 +2640,7 @@ const hydrateAssistantMessageRefs = ({
             inputState,
             refRegistry,
             toolName: part.name,
+            unresolvedInputRefs,
           });
     const output =
       "output" in part
@@ -2652,11 +2667,13 @@ const hydrateAssistantMessageRefs = ({
     entityContexts: readonly ChatEntityRefContext[],
     inputState: ChatRefInputState,
     toolCallsById: ReadonlyMap<string, { input: unknown; name: string }>,
+    unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): ChatMessage["parts"][number] => {
     let withDeclaredToolRefs = hydrateToolCallPart(
       part,
       entityContexts,
       inputState,
+      unresolvedInputRefs,
     );
     if (part.type === "tool-result" && typeof part.content === "string") {
       const content = part.content;
@@ -2728,6 +2745,9 @@ const hydrateAssistantMessageRefs = ({
       const entityContexts = isChatRefContext(refContext)
         ? refContext.entities
         : [];
+      const unresolvedInputRefs = isChatRefContext(refContext)
+        ? refContext.unresolvedInputs
+        : [];
       const toolCallsById = new Map<string, { input: unknown; name: string }>();
       for (const part of message.parts) {
         if (part.type === "tool-call") {
@@ -2759,11 +2779,18 @@ const hydrateAssistantMessageRefs = ({
               : entityContexts.filter(
                   (context) => context.toolCallId === toolCallId,
                 );
+          const partUnresolvedInputRefs =
+            toolCallId === undefined
+              ? []
+              : unresolvedInputRefs.filter(
+                  (context) => context.toolCallId === toolCallId,
+                );
           return hydratePart(
             part,
             partEntityContexts,
             inputState,
             toolCallsById,
+            partUnresolvedInputRefs,
           );
         }),
       });

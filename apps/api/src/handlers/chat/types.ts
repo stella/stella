@@ -115,7 +115,7 @@ export type ChatMessageMetadata = {
   /** Server-owned marker for the ID representation persisted in tool parts.
    * Incoming client metadata deliberately does not accept this field. */
   refEncoding?: ChatRefEncoding | undefined;
-  /** Server-owned workspace context for entity-only persisted tool inputs. */
+  /** Server-owned replay context for persisted tool references. */
   refContext?: ChatRefContext | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
