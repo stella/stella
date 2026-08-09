@@ -5,7 +5,7 @@ import { StyleSheet, TextInput } from "react-native";
 import { EmptyStateScreen } from "@/components/empty-state-screen";
 import { useAppColors } from "@/theme";
 
-export default function MattersScreen() {
+const MattersScreen = () => {
   const colors = useAppColors();
   const [query, setQuery] = useState("");
 
@@ -36,7 +36,9 @@ export default function MattersScreen() {
       />
     </EmptyStateScreen>
   );
-}
+};
+
+export default MattersScreen;
 
 const styles = StyleSheet.create({
   search: {

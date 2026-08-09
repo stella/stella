@@ -315,6 +315,7 @@ export const redactCaseLawDecision = async ({
           generation,
           scopedDb,
         });
+        // eslint-disable-next-line no-throw-literal -- preserve the first lease-claim rejection reason after all claims settle
         throw firstClaimError;
       }
       if (leases.size !== targets.size) {

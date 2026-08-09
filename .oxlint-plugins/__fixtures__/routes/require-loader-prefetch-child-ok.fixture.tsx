@@ -24,6 +24,4 @@ export const Route = createFileRoute("/__fixture/child-ok-loader")({
   },
 });
 
-function ChildOkLoaderComponent() {
-  return <ChildComponent />;
-}
+const ChildOkLoaderComponent = () => <ChildComponent />;

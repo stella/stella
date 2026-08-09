@@ -14,16 +14,14 @@ const LazyTanStackDevtoolsRoot = lazy(
   async () => await import("@/components/tanstack-devtools-root"),
 );
 
-export function StaticDevtoolsImportFixture({
+export const StaticDevtoolsImportFixture = ({
   panel,
 }: {
   panel: typeof ReactQueryDevtoolsPanel;
-}) {
-  return (
-    <>
-      <TanStackDevtools plugins={[]} />
-      <LazyTanStackDevtoolsRoot sourceInspector={false} />
-      <TableDevtools table={panel} />
-    </>
-  );
-}
+}) => (
+  <>
+    <TanStackDevtools plugins={[]} />
+    <LazyTanStackDevtoolsRoot sourceInspector={false} />
+    <TableDevtools table={panel} />
+  </>
+);

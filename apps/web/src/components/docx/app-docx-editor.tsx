@@ -23,13 +23,11 @@ export type DocxComments = NonNullable<DocxEditorProps["comments"]>;
  * caller may still override individual primitives by passing its own
  * `components`, which take precedence over the shared override.
  */
-export function DocxEditor(
+export const DocxEditor = (
   props: DocxEditorProps & { ref?: Ref<DocxEditorRef> },
-) {
-  return (
-    <FolioDocxEditor
-      {...props}
-      components={{ ...folioUIComponents, ...props.components }}
-    />
-  );
-}
+) => (
+  <FolioDocxEditor
+    {...props}
+    components={{ ...folioUIComponents, ...props.components }}
+  />
+);

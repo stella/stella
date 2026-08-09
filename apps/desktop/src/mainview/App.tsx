@@ -396,7 +396,7 @@ const AboutPane = ({
   );
 };
 
-export default function App() {
+const App = () => {
   useSystemTheme();
 
   const t = useTranslations("settings");
@@ -675,4 +675,6 @@ export default function App() {
       </div>
     </main>
   );
-}
+};
+
+export default App;

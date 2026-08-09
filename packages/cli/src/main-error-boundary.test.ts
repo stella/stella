@@ -6,7 +6,11 @@ import { EXIT_CODES } from "./mcp-constants.js";
 const makeReporter = () => {
   const stderr: string[] = [];
   return {
-    stderr: { write: (text: string) => void stderr.push(text) },
+    stderr: {
+      write: (text: string) => {
+        stderr.push(text);
+      },
+    },
     exitCode: undefined as number | string | null | undefined,
     lines: stderr,
   };

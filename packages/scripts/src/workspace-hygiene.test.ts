@@ -309,7 +309,7 @@ const createWorkspaceRoot = ({
   const validRootPackage = {
     ...rootPackageJson,
     catalog: {
-      oxlint: "1.75.0",
+      oxlint: "1.77.0",
       typescript: "6.0.3",
       ...(isRecord(rootPackageJson["catalog"])
         ? rootPackageJson["catalog"]

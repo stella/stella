@@ -9,11 +9,9 @@
 // oxlint-disable-next-line no-direct-matter-glyph/no-direct-matter-glyph
 import { Layers2Icon, LayersIcon } from "lucide-react";
 
-export function DirectMatterGlyphFixture() {
-  return (
-    <>
-      <LayersIcon />
-      <Layers2Icon />
-    </>
-  );
-}
+export const DirectMatterGlyphFixture = () => (
+  <>
+    <LayersIcon />
+    <Layers2Icon />
+  </>
+);

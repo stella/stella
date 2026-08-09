@@ -41,7 +41,7 @@ import { useShortcutRebinding } from "@/lib/use-shortcut-rebinding";
  * the row for whatever shortcut was just pressed, and lets the user rebind
  * hotkey-chord shortcuts in place.
  */
-export function KeyboardShortcutsDialog() {
+export const KeyboardShortcutsDialog = () => {
   const t = useTranslations();
   const { isOpen, open, setOpen } = useKeyboardShortcutsDialogStore();
   useShowShortcutsHotkey(open);
@@ -65,7 +65,7 @@ export function KeyboardShortcutsDialog() {
       </DialogPopup>
     </Dialog>
   );
-}
+};
 
 type ShortcutGroupSectionProps = {
   group: ShortcutGroup;

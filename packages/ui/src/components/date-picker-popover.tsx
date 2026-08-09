@@ -216,7 +216,7 @@ type DatePickerPopoverProps = {
   layer?: OverlayLayer;
 };
 
-function DatePickerPopover({
+const DatePickerPopover = ({
   value: rawValue,
   onChange,
   locale: localeProp,
@@ -232,7 +232,7 @@ function DatePickerPopover({
   maxDate,
   isDateDisabled,
   layer = "default",
-}: DatePickerPopoverProps) {
+}: DatePickerPopoverProps) => {
   const locale = localeProp ?? navigator.language;
   const value = normalizeDate(rawValue);
   const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
@@ -699,7 +699,7 @@ function DatePickerPopover({
       </PopoverPopup>
     </Popover>
   );
-}
+};
 
 export { DatePickerPopover };
 export type { DatePickerPopoverProps };

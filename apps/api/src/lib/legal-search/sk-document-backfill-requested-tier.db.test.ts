@@ -53,7 +53,6 @@ beforeAll(async () => {
   testDb = await getTestDb();
   scopedDb = asTestRaw<ScopedDb>(
     async (callback: (tx: TestDatabase) => Promise<unknown>) =>
-      // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
       await callback(testDb),
   );
 

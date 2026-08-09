@@ -90,7 +90,7 @@ const LABEL_PRESETS: LabelPreset[] = [
 // file can legitimately take several minutes.
 const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
-export function VersionsSidebar({
+export const VersionsSidebar = ({
   workspaceId,
   entityId,
   currentFieldId,
@@ -103,7 +103,7 @@ export function VersionsSidebar({
   isLoadingOlder = false,
   loadOlderError = false,
   onLoadOlder,
-}: VersionsSidebarProps) {
+}: VersionsSidebarProps) => {
   const t = useTranslations();
 
   const queryClient = useQueryClient();
@@ -497,7 +497,7 @@ export function VersionsSidebar({
       </div>
     </div>
   );
-}
+};
 
 // -- Load-older paging affordance --
 
@@ -516,12 +516,12 @@ type LoadOlderVersionsProps = {
  * stack requests; after a failure it surfaces the error and the button
  * stays the only retry path.
  */
-function LoadOlderVersions({
+const LoadOlderVersions = ({
   isLoadingOlder,
   loadOlderError,
   onLoadOlder,
   ref,
-}: LoadOlderVersionsProps) {
+}: LoadOlderVersionsProps) => {
   const t = useTranslations();
 
   if (isLoadingOlder) {
@@ -547,7 +547,7 @@ function LoadOlderVersions({
       </Button>
     </div>
   );
-}
+};
 
 // -- Version item with context menu --
 
@@ -567,7 +567,7 @@ type VersionItemProps = {
   onDownload: (fieldId: string) => void;
 };
 
-function VersionItem({
+const VersionItem = ({
   version,
   showPhaseDivider,
   currentFieldId,
@@ -581,7 +581,7 @@ function VersionItem({
   onSetLabel,
   onRestore,
   onDownload,
-}: VersionItemProps) {
+}: VersionItemProps) => {
   const t = useTranslations();
   const isSelected = version.file?.fieldId === currentFieldId;
   const isCurrent = version.id === currentVersionId;
@@ -774,7 +774,7 @@ function VersionItem({
       </Menu>
     </div>
   );
-}
+};
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 

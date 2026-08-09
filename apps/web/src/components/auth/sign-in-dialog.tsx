@@ -26,11 +26,11 @@ type SignInDialogStep =
   | { status: "sign-in" }
   | { status: "otp"; email: string; devOtp: string | null };
 
-export function SignInDialog({
+export const SignInDialog = ({
   onOpenChange,
   open,
   redirectTo,
-}: SignInDialogProps) {
+}: SignInDialogProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const [step, setStep] = useState<SignInDialogStep>({ status: "sign-in" });
@@ -95,4 +95,4 @@ export function SignInDialog({
       </DialogPopup>
     </Dialog>
   );
-}
+};

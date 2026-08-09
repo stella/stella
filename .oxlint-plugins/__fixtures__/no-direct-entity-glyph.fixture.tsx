@@ -10,12 +10,10 @@
 // oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph
 import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";
 
-export function DirectEntityGlyphFixture() {
-  return (
-    <>
-      <FolderIcon />
-      <FolderOpenIcon />
-      <ListTodoIcon />
-    </>
-  );
-}
+export const DirectEntityGlyphFixture = () => (
+  <>
+    <FolderIcon />
+    <FolderOpenIcon />
+    <ListTodoIcon />
+  </>
+);

@@ -278,17 +278,15 @@ type PromptBarProps = {
  * and the loading `PromptBarPlaceholder` shell so both surfaces are
  * pixel-identical and can never drift.
  */
-export function PromptBarPlaceholderContent({
+export const PromptBarPlaceholderContent = ({
   children,
 }: {
   children: ReactNode;
-}) {
-  return (
-    <span className="text-foreground-muted block min-w-0 truncate text-[13px] leading-5">
-      {children}
-    </span>
-  );
-}
+}) => (
+  <span className="text-foreground-muted block min-w-0 truncate text-[13px] leading-5">
+    {children}
+  </span>
+);
 
 type PromptBarShellProps = {
   children: ReactNode;
@@ -318,29 +316,27 @@ const DOC_FLOAT_SURFACE_CLASS =
  * The surface is solid on purpose: the separate pane veil softens document
  * content around the stack while the controls themselves remain crisp.
  */
-export function PromptBarShell({
+export const PromptBarShell = ({
   children,
   className,
   ...rest
-}: PromptBarShellProps) {
-  return (
-    <div
-      {...rest}
-      className={cn(
-        "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
-        "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        // py-0.5 keeps the single-line pill slim (the inner editor cell's
-        // min-h-8 sets the line height; the shell adds only a hairline of
-        // breathing room) so the bar reads lighter than the transcript.
-        "py-0.5 ps-1.5 pe-1",
-        DOC_FLOAT_SURFACE_CLASS,
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
+}: PromptBarShellProps) => (
+  <div
+    {...rest}
+    className={cn(
+      "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
+      "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+      // py-0.5 keeps the single-line pill slim (the inner editor cell's
+      // min-h-8 sets the line height; the shell adds only a hairline of
+      // breathing room) so the bar reads lighter than the transcript.
+      "py-0.5 ps-1.5 pe-1",
+      DOC_FLOAT_SURFACE_CLASS,
+      className,
+    )}
+  >
+    {children}
+  </div>
+);
 
 /**
  * Shared width of the docked composer column and any floating thread
@@ -404,41 +400,43 @@ type DockedComposerProps = {
  * z-40) so the two never fight where they meet, and the chips sit below
  * it (z-30) so an open thread wins the overlap.
  */
-export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-[80] flex flex-col items-center">
-      <ComposerVeil variant="pane" />
-      {chips !== undefined && (
-        <div
-          className={cn(
-            "pointer-events-auto relative z-30 px-1",
-            DOCKED_COMPOSER_WIDTH_CLASS,
-          )}
-        >
-          {chips}
-        </div>
-      )}
+export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
+  <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-[80] flex flex-col items-center">
+    <ComposerVeil variant="pane" />
+    {chips !== undefined && (
       <div
         className={cn(
-          "pointer-events-auto relative z-50 flex flex-col",
+          "pointer-events-auto relative z-30 px-1",
           DOCKED_COMPOSER_WIDTH_CLASS,
         )}
       >
-        {bar}
-        {/* No extra top margin: `ComposerStatusRow` owns the single
-            bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
-        {dock !== undefined && <div className="px-1">{dock}</div>}
+        {chips}
       </div>
+    )}
+    <div
+      className={cn(
+        "pointer-events-auto relative z-50 flex flex-col",
+        DOCKED_COMPOSER_WIDTH_CLASS,
+      )}
+    >
+      {bar}
+      {/* No extra top margin: `ComposerStatusRow` owns the single
+            bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
+      {dock !== undefined && <div className="px-1">{dock}</div>}
     </div>
-  );
-}
+  </div>
+);
 
 /**
  * Collapse affordance rendered by `ChatThreadCard` in its top end
  * corner, so the composer bar never carries a thread-visibility
  * control. The card reopens automatically on the next send.
  */
-function ThreadCardCollapseButton({ onCollapse }: { onCollapse: () => void }) {
+const ThreadCardCollapseButton = ({
+  onCollapse,
+}: {
+  onCollapse: () => void;
+}) => {
   const t = useTranslations();
   return (
     <Button
@@ -453,7 +451,7 @@ function ThreadCardCollapseButton({ onCollapse }: { onCollapse: () => void }) {
       <ChevronDownIcon aria-hidden="true" className="size-3.5" />
     </Button>
   );
-}
+};
 
 type ChatThreadCardProps = {
   /** Scroll container ref for the transcript inside the card. */
@@ -477,12 +475,12 @@ type ChatThreadCardProps = {
  * container, so the two surfaces can never drift. Surfaces pass only
  * their transcript (and any suggestion list) as children.
  */
-export function ChatThreadCard({
+export const ChatThreadCard = ({
   scrollRef,
   onCollapse,
   bottomOffsetClass,
   children,
-}: ChatThreadCardProps) {
+}: ChatThreadCardProps) => {
   const t = useTranslations();
   return (
     <div
@@ -520,7 +518,7 @@ export function ChatThreadCard({
       </div>
     </div>
   );
-}
+};
 
 type SuggestionStepperProps = {
   index: number;
@@ -533,13 +531,13 @@ type SuggestionStepperProps = {
 /** Compact floating review bar: step through the pending suggestions in
  *  document order and accept/dismiss each in place. Shared with the
  *  Template Studio chat, which feeds it tool-call suggestions. */
-export function SuggestionStepper({
+export const SuggestionStepper = ({
   index,
   total,
   onStep,
   onAccept,
   onDismiss,
-}: SuggestionStepperProps) {
+}: SuggestionStepperProps) => {
   const t = useTranslations();
   return (
     <div
@@ -578,9 +576,9 @@ export function SuggestionStepper({
       </Button>
     </div>
   );
-}
+};
 
-export function PromptBar(props: PromptBarProps) {
+export const PromptBar = (props: PromptBarProps) => {
   const {
     anonymized,
     onFocusChange,
@@ -1069,7 +1067,7 @@ export function PromptBar(props: PromptBarProps) {
       {...(dock === undefined ? {} : { dock })}
     />
   );
-}
+};
 
 type SuggestionCardProps = {
   suggestion: AISuggestion;
@@ -1080,7 +1078,7 @@ type SuggestionCardProps = {
   onFocus: (id: string) => void;
 };
 
-export function SuggestionCard(props: SuggestionCardProps) {
+export const SuggestionCard = (props: SuggestionCardProps) => {
   const t = useTranslations();
   const { suggestion, focused, showAcceptUI, onAccept, onReject, onFocus } =
     props;
@@ -1231,7 +1229,7 @@ export function SuggestionCard(props: SuggestionCardProps) {
       )}
     </div>
   );
-}
+};
 
 type SuggestionDisplayBadgesProps = {
   display: NonNullable<AISuggestion["display"]>;
@@ -1239,18 +1237,16 @@ type SuggestionDisplayBadgesProps = {
 
 /** Header badges for display-carrying suggestions: the payload's value
  *  type plus who fills it (replaces the severity dot + label). */
-function SuggestionDisplayBadges({ display }: SuggestionDisplayBadgesProps) {
-  return (
-    <>
-      {display.valueKind !== undefined && (
-        <ValueKindChip valueKind={display.valueKind} />
-      )}
-      {display.filledBy !== undefined && (
-        <FilledByBadge filledBy={display.filledBy} />
-      )}
-    </>
-  );
-}
+const SuggestionDisplayBadges = ({ display }: SuggestionDisplayBadgesProps) => (
+  <>
+    {display.valueKind !== undefined && (
+      <ValueKindChip valueKind={display.valueKind} />
+    )}
+    {display.filledBy !== undefined && (
+      <FilledByBadge filledBy={display.filledBy} />
+    )}
+  </>
+);
 
 type FilledByBadgeProps = {
   filledBy: NonNullable<NonNullable<AISuggestion["display"]>["filledBy"]>;
@@ -1258,7 +1254,7 @@ type FilledByBadgeProps = {
 
 /** Who fills the proposed field: a person, AI, or a person whose stub
  *  AI adapts in place (`personAi`). */
-function FilledByBadge({ filledBy }: FilledByBadgeProps) {
+const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   const t = useTranslations();
   if (filledBy === "ai") {
     return (
@@ -1283,9 +1279,9 @@ function FilledByBadge({ filledBy }: FilledByBadgeProps) {
       {t("templates.studio.filledByPerson")}
     </span>
   );
-}
+};
 
-function ValueKindChip({ valueKind }: { valueKind: string }) {
+const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   const t = useTranslations();
   if (!isValueTypeKind(valueKind)) {
     return null;
@@ -1298,4 +1294,4 @@ function ValueKindChip({ valueKind }: { valueKind: string }) {
       <span className="truncate">{t(meta.labelKey)}</span>
     </span>
   );
-}
+};

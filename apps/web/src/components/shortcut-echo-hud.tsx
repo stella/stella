@@ -17,7 +17,7 @@ import type { EchoCandidate } from "@/lib/use-shortcut-echo";
  * cheatsheet is closed. Because it matches against the effective registry, it
  * can only ever show a shortcut that actually exists.
  */
-export function ShortcutEchoHud() {
+export const ShortcutEchoHud = () => {
   const t = useTranslations();
   const groups = useEffectiveShortcutGroups();
 
@@ -62,4 +62,4 @@ export function ShortcutEchoHud() {
       </div>
     </output>
   );
-}
+};

@@ -381,7 +381,7 @@ describe("fenced serving-generation appends", () => {
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this adapter's database callbacks only observe that the
       // reservation/mark boundaries occurred; they never query the fake tx.
-      // eslint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- inert transaction boundary for ordering test
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- inert transaction boundary for ordering test
       await callback({} as Transaction);
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
       family: "case_law",
@@ -587,7 +587,7 @@ describe("failed index jobs always reach the audit trail", () => {
     });
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this invariant observes transaction boundaries only.
-      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- deliberately inert transaction
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- deliberately inert transaction
       await callback({} as Transaction);
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
       family: "case_law",
@@ -694,7 +694,7 @@ describe("failed index jobs always reach the audit trail", () => {
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this test's adapter ignores the transaction; the callback
       // boundary itself is what the indexer must cross before reporting success.
-      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
       await callback({} as Transaction);
     const commitEvents: string[] = [];
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
@@ -910,7 +910,7 @@ describe("first-ever fenced appends", () => {
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this test's adapter ignores the transaction; the callback
       // boundary itself is what the indexer must cross before reporting success.
-      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
       await callback({} as Transaction);
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
       family: "case_law",
@@ -1035,7 +1035,7 @@ describe("delete-task amplification", () => {
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this test's adapter ignores the transaction; the callback
       // boundary itself is what the indexer must cross before reporting success.
-      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
       await callback({} as Transaction);
     const indexer = createCorpusIndexer<"caseLawDecision", (typeof rows)[0]>({
       family: "case_law",

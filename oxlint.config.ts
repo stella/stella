@@ -57,6 +57,16 @@ export default defineConfig({
     "logical-assignment-operators": "off",
 
     "react/rules-of-hooks": "error",
+    // Ultracite configures only named components as arrows, leaving Oxlint's
+    // function-expression default for memo callbacks in conflict with
+    // `prefer-arrow-callback`. Use one total component style.
+    "react/function-component-definition": [
+      "error",
+      {
+        namedComponents: "arrow-function",
+        unnamedComponents: "arrow-function",
+      },
+    ],
     "react/style-prop-object": "error",
     "react/jsx-no-comment-textnodes": "error",
     "react/iframe-missing-sandbox": "error",
@@ -447,6 +457,17 @@ export default defineConfig({
   overrides: [
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      // TanStack route objects are initialized before their components, while
+      // those components read the exported Route object. Function declarations
+      // preserve that intentional two-way declaration order without a TDZ. The
+      // route slice also owns colocated components, so allow its existing mixed
+      // style rather than imposing the incompatible global arrow-only policy.
+      files: ["apps/web/src/routes/**/*.{ts,tsx}"],
+      rules: {
+        "react/function-component-definition": "off",
+      },
+    },
     {
       files: ["**/*.{js,jsx,mjs,cjs}"],
       rules: {

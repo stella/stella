@@ -21,7 +21,7 @@ type InputProps = Omit<
   nativeInput?: boolean;
 };
 
-function Input({
+const Input = ({
   className,
   size = "default",
   unstyled = false,
@@ -29,7 +29,7 @@ function Input({
   dir,
   onChange,
   ...props
-}: InputProps) {
+}: InputProps) => {
   const contentDir = useContentDir({
     // Structured/neutral-value types (token, URL, number, date…) stay LTR
     // unless the caller forces a direction; only free-text resolves by content.
@@ -95,6 +95,6 @@ function Input({
       )}
     </span>
   );
-}
+};
 
 export { Input, type InputProps };

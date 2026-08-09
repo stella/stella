@@ -7,43 +7,42 @@ import { MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
-function InputOTP({
+const InputOTP = ({
   className,
   containerClassName,
   ...props
 }: React.ComponentProps<typeof OTPInput> & {
   containerClassName?: string;
-}) {
-  return (
-    <OTPInput
-      className={cn("disabled:cursor-not-allowed", className)}
-      containerClassName={cn(
-        "flex items-center gap-2 has-disabled:opacity-50",
-        containerClassName,
-      )}
-      data-slot="input-otp"
-      {...props}
-    />
-  );
-}
+}) => (
+  <OTPInput
+    className={cn("disabled:cursor-not-allowed", className)}
+    containerClassName={cn(
+      "flex items-center gap-2 has-disabled:opacity-50",
+      containerClassName,
+    )}
+    data-slot="input-otp"
+    {...props}
+  />
+);
 
-function InputOTPGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn("flex items-center", className)}
-      data-slot="input-otp-group"
-      {...props}
-    />
-  );
-}
+const InputOTPGroup = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn("flex items-center", className)}
+    data-slot="input-otp-group"
+    {...props}
+  />
+);
 
-function InputOTPSlot({
+const InputOTPSlot = ({
   index,
   className,
   ...props
 }: React.ComponentProps<"div"> & {
   index: number;
-}) {
+}) => {
   const inputOTPContext = React.use(OTPInputContext);
   const { char, hasFakeCaret, isActive } = inputOTPContext.slots[index] ?? {};
 
@@ -65,14 +64,12 @@ function InputOTPSlot({
       )}
     </div>
   );
-}
+};
 
-function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="input-otp-separator" role="separator" {...props}>
-      <MinusIcon />
-    </div>
-  );
-}
+const InputOTPSeparator = ({ ...props }: React.ComponentProps<"div">) => (
+  <div data-slot="input-otp-separator" role="separator" {...props}>
+    <MinusIcon />
+  </div>
+);
 
 export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };

@@ -19,7 +19,7 @@ type TooltipProps = {
   layer?: OverlayLayer | undefined;
 };
 
-export default function Tooltip({
+const Tooltip = ({
   children,
   render,
   content,
@@ -27,20 +27,20 @@ export default function Tooltip({
   side,
   className,
   layer,
-}: PropsWithChildren<TooltipProps>) {
-  return (
-    <TooltipRoot>
-      <TooltipTrigger render={render}>{children}</TooltipTrigger>
-      <TooltipPopup
-        {...(align === undefined ? {} : { align })}
-        // text nowrap fixes tooltip for buttons in pdf viewer controls
-        className={cn("max-w-70 text-nowrap", className)}
-        hidden={content === undefined || content === null || content === ""}
-        {...(layer === undefined ? {} : { layer })}
-        {...(side === undefined ? {} : { side })}
-      >
-        {content}
-      </TooltipPopup>
-    </TooltipRoot>
-  );
-}
+}: PropsWithChildren<TooltipProps>) => (
+  <TooltipRoot>
+    <TooltipTrigger render={render}>{children}</TooltipTrigger>
+    <TooltipPopup
+      {...(align === undefined ? {} : { align })}
+      // text nowrap fixes tooltip for buttons in pdf viewer controls
+      className={cn("max-w-70 text-nowrap", className)}
+      hidden={content === undefined || content === null || content === ""}
+      {...(layer === undefined ? {} : { layer })}
+      {...(side === undefined ? {} : { side })}
+    >
+      {content}
+    </TooltipPopup>
+  </TooltipRoot>
+);
+
+export default Tooltip;

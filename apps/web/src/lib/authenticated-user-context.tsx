@@ -16,14 +16,12 @@ export type AuthenticatedUser = {
 
 const AuthenticatedUserContext = createContext<AuthenticatedUser | null>(null);
 
-export function AuthenticatedUserProvider({
+export const AuthenticatedUserProvider = ({
   children,
   user,
-}: PropsWithChildren<{ user: AuthenticatedUser }>) {
-  return (
-    <AuthenticatedUserContext value={user}>{children}</AuthenticatedUserContext>
-  );
-}
+}: PropsWithChildren<{ user: AuthenticatedUser }>) => (
+  <AuthenticatedUserContext value={user}>{children}</AuthenticatedUserContext>
+);
 
 export const useAuthenticatedUser = (): AuthenticatedUser => {
   const user = use(AuthenticatedUserContext);

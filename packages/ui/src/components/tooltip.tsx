@@ -14,11 +14,11 @@ const TooltipProvider = TooltipPrimitive.Provider;
 
 const Tooltip = TooltipPrimitive.Root;
 
-function TooltipTrigger(props: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
-}
+const TooltipTrigger = (props: TooltipPrimitive.Trigger.Props) => (
+  <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+);
 
-function TooltipPopup({
+const TooltipPopup = ({
   className,
   align = "center",
   sideOffset = 4,
@@ -31,38 +31,36 @@ function TooltipPopup({
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
   layer?: OverlayLayer;
-}) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner
-        align={align}
+}) => (
+  <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Positioner
+      align={align}
+      className={cn(
+        "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+        OVERLAY_LAYER_CLASS_NAMES[layer],
+      )}
+      data-slot="tooltip-positioner"
+      side={side}
+      sideOffset={sideOffset}
+    >
+      <TooltipPrimitive.Popup
         className={cn(
-          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
-          OVERLAY_LAYER_CLASS_NAMES[layer],
+          "bg-popover text-popover-foreground relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md border text-xs text-balance shadow-md/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-instant:duration-0 data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+          className,
         )}
-        data-slot="tooltip-positioner"
-        side={side}
-        sideOffset={sideOffset}
+        data-slot="tooltip-popup"
+        {...props}
       >
-        <TooltipPrimitive.Popup
-          className={cn(
-            "bg-popover text-popover-foreground relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md border text-xs text-balance shadow-md/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-instant:duration-0 data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            className,
-          )}
-          data-slot="tooltip-popup"
-          {...props}
+        <TooltipPrimitive.Viewport
+          className="relative size-full overflow-clip px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:truncate **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0"
+          data-slot="tooltip-viewport"
         >
-          <TooltipPrimitive.Viewport
-            className="relative size-full overflow-clip px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:truncate **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0"
-            data-slot="tooltip-viewport"
-          >
-            {children}
-          </TooltipPrimitive.Viewport>
-        </TooltipPrimitive.Popup>
-      </TooltipPrimitive.Positioner>
-    </TooltipPrimitive.Portal>
-  );
-}
+          {children}
+        </TooltipPrimitive.Viewport>
+      </TooltipPrimitive.Popup>
+    </TooltipPrimitive.Positioner>
+  </TooltipPrimitive.Portal>
+);
 
 export {
   TooltipCreateHandle,

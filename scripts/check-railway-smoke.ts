@@ -99,7 +99,6 @@ const expectCommit = ({ value, expectedCommit, source }: ExpectCommitInput) => {
 
 const runProbe = async (name: string, probe: () => Promise<void>) => {
   let lastError: Error | undefined;
-  // eslint-disable-next-line no-unreachable-loop -- the catch path explicitly continues after a failed probe; successful probes return.
   for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop -- retry probes must observe the result before deciding whether to wait and try again.
@@ -122,6 +121,7 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
   }
 
   if (lastError) {
+    // eslint-disable-next-line no-throw-literal -- preserve the probe's concrete Error subtype and attached diagnostics
     throw lastError;
   }
   throw new RailwaySmokeError(`${name} failed`);

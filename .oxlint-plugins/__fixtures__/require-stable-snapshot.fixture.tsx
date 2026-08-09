@@ -21,7 +21,7 @@ const items = [1, 2, 3];
 const baseSnapshot: { value: number } = { value: 0 };
 const store = { items: [1, 2, 3] };
 
-function FixtureComponent() {
+const FixtureComponent = () => {
   // getSnapshot returns a fresh object literal — MUST flag.
   // oxlint-disable-next-line require-stable-snapshot/require-stable-snapshot
   useSyncExternalStore(subscribe, () => ({ value: 1 }));
@@ -105,6 +105,6 @@ function FixtureComponent() {
   });
 
   return null;
-}
+};
 
 export const __requireStableSnapshotFixture = FixtureComponent;

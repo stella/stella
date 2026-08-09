@@ -563,7 +563,6 @@ const createScopedDb = (
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (callback: (tx: MockMcpTransaction) => unknown) =>
-        // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
         await callback({
           query: {
             entities: {
@@ -2299,7 +2298,6 @@ describe("OpenAI-compatible MCP tools", () => {
             };
           }) => unknown,
         ) =>
-          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
           await callback({
             query: {
               entities: {
@@ -3476,7 +3474,6 @@ describe("OpenAI-compatible MCP tools", () => {
             };
           }) => unknown,
         ) =>
-          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
           await callback({
             query: {
               entities: {
@@ -3570,7 +3567,6 @@ describe("OpenAI-compatible MCP tools", () => {
             };
           }) => unknown,
         ) =>
-          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
           await callback({
             query: {
               entities: {
@@ -3631,7 +3627,6 @@ describe("OpenAI-compatible MCP tools", () => {
             update: typeof updateMock;
           }) => unknown,
         ) =>
-          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
           await callback({
             query: {
               entities: {
@@ -3710,7 +3705,6 @@ describe("OpenAI-compatible MCP tools", () => {
             };
           }) => unknown,
         ) =>
-          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
           await callback({
             query: {
               workspaceContacts: {

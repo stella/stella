@@ -51,7 +51,7 @@ let db: ReturnType<typeof connect>;
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the walk expects; the walk
   // only issues reads under this test.
-  // eslint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 /** Same millisecond for every row; only the last three digits differ. */

@@ -24,8 +24,9 @@ const modelId = fc
   .string({ minLength: 1 })
   .filter((value) => !value.includes(":"));
 
-const relevantModel = fc.tuple(provider, modelId).map(
-  ([modelProvider, id]): UpstreamDiscoveryModel => ({
+const relevantModel = fc
+  .tuple(provider, modelId)
+  .map(([modelProvider, id]): UpstreamDiscoveryModel => ({
     provider: modelProvider,
     modelId: id,
     releaseDate: MODEL_DISCOVERY_EPOCH,
@@ -33,8 +34,7 @@ const relevantModel = fc.tuple(provider, modelId).map(
     toolCall: true,
     structuredOutput: true,
     outputModalities: ["text"],
-  }),
-);
+  }));
 
 type IneligibleField =
   | "outputModalities"

@@ -13,14 +13,14 @@ type TextareaProps = React.ComponentProps<"textarea"> & {
   unstyled?: boolean;
 };
 
-function Textarea({
+const Textarea = ({
   className,
   size = "default",
   unstyled = false,
   dir,
   onChange,
   ...props
-}: TextareaProps) {
+}: TextareaProps) => {
   const contentDir = useContentDir({
     dir,
     value: props.value,
@@ -60,6 +60,6 @@ function Textarea({
       />
     </span>
   );
-}
+};
 
 export { Textarea, type TextareaProps };

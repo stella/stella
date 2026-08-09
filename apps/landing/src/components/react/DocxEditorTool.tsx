@@ -121,7 +121,9 @@ export const DocxEditorTool = () => {
             type="file"
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
-            onChange={(event) => void handleFileChange(event)}
+            onChange={(event) => {
+              handleFileChange(event).catch(() => undefined);
+            }}
           />
           {source.kind === "doc" ? (
             <span

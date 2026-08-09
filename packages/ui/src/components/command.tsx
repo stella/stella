@@ -17,44 +17,38 @@ type CommandProps<ItemValue> = Omit<
   items?: readonly ItemValue[] | undefined;
 };
 
-function Command<ItemValue>({
+const Command = <ItemValue,>({
   autoHighlight = "always",
   keepHighlight = true,
   open = true,
   ...props
-}: CommandProps<ItemValue>): React.JSX.Element {
-  return (
-    <AutocompletePrimitive.Root
-      autoHighlight={autoHighlight}
-      keepHighlight={keepHighlight}
-      open={open}
-      {...props}
-    />
-  );
-}
+}: CommandProps<ItemValue>): React.JSX.Element => (
+  <AutocompletePrimitive.Root
+    autoHighlight={autoHighlight}
+    keepHighlight={keepHighlight}
+    open={open}
+    {...props}
+  />
+);
 
 const CommandDialog = DialogPrimitive.Root;
 
-function CommandDialogTrigger(props: DialogPrimitive.Trigger.Props) {
-  return (
-    <DialogPrimitive.Trigger data-slot="command-dialog-trigger" {...props} />
-  );
-}
+const CommandDialogTrigger = (props: DialogPrimitive.Trigger.Props) => (
+  <DialogPrimitive.Trigger data-slot="command-dialog-trigger" {...props} />
+);
 
-function CommandDialogPopup({
+const CommandDialogPopup = ({
   className,
   showCloseButton = false,
   ...props
-}: React.ComponentProps<typeof DialogPopup>) {
-  return (
-    <DialogPopup
-      className={cn("overflow-hidden p-0", className)}
-      data-slot="command-dialog-popup"
-      showCloseButton={showCloseButton}
-      {...props}
-    />
-  );
-}
+}: React.ComponentProps<typeof DialogPopup>) => (
+  <DialogPopup
+    className={cn("overflow-hidden p-0", className)}
+    data-slot="command-dialog-popup"
+    showCloseButton={showCloseButton}
+    {...props}
+  />
+);
 
 type CommandInputProps = Omit<AutocompletePrimitive.Input.Props, "size"> & {
   size?: "sm" | "default" | "lg" | number;
@@ -62,14 +56,14 @@ type CommandInputProps = Omit<AutocompletePrimitive.Input.Props, "size"> & {
   ref?: React.Ref<HTMLInputElement>;
 };
 
-function CommandInput({
+const CommandInput = ({
   className,
   size = "lg",
   wrapperClassName,
   dir,
   onChange,
   ...props
-}: CommandInputProps) {
+}: CommandInputProps) => {
   // Base UI's Autocomplete owns the value at the root, so onChange only fires
   // for native typing — a programmatic value (e.g. a recent search) would not
   // update it. A controlled consumer can therefore pass an explicit
@@ -106,149 +100,126 @@ function CommandInput({
       />
     </div>
   );
-}
+};
 
-function CommandPanel({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn(
-        "bg-popover text-popover-foreground flex min-h-0 flex-col rounded-lg border shadow-lg/5",
-        className,
-      )}
-      data-slot="command-panel"
-      {...props}
-    />
-  );
-}
+const CommandPanel = ({ className, ...props }: React.ComponentProps<"div">) => (
+  <div
+    className={cn(
+      "bg-popover text-popover-foreground flex min-h-0 flex-col rounded-lg border shadow-lg/5",
+      className,
+    )}
+    data-slot="command-panel"
+    {...props}
+  />
+);
 
-function CommandEmpty({
+const CommandEmpty = ({
   className,
   ...props
-}: AutocompletePrimitive.Empty.Props) {
-  return (
-    <AutocompletePrimitive.Empty
-      className={cn(
-        "text-muted-foreground py-6 text-center text-sm",
-        className,
-      )}
-      data-slot="command-empty"
-      {...props}
-    />
-  );
-}
+}: AutocompletePrimitive.Empty.Props) => (
+  <AutocompletePrimitive.Empty
+    className={cn("text-muted-foreground py-6 text-center text-sm", className)}
+    data-slot="command-empty"
+    {...props}
+  />
+);
 
-function CommandList({
+const CommandList = ({
   className,
   ...props
 }: AutocompletePrimitive.List.Props & {
   ref?: React.Ref<HTMLDivElement>;
-}) {
-  return (
-    <AutocompletePrimitive.List
-      className={cn(
-        "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto",
-        className,
-      )}
-      data-slot="command-list"
-      {...props}
-    />
-  );
-}
+}) => (
+  <AutocompletePrimitive.List
+    className={cn(
+      "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto",
+      className,
+    )}
+    data-slot="command-list"
+    {...props}
+  />
+);
 
-function CommandGroup({
+const CommandGroup = ({
   className,
   ...props
-}: AutocompletePrimitive.Group.Props) {
-  return (
-    <AutocompletePrimitive.Group
-      className={cn("text-foreground overflow-hidden p-1", className)}
-      data-slot="command-group"
-      {...props}
-    />
-  );
-}
+}: AutocompletePrimitive.Group.Props) => (
+  <AutocompletePrimitive.Group
+    className={cn("text-foreground overflow-hidden p-1", className)}
+    data-slot="command-group"
+    {...props}
+  />
+);
 
-function CommandGroupLabel({
+const CommandGroupLabel = ({
   className,
   ...props
-}: AutocompletePrimitive.GroupLabel.Props) {
-  return (
-    <AutocompletePrimitive.GroupLabel
-      className={cn(
-        "text-muted-foreground px-2 py-1.5 text-xs font-medium",
-        className,
-      )}
-      data-slot="command-group-label"
-      {...props}
-    />
-  );
-}
+}: AutocompletePrimitive.GroupLabel.Props) => (
+  <AutocompletePrimitive.GroupLabel
+    className={cn(
+      "text-muted-foreground px-2 py-1.5 text-xs font-medium",
+      className,
+    )}
+    data-slot="command-group-label"
+    {...props}
+  />
+);
 
-function CommandCollection(props: AutocompletePrimitive.Collection.Props) {
-  return (
-    <AutocompletePrimitive.Collection
-      data-slot="command-collection"
-      {...props}
-    />
-  );
-}
+const CommandCollection = (props: AutocompletePrimitive.Collection.Props) => (
+  <AutocompletePrimitive.Collection data-slot="command-collection" {...props} />
+);
 
-function CommandItem({
+const CommandItem = ({
   className,
   ...props
 }: AutocompletePrimitive.Item.Props & {
   ref?: React.Ref<HTMLDivElement>;
-}) {
-  return (
-    <AutocompletePrimitive.Item
-      className={cn(
-        "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      data-slot="command-item"
-      {...props}
-    />
-  );
-}
+}) => (
+  <AutocompletePrimitive.Item
+    className={cn(
+      "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+      className,
+    )}
+    data-slot="command-item"
+    {...props}
+  />
+);
 
-function CommandSeparator({
+const CommandSeparator = ({
   className,
   ...props
-}: AutocompletePrimitive.Separator.Props) {
-  return (
-    <AutocompletePrimitive.Separator
-      className={cn("bg-border -mx-1 h-px", className)}
-      data-slot="command-separator"
-      {...props}
-    />
-  );
-}
+}: AutocompletePrimitive.Separator.Props) => (
+  <AutocompletePrimitive.Separator
+    className={cn("bg-border -mx-1 h-px", className)}
+    data-slot="command-separator"
+    {...props}
+  />
+);
 
-function CommandShortcut({
+const CommandShortcut = ({
   className,
   ...props
-}: React.ComponentProps<"span">) {
-  return (
-    <span
-      className={cn("text-muted-foreground ms-auto text-xs", className)}
-      data-slot="command-shortcut"
-      {...props}
-    />
-  );
-}
+}: React.ComponentProps<"span">) => (
+  <span
+    className={cn("text-muted-foreground ms-auto text-xs", className)}
+    data-slot="command-shortcut"
+    {...props}
+  />
+);
 
-function CommandFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn(
-        "text-muted-foreground flex items-center justify-between border-t px-3 py-2 text-xs",
-        className,
-      )}
-      data-slot="command-footer"
-      {...props}
-    />
-  );
-}
+const CommandFooter = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn(
+      "text-muted-foreground flex items-center justify-between border-t px-3 py-2 text-xs",
+      className,
+    )}
+    data-slot="command-footer"
+    {...props}
+  />
+);
 
 export {
   Command,

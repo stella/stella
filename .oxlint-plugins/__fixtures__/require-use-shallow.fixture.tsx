@@ -31,7 +31,7 @@ const fixtureStore = createStore<FixtureState>((set, get) => ({
   getA: () => get().a,
 }));
 
-function FixtureComponent() {
+const FixtureComponent = () => {
   // Implicit-body object literal — MUST flag.
   // oxlint-disable-next-line require-use-shallow/require-use-shallow
   const objectSelector = useFixtureStore((s) => ({ a: s.a, b: s.b }));
@@ -105,6 +105,6 @@ function FixtureComponent() {
       {bareStorePrimitive}
     </div>
   );
-}
+};
 
 export const __requireUseShallowFixture = FixtureComponent;

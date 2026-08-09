@@ -189,7 +189,7 @@ const consumeStream = async (
   }
 };
 
-export function AutocompletePlayground() {
+export const AutocompletePlayground = () => {
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const inflightRef = useRef<AbortController | null>(null);
@@ -447,4 +447,4 @@ export function AutocompletePlayground() {
       </aside>
     </div>
   );
-}
+};

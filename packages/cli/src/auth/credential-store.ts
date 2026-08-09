@@ -117,8 +117,9 @@ const corruptionWarning = (filePath: string, reason: string): string =>
  */
 export const readCredentialFile = async (
   configDir: string,
-  warn: (message: string) => void = (message) =>
-    void process.stderr.write(`${message}\n`),
+  warn: (message: string) => void = (message) => {
+    process.stderr.write(`${message}\n`);
+  },
 ): Promise<CredentialFile> => {
   const filePath = credentialsFilePath(configDir);
 

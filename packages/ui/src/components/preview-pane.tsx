@@ -10,24 +10,22 @@ import { cn } from "@stll/ui/lib/utils";
  * empty (no children) while nothing is highlighted.
  */
 
-function MenuPreviewLayout({
+const MenuPreviewLayout = ({
   children,
   preview,
   className,
 }: React.PropsWithChildren<{
   preview: React.ReactNode;
   className?: string;
-}>) {
-  return (
-    <div
-      className={cn("flex items-stretch", className)}
-      data-slot="menu-preview-layout"
-    >
-      <div className="flex min-w-32 flex-1 flex-col">{children}</div>
-      <div className="ms-1 hidden border-s ps-1 sm:block">{preview}</div>
-    </div>
-  );
-}
+}>) => (
+  <div
+    className={cn("flex items-stretch", className)}
+    data-slot="menu-preview-layout"
+  >
+    <div className="flex min-w-32 flex-1 flex-col">{children}</div>
+    <div className="ms-1 hidden border-s ps-1 sm:block">{preview}</div>
+  </div>
+);
 
 type PreviewPaneProps = React.ComponentProps<"div"> & {
   /**
@@ -37,33 +35,31 @@ type PreviewPaneProps = React.ComponentProps<"div"> & {
   size?: "default" | "thumbnail";
 };
 
-function PreviewPane({
+const PreviewPane = ({
   children,
   className,
   size = "default",
   ...props
-}: PreviewPaneProps) {
-  return (
+}: PreviewPaneProps) => (
+  <div
+    className={cn(
+      "pointer-events-none select-none",
+      size === "thumbnail" ? "w-32" : "w-64 p-2",
+      className,
+    )}
+    data-slot="preview-pane"
+    {...props}
+  >
     <div
+      aria-hidden
       className={cn(
-        "pointer-events-none select-none",
-        size === "thumbnail" ? "w-32" : "w-64 p-2",
-        className,
+        "bg-muted/40 overflow-hidden rounded-md border",
+        size === "thumbnail" ? "h-20 p-1.5" : "h-36 p-2",
       )}
-      data-slot="preview-pane"
-      {...props}
     >
-      <div
-        aria-hidden
-        className={cn(
-          "bg-muted/40 overflow-hidden rounded-md border",
-          size === "thumbnail" ? "h-20 p-1.5" : "h-36 p-2",
-        )}
-      >
-        {children}
-      </div>
+      {children}
     </div>
-  );
-}
+  </div>
+);
 
 export { MenuPreviewLayout, PreviewPane };

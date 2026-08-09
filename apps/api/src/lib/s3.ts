@@ -494,6 +494,7 @@ export const writeS3ObjectWithRetry = async (
       await Bun.sleep(s3WriteRetryDelayMs(attempt));
     }
   }
+  // eslint-disable-next-line no-throw-literal -- preserve the SDK rejection object and its retry/status metadata for callers
   throw lastError;
 };
 

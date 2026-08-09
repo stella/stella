@@ -892,13 +892,13 @@ const getExternalMcpConnectorSlug = (
   return connectorSlug ?? null;
 };
 
-function ToolApprovalLeadingIcon({
+const ToolApprovalLeadingIcon = ({
   iconHref,
   toolName,
 }: {
   iconHref?: string | undefined;
   toolName?: ApprovalToolName | undefined;
-}) {
+}) => {
   if (iconHref) {
     return (
       <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
@@ -918,7 +918,7 @@ function ToolApprovalLeadingIcon({
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;
-}
+};
 
 const findMcpConnectorIconHref = ({
   connectorSlug,

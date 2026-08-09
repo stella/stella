@@ -127,7 +127,7 @@ export const workspace: Product = {
     {
       type: "source",
       path: "apps/desktop/src/mainview/App.tsx",
-      contains: ["export default function App()"],
+      contains: ["const App = () =>", "export default App"],
     },
     {
       type: "source",
