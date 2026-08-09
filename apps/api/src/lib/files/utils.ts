@@ -39,6 +39,7 @@ type ResolveUploadMimeProps = {
 };
 
 const MAX_MIME_EXTENSION_LENGTH = 32;
+const SAFE_MIME_EXTENSION_RE = /^[a-z0-9]{1,32}$/u;
 
 /**
  * Normalize a client-declared upload MIME type: when the browser
@@ -62,6 +63,9 @@ export const resolveUploadMime = ({
   const extension = fileName
     .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
     .toLowerCase();
+  if (!SAFE_MIME_EXTENSION_RE.test(extension)) {
+    return canonicalDeclaredMime;
+  }
   const lookupName = `file.${extension}`;
   return (
     Bun.file(lookupName).type.split(";").at(0)?.trim() || canonicalDeclaredMime

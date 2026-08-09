@@ -138,6 +138,15 @@ describe("resolveUploadMime", () => {
       }),
     ).toBe("application/octet-stream");
   });
+
+  test("rejects unsafe extension characters before MIME lookup", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "evidence.\0pdf",
+      }),
+    ).toBe("application/octet-stream");
+  });
 });
 
 describe("getFileExtension", () => {
