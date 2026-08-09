@@ -1229,7 +1229,11 @@
     "bodyTitle": "El. laiško tekstas",
     "cc": "Kopija",
     "from": "Siuntėjas",
+    "hideQuotedHistory": "Slėpti ankstesnius laiškus",
+    "hideSignature": "Slėpti parašą",
     "noSubject": "(Nėra temos)",
+    "showQuotedHistory": "Rodyti ankstesnius laiškus",
+    "showSignature": "Rodyti parašą",
     "to": "Gavėjai",
     "unnamedAttachment": "Nepavadintas priedas"
   },

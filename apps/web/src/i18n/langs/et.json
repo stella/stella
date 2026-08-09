@@ -1229,7 +1229,11 @@
     "bodyTitle": "E-kirja sisu",
     "cc": "Koopia",
     "from": "Saatja",
+    "hideQuotedHistory": "Peida varasemad kirjad",
+    "hideSignature": "Peida allkiri",
     "noSubject": "(Teema puudub)",
+    "showQuotedHistory": "Kuva varasemad kirjad",
+    "showSignature": "Kuva allkiri",
     "to": "Saajad",
     "unnamedAttachment": "Nimetu manus"
   },

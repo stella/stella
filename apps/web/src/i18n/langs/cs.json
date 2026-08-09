@@ -1229,7 +1229,11 @@
     "bodyTitle": "Tělo e-mailu",
     "cc": "Kopie",
     "from": "Odesílatel",
+    "hideQuotedHistory": "Skrýt předchozí zprávy",
+    "hideSignature": "Skrýt podpis",
     "noSubject": "(Bez předmětu)",
+    "showQuotedHistory": "Zobrazit předchozí zprávy",
+    "showSignature": "Zobrazit podpis",
     "to": "Příjemci",
     "unnamedAttachment": "Nepojmenovaná příloha"
   },

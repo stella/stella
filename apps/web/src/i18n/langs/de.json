@@ -1229,7 +1229,11 @@
     "bodyTitle": "E-Mail-Inhalt",
     "cc": "Kopie",
     "from": "Absender",
+    "hideQuotedHistory": "Vorherige Nachrichten ausblenden",
+    "hideSignature": "Signatur ausblenden",
     "noSubject": "(Kein Betreff)",
+    "showQuotedHistory": "Vorherige Nachrichten anzeigen",
+    "showSignature": "Signatur anzeigen",
     "to": "Empfänger",
     "unnamedAttachment": "Unbenannter Anhang"
   },

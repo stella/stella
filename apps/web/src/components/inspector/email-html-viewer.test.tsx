@@ -10,6 +10,7 @@ import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 
 const FORMATTING_LOCALE = "en-u-nu-arab";
@@ -48,7 +49,12 @@ describe("email viewer", () => {
         },
       ],
       bcc: ["blind@example.org"],
-      bodyHtml: "<p>Message body</p>",
+      bodyFolds: [
+        { id: "fold-0", kind: EMAIL_BODY_FOLD_KIND.quotedHistory },
+        { id: "fold-1", kind: EMAIL_BODY_FOLD_KIND.signature },
+      ],
+      bodyHtml:
+        '<p>Message body</p><details data-stella-email-fold="quoted-history"><summary data-stella-email-fold-summary="fold-0"></summary><blockquote>Previous message</blockquote></details><details data-stella-email-fold="signature"><summary data-stella-email-fold-summary="fold-1"></summary><p>Kind regards</p></details>',
       cc: ["copy@example.org"],
       date: "Mon, 02 Jun 2026 10:00:00 +0000",
       from: "Sender <sender@example.org>",
@@ -73,6 +79,12 @@ describe("email viewer", () => {
     expect(html).toContain('sandbox=""');
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
+    expect(html).toContain("Show previous messages");
+    expect(html).toContain("Hide previous messages");
+    expect(html).toContain("Previous message");
+    expect(html).toContain("Show signature");
+    expect(html).toContain("Hide signature");
+    expect(html).toContain("Kind regards");
     expect(html).not.toContain("href=");
     expect(html).not.toContain("<button");
   });

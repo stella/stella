@@ -1229,7 +1229,11 @@
     "bodyTitle": "Corps de l’e-mail",
     "cc": "Copie",
     "from": "Expéditeur",
+    "hideQuotedHistory": "Masquer les messages précédents",
+    "hideSignature": "Masquer la signature",
     "noSubject": "(Sans objet)",
+    "showQuotedHistory": "Afficher les messages précédents",
+    "showSignature": "Afficher la signature",
     "to": "Destinataires",
     "unnamedAttachment": "Pièce jointe sans nom"
   },

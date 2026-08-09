@@ -1229,7 +1229,11 @@
     "bodyTitle": "E-mail törzse",
     "cc": "Másolat",
     "from": "Feladó",
+    "hideQuotedHistory": "Korábbi üzenetek elrejtése",
+    "hideSignature": "Aláírás elrejtése",
     "noSubject": "(Nincs tárgy)",
+    "showQuotedHistory": "Korábbi üzenetek megjelenítése",
+    "showSignature": "Aláírás megjelenítése",
     "to": "Címzettek",
     "unnamedAttachment": "Névtelen melléklet"
   },
