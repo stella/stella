@@ -27,6 +27,7 @@ declare const spreadPolicyOverride: {
   };
 };
 declare const spreadRedirectOverride: { redirect?: RequestRedirect };
+declare const mutateTarget: (target: URL, hostname: string) => void;
 
 export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a parameter has no proven destination origin
@@ -83,6 +84,25 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   urlAlias.hostname = inputUrl;
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a URL through an alias invalidates the original binding's proof
   await fetchWithTimeout(originalUrl, { timeoutMs: 1000 });
+
+  const escapedUrl = new URL("https://api.example.com/items");
+  mutateTarget(escapedUrl, inputUrl);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a mutable URL passed to an unknown helper can have its authority changed
+  await fetchWithTimeout(escapedUrl, { timeoutMs: 1000 });
+
+  const containedUrl = new URL("https://api.example.com/items");
+  const holder = { target: containedUrl };
+  holder.target.hostname = inputUrl;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: storing a mutable URL in a container lets the container mutate its authority
+  await fetchWithTimeout(containedUrl, { timeoutMs: 1000 });
+
+  const request = fetchWithTimeout;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable local aliases of imported fetch wrappers remain network sinks
+  await request(inputUrl, { timeoutMs: 1000 });
+
+  const globalRequest = globalThis.fetch;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable local aliases of global fetch remain network sinks
+  await globalRequest(inputUrl, { signal });
 
   const mutableOrigins = ["https://provider.example"];
   mutableOrigins.push(new URL(inputUrl).origin);

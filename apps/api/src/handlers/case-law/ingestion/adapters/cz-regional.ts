@@ -429,7 +429,6 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       caseNumber,
     });
-    return null;
   }
 
   return {

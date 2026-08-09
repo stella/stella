@@ -205,6 +205,12 @@ describe("case-law adapter nullish optionals", () => {
               soud: "Krajsky soud v Brne",
               datumVydani: "2024-03-07",
             },
+            {
+              jednaciCislo: "15 Co 4/2024",
+              soud: "Krajsky soud v Brne",
+              datumVydani: "2024-03-08",
+              odkaz: "http://rozhodnuti.justice.cz/api/finaldoc/legacy",
+            },
           ],
           totalPages: 1,
           pageNumber: 0,
@@ -219,6 +225,7 @@ describe("case-law adapter nullish optionals", () => {
     expect(decisions.map(({ caseNumber }) => caseNumber)).toEqual([
       "15 Co 2/2024",
       "15 Co 3/2024",
+      "15 Co 4/2024",
     ]);
     expect(decisions.every(({ sourceUrl }) => sourceUrl === undefined)).toBe(
       true,

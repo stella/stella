@@ -228,9 +228,7 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const aliasVariableForReference = (
-          identifier: AstNode,
-        ): ScopeVariable | null => {
+        const outerTransparentExpression = (identifier: AstNode): AstNode => {
           let current = identifier;
           while (true) {
             const parent = current.parent;
@@ -247,11 +245,17 @@ export default eslintCompatPlugin({
             }
             current = parent;
           }
-          const declarator = current.parent;
+          return current;
+        };
+
+        const aliasVariableForReference = (
+          expression: AstNode,
+        ): ScopeVariable | null => {
+          const declarator = expression.parent;
           if (
             !isAstNode(declarator) ||
             declarator.type !== "VariableDeclarator" ||
-            declarator.init !== current ||
+            declarator.init !== expression ||
             !isEstreeIdentifier(declarator.id)
           ) {
             return null;
@@ -273,15 +277,43 @@ export default eslintCompatPlugin({
             if (!isAstNode(identifier)) {
               return false;
             }
-            const member = identifier.parent;
+            const expression = outerTransparentExpression(identifier);
+            const member = expression.parent;
             if (
               !isAstNode(member) ||
               member.type !== "MemberExpression" ||
-              member.object !== identifier
+              member.object !== expression
             ) {
-              const alias = aliasVariableForReference(identifier);
+              const alias = aliasVariableForReference(expression);
+              if (
+                alias !== null &&
+                variableHasOriginMutation(alias, nextVisited)
+              ) {
+                return true;
+              }
+              const parent = expression.parent;
+              if (
+                isAstNode(parent) &&
+                (parent.type === "CallExpression" ||
+                  parent.type === "NewExpression") &&
+                Array.isArray(parent.arguments) &&
+                parent.arguments.includes(expression)
+              ) {
+                return !(
+                  parent.type === "CallExpression" &&
+                  parent.arguments.at(0) === expression &&
+                  (isImportedFetchSink(parent.callee) ||
+                    isGlobalFetchSink(parent.callee))
+                );
+              }
               return (
-                alias !== null && variableHasOriginMutation(alias, nextVisited)
+                isAstNode(parent) &&
+                ((parent.type === "ArrayExpression" &&
+                  Array.isArray(parent.elements) &&
+                  parent.elements.includes(expression)) ||
+                  (parent.type === "Property" && parent.value === expression) ||
+                  (parent.type === "AssignmentExpression" &&
+                    parent.right === expression))
               );
             }
             const propertyName =
@@ -371,6 +403,56 @@ export default eslintCompatPlugin({
             return false;
           });
 
+        const isMutableUrlValue = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (expression === null) {
+            return false;
+          }
+          if (
+            expression.type === "NewExpression" &&
+            isIdentifier(expression.callee, "URL")
+          ) {
+            return true;
+          }
+          if (expression.type === "ConditionalExpression") {
+            return (
+              isMutableUrlValue(expression.consequent, visited) ||
+              isMutableUrlValue(expression.alternate, visited)
+            );
+          }
+          if (isEstreeIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visited.has(variable)) {
+              return false;
+            }
+            const initializer = stableInitializer(variable);
+            if (initializer === null) {
+              return false;
+            }
+            const nextVisited = new Set(visited);
+            nextVisited.add(variable);
+            return isMutableUrlValue(initializer, nextVisited);
+          }
+          if (
+            expression.type === "CallExpression" &&
+            isEstreeIdentifier(expression.callee)
+          ) {
+            const imported = importInfo(resolveVariable(expression.callee));
+            return (
+              (imported?.source === TRUSTED_RESTRICTION_MODULE &&
+                imported.importedName === TRUSTED_RESTRICTION_HELPER) ||
+              (imported !== null &&
+                TRUSTED_PROVIDER_RESTRICTIONS.get(imported.source)?.has(
+                  imported.importedName,
+                ) === true)
+            );
+          }
+          return false;
+        };
+
         const staticPattern = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
@@ -422,11 +504,7 @@ export default eslintCompatPlugin({
           }
           if (isEstreeIdentifier(expression)) {
             const variable = resolveVariable(expression);
-            if (
-              variable === null ||
-              visited.has(variable) ||
-              variableHasOriginMutation(variable)
-            ) {
+            if (variable === null || visited.has(variable)) {
               return null;
             }
             const initializer = stableInitializer(variable);
@@ -435,6 +513,12 @@ export default eslintCompatPlugin({
             }
             const nextVisited = new Set(visited);
             nextVisited.add(variable);
+            if (
+              isMutableUrlValue(initializer, nextVisited) &&
+              variableHasOriginMutation(variable)
+            ) {
+              return null;
+            }
             return staticPattern(initializer, nextVisited);
           }
           if (expression.type === "ConditionalExpression") {
@@ -719,27 +803,45 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const isImportedFetchSink = (callee: unknown): boolean => {
-          if (!isEstreeIdentifier(callee)) {
+        const isImportedFetchSink = (
+          callee: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          const expression = unwrapExpression(callee);
+          if (!isEstreeIdentifier(expression)) {
             return false;
           }
-          const imported = importInfo(resolveVariable(callee));
-          if (imported === null) {
-            return false;
-          }
-          let source = imported.source.replace(/\.[cm]?[jt]sx?$/u, "");
-          if (source.startsWith("@/api/")) {
-            source = `apps/api/src/${source.slice("@/api/".length)}`;
-          } else if (source.startsWith(".")) {
-            source = normalizePath(
-              path.resolve(path.dirname(filename), source),
-            );
-            const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
-            if (apiSourceIndex >= 0) {
-              source = source.slice(apiSourceIndex + 1);
+          const variable = resolveVariable(expression);
+          const imported = importInfo(variable);
+          if (imported !== null) {
+            let source = imported.source.replace(/\.[cm]?[jt]sx?$/u, "");
+            if (source.startsWith("@/api/")) {
+              source = `apps/api/src/${source.slice("@/api/".length)}`;
+            } else if (source.startsWith(".")) {
+              source = normalizePath(
+                path.resolve(path.dirname(filename), source),
+              );
+              const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
+              if (apiSourceIndex >= 0) {
+                source = source.slice(apiSourceIndex + 1);
+              }
+            }
+            if (
+              FETCH_MODULES.get(source)?.has(imported.importedName) === true
+            ) {
+              return true;
             }
           }
-          return FETCH_MODULES.get(source)?.has(imported.importedName) === true;
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          const initializer = stableInitializer(variable);
+          if (initializer === null) {
+            return false;
+          }
+          const nextVisited = new Set(visited);
+          nextVisited.add(variable);
+          return isImportedFetchSink(initializer, nextVisited);
         };
 
         const isGlobalReference = (identifier: IdentifierNode): boolean => {
@@ -750,10 +852,26 @@ export default eslintCompatPlugin({
           return variable === null || variable.defs.length === 0;
         };
 
-        const isGlobalFetchSink = (callee: unknown): boolean => {
+        const isGlobalFetchSink = (
+          callee: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
           const expression = unwrapExpression(callee);
           if (isEstreeIdentifier(expression)) {
-            return expression.name === "fetch" && isGlobalReference(expression);
+            if (expression.name === "fetch" && isGlobalReference(expression)) {
+              return true;
+            }
+            const variable = resolveVariable(expression);
+            if (variable === null || visited.has(variable)) {
+              return false;
+            }
+            const initializer = stableInitializer(variable);
+            if (initializer === null) {
+              return false;
+            }
+            const nextVisited = new Set(visited);
+            nextVisited.add(variable);
+            return isGlobalFetchSink(initializer, nextVisited);
           }
           if (
             expression?.type !== "MemberExpression" ||
