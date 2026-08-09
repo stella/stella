@@ -99,12 +99,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             name: t("tasks.untitled"),
           };
 
-      const response = await api
+      const { data: taskData, error: taskError } = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put(body);
 
-      const entityId = response.data?.entityId;
-      if (response.error || !entityId) {
+      const entityId = taskData?.entityId;
+      if (taskError || !entityId) {
         stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",

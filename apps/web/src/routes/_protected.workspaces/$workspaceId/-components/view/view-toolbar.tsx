@@ -607,14 +607,14 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   const handleAutoRun = async () => {
     setIsAutoRunning(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .playbooks["auto-run"].post({
-            queryKey: propertiesKeys.all(workspaceId),
-          }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const { data, error } = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .playbooks["auto-run"].post({
+          queryKey: propertiesKeys.all(workspaceId),
+        });
+      return { data, error };
+    });
     setIsAutoRunning(false);
 
     if (Result.isError(result)) {
@@ -655,13 +655,13 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   const handleRun = async (playbookId: string) => {
     setRunningPlaybookId(playbookId);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-          .run.post({ queryKey: propertiesKeys.all(workspaceId) }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const { data, error } = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+        .run.post({ queryKey: propertiesKeys.all(workspaceId) });
+      return { data, error };
+    });
     setRunningPlaybookId(null);
 
     if (Result.isError(result)) {

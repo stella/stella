@@ -90,20 +90,20 @@ export const CopyToMatterDialog = ({
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential copy/move mutations share query-key cache invalidation and move semantics (deleteSource); concurrent mutations would race and risk rate limits
-      const result = await Result.tryPromise(
-        async () =>
-          await api
-            .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
-            ["copy-to-workspace"].post({
-              queryKey: entitiesKeys.all(sourceWorkspaceId),
-              entityId: toSafeId<"entity">(entityId),
-              targetWorkspaceId: toSafeId<"workspace">(targetWorkspaceId),
-              targetParentId: targetParentId
-                ? toSafeId<"entity">(targetParentId)
-                : null,
-              deleteSource: mode === "move",
-            }),
-      );
+      const result = await Result.tryPromise(async () => {
+        const { data, error } = await api
+          .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
+          ["copy-to-workspace"].post({
+            queryKey: entitiesKeys.all(sourceWorkspaceId),
+            entityId: toSafeId<"entity">(entityId),
+            targetWorkspaceId: toSafeId<"workspace">(targetWorkspaceId),
+            targetParentId: targetParentId
+              ? toSafeId<"entity">(targetParentId)
+              : null,
+            deleteSource: mode === "move",
+          });
+        return { data, error };
+      });
 
       if (Result.isError(result)) {
         failedCount++;

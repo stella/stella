@@ -80,20 +80,20 @@ export const useChatModelSelection = ({
     selection: PersistedChatModelSelection,
   ): Promise<Result<void, ModelPersistError>> => {
     const requestId = ++requestIdRef.current;
-    const result = await Result.tryPromise(
-      async () =>
-        await api.chat
-          .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-          .model.patch(selection, {
-            query:
-              threadRef.scope === "workspace"
-                ? {
-                    workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
-                  }
-                : {},
-            fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
-          }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const { data, error } = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+        .model.patch(selection, {
+          query:
+            threadRef.scope === "workspace"
+              ? {
+                  workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+                }
+              : {},
+          fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
+        });
+      return { data, error };
+    });
     // A stale response (a newer selection has already been issued): never
     // toast for it and never touch the cache -- the newer request owns
     // both once it settles.
