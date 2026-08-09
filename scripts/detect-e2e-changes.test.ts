@@ -198,7 +198,9 @@ describe("detect-e2e-changes", () => {
   });
 
   test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
-    expect(e2eStackSetup).toContain("value: ${{ steps.stack.outputs.status }}");
+    expect(e2eStackSetup).toContain(
+      `value: ${githubExpression("steps.stack.outputs.status")}`,
+    );
     expect(e2eStackSetup).toContain(
       "grep -Eqi 'toomanyrequests:.*pull rate limit'",
     );
