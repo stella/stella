@@ -37,6 +37,7 @@ import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
 const PRESENTATION_TRAILING_PADDING_PX = 112;
+const SPREADSHEET_FORMULA_SYMBOL = "fx";
 
 type OfficeFileViewerProps = {
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
@@ -178,8 +179,7 @@ export const OfficeFileViewer = ({
               aria-hidden="true"
               className="text-muted-foreground px-3 font-serif text-sm italic"
             >
-              {/* oxlint-disable-next-line no-untranslated-jsx-literal/no-untranslated-jsx-literal -- conventional formula-bar symbol */}
-              fx
+              {SPREADSHEET_FORMULA_SYMBOL}
             </span>
             <input
               aria-label={t("common.formula")}
