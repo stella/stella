@@ -33,6 +33,7 @@ describe("active-file model source", () => {
         type: "extracted-text",
         fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
         fileName: "office-file",
+        knownSizeBytes: 123,
         mimeType,
       });
     }
@@ -43,6 +44,7 @@ describe("active-file model source", () => {
       type: "pdf",
       fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
       fileName: "office-file",
+      knownSizeBytes: 123,
       mimeType: PDF_MIME_TYPE,
     });
 
@@ -55,6 +57,7 @@ describe("active-file model source", () => {
       type: "pdf",
       fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f45",
       fileName: "office-file",
+      knownSizeBytes: null,
       mimeType: PDF_MIME_TYPE,
     });
   });
@@ -70,12 +73,20 @@ describe("active-file model source", () => {
 
   test("uses durable extraction only for the exact current version", () => {
     const content = fileContent(XLSX_MIME_TYPE);
+    const extractedContent = {
+      charCount: 10,
+      sourceEntityVersionId: "version-current",
+      sourceFieldId: "field-current",
+      sourceFileId: content.id,
+      sourceSha256Hex: content.sha256Hex,
+    };
 
     expect(
       getActiveFileModelBinding({
         content,
         currentVersionId: "version-current",
-        extractedCharCount: 10,
+        extractedContent,
+        fieldId: "field-current",
         fieldVersionId: "version-current",
       }),
     ).toEqual({ type: "durable-current" });
@@ -84,7 +95,8 @@ describe("active-file model source", () => {
       getActiveFileModelBinding({
         content,
         currentVersionId: "version-current",
-        extractedCharCount: 10,
+        extractedContent,
+        fieldId: "field-current",
         fieldVersionId: "version-historical",
       }),
     ).toEqual({
@@ -93,9 +105,37 @@ describe("active-file model source", () => {
         type: "extracted-text",
         fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
         fileName: "office-file",
+        knownSizeBytes: 123,
         mimeType: XLSX_MIME_TYPE,
       },
       version: "historical",
     });
+
+    for (const mismatchedExtraction of [
+      { ...extractedContent, sourceEntityVersionId: "version-previous" },
+      { ...extractedContent, sourceFieldId: "field-other" },
+      { ...extractedContent, sourceFileId: "file-other" },
+      { ...extractedContent, sourceSha256Hex: "b".repeat(64) },
+    ]) {
+      expect(
+        getActiveFileModelBinding({
+          content,
+          currentVersionId: "version-current",
+          extractedContent: mismatchedExtraction,
+          fieldId: "field-current",
+          fieldVersionId: "version-current",
+        }),
+      ).toEqual({
+        type: "direct",
+        source: {
+          type: "extracted-text",
+          fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
+          fileName: "office-file",
+          knownSizeBytes: 123,
+          mimeType: XLSX_MIME_TYPE,
+        },
+        version: "current",
+      });
+    }
   });
 });

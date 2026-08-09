@@ -12,7 +12,8 @@ export type NativeOfficeViewerFormat = "pptx" | "xlsx";
 export const getNativeOfficeViewerFormat = (
   mimeType: string | null | undefined,
 ): NativeOfficeViewerFormat | null => {
-  switch (desktopEditFileTypeForMimeType(mimeType ?? "")) {
+  const fileType = desktopEditFileTypeForMimeType(mimeType ?? "");
+  switch (fileType) {
     case "xlsx":
       return "xlsx";
     case "pptx":
@@ -20,6 +21,8 @@ export const getNativeOfficeViewerFormat = (
     case "docx":
     case null:
       return null;
+    default:
+      return fileType satisfies never;
   }
 };
 

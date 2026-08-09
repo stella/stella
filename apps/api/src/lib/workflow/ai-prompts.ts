@@ -177,8 +177,12 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
           : "Do not invent a filename or citation for an extracted-text " +
             "source.",
         `Citable filenames:\n${filenamesList || "- none"}`,
-        'For each statement, write concise supporting text in "text" ' +
-          'and the matching citations in "citations".',
+        ...(hasCitableFiles
+          ? [
+              'For each statement, write concise supporting text in "text" ' +
+                'and the matching citations in "citations".',
+            ]
+          : []),
         ...citationGuide,
         "Do not include markup, HTML, Markdown, or narrative outside " +
           "the object.",

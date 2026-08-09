@@ -156,7 +156,7 @@ export const OfficeFileViewer = ({
     >
       <div
         aria-label={fileName}
-        className="bg-muted flex h-full min-h-0 w-full flex-col overflow-hidden outline-none"
+        className="bg-muted focus-visible:ring-ring flex h-full min-h-0 w-full flex-col overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset"
         onKeyDownCapture={handleEditIntentKeyDown}
         onPointerDownCapture={handleViewerPointerDown}
         role="document"
@@ -165,7 +165,7 @@ export const OfficeFileViewer = ({
             ? { paddingBlockEnd: OFFICE_AI_DOCK_CLEARANCE_PX }
             : undefined
         }
-        tabIndex={-1}
+        tabIndex={0}
       >
         {format === "xlsx" && (
           <div

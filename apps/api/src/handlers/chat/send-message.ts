@@ -191,6 +191,7 @@ import {
 } from "@/api/lib/limits";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileText } from "@/api/lib/search/extract-content";
@@ -2378,7 +2379,12 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
             type: "text",
             content: `The exact ${activeFileFallback.sourceVersion} version of the active file "${activeFileFallback.fileName}" is attached as extracted text. Use this text for the current question instead of entity-level retrieval.${activeFileFallback.truncated ? " The attachment is truncated to the first available window." : ""}`,
           },
-          { type: "text", content: activeFileFallback.content },
+          {
+            type: "text",
+            content: sanitizeForPrompt(
+              untrustedText(activeFileFallback.content),
+            ),
+          },
         );
         break;
       default:
@@ -2424,7 +2430,15 @@ const resolveActiveFileModelBinding = async ({
                 entity: {
                   columns: { currentVersionId: true, id: true },
                   with: {
-                    extractedContent: { columns: { charCount: true } },
+                    extractedContent: {
+                      columns: {
+                        charCount: true,
+                        sourceEntityVersionId: true,
+                        sourceFieldId: true,
+                        sourceFileId: true,
+                        sourceSha256Hex: true,
+                      },
+                    },
                   },
                 },
               },
@@ -2454,8 +2468,8 @@ const resolveActiveFileModelBinding = async ({
       getActiveFileModelBinding({
         content: field.content,
         currentVersionId: field.entityVersion.entity.currentVersionId,
-        extractedCharCount:
-          field.entityVersion.entity.extractedContent?.charCount ?? null,
+        extractedContent: field.entityVersion.entity.extractedContent ?? null,
+        fieldId: fileFieldId,
         fieldVersionId: field.entityVersion.id,
       }),
     );
@@ -2483,6 +2497,12 @@ type ActiveFileFallbackForModel =
       truncated: boolean;
     };
 
+const activeFileSizeLimitError = () =>
+  new HandlerError({
+    status: 422,
+    message: `Active file exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
+  });
+
 const readActiveFileFallbackForModel = async ({
   organizationId,
   source,
@@ -2492,6 +2512,13 @@ const readActiveFileFallbackForModel = async ({
   Result<ActiveFileFallbackForModel | null, HandlerError<422 | 500>>
 > =>
   await Result.gen(async function* () {
+    if (
+      source.knownSizeBytes !== null &&
+      source.knownSizeBytes > FILE_SIZE_LIMIT_BYTES.chatContextFile
+    ) {
+      return Result.err(activeFileSizeLimitError());
+    }
+
     const s3Key = createFileKey({
       organizationId,
       workspaceId,
@@ -2509,6 +2536,10 @@ const readActiveFileFallbackForModel = async ({
           }),
       }),
     );
+    if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
+      return Result.err(activeFileSizeLimitError());
+    }
+
     if (source.type === "extracted-text") {
       const extracted = await extractFileText(buffer, source.mimeType, {
         feature: "active-file-fallback",
@@ -2527,15 +2558,6 @@ const readActiveFileFallbackForModel = async ({
     }
 
     const bytes = new Uint8Array(buffer);
-    if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `Active PDF exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
-        }),
-      );
-    }
-
     const fallback: ActiveFileFallbackForModel = {
       type: "pdf",
       bytes,

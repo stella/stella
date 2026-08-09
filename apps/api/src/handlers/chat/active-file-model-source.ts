@@ -9,12 +9,14 @@ export type ActiveFileSourceForModel =
       fileId: string;
       fileName: string;
       mimeType: typeof PDF_MIME_TYPE;
+      knownSizeBytes: number | null;
     }
   | {
       type: "extracted-text";
       fileId: string;
       fileName: string;
       mimeType: string;
+      knownSizeBytes: number;
     };
 
 export type ActiveFileModelBinding =
@@ -37,6 +39,7 @@ export const getActiveFileSourceForModel = (
       type: "pdf",
       fileId: content.id,
       fileName: content.fileName,
+      knownSizeBytes: content.sizeBytes,
       mimeType: PDF_MIME_TYPE,
     };
   }
@@ -46,6 +49,7 @@ export const getActiveFileSourceForModel = (
       type: "pdf",
       fileId: content.pdfFileId,
       fileName: content.fileName,
+      knownSizeBytes: null,
       mimeType: PDF_MIME_TYPE,
     };
   }
@@ -56,22 +60,33 @@ export const getActiveFileSourceForModel = (
         type: "extracted-text",
         fileId: content.id,
         fileName: content.fileName,
+        knownSizeBytes: content.sizeBytes,
         mimeType: content.mimeType,
       }
     : null;
 };
 
+type ActiveFileExtractedContent = {
+  charCount: number;
+  sourceEntityVersionId: string | null;
+  sourceFieldId: string | null;
+  sourceFileId: string | null;
+  sourceSha256Hex: string | null;
+};
+
 type GetActiveFileModelBindingOptions = {
   content: Extract<FieldContent, { type: "file" }>;
   currentVersionId: string | null;
-  extractedCharCount: number | null;
+  extractedContent: ActiveFileExtractedContent | null;
+  fieldId: string;
   fieldVersionId: string;
 };
 
 export const getActiveFileModelBinding = ({
   content,
   currentVersionId,
-  extractedCharCount,
+  extractedContent,
+  fieldId,
   fieldVersionId,
 }: GetActiveFileModelBindingOptions): ActiveFileModelBinding | null => {
   const source = getActiveFileSourceForModel(content);
@@ -81,7 +96,15 @@ export const getActiveFileModelBinding = ({
 
   const version =
     currentVersionId === fieldVersionId ? "current" : "historical";
-  if (version === "current" && (extractedCharCount ?? 0) > 0) {
+  const hasExactCurrentExtraction =
+    version === "current" &&
+    extractedContent !== null &&
+    extractedContent.charCount > 0 &&
+    extractedContent.sourceEntityVersionId === fieldVersionId &&
+    extractedContent.sourceFieldId === fieldId &&
+    extractedContent.sourceFileId === content.id &&
+    extractedContent.sourceSha256Hex === content.sha256Hex;
+  if (hasExactCurrentExtraction) {
     return { type: "durable-current" };
   }
 

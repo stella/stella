@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import { decidePdfDerivativeAction } from "./file-derivative-decision";
 
@@ -53,6 +54,17 @@ describe("decidePdfDerivativeAction", () => {
       fileName: "report.pdf",
     });
     expect(decidePdfDerivativeAction(content)).toEqual({ type: "skip" });
+  });
+
+  it("skips native Office files", () => {
+    for (const { fileName, mimeType } of [
+      { fileName: "schedule.xlsx", mimeType: XLSX_MIME_TYPE },
+      { fileName: "presentation.pptx", mimeType: PPTX_MIME_TYPE },
+    ]) {
+      expect(
+        decidePdfDerivativeAction(fileContent({ mimeType, fileName })),
+      ).toEqual({ type: "skip" });
+    }
   });
 
   it("skips encrypted files", () => {
