@@ -97,6 +97,13 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a stable computed authority key invalidates the URL's static proof
   await fetchWithTimeout(computedMutationUrl, { timeoutMs: 1000 });
 
+  const overriddenStringifier = new URL("https://api.example.com/items");
+  overriddenStringifier.toString = () => inputUrl;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: replacing a URL's stringifier invalidates its fixed-origin proof
+  await fetchWithTimeout(overriddenStringifier.toString(), {
+    timeoutMs: 1000,
+  });
+
   const escapedUrl = new URL("https://api.example.com/items");
   mutateTarget(escapedUrl, inputUrl);
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a mutable URL passed to an unknown helper can have its authority changed
@@ -122,6 +129,16 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   const namespaceRequest = http.fetchWithTimeout;
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable aliases of namespace-imported wrappers remain network sinks
   await namespaceRequest(inputUrl, { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.call cannot bypass target analysis
+  await fetchWithTimeout.call(undefined, inputUrl, { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.apply cannot bypass target analysis
+  await fetchWithTimeout.apply(undefined, [inputUrl, { timeoutMs: 1000 }]);
+
+  const boundRequest = fetchWithTimeout.bind(undefined);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a bound fetch wrapper remains a network sink
+  await boundRequest(inputUrl, { timeoutMs: 1000 });
 
   const mutableOrigins = ["https://provider.example"];
   mutableOrigins.push(new URL(inputUrl).origin);

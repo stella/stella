@@ -80,6 +80,7 @@ const URL_ORIGIN_PROPERTIES = new Set([
   "password",
   "port",
   "protocol",
+  "toString",
   "username",
 ]);
 
@@ -784,14 +785,8 @@ export default eslintCompatPlugin({
           return paths !== null && paths.every((path) => path.startsWith("/"));
         };
 
-        const rejectsRedirects = (call: AstNode): boolean => {
-          if (!Array.isArray(call.arguments)) {
-            return false;
-          }
-          const options = resolveObjectExpression(
-            call.arguments.at(1),
-            new Set(),
-          );
+        const rejectsRedirects = (optionsNode: unknown): boolean => {
+          const options = resolveObjectExpression(optionsNode, new Set());
           return (
             options !== null &&
             staticPattern(objectPropertyValue(options, "redirect")) === "error"
@@ -867,6 +862,18 @@ export default eslintCompatPlugin({
         ): boolean => {
           const expression = unwrapExpression(callee);
           if (
+            expression?.type === "CallExpression" &&
+            isAstNode(expression.callee) &&
+            expression.callee.type === "MemberExpression" &&
+            ((expression.callee.computed === false &&
+              getPropertyName(expression.callee.property) === "bind") ||
+              (expression.callee.computed === true &&
+                isStringLiteral(expression.callee.property) &&
+                expression.callee.property.value === "bind"))
+          ) {
+            return isImportedFetchSink(expression.callee.object, visited);
+          }
+          if (
             expression?.type === "MemberExpression" &&
             isEstreeIdentifier(expression.object)
           ) {
@@ -926,6 +933,18 @@ export default eslintCompatPlugin({
           visited = new Set<ScopeVariable>(),
         ): boolean => {
           const expression = unwrapExpression(callee);
+          if (
+            expression?.type === "CallExpression" &&
+            isAstNode(expression.callee) &&
+            expression.callee.type === "MemberExpression" &&
+            ((expression.callee.computed === false &&
+              getPropertyName(expression.callee.property) === "bind") ||
+              (expression.callee.computed === true &&
+                isStringLiteral(expression.callee.property) &&
+                expression.callee.property.value === "bind"))
+          ) {
+            return isGlobalFetchSink(expression.callee.object, visited);
+          }
           if (isEstreeIdentifier(expression)) {
             if (expression.name === "fetch" && isGlobalReference(expression)) {
               return true;
@@ -994,14 +1013,51 @@ export default eslintCompatPlugin({
             if (
               fileIsAllowed ||
               !isAstNode(node) ||
-              !Array.isArray(node.arguments) ||
-              node.arguments.length === 0 ||
-              (!isImportedFetchSink(node.callee) &&
-                !isGlobalFetchSink(node.callee))
+              !Array.isArray(node.arguments)
             ) {
               return;
             }
-            const target = node.arguments.at(0);
+            let target: unknown;
+            let requestOptions: unknown;
+            if (
+              isImportedFetchSink(node.callee) ||
+              isGlobalFetchSink(node.callee)
+            ) {
+              target = node.arguments.at(0);
+              requestOptions = node.arguments.at(1);
+            } else {
+              const callee = unwrapExpression(node.callee);
+              if (
+                callee?.type !== "MemberExpression" ||
+                (!isImportedFetchSink(callee.object) &&
+                  !isGlobalFetchSink(callee.object))
+              ) {
+                return;
+              }
+              const invocation =
+                callee.computed === false
+                  ? getPropertyName(callee.property)
+                  : isStringLiteral(callee.property)
+                    ? callee.property.value
+                    : null;
+              if (invocation === "call") {
+                target = node.arguments.at(1);
+                requestOptions = node.arguments.at(2);
+              } else if (invocation === "apply") {
+                const appliedArguments = unwrapExpression(node.arguments.at(1));
+                if (
+                  appliedArguments?.type === "ArrayExpression" &&
+                  Array.isArray(appliedArguments.elements)
+                ) {
+                  target = appliedArguments.elements.at(0);
+                  requestOptions = appliedArguments.elements.at(1);
+                } else {
+                  target = node.arguments.at(1);
+                }
+              } else {
+                return;
+              }
+            }
             const pattern = staticPattern(target);
             if (pattern === null || !hasFixedOrigin(pattern)) {
               context.report({
@@ -1012,7 +1068,7 @@ export default eslintCompatPlugin({
             }
             if (
               pattern.startsWith(`${RESTRICTED_TARGET_ORIGIN}/`) &&
-              !rejectsRedirects(node)
+              !rejectsRedirects(requestOptions)
             ) {
               context.report({
                 node,
