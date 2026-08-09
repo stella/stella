@@ -11,19 +11,29 @@ import {
 
 import {
   ENTITY_PRIORITIES as TASK_PRIORITIES,
+  isListItemType,
   isEntityPriority as isTaskPriority,
+  LIST_ITEM_TYPES,
   isTaskStatus,
   TASK_STATUSES,
 } from "@stll/api-contract";
 import type {
   EntityPriority as TaskPriority,
+  ListItemType,
   TaskStatus,
 } from "@stll/api-contract";
 
 import type { TranslationKey } from "@/i18n/types";
 
-export { isTaskPriority, isTaskStatus, TASK_PRIORITIES, TASK_STATUSES };
-export type { TaskPriority, TaskStatus };
+export {
+  isListItemType,
+  isTaskPriority,
+  isTaskStatus,
+  LIST_ITEM_TYPES,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+};
+export type { ListItemType, TaskPriority, TaskStatus };
 
 /** Normalize a date value that may be a Date object (Eden
  *  transforms `format: "date"`) or a YYYY-MM-DD string. */
@@ -40,16 +50,6 @@ export const toISODate = (v: string | Date | null | undefined): string => {
   return v.slice(0, 10);
 };
 
-export const LIST_ITEM_TYPES = [
-  "task",
-  "fact",
-  "issue",
-  "requirement",
-  "event",
-] as const;
-
-export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
-
 export const ITEM_TYPE_TRANSLATION_KEYS = {
   event: "common.itemTypeValues.event",
   fact: "memory.kinds.fact",
@@ -57,13 +57,6 @@ export const ITEM_TYPE_TRANSLATION_KEYS = {
   requirement: "common.itemTypeValues.requirement",
   task: "search.kinds.task",
 } as const satisfies Record<ListItemType, TranslationKey>;
-
-export const isListItemType = (
-  value: string | null | undefined,
-): value is ListItemType =>
-  value !== null &&
-  value !== undefined &&
-  LIST_ITEM_TYPES.some((itemType) => itemType === value);
 
 export const STATUS_ICONS = {
   open: CircleIcon,

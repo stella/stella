@@ -1,6 +1,8 @@
 import { v7 as uuidv7 } from "uuid";
 import type { StoreApi } from "zustand";
 
+import { isTaskStatus } from "@stll/api-contract";
+
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type {
   ChatTab,
@@ -199,7 +201,7 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     return (
       typeof label === "string" &&
       typeof value["isNew"] === "boolean" &&
-      (status === undefined || status === null || typeof status === "string")
+      (status === undefined || status === null || isTaskStatus(status))
     );
   }
   if (type === "chat") {

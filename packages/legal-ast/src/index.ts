@@ -1,5 +1,6 @@
 export {
   analysisAnnotationSchema,
+  analysisHeadingInputSchema,
   analysisHeadingSchema,
   CORE_CATEGORIES,
   decisionAnalysisSchema,
@@ -18,10 +19,13 @@ export type {
   PersistedDecisionAnalysis,
 } from "./analysis.js";
 export {
+  documentAstSchema,
   getDocumentAstMetadata,
   hasUsableAst,
   isDocumentAst,
   parseDocumentAst,
+  parseUsableDocumentAst,
+  persistedDocumentAstSchema,
 } from "./document-ast.js";
 export type {
   Block,
@@ -34,7 +38,12 @@ export type {
   TableBlock,
   TableCell,
 } from "./document-ast.js";
-export { flattenInlineText, isInline, isInlineArray } from "./inline.js";
+export {
+  flattenInlineText,
+  inlineSchema,
+  isInline,
+  isInlineArray,
+} from "./inline.js";
 export type {
   Inline,
   InlineBold,

@@ -21,4 +21,5 @@ export {
   hasUsableAst,
   isDocumentAst,
   parseDocumentAst,
+  parseUsableDocumentAst,
 } from "@/api/lib/case-law/document-ast";

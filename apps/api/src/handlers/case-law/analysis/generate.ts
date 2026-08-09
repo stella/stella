@@ -17,14 +17,14 @@ import type {
   PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 import {
-  analysisHeadingSchema,
+  analysisHeadingInputSchema,
   isAnalysisInProgress,
   isAnalysisGenerating,
   isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
@@ -57,7 +57,7 @@ const SENTINEL_STALE_MS = 5 * 60 * 1000;
 type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
 
 const analysisOutputSchema = v.strictObject({
-  headings: v.array(analysisHeadingSchema),
+  headings: v.array(analysisHeadingInputSchema),
 });
 
 const createAnalysisHeading = ({
@@ -258,15 +258,13 @@ export const generateAnalysis = async (
   }
 
   // Check AST
-  if (!hasUsableAst(decision.documentAst)) {
+  const ast = parseUsableDocumentAst(decision.documentAst);
+  if (ast === null) {
     return Result.ok({
       status: "error",
       error: "Decision has no parseable AST",
     });
   }
-
-  // hasUsableAst narrows to DocumentAst.
-  const ast = decision.documentAst;
 
   // Set sentinel atomically (WHERE analysis IS NULL prevents TOCTOU race)
   const [updated] = await rootDb

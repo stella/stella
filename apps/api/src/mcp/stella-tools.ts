@@ -16,7 +16,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
@@ -1224,12 +1224,11 @@ const toPlainDecisionText = (decision: {
   if (typeof decision.fulltext === "string" && decision.fulltext.length > 0) {
     return decision.fulltext;
   }
-  if (!hasUsableAst(decision.documentAst)) {
+  const ast = parseUsableDocumentAst(decision.documentAst);
+  if (ast === null) {
     return null;
   }
-  return decision.documentAst.blocks
-    .map((block) => block.plainText)
-    .join("\n\n");
+  return ast.blocks.map((block) => block.plainText).join("\n\n");
 };
 
 const toIsoDateString = (value: unknown): string | null => {

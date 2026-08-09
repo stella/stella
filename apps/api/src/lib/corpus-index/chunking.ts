@@ -216,10 +216,9 @@ const createHeadingStack = () => {
   const stack: { level: number; text: string }[] = [];
 
   const push = (level: number, text: string): void => {
-    // Terminate on the stack, not on the level: `isDocumentAst` only checks the
-    // envelope, so a malformed block can carry level <= 0, and comparing
-    // against the empty-stack default of 0 would then pop forever. Each
-    // iteration removes an entry, so bounding on length cannot spin.
+    // Terminate on the stack, not on the level. Each iteration removes an
+    // entry, so bounding on length cannot spin even if this helper is called
+    // with an object that bypassed the persisted AST schema.
     while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) {
       stack.pop();
     }
@@ -237,14 +236,10 @@ const createHeadingStack = () => {
 /**
  * Runtime check that a persisted block carries what the chunker reads.
  *
- * `DocumentAst` is a compile-time shape over data that was written to object
- * storage by an older parser and read back as JSON. Its guards
- * (`isDocumentAst`, `hasUsableAst`) deliberately validate only the envelope —
- * version and a blocks array — so `{ junk: true }`, `42` and `null` all arrive
- * here typed as `Block`. Reading `.plainText` off one of those throws, and
- * because the chunker runs inside the indexer's per-row try/catch that throw
- * would be recorded as a failed index job and retried forever, for a document
- * whose canonical text is perfectly good.
+ * `DocumentAst` is persisted to object storage and read back as JSON. Its
+ * Valibot-backed guard validates the complete block/source/metadata shape;
+ * this local check remains a defensive backstop for callers that construct an
+ * object in memory or bypass the parser.
  *
  * Checked with `in` rather than a discriminator: there is no trusted
  * discriminator to read until the shape itself is proven.

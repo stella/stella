@@ -51,6 +51,47 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isMcpCredential = (
+  value: unknown,
+): value is NonNullable<McpSession["credential"]> => {
+  if (!isRecord(value) || typeof value["type"] !== "string") {
+    return false;
+  }
+  switch (value["type"]) {
+    case "agent_run":
+      return typeof value["runId"] === "string" && value["runId"].length > 0;
+    case "oauth_client":
+      return (
+        typeof value["clientId"] === "string" && value["clientId"].length > 0
+      );
+    case "machine_api_key":
+      return (
+        typeof value["id"] === "string" &&
+        value["id"].length > 0 &&
+        typeof value["name"] === "string" &&
+        value["name"].length > 0
+      );
+    case "delegated_user":
+      return true;
+    default:
+      return false;
+  }
+};
+
+/** Validate session state recovered from an opaque framework transport slot. */
+export const isMcpSession = (value: unknown): value is McpSession =>
+  isRecord(value) &&
+  typeof value["userId"] === "string" &&
+  value["userId"].length > 0 &&
+  typeof value["organizationId"] === "string" &&
+  value["organizationId"].length > 0 &&
+  isStringArray(value["scopes"]) &&
+  (!("credential" in value) || isMcpCredential(value["credential"])) &&
+  (!("workspaceIds" in value) || isStringArray(value["workspaceIds"]));
+
 export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const userId = payload.sub;
   if (!userId) {
@@ -110,9 +151,6 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
     ...(rawWorkspaceIds === undefined ? {} : { workspaceIds: rawWorkspaceIds }),
   };
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 /**
  * A genuine token rejection surfaces as a better-call `APIError` with an

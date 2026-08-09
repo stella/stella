@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { WorkObligationStatus } from "@stll/api-contract";
+
 import {
   entities,
   WORK_OBLIGATION_STATUS,
@@ -59,7 +61,7 @@ const config = {
 const sortDate = sql<string>`COALESCE(${workObligations.hardDeadlineDate}, ${workObligations.workingTargetDate}, ${LAST_SORT_DATE}::date)`;
 
 type QueueRow = {
-  workflowStatus: string;
+  workflowStatus: WorkObligationStatus;
   hardDeadlineDate: string | null;
   workingTargetDate: string | null;
 };

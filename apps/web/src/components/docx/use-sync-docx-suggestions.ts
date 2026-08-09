@@ -15,7 +15,7 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import type { DocxEditorRef, FolioAIEditOperation } from "@stll/folio-react";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
@@ -26,7 +26,10 @@ import {
   summarizeOperation,
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
+import { parsePersistedDocxOperation } from "@/components/docx/operation-payload";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 type UseSyncDocxSuggestionsInput = {
@@ -103,12 +106,20 @@ export const useSyncDocxSuggestions = ({
     );
 
     const items = data.items.flatMap((row): ReviewSuggestion[] => {
-      // SAFETY: `opPayload` is stored opaquely (`t.Unknown()`) but was
-      // persisted from a client-prepared folio operation by the create
-      // handler, so it round-trips back as a FolioAIEditOperation. Narrow
-      // it here at the hydration boundary.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the op was persisted from a client-prepared FolioAIEditOperation and passes back opaquely through the jsonb column
-      const op = row.opPayload as FolioAIEditOperation;
+      // `opPayload` is intentionally opaque in the persistence schema. Parse
+      // it again at this hydration boundary: rows can predate the server
+      // validator, and a malformed operation must not crash every document
+      // reader that opens the entity.
+      const op = parsePersistedDocxOperation(row.opPayload);
+      if (op === null) {
+        getAnalytics().captureError(
+          new ClientTelemetryError({
+            area: "docx-suggestion-hydration",
+            message: "Persisted DOCX suggestion operation failed validation.",
+          }),
+        );
+        return [];
+      }
       const preview = buildPreview(op, blocksById);
       if (preview === null) {
         return [];

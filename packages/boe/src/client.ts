@@ -9,7 +9,13 @@ import type { BoeSearchQuery } from "./query.js";
 import type {
   BoeErrorResponse,
   BoeLawEnvelope,
+  BoeSearchHit,
   BoeSearchResponse,
+  BoeStatus,
+  BormeAnnouncement,
+  BormeDailyIssue,
+  BormeProvincialSection,
+  BormeSectionGroup,
   BormeSummaryResponse,
   ConsolidatedLawResult,
   ConsolidatedLawSections,
@@ -32,6 +38,139 @@ const MAX_SEARCH_LIMIT = 100;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const hasOptionalString = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === undefined || typeof record[key] === "string";
+
+const isBoeStatus = (value: unknown): value is BoeStatus =>
+  isRecord(value) &&
+  hasOptionalString(value, "code") &&
+  hasOptionalString(value, "text");
+
+const isBoeSearchHit = (value: unknown): value is BoeSearchHit =>
+  isRecord(value) &&
+  typeof value["identificador"] === "string" &&
+  hasOptionalString(value, "titulo") &&
+  hasOptionalString(value, "fecha_publicacion") &&
+  hasOptionalString(value, "fecha_disposicion") &&
+  (value["departamento"] === undefined || isBoeStatus(value["departamento"])) &&
+  (value["rango"] === undefined || isBoeStatus(value["rango"])) &&
+  (value["estado_consolidacion"] === undefined ||
+    isBoeStatus(value["estado_consolidacion"])) &&
+  hasOptionalString(value, "url_eli") &&
+  hasOptionalString(value, "url_html_consolidada");
+
+const isBoeSearchResponse = (value: unknown): value is BoeSearchResponse =>
+  isRecord(value) &&
+  (value["data"] === undefined ||
+    (Array.isArray(value["data"]) && value["data"].every(isBoeSearchHit))) &&
+  (value["status"] === undefined || isBoeStatus(value["status"]));
+
+const isBoeLawEnvelope = (value: unknown): value is BoeLawEnvelope =>
+  isRecord(value) &&
+  (value["status"] === undefined || isBoeStatus(value["status"]));
+
+const isBormeAnnouncement = (value: unknown): value is BormeAnnouncement =>
+  isRecord(value) &&
+  hasOptionalString(value, "identificador") &&
+  hasOptionalString(value, "titulo") &&
+  (value["url_pdf"] === undefined ||
+    (isRecord(value["url_pdf"]) &&
+      hasOptionalString(value["url_pdf"], "pagina_final") &&
+      hasOptionalString(value["url_pdf"], "pagina_inicial") &&
+      hasOptionalString(value["url_pdf"], "szBytes") &&
+      hasOptionalString(value["url_pdf"], "szKBytes") &&
+      hasOptionalString(value["url_pdf"], "texto"))) &&
+  hasOptionalString(value, "url_html") &&
+  hasOptionalString(value, "url_xml");
+
+const isBormeAnnouncementOrArray = (value: unknown): boolean =>
+  value === undefined ||
+  isBormeAnnouncement(value) ||
+  (Array.isArray(value) && value.every(isBormeAnnouncement));
+
+const isBormeSectionGroup = (value: unknown): value is BormeSectionGroup =>
+  isRecord(value) &&
+  hasOptionalString(value, "codigo") &&
+  hasOptionalString(value, "nombre") &&
+  isBormeAnnouncementOrArray(value["item"]);
+
+const isBormeSectionGroupOrArray = (value: unknown): boolean =>
+  value === undefined ||
+  isBormeSectionGroup(value) ||
+  (Array.isArray(value) && value.every(isBormeSectionGroup));
+
+const isBormeProvincialSection = (
+  value: unknown,
+): value is BormeProvincialSection =>
+  isRecord(value) &&
+  hasOptionalString(value, "codigo") &&
+  hasOptionalString(value, "nombre") &&
+  isBormeSectionGroupOrArray(value["apartado"]) &&
+  isBormeAnnouncementOrArray(value["item"]);
+
+const isBormeProvincialSectionOrArray = (value: unknown): boolean =>
+  value === undefined ||
+  isBormeProvincialSection(value) ||
+  (Array.isArray(value) && value.every(isBormeProvincialSection));
+
+const isBormeDailyIssue = (value: unknown): value is BormeDailyIssue => {
+  if (!isRecord(value) || !hasOptionalString(value, "numero")) {
+    return false;
+  }
+  const metadata = value["sumario_diario"];
+  return (
+    isBormeProvincialSectionOrArray(value["seccion"]) &&
+    (metadata === undefined ||
+      (isRecord(metadata) &&
+        hasOptionalString(metadata, "identificador") &&
+        (metadata["url_pdf"] === undefined ||
+          (isRecord(metadata["url_pdf"]) &&
+            hasOptionalString(metadata["url_pdf"], "szBytes") &&
+            hasOptionalString(metadata["url_pdf"], "szKBytes") &&
+            hasOptionalString(metadata["url_pdf"], "texto")))))
+  );
+};
+
+const isBormeDailyIssueOrArray = (value: unknown): boolean =>
+  value === undefined ||
+  isBormeDailyIssue(value) ||
+  (Array.isArray(value) && value.every(isBormeDailyIssue));
+
+const isBormeSummaryResponse = (
+  value: unknown,
+): value is BormeSummaryResponse => {
+  if (
+    !isRecord(value) ||
+    (value["status"] !== undefined && !isBoeStatus(value["status"]))
+  ) {
+    return false;
+  }
+  const data = value["data"];
+  if (data === undefined) {
+    return true;
+  }
+  if (!isRecord(data)) {
+    return false;
+  }
+  const summary = data["sumario"];
+  if (summary === undefined) {
+    return true;
+  }
+  if (!isRecord(summary)) {
+    return false;
+  }
+  const metadata = summary["metadatos"];
+  return (
+    isBormeDailyIssueOrArray(summary["diario"]) &&
+    (metadata === undefined ||
+      (isRecord(metadata) &&
+        hasOptionalString(metadata, "fecha_publicacion") &&
+        hasOptionalString(metadata, "publicacion")))
+  );
+};
 
 const parseErrorBody = (value: unknown): BoeErrorResponse => {
   if (!isRecord(value)) {
@@ -86,16 +225,31 @@ const boeFetch = async (
   return response;
 };
 
-const boeGet = async <T>(url: string): Promise<T | null> => {
+const boeGet = async <T>(
+  url: string,
+  isExpectedShape: (value: unknown) => value is T,
+): Promise<T | null> => {
   const response = await boeFetch(url, "application/json");
   if (response === null) {
     return null;
   }
-  // SAFETY: we trust the BOE open-data API to return the documented JSON shape;
-  // runtime validation across every nested branch is impractical for this
-  // undocumented-but-stable public API.
-  // oxlint-disable-next-line no-unsafe-type-assertion
-  return response.json() as Promise<T>;
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw new BoeAPIError({
+      cause: error,
+      httpStatus: response.status,
+      message: "BOE returned malformed JSON",
+    });
+  }
+  if (!isExpectedShape(body)) {
+    throw new BoeAPIError({
+      httpStatus: response.status,
+      message: "BOE returned an unexpected JSON payload shape",
+    });
+  }
+  return body;
 };
 
 // The BOE API serves /texto and /texto/bloque/{id} as application/xml only.
@@ -148,7 +302,7 @@ export const searchConsolidatedLegislation = async (
   }
 
   const url = `${LEGISLATION_ENDPOINT}?${params.toString()}`;
-  const data = await boeGet<BoeSearchResponse>(url);
+  const data = await boeGet(url, isBoeSearchResponse);
   return data ?? { data: [], status: { code: "200", text: "ok" } };
 };
 
@@ -165,7 +319,10 @@ const fetchLawJsonSection = async (
   lawId: string,
   section: string,
 ): Promise<unknown> => {
-  const envelope = await boeGet<BoeLawEnvelope>(lawSectionUrl(lawId, section));
+  const envelope = await boeGet(
+    lawSectionUrl(lawId, section),
+    isBoeLawEnvelope,
+  );
   if (envelope === null) {
     throw new BoeNotFoundError(`${lawId}/${section}`);
   }
@@ -178,7 +335,10 @@ const fetchOptionalLawJsonSection = async (
   lawId: string,
   section: string,
 ): Promise<unknown> => {
-  const envelope = await boeGet<BoeLawEnvelope>(lawSectionUrl(lawId, section));
+  const envelope = await boeGet(
+    lawSectionUrl(lawId, section),
+    isBoeLawEnvelope,
+  );
   return envelope === null ? null : (envelope.data ?? null);
 };
 
@@ -332,7 +492,7 @@ export const getBormeSummary = async (
     );
   }
   const url = `${BORME_SUMMARY_ENDPOINT}/${date}`;
-  const data = await boeGet<BormeSummaryResponse>(url);
+  const data = await boeGet(url, isBormeSummaryResponse);
   if (data === null) {
     throw new BoeNotFoundError(`borme/${date}`);
   }
@@ -352,7 +512,7 @@ export const getBoeSummary = async (
     );
   }
   const url = `${BOE_SUMMARY_ENDPOINT}/${date}`;
-  const data = await boeGet<Record<string, unknown>>(url);
+  const data = await boeGet(url, isRecord);
   if (data === null) {
     throw new BoeNotFoundError(`boe/${date}`);
   }

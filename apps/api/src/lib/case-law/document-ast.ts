@@ -21,4 +21,5 @@ export {
   hasUsableAst,
   isDocumentAst,
   parseDocumentAst,
+  parseUsableDocumentAst,
 } from "@stll/legal-ast/document-ast";

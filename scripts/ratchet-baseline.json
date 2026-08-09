@@ -1,11 +1,10 @@
 {
   "as-casts": {
-    "count": 5,
+    "count": 4,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
-      "apps/web/src/components/docx/use-sync-docx-suggestions.ts": 1,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1
     }
   },
@@ -239,7 +238,6 @@
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 3,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-provider.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-storage.ts": 2,
       "apps/api/src/lib/mcp-upstream/connections.ts": 5,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 6,
       "apps/api/src/lib/redis-client.ts": 2,
@@ -262,11 +260,12 @@
       "apps/api/src/lib/template-clause-links.ts": 3,
       "apps/api/src/lib/usage/usage-ledger.ts": 4,
       "apps/api/src/lib/views/template-properties.ts": 3,
-      "apps/api/src/lib/workflow-queue.ts": 9,
+      "apps/api/src/lib/workflow-queue.ts": 8,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
       "apps/api/src/lib/workflow/generate-batch-mock.ts": 5,
       "apps/api/src/lib/workflow/route-playbooks.ts": 1,
       "apps/api/src/lib/workflow/run-logic.ts": 2,
+      "apps/api/src/lib/workflow/run-state-store.ts": 1,
       "apps/api/src/lib/workflow/streaming-answer.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 1,
       "apps/api/src/mcp/egress.ts": 1,
@@ -305,7 +304,6 @@
       "apps/web/src/components/docx/use-docx-block-scroll.ts": 1,
       "apps/web/src/components/docx/use-edit-session.ts": 1,
       "apps/web/src/components/docx/use-folio-collaboration-session.ts": 1,
-      "apps/web/src/components/docx/use-sync-docx-suggestions.ts": 1,
       "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
       "apps/web/src/components/inspector/external-reference-panel.tsx": 8,
       "apps/web/src/components/inspector/inspector-broadcast.ts": 2,

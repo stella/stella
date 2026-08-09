@@ -7,6 +7,7 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -202,7 +203,7 @@ export type StoredRawReparseOutcome =
  * normalized format.
  */
 export type SourceAdapter = {
-  key: string;
+  key: AdapterKey;
   name: string;
   country: string;
   language: string;

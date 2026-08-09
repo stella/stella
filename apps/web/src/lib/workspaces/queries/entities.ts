@@ -6,6 +6,12 @@ import {
   queryOptions,
 } from "@tanstack/react-query";
 
+import {
+  isEntityPriority,
+  isListItemType,
+  isTaskStatus,
+} from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
@@ -43,10 +49,19 @@ type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
-  "entityId" | "parentId" | "fields" | "cellMetadata"
+  | "entityId"
+  | "parentId"
+  | "status"
+  | "priority"
+  | "listItemType"
+  | "fields"
+  | "cellMetadata"
 > & {
   entityId: string;
   parentId: string | null;
+  status: unknown;
+  priority: unknown;
+  listItemType: unknown;
   fields: {
     id: string;
     propertyId: string;
@@ -89,9 +104,14 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     createdByDeletedAt: entity.createdByDeletedAt,
     updatedAt: entity.updatedAt,
     version: entity.version,
-    status: entity.status,
-    priority: entity.priority,
-    listItemType: entity.listItemType,
+    // These columns are varchar for backwards compatibility. Treat unknown
+    // wire values as absent at this boundary so consumers cannot render an
+    // unhandled task state accidentally.
+    status: isTaskStatus(entity.status) ? entity.status : null,
+    priority: isEntityPriority(entity.priority) ? entity.priority : null,
+    listItemType: isListItemType(entity.listItemType)
+      ? entity.listItemType
+      : null,
     dueDate: entity.dueDate,
     agendaKind: entity.agendaKind,
     startAt: entity.startAt,

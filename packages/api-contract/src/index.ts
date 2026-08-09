@@ -25,11 +25,24 @@ export {
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,
+  isListItemType,
   isTaskStatus,
+  LIST_ITEM_TYPE,
+  LIST_ITEM_TYPES,
   TASK_STATUS,
   TASK_STATUSES,
 } from "./entity-options";
-export type { EntityPriority, TaskStatus } from "./entity-options";
+export type {
+  EntityPriority,
+  ListItemType,
+  TaskStatus,
+} from "./entity-options";
+export {
+  isWorkObligationStatus,
+  WORK_OBLIGATION_STATUS,
+  WORK_OBLIGATION_STATUSES,
+} from "./workflow-status";
+export type { WorkObligationStatus } from "./workflow-status";
 export { API_VALIDATION_ERROR_CODE, normalizeApiError } from "./error";
 export type {
   ApiErrorInput,

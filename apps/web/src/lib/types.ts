@@ -1,4 +1,9 @@
 import type {
+  EntityPriority,
+  ListItemType,
+  TaskStatus,
+} from "@stll/api-contract";
+import type {
   BoundingBox,
   AgendaItemKind,
   AgendaItemSource,
@@ -196,9 +201,12 @@ export type WorkspaceEntity = {
   createdByDeletedAt: string | null;
   updatedAt: string | null;
   version: number;
-  status: string | null;
-  priority: string | null;
-  listItemType: string | null;
+  /** Task workflow status; malformed legacy wire values are normalized to null. */
+  status: TaskStatus | null;
+  /** Task priority; malformed legacy wire values are normalized to null. */
+  priority: EntityPriority | null;
+  /** Legal-list discriminator; malformed legacy wire values are normalized to null. */
+  listItemType: ListItemType | null;
   dueDate: string | null;
   agendaKind: AgendaItemKind;
   startAt: string | null;

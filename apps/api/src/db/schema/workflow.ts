@@ -1,4 +1,10 @@
 import {
+  WORK_OBLIGATION_STATUS,
+  WORK_OBLIGATION_STATUSES,
+} from "@stll/api-contract";
+import type { WorkObligationStatus } from "@stll/api-contract";
+
+import {
   isNotNull,
   jsonb,
   p,
@@ -26,22 +32,11 @@ export const WORK_OBLIGATION_TYPES = [
 ] as const;
 export type WorkObligationType = (typeof WORK_OBLIGATION_TYPES)[number];
 
-export const WORK_OBLIGATION_STATUS = {
-  UNASSIGNED: "unassigned",
-  AWAITING_ACKNOWLEDGEMENT: "awaiting_acknowledgement",
-  ACTIVE: "active",
-  COMPLETED: "completed",
-  CANCELLED: "cancelled",
-} as const;
-
-export const WORK_OBLIGATION_STATUSES = [
-  WORK_OBLIGATION_STATUS.UNASSIGNED,
-  WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-  WORK_OBLIGATION_STATUS.ACTIVE,
-  WORK_OBLIGATION_STATUS.COMPLETED,
-  WORK_OBLIGATION_STATUS.CANCELLED,
-] as const;
-export type WorkObligationStatus = (typeof WORK_OBLIGATION_STATUSES)[number];
+export {
+  WORK_OBLIGATION_STATUS,
+  WORK_OBLIGATION_STATUSES,
+} from "@stll/api-contract";
+export type { WorkObligationStatus } from "@stll/api-contract";
 
 export const WORK_OBLIGATION_SOURCE = {
   MANUAL: "manual",

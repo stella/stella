@@ -377,6 +377,31 @@ const formatReleaseDate = (publishedAt: string) =>
       tag_name: string;
     };
 
+    const isGitHubRelease = (value: unknown): value is GitHubRelease => {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+      }
+      const body = Reflect.get(value, "body");
+      const draft = Reflect.get(value, "draft");
+      const htmlUrl = Reflect.get(value, "html_url");
+      const name = Reflect.get(value, "name");
+      const prerelease = Reflect.get(value, "prerelease");
+      const publishedAt = Reflect.get(value, "published_at");
+      const tagName = Reflect.get(value, "tag_name");
+      return (
+        (typeof body === "string" || body === null) &&
+        typeof draft === "boolean" &&
+        typeof htmlUrl === "string" &&
+        (typeof name === "string" || name === null) &&
+        typeof prerelease === "boolean" &&
+        (typeof publishedAt === "string" || publishedAt === null) &&
+        typeof tagName === "string"
+      );
+    };
+
+    const parseGitHubReleases = (value: unknown): GitHubRelease[] =>
+      Array.isArray(value) ? value.filter(isGitHubRelease) : [];
+
     const RELEASES_PER_PAGE = 12;
     const GITHUB_RELEASES_PER_PAGE = 100;
     const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
@@ -843,7 +868,7 @@ const formatReleaseDate = (publishedAt: string) =>
         }
 
         // eslint-disable-next-line no-await-in-loop -- body of the sequentially fetched page; see above
-        const releases = (await response.json()) as GitHubRelease[];
+        const releases = parseGitHubReleases(await response.json());
         stellaReleases.push(
           ...releases.filter(
             (release) =>

@@ -289,10 +289,7 @@ describe("chunkDocument never emits a body-less passage", () => {
 
   // The 2s deadline matters: a regression here hangs instead of failing, and
   // the deadline turns it back into a readable failure.
-  test("a non-positive heading level cannot spin the ancestry stack", () => {
-    // `isDocumentAst` validates the envelope only, so a source that emits a
-    // level of 0 reaches the chunker exactly like this. Parsed through the
-    // production guard rather than cast, so the test proves the real path.
+  test("an invalid heading level is rejected before chunking", () => {
     const ast = parseDocumentAst(
       JSON.stringify({
         version: 1,
@@ -334,10 +331,9 @@ describe("chunkDocument never emits a body-less passage", () => {
       }),
     );
 
+    expect(ast).toBeNull();
     const chunks = chunkDocument({ ast, fallbackText: "unused" });
-    expect(chunks.map((chunk) => chunk.text)).toEqual([
-      ["Zero", "Negative", "body"].join(SEPARATOR),
-    ]);
+    expect(chunks.map((chunk) => chunk.text)).toEqual(["unused"]);
   }, 2000);
 });
 
@@ -359,18 +355,14 @@ describe("chunkDocument fallbacks", () => {
     }
   });
 
-  test("junk blocks that pass the envelope guard degrade to the text", () => {
-    // Exactly what `hasUsableAst` admits: its own tests accept
-    // `{ version: 1, blocks: [{ a: 1 }] }`. Reading `.plainText` off any of
-    // these throws, and the indexer would record a failed job and retry
-    // forever for a document whose canonical text is fine.
+  test("junk blocks are rejected and degrade to the canonical text", () => {
     const ast = parseDocumentAst(
       JSON.stringify({
         version: 1,
         blocks: [{ junk: true }, 42, null],
       }),
     );
-    expect(ast).not.toBeNull();
+    expect(ast).toBeNull();
 
     const chunks = chunkDocument({
       ast,
@@ -463,13 +455,7 @@ describe("structural budget", () => {
     ).toThrow(/ceiling/u);
   });
 
-  test("heading ancestry is clamped to the deepest entries", () => {
-    // Persisted junk can carry any numeric level; ever-ascending levels grow
-    // the ancestry stack without bound, which is what made path
-    // materialization quadratic. The clamp keeps the deepest entries.
-    // Parsed through the production guard rather than cast, so the test
-    // proves the real path: `isDocumentAst` validates the envelope only, and
-    // any numeric level reaches the chunker.
+  test("heading levels outside the AST union are rejected", () => {
     const ast = parseDocumentAst(
       JSON.stringify({
         version: 1,
@@ -484,14 +470,14 @@ describe("structural budget", () => {
           statutes: [],
         },
         blocks: [
-          ...Array.from({ length: 100 }, (_, index) => ({
-            id: `h${index}`,
-            anchorId: `h${index}-anchor`,
+          {
+            id: "h0",
+            anchorId: "h0-anchor",
             type: "heading",
-            level: index + 1,
+            level: 4,
             inlines: [],
-            plainText: `H${index}`,
-          })),
+            plainText: "Invalid heading",
+          },
           {
             id: "p100",
             anchorId: "p100-anchor",
@@ -502,11 +488,10 @@ describe("structural budget", () => {
         ],
       }),
     );
-    const chunks = chunkDocument({ ast, fallbackText: "" });
-    const last = chunks.at(-1);
-    expect(last?.headingPath.length).toBe(64);
-    expect(last?.headingPath.at(-1)).toBe("H99");
-    expect(last?.headingPath.at(0)).toBe("H36");
+    expect(ast).toBeNull();
+    expect(chunkDocument({ ast, fallbackText: "canonical text" })).toEqual([
+      { seq: 0, text: "canonical text", anchorId: null, headingPath: [] },
+    ]);
   });
 });
 

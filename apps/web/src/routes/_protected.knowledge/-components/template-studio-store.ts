@@ -4,7 +4,10 @@ import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
-import type { TemplateEditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  templateValueSourcePatch,
+  type TemplateEditableField,
+} from "@/routes/_protected.knowledge/-components/template-wizard";
 
 // The Studio's editable manifest data + live document selection. Lives in a
 // module-level store (not the inspector tab payload, which must be
@@ -27,6 +30,7 @@ export const defaultStudioField = (path: string): StudioField => ({
   inputType: "text",
   required: false,
   options: [],
+  valueSource: { type: "input" },
   aiPrompt: undefined,
   aiAdapt: false,
   aiSeesDocument: false,
@@ -274,8 +278,26 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
     set((state) => {
       const exists = state.fields.some((f) => f.path === path);
       const fields = exists
-        ? state.fields.map((f) => (f.path === path ? { ...f, ...patch } : f))
-        : [...state.fields, { ...defaultStudioField(path), ...patch }];
+        ? state.fields.map((f) => {
+            if (f.path !== path) {
+              return f;
+            }
+            const next = { ...f, ...patch };
+            return {
+              ...next,
+              ...templateValueSourcePatch(next, { preserveDraft: true }),
+            };
+          })
+        : (() => {
+            const next = { ...defaultStudioField(path), ...patch };
+            return [
+              ...state.fields,
+              {
+                ...next,
+                ...templateValueSourcePatch(next, { preserveDraft: true }),
+              },
+            ];
+          })();
       return { fields, isDirty: true };
     }),
   removeField: (path) =>

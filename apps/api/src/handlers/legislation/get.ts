@@ -16,6 +16,7 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 
@@ -87,9 +88,9 @@ export const readLegislationHandler = async (
           key: astS3Key,
           step: "readLegislation.corpusAst",
           read: async () => await readCorpusAst(astS3Key),
-          fallback: () => pgAst,
+          fallback: () => parsePersistedCorpusAst(pgAst),
         })
-      : pgAst;
+      : parsePersistedCorpusAst(pgAst);
 
   const fulltext =
     corpus && textS3Key !== null

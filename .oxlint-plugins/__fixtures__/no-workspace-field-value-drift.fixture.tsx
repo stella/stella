@@ -53,6 +53,7 @@ export const _optionalBranch = () => {
 };
 
 export const _switchBranch = () => {
+  // oxlint-disable-next-line typescript/switch-exhaustiveness-check -- This fixture intentionally leaves members to its default branch.
   switch (content.type) {
     // oxlint-disable-next-line no-workspace-field-value-drift/no-workspace-field-value-drift
     case "text":

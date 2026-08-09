@@ -1,6 +1,10 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  persistedDocumentAstSchema,
+  type DocumentAst,
+} from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,7 +13,11 @@ import {
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import {
+  emptyAstSchema,
+  EMPTY_AST,
+  persistedDecisionSectionsSchema,
+} from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
   EmptyAst,
@@ -35,6 +43,18 @@ const CONTENT_TYPE = "application/zstd";
 const CORPUS_IO_TIMEOUT_MS = LIMITS.corpusObjectIoTimeoutMs;
 
 const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
+
+const persistedCorpusAstSchema = v.nullable(
+  v.union([persistedDocumentAstSchema, emptyAstSchema]),
+);
+
+export const parsePersistedCorpusSections = (
+  value: unknown,
+): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
+
+export const parsePersistedCorpusAst = (
+  value: unknown,
+): DocumentAst | EmptyAst | null => v.parse(persistedCorpusAstSchema, value);
 
 /**
  * The single bounded boundary for every corpus object read/write/delete.
@@ -358,11 +378,10 @@ export const readCorpusSections = async (
     "corpus-read-sections",
     async (signal) => await readCorpusS3Bytes(key, signal),
   );
-  // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
-  const parsed: DecisionSection[] | null = JSON.parse(
+  const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
   );
-  return parsed;
+  return parsePersistedCorpusSections(parsed);
 };
 
 export const readCorpusAst = async (
@@ -372,11 +391,10 @@ export const readCorpusAst = async (
     "corpus-read-ast",
     async (signal) => await readCorpusS3Bytes(key, signal),
   );
-  // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
-  const parsed: DocumentAst | EmptyAst | null = JSON.parse(
+  const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
   );
-  return parsed;
+  return parsePersistedCorpusAst(parsed);
 };
 
 type CorpusReadWithFallbackInput<T> = {

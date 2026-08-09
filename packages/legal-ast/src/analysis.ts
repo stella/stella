@@ -4,12 +4,6 @@
 
 import * as v from "valibot";
 
-const isRecord = (val: unknown): val is Record<string, unknown> =>
-  typeof val === "object" && val !== null;
-
-const hasGeneratingStatus = (val: unknown): val is { status: "generating" } =>
-  isRecord(val) && val["status"] === "generating";
-
 export const CORE_CATEGORIES = [
   "facts",
   "procedural-history",
@@ -59,17 +53,19 @@ export type PersistedDecisionAnalysis =
   | AnalysisInProgress
   | AnalysisGenerating;
 
-export const analysisAnnotationSchema = v.object({
-  id: v.string(),
-  summary: v.pipe(v.string(), v.minLength(1)),
-  startAnchorId: v.string(),
-  endAnchorId: v.string(),
-  // No length constraint: the prompt asks for short snippets,
-  // but models routinely over-shoot. The UI truncates for display.
-  textSnippet: v.string(),
-});
+export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
+  v.object({
+    id: v.string(),
+    summary: v.pipe(v.string(), v.minLength(1)),
+    startAnchorId: v.string(),
+    endAnchorId: v.string(),
+    // No length constraint: the prompt asks for short snippets,
+    // but models routinely over-shoot. The UI truncates for display.
+    textSnippet: v.string(),
+  });
 
-export const analysisHeadingSchema = v.object({
+/** Schema for one heading emitted by the AI before Stella adds stable IDs and children. */
+export const analysisHeadingInputSchema = v.object({
   id: v.string(),
   label: v.pipe(v.string(), v.minLength(1)),
   category: v.string(),
@@ -78,35 +74,57 @@ export const analysisHeadingSchema = v.object({
   annotations: v.array(analysisAnnotationSchema),
 });
 
-export const decisionAnalysisSchema = v.object({
+/** Complete persisted heading schema, including recursively nested children. */
+export const analysisHeadingSchema: v.GenericSchema<AnalysisHeading> = v.object(
+  {
+    id: v.string(),
+    label: v.pipe(v.string(), v.minLength(1)),
+    category: v.string(),
+    startAnchorId: v.string(),
+    endAnchorId: v.string(),
+    annotations: v.array(analysisAnnotationSchema),
+    children: v.array(v.lazy(() => analysisHeadingSchema)),
+  },
+);
+
+export const decisionAnalysisSchema: v.GenericSchema<DecisionAnalysis> =
+  v.object({
+    version: v.literal(1),
+    generatedAt: v.string(),
+    model: v.string(),
+    tree: v.array(analysisHeadingSchema),
+  });
+
+const analysisInProgressSchema: v.GenericSchema<AnalysisInProgress> = v.object({
   version: v.literal(1),
   generatedAt: v.string(),
   model: v.string(),
   tree: v.array(analysisHeadingSchema),
+  status: v.literal("generating"),
+});
+
+const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> = v.object({
+  version: v.literal(1),
+  status: v.literal("generating"),
+  startedAt: v.string(),
 });
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
-  isRecord(val) &&
-  val["version"] === 1 &&
-  val["status"] === "generating" &&
-  typeof val["startedAt"] === "string";
+  v.safeParse(analysisGeneratingSchema, val).success;
 
 export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
-  isRecord(val) &&
-  val["version"] === 1 &&
-  typeof val["generatedAt"] === "string" &&
-  typeof val["model"] === "string" &&
-  Array.isArray(val["tree"]);
+  v.safeParse(decisionAnalysisSchema, val).success &&
+  !(typeof val === "object" && val !== null && Object.hasOwn(val, "status"));
 
 export const isAnalysisInProgress = (val: unknown): val is AnalysisInProgress =>
-  isDecisionAnalysis(val) && hasGeneratingStatus(val);
+  v.safeParse(analysisInProgressSchema, val).success;
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,
 ): PersistedDecisionAnalysis | null => {
   if (
-    isDecisionAnalysis(val) ||
     isAnalysisInProgress(val) ||
+    isDecisionAnalysis(val) ||
     isAnalysisGenerating(val)
   ) {
     return val;

@@ -1,3 +1,4 @@
+import { isRecord } from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
@@ -30,6 +31,33 @@ const MAX_SEARCH_LIMIT = 100;
 // parenthesised `or` filters, so active search issues one request per
 // status code and combines the rows locally.
 const ACTIVE_STATUS_CODES = ["01", "02"] as const;
+
+const hasOptionalString = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === undefined || typeof record[key] === "string";
+
+const hasOptionalNumber = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === undefined || typeof record[key] === "number";
+
+/** Validate only the fields consumed by `parseCompany` and `parseSearchEntry`. */
+const isGcisRawCompany = (value: unknown): value is GcisResponse[number] =>
+  isRecord(value) &&
+  typeof value["Business_Accounting_NO"] === "string" &&
+  hasOptionalString(value, "Company_Name") &&
+  hasOptionalString(value, "Company_Status") &&
+  hasOptionalString(value, "Company_Status_Desc") &&
+  hasOptionalNumber(value, "Capital_Stock_Amount") &&
+  hasOptionalNumber(value, "Paid_In_Capital_Amount") &&
+  hasOptionalString(value, "Responsible_Name") &&
+  hasOptionalString(value, "Register_Organization_Desc") &&
+  hasOptionalString(value, "Company_Location") &&
+  hasOptionalString(value, "Company_Setup_Date") &&
+  hasOptionalString(value, "Change_Of_Approval_Data") &&
+  hasOptionalString(value, "Sus_Beg_Date") &&
+  hasOptionalString(value, "Sus_End_Date");
 
 const odataStringLiteral = (value: string): string =>
   `'${value.replaceAll("'", "''")}'`;
@@ -114,11 +142,18 @@ const gcisGet = async (url: string): Promise<GcisResponse> => {
       httpStatus: response.status,
     });
   }
-  // SAFETY: per-row shape is enforced when each entry is parsed into
-  // the domain type; treating the array entries as `GcisRawCompany`
-  // here just defers full validation to `parseCompany` /
-  // `parseSearchEntry`, which read fields defensively.
-  return parsed as GcisResponse;
+  const rows = parsed.filter(isGcisRawCompany);
+  if (rows.length === 0 && parsed.length > 0) {
+    throw new GcisAPIError({
+      message: "GCIS returned no rows with the fields required by stella",
+      httpStatus: response.status,
+    });
+  }
+  // GCIS occasionally adds malformed rows alongside valid rows during an
+  // upstream rollout. Isolate those poison rows so one bad entity does not
+  // discard an otherwise usable search page; a wholly malformed page fails
+  // above instead of being mistaken for a not-found response.
+  return rows;
 };
 
 const dedupeRowsByTaxId = (rows: GcisResponse): GcisResponse => {

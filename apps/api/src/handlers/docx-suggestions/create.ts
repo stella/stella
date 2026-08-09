@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { folioDocumentOperationBatchSchema } from "@stll/folio-agents";
+import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import { FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION } from "@stll/folio-core/server";
 
 import { chatThreads, docxSuggestions } from "@/api/db/schema";
@@ -9,11 +10,25 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 
 import { tCreateDocxSuggestionsBody } from "./schemas";
 
 type CreatedSuggestion = { ref: string; id: SafeId<"docxSuggestion"> };
+
+/** Parse suggestion operations once at the API boundary and return folio's
+ * canonical output, rather than retaining the untrusted input objects. */
+export const validateDocxSuggestionOperations = (
+  operations: readonly unknown[],
+): FolioAIEditOperation[] | undefined => {
+  const validation = folioDocumentOperationBatchSchema["~standard"].validate({
+    version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
+    operations,
+  });
+  return validation.issues === undefined
+    ? validation.value.operations
+    : undefined;
+};
 
 /**
  * Batch-persist AI DOCX suggestions the client just queued for review.
@@ -43,13 +58,10 @@ const createDocxSuggestions = createSafeHandler(
     // `~standard.validate` returns the result directly (matches the chat
     // tool's own usage; if folio ever turns it async this line fails
     // typecheck).
-    const opValidation = folioDocumentOperationBatchSchema[
-      "~standard"
-    ].validate({
-      version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
-      operations: body.suggestions.map((suggestion) => suggestion.opPayload),
-    });
-    if (opValidation.issues !== undefined) {
+    const validatedOperations = validateDocxSuggestionOperations(
+      body.suggestions.map((suggestion) => suggestion.opPayload),
+    );
+    if (validatedOperations === undefined) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -84,20 +96,28 @@ const createDocxSuggestions = createSafeHandler(
       }
     }
 
-    const prepared = body.suggestions.map((suggestion) => ({
-      ref: suggestion.ref,
-      row: {
-        id: createSafeId<"docxSuggestion">(),
-        workspaceId,
-        entityId: params.entityId,
-        originThreadId,
-        opPayload: suggestion.opPayload,
-        comment: suggestion.comment ?? null,
-        severity: suggestion.severity,
-        area: suggestion.area,
-        status: "pending" as const,
-      },
-    }));
+    const prepared = body.suggestions.map((suggestion, index) => {
+      const operation = validatedOperations[index];
+      if (operation === undefined) {
+        return unreachable(
+          "Folio operation validation returned fewer operations than supplied",
+        );
+      }
+      return {
+        ref: suggestion.ref,
+        row: {
+          id: createSafeId<"docxSuggestion">(),
+          workspaceId,
+          entityId: params.entityId,
+          originThreadId,
+          opPayload: operation,
+          comment: suggestion.comment ?? null,
+          severity: suggestion.severity,
+          area: suggestion.area,
+          status: "pending" as const,
+        },
+      };
+    });
 
     yield* Result.await(
       safeDb(async (tx) => {

@@ -5,6 +5,8 @@
  * boolean combination, negation) lives here so semantics never
  * drift between view filters, extraction gating, and templates.
  */
+import { panic } from "better-result";
+
 import type {
   CompareNode,
   CompareOp,
@@ -23,6 +25,9 @@ export type ConditionValue =
   | undefined;
 
 export type OperandResolver = (operand: RefOperand) => ConditionValue;
+
+const assertNever = (value: never): never =>
+  panic(`Unsupported condition variant: ${String(value)}`);
 
 export const evaluateCondition = (
   node: ConditionNode,
@@ -44,7 +49,7 @@ export const evaluateCondition = (
     case "predicate":
       return evaluatePredicate(node, resolve);
     default:
-      return false;
+      return assertNever(node);
   }
 };
 
@@ -122,7 +127,10 @@ const compareValues = (
     if (op === "gte") {
       return ln >= rn;
     }
-    return ln <= rn;
+    if (op === "lte") {
+      return ln <= rn;
+    }
+    return assertNever(op);
   }
 
   const ls = normScalar(left);
@@ -142,7 +150,10 @@ const compareValues = (
   if (op === "gte") {
     return ls >= rs;
   }
-  return ls <= rs;
+  if (op === "lte") {
+    return ls <= rs;
+  }
+  return assertNever(op);
 };
 
 // ── Predicates ────────────────────────────────────────────
@@ -205,7 +216,7 @@ const evaluatePredicate = (
     case "in":
       return asArray(node.value).includes(normScalar(actual));
     default:
-      return false;
+      return assertNever(node.op);
   }
 };
 

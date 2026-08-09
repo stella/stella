@@ -160,6 +160,21 @@ export type EditablePart = {
   pattern?: string | undefined;
 };
 
+/** Exactly one value source is active for a field. The legacy manifest uses
+ * optional sibling properties, so this discriminator is kept in editor state
+ * as the authoritative choice and prevents serializers from re-emitting an
+ * invalid combination when old or hand-authored data contains rivals. */
+export type TemplateValueSource =
+  | { type: "input" }
+  | { type: "composite"; parts: EditablePart[]; format: string }
+  /** Editor-only state while the author is still entering a part key/format. */
+  | { type: "composite-draft"; parts: EditablePart[]; format: string }
+  | { type: "lookup"; lookup: EditableLookup }
+  | { type: "formula"; formula: string }
+  | { type: "binding"; source: FieldSource }
+  | { type: "condition"; condition: string; conditionAst?: never }
+  | { type: "condition"; condition?: never; conditionAst: ConditionNode };
+
 export type TemplateEditableField = {
   path: string;
   kind: string;
@@ -170,6 +185,7 @@ export type TemplateEditableField = {
   inputType: InputType;
   required: boolean;
   options: string[];
+  valueSource: TemplateValueSource;
   /** Composite field: one value entered as several parts joined by `format`.
    *  Present iff `format` is present; `inputType` is then ignored for input
    *  rendering. */
@@ -209,6 +225,106 @@ export type TemplateEditableField = {
    *  are the repeat bounds and live on the FieldMeta whose path equals the
    *  loop's array (container) path. */
   validation?: FieldValidation | undefined;
+};
+
+/** Derive the single active source from an untrusted/legacy field shape. The
+ * precedence matches manifest validation: composite, formula, condition,
+ * binding, lookup, then ordinary input. */
+export const templateValueSourceOf = (
+  field: Pick<
+    TemplateEditableField,
+    | "parts"
+    | "format"
+    | "lookup"
+    | "formula"
+    | "source"
+    | "condition"
+    | "conditionAst"
+    | "inputType"
+  >,
+  options: { preserveDraft?: boolean } = {},
+): TemplateValueSource => {
+  if (field.parts !== undefined && field.parts.length > 0) {
+    const format = field.format?.trim() || defaultCompositeFormat(field.parts);
+    if (format !== undefined && format !== "") {
+      return { type: "composite", parts: field.parts, format };
+    }
+    if (options.preserveDraft === true) {
+      return {
+        type: "composite-draft",
+        parts: field.parts,
+        format: field.format ?? "",
+      };
+    }
+  }
+  if (field.parts !== undefined && options.preserveDraft === true) {
+    return {
+      type: "composite-draft",
+      parts: field.parts,
+      format: field.format ?? "",
+    };
+  }
+  if (field.formula?.trim()) {
+    return { type: "formula", formula: field.formula.trim() };
+  }
+  if (field.inputType === "boolean" && field.conditionAst !== undefined) {
+    return { type: "condition", conditionAst: field.conditionAst };
+  }
+  if (field.inputType === "boolean" && field.condition?.trim()) {
+    return { type: "condition", condition: field.condition.trim() };
+  }
+  if (field.source !== undefined) {
+    return { type: "binding", source: field.source };
+  }
+  if (field.lookup !== undefined) {
+    return { type: "lookup", lookup: field.lookup };
+  }
+  return { type: "input" };
+};
+
+/** Clear stale sibling properties when a field changes source. Keeping this
+ * transition beside the discriminator means every editor (wizard and Studio)
+ * constructs one valid state instead of relying on each control to remember
+ * every rival property. */
+export const templateValueSourcePatch = (
+  field: Pick<
+    TemplateEditableField,
+    | "parts"
+    | "format"
+    | "lookup"
+    | "formula"
+    | "source"
+    | "condition"
+    | "conditionAst"
+    | "inputType"
+  >,
+  options: { preserveDraft?: boolean } = {},
+): Pick<
+  TemplateEditableField,
+  | "valueSource"
+  | "parts"
+  | "format"
+  | "lookup"
+  | "formula"
+  | "source"
+  | "condition"
+  | "conditionAst"
+> => {
+  const valueSource = templateValueSourceOf(field, options);
+  const isComposite =
+    valueSource.type === "composite" || valueSource.type === "composite-draft";
+  return {
+    valueSource,
+    parts: isComposite ? valueSource.parts : undefined,
+    format: isComposite ? valueSource.format : undefined,
+    lookup: valueSource.type === "lookup" ? valueSource.lookup : undefined,
+    formula: valueSource.type === "formula" ? valueSource.formula : undefined,
+    source: valueSource.type === "binding" ? valueSource.source : undefined,
+    condition:
+      valueSource.type === "condition" ? valueSource.condition : undefined,
+    conditionAst:
+      valueSource.type === "condition" ? valueSource.conditionAst : undefined,
+  };
 };
 
 /**
@@ -276,28 +392,38 @@ const inferInputType = (field: ResolvedField): InputType => {
 const buildEditableFields = (
   fields: readonly ResolvedField[],
 ): TemplateEditableField[] =>
-  fields.map((f) => ({
-    path: f.path,
-    kind: f.kind,
-    label: f.label ?? "",
-    hint: f.hint,
-    inputType: inferInputType(f),
-    required: f.required ?? false,
-    options: optionalArray(f.options),
-    parts: f.parts?.map((part) => ({
+  fields.map((f) => {
+    const parts = f.parts?.map((part) => ({
       key: part.key,
       inputType: part.inputType,
       options: optionalArray(part.options),
       label: part.label,
       pattern: part.pattern,
-    })),
-    format: f.format,
-    optionsFrom: f.optionsFrom,
-    lookup: f.lookup,
-    formula: f.formula,
-    source: f.source,
-    dateFormat: f.dateFormat,
-  }));
+    }));
+    return {
+      path: f.path,
+      kind: f.kind,
+      label: f.label ?? "",
+      hint: f.hint,
+      inputType: inferInputType(f),
+      required: f.required ?? false,
+      options: optionalArray(f.options),
+      parts,
+      format: f.format,
+      optionsFrom: f.optionsFrom,
+      lookup: f.lookup,
+      formula: f.formula,
+      source: f.source,
+      dateFormat: f.dateFormat,
+      ...templateValueSourcePatch(
+        {
+          ...f,
+          parts,
+        },
+        { preserveDraft: true },
+      ),
+    };
+  });
 
 type ManifestPart = {
   key: string;
@@ -469,7 +595,16 @@ export const ConfigureStep = ({
 
   const updateField = (path: string, patch: Partial<TemplateEditableField>) => {
     setFields((prev) =>
-      prev.map((f) => (f.path === path ? { ...f, ...patch } : f)),
+      prev.map((f) => {
+        if (f.path !== path) {
+          return f;
+        }
+        const next = { ...f, ...patch };
+        return {
+          ...next,
+          ...templateValueSourcePatch(next, { preserveDraft: true }),
+        };
+      }),
     );
   };
 

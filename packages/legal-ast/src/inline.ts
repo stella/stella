@@ -1,11 +1,10 @@
-const isRecord = (val: unknown): val is Record<string, unknown> =>
-  typeof val === "object" && val !== null;
+import * as v from "valibot";
 
 export type InlineText = {
   type: "text";
   text: string;
   /** True when this text was anonymized by the publishing authority. */
-  anonymized?: true;
+  anonymized?: true | undefined;
 };
 
 export type InlineBold = { type: "bold"; children: Inline[] };
@@ -20,31 +19,35 @@ export type Inline =
   | InlineLink
   | InlineLineBreak;
 
+export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
+  v.object({
+    type: v.literal("text"),
+    text: v.string(),
+    anonymized: v.optional(v.literal(true)),
+  }),
+  v.object({
+    type: v.literal("bold"),
+    children: v.array(v.lazy(() => inlineSchema)),
+  }),
+  v.object({
+    type: v.literal("italic"),
+    children: v.array(v.lazy(() => inlineSchema)),
+  }),
+  v.object({
+    type: v.literal("link"),
+    href: v.string(),
+    children: v.array(v.lazy(() => inlineSchema)),
+  }),
+  v.object({ type: v.literal("line-break") }),
+]);
+
+const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
+
 export const isInlineArray = (val: unknown): val is Inline[] =>
-  Array.isArray(val) && val.every(isInline);
+  v.safeParse(inlineArraySchema, val).success;
 
-export const isInline = (val: unknown): val is Inline => {
-  if (!isRecord(val) || typeof val["type"] !== "string") {
-    return false;
-  }
-
-  if (val["type"] === "text") {
-    return (
-      typeof val["text"] === "string" &&
-      (val["anonymized"] === undefined || val["anonymized"] === true)
-    );
-  }
-
-  if (val["type"] === "bold" || val["type"] === "italic") {
-    return isInlineArray(val["children"]);
-  }
-
-  if (val["type"] === "link") {
-    return typeof val["href"] === "string" && isInlineArray(val["children"]);
-  }
-
-  return val["type"] === "line-break";
-};
+export const isInline = (val: unknown): val is Inline =>
+  v.safeParse(inlineSchema, val).success;
 
 export const flattenInlineText = (inlines: readonly Inline[]): string => {
   const parts: string[] = [];
