@@ -24,10 +24,18 @@ const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
 const PATH_TRAVERSAL_RE = /\.\./gu;
 const MAX_FILENAME_LENGTH = 255;
 
-const truncateUnicode = (value: string, maxLength: number): string =>
-  Array.from(value).slice(0, maxLength).join("");
-
-const unicodeLength = (value: string): number => Array.from(value).length;
+const truncateUnicode = (value: string, maxLength: number): string => {
+  const characters: string[] = [];
+  let length = 0;
+  for (const character of value) {
+    if (length + character.length > maxLength) {
+      break;
+    }
+    characters.push(character);
+    length += character.length;
+  }
+  return characters.join("");
+};
 
 const stripLeadingAndTrailingDots = (name: string): string => {
   let start = 0;
@@ -73,7 +81,7 @@ export const sanitizeFilenamePreservingExtension = (
 
   const extension = wellFormedName.slice(lastDot);
   const sanitizedBase = sanitizeFilename(wellFormedName.slice(0, lastDot));
-  const maxBaseLength = MAX_FILENAME_LENGTH - unicodeLength(extension);
+  const maxBaseLength = MAX_FILENAME_LENGTH - extension.length;
 
   if (maxBaseLength <= 0) {
     return sanitizeFilename(wellFormedName);
