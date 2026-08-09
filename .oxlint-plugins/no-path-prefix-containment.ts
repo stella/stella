@@ -276,6 +276,21 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isZeroStartPosition = (node: unknown): boolean => {
+          const expression = resolveStableExpression(node);
+          if (expression?.type === "Literal") {
+            return expression.value === 0;
+          }
+          if (
+            expression?.type !== "UnaryExpression" ||
+            (expression.operator !== "+" && expression.operator !== "-")
+          ) {
+            return false;
+          }
+          const argument = unwrapExpression(expression.argument);
+          return argument?.type === "Literal" && argument.value === 0;
+        };
+
         const isPathSeparator = (node: unknown): boolean => {
           const expression = resolveStableExpression(node);
           return (
@@ -342,9 +357,15 @@ export default eslintCompatPlugin({
               !isAstNode(node.callee) ||
               node.callee.type !== "MemberExpression" ||
               getPropertyName(node.callee.property) !== "startsWith" ||
-              !Array.isArray(node.arguments) ||
-              node.arguments.length !== 1
+              !Array.isArray(node.arguments)
             ) {
+              return;
+            }
+            const hasEquivalentStartPosition =
+              node.arguments.length === 1 ||
+              (node.arguments.length === 2 &&
+                isZeroStartPosition(node.arguments.at(1)));
+            if (!hasEquivalentStartPosition) {
               return;
             }
             const prefix = node.arguments.at(0);

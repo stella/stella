@@ -129,6 +129,17 @@ export default eslintCompatPlugin({
           if (templateValue !== null) {
             return templateValue;
           }
+          if (
+            expression.type === "BinaryExpression" &&
+            expression.operator === "+"
+          ) {
+            const left = resolveStaticString(expression.left, new Set(visited));
+            const right = resolveStaticString(
+              expression.right,
+              new Set(visited),
+            );
+            return left === null || right === null ? null : left + right;
+          }
           if (!isIdentifier(expression)) {
             return null;
           }
@@ -225,13 +236,6 @@ export default eslintCompatPlugin({
         };
 
         return {
-          before() {
-            const source = context.sourceCode.text;
-            return (
-              source.includes("localStorage") ||
-              source.includes("sessionStorage")
-            );
-          },
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);
             if (

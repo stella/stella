@@ -8,6 +8,10 @@
 declare const externalDocumentUrl: string;
 declare const openExternalUrl: (url: string) => void;
 
+// MUST flag: bare open resolves to the same browser-global primitive.
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: bare browser navigation must use the sanctioned helper
+export const bareGlobalOpen = open(externalDocumentUrl, "_blank");
+
 // MUST flag: a direct call on the browser's window global.
 // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: raw browser navigation must use the sanctioned helper
 export const directWindow = window.open(externalDocumentUrl, "_blank");
@@ -39,6 +43,17 @@ export const computedGlobalWindow =
 
 // Allowed: product code delegates to the sanctioned boundary.
 export const safeHelperCall = () => openExternalUrl(externalDocumentUrl);
+
+// Allowed: an injected function named `open` shadows the browser global.
+export const useInjectedOpen = (
+  open: (url: string, target: string) => unknown,
+) => open(externalDocumentUrl, "_blank");
+
+// Allowed: a nested local declaration also shadows the browser global.
+export const useLocallyDeclaredOpen = () => {
+  const open = (url: string) => `preview:${url}`;
+  return open(externalDocumentUrl);
+};
 
 // Allowed: an injected object named `window` is not the browser global.
 export const useInjectedWindow = (window: { open: (url: string) => unknown }) =>

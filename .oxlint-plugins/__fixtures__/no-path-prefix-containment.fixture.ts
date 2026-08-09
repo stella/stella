@@ -28,8 +28,18 @@ const _directJoin = path.join(root, candidate).startsWith(root);
 
 const resolvedRoot = path.resolve("/safe/root");
 const resolvedCandidate = path.resolve(resolvedRoot, "../root-backup");
+const zeroPosition = 0;
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves aliases retain Node path provenance
 const _aliasedResolve = resolvedCandidate.startsWith(resolvedRoot);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves an explicit zero cannot bypass bare-prefix detection
+const _explicitZeroPosition = resolvedCandidate.startsWith(resolvedRoot, 0);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves stable zero aliases retain their static meaning
+const _aliasedZeroPosition = resolvedCandidate.startsWith(
+  resolvedRoot,
+  zeroPosition,
+);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves negative zero has the same startsWith semantics
+const _negativeZeroPosition = resolvedCandidate.startsWith(resolvedRoot, -0);
 
 // Independently normalized paths remain unsafe when compared as strings.
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves named Node path imports are tracked
@@ -73,8 +83,14 @@ declare const isPathInside: (
 const _boundaryHelper = isPathInside(resolvedRoot, resolvedCandidate);
 
 // Generic string and URL prefix checks have no Node path provenance.
+declare const dynamicPosition: number;
 const _domainPrefix = domain.startsWith("docs.");
 const _urlPrefix = url.startsWith("https://");
+const _nonzeroPosition = resolvedCandidate.startsWith(resolvedRoot, 1);
+const _dynamicPosition = resolvedCandidate.startsWith(
+  resolvedRoot,
+  dynamicPosition,
+);
 
 // Same-named APIs from another module are not Node path operations.
 declare const normalize: (value: string) => string;
@@ -89,14 +105,19 @@ const checkWithShadowedResolve = (
 
 export const noPathPrefixContainmentFixture = {
   _aliasedResolve,
+  _aliasedZeroPosition,
   _boundaryHelper,
   _computed,
   _directJoin,
   _directResolve,
   _domainPrefix,
+  _dynamicPosition,
+  _explicitZeroPosition,
   _fakeNormalize,
   _fakeResolve,
   _inlineSeparatorBoundary,
+  _negativeZeroPosition,
+  _nonzeroPosition,
   _normalized,
   _relativeBoundary,
   _separatorBoundary,

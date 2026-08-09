@@ -6,13 +6,15 @@
 // remain a single enforced boundary.
 //
 // Flags whenever the receiver is the browser global:
+//   open(url)
 //   window.open(url)
 //   window["open"](url)
 //   globalThis.open(url)
 //   globalThis.window.open(url)
 //
 // This rule is scoped to browser surfaces in oxlint.config.ts. Locally bound
-// values named `window` or `globalThis` are unrelated objects and stay allowed.
+// values named `open`, `window`, or `globalThis` are unrelated bindings and
+// stay allowed.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -151,6 +153,9 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
 
 const isBrowserOpenCallee = (context: unknown, callee: unknown): boolean => {
   const unwrappedCallee = unwrapExpression(callee);
+  if (isIdentifier(unwrappedCallee, "open")) {
+    return isGlobalReference(context, unwrappedCallee);
+  }
   if (
     !unwrappedCallee ||
     unwrappedCallee.type !== "MemberExpression" ||
@@ -187,7 +192,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           requireSafeWindowOpen:
-            "Do not call window.open() directly. Use the sanctioned " +
+            "Do not call the browser open() primitive directly. Use the sanctioned " +
             "openIsolatedWindow() helper so opener isolation and URL handling " +
             "are enforced centrally.",
         },
