@@ -16,8 +16,8 @@ import {
   getEmailFileChatContext,
   localizeEmailBodyHtml,
   parseEmailDate,
-  type EmailChatMode,
   type EmailBodyFoldLabels,
+  type EmailResolvedChatMode,
 } from "@/components/inspector/email-html-viewer.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -30,19 +30,25 @@ type EmailHtmlViewerProps = {
   workspaceId: string;
 };
 
-type EmailFileViewerProps = EmailHtmlViewerProps & {
-  chatMode: EmailChatMode;
+type EmailFileViewerBaseProps = EmailHtmlViewerProps & {
   entityId: string;
   fileName: string;
 };
 
-export const EmailFileViewer = ({
-  chatMode,
-  entityId,
-  fieldId,
-  fileName,
-  workspaceId,
-}: EmailFileViewerProps) => {
+type EmailFileViewerProps = EmailFileViewerBaseProps &
+  (
+    | {
+        chatMode: EmailResolvedChatMode;
+      }
+    | {
+        chatMode: typeof EMAIL_CHAT_MODE.resolutionError;
+        onRetryChatResolution: () => void;
+      }
+  );
+
+export const EmailFileViewer = (props: EmailFileViewerProps) => {
+  const t = useTranslations();
+  const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
   const fileChatContext =
     chatMode === EMAIL_CHAT_MODE.contextual
       ? getEmailFileChatContext({ entityId, fieldId, fileName, workspaceId })
@@ -54,6 +60,23 @@ export const EmailFileViewer = ({
       className="flex min-h-0 flex-1 flex-col"
     >
       <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
+      {chatMode === EMAIL_CHAT_MODE.resolutionError ? (
+        <div
+          className="bg-background flex shrink-0 items-center justify-center gap-2 border-t p-2"
+          role="alert"
+        >
+          <span className="text-muted-foreground text-sm">
+            {t("common.somethingWentWrong")}
+          </span>
+          <Button
+            onClick={props.onRetryChatResolution}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.tryAgain")}
+          </Button>
+        </div>
+      ) : null}
     </FileViewerWithAI>
   );
 };

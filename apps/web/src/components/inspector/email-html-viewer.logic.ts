@@ -8,29 +8,26 @@ import type {
 export const EMAIL_CHAT_MODE = {
   contextual: "contextual",
   previewOnly: "preview-only",
+  resolutionError: "resolution-error",
 } as const;
 
 export type EmailChatMode =
   (typeof EMAIL_CHAT_MODE)[keyof typeof EMAIL_CHAT_MODE];
+export type EmailResolvedChatMode = Exclude<
+  EmailChatMode,
+  typeof EMAIL_CHAT_MODE.resolutionError
+>;
 
-type EmailVersionIdentity = {
-  file: { fieldId: string } | null;
-  id: string;
-};
+type EmailCurrentFieldIdentity = { id: string };
 
 export const getEmailChatMode = ({
-  currentVersionId,
+  currentFields,
   fieldId,
-  versions,
 }: {
-  currentVersionId: string | null | undefined;
+  currentFields: readonly EmailCurrentFieldIdentity[] | undefined;
   fieldId: string;
-  versions: readonly EmailVersionIdentity[] | undefined;
-}): EmailChatMode =>
-  versions?.some(
-    (version) =>
-      version.id === currentVersionId && version.file?.fieldId === fieldId,
-  )
+}): EmailResolvedChatMode =>
+  currentFields?.some((field) => field.id === fieldId)
     ? EMAIL_CHAT_MODE.contextual
     : EMAIL_CHAT_MODE.previewOnly;
 

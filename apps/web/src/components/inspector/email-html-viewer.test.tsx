@@ -76,32 +76,46 @@ describe("email viewer", () => {
   });
 
   test("keeps historical and unresolved versions preview-only", () => {
-    const versions = [
-      { id: "version-current", file: { fieldId: "field-current" } },
-      { id: "version-old", file: { fieldId: "field-old" } },
+    const currentFields = [
+      { id: "field-current-primary" },
+      { id: "field-current-secondary" },
     ];
 
     expect(
       getEmailChatMode({
-        currentVersionId: "version-current",
-        fieldId: "field-current",
-        versions,
+        currentFields,
+        fieldId: "field-current-secondary",
       }),
     ).toBe(EMAIL_CHAT_MODE.contextual);
     expect(
       getEmailChatMode({
-        currentVersionId: "version-current",
+        currentFields,
         fieldId: "field-old",
-        versions,
       }),
     ).toBe(EMAIL_CHAT_MODE.previewOnly);
     expect(
       getEmailChatMode({
-        currentVersionId: undefined,
-        fieldId: "field-current",
-        versions: undefined,
+        currentFields: undefined,
+        fieldId: "field-current-primary",
       }),
     ).toBe(EMAIL_CHAT_MODE.previewOnly);
+  });
+
+  test("surfaces contextual chat resolution failures with retry", () => {
+    const html = renderWithProviders(
+      <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.resolutionError}
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        onRetryChatResolution={() => undefined}
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Try again");
   });
 
   test("renders native metadata and keeps attachments informational", () => {
