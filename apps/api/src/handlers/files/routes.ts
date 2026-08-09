@@ -185,15 +185,6 @@ export const filesRoute = new Elysia({
     params: readEmailHtmlPreviewEndpoint.config.params,
     permissions: readEmailHtmlPreviewEndpoint.config.permissions,
   })
-  .get(
-    "/email-attachment/:fieldId/:attachmentId",
-    emailAttachmentEndpoint.handler,
-    {
-      params: emailAttachmentEndpoint.config.params,
-      permissions: emailAttachmentEndpoint.config.permissions,
-      query: emailAttachmentEndpoint.config.query,
-    },
-  )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,
@@ -208,3 +199,15 @@ export const filesRoute = new Elysia({
     query: ocrExportEndpoint.config.query,
     response: ocrExportEndpoint.config.response,
   });
+
+// This raw-response endpoint intentionally stays outside the exported Eden
+// contract. Elysia still registers it with the same guards and macros above.
+filesRoute.get(
+  "/email-attachment/:fieldId/:attachmentId",
+  emailAttachmentEndpoint.handler,
+  {
+    params: emailAttachmentEndpoint.config.params,
+    permissions: emailAttachmentEndpoint.config.permissions,
+    query: emailAttachmentEndpoint.config.query,
+  },
+);
