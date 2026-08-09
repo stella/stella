@@ -592,6 +592,13 @@ const CONTRACT_CORPUS = {
               kind: "document",
               name: "NDA draft",
               updatedAt: new Date("2026-01-01"),
+              extractedContent: {
+                extractedAt: new Date("2026-01-01"),
+                sourceEntityVersionId: uid(17),
+                sourceFieldId: uid(61),
+                sourceFileId: uid(63),
+                sourceSha256Hex: "a".repeat(64),
+              },
               currentVersion: {
                 id: uid(17),
                 createdAt: new Date("2026-01-01"),
@@ -621,6 +628,7 @@ const CONTRACT_CORPUS = {
                   },
                 ],
               },
+              versions: [{ id: uid(17) }],
             }),
           },
           documentProcessingRuns: { findMany: async () => [] },

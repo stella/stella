@@ -765,6 +765,7 @@ describe("MCP anonymization canary corpus", () => {
             kind: "document",
             name: nameSeed,
             updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            extractedContent: null,
             // readEntityByIdHandler reads the current version's fields via the
             // `currentVersion` relation (folded into one tombstone-safe query).
             currentVersion: {
@@ -778,6 +779,7 @@ describe("MCP anonymization canary corpus", () => {
                 },
               ],
             },
+            versions: [{ id: "ver_current" }],
           }),
         },
         documentProcessingRuns: { findMany: async () => [] },

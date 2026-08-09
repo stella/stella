@@ -457,11 +457,13 @@ type MockMcpTransaction = {
         updatedAt: Date;
         workspaceId: string;
         extractedContent: {
+          extractedAt: Date;
           sourceEntityVersionId: string | null;
           sourceFieldId: string | null;
           sourceFileId: string | null;
           sourceSha256Hex: string | null;
         } | null;
+        versions: { id: string }[];
         currentVersion: {
           createdAt: Date;
           id: string;
@@ -603,6 +605,7 @@ const createScopedDb = (
                   workspaceId: currentDocument.workspaceId,
                   extractedContent: extractedContentRow
                     ? {
+                        extractedAt: extractedContentRow.extractedAt,
                         sourceEntityVersionId:
                           extractedContentRow.sourceEntityVersionId,
                         sourceFieldId: extractedContentRow.sourceFieldId,
@@ -610,6 +613,7 @@ const createScopedDb = (
                         sourceSha256Hex: extractedContentRow.sourceSha256Hex,
                       }
                     : null,
+                  versions: [{ id: "entity_version_1" }],
                   currentVersion: {
                     createdAt: new Date("2026-01-01T00:00:00.000Z"),
                     id: "entity_version_1",
@@ -3460,11 +3464,13 @@ describe("OpenAI-compatible MCP tools", () => {
                 name: "Secret Doc for John Smith",
                 updatedAt: new Date("2026-01-01T00:00:00.000Z"),
                 workspaceId: "ws_1",
+                extractedContent: null,
                 currentVersion: {
                   createdAt: new Date("2026-01-01T00:00:00.000Z"),
                   id: "ver_current",
                   fields: [],
                 },
+                versions: [{ id: "ver_current" }],
               }),
             },
             documentProcessingRuns: { findMany: async () => [] },
