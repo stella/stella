@@ -14,6 +14,7 @@ import {
   EMAIL_CHAT_MODE,
   getEmailChatMode,
   getEmailFileChatContext,
+  shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
@@ -94,6 +95,15 @@ describe("email viewer", () => {
         fieldId: "field-current-primary",
       }),
     ).toBe(EMAIL_CHAT_MODE.previewOnly);
+  });
+
+  test("preserves chat when a background resolution refresh fails", () => {
+    expect(
+      shouldSurfaceEmailChatResolutionError({ hasData: true, isError: true }),
+    ).toBe(false);
+    expect(
+      shouldSurfaceEmailChatResolutionError({ hasData: false, isError: true }),
+    ).toBe(true);
   });
 
   test("does not load the AI host for preview-only email fields", () => {

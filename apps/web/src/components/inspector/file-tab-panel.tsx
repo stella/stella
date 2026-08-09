@@ -29,6 +29,7 @@ import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import {
   EMAIL_CHAT_MODE,
   getEmailChatMode,
+  shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
@@ -195,6 +196,11 @@ export const FileTabPanel = ({
     extractionFileFieldId: emailEntityQuery.data?.extractionFileFieldId,
     fieldId: tab.id,
   });
+  const shouldSurfaceEmailResolutionError =
+    shouldSurfaceEmailChatResolutionError({
+      hasData: emailEntityQuery.data !== undefined,
+      isError: emailEntityQuery.isError,
+    });
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
@@ -744,7 +750,7 @@ export const FileTabPanel = ({
 
   const fileViewer = (() => {
     if (isEmailDisplay) {
-      if (emailEntityQuery.isError) {
+      if (shouldSurfaceEmailResolutionError) {
         return (
           <EmailFileViewer
             chatMode={EMAIL_CHAT_MODE.resolutionError}

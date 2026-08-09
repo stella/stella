@@ -29,6 +29,14 @@ export const getEmailChatMode = ({
     ? EMAIL_CHAT_MODE.contextual
     : EMAIL_CHAT_MODE.previewOnly;
 
+export const shouldSurfaceEmailChatResolutionError = ({
+  hasData,
+  isError,
+}: {
+  hasData: boolean;
+  isError: boolean;
+}): boolean => isError && !hasData;
+
 export const getEmailFileChatContext = ({
   entityId,
   fieldId,
