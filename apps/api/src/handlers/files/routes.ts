@@ -3,9 +3,8 @@ import Elysia, { t } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
-import emailAttachmentEndpoint, {
-  saveEmailAttachmentEndpoint,
-} from "@/api/handlers/files/email-attachment";
+import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
+import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment-save";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,

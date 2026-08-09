@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -234,6 +234,7 @@ const AttachmentPreview = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const fileNameId = useId();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
   const attachmentQuery = useQuery(
     emailAttachmentPreviewOptions({
@@ -276,11 +277,13 @@ const AttachmentPreview = ({
         <BidiText
           as="span"
           className="min-w-0 flex-1 truncate text-sm font-medium"
+          id={fileNameId}
         >
           {fileName}
         </BidiText>
         <AttachmentSaveControls
           compact={false}
+          descriptionId={fileNameId}
           disabled={saving}
           onChooseMatter={onChooseMatter}
           onSave={onSave}
@@ -436,6 +439,7 @@ const AttachmentListItem = ({
   saving: boolean;
 }) => {
   const t = useTranslations();
+  const fileNameId = useId();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
   const unsupportedLabel = t("chat.unsupportedFileType");
 
@@ -453,7 +457,11 @@ const AttachmentListItem = ({
             fileName={fileName}
             mimeType={attachment.mimeType ?? "application/octet-stream"}
           />
-          <BidiText as="span" className="min-w-0 flex-1 truncate">
+          <BidiText
+            as="span"
+            className="min-w-0 flex-1 truncate"
+            id={fileNameId}
+          >
             {fileName}
           </BidiText>
           {!attachment.previewable ? (
@@ -464,6 +472,7 @@ const AttachmentListItem = ({
         </button>
         <AttachmentSaveControls
           compact
+          descriptionId={fileNameId}
           disabled={saving}
           onChooseMatter={() => onChooseMatter(attachment.id)}
           onSave={() => onSave(attachment)}
@@ -475,11 +484,13 @@ const AttachmentListItem = ({
 
 const AttachmentSaveControls = ({
   compact,
+  descriptionId,
   disabled,
   onChooseMatter,
   onSave,
 }: {
   compact: boolean;
+  descriptionId: string;
   disabled: boolean;
   onChooseMatter: () => void;
   onSave: () => void;
@@ -489,6 +500,7 @@ const AttachmentSaveControls = ({
   return (
     <div className="flex shrink-0 items-center">
       <Button
+        aria-describedby={descriptionId}
         aria-label={t("common.save")}
         className={compact ? "min-h-11 min-w-11" : undefined}
         disabled={disabled}
@@ -503,6 +515,7 @@ const AttachmentSaveControls = ({
         <DropdownMenuTrigger
           render={
             <Button
+              aria-describedby={descriptionId}
               aria-label={t("common.selectAMatter")}
               className={compact ? "min-h-11 min-w-11" : undefined}
               disabled={disabled}

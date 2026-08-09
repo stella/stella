@@ -51,6 +51,22 @@ describe("resolveUploadMime", () => {
     );
   });
 
+  test("recovers previewable images without a mirrored extension map", () => {
+    for (const [fileName, mimeType] of [
+      ["photo.png", "image/png"],
+      ["photo.jpg", "image/jpeg"],
+      ["photo.gif", "image/gif"],
+      ["photo.webp", "image/webp"],
+    ]) {
+      expect(
+        resolveUploadMime({
+          declaredMime: "application/octet-stream",
+          fileName,
+        }),
+      ).toBe(mimeType);
+    }
+  });
+
   test("leaves a well-typed MIME unchanged", () => {
     expect(
       resolveUploadMime({
