@@ -357,16 +357,21 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
     // Every route used here is mounted inside the versioned group, so the
     // prefix is applied once rather than repeated at each call site.
     const url = `${apiOrigin}${STELLA_API_VERSION_PREFIX}${route}`;
+    // Spread the body in rather than passing `body: undefined`: under
+    // `exactOptionalPropertyTypes` an explicit undefined is not a valid
+    // `RequestInit["body"]`, so a GET would not typecheck.
+    const body =
+      init?.body === undefined
+        ? {}
+        : {
+            body: JSON.stringify(init.body),
+            headers: { cookie, "content-type": "application/json" },
+          };
     const send = async () =>
       await fetch(url, {
-        body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+        headers: { cookie },
+        ...body,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        headers: {
-          cookie,
-          ...(init?.body === undefined
-            ? {}
-            : { "content-type": "application/json" }),
-        },
         method: init?.method ?? "GET",
       });
 
