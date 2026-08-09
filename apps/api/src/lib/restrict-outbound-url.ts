@@ -15,6 +15,18 @@ const pathMatchesPrefix = (pathname: string, prefix: string): boolean =>
     ? pathname.startsWith(prefix)
     : pathname === prefix || pathname.startsWith(`${prefix}/`);
 
+const trimDots = (value: string): string => {
+  let start = 0;
+  while (value[start] === ".") {
+    start++;
+  }
+  let end = value.length;
+  while (end > start && value[end - 1] === ".") {
+    end--;
+  }
+  return value.slice(start, end);
+};
+
 /**
  * Restrict a URL supplied by a trusted upstream protocol to that protocol's
  * declared public origin or HTTPS domain family.
@@ -52,9 +64,9 @@ export const restrictOutboundUrl = ({
     if (url.protocol !== "https:" || url.port !== "") {
       return null;
     }
-    const hostname = url.hostname.toLowerCase().replace(/\.+$/u, "");
+    const hostname = trimDots(url.hostname.toLowerCase());
     const allowed = hostPolicy.suffixes.some((candidate) => {
-      const suffix = candidate.toLowerCase().replace(/^\.+|\.+$/gu, "");
+      const suffix = trimDots(candidate.toLowerCase());
       return (
         suffix !== "" &&
         (hostname === suffix || hostname.endsWith(`.${suffix}`))
