@@ -296,6 +296,9 @@ export const fetchAccountLabel = async (
   try {
     const url = new URL(`${GRAPH_API_BASE_URL}/me`);
     url.searchParams.set("$select", "userPrincipalName,displayName,mail");
+    // SAFETY: GRAPH_API_BASE_URL is the compile-time Microsoft Graph origin;
+    // only the query string above is mutable, and no request input controls it.
+    // eslint-disable-next-line require-safe-outbound-target/require-safe-outbound-target
     const response = await fetchWithTimeout(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -332,6 +335,9 @@ export const listDriveRootChildren = async ({
         url.searchParams.set("$skiptoken", cursor);
       }
 
+      // SAFETY: GRAPH_API_BASE_URL is the compile-time Microsoft Graph origin;
+      // cursor is encoded into a query parameter and cannot change the origin.
+      // eslint-disable-next-line require-safe-outbound-target/require-safe-outbound-target
       const response = await fetchWithTimeout(url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
