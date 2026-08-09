@@ -1481,7 +1481,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
         organizationId: ids.orgB,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
-        workItemId: ids.entityA1,
+        matterId: ids.entityA1,
         dateIncurred: "2025-06-01",
         amount: cents(50),
         currency: "USD",

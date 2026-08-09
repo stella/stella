@@ -21,13 +21,17 @@ export const useCreateTimeEntry = () => {
   const analytics = useAnalytics();
 
   return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateTimeEntryVars) => {
+    mutationFn: async ({
+      workspaceId,
+      workItemId,
+      ...body
+    }: CreateTimeEntryVars) => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put({
         ...body,
-        ...(body.workItemId && {
-          workItemId: toSafeId<"entity">(body.workItemId),
+        ...(workItemId && {
+          workItemId: toSafeId<"entity">(workItemId),
         }),
       });
 

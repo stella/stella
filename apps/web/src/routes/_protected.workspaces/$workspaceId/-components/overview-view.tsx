@@ -49,6 +49,7 @@ import {
   TASK_STATUSES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useMountEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
@@ -106,7 +107,9 @@ const formatHours = (hours: number) =>
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
-  const timeBillingEnabled = isTimeBillingRouteEnabled();
+  const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
+  const timeBillingEnabled =
+    isTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const navigate = useNavigate();

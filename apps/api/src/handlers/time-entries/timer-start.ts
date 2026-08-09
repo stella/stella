@@ -44,12 +44,13 @@ const timerStart = createSafeHandler(
     });
 
     // Validate the optional work context belongs to this matter.
-    const workItem = body.workItemId
+    const workItemId = body.workItemId;
+    const workItem = workItemId
       ? yield* Result.await(
           safeDb((tx) =>
             tx.query.entities.findFirst({
               where: {
-                id: { eq: body.workItemId },
+                id: { eq: workItemId },
                 workspaceId: { eq: workspaceId },
               },
               columns: { id: true },
@@ -58,7 +59,7 @@ const timerStart = createSafeHandler(
         )
       : null;
 
-    if (body.workItemId && !workItem) {
+    if (workItemId && !workItem) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -114,7 +115,7 @@ const timerStart = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             userId: user.id,
-            workItemId: body.workItemId ?? null,
+            workItemId: workItemId ?? null,
             dateWorked: todayStr,
             timezoneId: body.timezoneId,
             durationMinutes: 0,
@@ -140,7 +141,7 @@ const timerStart = createSafeHandler(
               created: {
                 old: null,
                 new: {
-                  workItemId: body.workItemId ?? null,
+                  workItemId: workItemId ?? null,
                   dateWorked: todayStr,
                   source: TIME_ENTRY_SOURCE.TIMER,
                   status: BILLING_STATUS.DRAFT,

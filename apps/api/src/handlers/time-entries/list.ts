@@ -123,16 +123,21 @@ const readTimeEntries = createSafeHandler(
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
 
-    if (query.userId) {
-      if (!canReviewMatterEntries && query.userId !== currentUser.id) {
+    const requestedUserId = query.userId;
+    if (requestedUserId) {
+      if (!canReviewMatterEntries && requestedUserId !== currentUser.id) {
         return Result.err(
           new HandlerError({ status: 403, message: "Forbidden" }),
         );
       }
 
       const validatedUserId = yield* Result.await(
-        safeDb((tx) =>
-          validateOrgUserId(tx, query.userId, session.activeOrganizationId),
+        safeDb(async (tx) =>
+          await validateOrgUserId(
+            tx,
+            requestedUserId,
+            session.activeOrganizationId,
+          ),
         ),
       );
       if (!validatedUserId) {

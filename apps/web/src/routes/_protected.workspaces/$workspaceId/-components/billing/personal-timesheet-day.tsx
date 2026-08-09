@@ -4,7 +4,6 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -61,14 +60,8 @@ export const PersonalTimesheetDay = ({
   const canCreate = usePermissions({ timeEntry: ["create"] });
   const canUpdate = usePermissions({ timeEntry: ["update"] });
   const canDelete = usePermissions({ timeEntry: ["delete"] });
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (context) => context.user.id,
-  });
-
   const entriesQuery = useSuspenseInfiniteQuery(
     timeEntriesInfiniteOptions(workspaceId, {
-      userId,
       dateFrom: date,
       dateTo: date,
     }),

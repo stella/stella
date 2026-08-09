@@ -93,7 +93,6 @@ export const ManualTimeEntryForm = ({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="time-entry-narrative">{t("common.description")}</Label>
         <Textarea
-          dir="auto"
           id="time-entry-narrative"
           maxLength={10_000}
           onChange={(event) => setNarrative(event.currentTarget.value)}

@@ -374,10 +374,10 @@ export const BILLING_TOOL_DEFINITIONS = [
         matter_id: stringProp(
           "Matter/workspace ID to create the entry in; required when creating",
         ),
-        entity_id: stringProp(
+        entity_id: nullableStringProp(
           "Optional work item context (document, folder, or task). When " +
-            "updating, moves the entry to a " +
-            "different entity in the same matter.",
+            "updating, moves the entry to a different entity in the same " +
+            "matter; pass null to clear.",
         ),
         date_worked: stringProp(
           "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -854,12 +854,14 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
                 timeEntries.workItemId,
                 brandPersistedEntityId(input.entity_id),
               ),
-          eq(
-            timeEntries.userId,
-            canReview && input.user_id !== undefined
-              ? brandPersistedUserId(input.user_id)
-              : context.userId,
-          ),
+          input.user_id !== undefined
+            ? eq(
+                timeEntries.userId,
+                brandPersistedUserId(input.user_id),
+              )
+            : canReview
+              ? undefined
+              : eq(timeEntries.userId, context.userId),
           input.date_from === undefined
             ? undefined
             : gte(timeEntries.dateWorked, input.date_from),
@@ -928,7 +930,7 @@ const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
     date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
@@ -1055,7 +1057,12 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
         body: {
           ...(input.entity_id === undefined
             ? {}
-            : { workItemId: brandPersistedEntityId(input.entity_id) }),
+            : {
+                workItemId:
+                  input.entity_id === null
+                    ? null
+                    : brandPersistedEntityId(input.entity_id),
+              }),
           dateWorked: input.date_worked ?? "",
           timezoneId: input.timezone_id ?? "",
           durationMinutes: input.duration_minutes ?? 0,
@@ -1099,7 +1106,10 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     updateTimeEntryHandler({
       safeDb: context.safeDb,
       workspaceId,
-      actor: { userId: context.userId, memberRole: context.memberRole },
+      actor: {
+        userId: context.userId,
+        memberRole: { role: context.memberRole },
+      },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: {
         id: timeEntryId,
@@ -1119,7 +1129,12 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
         ...(input.no_charge === undefined ? {} : { noCharge: input.no_charge }),
         ...(input.entity_id === undefined
           ? {}
-          : { workItemId: brandPersistedEntityId(input.entity_id) }),
+          : {
+              workItemId:
+                input.entity_id === null
+                  ? null
+                  : brandPersistedEntityId(input.entity_id),
+            }),
         ...(input.task_code === undefined ? {} : { taskCode: input.task_code }),
         ...(input.activity_code === undefined
           ? {}
@@ -1170,7 +1185,10 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     deleteTimeEntryHandler({
       safeDb: context.safeDb,
       workspaceId,
-      actor: { userId: context.userId, memberRole: context.memberRole },
+      actor: {
+        userId: context.userId,
+        memberRole: { role: context.memberRole },
+      },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { id: timeEntryId },
     }),

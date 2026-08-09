@@ -78,6 +78,15 @@ details unless they are already public in the repository.
   other or bind them with a compile-time check; never rely on discipline or a
   hand-updated mirror test. A lookup whose miss means a bug must panic or emit
   telemetry, never fall back silently to a default.
+- Surface conflicts, do not average them. When two existing patterns contradict,
+  adopt one and never blend them into a hybrid. Precedence: documented convention
+  and enforced guards (lint rules, ratchet metrics, committed baselines), then the
+  most recent well-tested code, then the most widespread. If a convention and a
+  guard disagree, that disagreement is itself the finding: report it, do not
+  resolve it silently. Always report the conflict: the winner, the losing call
+  sites, and a concrete unification proposal (codemod, lint rule, ratchet metric).
+  Unifying is a scope decision, so propose it and let the user pick the moment; if
+  they defer, land the guard so the losing pattern can only shrink.
 - Avoid boolean fields for states that may grow. Use a named discriminator or
   domain type for values that answer "which kind/status/mode/type?" rather than
   a permanent yes/no question; a two-value union, enum, or equivalent domain type

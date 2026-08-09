@@ -84,7 +84,7 @@ const listTimeEntries = async ({
         workItemId: toSafeId<"entity">(workItemId),
       }),
     },
-    fetch: { signal },
+    fetch: signal ? { signal } : {},
   });
 
   return unwrapEden(response);
@@ -107,8 +107,8 @@ export const timeEntriesInfiniteOptions = (
   infiniteQueryOptions({
     queryKey: [...timeEntriesKeys.list(workspaceId, filters), "infinite"],
     initialPageParam: "",
-    queryFn: ({ pageParam, signal }) =>
-      listTimeEntries({
+    queryFn: async ({ pageParam, signal }) =>
+      await listTimeEntries({
         workspaceId,
         filters,
         ...(pageParam.length > 0 && { cursor: pageParam }),

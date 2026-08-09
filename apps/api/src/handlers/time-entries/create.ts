@@ -143,6 +143,15 @@ export const createTimeEntryHandler = async function* ({
     userId,
     dateWorked: body.dateWorked,
   });
+  const billable = body.billable ?? true;
+  if (billable && !resolvedRate) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Billable time entries need an effective rate",
+      }),
+    );
+  }
   const rateAtEntry = resolvedRate?.hourlyRate ?? 0;
   const currency = resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY;
 
@@ -180,7 +189,7 @@ export const createTimeEntryHandler = async function* ({
           rateAtEntry: cents(rateAtEntry),
           currency,
           narrative: body.narrative,
-          billable: body.billable ?? true,
+          billable,
           taskCode: body.taskCode ?? null,
           activityCode: body.activityCode ?? null,
           source: TIME_ENTRY_SOURCE.MANUAL,
@@ -209,7 +218,7 @@ export const createTimeEntryHandler = async function* ({
               billedMinutes,
               rateAtEntry: cents(rateAtEntry),
               currency,
-              billable: body.billable ?? true,
+              billable,
               source: TIME_ENTRY_SOURCE.MANUAL,
             },
           },

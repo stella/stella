@@ -5,10 +5,12 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { resolveRate } from "@/api/handlers/rates/resolve";
 import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/handlers/time-entries/authorization";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -16,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -42,6 +45,14 @@ export type UpdateTimeEntryHandlerProps = {
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateTimeEntryBodySchema>;
 };
+
+type ResolvedRateUpdate =
+  | { type: "unchanged" }
+  | {
+      type: "resolved";
+      rateAtEntry: ReturnType<typeof cents>;
+      currency: string;
+    };
 
 // Shared time-entry update logic reused by the HTTP handler and the
 // `save_time_entry` MCP tool, so both enforce the billed/written-off guard and
@@ -122,12 +133,13 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
-  if (body.workItemId) {
+  const workItemId = body.workItemId;
+  if (workItemId) {
     const workItem = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: { eq: body.workItemId },
+            id: { eq: workItemId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true },
@@ -145,6 +157,44 @@ export const updateTimeEntryHandler = async function* ({
     }
   }
 
+  const willBeBillable = body.billable ?? existing.billable;
+  const shouldResolveRate =
+    willBeBillable &&
+    (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
+      body.dateWorked !== undefined ||
+      body.billable === true);
+  let resolvedRateUpdate: ResolvedRateUpdate = { type: "unchanged" };
+  if (shouldResolveRate) {
+    if (!existing.userId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Billable time entries need an assigned timekeeper",
+        }),
+      );
+    }
+
+    const resolvedRate = yield* resolveRate({
+      safeDb,
+      workspaceId,
+      userId: existing.userId,
+      dateWorked: body.dateWorked ?? existing.dateWorked,
+    });
+    if (!resolvedRate) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Billable time entries need an effective rate",
+        }),
+      );
+    }
+    resolvedRateUpdate = {
+      type: "resolved",
+      rateAtEntry: cents(resolvedRate.hourlyRate),
+      currency: resolvedRate.currency,
+    };
+  }
+
   const updates = {
     ...pickDefined(body, [
       "dateWorked",
@@ -159,6 +209,12 @@ export const updateTimeEntryHandler = async function* ({
     ]),
     ...(body.durationMinutes !== undefined
       ? { billedMinutes: roundToIncrement(body.durationMinutes) }
+      : {}),
+    ...(resolvedRateUpdate.type === "resolved"
+      ? {
+          rateAtEntry: resolvedRateUpdate.rateAtEntry,
+          currency: resolvedRateUpdate.currency,
+        }
       : {}),
     updatedAt: new Date(),
   };

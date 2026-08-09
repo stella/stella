@@ -52,8 +52,6 @@ describe("createTimeEntryHandler (timezone validation)", () => {
           dateWorked: "2026-07-01",
           timezoneId: "Not/A_Real_Zone",
           durationMinutes: 30,
-          rateAtEntry: 10_000,
-          currency: "USD",
           narrative: "test",
         },
       }),

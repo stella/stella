@@ -224,22 +224,23 @@ export const TimesheetDayView = ({
       {/* Entries list */}
       {entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          {entries.map((entry) => (
-            <TimeEntryRow
-              entry={entry}
-              key={entry.id}
-              matterName={
-                entry.workItemId
-                  ? matterNameMap.get(entry.workItemId)
-                  : undefined
-              }
-              onDelete={handleDelete}
-              onEdit={setEditingId}
-              onSelect={handleSelect}
-              selected={selectedIds.has(entry.id)}
-              workspaceId={workspaceId}
-            />
-          ))}
+          {entries.map((entry) => {
+            const matterName = entry.workItemId
+              ? matterNameMap.get(entry.workItemId)
+              : undefined;
+            return (
+              <TimeEntryRow
+                entry={entry}
+                key={entry.id}
+                {...(matterName ? { matterName } : {})}
+                onDelete={handleDelete}
+                onEdit={setEditingId}
+                onSelect={handleSelect}
+                selected={selectedIds.has(entry.id)}
+                workspaceId={workspaceId}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="text-muted-foreground py-8 text-center text-sm">

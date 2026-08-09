@@ -1,4 +1,5 @@
 SET lock_timeout = '1s';
+-- stella-migration-safety: reviewed destructive-change - this deployment replaces the legacy work-item name and workspace-only policies atomically; rollback restores the prior names and policies with the matching application revision.
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint

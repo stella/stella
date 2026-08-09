@@ -11,6 +11,8 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { toISODate } from "@/components/workspaces/entity-utils";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useLocale } from "@/i18n/formatting-context";
+import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -24,8 +26,20 @@ import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceI
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
-  beforeLoad: ({ params }) => {
+  beforeLoad: async ({ context, params }) => {
     if (!isTimeBillingRouteEnabled()) {
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+      });
+    }
+
+    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const canReadTimeEntries = authClient.organization.checkRolePermission({
+      role,
+      permissions: { timeEntry: ["read"] },
+    });
+    if (!canReadTimeEntries) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },
@@ -38,7 +52,6 @@ export const Route = createFileRoute(
       ensureRouteInfiniteQueryData(
         context.queryClient,
         timeEntriesInfiniteOptions(params.workspaceId, {
-          userId: context.user.id,
           dateFrom: today,
           dateTo: today,
         }),
