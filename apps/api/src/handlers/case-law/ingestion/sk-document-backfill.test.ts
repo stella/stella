@@ -12,6 +12,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
+  fetchPdfBytes,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   remainingDocumentOrder,
   remainingDocumentPredicate,
@@ -28,6 +29,15 @@ const compileOrder = (fragments: readonly SQL[]) =>
   fragments.map((fragment) => dialect.sqlToQuery(fragment).sql).join(", ");
 
 describe("deferred document queue shape", () => {
+  test("treats a persisted out-of-boundary URL as unavailable", async () => {
+    const result = await fetchPdfBytes(
+      "http://legacy.invalid/document.pdf",
+      new AbortController().signal,
+    );
+
+    expect(result).toBeUndefined();
+  });
+
   test("both tiers only take decisions that are still waiting", () => {
     for (const predicate of [
       requestedDocumentPredicate,

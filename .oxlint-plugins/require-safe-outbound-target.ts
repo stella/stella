@@ -240,6 +240,58 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const stableDestructuredProperty = (
+          variable: ScopeVariable,
+          bindingName: string,
+        ): { object: AstNode; propertyName: string } | null => {
+          if (
+            variable.references.some(
+              (reference) =>
+                reference.init !== true && reference.isWrite?.() === true,
+            )
+          ) {
+            return null;
+          }
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const" ||
+              !isAstNode(definition.node.id) ||
+              definition.node.id.type !== "ObjectPattern" ||
+              !Array.isArray(definition.node.id.properties)
+            ) {
+              continue;
+            }
+            const initializer = unwrapExpression(definition.node.init);
+            if (initializer === null) {
+              continue;
+            }
+            for (const property of definition.node.id.properties) {
+              if (
+                !isAstNode(property) ||
+                property.type !== "Property" ||
+                !isIdentifier(property.value, bindingName)
+              ) {
+                continue;
+              }
+              const propertyName =
+                property.computed === false
+                  ? getPropertyName(property.key)
+                  : isStringLiteral(property.key)
+                    ? property.key.value
+                    : null;
+              if (propertyName !== null) {
+                return { object: initializer, propertyName };
+              }
+            }
+          }
+          return null;
+        };
+
         const outerTransparentExpression = (identifier: AstNode): AstNode => {
           let current = identifier;
           while (true) {
@@ -273,6 +325,40 @@ export default eslintCompatPlugin({
             return null;
           }
           return resolveVariable(declarator.id);
+        };
+
+        const destructuredAliasVariablesForReference = (
+          expression: AstNode,
+        ): ScopeVariable[] | null => {
+          const declarator = expression.parent;
+          if (
+            !isAstNode(declarator) ||
+            declarator.type !== "VariableDeclarator" ||
+            declarator.init !== expression ||
+            !isAstNode(declarator.id) ||
+            declarator.id.type !== "ObjectPattern" ||
+            !Array.isArray(declarator.id.properties)
+          ) {
+            return null;
+          }
+          const aliases: ScopeVariable[] = [];
+          for (const property of declarator.id.properties) {
+            if (
+              !isAstNode(property) ||
+              property.type !== "Property" ||
+              !isEstreeIdentifier(property.value)
+            ) {
+              // Rest, defaults, and nested patterns can retain mutable aliases.
+              // Reject their proof rather than guessing about ownership.
+              return [];
+            }
+            const alias = resolveVariable(property.value);
+            if (alias === null) {
+              return [];
+            }
+            aliases.push(alias);
+          }
+          return aliases;
         };
 
         const variableHasOriginMutation = (
@@ -413,6 +499,17 @@ export default eslintCompatPlugin({
             }
             const alias = aliasVariableForReference(current);
             if (alias !== null && variableHasDeepMutation(alias, nextVisited)) {
+              return true;
+            }
+            const destructuredAliases =
+              destructuredAliasVariablesForReference(current);
+            if (
+              destructuredAliases !== null &&
+              (destructuredAliases.length === 0 ||
+                destructuredAliases.some((destructuredAlias) =>
+                  variableHasDeepMutation(destructuredAlias, nextVisited),
+                ))
+            ) {
               return true;
             }
             const parent = current.parent;
@@ -856,6 +953,31 @@ export default eslintCompatPlugin({
             : source;
         };
 
+        const namespaceImportSourceForExpression = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): string | null => {
+          const expression = unwrapExpression(node);
+          if (!isEstreeIdentifier(expression)) {
+            return null;
+          }
+          const variable = resolveVariable(expression);
+          const source = namespaceImportSource(variable);
+          if (source !== null) {
+            return source;
+          }
+          if (variable === null || visited.has(variable)) {
+            return null;
+          }
+          const initializer = stableInitializer(variable);
+          if (initializer === null) {
+            return null;
+          }
+          const nextVisited = new Set(visited);
+          nextVisited.add(variable);
+          return namespaceImportSourceForExpression(initializer, nextVisited);
+        };
+
         const isImportedFetchSink = (
           callee: unknown,
           visited = new Set<ScopeVariable>(),
@@ -911,6 +1033,23 @@ export default eslintCompatPlugin({
           if (variable === null || visited.has(variable)) {
             return false;
           }
+          const destructured = stableDestructuredProperty(
+            variable,
+            expression.name,
+          );
+          if (destructured !== null) {
+            const source = namespaceImportSourceForExpression(
+              destructured.object,
+            );
+            if (
+              source !== null &&
+              FETCH_MODULES.get(normalizeFetchModuleSource(source))?.has(
+                destructured.propertyName,
+              ) === true
+            ) {
+              return true;
+            }
+          }
           const initializer = stableInitializer(variable);
           if (initializer === null) {
             return false;
@@ -926,6 +1065,33 @@ export default eslintCompatPlugin({
           }
           const variable = resolveVariable(identifier);
           return variable === null || variable.defs.length === 0;
+        };
+
+        const isGlobalObjectExpression = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isEstreeIdentifier(expression)) {
+            return false;
+          }
+          if (
+            ["globalThis", "self", "window"].includes(expression.name) &&
+            isGlobalReference(expression)
+          ) {
+            return true;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          const initializer = stableInitializer(variable);
+          if (initializer === null) {
+            return false;
+          }
+          const nextVisited = new Set(visited);
+          nextVisited.add(variable);
+          return isGlobalObjectExpression(initializer, nextVisited);
         };
 
         const isGlobalFetchSink = (
@@ -952,6 +1118,16 @@ export default eslintCompatPlugin({
             const variable = resolveVariable(expression);
             if (variable === null || visited.has(variable)) {
               return false;
+            }
+            const destructured = stableDestructuredProperty(
+              variable,
+              expression.name,
+            );
+            if (
+              destructured?.propertyName === "fetch" &&
+              isGlobalObjectExpression(destructured.object)
+            ) {
+              return true;
             }
             const initializer = stableInitializer(variable);
             if (initializer === null) {

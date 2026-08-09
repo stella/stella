@@ -130,6 +130,14 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable aliases of namespace-imported wrappers remain network sinks
   await namespaceRequest(inputUrl, { timeoutMs: 1000 });
 
+  const { fetchWithTimeout: destructuredRequest } = http;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: destructuring cannot erase a namespace-imported network sink's identity
+  await destructuredRequest(inputUrl, { timeoutMs: 1000 });
+
+  const { fetch: destructuredGlobalRequest } = globalThis;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: destructuring cannot erase the global fetch sink's identity
+  await destructuredGlobalRequest(inputUrl, { signal });
+
   // oxlint-disable-next-line no-useless-call, require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.call cannot bypass target analysis
   await fetchWithTimeout.call(undefined, inputUrl, { timeoutMs: 1000 });
 
@@ -164,6 +172,24 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   if (aliasWidenedPolicy !== null) {
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a policy array through an alias invalidates its proof
     await fetchWithTimeout(aliasWidenedPolicy, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const destructuredPolicy = {
+    type: "exact-origin" as const,
+    origins: ["https://provider.example"],
+  };
+  const { origins: destructuredOrigins } = destructuredPolicy;
+  destructuredOrigins.push(new URL(inputUrl).origin);
+  const destructuredWidenedPolicy = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: destructuredPolicy,
+  });
+  if (destructuredWidenedPolicy !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a policy array through a destructured alias invalidates its proof
+    await fetchWithTimeout(destructuredWidenedPolicy, {
       redirect: "error",
       timeoutMs: 1000,
     });

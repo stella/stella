@@ -97,11 +97,10 @@ export const fetchPdfBytes = async (
 ): Promise<Uint8Array | undefined> => {
   const target = restrictSkCourtDocumentUrl(documentUrl);
   if (target === null) {
-    throw new AdapterFetchError({
-      message: "Document URL is outside the Slovak court boundary",
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: null,
-    });
+    // Persisted legacy rows can predate the provider boundary. Returning the
+    // terminal unavailable outcome lets the caller drain them from the queue;
+    // retrying cannot make an off-origin URL become trusted.
+    return undefined;
   }
 
   const response = await fetchWithTimeout(target, {
