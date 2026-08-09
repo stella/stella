@@ -932,13 +932,13 @@ jobs:
       postgres:
         image: postgres:18.3
         env:
-          POSTGRES_USER: stella
+          POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
           POSTGRES_DB: stella
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella -d stella"
+          --health-cmd "pg_isready -U stella_owner -d stella"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -960,13 +960,13 @@ jobs:
       - name: Apply migrations to service Postgres
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
   # Typecheck-cost baseline guard. What silently rots is the compiler's

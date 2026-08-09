@@ -10,6 +10,7 @@ import nodePath from "node:path";
 import { resolveDatabaseUrl } from "../db-url";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { runOnlineMigrations } from "./online-migrations";
+import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
 // Migrations run through Bun's SQL client — the same driver the API uses
 // at runtime — so TLS is negotiated identically. The drizzle-kit CLI
@@ -47,13 +48,29 @@ const client = new SQL({ url, max: 1 });
 const bootstrapRoleSql = `
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles WHERE rolname = '${APPLICATION_RLS_ROLE_NAME}'
+  ) THEN
     BEGIN
-      CREATE ROLE stella NOLOGIN;
+      CREATE ROLE ${APPLICATION_RLS_ROLE_NAME} NOLOGIN;
     EXCEPTION
       WHEN duplicate_object OR unique_violation THEN
         NULL;
     END;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname = '${APPLICATION_RLS_ROLE_NAME}'
+      AND (rolcanlogin OR rolsuper OR rolbypassrls)
+  ) THEN
+    RAISE EXCEPTION 'reserved RLS role ${APPLICATION_RLS_ROLE_NAME} must be NOLOGIN, NOSUPERUSER, and NOBYPASSRLS';
+  END IF;
+  IF CURRENT_USER <> '${APPLICATION_RLS_ROLE_NAME}'
+     AND NOT pg_has_role(CURRENT_USER, '${APPLICATION_RLS_ROLE_NAME}', 'SET') THEN
+    EXECUTE format(
+      'GRANT ${APPLICATION_RLS_ROLE_NAME} TO %I WITH SET TRUE',
+      CURRENT_USER
+    );
   END IF;
 END
 $$;

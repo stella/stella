@@ -276,7 +276,7 @@ jobs:
           SMTP_HOST: "127.0.0.1"
           SMTP_PORT: "1025"
           TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
-          USE_MOCK_AI: "true"
+          USE_MOCK_AI: "false"
         run: |
           cleanup_smoke() {
             docker rm -f stella-api-smoke >/dev/null 2>&1 || true
@@ -314,7 +314,8 @@ jobs:
             stella-api:smoke
 
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:3001/live >/dev/null \
+              && docker logs stella-api-smoke 2>&1 | grep -q '"message":"scheduler.started"'; then
               exit 0
             fi
             if [[ "$(docker inspect --format='{{.State.Running}}' stella-api-smoke 2>/dev/null)" != "true" ]]; then
@@ -336,7 +337,7 @@ jobs:
         # resolution error fails.
         run: |
           set -euo pipefail
-          for entrypoint in /app/scheduler.js /app/document-processing-worker.js /app/backfill.js; do
+          for entrypoint in /app/document-processing-worker.js /app/backfill.js; do
             output=$(docker run --rm stella-api:smoke timeout 20 bun "$entrypoint" 2>&1 || true)
             if grep -qiE "cannot (find|resolve) (module|package)" <<<"$output"; then
               echo "::error::${entrypoint} failed module resolution in the runtime image."
@@ -1096,6 +1097,7 @@ jobs:
       - name: Verify production serves the release commit
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
         run: bun scripts/check-api-deployment.ts
 

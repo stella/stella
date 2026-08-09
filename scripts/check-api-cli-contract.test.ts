@@ -183,6 +183,22 @@ describe("API and CLI release contract", () => {
     }
   });
 
+  test("release and migration smoke tests wait for scheduler initialization", async () => {
+    const workflows = await Promise.all([
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
+      ).text(),
+    ]);
+
+    for (const workflow of workflows) {
+      expect(workflow).toContain("curl -fsS http://127.0.0.1:3001/live");
+      expect(workflow).toContain(`grep -q '"message":"scheduler.started"'`);
+    }
+  });
+
   test("shared package publishing uses Changesets release signals", async () => {
     const [changesetConfig, ciWorkflow, publishWorkflow] = await Promise.all([
       Bun.file(new URL("../.changeset/config.json", import.meta.url)).text(),

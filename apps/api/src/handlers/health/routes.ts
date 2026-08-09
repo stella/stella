@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import Elysia from "elysia";
+import type { Context } from "elysia";
 
 import { STELLA_REST_API_CONTRACT_VERSION } from "@stll/api-contract";
 
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
-import { probeDatabase } from "@/api/lib/health/probe-database";
+import {
+  probeApiReadiness,
+  type ReadinessOutcome,
+} from "@/api/lib/health/readiness";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -15,69 +19,67 @@ const BUILD_METADATA = {
   commit: APP_COMMIT_SHA,
 };
 
-const PROBE_TIMEOUT_MS = 5000;
-
-// Coalesces concurrent /health calls onto a single in-flight probe and
-// reuses the outcome for this window, so liveness checks (k8s, ALB) and
-// any drive-by traffic don't translate one-to-one into DB round-trips.
 const PROBE_CACHE_TTL_MS = 5000;
 
-const unrefTimer = (timerId: ReturnType<typeof setTimeout>) => {
-  if (
-    typeof timerId === "object" &&
-    "unref" in timerId &&
-    typeof timerId.unref === "function"
-  ) {
-    timerId.unref();
-  }
+type HealthRouteOptions = {
+  probeReadiness?: () => Promise<ReadinessOutcome>;
 };
 
-const runDatabaseProbe = async (): Promise<ProbeOutcome<HealthCheckError>> => {
-  let timerId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timerId = setTimeout(
-      () => reject(new HealthCheckError({ message: "DB probe timeout" })),
-      PROBE_TIMEOUT_MS,
-    );
-    // `unref` keeps a still-pending timeout from holding the event
-    // loop open at shutdown if the race resolves before we reach the
-    // clearTimeout below.
-    unrefTimer(timerId);
+const readinessOutcome = async (
+  probeReadiness: () => Promise<ReadinessOutcome>,
+): Promise<ProbeOutcome<HealthCheckError>> => {
+  const result = await Result.tryPromise({
+    try: probeReadiness,
+    catch: (cause) => cause,
   });
-  const result = await Result.tryPromise(async () => {
-    try {
-      return await Promise.race([probeDatabase(), timeout]);
-    } finally {
-      clearTimeout(timerId);
-    }
-  });
-  if (result.isErr()) {
-    const cause = result.error;
+  if (Result.isError(result)) {
     return {
       ok: false,
-      error: HealthCheckError.is(cause)
-        ? cause
-        : new HealthCheckError({ message: "DB probe failed", cause }),
+      error: new HealthCheckError({
+        message: "API readiness probe failed",
+        cause: result.error,
+      }),
     };
   }
-  return { ok: true };
+  return result.value.status === "ready"
+    ? { ok: true }
+    : {
+        ok: false,
+        error: new HealthCheckError({
+          message: "Required API dependency is unavailable",
+        }),
+      };
 };
 
-const probeCache = createProbeCache(runDatabaseProbe, {
-  ttlMs: PROBE_CACHE_TTL_MS,
-});
+export const createHealthRoute = ({
+  probeReadiness = probeApiReadiness,
+}: HealthRouteOptions = {}) => {
+  const probeCache = createProbeCache(
+    async () => await readinessOutcome(probeReadiness),
+    { ttlMs: PROBE_CACHE_TTL_MS },
+  );
+  const readinessResponse = async () => await probeCache.run();
+  const livenessHandler = () => ({
+    status: "ok" as const,
+    ...BUILD_METADATA,
+  });
+  const readinessHandler = async ({ set }: Pick<Context, "set">) => {
+    const outcome = await readinessResponse();
+    if (!outcome.ok) {
+      set.status = 503;
+      return {
+        status: "error" as const,
+        message: "Required dependency unavailable",
+        ...BUILD_METADATA,
+      };
+    }
+    return { status: "ok" as const, ...BUILD_METADATA };
+  };
 
-export const healthRoute = new Elysia().get("/health", async ({ set }) => {
-  const outcome = await probeCache.run();
+  return new Elysia()
+    .get("/live", livenessHandler)
+    .get("/ready", readinessHandler)
+    .get("/health", livenessHandler);
+};
 
-  if (!outcome.ok) {
-    set.status = 503;
-    return {
-      status: "error" as const,
-      message: "Database unreachable",
-      ...BUILD_METADATA,
-    };
-  }
-
-  return { status: "ok" as const, ...BUILD_METADATA };
-});
+export const healthRoute = createHealthRoute();

@@ -24,6 +24,17 @@ Deploy the API, document-processing worker, and Gotenberg with
 long-running server process. The web app is a TanStack Start SSR app, so
 serving `apps/web/dist` as static files is not enough.
 
+<!-- BEGIN GENERATED SELF-HOST CONTRACT -->
+
+The production Compose contract contains exactly these services:
+
+- `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
+- `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
+
+Its generated environment template is `deploy/selfhost/.env.example`.
+<!-- END GENERATED SELF-HOST CONTRACT -->
+
 ```bash
 cp apps/web/.env.example apps/web/.env
 # edit apps/web/.env (at minimum VITE_API_URL)
@@ -104,53 +115,54 @@ docker run --detach \
 
 For Postgres, Redis/Valkey, and object storage, any self-hosted instance works
 as long as the API container can reach it. Put the service URLs and credentials
-in `apps/api/.env`.
+in `deploy/selfhost/.env`.
 
 ## Configure The API
 
-Start from the example API environment file:
+Start from the generated production profile, not the local-development API
+example:
 
 ```bash
-cp apps/api/.env.example apps/api/.env
+cp deploy/selfhost/.env.example deploy/selfhost/.env
 ```
 
-At minimum, set these values for your self-hosted services:
+The profile is regenerated from the API schemas by `bun run
+selfhost:generate`. Active blank values are operator-owned inputs.
+Copy the API digest from the release manifest, and generate independent values
+for each secret. For example:
 
 ```bash
-DATABASE_URL="postgres://user:password@postgres.example.internal:5432/stella"
-REDIS_URL="redis://valkey.example.internal:6379"
-
-S3_ENDPOINT="https://s3.example.com"
-S3_BUCKET="stella"
-S3_REGION="us-east-1"
-S3_CREDENTIALS_PROVIDER="env"
-S3_ACCESS_KEY_ID="..."
-S3_SECRET_ACCESS_KEY="..."
+openssl rand -base64 48 # BETTER_AUTH_SECRET
+openssl rand -hex 32    # CONTENT_ENCRYPTION_KEY (exactly 64 hex characters)
+openssl rand -base64 48 # SELFHOST_BOOTSTRAP_TOKEN
+openssl rand -base64 48 # GOTENBERG_PASSWORD
 ```
 
-Also set the public application URLs and production secrets:
+Replace the example Postgres, Redis, object-storage, and public URL values.
+When using `S3_CREDENTIALS_PROVIDER="env"`, both S3 credential variables are
+required. Validate the completed file through the real production schemas
+before contacting any service:
 
 ```bash
-FRONTEND_URL="https://stella.example.com"
-BETTER_AUTH_URL="https://api.stella.example.com"
-BETTER_AUTH_SECRET="replace-with-at-least-32-random-characters"
-EMAIL_PROVIDER="smtp"
-TRANSACTIONAL_EMAIL_FROM="noreply@example.com"
-GOTENBERG_URL="http://gotenberg:3000"
-GOTENBERG_USERNAME="replace-with-a-username"
-GOTENBERG_PASSWORD="replace-with-a-password"
-# Optional: enable searchable-text extraction for scanned PDFs. If the service
-# requires a bearer token, generate one with at least 16 characters.
-# OCR_SERVICE_URL="https://ocr.example.internal"
-# OCR_SERVICE_TOKEN=""
-# Release queued OCR requests at this interval. Defaults to 1440 minutes.
-DOCUMENT_OCR_BATCH_INTERVAL_MINUTES="1440"
-# Optional: enable desktop edit session endpoints.
-FEATURE_DESKTOP_EDITING="true"
+bun run selfhost:doctor
 ```
 
-The self-host Compose file starts the stock `gotenberg/gotenberg:8` container
-next to the API. The API reads `GOTENBERG_URL` from `apps/api/.env`; use
+The stock profile enables local email/password authentication and requires the
+setup token when the first account is created. The web sign-up form prompts for
+that token. After the first account exists, remove
+`SELFHOST_BOOTSTRAP_TOKEN`; later sign-ins continue to use the account's
+password. Transactional email is optional. To add email OTP, invitations, or
+security mail, configure either the documented SMTP variables or SES variables
+together. The template does not point at an unbundled local SMTP service.
+
+Mock AI is rejected when `NODE_ENV` is `production` or `staging`. The profile
+sets `USE_MOCK_AI="false"` and `REQUIRE_PERSONAL_AI_KEY="true"`; organizations
+provide an AI provider key in Settings. An operator may instead configure a
+real instance-wide provider in `deploy/selfhost/.env`.
+
+The self-host Compose file starts a versioned, digest-pinned Gotenberg container
+next to the API. The API reads `GOTENBERG_URL` from
+`deploy/selfhost/.env`; use
 `http://gotenberg:3000` for Docker Compose because `localhost` inside the API
 container means the API container itself. Services on the private Compose
 network can reach Gotenberg at `gotenberg:3000` ([Gotenberg
@@ -164,10 +176,11 @@ recommends treating it like a database: keep it behind your firewall. The
 self-host Compose file intentionally does not publish a `ports` entry for the
 Gotenberg service.
 
-The Compose file also starts the scheduler and document-processing worker from
-the API image. The worker stays idle when no OCR work is queued. The scheduler
-releases queued requests every `DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum
-5, maximum 10080).
+The Compose file starts the document-processing worker from the API image. The
+worker stays idle when no OCR work is queued. The API owns the scheduled-job
+loop and releases queued requests every
+`DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum 5, maximum 10080); there is no
+standalone scheduler service to omit accidentally.
 To enable OCR, deploy a PaddleOCR-compatible service separately and set
 `OCR_SERVICE_URL`; non-loopback endpoints must use HTTPS because requests carry
 short-lived access credentials.
@@ -193,66 +206,92 @@ stores the exact trusted web/API origin before accepting Office file handoffs.
 ## Database migrations
 
 Apply SQL migrations from `apps/api/drizzle/` before running the API against a
-new database. With `DATABASE_URL` set in `apps/api/.env`, run the `db:migrate`
-script (it loads `apps/api/.env` and applies the migrations via
-[Drizzle Kit](https://orm.drizzle.team/docs/migrations)):
+new database, and before each application upgrade. The release image contains
+the exact migration bundle for that release:
 
 ```bash
-cd apps/api
-bun run db:migrate
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml pull
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml run --rm --no-deps api \
+  bun /app/apps/api/src/db/migrate.js
 ```
 
 ## Container images
 
-Releases publish a multi-architecture API image to GitHub Container Registry.
-You can run a release tag instead of building the API from source:
+Releases publish multi-architecture API and web images to GitHub Container
+Registry. The API image is portable and is the image used by Compose:
 
 ```bash
-docker pull ghcr.io/stella/stella-api:vX.Y.Z
+docker pull ghcr.io/stella/stella-api@sha256:<digest-from-release-manifest>
 ```
 
-Only the API image is published by the release workflow today. Build the web
-image from `apps/web/Dockerfile`, or run `apps/web/start-runtime.js` from a
-source checkout after `bun --filter @stll/web build`.
+The published web image is built for the release workflow's selected hosted
+target environment, so its public URLs are not portable. Self-hosted operators
+must build `apps/web/Dockerfile` with their own public URLs, or run
+`apps/web/start-runtime.js` from a source checkout after building the web app.
 
 ## Run With Docker Compose
 
-From the repository root, pass `--env-file apps/api/.env` so Compose can read
-the API environment. The API service also reads `apps/api/.env` by default.
-This Compose file starts the API, document-processing worker, and Gotenberg;
-run the web SSR server separately as described above.
+From the repository root, validate the production profile, inspect the resolved
+Compose model, migrate, then start the three declared services. Run the web SSR
+server separately as described above.
+
+<!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->
+```bash
+bun run selfhost:doctor
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml config --quiet
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml run --rm --no-deps api \
+  bun /app/apps/api/src/db/migrate.js
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml up -d
+```
+<!-- END GENERATED SELF-HOST RUN COMMANDS -->
+
+`STELLA_API_IMAGE` has no default. Copy the digest-qualified API reference from
+the release's `release-manifest.json`; Compose fails interpolation when it is
+absent, and `selfhost:doctor` rejects tags, including version and `latest` tags.
+To upgrade, copy the new digest-qualified reference into the environment, pull
+it, run that image's migrations, then recreate the services.
 
 ```bash
-docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d --build
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml pull
 ```
-
-By default the API service pulls the prebuilt multi-arch (amd64/arm64) image
-published to GHCR on each release, so you can skip building from source:
-
-```bash
-docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml pull
-docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d
-```
-
-The default tag is `:latest` (advanced only on stable releases). **For
-production, pin an explicit version** by setting `STELLA_API_IMAGE` (e.g.
-`STELLA_API_IMAGE=ghcr.io/stella/stella-api:v0.5.2`) so upgrades are deliberate
-— migrations are manual (`bun run db:migrate`), so always run them against the
-new version **before** `up -d` to avoid a newer API hitting an older schema.
-Keep `--build` if you prefer to build from source instead.
 
 To use a different env file, set `STELLA_API_ENV_FILE` in that file:
 
 ```bash
-STELLA_API_ENV_FILE=.env.local docker compose --env-file .env.local -f docker-compose.selfhost.yml up -d --build
+STELLA_API_ENV_FILE=/run/secrets/stella.env \
+  docker compose --env-file /run/secrets/stella.env \
+  -f docker-compose.selfhost.yml up -d
 ```
 
 The API listens on port `3001` by default. To publish it on a different host
 port:
 
 ```bash
-STELLA_API_HOST_PORT=8080 docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d --build
+STELLA_API_HOST_PORT=8080 \
+  docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml up -d
 ```
+
+## Health and readiness
+
+- `/live` reports only that the API process can serve HTTP. Use it for a
+  liveness probe.
+- `/ready` checks Postgres, Redis/Valkey, object storage, authenticated
+  Gotenberg health, and scheduled-job registration. It returns 503 if any
+  required component is unavailable.
+- `/health` is a compatibility alias for `/live` and carries the same build
+  metadata used by release verification. Do not use it as a readiness probe.
+
+Compose uses `/ready` for the API. The worker healthcheck runs only while the
+worker process is alive and also requires API readiness. Queue latency and
+worker error logs remain the authoritative signals that work is draining; the
+healthcheck does not claim to execute a synthetic document job.
 
 ## Requirements
 
@@ -295,7 +334,7 @@ The response is the standard page envelope with only four fields per account:
 }
 ```
 
-Enable it by setting `OPERATOR_METRICS_TOKEN` in `apps/api/.env` to a long
+Enable it by setting `OPERATOR_METRICS_TOKEN` in `deploy/selfhost/.env` to a long
 random value (32+ characters, e.g. `openssl rand -hex 32`). When the variable
 is unset the endpoint is disabled and returns 404; a wrong token returns 401.
 Example:

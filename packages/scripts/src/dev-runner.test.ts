@@ -613,7 +613,7 @@ describe("worktree helpers", () => {
 });
 
 describe("dev env factories", () => {
-  test("starts the scheduler whenever API development is enabled", () => {
+  test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
 
@@ -632,15 +632,7 @@ describe("dev env factories", () => {
       rootDir,
     });
 
-    expect(apiSteps.secondary).toHaveLength(1);
-    expect(apiSteps.secondary.at(0)?.cmd.slice(1)).toEqual([
-      "--watch",
-      "src/scheduler/scheduler.ts",
-    ]);
-    expect(apiSteps.secondary.at(0)?.cwd).toBe(
-      path.resolve(rootDir, "apps/api"),
-    );
-    expect(apiSteps.secondary.at(0)?.label).toBe("Scheduler");
+    expect(apiSteps.secondary).toEqual([]);
     expect(webSteps.secondary).toEqual([]);
   });
 

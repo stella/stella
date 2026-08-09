@@ -66,13 +66,13 @@ jobs:
       postgres:
         image: postgres:18.3
         env:
-          POSTGRES_USER: stella
+          POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
           POSTGRES_DB: stella
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella -d stella"
+          --health-cmd "pg_isready -U stella_owner -d stella"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -105,7 +105,7 @@ jobs:
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
         # the same entrypoint the deploy runs, not the drizzle-kit CLI.
         run: bun run src/db/migrate.ts
@@ -113,7 +113,7 @@ jobs:
       - name: Verify schema parity with schema.ts
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # `push --explain` exits with "[i] No changes detected" when the
         # migrated schema already matches schema.ts. Any pending diff fails CI.
         run: |
@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
-          APPLIED=$(psql -h 127.0.0.1 -U stella -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
+          APPLIED=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
           echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
           [ "$EXPECTED" = "$APPLIED" ] || {
             echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
@@ -139,20 +139,20 @@ jobs:
 
       - name: Reject inconsistent migration history
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           PGPASSWORD: stella
         run: |
           set -euo pipefail
-          psql -h 127.0.0.1 -U stella -d stella -c \
+          psql -h 127.0.0.1 -U stella_owner -d stella -c \
             "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1" \
             >/dev/null
-          backup_count=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+          backup_count=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
             "SELECT count(*) FROM drizzle.__migration_history_smoke_backup")
           if [[ "$backup_count" != "1" ]]; then
             echo "::error::Backed up $backup_count migration rows; expected 1."
             exit 1
           fi
-          corrupted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+          corrupted=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
             "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")
           if [[ "$corrupted" != "1" ]]; then
             echo "::error::Corrupted $corrupted migration rows; expected 1."
@@ -162,13 +162,13 @@ jobs:
           migration_exit=0
           (cd apps/api && bun run src/db/migrate.ts) || migration_exit=$?
 
-          restored=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+          restored=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
             "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
           if [[ "$restored" != "1" ]]; then
             echo "::error::Restored $restored migration rows; expected 1."
             exit 1
           fi
-          psql -h 127.0.0.1 -U stella -d stella -c \
+          psql -h 127.0.0.1 -U stella_owner -d stella -c \
             "DROP TABLE drizzle.__migration_history_smoke_backup" \
             >/dev/null
           if [[ "$migration_exit" == "0" ]]; then
@@ -183,7 +183,7 @@ jobs:
         env:
           BETTER_AUTH_SECRET: "migration-smoke-secret-at-least-32-chars"
           BETTER_AUTH_URL: "http://127.0.0.1:3001"
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           EMAIL_PROVIDER: smtp
           FRONTEND_URL: "http://127.0.0.1:3000"
           GOTENBERG_PASSWORD: gotenberg
@@ -212,7 +212,8 @@ jobs:
           trap cleanup EXIT
 
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:3001/live >/dev/null \
+              && grep -q '"message":"scheduler.started"' "$log_file"; then
               exit 0
             fi
             if ! kill -0 "$api_pid" >/dev/null 2>&1; then

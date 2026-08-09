@@ -1,5 +1,11 @@
 import { panic } from "better-result";
 
+import { APPLICATION_RLS_ROLE_NAME } from "./db/role-names";
+import {
+  isLoopbackHostname,
+  isRailwayPrivateHostname,
+} from "./lib/secure-service-url";
+
 /**
  * Resolve the Postgres connection URL.
  *
@@ -24,6 +30,37 @@ const COMPONENT_KEYS = [
 const ALLOWED_SSLMODES = ["require", "verify-ca", "verify-full"] as const;
 const SUPPORTED_DATABASE_PROTOCOLS = ["postgres:", "postgresql:"] as const;
 
+export const hasSecureDatabaseTransport = (databaseUrl: string) => {
+  const parsed = new URL(databaseUrl);
+  if (
+    isLoopbackHostname(parsed.hostname) ||
+    isRailwayPrivateHostname(parsed.hostname)
+  ) {
+    return true;
+  }
+  const sslmodes = parsed.searchParams.getAll("sslmode");
+  return (
+    sslmodes.length === 1 &&
+    ALLOWED_SSLMODES.some((mode) => mode === sslmodes.at(0))
+  );
+};
+
+const assertDatabaseLoginIsNotReserved = (username: string) => {
+  if (username.toLowerCase() === APPLICATION_RLS_ROLE_NAME) {
+    panic(
+      `Database login must not use the reserved ${APPLICATION_RLS_ROLE_NAME} RLS role`,
+    );
+  }
+};
+
+const decodeDatabaseUrlUsername = (username: string) => {
+  try {
+    return decodeURIComponent(username);
+  } catch {
+    return panic("Database login must use valid percent encoding");
+  }
+};
+
 export const resolveDatabaseUrl = (
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined => {
@@ -46,6 +83,9 @@ export const resolveDatabaseUrl = (
     ) {
       panic("DATABASE_URL must use the postgres:// or postgresql:// scheme");
     }
+    assertDatabaseLoginIsNotReserved(
+      decodeDatabaseUrlUsername(parsed.username),
+    );
     return databaseUrl;
   }
 
@@ -91,6 +131,7 @@ export const resolveDatabaseUrl = (
   if (!/^\d+$/u.test(DB_PORT)) {
     panic("DB_PORT must be numeric");
   }
+  assertDatabaseLoginIsNotReserved(DB_USER);
   const auth = `${encodeURIComponent(DB_USER)}:${encodeURIComponent(DB_PASSWORD)}`;
   const name = encodeURIComponent(DB_NAME);
   return `postgres://${auth}@${DB_HOST}:${DB_PORT}/${name}?sslmode=${sslmode}`;

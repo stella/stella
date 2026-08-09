@@ -67,6 +67,10 @@ const checkApiHealth = async (apiUrl: string, expectedCommit?: string) => {
   });
 };
 
+const checkApiReadiness = async (apiUrl: string) => {
+  await fetchWithTimeout(appendPath(apiUrl, "/ready"));
+};
+
 const checkWebHealth = async (webUrl: string) => {
   await fetchWithTimeout(appendPath(webUrl, "/health"));
 };
@@ -132,6 +136,9 @@ const main = async () => {
   const webUrl = readRequiredEnv(WEB_URL_ENV);
   const expectedCommit = readOptionalEnv(EXPECTED_COMMIT_ENV);
 
+  await runProbe("api /ready", async () => {
+    await checkApiReadiness(apiUrl);
+  });
   await runProbe("api /health", async () => {
     await checkApiHealth(apiUrl, expectedCommit);
   });

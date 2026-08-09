@@ -18,19 +18,3 @@ test("validates PDF sources through the shared MIME resolver", async () => {
   expect(source).toContain("resolveExtractionMimeType({");
   expect(source).not.toContain("content.mimeType !== PDF_MIME_TYPE");
 });
-
-test("ships the batch scheduler in the stock self-host deployment", async () => {
-  const dockerfile = await Bun.file(
-    new URL("../../Dockerfile", import.meta.url),
-  ).text();
-  const compose = await Bun.file(
-    new URL("../../../../docker-compose.selfhost.yml", import.meta.url),
-  ).text();
-
-  expect(dockerfile).toContain("--outfile /app/scheduler.js");
-  expect(dockerfile).toContain(
-    "COPY --chown=stella:stella --from=builder /app/scheduler.js /app/scheduler.js",
-  );
-  expect(compose).toContain("scheduler:");
-  expect(compose).toContain('command: ["bun", "/app/scheduler.js"]');
-});

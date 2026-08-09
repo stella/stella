@@ -1,0 +1,485 @@
+#!/usr/bin/env bun
+import { panic } from "better-result";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { APPLICATION_RLS_ROLE_NAME } from "../apps/api/src/db/role-names";
+import { isTlsOrLoopbackUrl } from "../apps/api/src/lib/secure-service-url";
+import {
+  type ApiEnvironmentName,
+  ENV_CATALOG,
+  ENV_OWNER,
+  ENV_REQUIREMENT,
+} from "./env-catalog";
+import {
+  exampleValueForCatalogEntry,
+  parseEnvText,
+  renderEnvironmentEntries,
+  validateDoctorEnvironment,
+} from "./env-tool";
+import {
+  RELEASE_ARTIFACT,
+  RELEASE_DOC_MARKERS,
+  renderReleaseDocsContract,
+  renderSelfhostCompose,
+  renderSelfhostDocsContract,
+  renderSelfhostRunDocsContract,
+  SELFHOST_COMPOSE_PATH,
+  SELFHOST_COMPOSE_ENV,
+  SELFHOST_DOC_MARKERS,
+  SELFHOST_ENV_EXAMPLE_PATH,
+  SELFHOST_ENV_PATH,
+  SELFHOST_RUN_DOC_MARKERS,
+  selfhostComposeViolations,
+} from "./selfhost-contract";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "..");
+const SELFHOST_DOC_PATH = "docs/self-hosting.md";
+const RELEASE_DOC_PATH = "docs/releases.md";
+const RELEASE_WORKFLOW_PATH = ".github/workflows/release.yml";
+const RELEASE_MANIFEST_SCRIPT_PATH = "scripts/create-release-manifest.sh";
+const IMAGE_DIGEST_PATTERN = /@sha256:[a-f0-9]{64}$/u;
+const LOCAL_API_READINESS_ALIAS_PATTERN =
+  /(?:localhost|127\.0\.0\.1):3001\/health/u;
+const RESERVED_DATABASE_LOGIN_PATTERN = new RegExp(
+  String.raw`(?:\bPOSTGRES_USER:\s*["']?${APPLICATION_RLS_ROLE_NAME}["']?(?:\s|$)|postgres(?:ql)?:\/\/${APPLICATION_RLS_ROLE_NAME}(?=[:@])|\b(?:pg_isready|psql)\b[^\n]*\s-U\s+${APPLICATION_RLS_ROLE_NAME}(?=\s|$))`,
+  "imu",
+);
+
+const SELFHOST_ACTIVE_API_ENV_NAMES = [
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_URL",
+  "CONTENT_ENCRYPTION_KEY",
+  "DATABASE_URL",
+  "FRONTEND_URL",
+  "GOTENBERG_PASSWORD",
+  "GOTENBERG_URL",
+  "GOTENBERG_USERNAME",
+  "REDIS_URL",
+  "REQUIRE_PERSONAL_AI_KEY",
+  "S3_ACCESS_KEY_ID",
+  "S3_BUCKET",
+  "S3_CREDENTIALS_PROVIDER",
+  "S3_ENDPOINT",
+  "S3_REGION",
+  "S3_SECRET_ACCESS_KEY",
+  "SELFHOST_BOOTSTRAP_TOKEN",
+  "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
+  "USE_MOCK_AI",
+] as const satisfies readonly ApiEnvironmentName[];
+type SelfhostActiveApiEnvironmentName =
+  (typeof SELFHOST_ACTIVE_API_ENV_NAMES)[number];
+
+const SELFHOST_ACTIVE_API_ENV = new Set<string>(SELFHOST_ACTIVE_API_ENV_NAMES);
+
+const SELFHOST_API_EXAMPLES = {
+  BETTER_AUTH_SECRET: "",
+  BETTER_AUTH_URL: "https://api.stella.example.com",
+  CONTENT_ENCRYPTION_KEY: "",
+  DATABASE_URL:
+    "postgres://stella_owner:password@postgres.example.internal:5432/stella?sslmode=require",
+  FRONTEND_URL: "https://stella.example.com",
+  GOTENBERG_PASSWORD: "",
+  GOTENBERG_URL: "http://gotenberg:3000",
+  GOTENBERG_USERNAME: "stella",
+  REDIS_URL: "rediss://valkey.example.internal:6379",
+  REQUIRE_PERSONAL_AI_KEY: "true",
+  S3_ACCESS_KEY_ID: "",
+  S3_BUCKET: "stella",
+  S3_CREDENTIALS_PROVIDER: "env",
+  S3_ENDPOINT: "https://s3.example.internal",
+  S3_REGION: "us-east-1",
+  S3_SECRET_ACCESS_KEY: "",
+  SELFHOST_BOOTSTRAP_TOKEN: "",
+  SELFHOST_LOCAL_PASSWORD_AUTH: "true",
+  STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: "direct",
+  USE_MOCK_AI: "false",
+} as const satisfies Record<SelfhostActiveApiEnvironmentName, string>;
+const SELFHOST_API_EXAMPLE_VALUES = new Map(
+  Object.entries(SELFHOST_API_EXAMPLES),
+);
+
+const SELFHOST_VALIDATION_ENV_NAMES = [
+  "BETTER_AUTH_SECRET",
+  "CONTENT_ENCRYPTION_KEY",
+  "GOTENBERG_PASSWORD",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
+  "SELFHOST_BOOTSTRAP_TOKEN",
+] as const satisfies readonly ApiEnvironmentName[];
+type SelfhostValidationEnvironmentName =
+  (typeof SELFHOST_VALIDATION_ENV_NAMES)[number];
+
+const SELFHOST_VALIDATION_VALUES = {
+  BETTER_AUTH_SECRET: "a".repeat(32),
+  CONTENT_ENCRYPTION_KEY: "b".repeat(64),
+  GOTENBERG_PASSWORD: "c".repeat(32),
+  S3_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE",
+  S3_SECRET_ACCESS_KEY: "d".repeat(40),
+  SELFHOST_BOOTSTRAP_TOKEN: "e".repeat(32),
+} as const satisfies Record<SelfhostValidationEnvironmentName, string>;
+const SELFHOST_DEPLOYMENT_VALIDATION_VALUES = {
+  STELLA_API_IMAGE: `ghcr.io/stella/stella-api@sha256:${"f".repeat(64)}`,
+} as const;
+const SELFHOST_GOTENBERG_URL = "http://gotenberg:3000/";
+
+export const materializeSelfhostTemplateForValidation = (text: string) => {
+  let materialized = text;
+  for (const [name, value] of Object.entries({
+    ...SELFHOST_VALIDATION_VALUES,
+    ...SELFHOST_DEPLOYMENT_VALIDATION_VALUES,
+  })) {
+    materialized = materialized.replace(
+      `${name}=""`,
+      () => `${name}="${value}"`,
+    );
+  }
+  return materialized;
+};
+
+const apiCatalogEntries = () =>
+  ENV_CATALOG.filter(
+    ({ documented, owner }) =>
+      documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+  );
+
+export const isImmutableApplicationImage = (image: string) =>
+  IMAGE_DIGEST_PATTERN.test(image);
+
+export const isSecureSelfhostGotenbergUrl = (value: string) => 
+  (
+    isTlsOrLoopbackUrl(value, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    }) ||
+    (URL.canParse(value) && new URL(value).href === SELFHOST_GOTENBERG_URL)
+  )
+;
+
+export const renderSelfhostEnvExample = () => {
+  const header = [
+    "# Generated by `bun run selfhost:generate`; edit the runtime schemas or",
+    "# scripts/selfhost-tool.ts instead. Copy this file to deploy/selfhost/.env,",
+    "# replace every active blank value, then run `bun run selfhost:doctor`.",
+    "",
+    "# --- Deployment --------------------------------------------------------",
+    "# Required. Digest-qualified API reference from release-manifest.json.",
+    'STELLA_API_IMAGE=""',
+    "# Compose path of the runtime environment file.",
+    `STELLA_API_ENV_FILE="${SELFHOST_ENV_PATH}"`,
+    "",
+  ].join("\n");
+
+  return renderEnvironmentEntries(apiCatalogEntries(), {
+    header,
+    isActive: ({ name, requirement }) =>
+      requirement === ENV_REQUIREMENT.required ||
+      SELFHOST_ACTIVE_API_ENV.has(name),
+    valueFor: (entry) =>
+      SELFHOST_API_EXAMPLE_VALUES.get(entry.name) ??
+      exampleValueForCatalogEntry({ ...entry, example: undefined }),
+  });
+};
+
+const replaceGeneratedBlock = (
+  document: string,
+  markers: { begin: string; end: string },
+  generated: string,
+) => {
+  const start = document.indexOf(markers.begin);
+  const end = document.indexOf(markers.end);
+  if (start === -1 || end === -1 || end < start) {
+    panic(`Missing generated documentation markers: ${markers.begin}`);
+  }
+  const after = end + markers.end.length;
+  return `${document.slice(0, start)}${generated}${document.slice(after)}`;
+};
+
+const renderSelfhostDoc = () => {
+  const documentWithContract = replaceGeneratedBlock(
+    readFileSync(path.join(REPO_ROOT, SELFHOST_DOC_PATH), "utf-8"),
+    SELFHOST_DOC_MARKERS,
+    renderSelfhostDocsContract(),
+  );
+  return replaceGeneratedBlock(
+    documentWithContract,
+    SELFHOST_RUN_DOC_MARKERS,
+    renderSelfhostRunDocsContract(),
+  );
+};
+
+const renderReleaseDoc = () =>
+  replaceGeneratedBlock(
+    readFileSync(path.join(REPO_ROOT, RELEASE_DOC_PATH), "utf-8"),
+    RELEASE_DOC_MARKERS,
+    renderReleaseDocsContract(),
+  );
+
+const generatedArtifacts = () => [
+  { content: renderSelfhostCompose(), path: SELFHOST_COMPOSE_PATH },
+  { content: renderSelfhostEnvExample(), path: SELFHOST_ENV_EXAMPLE_PATH },
+  { content: renderSelfhostDoc(), path: SELFHOST_DOC_PATH },
+  { content: renderReleaseDoc(), path: RELEASE_DOC_PATH },
+];
+
+export const productionEnvironmentIssues = (text: string) => {
+  const input = parseEnvText(text, {});
+  const result = validateDoctorEnvironment({
+    app: "api",
+    input,
+    mode: "production",
+  });
+  if (result.status === "invalid") {
+    return result.issues;
+  }
+  const issues: string[] = [];
+  const image = input["STELLA_API_IMAGE"];
+  if (!image || !isImmutableApplicationImage(image)) {
+    issues.push("STELLA_API_IMAGE must be a digest-qualified image.");
+  }
+  const gotenbergUrl = input["GOTENBERG_URL"];
+  if (!gotenbergUrl || !isSecureSelfhostGotenbergUrl(gotenbergUrl)) {
+    issues.push(
+      "GOTENBERG_URL must use HTTPS, loopback HTTP, or the generated private Compose endpoint.",
+    );
+  }
+  return issues;
+};
+
+export const existingSelfhostComposeViolations = (absolutePath: string) => {
+  if (!existsSync(absolutePath)) {
+    return [];
+  }
+  return selfhostComposeViolations(readFileSync(absolutePath, "utf-8"));
+};
+
+export const ambientComposeOverrideIssues = (
+  text: string,
+  ambientEnvironment: NodeJS.ProcessEnv,
+) => {
+  const fileEnvironment = parseEnvText(text, {});
+  const issues: string[] = [];
+  for (const name of Object.values(SELFHOST_COMPOSE_ENV)) {
+    const ambientValue = ambientEnvironment[name];
+    if (ambientValue !== undefined && ambientValue !== fileEnvironment[name]) {
+      issues.push(
+        `${name} in the shell conflicts with the checked self-host environment file.`,
+      );
+    }
+  }
+  return issues;
+};
+
+const templateContractIssues = (text: string) => {
+  const issues = productionEnvironmentIssues(
+    materializeSelfhostTemplateForValidation(text),
+  );
+  for (const name of SELFHOST_VALIDATION_ENV_NAMES) {
+    if (!text.includes(`${name}=""`)) {
+      issues.push(`${name} must be an active blank operator-supplied value.`);
+    }
+  }
+  if (!text.includes('STELLA_API_IMAGE=""')) {
+    issues.push("STELLA_API_IMAGE must be an active blank operator value.");
+  }
+  if (!text.includes('USE_MOCK_AI="false"')) {
+    issues.push("The production template must disable mock AI explicitly.");
+  }
+  for (const name of ["EMAIL_PROVIDER", "SMTP_HOST", "SMTP_PORT"] as const) {
+    if (new RegExp(`^${name}=`, "mu").test(text)) {
+      issues.push(
+        `${name} must remain inactive until an operator configures it.`,
+      );
+    }
+  }
+  return issues;
+};
+
+export const releaseManifestIssues = (output: unknown) => {
+  if (typeof output !== "object" || output === null) {
+    return ["The release manifest script did not return an object."];
+  }
+  const values = new Map(Object.entries(output));
+  const issues: string[] = [];
+  for (const artifact of Object.values(RELEASE_ARTIFACT)) {
+    if (!Object.hasOwn(output, artifact.manifestKey)) {
+      issues.push(`Release manifest is missing ${artifact.manifestKey}.`);
+      continue;
+    }
+    const manifestArtifact = values.get(artifact.manifestKey);
+    if (typeof manifestArtifact !== "object" || manifestArtifact === null) {
+      issues.push(
+        `Release manifest ${artifact.manifestKey} must be an artifact object.`,
+      );
+      continue;
+    }
+    const reference = new Map(Object.entries(manifestArtifact)).get(
+      "reference",
+    );
+    if (
+      typeof reference !== "string" ||
+      !isImmutableApplicationImage(reference)
+    ) {
+      issues.push(
+        `Release manifest ${artifact.manifestKey}.reference must be a digest-qualified image reference.`,
+      );
+    }
+  }
+  return issues;
+};
+
+const releaseContractIssues = () => {
+  const digest = `sha256:${"a".repeat(64)}`;
+  const manifest = Bun.spawnSync({
+    cmd: [
+      "bash",
+      RELEASE_MANIFEST_SCRIPT_PATH,
+      "1.2.3",
+      "ghcr.io/stella/stella-api",
+      digest,
+      "ghcr.io/stella/stella-web",
+      digest,
+      "production",
+    ],
+    cwd: REPO_ROOT,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (manifest.exitCode !== 0) {
+    return ["The release manifest script rejected the contract fixture."];
+  }
+  const output: unknown = JSON.parse(manifest.stdout.toString());
+  const issues = releaseManifestIssues(output);
+  const workflow = readFileSync(
+    path.join(REPO_ROOT, RELEASE_WORKFLOW_PATH),
+    "utf-8",
+  );
+  if (
+    !workflow.includes("IMAGE_NAME:") ||
+    !workflow.includes("WEB_IMAGE_NAME:")
+  ) {
+    issues.push("Release workflow must name both API and web images.");
+  }
+  return issues;
+};
+
+type WorkflowSource = {
+  content: string;
+  path: string;
+};
+
+export const workflowContractIssues = (workflows: Iterable<WorkflowSource>) => {
+  const issues: string[] = [];
+  for (const workflow of workflows) {
+    if (LOCAL_API_READINESS_ALIAS_PATTERN.test(workflow.content)) {
+      issues.push(
+        `${workflow.path} must use /live when waiting for a local API process to boot.`,
+      );
+    }
+    if (RESERVED_DATABASE_LOGIN_PATTERN.test(workflow.content)) {
+      issues.push(
+        `${workflow.path} must not use the reserved ${APPLICATION_RLS_ROLE_NAME} RLS role as a database login.`,
+      );
+    }
+  }
+  return issues;
+};
+
+const repositoryWorkflowSources = () =>
+  Array.from(
+    new Bun.Glob(".github/**/*.{yml,yaml}").scanSync({
+      cwd: REPO_ROOT,
+      onlyFiles: true,
+    }),
+    (workflowPath) => ({
+      content: readFileSync(path.join(REPO_ROOT, workflowPath), "utf-8"),
+      path: workflowPath,
+    }),
+  );
+
+const generate = () => {
+  for (const artifact of generatedArtifacts()) {
+    const absolutePath = path.join(REPO_ROOT, artifact.path);
+    mkdirSync(path.dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, artifact.content);
+    console.log(`Generated ${artifact.path}`);
+  }
+};
+
+const check = () => {
+  const issues: string[] = [];
+  for (const artifact of generatedArtifacts()) {
+    const absolutePath = path.join(REPO_ROOT, artifact.path);
+    if (
+      !existsSync(absolutePath) ||
+      readFileSync(absolutePath, "utf-8") !== artifact.content
+    ) {
+      issues.push(`${artifact.path} is stale.`);
+    }
+  }
+  issues.push(
+    ...existingSelfhostComposeViolations(
+      path.join(REPO_ROOT, SELFHOST_COMPOSE_PATH),
+    ),
+    ...templateContractIssues(renderSelfhostEnvExample()),
+    ...releaseContractIssues(),
+    ...workflowContractIssues(repositoryWorkflowSources()),
+  );
+  if (issues.length === 0) {
+    console.log("Self-host production contract is valid.");
+    return true;
+  }
+  for (const issue of issues) {
+    console.error(issue);
+  }
+  console.error("Run `bun run selfhost:generate` after changing the contract.");
+  return false;
+};
+
+const doctor = (envPath = SELFHOST_ENV_PATH) => {
+  const absolutePath = path.resolve(REPO_ROOT, envPath);
+  if (!existsSync(absolutePath)) {
+    console.error(`${envPath} does not exist.`);
+    return false;
+  }
+  const text = readFileSync(absolutePath, "utf-8");
+  const issues = [
+    ...productionEnvironmentIssues(text),
+    ...ambientComposeOverrideIssues(text, process.env),
+  ];
+  if (issues.length === 0) {
+    console.log(`${envPath}: valid production self-host configuration.`);
+    return true;
+  }
+  for (const issue of issues) {
+    console.error(issue);
+  }
+  return false;
+};
+
+const main = () => {
+  const command = process.argv.at(2);
+  if (command === "generate") {
+    generate();
+    return;
+  }
+  if (command === "check") {
+    if (!check()) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+  if (command === "doctor") {
+    if (!doctor(process.argv.at(3))) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+  console.error("Usage: selfhost-tool.ts <generate|check|doctor> [env-file]");
+  process.exitCode = 1;
+};
+
+if (import.meta.main) {
+  main();
+}

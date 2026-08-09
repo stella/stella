@@ -109,6 +109,7 @@ import { httpError } from "@/api/lib/errors/http-error";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
+import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import {
@@ -138,7 +139,7 @@ import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cl
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
-const HEALTH_PATH = "/health";
+const HEALTH_PATHS = new Set(["/health", "/live", "/ready"]);
 const DEFAULT_API_PORT = 3001;
 // Keep-alive idle timeout in seconds; see the `api.listen` call.
 const HTTP_IDLE_TIMEOUT_S = 75;
@@ -190,7 +191,7 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
   set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
 };
 
-const shouldLogRequest = (path: string): boolean => path !== HEALTH_PATH;
+const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
 const getRouteName = (route: string | undefined): string =>
   route ?? "unmatched";
@@ -742,14 +743,14 @@ const startServer = async (): Promise<void> => {
   // Each job is leased individually (`locked_by`/`locked_until`), so running
   // this in every replica is safe.
   //
-  // Last on purpose. After `listen`, because readiness must not wait on
-  // background-job setup: registration touches the database and the first tick
-  // can reach Redis and object storage, none of which the health endpoint
-  // depends on. After the signal handlers, because registration is awaited,
+  // Last on purpose. After `listen`, so liveness can distinguish slow setup
+  // from a dead process; readiness remains false until registration completes.
+  // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
   await ensureDefaultSchedulerJobs();
   scheduler.loop = startSchedulerLoop();
+  markScheduledJobsReady();
   logger.info("scheduler.started", {
     "scheduler.runner_id": scheduler.loop.runnerId,
   });

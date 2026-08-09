@@ -34,8 +34,6 @@
     "db:seed-templates": "bun scripts/seed-templates.ts",
     "db:backfill-chat-search": "bun scripts/backfill-chat-search.ts",
     "db:backfill-search-previews": "bun scripts/backfill-search-previews.ts",
-    "scheduler": "bun src/scheduler/scheduler.ts",
-    "dev:scheduler": "bun --watch src/scheduler/scheduler.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },

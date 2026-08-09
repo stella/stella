@@ -1556,15 +1556,6 @@ export const buildPersistentSteps = ({
     });
   }
 
-  if (modeIncludesApi(mode)) {
-    secondary.push({
-      cmd: [resolveCommandPath("bun"), "--watch", "src/scheduler/scheduler.ts"],
-      cwd: path.resolve(rootDir, "apps/api"),
-      env: apiEnv,
-      label: "Scheduler",
-    });
-  }
-
   return {
     primary,
     secondary,

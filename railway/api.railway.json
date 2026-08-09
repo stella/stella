@@ -16,7 +16,7 @@
   },
   "deploy": {
     "drainingSeconds": 15,
-    "healthcheckPath": "/health",
+    "healthcheckPath": "/ready",
     "healthcheckTimeout": 300,
     "preDeployCommand": ["bun /app/apps/api/src/db/migrate.js"],
     "restartPolicyMaxRetries": 10,

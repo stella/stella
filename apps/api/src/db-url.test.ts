@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveDatabaseUrl } from "@/api/db-url";
+import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 
 const components = {
   DB_HOST: "db.example",
@@ -47,6 +47,16 @@ describe("resolveDatabaseUrl", () => {
     },
   );
 
+  test.each([
+    ["postgres://stella:pw@db.example/app"],
+    ["postgres://STELLA:pw@db.example/app"],
+    ["postgres://st%65lla:pw@db.example/app"],
+  ])("rejects the reserved RLS login: %s", (databaseUrl) => {
+    expect(() => resolveDatabaseUrl({ DATABASE_URL: databaseUrl })).toThrow(
+      "Database login must not use the reserved stella RLS role",
+    );
+  });
+
   test("returns undefined when nothing is set", () => {
     expect(resolveDatabaseUrl({})).toBeUndefined();
   });
@@ -63,6 +73,12 @@ describe("resolveDatabaseUrl", () => {
     ).toBe("postgres://appuser:pw@db.example:5432/appdb?sslmode=verify-full");
   });
 
+  test("rejects the reserved RLS login in component settings", () => {
+    expect(() =>
+      resolveDatabaseUrl({ ...components, DB_USER: "stella" }),
+    ).toThrow("Database login must not use the reserved stella RLS role");
+  });
+
   test("percent-encodes credentials with reserved characters", () => {
     expect(
       resolveDatabaseUrl({
@@ -74,6 +90,18 @@ describe("resolveDatabaseUrl", () => {
       "postgres://user%40host:p%40ss%3Aw%2Frd%3F%23@db.example:5432/appdb?sslmode=require",
     );
   });
+
+  test.each([
+    ["team%owner", "team%25owner"],
+    ["%73tella", "%2573tella"],
+  ])(
+    "treats component DB_USER as literal input: %s",
+    (databaseUser, encodedDatabaseUser) => {
+      expect(resolveDatabaseUrl({ ...components, DB_USER: databaseUser })).toBe(
+        `postgres://${encodedDatabaseUser}:pw@db.example:5432/appdb?sslmode=require`,
+      );
+    },
+  );
 
   test("percent-encodes the database name (path segment)", () => {
     expect(
@@ -153,4 +181,31 @@ describe("resolveDatabaseUrl", () => {
       ).toThrow(/DB_PORT must be numeric/u);
     },
   );
+});
+
+describe("hasSecureDatabaseTransport", () => {
+  test.each([
+    "postgres://owner:password@db.example.com/stella?sslmode=require",
+    "postgres://owner:password@db.example.com/stella?sslmode=verify-ca",
+    "postgres://owner:password@db.example.com/stella?sslmode=verify-full",
+    "postgres://owner:password@localhost/stella?sslmode=disable",
+    "postgres://owner:password@127.0.0.1/stella",
+    "postgres://owner:password@[::1]/stella",
+    "postgres://owner:password@postgres.railway.internal/stella",
+  ])("accepts encrypted or loopback database transport: %s", (databaseUrl) => {
+    expect(hasSecureDatabaseTransport(databaseUrl)).toBe(true);
+  });
+
+  test.each([
+    "postgres://owner:password@db.example.com/stella",
+    "postgres://owner:password@db.example.com/stella?sslmode=disable",
+    "postgres://owner:password@db.example.com/stella?sslmode=prefer",
+    "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=disable",
+    "postgres://owner:password@db.example.com/stella?sslmode=disable&sslmode=require",
+    "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=verify-full",
+    "postgres://owner:password@railway.internal/stella",
+    "postgres://owner:password@postgres.railway.internal.example.com/stella",
+  ])("rejects remote database transport without TLS: %s", (databaseUrl) => {
+    expect(hasSecureDatabaseTransport(databaseUrl)).toBe(false);
+  });
 });

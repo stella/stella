@@ -9,12 +9,15 @@
  */
 import * as v from "valibot";
 
+import { hasSecureDatabaseTransport } from "@/api/db-url";
 import {
   CORPUS_STORAGE_MODES,
   type CorpusStorageMode,
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
+import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
 
 /**
  * NODE_ENV values that identify a deployed (non-local) Stella
@@ -90,7 +93,7 @@ export const envBaseServerSchema = {
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
-  S3_ENDPOINT: v.string(),
+  S3_ENDPOINT: v.pipe(v.string(), v.url()),
   S3_BUCKET: v.string(),
   S3_CREDENTIALS_PROVIDER: v.optional(
     v.picklist(["auto", "env", "aws-runtime", "none"]),
@@ -175,8 +178,13 @@ type EnvBaseInvariantInput = {
   CORPUS_INDEXING_ENABLED: boolean;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
+  DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
+  S3_ACCESS_KEY_ID?: string | undefined;
+  S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
+  S3_ENDPOINT: string;
+  S3_SECRET_ACCESS_KEY?: string | undefined;
   isDev: boolean;
 };
 
@@ -185,10 +193,35 @@ export const envBaseInvariantViolation = ({
   CORPUS_INDEXING_ENABLED,
   CORPUS_STORAGE_ENABLED,
   CORPUS_STORAGE_MODE,
+  DATABASE_URL,
   LEGAL_CORPUS_S3_BUCKET,
   LEGAL_SEARCH_PROVIDER,
+  S3_ACCESS_KEY_ID,
+  S3_CREDENTIALS_PROVIDER,
+  S3_ENDPOINT,
+  S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
+  if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
+    return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+  }
+  if (
+    !isDev &&
+    !isTlsOrLoopbackUrl(S3_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "S3_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
+  const hasAccessKey = isUsableStaticCredential(S3_ACCESS_KEY_ID);
+  const hasSecretKey = isUsableStaticCredential(S3_SECRET_ACCESS_KEY);
+  if (hasAccessKey !== hasSecretKey) {
+    return "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together.";
+  }
+  if (S3_CREDENTIALS_PROVIDER === "env" && !(hasAccessKey && hasSecretKey)) {
+    return 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.';
+  }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_ENDPOINT === undefined

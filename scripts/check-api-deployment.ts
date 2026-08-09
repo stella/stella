@@ -2,6 +2,7 @@ import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 const DEFAULT_ATTEMPTS = 30;
 const DEFAULT_DELAY_MS = 10_000;
+const DEFAULT_PROBE_PATH = "ready";
 const DEFAULT_STABLE_PROBES = 5;
 const FETCH_TIMEOUT_MS = 10_000;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
@@ -88,7 +89,7 @@ const readDeployedCommit = async (apiUrl: string, probePath: string) => {
 const main = async () => {
   const apiUrl = readRequiredEnv("API_DEPLOYMENT_URL");
   const probePath =
-    process.env["API_DEPLOYMENT_PROBE_PATH"]?.trim() || "health";
+    process.env["API_DEPLOYMENT_PROBE_PATH"]?.trim() || DEFAULT_PROBE_PATH;
   const expectedCommit = readRequiredEnv("API_DEPLOYMENT_EXPECTED_COMMIT");
   if (!COMMIT_SHA_PATTERN.test(expectedCommit)) {
     throw new ApiDeploymentError(

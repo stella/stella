@@ -238,7 +238,7 @@ describe("environment file parsing", () => {
 });
 
 describe("environment doctor output", () => {
-  const validApiInput = () => parseEnvText(renderApiEnvExample());
+  const validApiInput = () => parseEnvText(renderApiEnvExample(), {});
 
   test("never renders cataloged secret values", () => {
     const secretEntry = ENV_CATALOG.find(
@@ -346,6 +346,85 @@ describe("environment doctor output", () => {
       expected:
         "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
       overrides: { NODE_ENV: "production" },
+    },
+    {
+      expected: "USE_MOCK_AI is only supported in local development and tests.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        USE_MOCK_AI: "true",
+      },
+    },
+    {
+      expected: 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+      overrides: {
+        S3_ACCESS_KEY_ID: "",
+        S3_CREDENTIALS_PROVIDER: "env",
+        S3_SECRET_ACCESS_KEY: "",
+      },
+    },
+    {
+      expected: 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+      overrides: {
+        S3_ACCESS_KEY_ID: " use-iam-role ",
+        S3_CREDENTIALS_PROVIDER: "env",
+        S3_SECRET_ACCESS_KEY: "USE-IAM-ROLE",
+      },
+    },
+    {
+      expected:
+        "DATABASE_URL must enable TLS outside loopback or Railway private networking.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        DATABASE_URL:
+          "postgres://owner:password@db.example.com:5432/stella?sslmode=disable",
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "S3_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        S3_ENDPOINT: "http://storage.example.com",
+      },
+    },
+    {
+      expected:
+        "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        REDIS_URL: "redis://cache.example.com:6379",
+      },
+    },
+    {
+      expected:
+        "BETTER_AUTH_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        BETTER_AUTH_URL: "http://api.example.com",
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "FRONTEND_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        FRONTEND_URL: "http://workspace.example.com",
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "PUBLIC_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        PUBLIC_URL: "http://public-api.example.com",
+      },
     },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {
     const result = validateDoctorEnvironment({

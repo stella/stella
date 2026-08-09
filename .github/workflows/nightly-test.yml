@@ -201,7 +201,7 @@ jobs:
       - name: Wait for API
         run: |
           for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/live > /dev/null 2>&1; then
               echo "API up after ${i}s"
               exit 0
             fi
@@ -286,13 +286,13 @@ jobs:
       postgres:
         image: postgres:18.3
         env:
-          POSTGRES_USER: stella
+          POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
           POSTGRES_DB: stella
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella -d stella"
+          --health-cmd "pg_isready -U stella_owner -d stella"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -317,7 +317,7 @@ jobs:
       - name: Apply migrations to service Postgres
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # Exercises the shipped migrate entrypoint (Bun SQL + drizzle migrator),
         # so the JSONB persistence suite runs against the real schema, including
         # the case-law ingestion role/policy migrations.
@@ -326,7 +326,7 @@ jobs:
       - name: Run Postgres-gated API suites
         working-directory: apps/api
         env:
-          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # The runner discovers every suite that declares the Postgres gate, so
         # adding a gated test cannot silently omit it from this workflow.
         run: bun run test:postgres

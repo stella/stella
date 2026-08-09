@@ -118,6 +118,17 @@ describe("document-processing worker environment", () => {
     );
   });
 
+  test("accepts Railway private-network Redis in production", () => {
+    expect(
+      validateWorkerEnv({
+        ...baseEnv,
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        REDIS_URL: "redis://default:password@redis.railway.internal:6379",
+      }).exitCode,
+    ).toBe(0);
+  });
+
   test("does not pull the full API environment into the worker graph", async () => {
     const modules = await collectApiModuleGraph(workerEntrypoint);
 
