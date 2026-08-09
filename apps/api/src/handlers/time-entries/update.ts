@@ -21,6 +21,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const updateTimeEntryBodySchema = t.Object({
   id: tSafeId("timeEntry"),
@@ -177,7 +178,7 @@ export const updateTimeEntryHandler = async function* ({
     const resolvedRate = yield* resolveRate({
       safeDb,
       workspaceId,
-      userId: existing.userId,
+      userId: brandPersistedUserId(existing.userId),
       dateWorked: body.dateWorked ?? existing.dateWorked,
     });
     if (!resolvedRate) {

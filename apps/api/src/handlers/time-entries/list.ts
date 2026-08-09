@@ -31,7 +31,10 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedTimeEntryId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const readTimeEntriesQuerySchema = t.Object({
@@ -132,12 +135,13 @@ const readTimeEntries = createSafeHandler(
       }
 
       const validatedUserId = yield* Result.await(
-        safeDb(async (tx) =>
-          await validateOrgUserId(
-            tx,
-            requestedUserId,
-            session.activeOrganizationId,
-          ),
+        safeDb(
+          async (tx) =>
+            await validateOrgUserId(
+              tx,
+              brandPersistedUserId(requestedUserId),
+              session.activeOrganizationId,
+            ),
         ),
       );
       if (!validatedUserId) {

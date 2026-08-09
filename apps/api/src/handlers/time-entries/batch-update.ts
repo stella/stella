@@ -3,7 +3,9 @@ import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
+import {
+  UNPRICED_TIME_ENTRY_CURRENCY,
+} from "@/api/handlers/time-entries/constants";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";

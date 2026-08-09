@@ -930,7 +930,9 @@ const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
+    entity_id: v.optional(
+      v.nullable(v.pipe(v.string(), v.minLength(1))),
+    ),
     date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
