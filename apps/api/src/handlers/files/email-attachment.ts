@@ -200,7 +200,7 @@ export default createSafeHandler(
                   metadata: {
                     attachmentId,
                     fieldId,
-                    mimeType,
+                    mimeType: attachmentMimeType ?? "application/octet-stream",
                     sizeBytes: attachment.bytes.byteLength,
                   },
                 }),
