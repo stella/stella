@@ -1,9 +1,9 @@
 import {
   AlertTriangleIcon,
   BanknoteIcon,
+  CogIcon,
   ExternalLinkIcon,
   ScaleIcon,
-  Settings2Icon,
   TagIcon,
   UserIcon,
   XIcon,
@@ -116,7 +116,7 @@ export const CatalogueDetailPreview = ({
                 />
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailSetup")}
-                  icon={Settings2Icon}
+                  icon={CogIcon}
                   value={t(`catalogue.setup.${setupKey(entry.setup)}`)}
                 />
               </div>

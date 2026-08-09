@@ -3,11 +3,11 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   BuildingIcon,
   ChevronsUpDownIcon,
+  CogIcon,
   GlobeIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
-  Settings2Icon,
   SunIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -166,7 +166,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
               );
             }}
           >
-            <Settings2Icon />
+            <CogIcon />
             {t("common.settings")}
           </MenuItem>
           <MenuSeparator />

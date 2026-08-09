@@ -2,13 +2,13 @@ import { useCallback, useState } from "react";
 
 import {
   BanknoteIcon,
+  CogIcon,
   ExternalLinkIcon,
   KeyRoundIcon,
   LinkIcon,
   LoaderIcon,
   PencilIcon,
   ScaleIcon,
-  Settings2Icon,
   TagIcon,
   UserIcon,
   XIcon,
@@ -158,7 +158,7 @@ export const CatalogueDetailPanel = ({
               )}
               <Field
                 ariaLabel={t("onboarding.catalogueDetailSetup")}
-                icon={Settings2Icon}
+                icon={CogIcon}
                 value={t(`catalogue.setup.${setupKey(entry.setup)}`)}
               />
             </div>

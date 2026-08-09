@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
+  CogIcon,
   CopyIcon,
   FlagIcon,
   GripVerticalIcon,
@@ -19,7 +20,6 @@ import {
   PlusIcon,
   RepeatIcon,
   SearchIcon,
-  SlidersHorizontalIcon,
   SparklesIcon,
   Trash2Icon,
   XIcon,
@@ -1250,7 +1250,7 @@ const GradedFooter = ({
           aria-expanded={advancedOpen}
           onClick={() => setAdvancedOpen((prev) => !prev)}
         >
-          <SlidersHorizontalIcon className="size-3" />
+          <CogIcon className="size-3" />
           {t("knowledge.playbooks.advanced")}
         </InlineAction>
       </div>
@@ -1567,7 +1567,7 @@ const ExtractBody = ({
           aria-expanded={advancedOpen}
           onClick={() => setAdvancedOpen((prev) => !prev)}
         >
-          <SlidersHorizontalIcon className="size-3" />
+          <CogIcon className="size-3" />
           {t("knowledge.playbooks.advanced")}
         </InlineAction>
       </div>
