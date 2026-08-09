@@ -111,7 +111,7 @@ const AttachmentPreview = ({
   useExternalSyncEffect(() => {
     if (!pdfQuery.data) {
       setPdfObjectUrl(null);
-      return;
+      return undefined;
     }
     const objectUrl = URL.createObjectURL(
       new Blob([pdfQuery.data], { type: "application/pdf" }),

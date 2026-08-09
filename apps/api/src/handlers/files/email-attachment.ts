@@ -166,7 +166,7 @@ export default createSafeHandler(
       () => `${disposition};`,
     );
     return Result.ok(
-      new Response(attachment.bytes, {
+      new Response(new Uint8Array(attachment.bytes), {
         headers: {
           ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
           "Cache-Control": "private, no-store",

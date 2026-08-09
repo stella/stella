@@ -150,7 +150,7 @@ export const emailAttachmentPdfOptions = ({
     queryFn: async ({ signal }) => {
       const response = await api
         .files({ workspaceId })
-        ["email-attachment"]({ fieldId, attachmentId })
+        ["email-attachment"]({ fieldId })({ attachmentId })
         .get({ query: { disposition: "inline" }, fetch: { signal } });
       const data = unwrapEden(response);
       if (!(data instanceof Response)) {
