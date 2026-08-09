@@ -45,7 +45,7 @@ const emitCitationRegistrationChange = (
   eventTarget.dispatchEvent(new Event(EMAIL_CITATION_REGISTRATION_EVENT));
 };
 
-const isEmailCitationTargetDetail = (
+export const isEmailCitationTargetDetail = (
   value: unknown,
 ): value is EmailCitationTarget =>
   typeof value === "object" &&

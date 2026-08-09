@@ -32,9 +32,9 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
+  isEmailCitationTargetDetail,
   isKnownEmailCitationTarget,
   registerEmailCitationBlocks,
-  type EmailCitationTarget,
 } from "@/lib/files/email-citations";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
@@ -147,9 +147,11 @@ export const EmailHtmlViewer = ({
   }, [entityId, fieldId, previewQuery.data]);
 
   useExternalSyncEffect(() => {
-    const handleCitation = ({
-      detail,
-    }: CustomEvent<EmailCitationTarget>): void => {
+    const handleCitation = (event: Event): void => {
+      if (!("detail" in event) || !isEmailCitationTargetDetail(event.detail)) {
+        return;
+      }
+      const { detail } = event;
       if (
         detail.entityId !== entityId ||
         detail.fieldId !== fieldId ||
