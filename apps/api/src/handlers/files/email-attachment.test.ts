@@ -54,3 +54,20 @@ test("rejects extracted attachment bytes that fail the file scan", async () => {
   expect(result.error.status).toBe(422);
   expect(result.error.message).toStartWith("File rejected:");
 });
+
+test("rejects empty extracted attachments before persistence", async () => {
+  const result = await scanEmailAttachmentForSave({
+    bytes: new Uint8Array(),
+    fileName: "empty.bin",
+    mimeType: "application/octet-stream",
+  });
+
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    return;
+  }
+  expect(result.error).toMatchObject({
+    status: 422,
+    message: "File rejected: file is empty",
+  });
+});
