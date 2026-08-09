@@ -244,9 +244,7 @@ export const updateTimeEntryHandler = async function* ({
       "taskCode",
       "activityCode",
     ]),
-    ...(changedTimezoneId !== null
-      ? { timezoneId: changedTimezoneId }
-      : {}),
+    ...(changedTimezoneId !== null ? { timezoneId: changedTimezoneId } : {}),
     ...(body.durationMinutes !== undefined
       ? { billedMinutes: roundToBillingIncrement(body.durationMinutes) }
       : {}),
