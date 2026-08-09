@@ -114,19 +114,19 @@ describe("email viewer", () => {
     expect(
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: null,
-        isEmailDisplay: true,
+        isEmailViewerActive: true,
       }),
     ).toBe(EMAIL_EXTRACTION_POLL_INTERVAL_MS);
     expect(
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: "field-current",
-        isEmailDisplay: true,
+        isEmailViewerActive: true,
       }),
     ).toBe(false);
     expect(
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: null,
-        isEmailDisplay: false,
+        isEmailViewerActive: false,
       }),
     ).toBe(false);
   });

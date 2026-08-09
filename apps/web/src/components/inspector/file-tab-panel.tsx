@@ -188,14 +188,16 @@ export const FileTabPanel = ({
     mimeType: tab.mimeType,
   });
   const isEmailDisplay = nativePreviewKind === "email";
+  const isEmailViewerActive =
+    isEmailDisplay && tab.id === activeId && !minimized;
   const isMarkdownDisplay = nativePreviewKind === "markdown";
   const emailEntityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
-    enabled: isEmailDisplay,
+    enabled: isEmailViewerActive,
     refetchInterval: ({ state }) =>
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: state.data?.extractionFileFieldId,
-        isEmailDisplay,
+        isEmailViewerActive,
       }),
   });
   const emailChatMode = getEmailChatMode({

@@ -48,12 +48,12 @@ export const shouldSurfaceEmailChatResolutionError = ({
 
 export const getEmailExtractionRefetchInterval = ({
   extractionFileFieldId,
-  isEmailDisplay,
+  isEmailViewerActive,
 }: {
   extractionFileFieldId: string | null | undefined;
-  isEmailDisplay: boolean;
+  isEmailViewerActive: boolean;
 }): number | false =>
-  isEmailDisplay && extractionFileFieldId === null
+  isEmailViewerActive && extractionFileFieldId === null
     ? EMAIL_EXTRACTION_POLL_INTERVAL_MS
     : false;
 
