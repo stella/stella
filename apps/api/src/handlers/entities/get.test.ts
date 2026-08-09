@@ -101,7 +101,9 @@ describe("readEntityByIdHandler", () => {
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.extractionFileFieldId).toBe("field_email");
+      expect(result.value.extractionFileFieldId).toBe(
+        toSafeId<"field">("field_email"),
+      );
     }
   });
 });

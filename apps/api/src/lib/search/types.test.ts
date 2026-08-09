@@ -44,7 +44,7 @@ describe("findExtractionFileField", () => {
   });
 
   test("returns the canonical source row without duplicating selection", () => {
-    expect(findExtractionFileFieldRow(fields)).toBe(fields.at(0));
+    expect(findExtractionFileFieldRow(fields)).toBe(fields[0]);
   });
 });
 
