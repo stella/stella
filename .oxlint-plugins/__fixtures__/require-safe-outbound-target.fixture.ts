@@ -12,12 +12,21 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
+import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
+
 const STATIC_BASE = "https://api.example.com";
 const STATIC_ALIAS = STATIC_BASE;
 
 declare const dynamicBase: string;
 declare const dynamicPath: string;
 declare const signal: AbortSignal;
+declare const spreadPolicyOverride: {
+  hostPolicy?: {
+    type: "exact-origin";
+    origins: string[];
+  };
+};
+declare const spreadRedirectOverride: { redirect?: RequestRedirect };
 
 export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a parameter has no proven destination origin
@@ -37,6 +46,9 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: retry wrappers cannot make an arbitrary destination trustworthy
   await fetchWithRetry(inputUrl, undefined, { signal });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: relative extension-bearing imports remain recognized network sinks
+  await relativeFetch(inputUrl, { timeoutMs: 1000 });
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: genuine global fetch is also an outbound sink
   await globalThis.fetch(inputUrl, { signal });
@@ -60,6 +72,17 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an absolute runtime first argument overrides the fixed URL base
   await fetchWithTimeout(new URL(inputUrl, STATIC_BASE), { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: special-scheme URL parsing treats a backslash after a slash as an authority delimiter
+  await fetchWithTimeout(new URL(`/\\${inputUrl}`, STATIC_BASE), {
+    timeoutMs: 1000,
+  });
+
+  const originalUrl = new URL("https://api.example.com/items");
+  const urlAlias = originalUrl;
+  urlAlias.hostname = inputUrl;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a URL through an alias invalidates the original binding's proof
+  await fetchWithTimeout(originalUrl, { timeoutMs: 1000 });
 
   const mutableOrigins = ["https://provider.example"];
   mutableOrigins.push(new URL(inputUrl).origin);
@@ -85,6 +108,38 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   if (redirectableProviderUrl !== null) {
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: provider-restricted targets must reject redirects at the network sink
     await fetchWithTimeout(redirectableProviderUrl, { timeoutMs: 1000 });
+  }
+
+  const spreadPolicy = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ["https://provider.example"],
+    },
+    ...spreadPolicyOverride,
+  });
+  if (spreadPolicy !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an opaque spread can replace a proven host policy
+    await fetchWithTimeout(spreadPolicy, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const spreadRedirect = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ["https://provider.example"],
+    },
+  });
+  if (spreadRedirect !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an opaque spread can replace redirect: error
+    await fetchWithTimeout(spreadRedirect, {
+      redirect: "error",
+      ...spreadRedirectOverride,
+      timeoutMs: 1000,
+    });
   }
 };
 

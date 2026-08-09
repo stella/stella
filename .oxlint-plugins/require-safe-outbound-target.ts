@@ -25,6 +25,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
+import path from "node:path";
 
 import {
   filenameForContext,
@@ -38,10 +39,10 @@ import {
 import type { AstNode } from "./utils.ts";
 
 const FETCH_MODULES = new Map([
-  ["@/api/lib/fetch", new Set(["fetchWithTimeout"])],
+  ["apps/api/src/lib/fetch", new Set(["fetchWithTimeout"])],
   ["@stll/fetch", new Set(["fetchWithTimeout"])],
   [
-    "@/api/handlers/case-law/ingestion/adapters/retry",
+    "apps/api/src/handlers/case-law/ingestion/adapters/retry",
     new Set(["fetchWithRetry"]),
   ],
 ]);
@@ -131,7 +132,11 @@ const hasFixedOrigin = (pattern: string | null): boolean => {
 const normalizePath = (path: string): string => path.replaceAll("\\", "/");
 
 const isProvablyRelativeUrlPattern = (pattern: string | null): boolean => {
-  if (pattern === null || pattern.startsWith(DYNAMIC_PART)) {
+  if (
+    pattern === null ||
+    pattern.startsWith(DYNAMIC_PART) ||
+    pattern.includes("\\")
+  ) {
     return false;
   }
   const dynamicIndex = pattern.indexOf(DYNAMIC_PART);
@@ -182,6 +187,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         let allowedFiles = new Set<string>();
+        let filename = "";
         let fileIsAllowed = false;
 
         const resolveVariable = (
@@ -222,8 +228,47 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const variableHasOriginMutation = (variable: ScopeVariable): boolean =>
-          variable.references.some((reference) => {
+        const aliasVariableForReference = (
+          identifier: AstNode,
+        ): ScopeVariable | null => {
+          let current = identifier;
+          while (true) {
+            const parent = current.parent;
+            if (
+              !isAstNode(parent) ||
+              ![
+                "ChainExpression",
+                "TSAsExpression",
+                "TSSatisfiesExpression",
+              ].includes(parent.type) ||
+              parent.expression !== current
+            ) {
+              break;
+            }
+            current = parent;
+          }
+          const declarator = current.parent;
+          if (
+            !isAstNode(declarator) ||
+            declarator.type !== "VariableDeclarator" ||
+            declarator.init !== current ||
+            !isEstreeIdentifier(declarator.id)
+          ) {
+            return null;
+          }
+          return resolveVariable(declarator.id);
+        };
+
+        const variableHasOriginMutation = (
+          variable: ScopeVariable,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          if (visited.has(variable)) {
+            return false;
+          }
+          const nextVisited = new Set(visited);
+          nextVisited.add(variable);
+          return variable.references.some((reference) => {
             const identifier = reference.identifier;
             if (!isAstNode(identifier)) {
               return false;
@@ -234,7 +279,10 @@ export default eslintCompatPlugin({
               member.type !== "MemberExpression" ||
               member.object !== identifier
             ) {
-              return false;
+              const alias = aliasVariableForReference(identifier);
+              return (
+                alias !== null && variableHasOriginMutation(alias, nextVisited)
+              );
             }
             const propertyName =
               member.computed === false
@@ -269,6 +317,7 @@ export default eslintCompatPlugin({
                   parent.argument === member))
             );
           });
+        };
 
         const variableHasDeepMutation = (variable: ScopeVariable): boolean =>
           variable.references.some((reference) => {
@@ -501,7 +550,13 @@ export default eslintCompatPlugin({
         ): AstNode | null => {
           const expression = unwrapExpression(node);
           if (expression?.type === "ObjectExpression") {
-            return expression;
+            return Array.isArray(expression.properties) &&
+              expression.properties.every(
+                (property) =>
+                  isAstNode(property) && property.type !== "SpreadElement",
+              )
+              ? expression
+              : null;
           }
           if (!isEstreeIdentifier(expression)) {
             return null;
@@ -672,10 +727,19 @@ export default eslintCompatPlugin({
           if (imported === null) {
             return false;
           }
-          return (
-            FETCH_MODULES.get(imported.source)?.has(imported.importedName) ===
-            true
-          );
+          let source = imported.source.replace(/\.[cm]?[jt]sx?$/u, "");
+          if (source.startsWith("@/api/")) {
+            source = `apps/api/src/${source.slice("@/api/".length)}`;
+          } else if (source.startsWith(".")) {
+            source = normalizePath(
+              path.resolve(path.dirname(filename), source),
+            );
+            const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
+            if (apiSourceIndex >= 0) {
+              source = source.slice(apiSourceIndex + 1);
+            }
+          }
+          return FETCH_MODULES.get(source)?.has(imported.importedName) === true;
         };
 
         const isGlobalReference = (identifier: IdentifierNode): boolean => {
@@ -716,6 +780,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             allowedFiles = new Set();
+            filename = normalizePath(filenameForContext(context));
             fileIsAllowed = false;
             const options = context.options.at(0);
             if (
@@ -731,7 +796,6 @@ export default eslintCompatPlugin({
                 allowedFiles.add(normalizePath(file));
               }
             }
-            const filename = normalizePath(filenameForContext(context));
             for (const allowed of allowedFiles) {
               if (filename === allowed || filename.endsWith(`/${allowed}`)) {
                 fileIsAllowed = true;
