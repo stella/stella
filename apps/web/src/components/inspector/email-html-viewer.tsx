@@ -11,9 +11,12 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { DocumentIcon } from "@/components/document-icon";
 import {
+  EMAIL_CHAT_MODE,
   getEmailAttachmentSize,
+  getEmailFileChatContext,
   localizeEmailBodyHtml,
   parseEmailDate,
+  type EmailChatMode,
   type EmailBodyFoldLabels,
 } from "@/components/inspector/email-html-viewer.logic";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -28,23 +31,32 @@ type EmailHtmlViewerProps = {
 };
 
 type EmailFileViewerProps = EmailHtmlViewerProps & {
+  chatMode: EmailChatMode;
   entityId: string;
   fileName: string;
 };
 
 export const EmailFileViewer = ({
+  chatMode,
   entityId,
   fieldId,
   fileName,
   workspaceId,
-}: EmailFileViewerProps) => (
-  <FileViewerWithAI
-    activeFile={{ entityId, fileFieldId: fieldId, fileName }}
-    workspaceId={workspaceId}
-  >
-    <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
-  </FileViewerWithAI>
-);
+}: EmailFileViewerProps) => {
+  const fileChatContext =
+    chatMode === EMAIL_CHAT_MODE.contextual
+      ? getEmailFileChatContext({ entityId, fieldId, fileName, workspaceId })
+      : { workspaceId };
+
+  return (
+    <FileViewerWithAI
+      {...fileChatContext}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
+    </FileViewerWithAI>
+  );
+};
 
 export const EmailHtmlViewer = ({
   fieldId,

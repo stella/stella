@@ -5,6 +5,50 @@ import type {
   EmailBodyFoldKind,
 } from "@/lib/files/email-preview";
 
+export const EMAIL_CHAT_MODE = {
+  contextual: "contextual",
+  previewOnly: "preview-only",
+} as const;
+
+export type EmailChatMode =
+  (typeof EMAIL_CHAT_MODE)[keyof typeof EMAIL_CHAT_MODE];
+
+type EmailVersionIdentity = {
+  file: { fieldId: string } | null;
+  id: string;
+};
+
+export const getEmailChatMode = ({
+  currentVersionId,
+  fieldId,
+  versions,
+}: {
+  currentVersionId: string | null | undefined;
+  fieldId: string;
+  versions: readonly EmailVersionIdentity[] | undefined;
+}): EmailChatMode =>
+  versions?.some(
+    (version) =>
+      version.id === currentVersionId && version.file?.fieldId === fieldId,
+  )
+    ? EMAIL_CHAT_MODE.contextual
+    : EMAIL_CHAT_MODE.previewOnly;
+
+export const getEmailFileChatContext = ({
+  entityId,
+  fieldId,
+  fileName,
+  workspaceId,
+}: {
+  entityId: string;
+  fieldId: string;
+  fileName: string;
+  workspaceId: string;
+}) => ({
+  activeFile: { entityId, fileFieldId: fieldId, fileName },
+  workspaceId,
+});
+
 export const parseEmailDate = (value: string | null): Date | null => {
   if (!value) {
     return null;

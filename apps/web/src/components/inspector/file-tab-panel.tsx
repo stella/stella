@@ -26,6 +26,7 @@ import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
+import { getEmailChatMode } from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
 import {
@@ -69,6 +70,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 type MatterOrigin = {
   color: string | null;
@@ -183,6 +185,18 @@ export const FileTabPanel = ({
   });
   const isEmailDisplay = nativePreviewKind === "email";
   const isMarkdownDisplay = nativePreviewKind === "markdown";
+  const emailVersionsQuery = useQuery({
+    ...entityVersionsOptions({
+      entityId: tab.entityId,
+      workspaceId: tab.workspaceId,
+    }),
+    enabled: isEmailDisplay,
+  });
+  const emailChatMode = getEmailChatMode({
+    currentVersionId: emailVersionsQuery.data?.currentVersionId,
+    fieldId: tab.id,
+    versions: emailVersionsQuery.data?.versions,
+  });
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
@@ -734,6 +748,7 @@ export const FileTabPanel = ({
     if (isEmailDisplay) {
       return (
         <EmailFileViewer
+          chatMode={emailChatMode}
           entityId={tab.entityId}
           fieldId={tab.id}
           fileName={tab.fileName}

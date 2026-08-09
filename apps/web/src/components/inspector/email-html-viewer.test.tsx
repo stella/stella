@@ -10,6 +10,11 @@ import {
   EmailFileViewer,
   EmailHtmlViewer,
 } from "@/components/inspector/email-html-viewer";
+import {
+  EMAIL_CHAT_MODE,
+  getEmailChatMode,
+  getEmailFileChatContext,
+} from "@/components/inspector/email-html-viewer.logic";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -37,9 +42,26 @@ const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
   );
 
 describe("email viewer", () => {
-  test("reuses the contextual file chat surface", () => {
+  test("passes the complete file identity to contextual chat", () => {
+    expect(
+      getEmailFileChatContext({
+        entityId: "entity-1",
+        fieldId: "field-1",
+        fileName: "message.eml",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      activeFile: {
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        fileName: "message.eml",
+      },
+      workspaceId: "workspace-1",
+    });
+
     const html = renderWithProviders(
       <EmailFileViewer
+        chatMode={EMAIL_CHAT_MODE.contextual}
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
@@ -49,7 +71,37 @@ describe("email viewer", () => {
     );
 
     expect(html).toContain('data-file-viewer-ai="true"');
+    expect(html).toContain("flex min-h-0 flex-1 flex-col");
     expect(html).toContain('role="status"');
+  });
+
+  test("keeps historical and unresolved versions preview-only", () => {
+    const versions = [
+      { id: "version-current", file: { fieldId: "field-current" } },
+      { id: "version-old", file: { fieldId: "field-old" } },
+    ];
+
+    expect(
+      getEmailChatMode({
+        currentVersionId: "version-current",
+        fieldId: "field-current",
+        versions,
+      }),
+    ).toBe(EMAIL_CHAT_MODE.contextual);
+    expect(
+      getEmailChatMode({
+        currentVersionId: "version-current",
+        fieldId: "field-old",
+        versions,
+      }),
+    ).toBe(EMAIL_CHAT_MODE.previewOnly);
+    expect(
+      getEmailChatMode({
+        currentVersionId: undefined,
+        fieldId: "field-current",
+        versions: undefined,
+      }),
+    ).toBe(EMAIL_CHAT_MODE.previewOnly);
   });
 
   test("renders native metadata and keeps attachments informational", () => {
