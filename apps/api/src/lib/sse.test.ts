@@ -1,5 +1,10 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
+import {
+  REALTIME_EVENT_TYPE,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
 import { toSafeId } from "@/api/lib/branded-types";
 
 type MessageHandler = (message: string) => void;
@@ -128,6 +133,10 @@ const flushMicrotasks = async (): Promise<void> => {
 
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
+const testEvent = (marker: string): WorkspaceRealtimeEvent => ({
+  type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
+  data: ["sse-test", marker],
+});
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
@@ -148,7 +157,7 @@ describe("sse module import", () => {
 
   test("broadcasting before startSse does not throw", async () => {
     expect(() =>
-      broadcast(workspaceId, { type: "test-event", data: null }),
+      broadcast(workspaceId, testEvent("before-start")),
     ).not.toThrow();
 
     await flushMicrotasks();
@@ -298,7 +307,7 @@ describe("subscribe: already-aborted signal", () => {
 
     // A subsequent broadcast must not resurrect or feed the dead stream:
     // nothing was registered, so there is nothing to enqueue into.
-    broadcast(workspaceId, { type: "after-abort", data: null });
+    broadcast(workspaceId, testEvent("after-abort"));
     await flushMicrotasks();
 
     const second = await reader.read();
@@ -317,7 +326,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     const stream = subscribe(workspaceId, organizationId, controller.signal);
     const reader = stream.getReader();
 
-    broadcast(workspaceId, { type: "local-only", data: { n: 1 } });
+    broadcast(workspaceId, testEvent("local-only"));
 
     const { value } = await reader.read();
     const text = new TextDecoder().decode(value);
@@ -348,8 +357,8 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // loopback (publish -> subscriber handler -> local delivery), never a
     // second inline copy. Reading two events in order proves the first was
     // delivered exactly once.
-    broadcast(workspaceId, { type: "event-a", data: null });
-    broadcast(workspaceId, { type: "event-b", data: null });
+    broadcast(workspaceId, testEvent("event-a"));
+    broadcast(workspaceId, testEvent("event-b"));
 
     expect(decode((await reader.read()).value)).toContain("event-a");
     expect(decode((await reader.read()).value)).toContain("event-b");
@@ -374,7 +383,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const reader = stream.getReader();
 
     // Baseline: loopback delivery works while subscribed.
-    broadcast(workspaceId, { type: "before-drop", data: null });
+    broadcast(workspaceId, testEvent("before-drop"));
     expect(decode((await reader.read()).value)).toContain("before-drop");
 
     // Bun reconnects the socket but does NOT re-issue SUBSCRIBE: the client is
@@ -396,8 +405,8 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // old code kept treating the reconnected client as attached, no loopback
     // would arrive and these reads would hang; if it re-subscribed on the same
     // client, each event would be delivered twice.
-    broadcast(workspaceId, { type: "after-reconnect-1", data: null });
-    broadcast(workspaceId, { type: "after-reconnect-2", data: null });
+    broadcast(workspaceId, testEvent("after-reconnect-1"));
+    broadcast(workspaceId, testEvent("after-reconnect-2"));
     expect(decode((await reader.read()).value)).toContain("after-reconnect-1");
     expect(decode((await reader.read()).value)).toContain("after-reconnect-2");
 
@@ -429,7 +438,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     }
     await flushMicrotasks();
 
-    broadcast(workspaceId, { type: "deaf-window", data: null });
+    broadcast(workspaceId, testEvent("deaf-window"));
     expect(decode((await reader.read()).value)).toContain("deaf-window");
 
     subscribeBehavior = "resolve";
@@ -466,14 +475,14 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // Broadcast our own event in the window: delivered inline AND published with
     // our origin id + deliveredInline=true, so the copy that loops back through
     // the already-live subscription must be suppressed.
-    broadcast(workspaceId, { type: "own-in-window", data: null });
+    broadcast(workspaceId, testEvent("own-in-window"));
 
     // Exactly one copy (the inline one). Attaching the replacement and then
     // broadcasting a steady event that rides loopback only; reading it second
     // proves the windowed event was not delivered twice.
     expect(decode((await reader.read()).value)).toContain("own-in-window");
     await flushMicrotasks();
-    broadcast(workspaceId, { type: "after-window", data: null });
+    broadcast(workspaceId, testEvent("after-window"));
     expect(decode((await reader.read()).value)).toContain("after-window");
 
     controller.abort();
@@ -506,7 +515,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const remotePayload = JSON.stringify({
       scope: "workspace",
       id: workspaceId,
-      event: { type: "remote-in-window", data: null },
+      event: testEvent("remote-in-window"),
       originInstanceId: "some-other-instance",
       deliveredInline: false,
     });
@@ -552,11 +561,11 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     // A loopback arrives on the OLD generation's still-live callback: the
     // generation gate must drop it. The replacement's loopback delivers once.
-    const workspacePayload = (type: string): string =>
+    const workspacePayload = (marker: string): string =>
       JSON.stringify({
         scope: "workspace",
         id: workspaceId,
-        event: { type, data: null },
+        event: testEvent(marker),
       });
     original?.messageHandler?.(workspacePayload("stale-old-generation"));
     replacement?.messageHandler?.(workspacePayload("fresh-new-generation"));

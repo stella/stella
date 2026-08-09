@@ -1,44 +1,27 @@
 import { useQueryClient } from "@tanstack/react-query";
 
+import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
+import {
+  getWorkspaceRealtimeQueryKey,
+  parseWorkspaceRealtimeMessage,
+} from "@/lib/workspace-realtime";
 
-const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
 } satisfies EventSourceInit;
 
-type WorkspaceSSEEvent = {
-  type: string;
-  data: unknown;
-};
-
 type UseWorkspaceSSEOptions = {
-  onEvent?: (event: WorkspaceSSEEvent) => void;
+  onEvent?: (event: WorkspaceRealtimeEvent) => void;
 };
 
 const getWorkspaceSSEUrl = (workspaceId: string) =>
   apiUrl(`/workspaces/${workspaceId}/events`);
-
-const parseWorkspaceSSEEvent = (data: string): WorkspaceSSEEvent | null => {
-  const parsed: unknown = JSON.parse(data);
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("type" in parsed) ||
-    typeof parsed.type !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    type: parsed.type,
-    data: "data" in parsed ? parsed.data : undefined,
-  };
-};
 
 /**
  * Subscribe to workspace-scoped SSE events. On receiving an
@@ -55,19 +38,19 @@ export const useWorkspaceSSE = (
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
 
-  const handleParsedEvent = useLatestCallback((event: WorkspaceSSEEvent) => {
-    options.onEvent?.(event);
+  const handleParsedEvent = useLatestCallback(
+    (event: WorkspaceRealtimeEvent) => {
+      options.onEvent?.(event);
 
-    if (
-      event.type === INVALIDATE_QUERY_EVENT_TYPE &&
-      Array.isArray(event.data)
-    ) {
-      detached(
-        queryClient.invalidateQueries({ queryKey: event.data }),
-        "useWorkspaceSSE",
-      );
-    }
-  });
+      const queryKey = getWorkspaceRealtimeQueryKey(event);
+      if (queryKey) {
+        detached(
+          queryClient.invalidateQueries({ queryKey }),
+          "useWorkspaceSSE",
+        );
+      }
+    },
+  );
   const captureClosedConnection = useLatestCallback(() => {
     analytics.captureError(
       new Error(`SSE connection closed for workspace ${workspaceId}`),
@@ -81,16 +64,12 @@ export const useWorkspaceSSE = (
     );
 
     const handleMessage = (event: MessageEvent) => {
-      try {
-        const parsed = parseWorkspaceSSEEvent(String(event.data));
-        if (!parsed) {
-          return;
-        }
-
-        handleParsedEvent(parsed);
-      } catch {
-        // Malformed SSE data; ignore.
+      const parsed = parseWorkspaceRealtimeMessage(String(event.data));
+      if (!parsed) {
+        return;
       }
+
+      handleParsedEvent(parsed);
     };
 
     const handleError = () => {

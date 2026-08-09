@@ -1,5 +1,10 @@
 import Elysia, { t } from "elysia";
 
+import {
+  REALTIME_EVENT_TYPE,
+  type OrganizationRealtimeEvent,
+} from "@stll/api-contract";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 import { authMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,8 +18,6 @@ const invalidateQueryBodySchema = t.Object({
   queryKeys: t.Optional(t.Array(queryKeySchema)),
 });
 
-const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
-
 // Elysia runs a macro's afterHandle even when an earlier beforeHandle
 // short-circuited the request (e.g. the /v1 rate limiter answering 429),
 // i.e. BEFORE validateAuth's resolve populated `session`. The static types
@@ -25,10 +28,11 @@ const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const didAuthResolve = (ctx: { session?: unknown }): boolean =>
   ctx.session !== undefined && ctx.session !== null;
 
-const createInvalidateQueryEvent = (queryKey: string[]) => ({
-  type: INVALIDATE_QUERY_EVENT_TYPE,
-  data: queryKey,
-});
+const createInvalidateQueryEvent = (queryKey: string[]) =>
+  ({
+    type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
+    data: queryKey,
+  }) satisfies OrganizationRealtimeEvent;
 
 export const broadcastQueryInvalidationToOrganization = (
   organizationId: SafeId<"organization">,
