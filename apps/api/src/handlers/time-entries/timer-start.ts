@@ -2,14 +2,11 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { member } from "@/api/db/auth-schema";
 import {
   ACTIVE_TIMER_INDEX_NAME,
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
-  workspaceMembers,
-  workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -20,6 +17,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStartBodySchema = t.Object({
@@ -102,46 +100,13 @@ const timerStart = createSafeHandler(
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
-      const [activeWorkspace] = await tx
-        .select({
-          clientId: workspaces.clientId,
-          organizationRole: member.role,
-          workspaceMemberId: workspaceMembers.id,
-        })
-        .from(workspaces)
-        .leftJoin(
-          member,
-          and(
-            eq(member.organizationId, workspaces.organizationId),
-            eq(member.userId, user.id),
-          ),
-        )
-        .leftJoin(
-          workspaceMembers,
-          and(
-            eq(workspaceMembers.workspaceId, workspaces.id),
-            eq(workspaceMembers.userId, user.id),
-          ),
-        )
-        .where(
-          and(
-            eq(workspaces.id, workspaceId),
-            eq(workspaces.organizationId, session.activeOrganizationId),
-            eq(workspaces.status, "active"),
-          ),
-        )
-        .limit(1);
-      if (!activeWorkspace) {
-        return { type: "workspace_unavailable" as const };
-      }
-      const hasAdminBypass =
-        (activeWorkspace.organizationRole === "owner" ||
-          activeWorkspace.organizationRole === "admin") &&
-        activeWorkspace.clientId !== null;
-      if (
-        activeWorkspace.organizationRole === null ||
-        (activeWorkspace.workspaceMemberId === null && !hasAdminBypass)
-      ) {
+      const hasCurrentAccess = await hasCurrentTimerMatterAccess({
+        organizationId: session.activeOrganizationId,
+        tx,
+        userId: user.id,
+        workspaceId,
+      });
+      if (!hasCurrentAccess) {
         return { type: "workspace_unavailable" as const };
       }
       const totalEntries = await tx.$count(

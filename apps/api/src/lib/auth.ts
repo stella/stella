@@ -37,6 +37,7 @@ import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
   OAUTH_UI_CONSENT_PATH,
@@ -101,7 +102,7 @@ import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
-import { revokeRemovedMemberAccess } from "@/api/lib/time-entry-offboarding";
+import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
@@ -1018,9 +1019,18 @@ const createAuth = () => {
             // rows by the plugin itself (the membership it just removed), not
             // supplied by the caller, so this is where they become ownership
             // ids for the tenant predicates the helper applies.
-            await revokeRemovedMemberAccess({
-              organizationId: brandPersistedOrganizationId(org.id),
-              userId: brandPersistedUserId(removedMember.userId),
+            const organizationId = brandPersistedOrganizationId(org.id);
+            const userId = brandPersistedUserId(removedMember.userId);
+            await rootDb.transaction(async (tx) => {
+              await closeRemovedMemberActiveTimer({
+                organizationId,
+                tx,
+                userId,
+              });
+              await revokeOrganizationMemberAuthArtifacts(tx, {
+                organizationId,
+                userId,
+              });
             });
           },
         },
