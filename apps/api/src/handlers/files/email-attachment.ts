@@ -29,6 +29,8 @@ import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
+const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
+
 const emailAttachmentFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
@@ -59,7 +61,9 @@ const emailAttachmentFieldQuery = async (
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "document_processing" },
-  query: t.Object({ disposition: t.UnionEnum(["inline", "download"]) }),
+  query: t.Object({
+    disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
+  }),
   params: workspaceParams({
     fieldId: tSafeId("field"),
     attachmentId: t.String({ minLength: 1, maxLength: 64 }),
