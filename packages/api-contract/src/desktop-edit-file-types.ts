@@ -36,11 +36,7 @@ export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
 export const desktopEditFileTypeForMimeType = (
   mimeType: string,
 ): DesktopEditFileType | null => {
-  const normalizedMimeType = mimeType
-    .split(";", 1)
-    .at(0)
-    ?.trim()
-    .toLowerCase();
+  const normalizedMimeType = mimeType.split(";", 1).at(0)?.trim().toLowerCase();
   if (!normalizedMimeType) {
     return null;
   }
