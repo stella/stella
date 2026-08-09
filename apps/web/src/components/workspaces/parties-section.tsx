@@ -53,10 +53,7 @@ import {
 } from "@/lib/workspaces/party-roles";
 import type { PartyRole } from "@/lib/workspaces/party-roles";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
-import {
-  workspaceContactsKeys,
-  workspaceContactsOptions,
-} from "@/lib/workspaces/queries/workspace-contacts";
+import { workspaceContactsOptions } from "@/lib/workspaces/queries/workspace-contacts";
 
 type PartiesSectionProps = {
   workspaceId: string;
@@ -462,9 +459,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             vars.workspaceContactId,
           ),
         })
-        .delete({
-          queryKey: workspaceContactsKeys.all(vars.workspaceId),
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -578,7 +573,6 @@ const AddPartyDialog = ({
         .contacts.put({
           ...body,
           contactId: toSafeId<"contact">(body.contactId),
-          queryKey: workspaceContactsKeys.all(ws),
         });
 
       return unwrapEden(response);

@@ -2,10 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { ratesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 export const ratesKeys = {
-  all: (workspaceId: string) => ["rates", workspaceId],
+  all: ratesQueryRoot,
   tables: (workspaceId: string) => [...ratesKeys.all(workspaceId), "tables"],
   entries: (workspaceId: string, rateTableId: string) => [
     ...ratesKeys.all(workspaceId),

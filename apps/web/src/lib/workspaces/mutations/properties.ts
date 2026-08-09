@@ -45,7 +45,6 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: propertiesKeys.all(workspaceId),
           name,
           contentType,
           ...(toolType ? { toolType } : {}),
@@ -103,7 +102,6 @@ export const useCreatePropertiesBatch = ({
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .batch.put({
-          queryKey: propertiesKeys.all(workspaceId),
           items: items.map((item) => ({
             name: item.name,
             contentType: item.contentType,
@@ -166,7 +164,6 @@ export const useUpdateProperty = () => {
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .property({ propertyId: toSafeId<"property">(propertyId) })
         .post({
-          queryKey: propertiesKeys.all(workspaceId),
           name,
           content,
           tool:
@@ -299,9 +296,7 @@ export const useDeleteProperty = () => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .property({ propertyId: toSafeId<"property">(propertyId) })
-        .delete({
-          queryKey: propertiesKeys.all(workspaceId),
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);

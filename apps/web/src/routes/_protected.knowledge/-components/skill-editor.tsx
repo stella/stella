@@ -335,7 +335,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
-        .patch({ ...payload, queryKey: ["skills"] });
+        .patch({ ...payload });
       return unwrapEden(response);
     },
     onSuccess: () => {
@@ -361,7 +361,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
-        .resources.post({ ...payload, queryKey: ["skills"] });
+        .resources.post({ ...payload });
       return unwrapEden(response);
     },
     onSuccess: (data) => {
@@ -382,7 +382,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         .skills({ skillId: safeSkillId })
         .resources.upload.post({
           ...payload,
-          queryKey: ["skills"],
         });
       return unwrapEden(response);
     },
@@ -402,7 +401,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     mutationFn: async (payload: { path: string; resourceId: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
-        .resources.delete({ path: payload.path, queryKey: ["skills"] });
+        .resources.delete({ path: payload.path });
       return {
         ...unwrapEden(response),
         resourceId: payload.resourceId,
@@ -437,7 +436,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     mutationFn: async (payload: { oldPath: string; newPath: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
-        .resources.rename.post({ ...payload, queryKey: ["skills"] });
+        .resources.rename.post({ ...payload });
       return unwrapEden(response);
     },
     onSuccess: (data, variables) => {

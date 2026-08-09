@@ -6,7 +6,10 @@ import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
-import { workspacesKeys } from "@/lib/workspaces/queries";
+import {
+  workspaceJustificationsQueryRoot,
+  workspaceWorkflowQueryRoot,
+} from "@/lib/workspaces/queries/workspace.logic";
 
 type JustificationsKey = {
   workspaceId: string;
@@ -19,19 +22,13 @@ type WorkflowTargetCountKey = {
 };
 
 export const workspaceKeys = {
-  workflow: (workspaceId: string) => [
-    ...workspacesKeys.byId(workspaceId),
-    "workflow",
-  ],
+  workflow: workspaceWorkflowQueryRoot,
   workflowTargetCount: ({ entityIds, workspaceId }: WorkflowTargetCountKey) => [
     ...workspaceKeys.workflow(workspaceId),
     "target-count",
     { entityIds },
   ],
-  justifications: (workspaceId: string) => [
-    ...workspacesKeys.byId(workspaceId),
-    "justifications",
-  ],
+  justifications: workspaceJustificationsQueryRoot,
   justificationsByEntities: ({ workspaceId, entityIds }: JustificationsKey) => [
     ...workspaceKeys.justifications(workspaceId),
     { entityIds },

@@ -2,9 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { billingCodesQueryRoot } from "@/lib/resource-query-roots.logic";
 
 export const billingCodesKeys = {
-  all: (workspaceId: string) => ["billingCodes", workspaceId],
+  all: billingCodesQueryRoot,
   list: (workspaceId: string, type?: string) => [
     ...billingCodesKeys.all(workspaceId),
     type,

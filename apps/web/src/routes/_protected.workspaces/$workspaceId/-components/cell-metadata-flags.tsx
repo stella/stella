@@ -583,7 +583,6 @@ export const useCellMetadataFlags = ({
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .metadata.patch({
-          queryKey: entitiesKeys.all(workspaceId),
           entityId: toSafeId<"entity">(entityId),
           propertyId: toSafeId<"property">(propertyId),
           baseManualFlags,

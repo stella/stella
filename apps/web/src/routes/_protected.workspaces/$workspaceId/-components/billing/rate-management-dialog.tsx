@@ -31,7 +31,6 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import {
   rateEntriesOptions,
-  ratesKeys,
   rateTablesOptions,
 } from "@/lib/workspaces/queries/rates";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
@@ -107,7 +106,6 @@ const RateTablesView = ({
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })
         .put({
-          queryKey: ratesKeys.all(ws),
           ...body,
         });
 
@@ -128,7 +126,6 @@ const RateTablesView = ({
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })
         .delete({
-          queryKey: ratesKeys.all(ws),
           id: toSafeId<"rateTable">(id),
         });
 
@@ -152,7 +149,6 @@ const RateTablesView = ({
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })
         .patch({
-          queryKey: ratesKeys.all(ws),
           ...body,
           id: toSafeId<"rateTable">(body.id),
         });
@@ -430,7 +426,6 @@ const RateEntriesView = ({
           rateTableId: toSafeId<"rateTable">(rtId),
         })
         .entries.put({
-          queryKey: ratesKeys.all(ws),
           ...restBody,
           ...(userId !== undefined && {
             userId: userId === null ? null : toSafeId<"user">(userId),
@@ -458,7 +453,6 @@ const RateEntriesView = ({
           rateTableId: toSafeId<"rateTable">(rtId),
         })
         .entries.delete({
-          queryKey: ratesKeys.all(ws),
           id: toSafeId<"rateEntry">(id),
         });
 

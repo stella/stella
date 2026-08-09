@@ -44,7 +44,6 @@ import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import type {
   MyTasksStatus,
   TaskItem,
@@ -190,7 +189,6 @@ export function LegacyTodosPage() {
     mutationFn: async (wsId: string) => {
       const response = await api.tasks({ workspaceId: wsId }).put({
         assigneeIds: [toSafeId<"user">(userId)],
-        queryKey: entitiesKeys.all(wsId),
         name: t("tasks.untitled"),
       });
 

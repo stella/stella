@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
@@ -31,7 +32,7 @@ type TimeEntriesListKey = {
 };
 
 export const timeEntriesKeys = {
-  all: (workspaceId: string) => ["timeEntries", workspaceId],
+  all: timeEntriesQueryRoot,
   list: (workspaceId: string, key: TimeEntriesListKey) => [
     ...timeEntriesKeys.all(workspaceId),
     {

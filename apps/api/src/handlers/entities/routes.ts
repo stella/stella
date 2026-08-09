@@ -1,6 +1,8 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
@@ -49,19 +51,33 @@ import uploadVersion from "@/api/handlers/entities/upload-version";
 import versionDiff from "@/api/handlers/entities/version-diff";
 import versionSummarize from "@/api/handlers/entities/version-summarize";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import {
+  resourceRealtime,
+  workspaceResourceSetUpdates,
+} from "@/api/lib/resource-realtime-macro";
 import {
   isTranslateRateLimitedPath,
   isUploadRateLimitedPath,
 } from "@/api/lib/upload-rate-limit";
 
+const entityRealtimeUpdates = workspaceResourceSetUpdates(RESOURCE_TYPE.ENTITY);
+const entityFileRealtimeUpdates = workspaceResourceSetUpdates([
+  RESOURCE_TYPE.ENTITY,
+  RESOURCE_TYPE.USER_FILE,
+]);
+const entityVersionRealtimeUpdates = workspaceResourceSetUpdates([
+  RESOURCE_TYPE.ENTITY,
+  RESOURCE_TYPE.ENTITY_VERSION,
+  RESOURCE_TYPE.USER_FILE,
+]);
+
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",
 })
   .use(workspaceAccessMacro)
-  .use(invalidateQuery)
+  .use(resourceRealtime)
   .use(permissionMacro)
   .use(
     rateLimit({
@@ -92,27 +108,27 @@ export const entitiesRoute = new Elysia({
   })
   .put("/", createEntities.handler, {
     body: createEntities.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityRealtimeUpdates,
     permissions: createEntities.config.permissions,
   })
   .put("/blank-document", createBlankDocument.handler, {
     body: createBlankDocument.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createBlankDocument.config.permissions,
   })
   .put("/blank-document-from-style-set", createDocumentFromStyleSet.handler, {
     body: createDocumentFromStyleSet.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createDocumentFromStyleSet.config.permissions,
   })
   .post("/upload", uploadEntity.handler, {
     body: uploadEntity.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: uploadEntity.config.permissions,
   })
   .post("/upload-generated-document", uploadGeneratedDocument.handler, {
     body: uploadGeneratedDocument.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: uploadGeneratedDocument.config.permissions,
   })
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
@@ -137,7 +153,6 @@ export const entitiesRoute = new Elysia({
   })
   .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
     body: releaseDesktopEditLock.config.body,
-    invalidateQuery: true,
     permissions: releaseDesktopEditLock.config.permissions,
   })
   .post(
@@ -150,11 +165,11 @@ export const entitiesRoute = new Elysia({
   )
   .post("/clip", clipEndpoint.handler, {
     ...clipEndpoint.config,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
   })
   .post("/create-from-legal-source", createFromLegalSource.handler, {
     body: createFromLegalSource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createFromLegalSource.config.permissions,
   })
   .post("/query", readEntities.handler, {
@@ -195,27 +210,27 @@ export const entitiesRoute = new Elysia({
   })
   .delete("/", deleteEntities.handler, {
     body: deleteEntities.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: deleteEntities.config.permissions,
   })
   .patch("/move", moveEntity.handler, {
     body: moveEntity.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityRealtimeUpdates,
     permissions: moveEntity.config.permissions,
   })
   .patch("/rename", renameEntity.handler, {
     body: renameEntity.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityRealtimeUpdates,
     permissions: renameEntity.config.permissions,
   })
   .post("/duplicate", duplicateEntity.handler, {
     body: duplicateEntity.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: duplicateEntity.config.permissions,
   })
   .post("/copy-to-workspace", copyToWorkspace.handler, {
     body: copyToWorkspace.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityRealtimeUpdates,
     permissions: copyToWorkspace.config.permissions,
   })
   .post("/check-stamp", checkStamp.handler, {
@@ -278,7 +293,7 @@ export const entitiesRoute = new Elysia({
     updateVersionLabel.handler,
     {
       body: updateVersionLabel.config.body,
-      invalidateQuery: true,
+      resourceSetUpdated: entityVersionRealtimeUpdates,
       params: updateVersionLabel.config.params,
       permissions: updateVersionLabel.config.permissions,
     },
@@ -288,7 +303,7 @@ export const entitiesRoute = new Elysia({
     updateVersionDescription.handler,
     {
       body: updateVersionDescription.config.body,
-      invalidateQuery: true,
+      resourceSetUpdated: entityVersionRealtimeUpdates,
       params: updateVersionDescription.config.params,
       permissions: updateVersionDescription.config.permissions,
     },
@@ -297,23 +312,21 @@ export const entitiesRoute = new Elysia({
     "/entity/:entityId/versions/:versionId/restore",
     restoreVersion.handler,
     {
-      invalidateQuery: true,
       params: restoreVersion.config.params,
       permissions: restoreVersion.config.permissions,
     },
   )
   .delete("/entity/:entityId/versions/:versionId", deleteVersion.handler, {
-    invalidateQuery: true,
     params: deleteVersion.config.params,
     permissions: deleteVersion.config.permissions,
   })
   .post("/upload-version", uploadVersion.handler, {
     body: uploadVersion.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityVersionRealtimeUpdates,
     permissions: uploadVersion.config.permissions,
   })
   .post("/translate", translateEntity.handler, {
     body: translateEntity.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: translateEntity.config.permissions,
   });

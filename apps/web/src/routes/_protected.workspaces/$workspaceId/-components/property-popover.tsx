@@ -112,7 +112,6 @@ export const PropertyPopover = ({
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["metadata-batch"].patch({
-          queryKey: entitiesKeys.all(workspaceId),
           propertyId: toSafeId<"property">(id),
           flag: action,
           filters,

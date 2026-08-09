@@ -428,7 +428,6 @@ export const ExistingFileOrganizerDialog = ({
           const moveResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .move.patch({
-              queryKey: entitiesKeys.all(workspaceId),
               entityId: toSafeId<"entity">(row.entityId),
               parentId:
                 targetParentId === null
@@ -446,7 +445,6 @@ export const ExistingFileOrganizerDialog = ({
           const renameResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .rename.patch({
-              queryKey: entitiesKeys.all(workspaceId),
               entityId: toSafeId<"entity">(row.entityId),
               name: targetName,
             });
@@ -480,7 +478,6 @@ export const ExistingFileOrganizerDialog = ({
         const deleteResponse = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .delete({
-            queryKey: entitiesKeys.all(workspaceId),
             entityIds: deletableFolderIds.map((entityId) =>
               toSafeId<"entity">(entityId),
             ),
@@ -1533,7 +1530,6 @@ const ensureFolders = async ({
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: entitiesKeys.all(workspaceId),
           kind: "folder",
           name: segment,
           parentId: parentSafeId,

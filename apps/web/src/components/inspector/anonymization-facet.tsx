@@ -64,14 +64,8 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  anonymizationAllowlistKeys,
-  anonymizationAllowlistOptions,
-} from "@/lib/workspaces/queries/anonymization-allowlist";
-import {
-  anonymizationTermsKeys,
-  anonymizationTermsOptions,
-} from "@/lib/workspaces/queries/anonymization-terms";
+import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
+import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
 // Org-wide ignore lands behind a dedicated org-settings handler
 // with `organizationSettings` permissions; until that ships, the
@@ -234,7 +228,6 @@ export const AnonymizationFacet = ({
                   label: entry.label,
                 },
           ),
-          queryKey: anonymizationTermsKeys.all(vars.workspaceId),
         });
 
       return unwrapEden(response);
@@ -250,9 +243,7 @@ export const AnonymizationFacet = ({
         ["anonymization-terms"]({
           entryId: toSafeId<"anonymizationBlacklistEntry">(vars.entryId),
         })
-        .delete({
-          queryKey: anonymizationTermsKeys.all(vars.workspaceId),
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -426,18 +417,6 @@ export const AnonymizationFacet = ({
           ...(vars.scope === "document" && vars.entityId
             ? { entityId: toSafeId<"entity">(vars.entityId) }
             : {}),
-          // Workspace-scoped writes affect every doc in the
-          // workspace, so invalidate by the workspace-only key
-          // prefix; that wakes up every open document's
-          // entity-keyed allowlist query. Doc-scoped writes only
-          // need to refresh their own query.
-          queryKey:
-            vars.scope === "workspace"
-              ? anonymizationAllowlistKeys.workspace(vars.workspaceId)
-              : anonymizationAllowlistKeys.all({
-                  workspaceId: vars.workspaceId,
-                  entityId: vars.entityId,
-                }),
         });
       return unwrapEden(response);
     },
@@ -452,13 +431,7 @@ export const AnonymizationFacet = ({
         ["anonymization-allowlist"]({
           entryId: toSafeId<"anonymizationAllowlistEntry">(vars.entryId),
         })
-        .delete({
-          // The caller doesn't know whether the deleted row was
-          // doc- or workspace-scoped, so broadcast on the
-          // workspace-prefix key. That refreshes every open
-          // document's allowlist query in this workspace.
-          queryKey: anonymizationAllowlistKeys.workspace(vars.workspaceId),
-        });
+        .delete({});
       if (response.error) {
         throw toAPIError(response.error);
       }

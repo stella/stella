@@ -121,7 +121,6 @@ const BlueprintGallerySheetBody = ({
       const response = await api.skills["from-blueprint"].post({
         scope,
         blueprintId: id,
-        queryKey: ["skills"],
       });
       return { id: unwrapEden(response).id };
     },

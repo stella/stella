@@ -3,9 +3,10 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { workspaceMembersQueryRoot } from "@/lib/resource-query-roots.logic";
 
 export const workspaceMembersKeys = {
-  all: (workspaceId: string) => ["workspace-members", workspaceId],
+  all: workspaceMembersQueryRoot,
 };
 
 export const workspaceMembersOptions = (workspaceId: string) =>

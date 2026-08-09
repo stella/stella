@@ -28,10 +28,6 @@ export const buildEntityCreatePresignPayload = ({
   sha256Hex,
 });
 
-export const buildEntityCreateInvalidationPayload = (workspaceId: string) => ({
-  queryKey: entitiesKeys.all(workspaceId),
-});
-
 export const entityCreateLocalInvalidationKeys = (workspaceId: string) => [
   entitiesKeys.all(workspaceId),
   // This prefix also invalidates every overview activity category.

@@ -368,7 +368,6 @@ export const OnboardingWizard = () => {
             if (entry.kind === "skill") {
               const { error } = await api.catalogue["install-skill"].post({
                 slug: entry.slug,
-                queryKey: ["skills"],
               });
               if (error) {
                 throw toAPIError(error);
@@ -378,7 +377,7 @@ export const OnboardingWizard = () => {
             if (entry.kind === "native-tool") {
               const { error } = await api.mcp["native-tools"]({
                 slug: entry.backendSlug,
-              }).patch({ enabled: true, queryKey: ["mcp"] });
+              }).patch({ enabled: true });
               if (error) {
                 throw toAPIError(error);
               }
@@ -388,7 +387,6 @@ export const OnboardingWizard = () => {
               displayName: entry.displayName,
               description: entry.description,
               url: entry.url,
-              queryKey: ["mcp"],
             });
             if (error) {
               throw toAPIError(error);
@@ -399,7 +397,7 @@ export const OnboardingWizard = () => {
           async (entry) => {
             const { error } = await api.mcp["native-tools"]({
               slug: entry.backendSlug,
-            }).patch({ enabled: false, queryKey: ["mcp"] });
+            }).patch({ enabled: false });
             if (error) {
               throw toAPIError(error);
             }

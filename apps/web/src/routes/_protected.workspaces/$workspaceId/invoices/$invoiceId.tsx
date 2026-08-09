@@ -249,7 +249,6 @@ const InvoiceDetail = ({
         })
         .transition.post({
           action,
-          queryKey: invoicesKeys.all(workspaceId),
         });
       return unwrapEden(response);
     },
@@ -267,9 +266,7 @@ const InvoiceDetail = ({
         .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
           invoiceId: toSafeId<"invoice">(invoiceId),
         })
-        .delete({
-          queryKey: invoicesKeys.all(workspaceId),
-        });
+        .delete({});
       return unwrapEden(response);
     },
     onSuccess: async () => {
@@ -292,7 +289,6 @@ const InvoiceDetail = ({
         })
         .entries.delete({
           timeEntryIds: [toSafeId<"timeEntry">(timeEntryId)],
-          queryKey: invoicesKeys.all(workspaceId),
         });
       return unwrapEden(response);
     },
@@ -312,7 +308,6 @@ const InvoiceDetail = ({
         })
         .entries.delete({
           expenseIds: [toSafeId<"expense">(expenseId)],
-          queryKey: invoicesKeys.all(workspaceId),
         });
       return unwrapEden(response);
     },
@@ -798,7 +793,6 @@ const EditInvoiceForm = ({
           reference: parsedValue.reference || null,
           currency: parsedValue.currency,
           notes: parsedValue.notes || null,
-          queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
         showErrorToast(t("billing.failedToSave"));

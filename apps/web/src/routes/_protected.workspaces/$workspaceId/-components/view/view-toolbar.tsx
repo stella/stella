@@ -610,9 +610,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     const result = await Result.tryPromise(async () => {
       const { data, error } = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .playbooks["auto-run"].post({
-          queryKey: propertiesKeys.all(workspaceId),
-        });
+        .playbooks["auto-run"].post({});
       return { data, error };
     });
     setIsAutoRunning(false);
@@ -667,7 +665,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
       const { data, error } = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        .run.post({ queryKey: propertiesKeys.all(workspaceId) });
+        .run.post({});
       return { data, error };
     });
     setRunningPlaybookId(null);

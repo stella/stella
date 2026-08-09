@@ -21,8 +21,6 @@ export const useAddWorkspaceMember = () => {
     mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
       const response = await api.workspaces({ workspaceId }).members.put({
         userId: toSafeId<"user">(userId),
-        queryKey: workspaceMembersKeys.all(workspaceId),
-        queryKeys: [workspacesKeys.all],
       });
 
       return unwrapEden(response);

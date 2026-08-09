@@ -267,7 +267,6 @@ export const FileTabPanel = ({
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["upload-version"].post({
-          queryKey: entitiesKeys.all(workspaceId),
           entityId: toSafeId<"entity">(entityId),
           file,
         });

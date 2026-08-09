@@ -1123,8 +1123,6 @@ export const useChatSession = ({
         const response = await api
           .entities({ workspaceId: toSafeId<"workspace">(matterId) })
           ["upload-generated-document"].post({
-            queryKey: entitiesKeys.all(matterId),
-            queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
             file,
             contentSha256Hex,
             messageId: toSafeId<"chatMessage">(draftMessageId),

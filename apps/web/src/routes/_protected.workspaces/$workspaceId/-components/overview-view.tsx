@@ -181,7 +181,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     const { data: taskData, error: taskError } = await api
       .tasks({ workspaceId })
       .put({
-        queryKey: entitiesKeys.all(workspaceId),
         name: t("tasks.untitled"),
       });
     const entityId = taskData?.entityId;
@@ -218,7 +217,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
-          queryKey: entitiesKeys.all(workspaceId),
           taskId: toSafeId<"entity">(taskId),
           status,
         });

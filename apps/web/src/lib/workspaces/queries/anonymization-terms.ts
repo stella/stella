@@ -2,10 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { workspaceAnonymizationTermsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 export const anonymizationTermsKeys = {
-  all: (workspaceId: string): string[] => ["anonymization-terms", workspaceId],
+  all: workspaceAnonymizationTermsQueryRoot,
 };
 
 export const anonymizationTermsOptions = (workspaceId: string) =>

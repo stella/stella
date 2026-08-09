@@ -5,7 +5,6 @@ import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import {
-  buildEntityCreateInvalidationPayload,
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
 } from "./create-file-upload-payload.logic";
@@ -49,14 +48,6 @@ describe("entity-create upload payload", () => {
     });
 
     expect(payload.size).toBe(0);
-  });
-
-  test("broadcasts one non-overlapping invalidation per finalized file", () => {
-    const workspaceId = "workspace_upload";
-
-    expect(buildEntityCreateInvalidationPayload(workspaceId)).toEqual({
-      queryKey: entitiesKeys.all(workspaceId),
-    });
   });
 
   test("invalidates overview and activity once after the upload operation", () => {

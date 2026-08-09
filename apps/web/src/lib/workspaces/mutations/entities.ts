@@ -11,9 +11,6 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
-import { workspacesKeys } from "@/lib/workspaces/queries.logic";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -32,8 +29,6 @@ export const useCreateEntities = () => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           name: body.name,
           ...(body.kind !== undefined && { kind: body.kind }),
           ...(body.parentId !== undefined && {
@@ -64,11 +59,6 @@ export const useDeleteEntities = () => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .delete({
-          queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [
-            taskKeys.all(workspaceId),
-            workspacesKeys.overviewActivityAll(workspaceId),
-          ],
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
@@ -101,8 +91,6 @@ export const useMoveEntity = () => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .move.patch({
-          queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           entityId: toSafeId<"entity">(entityId),
           parentId: parentId === null ? null : toSafeId<"entity">(parentId),
         });
@@ -130,8 +118,6 @@ export const useRenameEntity = () => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .rename.patch({
-          queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           entityId: toSafeId<"entity">(entityId),
           name,
         });
@@ -169,8 +155,6 @@ export const useUpsertField = () => {
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post({
-          queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           propertyId: toSafeId<"property">(propertyId),
           entityId: toSafeId<"entity">(entityId),
           content,

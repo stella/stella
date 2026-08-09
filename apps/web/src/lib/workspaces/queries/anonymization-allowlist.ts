@@ -2,6 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import {
+  anonymizationAllowlistQueryRoot,
+  workspaceAnonymizationAllowlistQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 export type AnonymizationAllowlistKey = {
@@ -10,7 +14,7 @@ export type AnonymizationAllowlistKey = {
 };
 
 export const anonymizationAllowlistKeys = {
-  root: ["anonymization-allowlist"],
+  root: anonymizationAllowlistQueryRoot(),
   all: ({ workspaceId, entityId }: AnonymizationAllowlistKey): string[] => [
     ...anonymizationAllowlistKeys.root,
     workspaceId,
@@ -23,10 +27,7 @@ export const anonymizationAllowlistKeys = {
    * other open documents refresh too — entity-keyed queries
    * would otherwise keep stale exclusions.
    */
-  workspace: (workspaceId: string): string[] => [
-    ...anonymizationAllowlistKeys.root,
-    workspaceId,
-  ],
+  workspace: workspaceAnonymizationAllowlistQueryRoot,
 };
 
 export const anonymizationAllowlistOptions = ({

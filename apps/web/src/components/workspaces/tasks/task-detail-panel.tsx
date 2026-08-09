@@ -135,7 +135,6 @@ const TaskDetailPanelContent = ({
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
-          queryKey: entitiesKeys.all(workspaceId),
           ...body,
           taskId: toSafeId<"entity">(body.taskId),
         });
@@ -197,7 +196,6 @@ const TaskDetailPanelContent = ({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
         ...workflowBody,
-        queryKey: entitiesKeys.all(workspaceId),
         ...(ownerUserId === undefined
           ? {}
           : {
@@ -233,16 +231,11 @@ const TaskDetailPanelContent = ({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapEden(
-          await endpoint.acknowledge.post({
-            queryKey: entitiesKeys.all(workspaceId),
-          }),
-        );
+        return unwrapEden(await endpoint.acknowledge.post({}));
       }
       return unwrapEden(
         await endpoint.transition.post({
           action: action.action,
-          queryKey: entitiesKeys.all(workspaceId),
           ...(action.reason ? { reason: action.reason } : {}),
         }),
       );
@@ -282,7 +275,6 @@ const TaskDetailPanelContent = ({
                   .assignees.post({
                     taskId: toSafeId<"entity">(taskId),
                     userId: toSafeId<"user">(userId),
-                    queryKey: entitiesKeys.all(workspaceId),
                   });
                 if (response.error) {
                   analytics.captureError(toAPIError(response.error));

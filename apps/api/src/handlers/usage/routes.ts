@@ -5,7 +5,6 @@ import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
 import getEntitlement from "@/api/handlers/usage/get-entitlement";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 // Operator-driven admin endpoints (manual entitlement upsert,
 // discretionary usage allocations) are deliberately NOT mounted on this
@@ -18,7 +17,6 @@ import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 export const usageRoute = new Elysia({ prefix: "/usage" })
   .use(authMacro)
   .use(permissionMacro)
-  .use(invalidateQuery)
   .guard({ validateAuth: true })
   .get("/entitlement", getEntitlement.handler, {
     permissions: getEntitlement.config.permissions,

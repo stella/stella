@@ -138,7 +138,7 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
     const orgId = context.user.activeOrganizationId;
 
     if (!seededThisSession.has(orgId)) {
-      const response = await api.skills.seed.post({ queryKey: ["skills"] });
+      const response = await api.skills.seed.post({});
       // Only mark the org as seeded once the server confirmed — a
       // transient failure would otherwise pin us into the "already
       // seeded" branch for the rest of the session and the user would

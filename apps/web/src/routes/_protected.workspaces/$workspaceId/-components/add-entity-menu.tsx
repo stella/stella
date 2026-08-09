@@ -135,7 +135,6 @@ export const AddEntityMenu = ({
     const { data: taskData, error: taskError } = await api
       .tasks({ workspaceId })
       .put({
-        queryKey: entitiesKeys.all(workspaceId),
         name: t("tasks.untitled"),
       });
 

@@ -1031,7 +1031,7 @@ const ComposerMcpSubmenu = ({
         .connections({
           connectionId: toSafeId<"mcpUserConnection">(connectionId),
         })
-        .patch({ enabled: nextEnabled, queryKey: ["mcp"] });
+        .patch({ enabled: nextEnabled });
       return unwrapEden(response);
     });
     if (Result.isError(result)) {

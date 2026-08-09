@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 
 /** Mirrors `INVOICE_STATUSES` in `apps/api/src/db/schema.ts`. */
 type InvoiceStatus = "draft" | "finalized" | "sent" | "paid" | "void";
@@ -20,7 +21,7 @@ type InvoicesListKey = {
 const getInitialInvoicesPageParam = (): string | undefined => undefined;
 
 export const invoicesKeys = {
-  all: (workspaceId: string) => ["invoices", workspaceId],
+  all: invoicesQueryRoot,
   list: (workspaceId: string, key: InvoicesListKey) => [
     ...invoicesKeys.all(workspaceId),
     { limit: key.limit, cursor: key.cursor },

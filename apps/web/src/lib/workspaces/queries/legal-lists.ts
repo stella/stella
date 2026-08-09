@@ -3,10 +3,11 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
+import { legalListsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 export const legalListKeys = {
-  all: (workspaceId: string) => ["legal-lists", workspaceId] as const,
+  all: legalListsQueryRoot,
   detail: (workspaceId: string, listId: string) => [
     ...legalListKeys.all(workspaceId),
     listId,

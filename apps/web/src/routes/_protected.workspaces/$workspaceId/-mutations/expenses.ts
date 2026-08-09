@@ -4,7 +4,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { expensesKeys } from "@/lib/workspaces/queries/expenses";
 
 type ExpenseCategory =
   | "filing_fee"
@@ -36,7 +35,6 @@ export const useCreateExpense = () => {
       const response = await api
         .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: expensesKeys.all(workspaceId),
           ...body,
           matterId: toSafeId<"entity">(body.matterId),
         });
@@ -73,7 +71,6 @@ export const useUpdateExpense = () => {
       const response = await api
         .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
-          queryKey: expensesKeys.all(workspaceId),
           ...restBody,
           id: toSafeId<"expense">(id),
           ...(matterId !== undefined && {
@@ -102,7 +99,6 @@ export const useDeleteExpense = () => {
       const response = await api
         .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .delete({
-          queryKey: expensesKeys.all(workspaceId),
           id: toSafeId<"expense">(id),
         });
 

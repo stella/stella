@@ -3,6 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 type ExpenseCategory =
@@ -36,7 +37,7 @@ type ExpensesListKey = {
 };
 
 export const expensesKeys = {
-  all: (workspaceId: string) => ["expenses", workspaceId],
+  all: expensesQueryRoot,
   list: (workspaceId: string, key: ExpensesListKey) => [
     ...expensesKeys.all(workspaceId),
     {

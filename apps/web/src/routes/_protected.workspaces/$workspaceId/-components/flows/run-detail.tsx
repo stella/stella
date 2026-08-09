@@ -127,7 +127,7 @@ const RunDetailContent = ({
     const response = await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .flows.runs({ runId: toSafeId<"flowRun">(run.id) })
-      .cancel.post({ queryKey: flowRunsKeys.all(workspaceId) });
+      .cancel.post({});
     setCancelling(false);
 
     if (response.error) {
@@ -374,7 +374,6 @@ const ReviewGateCard = ({
       .review.post({
         decision,
         note: trimmedNote === "" ? null : trimmedNote,
-        queryKey: flowRunsKeys.all(workspaceId),
       });
     setSubmitting(false);
 

@@ -4,7 +4,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 
 type CreateTimeEntryVars = {
   workspaceId: string;
@@ -28,7 +27,6 @@ export const useCreateTimeEntry = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
         matterId: toSafeId<"entity">(body.matterId),
       });
@@ -67,7 +65,6 @@ export const useUpdateTimeEntry = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).patch({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ...restBody,
         id: toSafeId<"timeEntry">(id),
         ...(matterId !== undefined && {
@@ -96,7 +93,6 @@ export const useDeleteTimeEntry = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).delete({
-        queryKey: timeEntriesKeys.all(workspaceId),
         id: toSafeId<"timeEntry">(id),
       });
 
@@ -125,7 +121,6 @@ export const useStartTimer = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.start.post({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
         matterId: toSafeId<"entity">(body.matterId),
       });
@@ -149,9 +144,7 @@ export const useStopTimer = () => {
     mutationFn: async ({ workspaceId }: StopTimerVars) => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).timer.stop.post({
-        queryKey: timeEntriesKeys.all(workspaceId),
-      });
+      }).timer.stop.post({});
 
       return unwrapEden(response);
     },
@@ -175,7 +168,6 @@ export const useBatchUpdateTimeEntries = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.post({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
         ids: body.ids.map((id) => toSafeId<"timeEntry">(id)),
       });
@@ -201,7 +193,6 @@ export const useBatchDeleteTimeEntries = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.delete({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ids: ids.map((id) => toSafeId<"timeEntry">(id)),
       });
 
@@ -227,7 +218,6 @@ export const useSplitTimeEntry = () => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).split.post({
-        queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
         id: toSafeId<"timeEntry">(body.id),
         splits: body.splits.map((split) => ({

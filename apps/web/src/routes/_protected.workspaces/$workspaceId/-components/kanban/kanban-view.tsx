@@ -218,7 +218,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
-          queryKey: entitiesKeys.all(workspaceId),
           taskId: toSafeId<"entity">(taskId),
           status,
         });

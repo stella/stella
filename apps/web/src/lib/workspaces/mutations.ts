@@ -37,7 +37,6 @@ export const useCreateWorkspace = () => {
     mutationFn: async (vars: CreateWorkspaceVars) => {
       const id = crypto.randomUUID();
       const response = await api.workspaces.put({
-        queryKey: workspacesKeys.all,
         id: toSafeId<"workspace">(id),
         ...(vars.clientId !== undefined && {
           clientId: toSafeId<"contact">(vars.clientId),
@@ -115,7 +114,6 @@ export const useUpdateWorkspace = () => {
                 : {}),
             },
           }),
-          queryKey: workspacesKeys.all,
         });
 
       if (response.error) {
@@ -162,9 +160,7 @@ export const useUnarchiveWorkspace = () => {
     mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .unarchive.post({
-          queryKey: workspacesKeys.all,
-        });
+        .unarchive.post({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -193,9 +189,7 @@ export const useDeleteWorkspace = () => {
     mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .delete({
-          queryKey: workspacesKeys.all,
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -225,7 +219,6 @@ export const useDuplicateWorkspace = () => {
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .duplicate.post({
           includeContent,
-          queryKey: workspacesKeys.all,
         });
 
       return unwrapEden(response);

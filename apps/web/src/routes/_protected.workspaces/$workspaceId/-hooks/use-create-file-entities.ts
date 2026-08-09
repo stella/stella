@@ -19,17 +19,12 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import {
-  propertiesKeys,
-  propertiesOptions,
-} from "@/lib/workspaces/queries/properties";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
 import {
-  buildEntityCreateInvalidationPayload,
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
@@ -120,7 +115,6 @@ const prepareFolderTreeUpload = async ({
   const response = await api
     .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["entity-create"].tree.post({
-      queryKey: entitiesKeys.all(workspaceId),
       propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
       parentId: parentId === null ? null : toSafeId<"entity">(parentId),
       directories: plan.directories,
@@ -356,10 +350,9 @@ const uploadPreparedFileEntity = async ({
   }
 
   // 4. Finalize.
-  const finalize = await wsClient({ uploadId }).finalize.post(
-    buildEntityCreateInvalidationPayload(workspaceId),
-    { fetch: { signal } },
-  );
+  const finalize = await wsClient({ uploadId }).finalize.post(undefined, {
+    fetch: { signal },
+  });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
     attachResponseForRetry(error, finalize.response);
@@ -672,7 +665,6 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
 
     const response = await api.properties({ workspaceId }).put({
-      queryKey: propertiesKeys.all(workspaceId),
       name: t("workspaces.files.defaultPropertyName"),
       contentType: "file",
     });

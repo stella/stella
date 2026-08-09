@@ -26,7 +26,7 @@ export const installCatalogueEntry = async (
   if (entry.kind === "native-tool") {
     const response = await api.mcp["native-tools"]({
       slug: entry.backendSlug,
-    }).patch({ enabled: true, queryKey: ["mcp"] });
+    }).patch({ enabled: true });
     if (response.error) {
       throw toAPIError(response.error);
     }
@@ -41,7 +41,6 @@ export const installCatalogueEntry = async (
       displayName: entry.displayName,
       description: entry.description,
       url: entry.url,
-      queryKey: ["mcp"],
     });
     if (response.error) {
       throw toAPIError(response.error);
@@ -51,7 +50,6 @@ export const installCatalogueEntry = async (
 
   const response = await api.catalogue["install-skill"].post({
     slug: entry.slug,
-    queryKey: ["skills"],
   });
   if (response.error) {
     throw toAPIError(response.error);

@@ -142,7 +142,6 @@ const ImportSkillDialogBody = ({
                 sourceUrl: skill.sourceUrl,
               }))
           : [],
-        queryKey: ["skills"],
         scope,
       });
       return unwrapEden(response);

@@ -18,10 +18,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  billingCodesKeys,
-  billingCodesOptions,
-} from "@/lib/workspaces/queries/billing-codes";
+import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
   open: boolean;
@@ -59,7 +56,6 @@ export const BillingCodesDialog = ({
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
       }).put({
-        queryKey: billingCodesKeys.all(ws),
         ...body,
       });
 
@@ -80,7 +76,6 @@ export const BillingCodesDialog = ({
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
       }).delete({
-        queryKey: billingCodesKeys.all(ws),
         id: toSafeId<"billingCode">(id),
       });
 
@@ -105,7 +100,6 @@ export const BillingCodesDialog = ({
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
       }).patch({
-        queryKey: billingCodesKeys.all(ws),
         ...body,
         id: toSafeId<"billingCode">(body.id),
       });

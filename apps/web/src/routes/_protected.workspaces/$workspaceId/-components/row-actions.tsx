@@ -542,7 +542,6 @@ export const RowActions = ({
           ["desktop-edit-sessions"].release.post({
             entityId: toSafeId<"entity">(file.entityId),
             propertyId: toSafeId<"property">(file.propertyId),
-            queryKey: entitiesKeys.all(workspaceId),
           });
 
         if (response.error) {
@@ -663,7 +662,6 @@ export const RowActions = ({
         const response = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .duplicate.post({
-            queryKey: entitiesKeys.all(workspaceId),
             entityId: toSafeId<"entity">(e.entityId),
           });
         return unwrapEden(response);

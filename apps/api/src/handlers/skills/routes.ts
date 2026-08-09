@@ -1,6 +1,8 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
 import discoverSkillUrl from "@/api/handlers/skills/discover";
@@ -25,13 +27,21 @@ import {
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import {
+  organizationResourceSetUpdates,
+  resourceRealtime,
+} from "@/api/lib/resource-realtime-macro";
+
+const skillRealtimeUpdates = organizationResourceSetUpdates([
+  RESOURCE_TYPE.AGENT_SKILL,
+  RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+]);
 
 export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(authMacro)
   .use(permissionMacro)
-  .use(invalidateQuery)
+  .use(resourceRealtime)
   .use(
     rateLimit({
       scoping: "scoped",
@@ -55,26 +65,26 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/", createSkill.handler, {
     body: createSkill.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: createSkill.config.permissions,
   })
   .post("/seed", seedSkills.handler, {
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: seedSkills.config.permissions,
   })
   .post("/from-blueprint", fromBlueprint.handler, {
     body: fromBlueprint.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: fromBlueprint.config.permissions,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: uploadSkill.config.permissions,
   })
   .post("/import-url", importSkillFromUrl.handler, {
     body: importSkillFromUrl.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: importSkillFromUrl.config.permissions,
   })
   .post("/discover-url", discoverSkillUrl.handler, {
@@ -83,7 +93,7 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/import-urls", importSkillsFromUrls.handler, {
     body: importSkillsFromUrls.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     permissions: importSkillsFromUrls.config.permissions,
   })
   .post("/generate-draft", generateSkillDraft.handler, {
@@ -92,37 +102,37 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .patch("/:skillId", updateSkill.handler, {
     body: updateSkill.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkill.config.params,
     permissions: updateSkill.config.permissions,
   })
   .patch("/:skillId/resources", updateSkillResource.handler, {
     body: updateSkillResource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkillResource.config.params,
     permissions: updateSkillResource.config.permissions,
   })
   .post("/:skillId/resources", createSkillResource.handler, {
     body: createSkillResource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: createSkillResource.config.params,
     permissions: createSkillResource.config.permissions,
   })
   .delete("/:skillId/resources", deleteSkillResource.handler, {
     body: deleteSkillResource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkillResource.config.params,
     permissions: deleteSkillResource.config.permissions,
   })
   .post("/:skillId/resources/rename", renameSkillResource.handler, {
     body: renameSkillResource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: renameSkillResource.config.params,
     permissions: renameSkillResource.config.permissions,
   })
   .post("/:skillId/resources/upload", uploadSkillResource.handler, {
     body: uploadSkillResource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: uploadSkillResource.config.params,
     permissions: uploadSkillResource.config.permissions,
   })
@@ -132,7 +142,7 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     permissions: rewriteSkillResource.config.permissions,
   })
   .delete("/:skillId", deleteSkill.handler, {
-    invalidateQuery: true,
+    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkill.config.params,
     permissions: deleteSkill.config.permissions,
   });

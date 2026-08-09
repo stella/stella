@@ -357,8 +357,6 @@ export const AssigneePicker = ({
     ]);
   };
 
-  const queryKey = entitiesKeys.all(workspaceId);
-
   const addAssignee = useMutation({
     mutationFn: async (userId: string) => {
       const response = await api
@@ -366,7 +364,6 @@ export const AssigneePicker = ({
         .assignees.post({
           taskId: toSafeId<"entity">(taskId),
           userId: toSafeId<"user">(userId),
-          queryKey,
         });
       return unwrapEden(response);
     },
@@ -380,7 +377,6 @@ export const AssigneePicker = ({
         .assignees.delete({
           taskId: toSafeId<"entity">(taskId),
           userId: toSafeId<"user">(userId),
-          queryKey,
         });
       return unwrapEden(response);
     },

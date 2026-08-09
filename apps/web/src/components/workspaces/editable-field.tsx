@@ -175,7 +175,6 @@ const InlineEditor = ({
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post({
-          queryKey: entitiesKeys.all(workspaceId),
           propertyId: toSafeId<"property">(propertyId),
           entityId: toSafeId<"entity">(entityId),
           content: newContent,

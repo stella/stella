@@ -1147,7 +1147,6 @@ const VersionDropZone = ({
                 ["upload-version"].post({
                   entityId: toSafeId<"entity">(entityId),
                   file,
-                  queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
                 });
               if (response.error) {
                 throw toAPIError(response.error);

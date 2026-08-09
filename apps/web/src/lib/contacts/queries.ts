@@ -3,6 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { contactsQueryRoot } from "@/lib/resource-query-roots.logic";
 
 type ContactsListKey = {
   type?: "person" | "organization" | undefined;
@@ -10,7 +11,7 @@ type ContactsListKey = {
 };
 
 export const contactsKeys = {
-  all: ["contacts"],
+  all: contactsQueryRoot(),
   scoped: (activeOrganizationId: string) => [
     ...contactsKeys.all,
     activeOrganizationId,

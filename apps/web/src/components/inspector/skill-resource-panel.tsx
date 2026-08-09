@@ -99,11 +99,10 @@ export const SkillResourcePanel = ({
     // resource rows. Same panel, two save endpoints.
     const response =
       tab.target === "body"
-        ? await skill.patch({ body: nextContent, queryKey: ["skills"] })
+        ? await skill.patch({ body: nextContent })
         : await skill.resources.patch({
             path: tab.resourcePath,
             content: nextContent,
-            queryKey: ["skills"],
           });
     setSaving(false);
     if (response.error) {
@@ -165,12 +164,11 @@ export const SkillResourcePanel = ({
       const response =
         target === "body"
           ? // oxlint-disable-next-line no-await-in-loop -- sequential save queue: each write must land before retrying with newer markdown
-            await skill.patch({ body: stored, queryKey: ["skills"] })
+            await skill.patch({ body: stored })
           : // oxlint-disable-next-line no-await-in-loop -- sequential save queue: each write must land before retrying with newer markdown
             await skill.resources.patch({
               path: resourcePath,
               content: stored,
-              queryKey: ["skills"],
             });
       next = queue.pending;
       queue.pending = null;

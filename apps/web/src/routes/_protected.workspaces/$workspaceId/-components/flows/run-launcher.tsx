@@ -86,7 +86,6 @@ export const RunLauncher = ({
       .flows.runs.post({
         definitionId: toSafeId<"flowDefinition">(definitionId),
         inputEntityIds: selectedEntityIds.map((id) => toSafeId<"entity">(id)),
-        queryKey: flowRunsKeys.all(workspaceId),
       });
     setStarting(false);
 

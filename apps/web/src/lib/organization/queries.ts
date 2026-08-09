@@ -4,8 +4,9 @@ import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ORGANIZATION_MEMBERS_LIMIT } from "@/lib/organization/consts";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { organizationQueryRoot } from "@/lib/resource-query-roots.logic";
 
-const ORGANIZATION_KEY_ROOT = ["organization"];
+const ORGANIZATION_KEY_ROOT = organizationQueryRoot();
 
 export const organizationKeys = {
   root: ORGANIZATION_KEY_ROOT,

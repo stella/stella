@@ -95,7 +95,6 @@ const releaseEditSession = async ({
       ["desktop-edit-sessions"].release.post({
         entityId: toSafeId<"entity">(entityId),
         propertyId: toSafeId<"property">(propertyId),
-        queryKey: entitiesKeys.all(workspaceId),
       });
     if (response.error) {
       return { status: "error" as const, error: toAPIError(response.error) };

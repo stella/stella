@@ -6,6 +6,10 @@ import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import {
+  agentSkillsQueryRoot,
+  mcpQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -40,7 +44,11 @@ type ClausesListKey = {
 
 export const knowledgeKeys = {
   skills: {
-    all: (organizationId: string) => ["skills", organizationId],
+    root: agentSkillsQueryRoot(),
+    all: (organizationId: string) => [
+      ...knowledgeKeys.skills.root,
+      organizationId,
+    ],
     list: (organizationId: string, { limit }: SkillsPageKey) => [
       ...knowledgeKeys.skills.all(organizationId),
       "list",
@@ -166,7 +174,11 @@ export const knowledgeKeys = {
     ],
   },
   mcp: {
-    all: (organizationId: string) => ["mcp", organizationId],
+    root: mcpQueryRoot(),
+    all: (organizationId: string) => [
+      ...knowledgeKeys.mcp.root,
+      organizationId,
+    ],
     connectors: (organizationId: string) => [
       ...knowledgeKeys.mcp.all(organizationId),
       "connectors",

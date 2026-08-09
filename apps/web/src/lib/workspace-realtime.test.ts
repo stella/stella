@@ -53,6 +53,14 @@ describe("workspace realtime policy", () => {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["tasks", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "overview"],
+      },
     ]);
     expect(getWorkspaceRealtimeQueryActions(deleted, WORKSPACE_ID)).toEqual([
       {
@@ -63,6 +71,14 @@ describe("workspace realtime policy", () => {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["tasks", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "overview"],
+      },
     ]);
   });
 
@@ -71,14 +87,14 @@ describe("workspace realtime policy", () => {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.WORKSPACE_VIEW, id: "view-1" },
     });
-    const contact = parseEvent({
+    const memory = parseEvent({
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
-      resource: { type: RESOURCE_TYPE.CONTACT, id: "contact-1" },
+      resource: { type: RESOURCE_TYPE.AI_MEMORY, id: "memory-1" },
     });
 
     expect(view).not.toBeNull();
-    expect(contact).not.toBeNull();
-    if (!(view && contact)) {
+    expect(memory).not.toBeNull();
+    if (!(view && memory)) {
       return;
     }
 
@@ -88,7 +104,7 @@ describe("workspace realtime policy", () => {
         queryKey: ["views", WORKSPACE_ID],
       },
     ]);
-    expect(getWorkspaceRealtimeQueryActions(contact, WORKSPACE_ID)).toEqual([]);
+    expect(getWorkspaceRealtimeQueryActions(memory, WORKSPACE_ID)).toEqual([]);
   });
 
   test("maps field changes to entity and field-file caches", () => {
@@ -168,6 +184,14 @@ describe("workspace realtime policy", () => {
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["tasks", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "overview"],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["files", WORKSPACE_ID, "field-1"],
       },
       {
@@ -198,21 +222,67 @@ describe("workspace realtime policy", () => {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["tasks", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "overview"],
+      },
     ]);
     expect(getWorkspaceRealtimeQueryActions(flowRunSet, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["flow-runs", WORKSPACE_ID],
+      },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["workspaces", WORKSPACE_ID, "workflow"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-        queryKey: ["entities", WORKSPACE_ID],
+        queryKey: ["workspaces", WORKSPACE_ID, "justifications"],
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-        queryKey: ["workspaces", WORKSPACE_ID, "justifications"],
+        queryKey: ["entities", WORKSPACE_ID],
       },
     ]);
+  });
+
+  test("maps every migrated resource domain to a server-owned query root", () => {
+    const cases = [
+      [RESOURCE_TYPE.AGENT_SKILL, ["skills"]],
+      [RESOURCE_TYPE.BILLING_CODE, ["billingCodes", WORKSPACE_ID]],
+      [RESOURCE_TYPE.CONTACT, ["contacts"]],
+      [RESOURCE_TYPE.EXPENSE, ["expenses", WORKSPACE_ID]],
+      [RESOURCE_TYPE.INVOICE, ["invoices", WORKSPACE_ID]],
+      [RESOURCE_TYPE.LEGAL_LIST, ["legal-lists", WORKSPACE_ID]],
+      [RESOURCE_TYPE.MCP_CONNECTOR, ["mcp"]],
+      [RESOURCE_TYPE.ORGANIZATION, ["organization"]],
+      [RESOURCE_TYPE.PROPERTY, ["properties", WORKSPACE_ID]],
+      [RESOURCE_TYPE.RATE_TABLE, ["rates", WORKSPACE_ID]],
+      [RESOURCE_TYPE.TIME_ENTRY, ["timeEntries", WORKSPACE_ID]],
+      [RESOURCE_TYPE.WORKSPACE, ["workspaces"]],
+    ] as const;
+
+    for (const [resourceType, expectedQueryKey] of cases) {
+      const event = parseEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+        resourceType,
+      });
+      expect(event).not.toBeNull();
+      if (!event) {
+        continue;
+      }
+      expect(
+        getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID),
+      ).toContainEqual({
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: expectedQueryKey,
+      });
+    }
   });
 
   test("rejects malformed JSON, unknown events, query keys, and resources", () => {

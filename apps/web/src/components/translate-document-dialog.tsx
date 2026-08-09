@@ -112,7 +112,6 @@ export const TranslateDocumentDialog = ({
           // first value (`default`), which would bypass the client's
           // prefer_more default and ruin legal-register output.
           formality: "prefer_more",
-          queryKey: entitiesKeys.all(workspaceId),
         });
 
       return unwrapEden(response);

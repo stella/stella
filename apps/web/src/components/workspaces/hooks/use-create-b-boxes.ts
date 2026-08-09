@@ -59,7 +59,6 @@ export const useCreateBBoxes = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["bounding-boxes"].post({
-          queryKey: workspaceKeys.justifications(workspaceId),
           justificationId: toSafeId<"justification">(justification.id),
         });
 

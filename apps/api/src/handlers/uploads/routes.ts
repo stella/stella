@@ -1,15 +1,25 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import presignUpload from "@/api/handlers/uploads/create";
 import abortUpload from "@/api/handlers/uploads/delete";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
 import finalizeUpload from "@/api/handlers/uploads/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import {
+  resourceRealtime,
+  workspaceResourceSetUpdates,
+} from "@/api/lib/resource-realtime-macro";
+
+const entityUploadRealtimeUpdates = workspaceResourceSetUpdates([
+  RESOURCE_TYPE.ENTITY,
+  RESOURCE_TYPE.USER_FILE,
+]);
 
 /**
  * Workspace-scoped presigned-upload coordination:
@@ -34,15 +44,14 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
  *
  * All four share the legacy `upload` rate-limit budget — they
  * collectively represent one "upload" worth of API capacity.
- * `invalidateQuery` runs on finalize so the entities list cache
- * refreshes after a successful entity_create finalize, matching the
- * legacy multipart endpoint's behaviour.
+ * Semantic resource updates run after entity tree creation and finalize so
+ * entity and file projections refresh after durable writes.
  */
 export const uploadsRoute = new Elysia({
   prefix: "/uploads/:workspaceId",
 })
   .use(workspaceAccessMacro)
-  .use(invalidateQuery)
+  .use(resourceRealtime)
   .use(permissionMacro)
   .use(
     rateLimit({
@@ -68,12 +77,12 @@ export const uploadsRoute = new Elysia({
   })
   .post("/entity-create/tree", entityCreateTree.handler, {
     body: entityCreateTree.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: entityUploadRealtimeUpdates,
     permissions: entityCreateTree.config.permissions,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
     params: finalizeUpload.config.params,
-    invalidateQuery: true,
+    resourceSetUpdated: entityUploadRealtimeUpdates,
     permissions: finalizeUpload.config.permissions,
   })
   .post("/:uploadId/abort", abortUpload.handler, {

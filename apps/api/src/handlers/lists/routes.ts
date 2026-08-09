@@ -1,5 +1,7 @@
 import Elysia from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { env } from "@/api/env";
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
@@ -23,12 +25,19 @@ import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import {
+  resourceRealtime,
+  workspaceResourceSetUpdates,
+} from "@/api/lib/resource-realtime-macro";
+
+const legalListRealtimeUpdates = workspaceResourceSetUpdates(
+  RESOURCE_TYPE.LEGAL_LIST,
+);
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .use(deploymentFeatureGate(env.isDev || env.FEATURE_LEGAL_LISTS))
   .use(workspaceAccessMacro)
-  .use(invalidateQuery)
+  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
   .get("/", readLists.handler, {
@@ -37,67 +46,67 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   })
   .put("/", createList.handler, {
     body: createList.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createList.config.permissions,
   })
   .patch("/", updateList.handler, {
     body: updateList.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateList.config.permissions,
   })
   .post("/sections", createSection.handler, {
     body: createSection.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createSection.config.permissions,
   })
   .post("/columns", createColumn.handler, {
     body: createColumn.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createColumn.config.permissions,
   })
   .post("/generations", createGeneration.handler, {
     body: createGeneration.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createGeneration.config.permissions,
   })
   .post("/generation-candidates", submitGenerationCandidates.handler, {
     body: submitGenerationCandidates.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: submitGenerationCandidates.config.permissions,
   })
   .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
     body: acceptGenerationCandidate.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: acceptGenerationCandidate.config.permissions,
   })
   .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
     body: rejectGenerationCandidate.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: rejectGenerationCandidate.config.permissions,
   })
   .post("/item-sources", createItemSource.handler, {
     body: createItemSource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemSource.config.permissions,
   })
   .post("/item-comments", createItemComment.handler, {
     body: createItemComment.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemComment.config.permissions,
   })
   .post("/item-reviews", reviewItem.handler, {
     body: reviewItem.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: reviewItem.config.permissions,
   })
   .patch("/item-sources", verifyItemSource.handler, {
     body: verifyItemSource.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: verifyItemSource.config.permissions,
   })
   .patch("/items", updateItem.handler, {
     body: updateItem.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateItem.config.permissions,
   })
   .get(

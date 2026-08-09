@@ -148,7 +148,6 @@ export const DocumentAiSourceBar = ({
           ["bounding-boxes"].post(
             {
               justificationId: toSafeId<"justification">(justificationId),
-              queryKey: workspaceKeys.justifications(workspaceId),
             },
             { fetch: { signal } },
           );

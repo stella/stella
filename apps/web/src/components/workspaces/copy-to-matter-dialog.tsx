@@ -94,7 +94,6 @@ export const CopyToMatterDialog = ({
         const { data, error } = await api
           .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
           ["copy-to-workspace"].post({
-            queryKey: entitiesKeys.all(sourceWorkspaceId),
             entityId: toSafeId<"entity">(entityId),
             targetWorkspaceId: toSafeId<"workspace">(targetWorkspaceId),
             targetParentId: targetParentId

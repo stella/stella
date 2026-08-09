@@ -1,30 +1,37 @@
 import Elysia from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
 import updateCellMetadata from "@/api/handlers/fields/update-cell-metadata";
 import upsertField from "@/api/handlers/fields/upsert-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import {
+  resourceRealtime,
+  workspaceResourceSetUpdates,
+} from "@/api/lib/resource-realtime-macro";
+
+const fieldRealtimeUpdates = workspaceResourceSetUpdates(RESOURCE_TYPE.FIELD);
 
 export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   .use(workspaceAccessMacro)
-  .use(invalidateQuery)
+  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
   .post("/", upsertField.handler, {
     body: upsertField.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: fieldRealtimeUpdates,
     permissions: upsertField.config.permissions,
   })
   .patch("/metadata", updateCellMetadata.handler, {
     body: updateCellMetadata.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: fieldRealtimeUpdates,
     permissions: updateCellMetadata.config.permissions,
   })
   .patch("/metadata-batch", markColumnFlag.handler, {
     body: markColumnFlag.config.body,
-    invalidateQuery: true,
+    resourceSetUpdated: fieldRealtimeUpdates,
     permissions: markColumnFlag.config.permissions,
   });

@@ -30,7 +30,7 @@ export const useUninstallEntry = (
       if (entry.kind === "native-tool") {
         const response = await api.mcp["native-tools"]({
           slug: entry.backendSlug,
-        }).patch({ enabled: false, queryKey: ["mcp"] });
+        }).patch({ enabled: false });
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -42,7 +42,7 @@ export const useUninstallEntry = (
         }
         const response = await api.mcp
           .connectors({ slug: entry.installedConnectorSlug })
-          .delete({ queryKey: ["mcp"] });
+          .delete({});
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -53,7 +53,7 @@ export const useUninstallEntry = (
       }
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(entry.installedSkillId) })
-        .delete({ queryKey: ["skills"] });
+        .delete({});
       if (response.error) {
         throw toAPIError(response.error);
       }

@@ -6,6 +6,7 @@ import {
 } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { flowRunsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 // ── Key type ────────────────────────────────────────
@@ -22,7 +23,7 @@ const FLOW_RUNS_POLL_MS = 3000;
 // ── Key helpers ─────────────────────────────────────
 
 export const flowRunsKeys = {
-  all: (workspaceId: string) => ["flow-runs", workspaceId],
+  all: flowRunsQueryRoot,
   list: (key: FlowRunsListKey) => [
     ...flowRunsKeys.all(key.workspaceId),
     "list",

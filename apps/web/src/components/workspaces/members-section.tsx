@@ -124,10 +124,7 @@ const MemberRow = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
         .members({ userId: toSafeId<"user">(vars.userId) })
-        .delete({
-          queryKey: workspaceMembersKeys.all(vars.workspaceId),
-          queryKeys: [workspacesKeys.all],
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);

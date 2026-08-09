@@ -86,7 +86,7 @@ export const AddMcpServerSheet = ({
     mutationFn: async (connector: CreatedConnector) => {
       const response = await api.mcp
         .connectors({ slug: connector.slug })
-        .connect.post({ queryKey: ["mcp"] });
+        .connect.post({});
       return { connector, data: unwrapEden(response) };
     },
     onSuccess: ({ connector, data }) => {
@@ -122,7 +122,6 @@ export const AddMcpServerSheet = ({
     mutationFn: async (trimmedUrl: string) => {
       const response = await api.mcp.connectors.post({
         url: trimmedUrl,
-        queryKey: ["mcp"],
       });
       return unwrapEden(response);
     },
@@ -138,7 +137,6 @@ export const AddMcpServerSheet = ({
       const response = await api.mcp.connections.post({
         connectorSlug: payload.connectorSlug,
         token: payload.token,
-        queryKey: ["mcp"],
       });
       return unwrapEden(response);
     },

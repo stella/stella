@@ -285,9 +285,7 @@ export const VersionsSidebar = ({
       }
 
       // 4. Finalize.
-      const finalize = await wsClient({ uploadId }).finalize.post({
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
+      const finalize = await wsClient({ uploadId }).finalize.post({});
       if (finalize.error) {
         throw toAPIError(finalize.error);
       }
@@ -309,9 +307,7 @@ export const VersionsSidebar = ({
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .delete({
-          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-        });
+        .delete({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -341,7 +337,6 @@ export const VersionsSidebar = ({
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .label.patch({
           label,
-          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
         });
 
       if (response.error) {
@@ -360,9 +355,7 @@ export const VersionsSidebar = ({
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .restore.post({
-          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-        });
+        .restore.post({});
 
       if (response.error) {
         throw toAPIError(response.error);

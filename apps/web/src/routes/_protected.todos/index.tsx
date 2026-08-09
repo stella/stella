@@ -57,7 +57,6 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { LegacyTodosPage } from "@/routes/_protected.todos/-legacy-page";
 import type {
   MyWorkItem,
@@ -186,7 +185,6 @@ function MyWorkPage() {
 
   const handleCreateTask = async (wsId: string) => {
     const response = await api.tasks({ workspaceId: wsId }).put({
-      queryKey: entitiesKeys.all(wsId),
       name: t("tasks.untitled"),
     });
 

@@ -130,7 +130,7 @@ function LegalListsPage() {
     const result = await Result.tryPromise(async () => {
       const response = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name, queryKey: [...legalListKeys.all(workspaceId)] });
+        .put({ name });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -262,7 +262,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
-          queryKey: legalListKeys.items(workspaceId, listId),
           name: itemName,
           listId: toSafeId<"legalList">(listId),
           listItemType: itemType,
@@ -289,7 +288,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["item-reviews"].post({
-        queryKey: legalListKeys.items(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         itemEntityId: toSafeId<"entity">(itemEntityId),
         decision: "verified",
@@ -311,7 +309,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .sections.post({
-        queryKey: legalListKeys.detail(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         name: nextSectionName,
       });
@@ -332,7 +329,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .columns.post({
-        queryKey: legalListKeys.detail(workspaceId, listId),
         listId: toSafeId<"legalList">(listId),
         propertyId: toSafeId<"property">(selectedPropertyId),
       });
@@ -852,7 +848,6 @@ const ItemSourcesPanel = ({
     const response = await api
       .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["item-sources"].patch({
-        queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
         id: toSafeId<"legalListItemSource">(sourceId),
         listId: toSafeId<"legalList">(listId),
         itemEntityId: toSafeId<"entity">(itemEntityId),

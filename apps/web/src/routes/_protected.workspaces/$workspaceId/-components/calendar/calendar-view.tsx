@@ -25,7 +25,6 @@ import {
   calendarTasksKeys,
   calendarTasksOptions,
 } from "@/lib/workspaces/queries/calendar-tasks";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 
 import { CalendarDayCell } from "./calendar-day-cell";
@@ -108,7 +107,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     const { data: taskData, error: taskError } = await api
       .tasks({ workspaceId })
       .put({
-        queryKey: entitiesKeys.all(workspaceId),
         name: t("tasks.untitled"),
         ...(dueDate && { dueDate }),
         ...(startAt && { allDay: true, startAt }),
@@ -438,7 +436,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .patch({
                 taskId: toSafeId<"entity">(entityId),
-                queryKey: entitiesKeys.all(workspaceId),
                 dueDate: date,
               });
             if (response.error) {
@@ -463,7 +460,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .patch({
                 taskId: toSafeId<"entity">(entityId),
-                queryKey: entitiesKeys.all(workspaceId),
                 allDay: true,
                 startAt: toAllDayAgendaDateTime(date),
               });
