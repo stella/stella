@@ -169,6 +169,7 @@ export const finalizeEntityVersion = async function* ({
 
     return await writeFileVersion({
       tx,
+      organizationId,
       workspaceId,
       entityId,
       userId,
@@ -181,6 +182,7 @@ export const finalizeEntityVersion = async function* ({
       sizeBytes: declaredSize,
       sha256Hex: declaredSha256Hex,
       source: UPLOAD_DOCUMENT_SOURCE,
+      writePolicy: { type: "replace-current-file" },
       scanWarnings,
       afterWrite: async ({ versionNumber }) => {
         finalized = {

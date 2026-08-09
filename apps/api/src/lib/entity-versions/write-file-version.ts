@@ -3,16 +3,21 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   cellMetadata,
+  desktopEditSessions,
   entities,
   entityVersions,
+  fileChatThreads,
   fields,
+  folioCollabSessions,
   properties,
   workspaces,
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -22,24 +27,41 @@ import { fileContentWithMintedObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+export type FileVersionWritePolicy =
+  | { type: "replace-current-file" }
+  | {
+      type: "automatic-docx-edit";
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+      filePropertyId: SafeId<"property">;
+      replacedFileFieldId: SafeId<"field">;
+    };
 
 export type WriteFileVersionResult =
   | {
       status: "ok";
       entityVersionId: SafeId<"entityVersion">;
       fieldId: SafeId<"field">;
+      filePropertyId: SafeId<"property">;
       versionNumber: number;
     }
   | {
       status:
         | "current-version-not-found"
+        | "current-version-changed"
+        | "edit-session-open"
         | "entity-not-found"
         | "entity-read-only"
-        | "missing-file-field";
+        | "missing-file-field"
+        | "target-file-not-found"
+        | "workspace-not-active";
     };
 
 type WriteFileVersionInput = {
   tx: Transaction;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   userId: SafeId<"user">;
@@ -53,6 +75,7 @@ type WriteFileVersionInput = {
   sha256Hex: string;
   source: DocumentSource | null;
   scanWarnings?: string[] | undefined;
+  writePolicy: FileVersionWritePolicy;
   afterWrite?:
     | ((
         result: Extract<WriteFileVersionResult, { status: "ok" }>,
@@ -60,16 +83,64 @@ type WriteFileVersionInput = {
     | undefined;
 };
 
+const hasOpenDocxEditSession = async ({
+  tx,
+  workspaceId,
+  entityId,
+  filePropertyId,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  filePropertyId: SafeId<"property">;
+}): Promise<boolean> => {
+  const now = new Date();
+  const liveDesktopSessions = await tx
+    .select({ id: desktopEditSessions.id })
+    .from(desktopEditSessions)
+    .where(
+      and(
+        eq(desktopEditSessions.entityId, entityId),
+        eq(desktopEditSessions.propertyId, filePropertyId),
+        eq(desktopEditSessions.workspaceId, workspaceId),
+        ...liveDesktopEditSessionPredicates(now),
+      ),
+    )
+    .limit(1);
+  if (liveDesktopSessions.at(0)) {
+    return true;
+  }
+
+  const openCollabSessions = await tx
+    .select({ createdAt: folioCollabSessions.createdAt })
+    .from(folioCollabSessions)
+    .where(
+      and(
+        eq(folioCollabSessions.entityId, entityId),
+        eq(folioCollabSessions.propertyId, filePropertyId),
+        eq(folioCollabSessions.status, "open"),
+        eq(folioCollabSessions.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  const openCollabSession = openCollabSessions.at(0);
+  return (
+    openCollabSession !== undefined &&
+    !isFolioCollabSessionExpired(openCollabSession.createdAt, now)
+  );
+};
+
 /**
  * Canonical transaction for replacing an entity's file with a new version.
  *
- * Every transport (multipart, presigned upload, and compound template fill)
- * delegates here, so row locking, version numbering, field/cell cloning, and
- * audit events cannot drift between CLI, MCP, and HTTP entry points. Callers
+ * Ordinary transports and automatic DOCX edits delegate here, so row locking,
+ * version numbering, field/cell cloning, edit-session exclusion, and audit
+ * events cannot drift between CLI, MCP, chat, and HTTP entry points. Callers
  * own object-storage placement and post-commit derivative/extraction work.
  */
 export const writeFileVersion = async ({
   tx,
+  organizationId,
   workspaceId,
   entityId,
   userId,
@@ -83,8 +154,38 @@ export const writeFileVersion = async ({
   sha256Hex,
   source,
   scanWarnings,
+  writePolicy,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
+  switch (writePolicy.type) {
+    case "replace-current-file": {
+      break;
+    }
+    case "automatic-docx-edit": {
+      await lockDocxEditTarget({
+        entityId,
+        propertyId: writePolicy.filePropertyId,
+        tx,
+        workspaceId,
+      });
+      if (
+        await hasOpenDocxEditSession({
+          tx,
+          workspaceId,
+          entityId,
+          filePropertyId: writePolicy.filePropertyId,
+        })
+      ) {
+        return { status: "edit-session-open" };
+      }
+      break;
+    }
+    default: {
+      const exhaustive: never = writePolicy;
+      return exhaustive;
+    }
+  }
+
   const entityRows = await tx
     .select({
       currentVersionId: entities.currentVersionId,
@@ -111,20 +212,43 @@ export const writeFileVersion = async ({
   }
 
   const currentVersionId = lockedEntity.currentVersionId;
+  if (
+    writePolicy.type === "automatic-docx-edit" &&
+    currentVersionId !== writePolicy.expectedCurrentVersionId
+  ) {
+    return { status: "current-version-changed" };
+  }
   const currentVersion = await tx.query.entityVersions.findFirst({
-    where: { id: { eq: currentVersionId }, deletedAt: { isNull: true } },
+    where: {
+      id: { eq: currentVersionId },
+      entityId: { eq: entityId },
+      workspaceId: { eq: workspaceId },
+      deletedAt: { isNull: true },
+    },
     columns: { versionNumber: true },
     with: {
-      fields: { columns: { content: true, propertyId: true } },
+      fields: { columns: { id: true, content: true, propertyId: true } },
     },
   });
   if (!currentVersion) {
     return { status: "current-version-not-found" };
   }
 
-  const fileField = currentVersion.fields.find(
-    (candidate) => candidate.content.type === "file",
-  );
+  const fileField =
+    writePolicy.type === "automatic-docx-edit"
+      ? currentVersion.fields.find(
+          (candidate) =>
+            candidate.id === writePolicy.replacedFileFieldId &&
+            candidate.propertyId === writePolicy.filePropertyId &&
+            candidate.content.type === "file" &&
+            candidate.content.mimeType === DOCX_MIME_TYPE,
+        )
+      : currentVersion.fields.find(
+          (candidate) => candidate.content.type === "file",
+        );
+  if (writePolicy.type === "automatic-docx-edit" && !fileField) {
+    return { status: "target-file-not-found" };
+  }
   const systemFileProperty = fileField
     ? undefined
     : await tx
@@ -160,8 +284,14 @@ export const writeFileVersion = async ({
 
   const workspace = await tx.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
-    columns: { reference: true },
+    columns: { reference: true, status: true },
   });
+  if (
+    writePolicy.type === "automatic-docx-edit" &&
+    workspace?.status !== "active"
+  ) {
+    return { status: "workspace-not-active" };
+  }
   const versionNumber = await nextEntityVersionNumber(tx, {
     entityId,
     workspaceId,
@@ -268,6 +398,21 @@ export const writeFileVersion = async ({
     .where(
       and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
     );
+  if (writePolicy.type === "automatic-docx-edit") {
+    // File-chat identity follows the logical document across automatic edits.
+    // Move every user's exact field mapping atomically with the version write.
+    await tx
+      .update(fileChatThreads)
+      .set({ fieldId })
+      .where(
+        and(
+          eq(fileChatThreads.organizationId, organizationId),
+          eq(fileChatThreads.workspaceId, workspaceId),
+          eq(fileChatThreads.entityId, entityId),
+          eq(fileChatThreads.fieldId, writePolicy.replacedFileFieldId),
+        ),
+      );
+  }
   await tx
     .update(workspaces)
     .set({ lastActivityAt: new Date() })
@@ -278,6 +423,7 @@ export const writeFileVersion = async ({
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
       resourceId: entityVersionId,
+      workspaceId,
       changes: {
         created: {
           old: null,
@@ -297,6 +443,7 @@ export const writeFileVersion = async ({
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
       resourceId: entityId,
+      workspaceId,
       changes: {
         currentVersionId: { old: currentVersionId, new: entityVersionId },
       },
@@ -307,6 +454,7 @@ export const writeFileVersion = async ({
     status: "ok",
     entityVersionId,
     fieldId,
+    filePropertyId,
     versionNumber,
   } as const;
   await afterWrite?.(result);

@@ -1050,6 +1050,7 @@ describe("MCP template tools", () => {
         entityId: ENTITY_ID,
         fileName: "lease.docx",
         source: null,
+        writePolicy: { type: "replace-current-file" },
         afterWrite: expect.any(Function),
       }),
     );

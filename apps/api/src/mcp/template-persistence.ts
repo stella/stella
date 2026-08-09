@@ -8,10 +8,10 @@ import {
   templatePersistenceRequests,
   type TemplatePersistenceResult,
 } from "@/api/db/schema";
-import { createEntityVersionFromBuffer } from "@/api/handlers/entities/create-version-from-buffer";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 /** Narrow persistence seam shared by template MCP handlers and their tests. */

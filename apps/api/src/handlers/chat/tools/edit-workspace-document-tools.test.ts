@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
-import { fields, fileChatThreads } from "@/api/db/schema";
+import {
+  entityVersions,
+  fields,
+  fileChatThreads,
+  pendingUploads,
+} from "@/api/db/schema";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -153,6 +158,7 @@ const buildTx = ({
             {
               currentVersionId: lockedCurrentVersionId,
               docSequence: null,
+              kind: "document",
               readOnly,
             },
           ],
@@ -179,6 +185,15 @@ const buildTx = ({
       where: () => ({
         limit: async () =>
           openDesktopEditSession ? [{ id: "open-edit-session" }] : [],
+      }),
+    }),
+  };
+  const workspaceStatusSelect = {
+    from: () => ({
+      where: () => ({
+        limit: () => ({
+          for: async () => [{ status: "active" }],
+        }),
       }),
     }),
   };
@@ -244,6 +259,9 @@ const buildTx = ({
       },
     },
     select: (selectedFields: Record<string, unknown>) => {
+      if ("status" in selectedFields) {
+        return workspaceStatusSelect;
+      }
       if ("metadata" in selectedFields) {
         return cellMetadataSelect;
       }
@@ -259,16 +277,28 @@ const buildTx = ({
     insert: (table: unknown) => ({
       values: (values: unknown) => {
         insertedTables.push({ table, values });
+        if (table === pendingUploads) {
+          return {
+            returning: async () => [{ id: "intent_1" }],
+          };
+        }
         return undefined;
       },
     }),
     update: (table: unknown) => ({
       set: (values: unknown) => ({
-        where: async () => {
+        where: () => {
           updatedTables.push({ table, values });
+          if (table === pendingUploads) {
+            return {
+              returning: async () => [{ id: "intent_1" }],
+            };
+          }
+          return undefined;
         },
       }),
     }),
+    delete: () => ({ where: async () => undefined }),
   };
 
   return { tx, insertedTables, updatedTables };
@@ -293,8 +323,10 @@ const validateInput = async (input: unknown) => {
 
 describe("createEditWorkspaceDocumentTools", () => {
   beforeEach(() => {
-    s3WriteMock.mockClear();
-    s3DeleteMock.mockClear();
+    s3WriteMock.mockReset();
+    s3WriteMock.mockResolvedValue(undefined);
+    s3DeleteMock.mockReset();
+    s3DeleteMock.mockResolvedValue(undefined);
     processExtractionMock.mockClear();
     enqueueImageThumbnailOrMarkFailedMock.mockClear();
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
@@ -314,18 +346,24 @@ describe("createEditWorkspaceDocumentTools", () => {
       organizationId,
       workspaceId,
       entityId,
-      expectedCurrentVersionId: entityVersionId,
       userId,
       recordAuditEvent: async () => undefined,
       buffer: new ArrayBuffer(FILE_SIZE_LIMIT_BYTES.document + 1),
       fileName: "oversized.docx",
-      filePropertyId: propertyId,
-      replacedFileFieldId: fileFieldId,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      source: null,
+      writePolicy: {
+        type: "automatic-docx-edit",
+        expectedCurrentVersionId: entityVersionId,
+        filePropertyId: propertyId,
+        replacedFileFieldId: fileFieldId,
+      },
     });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ reason: "documentTooLarge" });
+      expect(result.error).toMatchObject({ code: "document-too-large" });
     }
     expect(s3WriteMock).not.toHaveBeenCalled();
     expect(insertedTables).toEqual([]);
@@ -707,6 +745,67 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(s3WriteMock).not.toHaveBeenCalled();
   });
 
+  test("surfaces object-storage failures as a sanitized tool error", async () => {
+    const { tx, insertedTables } = buildTx({
+      preferredName: "Jana Nováková",
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    s3WriteMock.mockRejectedValue(
+      new Error("private object-storage endpoint unavailable"),
+    );
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+    const block = await firstBlock(s3FileBuffer);
+
+    const rejection = await Promise.resolve(
+      execute(
+        {
+          baseVersionId: entityVersionId,
+          version: 1,
+          operations: [
+            {
+              id: "op-1",
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      kind: "server-defect",
+      message: "The edited document could not be persisted",
+    });
+    expect(rejection instanceof Error ? rejection.message : "").not.toContain(
+      "private object-storage endpoint",
+    );
+    expect(insertedTables).toEqual([
+      expect.objectContaining({ table: pendingUploads }),
+    ]);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+  });
+
   test("direct mode applies without tracked-changes markup", async () => {
     // Direct text rewrites create no authored revision, so a missing account
     // name must not block them with the tracked-changes name dialog.
@@ -863,7 +962,12 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(rejection instanceof Error ? rejection.message : "").toMatch(
       /active edit session/iu,
     );
-    expect(insertedTables).toEqual([]);
+    expect(insertedTables).toEqual([
+      expect.objectContaining({ table: pendingUploads }),
+    ]);
+    expect(insertedTables).not.toContainEqual(
+      expect.objectContaining({ table: entityVersions }),
+    );
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
   });
 
@@ -920,7 +1024,12 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(rejection instanceof Error ? rejection.message : "").toMatch(
       /changed while edits were being applied/iu,
     );
-    expect(insertedTables).toEqual([]);
+    expect(insertedTables).toEqual([
+      expect.objectContaining({ table: pendingUploads }),
+    ]);
+    expect(insertedTables).not.toContainEqual(
+      expect.objectContaining({ table: entityVersions }),
+    );
     expect(recordedAuditEvents).toEqual([]);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
   });

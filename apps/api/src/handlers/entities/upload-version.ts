@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 
-import { createEntityVersionFromBuffer } from "@/api/handlers/entities/create-version-from-buffer";
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -99,6 +99,7 @@ export default createSafeHandler(
             fileName: sanitizedName,
             mimeType: file.type,
             source: UPLOAD_DOCUMENT_SOURCE,
+            writePolicy: { type: "replace-current-file" },
             scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
           }),
         catch: (cause) =>
@@ -125,8 +126,18 @@ export default createSafeHandler(
           status = 409;
           break;
         }
+        case "current-version-changed":
+        case "edit-session-open":
+        case "workspace-not-active": {
+          status = 409;
+          break;
+        }
         case "missing-file-field": {
           status = 400;
+          break;
+        }
+        case "target-file-not-found": {
+          status = 409;
           break;
         }
         default: {

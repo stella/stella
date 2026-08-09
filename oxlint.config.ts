@@ -501,6 +501,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
@@ -1347,6 +1348,15 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-unowned-file-version-write.fixture.ts",
+      ],
+      rules: {
+        "no-unowned-file-version-write/no-unowned-file-version-write":
+          "error",
+      },
+    },
+    {
       files: [".oxlint-plugins/__fixtures__/no-db-await-in-loop.fixture.ts"],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",
@@ -1822,6 +1832,17 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      // Ordinary and automatic document replacements share one locked,
+      // audited transaction. Specialized session finalizers and restore are
+      // explicit rule-owned exceptions with separate lifecycle semantics.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "no-unowned-file-version-write/no-unowned-file-version-write":
           "error",
       },
     },
