@@ -64,7 +64,7 @@ const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),
   data: v.object({
     requestedBy: nonEmptyStringSchema,
-    requestedAt: nonEmptyStringSchema,
+    requestedAt: v.pipe(v.string(), v.isoTimestamp()),
   }),
 });
 

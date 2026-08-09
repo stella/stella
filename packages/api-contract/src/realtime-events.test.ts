@@ -101,5 +101,14 @@ describe("realtime event contracts", () => {
         data: {},
       }),
     ).toBeNull();
+    expect(
+      parseDesktopEditSessionRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
+        data: {
+          requestedBy: "Another user",
+          requestedAt: "not-a-timestamp",
+        },
+      }),
+    ).toBeNull();
   });
 });
