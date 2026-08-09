@@ -41,6 +41,36 @@ export const computedGlobalWindow =
   // eslint-disable-next-line require-safe-window-open/require-safe-window-open, typescript/dot-notation -- fixture: static computed properties preserve the global call identity
   globalThis[`window`][`open`](externalDocumentUrl);
 
+// MUST flag: immutable aliases retain the browser window's provenance.
+export const aliasedWindow = () => {
+  const popupHost = window;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: a stable alias cannot bypass the navigation boundary
+  return popupHost.open(externalDocumentUrl, "_blank");
+};
+
+// MUST flag: an alias of globalThis exposes the same open primitive.
+export const aliasedGlobalThis = () => {
+  const popupHost = globalThis;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: a globalThis alias retains browser-global identity
+  return popupHost.open(externalDocumentUrl);
+};
+
+// MUST flag: aliasing globalThis.window also retains window provenance.
+export const aliasedGlobalWindow = () => {
+  const popupHost = globalThis.window;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: a globalThis.window alias still reaches the raw primitive
+  return popupHost.open(externalDocumentUrl);
+};
+
+// MUST flag: provenance follows stable alias chains.
+export const chainedWindowAlias = () => {
+  const browserGlobal = globalThis;
+  const browserWindow = browserGlobal.window;
+  const popupHost = browserWindow;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: stable alias chains cannot hide the browser global
+  return popupHost.open(externalDocumentUrl);
+};
+
 // Allowed: product code delegates to the sanctioned boundary.
 export const safeHelperCall = () => openExternalUrl(externalDocumentUrl);
 
@@ -59,6 +89,43 @@ export const useLocallyDeclaredOpen = () => {
 export const useInjectedWindow = (window: { open: (url: string) => unknown }) =>
   window.open(externalDocumentUrl);
 
+// Allowed: a stable alias of a shadowing parameter is still unrelated.
+export const useInjectedWindowAlias = (window: {
+  open: (url: string) => unknown;
+}) => {
+  const popupHost = window;
+  return popupHost.open(externalDocumentUrl);
+};
+
+// Allowed: a mutable alias may be replaced before the call.
+export const useMutableWindowAlias = (
+  replaceHost: boolean,
+  replacement: { open: (url: string) => unknown },
+) => {
+  let popupHost = window;
+  if (replaceHost) {
+    popupHost = replacement;
+  }
+  return popupHost.open(externalDocumentUrl);
+};
+
+// Allowed: a conditional host does not have statically proven provenance.
+export const useDynamicWindowAlias = (
+  useBrowserWindow: boolean,
+  replacement: { open: (url: string) => unknown },
+) => {
+  const popupHost = useBrowserWindow ? window : replacement;
+  return popupHost.open(externalDocumentUrl);
+};
+
+// Allowed: a call result is not a proven browser-global alias.
+export const useResolvedWindowAlias = (
+  resolvePopupHost: () => { open: (url: string) => unknown },
+) => {
+  const popupHost = resolvePopupHost();
+  return popupHost.open(externalDocumentUrl);
+};
+
 // Allowed: a locally bound globalThis-shaped test double is not the global.
 export const useInjectedGlobalThis = (
   // oxlint-disable-next-line no-shadow-restricted-names -- fixture: proves the explicit globalThis chain is binding-aware
@@ -70,6 +137,17 @@ export const useInjectedGlobalThis = (
   globalThis.open(externalDocumentUrl),
   globalThis.window.open(externalDocumentUrl),
 ];
+
+// Allowed: aliases derived from a shadowing globalThis remain unrelated.
+export const useInjectedGlobalThisAlias = (
+  // oxlint-disable-next-line no-shadow-restricted-names -- fixture: proves aliases preserve local binding provenance
+  globalThis: {
+    window: { open: (url: string) => unknown };
+  },
+) => {
+  const popupHost = globalThis.window;
+  return popupHost.open(externalDocumentUrl);
+};
 
 // Allowed: opening a method on an ordinary domain object is unrelated.
 declare const documentPreview: { open: (url: string) => unknown };

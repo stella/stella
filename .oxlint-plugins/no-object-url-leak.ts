@@ -19,10 +19,6 @@ import type { AstNode } from "./utils.ts";
 
 const RULE_NAME = "no-object-url-leak";
 const GLOBAL_HOST_NAMES = new Set(["globalThis", "self", "window"]);
-const VALUE_WRAPPER_TYPES = new Set([
-  "ConditionalExpression",
-  "LogicalExpression",
-]);
 const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
   "FunctionDeclaration",
@@ -439,8 +435,30 @@ const revocationCoversCreation = (
 };
 
 // Find the declaration/assignment that receives this value. Conditional and
-// logical expressions are transparent because only their selected result is
-// assigned to the binding.
+// short-circuit expressions are transparent only when this creation can be
+// the expression's owned result. A createObjectURL call on the left of `&&`
+// produces a separate, truthy URL before the right operand runs, so it must
+// not share the right operand's ownership slot. `||` and `??` select at most
+// one created URL because object URLs are non-empty, non-nullish strings.
+const wrapperCarriesCreatedValue = (
+  parent: AstNode,
+  current: AstNode,
+): boolean => {
+  if (parent.type === "ConditionalExpression") {
+    return parent.consequent === current || parent.alternate === current;
+  }
+  if (parent.type !== "LogicalExpression") {
+    return false;
+  }
+  if (parent.operator === "&&") {
+    return parent.right === current;
+  }
+  return (
+    (parent.operator === "||" || parent.operator === "??") &&
+    (parent.left === current || parent.right === current)
+  );
+};
+
 const creationOwner = (creation) => {
   let current = creation;
   let parent = isAstNode(current.parent) ? current.parent : null;
@@ -450,11 +468,7 @@ const creationOwner = (creation) => {
       parent.type === "TSNonNullExpression" ||
       parent.type === "TSSatisfiesExpression" ||
       parent.type === "TSTypeAssertion" ||
-      (VALUE_WRAPPER_TYPES.has(parent.type) &&
-        (parent.left === current ||
-          parent.right === current ||
-          parent.consequent === current ||
-          parent.alternate === current)))
+      wrapperCarriesCreatedValue(parent, current))
   ) {
     current = parent;
     parent = isAstNode(current.parent) ? current.parent : null;

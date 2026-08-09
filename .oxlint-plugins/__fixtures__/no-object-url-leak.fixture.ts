@@ -7,6 +7,7 @@
 declare const blob: Blob;
 declare const blobs: readonly Blob[];
 declare const condition: boolean;
+declare const existingObjectUrl: string;
 declare const mode: "keep" | "skip";
 
 // MUST flag: an escaped Blob URL has no visible owner or cleanup.
@@ -110,6 +111,28 @@ export const conditionalFinallyCleanup = () => {
       URL.revokeObjectURL(url);
     }
   }
+};
+
+// MUST flag: the left side of && is a distinct, truthy object URL. The right
+// side becomes the assigned result, so revoking that result cannot free the
+// first Blob.
+export const accumulatingLogicalAnd = () => {
+  const url =
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: logical AND creates two live ownership values
+    URL.createObjectURL(blob) &&
+    // The assigned right-side creation is revoked and must remain clean.
+    URL.createObjectURL(blob);
+  URL.revokeObjectURL(url);
+};
+
+// MUST flag: the URL created on the left of && is discarded when the logical
+// expression selects a replacement string. Revoking that result cannot free
+// the created Blob URL.
+export const replacedLogicalAnd = () => {
+  const url =
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: logical AND discards the created URL for a replacement value
+    URL.createObjectURL(blob) && "replacement";
+  URL.revokeObjectURL(url);
 };
 
 // MUST flag: a loop can overwrite the same ownership binding on every
@@ -232,6 +255,22 @@ export const conditionalCleanup = () => {
     ? URL.createObjectURL(blob)
     : globalThis.URL.createObjectURL(blob);
   URL.revokeObjectURL(url);
+};
+
+// Allowed: object URLs are truthy and non-nullish strings, so the right sides
+// of || and ?? are mutually exclusive fallbacks rather than accumulating
+// ownership writes.
+export const logicalFallbackCleanup = () => {
+  const runtimeFallbackUrl =
+    existingObjectUrl || globalThis.URL.createObjectURL(blob);
+  URL.revokeObjectURL(runtimeFallbackUrl);
+  const orUrl =
+    URL.createObjectURL(blob) || globalThis.URL.createObjectURL(blob);
+  URL.revokeObjectURL(orUrl);
+  const nullishUrl =
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- fixture: exercise conservative ?? ownership handling
+    URL.createObjectURL(blob) ?? globalThis.URL.createObjectURL(blob);
+  URL.revokeObjectURL(nullishUrl);
 };
 
 // Allowed: `finally` revokes the URL even when the work exits abruptly.
