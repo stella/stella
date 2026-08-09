@@ -132,7 +132,7 @@ const timerStart = createSafeHandler(
         )
         .limit(1);
       if (!activeWorkspace) {
-        return { type: "workspace_inactive" as const };
+        return { type: "workspace_unavailable" as const };
       }
       const hasAdminBypass =
         (activeWorkspace.organizationRole === "owner" ||
@@ -142,7 +142,7 @@ const timerStart = createSafeHandler(
         activeWorkspace.organizationRole === null ||
         (activeWorkspace.workspaceMemberId === null && !hasAdminBypass)
       ) {
-        return { type: "workspace_inaccessible" as const };
+        return { type: "workspace_unavailable" as const };
       }
       const totalEntries = await tx.$count(
         timeEntries,
@@ -242,16 +242,7 @@ const timerStart = createSafeHandler(
       );
     }
 
-    if (txValue.type === "workspace_inactive") {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This matter is no longer active",
-        }),
-      );
-    }
-
-    if (txValue.type === "workspace_inaccessible") {
+    if (txValue.type === "workspace_unavailable") {
       return Result.err(
         new HandlerError({
           status: 404,

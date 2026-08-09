@@ -36,7 +36,6 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
 import { timeEntries, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
@@ -683,119 +682,124 @@ const socialSignInTwoFactorRedirectPlugin = {
  * still owns the user/workspace locks, and leave a service audit trail for the
  * elapsed work rather than silently dropping the running interval.
  */
-const closeRemovedMemberActiveTimers = async ({
+const revokeRemovedMemberAccess = async ({
   organizationId,
-  tx,
   userId,
 }: {
   organizationId: SafeId<"organization">;
-  tx: Transaction;
   userId: SafeId<"user">;
-}): Promise<void> => {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+}) => {
+  await rootDb.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 
-  const timerWorkspaces = await tx
-    .selectDistinct({ id: timeEntries.workspaceId })
-    .from(timeEntries)
-    .innerJoin(workspaces, eq(workspaces.id, timeEntries.workspaceId))
-    .where(
-      and(
-        eq(workspaces.organizationId, organizationId),
-        eq(timeEntries.userId, userId),
-        isNotNull(timeEntries.timerStartedAt),
-        isNull(timeEntries.timerStoppedAt),
-      ),
-    );
-
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    execution: {
-      performer: {
-        type: "service",
-        id: "organization-member-removal",
-        name: "Organization member removal",
-      },
-      trigger: {
-        type: "system",
-        source: "organization_member_removal",
-      },
-    },
-    organizationId,
-    userId,
-    workspaceId: null,
-  });
-
-  const now = new Date();
-  for (const workspace of timerWorkspaces) {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${workspace.id}))`,
-    );
-    const lockedWorkspace = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspace.id))
-      .for("update");
-    if (!lockedWorkspace.at(0)) {
-      continue;
-    }
-    const activeTimers = await tx
-      .select({
-        billedMinutes: timeEntries.billedMinutes,
-        durationMinutes: timeEntries.durationMinutes,
-        id: timeEntries.id,
-        timerStartedAt: timeEntries.timerStartedAt,
-      })
+    const timerWorkspaces = await tx
+      .selectDistinct({ id: timeEntries.workspaceId })
       .from(timeEntries)
+      .innerJoin(workspaces, eq(workspaces.id, timeEntries.workspaceId))
       .where(
         and(
-          eq(timeEntries.workspaceId, workspace.id),
+          eq(workspaces.organizationId, organizationId),
           eq(timeEntries.userId, userId),
           isNotNull(timeEntries.timerStartedAt),
           isNull(timeEntries.timerStoppedAt),
         ),
-      )
-      .for("update");
+      );
 
-    for (const timer of activeTimers) {
-      if (!timer.timerStartedAt) {
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      execution: {
+        performer: {
+          type: "service",
+          id: "organization-member-removal",
+          name: "Organization member removal",
+        },
+        trigger: {
+          type: "system",
+          source: "organization_member_removal",
+        },
+      },
+      organizationId,
+      userId,
+      workspaceId: null,
+    });
+
+    const now = new Date();
+    for (const workspace of timerWorkspaces) {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspace.id}))`,
+      );
+      const lockedWorkspace = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspace.id))
+        .for("update");
+      if (!lockedWorkspace.at(0)) {
         continue;
       }
-      const durationMinutes = Math.max(
-        1,
-        Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
-      );
-      const billedMinutes = roundToBillingIncrement(durationMinutes);
-      await tx
-        .update(timeEntries)
-        .set({
-          durationMinutes,
-          billedMinutes,
-          timerStartedAt: null,
-          timerStoppedAt: now,
-          updatedAt: now,
+      const activeTimers = await tx
+        .select({
+          billedMinutes: timeEntries.billedMinutes,
+          durationMinutes: timeEntries.durationMinutes,
+          id: timeEntries.id,
+          timerStartedAt: timeEntries.timerStartedAt,
         })
-        .where(eq(timeEntries.id, timer.id));
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspace.id),
+            eq(timeEntries.userId, userId),
+            isNotNull(timeEntries.timerStartedAt),
+            isNull(timeEntries.timerStoppedAt),
+          ),
+        )
+        .for("update");
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-        resourceId: timer.id,
-        workspaceId: workspace.id,
-        changes: {
-          timerStartedAt: {
-            old: timer.timerStartedAt.toISOString(),
-            new: null,
+      for (const timer of activeTimers) {
+        if (!timer.timerStartedAt) {
+          continue;
+        }
+        const durationMinutes = Math.max(
+          1,
+          Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
+        );
+        const billedMinutes = roundToBillingIncrement(durationMinutes);
+        await tx
+          .update(timeEntries)
+          .set({
+            durationMinutes,
+            billedMinutes,
+            timerStartedAt: null,
+            timerStoppedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(timeEntries.id, timer.id));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: timer.id,
+          workspaceId: workspace.id,
+          changes: {
+            timerStartedAt: {
+              old: timer.timerStartedAt.toISOString(),
+              new: null,
+            },
+            timerStoppedAt: { old: null, new: now.toISOString() },
+            durationMinutes: {
+              old: timer.durationMinutes,
+              new: durationMinutes,
+            },
+            billedMinutes: { old: timer.billedMinutes, new: billedMinutes },
           },
-          timerStoppedAt: { old: null, new: now.toISOString() },
-          durationMinutes: {
-            old: timer.durationMinutes,
-            new: durationMinutes,
-          },
-          billedMinutes: { old: timer.billedMinutes, new: billedMinutes },
-        },
-        metadata: { cause: "organization_member_removed" },
-      });
+          metadata: { cause: "organization_member_removed" },
+        });
+      }
     }
-  }
+
+    await revokeOrganizationMemberAuthArtifacts(tx, {
+      organizationId,
+      userId,
+    });
+  });
 };
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
@@ -1155,18 +1159,9 @@ const createAuth = () => {
             // rows by the plugin itself (the membership it just removed), not
             // supplied by the caller, so this is where they become ownership
             // ids for the tenant predicates the helper applies.
-            await rootDb.transaction(async (tx) => {
-              const organizationId = brandPersistedOrganizationId(org.id);
-              const userId = brandPersistedUserId(removedMember.userId);
-              await closeRemovedMemberActiveTimers({
-                organizationId,
-                tx,
-                userId,
-              });
-              await revokeOrganizationMemberAuthArtifacts(tx, {
-                organizationId,
-                userId,
-              });
+            await revokeRemovedMemberAccess({
+              organizationId: brandPersistedOrganizationId(org.id),
+              userId: brandPersistedUserId(removedMember.userId),
             });
           },
         },

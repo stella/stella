@@ -7,8 +7,8 @@ import { Checkbox } from "@stll/ui/components/checkbox";
 import { Label } from "@stll/ui/components/label";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { detached } from "@/lib/detached";
 import { addDays, parseIsoDateLocal } from "@/lib/dates";
+import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
