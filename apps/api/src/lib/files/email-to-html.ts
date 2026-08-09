@@ -18,6 +18,13 @@ import PostalMime, { type Address } from "postal-mime";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
+import {
+  EMAIL_CITATION_BLOCK_MODE,
+  type EmailCitationBlock,
+  type EmailCitationBlockMode,
+  MAX_EMAIL_CITATION_BLOCKS,
+  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+} from "@/api/lib/files/email-citations";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 
 export const EML_MIME_TYPE = "message/rfc822";
@@ -131,6 +138,7 @@ export type EmailPreview = {
   attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
+  citationBlocks: EmailCitationBlock[];
 };
 
 /**
@@ -155,10 +163,15 @@ export const emailToHtml = async (
       }),
   });
 
+type EmailPreviewOptions = {
+  citationBlockMode?: EmailCitationBlockMode;
+  createAttachmentId?: (attachmentIndex: number) => string;
+};
+
 export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
-  options: { createAttachmentId?: (attachmentIndex: number) => string } = {},
+  options: EmailPreviewOptions = {},
 ): Promise<Result<EmailPreview, EmailParseError>> =>
   await Result.tryPromise({
     try: async () =>
@@ -174,14 +187,24 @@ export const emailToPreview = async (
 export const buildEmailPreview = (
   parsed: ParsedEmail,
   {
+    citationBlockMode = EMAIL_CITATION_BLOCK_MODE.include,
     createAttachmentId = (attachmentIndex) =>
       `attachment-${String(attachmentIndex)}`,
-  }: { createAttachmentId?: (attachmentIndex: number) => string } = {},
+  }: EmailPreviewOptions = {},
 ): EmailPreview => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
-  const renderedBody = renderEmailBody(parsed);
+  const headerCitationBlocks =
+    citationBlockMode === EMAIL_CITATION_BLOCK_MODE.include
+      ? buildEmailHeaderCitationBlocks(parsed)
+      : [];
+  const renderedBody = renderEmailBody(
+    parsed,
+    citationBlockMode === EMAIL_CITATION_BLOCK_MODE.include
+      ? MAX_EMAIL_CITATION_BLOCKS - headerCitationBlocks.length
+      : 0,
+  );
 
   return {
     subject: parsed.subject,
@@ -214,7 +237,26 @@ export const buildEmailPreview = (
       }),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
+    citationBlocks: [...headerCitationBlocks, ...renderedBody.citationBlocks],
   };
+};
+
+const buildEmailHeaderCitationBlocks = (
+  parsed: ParsedEmail,
+): EmailCitationBlock[] => {
+  const values = [
+    ["header-subject", parsed.subject],
+    ["header-from", parsed.from],
+    ["header-to", parsed.to.join(", ")],
+    ["header-cc", parsed.cc.join(", ")],
+    ["header-bcc", parsed.bcc.join(", ")],
+    ["header-date", parsed.date],
+  ] as const;
+
+  return values.flatMap(([id, value]) => {
+    const text = normalizeEmailCitationText(value ?? "");
+    return text.length === 0 ? [] : [{ id, text }];
+  });
 };
 
 export const isEmailAttachmentPreviewable = (
@@ -600,6 +642,16 @@ body, table, td, div, p, span {
 [data-stella-email-fold][open] > summary {
   margin-bottom: 8px;
 }
+[data-stella-email-citation-active] {
+  background: #fef3c7;
+  border-radius: 3px;
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+.stella-email-plain-line {
+  display: block;
+  min-height: 1.45em;
+}
 `;
 
 export const renderEmailHtml = (parsed: ParsedEmail): string => {
@@ -636,15 +688,24 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
 type RenderedEmailBody = {
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
+  citationBlocks: EmailCitationBlock[];
   referencedContentIds: Set<string>;
 };
 
-const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
+const renderEmailBody = (
+  parsed: ParsedEmail,
+  maxCitationBlocks = MAX_EMAIL_CITATION_BLOCKS,
+): RenderedEmailBody => {
   if (parsed.body.type === "text") {
     const renderedTextBody = renderPlainTextBody(parsed.body.text);
+    const $ = load(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto">${renderedTextBody.html}</body></html>`,
+    );
+    const citationBlocks = annotateEmailCitationBlocks($, maxCitationBlocks);
     return {
       bodyFolds: renderedTextBody.bodyFolds,
-      bodyHtml: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto">${renderedTextBody.html}</body></html>`,
+      bodyHtml: `<!DOCTYPE html>${$.html()}`,
+      citationBlocks,
       referencedContentIds: new Set(),
     };
   }
@@ -653,6 +714,7 @@ const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
   const bodyFolds = foldQuotedHistoryAndSignatures($);
+  const citationBlocks = annotateEmailCitationBlocks($, maxCitationBlocks);
   const referencedContentIds = getReferencedInlineContentIds($);
   inlineCidImages($, parsed.inlineImages);
 
@@ -671,6 +733,7 @@ const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   return {
     bodyFolds,
     bodyHtml: `<!DOCTYPE html>${$.html()}`,
+    citationBlocks,
     referencedContentIds,
   };
 };
@@ -850,7 +913,7 @@ const sanitizeDom = ($: CheerioApi): void => {
         $(node).removeAttr(attribute);
         continue;
       }
-      if (name.startsWith("data-stella-email-fold")) {
+      if (name.startsWith("data-stella-email-")) {
         $(node).removeAttr(attribute);
         continue;
       }
@@ -994,7 +1057,14 @@ const renderPlainTextBody = (text: string): RenderedPlainTextBody => {
   const bodyFolds: EmailBodyFold[] = [];
   const html = sections
     .map(({ type, text: sectionText }) => {
-      const pre = `<pre style="${PRE_STYLE}">${escapeHtml(sectionText)}</pre>`;
+      const lines = sectionText
+        .split("\n")
+        .map(
+          (line) =>
+            `<span class="stella-email-plain-line" data-stella-email-citation-unit>${escapeHtml(line)}</span>`,
+        )
+        .join("");
+      const pre = `<pre style="${PRE_STYLE}">${lines}</pre>`;
       if (type === "content") {
         return pre;
       }
@@ -1008,6 +1078,107 @@ const renderPlainTextBody = (text: string): RenderedPlainTextBody => {
     .join("");
   return { bodyFolds, html };
 };
+
+const EMAIL_CITATION_BLOCK_TAG_NAMES = [
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "body",
+  "dd",
+  "div",
+  "dt",
+  "figcaption",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "li",
+  "main",
+  "p",
+  "pre",
+  "section",
+  "td",
+  "th",
+] as const;
+const EMAIL_CITATION_BLOCK_TAGS = new Set<string>(
+  EMAIL_CITATION_BLOCK_TAG_NAMES,
+);
+const EMAIL_CITATION_BLOCK_SELECTOR = [
+  "body *[data-stella-email-citation-unit]",
+  ...EMAIL_CITATION_BLOCK_TAG_NAMES.map((tag) =>
+    tag === "body" ? tag : `body ${tag}`,
+  ),
+].join(", ");
+
+const annotateEmailCitationBlocks = (
+  $: CheerioApi,
+  maxBlocks: number,
+): EmailCitationBlock[] => {
+  const blocks: EmailCitationBlock[] = [];
+  $(EMAIL_CITATION_BLOCK_SELECTOR).each((_, element) => {
+    if (!isTag(element) || blocks.length >= maxBlocks) {
+      return;
+    }
+    if (
+      $(element).is("[hidden], [aria-hidden='true']") ||
+      $(element).parents("[hidden], [aria-hidden='true']").length > 0
+    ) {
+      return;
+    }
+
+    const text = normalizeEmailCitationText(collectEmailCitationText(element));
+    if (text.length === 0) {
+      $(element).removeAttr("data-stella-email-citation-unit");
+      return;
+    }
+
+    const id = `body-${String(blocks.length + 1).padStart(4, "0")}`;
+    $(element)
+      .removeAttr("data-stella-email-citation-unit")
+      .attr("data-stella-email-anchor", id);
+    blocks.push({ id, text });
+  });
+  $("[data-stella-email-citation-unit]").removeAttr(
+    "data-stella-email-citation-unit",
+  );
+  return blocks;
+};
+
+const collectEmailCitationText = (element: Element): string => {
+  const parts: string[] = [];
+  for (const child of element.children) {
+    if (isText(child)) {
+      parts.push(child.data);
+      continue;
+    }
+    if (!isTag(child)) {
+      continue;
+    }
+    if (child.name === "br") {
+      parts.push("\n");
+      continue;
+    }
+    if (
+      EMAIL_CITATION_BLOCK_TAGS.has(child.name) ||
+      child.attribs["data-stella-email-citation-unit"] !== undefined
+    ) {
+      continue;
+    }
+    parts.push(collectEmailCitationText(child));
+  }
+  return parts.join(" ");
+};
+
+const normalizeEmailCitationText = (text: string): string =>
+  text
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH);
 
 const splitPlainTextBody = (text: string): PlainTextSection[] => {
   const lines = text.split("\n");

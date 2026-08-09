@@ -360,6 +360,32 @@ describe("chat prompt builders", () => {
     expect(prompt).not.toContain("apply-active-docx-edits");
   });
 
+  test("grounds active email answers in source-bound citation blocks", () => {
+    const fieldId = toSafeId<"field">("00000000-0000-4000-8000-000000000042");
+    const prompt = appendActiveFilePromptIfEntityExists({
+      activeFile: {
+        emailCitationSnapshot: {
+          blocks: [
+            { id: "header-from", text: "Sender <sender@example.org>" },
+            { id: "body-0001", text: "Payment is due Friday." },
+          ],
+        },
+        entityId: toSafeId<"entity">("entity_email"),
+        fileFieldId: fieldId,
+        fileName: "message.eml",
+      },
+      entityExists: true,
+      prompt: "Base prompt",
+      refRegistry: createChatRefRegistry(),
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(prompt).toContain("EMAIL CITATIONS");
+    expect(prompt).toContain(`#email:${fieldId}:body-0001`);
+    expect(prompt).toContain('"blockId":"header-from"');
+    expect(prompt).toContain('"text":"Payment is due Friday."');
+  });
+
   test("instructs the model to use live DOCX edits when a snapshot is available", () => {
     const basePrompt = "Base prompt";
     const refRegistry = createChatRefRegistry();

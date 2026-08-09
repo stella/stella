@@ -556,6 +556,9 @@ describe("buildSendRequestBody", () => {
             canApplyEdits: undefined,
           },
           entityId: "entity-A",
+          emailCitationSnapshot: {
+            blocks: [{ id: "body-0001", text: "Payment is due Friday." }],
+          },
           fileFieldId: undefined,
           fileName: "document.docx",
           supportsDocxEdits: undefined,
@@ -591,6 +594,9 @@ describe("buildSendRequestBody", () => {
           blocks: [{ id: "block-A", kind: "paragraph", text: "Text" }],
         },
         entityId: "entity-A",
+        emailCitationSnapshot: {
+          blocks: [{ id: "body-0001", text: "Payment is due Friday." }],
+        },
         fileName: "document.docx",
       },
       activeSkill: { skillName: "Review" },

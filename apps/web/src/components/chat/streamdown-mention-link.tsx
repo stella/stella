@@ -6,6 +6,7 @@ import {
   FileTextIcon,
   GlobeIcon,
   LandmarkIcon,
+  MailIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -31,6 +32,12 @@ import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import {
+  EMAIL_CITATION_HREF_PREFIX,
+  EMAIL_CITATION_SCROLL_EVENT,
+  parseEmailCitationHref,
+  type EmailCitationTarget,
+} from "@/lib/files/email-citations";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -544,6 +551,18 @@ export const StreamdownMentionLink = ({
     );
   }
 
+  if (href.startsWith(EMAIL_CITATION_HREF_PREFIX)) {
+    const target = parseEmailCitationHref(href);
+    if (!target) {
+      return <span {...props}>{children}</span>;
+    }
+    return (
+      <EmailCitationChip interactive={interactive} target={target}>
+        {children}
+      </EmailCitationChip>
+    );
+  }
+
   const mentionChip =
     parseChatResourceHref(href) !== null ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
@@ -586,6 +605,33 @@ export const StreamdownMentionLink = ({
     </a>
   );
 };
+
+const EmailCitationChip = ({
+  children,
+  interactive,
+  target,
+}: {
+  children: React.ReactNode;
+  interactive: boolean;
+  target: EmailCitationTarget;
+}) => (
+  <InlinePill
+    data-block-id={target.blockId}
+    leadingIcon={<MailIcon className="size-3 shrink-0" />}
+    onActivate={
+      interactive
+        ? () => {
+            window.dispatchEvent(
+              new CustomEvent(EMAIL_CITATION_SCROLL_EVENT, { detail: target }),
+            );
+          }
+        : undefined
+    }
+    truncate
+  >
+    {children}
+  </InlinePill>
+);
 
 type FolioBlockChipProps = {
   blockId: string;

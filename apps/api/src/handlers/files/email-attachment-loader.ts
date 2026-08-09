@@ -9,6 +9,7 @@ import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
 } from "@/api/lib/files/email-attachment-token";
+import { EMAIL_CITATION_BLOCK_MODE } from "@/api/lib/files/email-citations";
 import {
   buildEmailPreview,
   parseEmail,
@@ -162,6 +163,7 @@ export const loadEmailAttachment = async function* ({
   }
 
   const preview = buildEmailPreview(parsedResult.value, {
+    citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
     createAttachmentId: (index) =>
       createEmailAttachmentDescriptor({
         attachmentIndex: index,

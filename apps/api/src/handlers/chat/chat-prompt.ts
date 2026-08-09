@@ -52,6 +52,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH } from "@/api/lib/files/email-citations";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 
 const TITLE_MAX_LENGTH = 80;
@@ -954,12 +955,14 @@ const buildActiveFilePrompt = ({
   const canEditActiveDocx =
     activeFile.supportsDocxEdits === true &&
     toolAvailability.docxEditMode !== null;
+  const emailCitationSection = buildActiveEmailCitationPrompt(activeFile);
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
     `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
     `LONG-DOCUMENT LOOKUPS: \`external_read_content_across_matters\` returns the document as Markdown (headings, tables, and lists preserved) for DOCX files, or plain text otherwise, one truncated window at a time starting from the beginning. If the answer is not in the first window, call it again with \`cursor\` set to the previous response's \`nextCursor\` to keep reading further into the document — page through until you find it or \`nextCursor\` comes back null.`,
     "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, inspect that attachment directly before answering. Do not claim the file has no extracted text when a direct attachment is available for this turn.",
+    emailCitationSection,
     canEditActiveDocx
       ? `\`create-document\` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Use \`${
           toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.auto
@@ -975,6 +978,32 @@ const buildActiveFilePrompt = ({
   ]
     .filter((section) => section.length > 0)
     .join("\n");
+};
+
+const buildActiveEmailCitationPrompt = (
+  activeFile: IncomingActiveFile,
+): string => {
+  const snapshot = activeFile.emailCitationSnapshot;
+  const fileFieldId = activeFile.fileFieldId;
+  if (!snapshot || !fileFieldId || snapshot.blocks.length === 0) {
+    return "";
+  }
+
+  const blocks = snapshot.blocks.map(({ id, text }) => ({
+    blockId: id,
+    text: sanitizePromptValue({
+      maxLength: MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+      text,
+    }),
+  }));
+
+  return [
+    "EMAIL CITATIONS: When you summarise, quote, or make a claim about the open email, cite the supporting message passage inline. Wrap a short meaningful phrase in a Markdown link whose href is `#email:<fileFieldId>:<blockId>`.",
+    `For this email, copy the file field id and block id verbatim. Example: \`[payment is due Friday](#email:${fileFieldId}:body-0001)\`. Never invent an id, never expose the internal href as link text, and cite only the few passages a user would want to verify. Clicking the citation scrolls to and highlights that exact passage in the email viewer.`,
+    ["Email citation blocks:", "```json", JSON.stringify(blocks), "```"].join(
+      "\n",
+    ),
+  ].join("\n");
 };
 
 type ActiveDocxEditSnapshot = NonNullable<

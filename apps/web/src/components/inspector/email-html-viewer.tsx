@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, PaperclipIcon } from "lucide-react";
@@ -23,8 +23,13 @@ import {
   type EmailResolvedChatMode,
   type EmailViewerLayout,
 } from "@/components/inspector/email-html-viewer.logic";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import {
+  EMAIL_CITATION_SCROLL_EVENT,
+  type EmailCitationTarget,
+} from "@/lib/files/email-citations";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
@@ -55,8 +60,19 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
   const t = useTranslations();
   const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
   const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
+  const previewQuery = useQuery(
+    emailHtmlPreviewOptions({ workspaceId, fieldId }),
+  );
   const fileChatContext = isContextual
-    ? getEmailFileChatContext({ entityId, fieldId, fileName, workspaceId })
+    ? getEmailFileChatContext({
+        citationSnapshot: previewQuery.data
+          ? { blocks: previewQuery.data.citationBlocks }
+          : undefined,
+        entityId,
+        fieldId,
+        fileName,
+        workspaceId,
+      })
     : { activeFile: undefined, workspaceId };
 
   return (
@@ -106,10 +122,35 @@ export const EmailHtmlViewer = ({
 }: EmailHtmlViewerProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const articleRef = useRef<HTMLElement>(null);
+  const bodyFrameRef = useRef<HTMLIFrameElement>(null);
+  const [activeCitationBlockId, setActiveCitationBlockId] = useState<
+    string | null
+  >(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const previewQuery = useQuery(
     emailHtmlPreviewOptions({ workspaceId, fieldId }),
   );
+
+  useExternalSyncEffect(() => {
+    const handleCitation = ({
+      detail,
+    }: CustomEvent<EmailCitationTarget>): void => {
+      if (detail.fieldId !== fieldId) {
+        return;
+      }
+      setActiveCitationBlockId(detail.blockId);
+      scrollToEmailCitation({
+        article: articleRef.current,
+        blockId: detail.blockId,
+        bodyFrame: bodyFrameRef.current,
+      });
+    };
+    window.addEventListener(EMAIL_CITATION_SCROLL_EVENT, handleCitation);
+    return () => {
+      window.removeEventListener(EMAIL_CITATION_SCROLL_EVENT, handleCitation);
+    };
+  }, [fieldId]);
 
   if (previewQuery.isPending) {
     return (
@@ -177,22 +218,41 @@ export const EmailHtmlViewer = ({
         "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
         layout === EMAIL_VIEWER_LAYOUT.contextualChat && "pb-40",
       )}
+      ref={articleRef}
     >
       <header className="bg-background max-h-[45%] shrink-0 overflow-y-auto overscroll-contain border-b px-4 py-3">
-        <h1 className="text-foreground text-base font-semibold text-balance">
+        <h1
+          className={cn(
+            "text-foreground text-base font-semibold text-balance",
+            activeCitationBlockId === "header-subject" &&
+              "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+          )}
+          data-stella-email-anchor="header-subject"
+        >
           <BidiText as="span">{subject}</BidiText>
         </h1>
         <dl className="mt-3 grid min-w-0 gap-1.5 text-xs">
           <EmailParticipantRow
+            activeCitationBlockId={activeCitationBlockId}
+            citationBlockId="header-from"
             label={t("emailViewer.from")}
             values={preview.from ? [preview.from] : []}
           />
           <EmailParticipantRow
+            activeCitationBlockId={activeCitationBlockId}
+            citationBlockId="header-to"
             label={t("emailViewer.to")}
             values={preview.to}
           />
           {formattedDate ? (
-            <div className="text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+            <div
+              className={cn(
+                "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
+                activeCitationBlockId === "header-date" &&
+                  "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+              )}
+              data-stella-email-anchor="header-date"
+            >
               <dt>{t("common.date")}</dt>
               <dd className="min-w-0 truncate">
                 <time dateTime={parsedDate?.toISOString()}>
@@ -212,10 +272,14 @@ export const EmailHtmlViewer = ({
             </summary>
             <dl className="grid gap-1.5 pb-1">
               <EmailParticipantRow
+                activeCitationBlockId={activeCitationBlockId}
+                citationBlockId="header-cc"
                 label={t("emailViewer.cc")}
                 values={preview.cc}
               />
               <EmailParticipantRow
+                activeCitationBlockId={activeCitationBlockId}
+                citationBlockId="header-bcc"
                 label={t("emailViewer.bcc")}
                 values={preview.bcc}
               />
@@ -264,8 +328,9 @@ export const EmailHtmlViewer = ({
       <div className="bg-muted/30 min-h-0 min-w-0 flex-1 overflow-hidden p-2">
         <iframe
           className="bg-background size-full border-0"
+          ref={bodyFrameRef}
           referrerPolicy="no-referrer"
-          sandbox=""
+          sandbox="allow-same-origin"
           srcDoc={bodyHtml}
           title={t("emailViewer.bodyTitle")}
         />
@@ -288,9 +353,13 @@ const formatAttachmentSize = (
 };
 
 const EmailParticipantRow = ({
+  activeCitationBlockId,
+  citationBlockId,
   label,
   values,
 }: {
+  activeCitationBlockId: string | null;
+  citationBlockId: string;
   label: string;
   values: readonly string[];
 }) => {
@@ -300,7 +369,14 @@ const EmailParticipantRow = ({
   const valueOccurrences = new Map<string, number>();
 
   return (
-    <div className="text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+    <div
+      className={cn(
+        "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
+        activeCitationBlockId === citationBlockId &&
+          "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+      )}
+      data-stella-email-anchor={citationBlockId}
+    >
       <dt>{label}</dt>
       <dd className="min-w-0 text-start break-words">
         {values.map((value, index) => (
@@ -312,6 +388,70 @@ const EmailParticipantRow = ({
       </dd>
     </div>
   );
+};
+
+const scrollToEmailCitation = ({
+  article,
+  blockId,
+  bodyFrame,
+}: {
+  article: HTMLElement | null;
+  blockId: string;
+  bodyFrame: HTMLIFrameElement | null;
+}): void => {
+  const bodyDocument = bodyFrame?.contentDocument;
+  if (bodyDocument) {
+    for (const active of bodyDocument.querySelectorAll(
+      "[data-stella-email-citation-active]",
+    )) {
+      active.removeAttribute("data-stella-email-citation-active");
+    }
+  }
+
+  const headerTarget = findEmailCitationElement(article, blockId);
+  if (headerTarget) {
+    openAncestorDetails(headerTarget);
+    headerTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
+  if (!bodyDocument) {
+    return;
+  }
+  const bodyTarget = findEmailCitationElement(bodyDocument.body, blockId);
+  if (!bodyTarget) {
+    return;
+  }
+  openAncestorDetails(bodyTarget);
+  bodyTarget.setAttribute("data-stella-email-citation-active", "");
+  bodyTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+};
+
+const openAncestorDetails = (target: HTMLElement): void => {
+  let ancestor = target.parentElement;
+  while (ancestor) {
+    if (ancestor.tagName === "DETAILS") {
+      ancestor.setAttribute("open", "");
+    }
+    ancestor = ancestor.parentElement;
+  }
+};
+
+const findEmailCitationElement = (
+  root: ParentNode | null,
+  blockId: string,
+): HTMLElement | null => {
+  if (!root) {
+    return null;
+  }
+  for (const element of root.querySelectorAll<HTMLElement>(
+    "[data-stella-email-anchor]",
+  )) {
+    if (element.dataset["stellaEmailAnchor"] === blockId) {
+      return element;
+    }
+  }
+  return null;
 };
 
 const getAttachmentKey = (

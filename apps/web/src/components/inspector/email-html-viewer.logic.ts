@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { EmailCitationSnapshot } from "@/lib/files/email-citations";
 import type {
   EmailBodyFold,
   EmailBodyFoldKind,
@@ -58,17 +59,26 @@ export const getEmailExtractionRefetchInterval = ({
     : false;
 
 export const getEmailFileChatContext = ({
+  citationSnapshot,
   entityId,
   fieldId,
   fileName,
   workspaceId,
 }: {
+  citationSnapshot?: EmailCitationSnapshot | undefined;
   entityId: string;
   fieldId: string;
   fileName: string;
   workspaceId: string;
 }) => ({
-  activeFile: { entityId, fileFieldId: fieldId, fileName },
+  activeFile: {
+    entityId,
+    fileFieldId: fieldId,
+    fileName,
+    ...(citationSnapshot === undefined
+      ? {}
+      : { emailCitationSnapshot: citationSnapshot }),
+  },
   workspaceId,
 });
 

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { MAX_EMAIL_CITATION_BLOCKS } from "@/api/lib/files/email-citations";
+
 import {
   buildEmailPreview,
   emailToHtml,
@@ -343,7 +345,7 @@ describe("renderEmailHtml", () => {
             "From: Žofie Nováková &lt;zofie@example.cz&gt;<br>",
             "To: 李雷 &lt;li@example.cn&gt;<br>",
             "Subject: Návrh smlouvy ⚖️<br><br>",
-            '<p style="background: url(https://attacker.example/style)">Message content</p>',
+            '<p data-stella-email-anchor="forged" style="background: url(https://attacker.example/style)">Message content</p>',
             '<img src="https://attacker.example/pixel.gif" onerror="steal()">',
             '<a href="https://attacker.example/link" ping="https://attacker.example/ping">safe text</a>',
             '<form action="https://attacker.example/submit"><input value="x"></form>',
@@ -392,6 +394,22 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain('<body dir="auto">');
     expect(preview.bodyHtml).toContain("Forwarded message");
     expect(preview.bodyHtml).toContain("Message content");
+    expect(preview.citationBlocks).toContainEqual({
+      id: "header-subject",
+      text: "Návrh smlouvy ⚖️",
+    });
+    const bodyCitationBlocks = preview.citationBlocks.filter(({ id }) =>
+      id.startsWith("body-"),
+    );
+    expect(bodyCitationBlocks.length).toBeGreaterThan(0);
+    for (const { id } of bodyCitationBlocks) {
+      expect(
+        preview.bodyHtml.match(
+          new RegExp(`data-stella-email-anchor="${id}"`, "gu"),
+        ),
+      ).toHaveLength(1);
+    }
+    expect(preview.bodyHtml).not.toContain('data-stella-email-anchor="forged"');
     expect(preview.bodyHtml).not.toContain("Návrh smlouvy ⚖️");
     expect(preview.bodyHtml).not.toContain("zofie@example.cz");
     expect(preview.bodyHtml).not.toContain("li@example.cn");
@@ -624,9 +642,27 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Aktuální odpověď");
     expect(preview.bodyHtml).toContain("Žofie Nováková");
     expect(preview.bodyHtml).toContain("&gt; Předchozí zpráva");
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Aktuální odpověď",
+    });
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0002",
+      text: "--",
+    });
     expect(
       parsedEmailToText(htmlEmail({ body: { type: "text", text: body } })),
     ).toContain("> Druhý řádek");
+  });
+
+  test("bounds citation blocks while leaving the complete body visible", () => {
+    const lines = Array.from({ length: 200 }, (_, index) => `Line ${index}`);
+    const preview = buildEmailPreview(
+      htmlEmail({ body: { type: "text", text: lines.join("\n") } }),
+    );
+
+    expect(preview.citationBlocks).toHaveLength(MAX_EMAIL_CITATION_BLOCKS);
+    expect(preview.bodyHtml).toContain("Line 199");
   });
 
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
