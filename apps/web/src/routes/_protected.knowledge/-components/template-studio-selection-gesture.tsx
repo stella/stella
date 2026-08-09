@@ -390,7 +390,7 @@ export const useTemplateStudioSelectionGesture = ({
           ` If the selection is just another occurrence of one of them, set` +
           ` fieldPath to that exact existing path instead of inventing a` +
           ` new field.`;
-    const response = await api.templates["suggest-fields"].post({
+    const { data, error } = await api.templates["suggest-fields"].post({
       text: contextText,
       instructions:
         `The user selected this exact text: "${selection.text}". Propose exactly ` +
@@ -402,12 +402,12 @@ export const useTemplateStudioSelectionGesture = ({
     if (sequence !== enrichSeqRef.current) {
       return;
     }
-    if (response.error) {
-      getAnalytics().captureError(response.error);
+    if (error) {
+      getAnalytics().captureError(error);
       setEnrichment({ status: "idle" });
       return;
     }
-    const match = response.data.suggestions.at(0);
+    const match = data.suggestions.at(0);
     if (!match) {
       setEnrichment({ status: "idle" });
       return;

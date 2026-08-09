@@ -15,6 +15,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { filesKeys } from "@/lib/files/queries";
@@ -85,14 +86,16 @@ const releaseEditSession = async ({
   workspaceId,
   entityId,
   propertyId,
-}: EditSessionReleaseContext) =>
-  await api
+}: EditSessionReleaseContext) => {
+  const response = await api
     .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["desktop-edit-sessions"].release.post({
       entityId: toSafeId<"entity">(entityId),
       propertyId: toSafeId<"property">(propertyId),
       queryKey: entitiesKeys.all(workspaceId),
     });
+  return unwrapEden(response);
+};
 
 const getEditSessionErrorReason = (error: {
   status: number;

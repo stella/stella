@@ -94,7 +94,7 @@ import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
@@ -193,20 +193,14 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   // swaps the cached id; the key change remounts the inner surface
   // (which also drops the previous thread's in-document suggestions).
   const rotateThread = async (): Promise<boolean> => {
-    const rotated = await Result.tryPromise(
-      async () =>
-        await api.chat["template-thread"].rotate.post({
-          templateId: toSafeId<"template">(props.templateId),
-        }),
-    );
+    const rotated = await Result.tryPromise(async () => {
+      const response = await api.chat["template-thread"].rotate.post({
+        templateId: toSafeId<"template">(props.templateId),
+      });
+      return unwrapEden(response);
+    });
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-      return false;
-    }
-    const { data, error } = rotated.value;
-    if (error) {
-      getAnalytics().captureError(toAPIError(error));
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
       return false;
     }
@@ -214,7 +208,7 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       chatKeys.templateThread(activeOrganizationId, {
         templateId: props.templateId,
       }),
-      toChatThreadId(data.threadId),
+      toChatThreadId(rotated.value.threadId),
     );
     return true;
   };

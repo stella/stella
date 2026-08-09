@@ -31,7 +31,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
@@ -243,18 +243,18 @@ const ExportReportDialogBody = ({
         };
 
     setSubmitting(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .reports.export.post({
-            templateRef,
-            viewId: toSafeId<"workspaceView">(view.id),
-            mode,
-            format,
-            aiNarrative,
-          }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports.export.post({
+          templateRef,
+          viewId: toSafeId<"workspaceView">(view.id),
+          mode,
+          format,
+          aiNarrative,
+        });
+      return unwrapEden(response);
+    });
     setSubmitting(false);
 
     if (Result.isError(result)) {
@@ -262,26 +262,15 @@ const ExportReportDialogBody = ({
       stellaToast.add({
         type: "error",
         title: t("workspaces.views.reportExport.failed"),
-        description: t("common.unexpectedError"),
-      });
-      return;
-    }
-
-    const response = result.value;
-    if (response.error) {
-      analytics.captureError(toAPIError(response.error));
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
         description: userErrorMessage(
-          response.error,
+          result.error,
           t("common.unexpectedError"),
         ),
       });
       return;
     }
 
-    onStarted(response.data.exportId, mode);
+    onStarted(result.value.exportId, mode);
   };
 
   // "Customize" is offered only for a built-in: cloning it into the org's
@@ -295,28 +284,19 @@ const ExportReportDialogBody = ({
       return;
     }
     setCustomizing(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey });
+      return unwrapEden(response);
+    });
     setCustomizing(false);
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
       stellaToast.add({
         type: "error",
-        title: t("common.unexpectedError"),
-      });
-      return;
-    }
-    const response = result.value;
-    if (response.error) {
-      analytics.captureError(toAPIError(response.error));
-      stellaToast.add({
-        type: "error",
-        title: userErrorMessage(response.error, t("common.unexpectedError")),
+        title: userErrorMessage(result.error, t("common.unexpectedError")),
       });
       return;
     }
