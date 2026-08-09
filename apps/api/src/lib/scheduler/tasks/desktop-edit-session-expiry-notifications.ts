@@ -1,9 +1,13 @@
+import type {
+  DesktopEditSessionRealtimeEvent,
+  WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   desktopEditSessionClosedEvent,
   desktopEditSessionCloseSignal,
 } from "@/api/lib/desktop-edit-session-notifications";
-import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 export type ExpiredDesktopEditSessionNotification = {
   id: SafeId<"desktopEditSession">;
@@ -13,11 +17,11 @@ export type ExpiredDesktopEditSessionNotification = {
 export type DesktopEditSessionExpiryNotificationPublisher = {
   publishSessionEvent: (
     sessionId: SafeId<"desktopEditSession">,
-    event: SSEEvent,
+    event: DesktopEditSessionRealtimeEvent,
   ) => Promise<void>;
   publishWorkspaceEvent: (
     workspaceId: SafeId<"workspace">,
-    event: SSEEvent,
+    event: WorkspaceRealtimeEvent,
   ) => Promise<void>;
 };
 

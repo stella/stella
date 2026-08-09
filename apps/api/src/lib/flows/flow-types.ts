@@ -1,5 +1,8 @@
 import * as v from "valibot";
 
+export { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
+export type { FlowRunStatus, FlowRunStepStatus } from "@stll/api-contract";
+
 /**
  * Shared types and boundary schemas for the Workflows feature.
  *
@@ -120,28 +123,6 @@ export type FlowDefinitionSnapshot = {
   name: string;
   steps: FlowStep[];
 };
-
-// -- Run / step status value unions --
-
-export const FLOW_RUN_STATUSES = [
-  "pending",
-  "running",
-  "awaiting_review",
-  "completed",
-  "failed",
-  "cancelled",
-] as const;
-export type FlowRunStatus = (typeof FLOW_RUN_STATUSES)[number];
-
-export const FLOW_RUN_STEP_STATUSES = [
-  "pending",
-  "running",
-  "awaiting_review",
-  "completed",
-  "failed",
-  "skipped",
-] as const;
-export type FlowRunStepStatus = (typeof FLOW_RUN_STEP_STATUSES)[number];
 
 // -- Boundary schemas (definition input validation) --
 

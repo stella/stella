@@ -11,6 +11,10 @@ import {
 } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 
+import {
+  REALTIME_EVENT_TYPE,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -36,38 +40,9 @@ import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 
-const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
-const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
 const ACTIVITY_INVALIDATION_DEBOUNCE_MS = 1000;
 const ACTIVITY_INVALIDATION_MAX_WAIT_MS = 5000;
-
-type ExtractionPreviewEventData = {
-  entityId: string;
-  propertyId: string;
-  answer: string | null;
-  status: "streaming" | "clear";
-};
-
-const isExtractionPreviewEventData = (
-  data: unknown,
-): data is ExtractionPreviewEventData => {
-  if (typeof data !== "object" || data === null) {
-    return false;
-  }
-  if (
-    !("entityId" in data) ||
-    typeof data.entityId !== "string" ||
-    !("propertyId" in data) ||
-    typeof data.propertyId !== "string" ||
-    !("status" in data) ||
-    (data.status !== "streaming" && data.status !== "clear") ||
-    !("answer" in data)
-  ) {
-    return false;
-  }
-  return typeof data.answer === "string" || data.answer === null;
-};
 
 const extractionPreviewKey = (entityId: string, propertyId: string) =>
   `${entityId}:${propertyId}`;
@@ -197,24 +172,22 @@ function RouteComponent() {
     { maxWait: ACTIVITY_INVALIDATION_MAX_WAIT_MS },
   );
 
-  const handleWorkspaceSSEEvent = ({
-    type,
-    data,
-  }: {
-    type: string;
-    data: unknown;
-  }) => {
-    if (type === INVALIDATE_QUERY_EVENT_TYPE) {
-      invalidateActivity(workspaceId);
+  const handleWorkspaceSSEEvent = (event: WorkspaceRealtimeEvent) => {
+    switch (event.type) {
+      case REALTIME_EVENT_TYPE.INVALIDATE_QUERY:
+        invalidateActivity(workspaceId);
+        return;
+      case REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE:
+        return;
+      case REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW:
+        break;
+      default:
+        event satisfies never;
+        return;
     }
 
+    const data = event.data;
     const workspaceStore = useWorkspaceStore.getState();
-    if (
-      type !== EXTRACTION_PREVIEW_EVENT_TYPE ||
-      !isExtractionPreviewEventData(data)
-    ) {
-      return;
-    }
 
     // Backend sends "clear" right after the entity-invalidation
     // broadcast, but the invalidation's refetch needs a network

@@ -40,6 +40,20 @@ export type {
   DocumentVersionUploadReservationInput,
   UploadLifecycleInput,
 } from "./document-version-upload";
+export { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
+export type { FlowRunStatus, FlowRunStepStatus } from "./flow-status";
+export {
+  parseDesktopEditSessionRealtimeEvent,
+  parseOrganizationRealtimeEvent,
+  parseWorkspaceRealtimeEvent,
+  REALTIME_EVENT_TYPE,
+} from "./realtime-events";
+export type {
+  DesktopEditSessionClientEvent,
+  DesktopEditSessionRealtimeEvent,
+  OrganizationRealtimeEvent,
+  WorkspaceRealtimeEvent,
+} from "./realtime-events";
 
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;

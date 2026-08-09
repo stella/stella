@@ -1,5 +1,14 @@
 import { TaggedError } from "better-result";
 
+import {
+  parseDesktopEditSessionRealtimeEvent,
+  parseOrganizationRealtimeEvent,
+  parseWorkspaceRealtimeEvent,
+  type DesktopEditSessionRealtimeEvent,
+  type OrganizationRealtimeEvent,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRedisClient } from "@/api/lib/redis-client";
 
@@ -8,29 +17,24 @@ export const REDIS_CHANNEL = "sse:broadcast";
 
 export const INSTANCE_ID = `api:${process.pid}:${Bun.randomUUIDv7()}`;
 
-export type SSEEvent = {
-  type: string;
-  data: unknown;
-};
-
 type RedisPayload =
   | {
       scope: "organization";
       id: string;
-      event: SSEEvent;
+      event: OrganizationRealtimeEvent;
       originInstanceId?: string | undefined;
       deliveredInline?: boolean | undefined;
     }
   | {
       scope: "session";
       id: string;
-      event: SSEEvent;
+      event: DesktopEditSessionRealtimeEvent;
       originInstanceId?: string | undefined;
     }
   | {
       scope: "workspace";
       id: string;
-      event: SSEEvent;
+      event: WorkspaceRealtimeEvent;
       originInstanceId?: string | undefined;
       deliveredInline?: boolean | undefined;
     };
@@ -80,30 +84,32 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     return null;
   }
 
-  const event = parsed.event;
-  if (
-    typeof event !== "object" ||
-    event === null ||
-    !("type" in event) ||
-    typeof event.type !== "string"
-  ) {
-    return null;
+  const originInstanceId =
+    "originInstanceId" in parsed && typeof parsed.originInstanceId === "string"
+      ? parsed.originInstanceId
+      : undefined;
+
+  if (scope === "session") {
+    const event = parseDesktopEditSessionRealtimeEvent(parsed.event);
+    return event ? { scope, id: parsed.id, event, originInstanceId } : null;
   }
 
-  return {
-    scope,
-    id: parsed.id,
-    event: { type: event.type, data: "data" in event ? event.data : undefined },
-    originInstanceId:
-      "originInstanceId" in parsed &&
-      typeof parsed.originInstanceId === "string"
-        ? parsed.originInstanceId
-        : undefined,
-    deliveredInline:
-      "deliveredInline" in parsed && typeof parsed.deliveredInline === "boolean"
-        ? parsed.deliveredInline
-        : undefined,
-  };
+  const deliveredInline =
+    "deliveredInline" in parsed && typeof parsed.deliveredInline === "boolean"
+      ? parsed.deliveredInline
+      : undefined;
+
+  if (scope === "organization") {
+    const event = parseOrganizationRealtimeEvent(parsed.event);
+    return event
+      ? { scope, id: parsed.id, event, originInstanceId, deliveredInline }
+      : null;
+  }
+
+  const event = parseWorkspaceRealtimeEvent(parsed.event);
+  return event
+    ? { scope, id: parsed.id, event, originInstanceId, deliveredInline }
+    : null;
 };
 
 let publisher: ReturnType<typeof createRedisClient> | null = null;
@@ -127,7 +133,7 @@ const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
 
 export const publishWorkspaceEvent = async (
   workspaceId: SafeId<"workspace">,
-  event: SSEEvent,
+  event: WorkspaceRealtimeEvent,
   options: PublishOptions = {},
 ): Promise<void> => {
   await publishRedisPayload({
@@ -141,7 +147,7 @@ export const publishWorkspaceEvent = async (
 
 export const publishOrganizationEvent = async (
   organizationId: SafeId<"organization">,
-  event: SSEEvent,
+  event: OrganizationRealtimeEvent,
   options: PublishOptions = {},
 ): Promise<void> => {
   await publishRedisPayload({
@@ -155,7 +161,7 @@ export const publishOrganizationEvent = async (
 
 export const publishSessionEvent = async (
   sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
+  event: DesktopEditSessionRealtimeEvent,
   options: { originInstanceId?: string | undefined } = {},
 ): Promise<void> => {
   await publishRedisPayload({

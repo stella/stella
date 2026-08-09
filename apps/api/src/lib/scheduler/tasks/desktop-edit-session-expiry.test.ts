@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type {
+  DesktopEditSessionRealtimeEvent,
+  WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildExpiryAuditEvents,
@@ -10,7 +15,6 @@ import {
   publishDesktopEditSessionExpiryNotificationsWithRetry,
   type ExpiredDesktopEditSessionNotification,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
-import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 const session = (id: string, createdBy: string) => ({
   id,
@@ -79,7 +83,7 @@ describe("buildExpiryAuditEvents", () => {
 type PublishedEvent = {
   scope: "session" | "workspace";
   id: string;
-  event: SSEEvent;
+  event: DesktopEditSessionRealtimeEvent | WorkspaceRealtimeEvent;
 };
 
 const notificationSession = (
