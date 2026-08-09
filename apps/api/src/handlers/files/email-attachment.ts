@@ -3,7 +3,10 @@ import { t } from "elysia";
 
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -56,7 +59,7 @@ export default createSafeHandler(
     scopedDb,
     session,
     workspaceId,
-  }) {
+  }): SafeHandlerGenerator<Response> {
     const attachment = yield* loadEmailAttachment({
       attachmentId,
       fieldId,
