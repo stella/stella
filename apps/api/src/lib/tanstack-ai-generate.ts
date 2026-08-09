@@ -1,7 +1,6 @@
 import { EventType, chat, parsePartialJSON } from "@tanstack/ai";
 import type {
   ModelMessage,
-  RunFinishedEvent,
   RunErrorEvent,
   StreamChunk,
   StructuredOutputPart,
@@ -119,7 +118,7 @@ export type TanStackStructuredOutputEvent<TOutput> =
     };
 
 export type TanStackTextGenerationResult = {
-  finishReason: NonNullable<RunFinishedEvent["finishReason"]> | null;
+  finishReason: "stop" | "length" | "content_filter" | "tool_calls" | null;
   text: string;
 };
 
