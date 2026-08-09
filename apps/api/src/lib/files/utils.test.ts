@@ -93,6 +93,21 @@ describe("resolveUploadMime", () => {
       }),
     ).toBe("application/octet-stream");
   });
+
+  test("bounds untrusted filenames before MIME lookup", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: `${"a".repeat(10_000)}.PDF`,
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: `file.${"a".repeat(10_000)}`,
+      }),
+    ).toBe("application/octet-stream");
+  });
 });
 
 describe("getFileExtension", () => {

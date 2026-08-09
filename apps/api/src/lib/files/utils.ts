@@ -33,6 +33,8 @@ type ResolveUploadMimeProps = {
   fileName: string;
 };
 
+const MAX_MIME_EXTENSION_LENGTH = 32;
+
 /**
  * Normalize a client-declared upload MIME type: when the browser
  * reports a generic/empty type, fall back to a known type inferred
@@ -47,10 +49,13 @@ export const resolveUploadMime = ({
     return declaredMime;
   }
   const dotIndex = fileName.lastIndexOf(".");
-  const lookupName =
-    dotIndex === -1
-      ? fileName
-      : `${fileName.slice(0, dotIndex + 1)}${fileName.slice(dotIndex + 1).toLowerCase()}`;
+  if (dotIndex === -1) {
+    return declaredMime;
+  }
+  const extension = fileName
+    .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
+    .toLowerCase();
+  const lookupName = `file.${extension}`;
   return Bun.file(lookupName).type || declaredMime;
 };
 
