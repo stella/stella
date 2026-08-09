@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { TimeEntrySummary } from "@stll/api-contract";
+import type { TimeEntrySummary } from "@stll/api-contract/time-entries";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";

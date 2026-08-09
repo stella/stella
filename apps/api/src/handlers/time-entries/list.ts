@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { TimeEntryListPage } from "@stll/api-contract";
+import type { TimeEntryListPage } from "@stll/api-contract/time-entries";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -253,7 +253,7 @@ const readTimeEntries = createSafeHandler(
       limit,
       cursorForItem: (item) =>
         encodePaginationCursor([item.dateWorked, item.id]),
-    });
+    } satisfies TimeEntryListPage);
 
     // Batch-fetch user names
     const userIds = new Set<string>();
@@ -309,7 +309,7 @@ const readTimeEntries = createSafeHandler(
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
-    } satisfies TimeEntryListPage);
+    });
   },
 );
 

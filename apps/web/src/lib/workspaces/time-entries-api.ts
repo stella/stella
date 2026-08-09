@@ -1,6 +1,6 @@
+import { parseApiErrorValue } from "@stll/api-contract";
 import {
   parsePolishedTimeEntryNarrativeResponse,
-  parseApiErrorValue,
   parseTimeEntryDeleteResponse,
   parseTimeEntryIdResponse,
   parseTimeEntryListPage,
@@ -9,12 +9,12 @@ import {
   parseTimeEntryUpdatedResponse,
   parseTimerStartResponse,
   parseTimerStopResponse,
-} from "@stll/api-contract";
+} from "@stll/api-contract/time-entries";
 import type {
   TimeEntry,
   TimeEntryListPage,
   TimeEntrySummary,
-} from "@stll/api-contract";
+} from "@stll/api-contract/time-entries";
 import { cents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 
