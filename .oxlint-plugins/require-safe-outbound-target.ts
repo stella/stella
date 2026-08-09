@@ -1061,7 +1061,7 @@ export default eslintCompatPlugin({
             const pattern = staticPattern(target);
             if (pattern === null || !hasFixedOrigin(pattern)) {
               context.report({
-                node: target ?? node,
+                node: isAstNode(target) ? target : node,
                 messageId: "unsafeOutboundTarget",
               });
               return;
