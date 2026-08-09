@@ -396,22 +396,23 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## time-entries
 
-| Capability                  | Access             | Scope                | Feature              | Reachable via                                                        |
-| --------------------------- | ------------------ | -------------------- | -------------------- | -------------------------------------------------------------------- |
-| `time-entries.batch-delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-delete`       |
-| `time-entries.batch-update` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-update`       |
-| `time-entries.create`       | write              | stella:billing_write | FEATURE_TIME_BILLING | curated tool `save_time_entry`                                       |
-| `time-entries.delete`       | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | curated tool `delete_time_entry`                                     |
-| `time-entries.export-csv`   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries export-csv`         |
-| `time-entries.export-ledes` | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries export-ledes`       |
-| `time-entries.export-pdf`   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `time-entries.get`          | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_time_entries`                                       |
-| `time-entries.list`         | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_time_entries`                                     |
-| `time-entries.split`        | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split`              |
-| `time-entries.summary.get`  | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries summary-get`        |
-| `time-entries.timer-start`  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-start`        |
-| `time-entries.timer-stop`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-stop`         |
-| `time-entries.update`       | write              | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry`                                         |
+| Capability                      | Access             | Scope                | Feature              | Reachable via                                                        |
+| ------------------------------- | ------------------ | -------------------- | -------------------- | -------------------------------------------------------------------- |
+| `time-entries.batch-delete`     | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-delete`       |
+| `time-entries.batch-update`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries batch-update`       |
+| `time-entries.create`           | write              | stella:billing_write | FEATURE_TIME_BILLING | curated tool `save_time_entry`                                       |
+| `time-entries.delete`           | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | curated tool `delete_time_entry`                                     |
+| `time-entries.export-csv`       | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries export-csv`         |
+| `time-entries.export-ledes`     | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries export-ledes`       |
+| `time-entries.export-pdf`       | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `time-entries.get`              | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_time_entries`                                       |
+| `time-entries.list`             | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_time_entries`                                     |
+| `time-entries.split`            | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split`              |
+| `time-entries.summary.get`      | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries summary-get`        |
+| `time-entries.summary.team.get` | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries summary-team-get`   |
+| `time-entries.timer-start`      | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-start`        |
+| `time-entries.timer-stop`       | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-stop`         |
+| `time-entries.update`           | write              | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry`                                         |
 
 ## uploads
 

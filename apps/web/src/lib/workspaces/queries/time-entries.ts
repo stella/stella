@@ -1,5 +1,4 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -140,11 +139,7 @@ export const timeEntrySummaryOptions = (
         query: { dateFrom, dateTo },
         fetch: { signal },
       });
-      const summary = unwrapEden(response);
-      if ("scope" in summary) {
-        return panic("Expected a personal time-entry summary");
-      }
-      return summary;
+      return unwrapEden(response);
     },
   });
 
@@ -158,15 +153,11 @@ export const timeEntryTeamSummaryOptions = (
     queryFn: async ({ signal }) => {
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).summary.get({
-        query: { dateFrom, dateTo, scope: "team" },
+      })["team-summary"].get({
+        query: { dateFrom, dateTo },
         fetch: { signal },
       });
-      const summary = unwrapEden(response);
-      if (!("scope" in summary) || summary.scope !== "team") {
-        return panic("Expected a team time-entry summary");
-      }
-      return summary;
+      return unwrapEden(response);
     },
   });
 

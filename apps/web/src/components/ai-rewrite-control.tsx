@@ -144,7 +144,6 @@ export const AiRewriteControl = ({
               {t("ai.customRewriteInstruction")}
             </Label>
             <Textarea
-              dir="auto"
               id={customInstructionId}
               maxLength={MAX_CUSTOM_INSTRUCTION_LENGTH}
               onChange={(event) =>

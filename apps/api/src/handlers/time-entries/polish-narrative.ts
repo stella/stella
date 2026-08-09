@@ -54,7 +54,6 @@ const config = {
 
 const polishTimeEntryNarrative = createSafeHandler(
   config,
-  // eslint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; this endpoint has no DB operation
   async function* ({ body, request, safeDb, session, user, workspaceId }) {
     const narrative = body.narrative.trim();
     const instruction = body.instruction.trim();

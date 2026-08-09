@@ -14,6 +14,7 @@ import readTimeEntries from "@/api/handlers/time-entries/list";
 import polishTimeEntryNarrative from "@/api/handlers/time-entries/polish-narrative";
 import splitEntry from "@/api/handlers/time-entries/split";
 import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
+import readTeamTimeEntrySummary from "@/api/handlers/time-entries/summary/team/get";
 import timerStart from "@/api/handlers/time-entries/timer-start";
 import timerStop from "@/api/handlers/time-entries/timer-stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
@@ -43,6 +44,10 @@ export const timeEntriesRoute = new Elysia({
   .get("/summary", readTimeEntrySummary.handler, {
     permissions: readTimeEntrySummary.config.permissions,
     query: readTimeEntrySummary.config.query,
+  })
+  .get("/team-summary", readTeamTimeEntrySummary.handler, {
+    permissions: readTeamTimeEntrySummary.config.permissions,
+    query: readTeamTimeEntrySummary.config.query,
   })
   .post("/polish-narrative", polishTimeEntryNarrative.handler, {
     body: polishTimeEntryNarrative.config.body,

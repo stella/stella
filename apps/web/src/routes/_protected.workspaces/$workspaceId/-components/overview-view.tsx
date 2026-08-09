@@ -347,13 +347,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   });
 
   const totalHoursThisWeek =
-    (teamTimeSummary?.scope === "team"
+    (teamTimeSummary
       ? teamTimeSummary.viewerTotalMinutes
       : (timeSummary?.totalMinutes ?? 0)) / 60;
   const prevWeekHours = (previousTimeSummary?.totalMinutes ?? 0) / 60;
 
   const teamHeatmap = useMemo(() => {
-    if (teamTimeSummary?.scope !== "team") {
+    if (!teamTimeSummary) {
       return [];
     }
 
