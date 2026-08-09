@@ -31,9 +31,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { createChatThreadId, type ChatThreadId } from "@/lib/chat-thread-ref";
 
-import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
+import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import {
   buildFolioReviewDecorations,
   resolveFolioReviewFocusId,
