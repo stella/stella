@@ -238,7 +238,7 @@ describe("environment file parsing", () => {
 });
 
 describe("environment doctor output", () => {
-  const validApiInput = () => parseEnvText(renderApiEnvExample());
+  const validApiInput = () => parseEnvText(renderApiEnvExample(), {});
 
   test("never renders cataloged secret values", () => {
     const secretEntry = ENV_CATALOG.find(
@@ -361,6 +361,14 @@ describe("environment doctor output", () => {
         S3_ACCESS_KEY_ID: "",
         S3_CREDENTIALS_PROVIDER: "env",
         S3_SECRET_ACCESS_KEY: "",
+      },
+    },
+    {
+      expected: 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+      overrides: {
+        S3_ACCESS_KEY_ID: " use-iam-role ",
+        S3_CREDENTIALS_PROVIDER: "env",
+        S3_SECRET_ACCESS_KEY: "USE-IAM-ROLE",
       },
     },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {

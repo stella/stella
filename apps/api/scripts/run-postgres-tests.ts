@@ -1,6 +1,7 @@
 import path from "node:path";
 
-const POSTGRES_TEST_MARKER = "STELLA_RUN_POSTGRES_TESTS";
+import { POSTGRES_TEST_MARKER } from "../src/tests/test-database-environment";
+
 const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
 const apiRoot = path.resolve(import.meta.dir, "..");
 

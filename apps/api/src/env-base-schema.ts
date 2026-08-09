@@ -15,6 +15,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
 
 /**
  * NODE_ENV values that identify a deployed (non-local) Stella
@@ -195,8 +196,8 @@ export const envBaseInvariantViolation = ({
   S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
-  const hasAccessKey = S3_ACCESS_KEY_ID !== undefined;
-  const hasSecretKey = S3_SECRET_ACCESS_KEY !== undefined;
+  const hasAccessKey = isUsableStaticCredential(S3_ACCESS_KEY_ID);
+  const hasSecretKey = isUsableStaticCredential(S3_SECRET_ACCESS_KEY);
   if (hasAccessKey !== hasSecretKey) {
     return "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together.";
   }

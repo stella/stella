@@ -11,6 +11,10 @@ import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { safeErrorCode } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import {
+  credentialsFromEnvValues,
+  type OptionalS3Credentials,
+} from "@/api/lib/s3-credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -203,12 +207,6 @@ const fetchImdsCredentials = async ({
   }
 };
 
-type OptionalS3Credentials = {
-  accessKeyId: string;
-  secretAccessKey: string;
-  sessionToken?: string;
-};
-
 const buildS3Client = (
   bucket: string,
   creds?: OptionalS3Credentials | null,
@@ -264,33 +262,6 @@ type ResolveS3CredentialsOptions = {
   provider?: S3CredentialsProvider;
   runtimeEnv?: CredentialRuntimeEnv;
   staticCredentials?: OptionalS3Credentials | null;
-};
-
-// Sentinel strings used in task definitions to signal "no static
-// credential is set; resolve via the runtime IAM role". Matched after
-// trim + lowercase so trailing whitespace and casing variants (e.g.
-// "USE-IAM-ROLE", "use-iam-role ") do not slip through.
-const STATIC_CREDENTIAL_PLACEHOLDERS: ReadonlySet<string> = new Set([
-  "",
-  "use-iam-role",
-]);
-
-const isUsableStaticCredential = (value: string | undefined): value is string =>
-  value !== undefined &&
-  !STATIC_CREDENTIAL_PLACEHOLDERS.has(value.trim().toLowerCase());
-
-export const credentialsFromEnvValues = (
-  accessKeyId: string | undefined,
-  secretAccessKey: string | undefined,
-): OptionalS3Credentials | null => {
-  if (
-    !isUsableStaticCredential(accessKeyId) ||
-    !isUsableStaticCredential(secretAccessKey)
-  ) {
-    return null;
-  }
-
-  return { accessKeyId, secretAccessKey };
 };
 
 const staticCredentialsFromEnv = (): OptionalS3Credentials | null =>

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  credentialsFromEnvValues,
   getS3,
   isMissingS3ObjectError,
   isS3Stale,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
+import { credentialsFromEnvValues } from "@/api/lib/s3-credentials";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });

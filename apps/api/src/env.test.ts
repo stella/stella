@@ -104,4 +104,18 @@ describe("API environment", () => {
       "USE_MOCK_AI is only supported in local development and tests.",
     );
   });
+
+  test("rejects static credential placeholders for the env provider", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      S3_ACCESS_KEY_ID: " use-iam-role ",
+      S3_CREDENTIALS_PROVIDER: "env",
+      S3_SECRET_ACCESS_KEY: "USE-IAM-ROLE",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+    );
+  });
 });

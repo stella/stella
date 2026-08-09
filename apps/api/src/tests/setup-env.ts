@@ -1,5 +1,7 @@
 import { setDefaultTimeout } from "bun:test";
 
+import { configureTestDatabaseEnvironment } from "./test-database-environment";
+
 // DB-backed suites rebuild the shared PGlite schema in their `beforeAll`
 // (getTestDb / getRlsFixture): a full drizzle push of the whole schema plus
 // the RLS grants/policies. On a loaded CI runner that push takes several
@@ -9,8 +11,7 @@ import { setDefaultTimeout } from "bun:test";
 // (a genuinely hung hook still fails within this window).
 setDefaultTimeout(30_000);
 
-process.env["DATABASE_URL"] ??=
-  "postgres://postgres:postgres@localhost:5432/stella";
+configureTestDatabaseEnvironment();
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "stella-test";
 process.env["S3_REGION"] ??= "us-east-1";

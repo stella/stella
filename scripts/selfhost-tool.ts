@@ -69,7 +69,7 @@ const SELFHOST_API_EXAMPLES = {
   BETTER_AUTH_URL: "https://api.stella.example.com",
   CONTENT_ENCRYPTION_KEY: "",
   DATABASE_URL:
-    "postgres://stella:password@postgres.example.internal:5432/stella?sslmode=require",
+    "postgres://stella_owner:password@postgres.example.internal:5432/stella?sslmode=require",
   FRONTEND_URL: "https://stella.example.com",
   GOTENBERG_PASSWORD: "",
   GOTENBERG_URL: "http://gotenberg:3000",

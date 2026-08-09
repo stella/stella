@@ -70,6 +70,9 @@ describe("self-host production environment", () => {
     const example = renderSelfhostEnvExample();
     expect(example).toContain('STELLA_API_IMAGE=""');
     expect(example).toContain('CONTENT_ENCRYPTION_KEY=""');
+    expect(example).toContain(
+      "postgres://stella_owner:password@postgres.example.internal:5432/stella?sslmode=require",
+    );
     expect(example).toContain('SELFHOST_LOCAL_PASSWORD_AUTH="true"');
     expect(example).toContain('SELFHOST_BOOTSTRAP_TOKEN=""');
     expect(example).toContain('USE_MOCK_AI="false"');

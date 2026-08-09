@@ -47,6 +47,16 @@ describe("resolveDatabaseUrl", () => {
     },
   );
 
+  test.each([
+    ["postgres://stella:pw@db.example/app"],
+    ["postgres://STELLA:pw@db.example/app"],
+    ["postgres://st%65lla:pw@db.example/app"],
+  ])("rejects the reserved RLS login: %s", (databaseUrl) => {
+    expect(() => resolveDatabaseUrl({ DATABASE_URL: databaseUrl })).toThrow(
+      "Database login must not use the reserved stella RLS role",
+    );
+  });
+
   test("returns undefined when nothing is set", () => {
     expect(resolveDatabaseUrl({})).toBeUndefined();
   });
@@ -61,6 +71,12 @@ describe("resolveDatabaseUrl", () => {
     expect(
       resolveDatabaseUrl({ ...components, DB_SSLMODE: "verify-full" }),
     ).toBe("postgres://appuser:pw@db.example:5432/appdb?sslmode=verify-full");
+  });
+
+  test("rejects the reserved RLS login in component settings", () => {
+    expect(() =>
+      resolveDatabaseUrl({ ...components, DB_USER: "stella" }),
+    ).toThrow("Database login must not use the reserved stella RLS role");
   });
 
   test("percent-encodes credentials with reserved characters", () => {
