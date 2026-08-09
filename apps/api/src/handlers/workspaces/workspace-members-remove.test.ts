@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import {
   auditLogs,
@@ -11,7 +11,17 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import removeWorkspaceMember from "./workspace-members-remove";
+const revokeWorkspaceSseAccessMock = mock(async () => undefined);
+
+void mock.module("@/api/lib/sse", () => ({
+  broadcast: mock(() => undefined),
+  broadcastSessionEvent: mock(() => undefined),
+  broadcastToOrganization: mock(() => undefined),
+  revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
+}));
+
+const { default: removeWorkspaceMember } =
+  await import("./workspace-members-remove");
 
 type RemoveMemberCtx = Parameters<typeof removeWorkspaceMember.handler>[0];
 
@@ -146,5 +156,9 @@ describe("removeWorkspaceMember", () => {
         }),
       ],
     ]);
+    expect(revokeWorkspaceSseAccessMock).toHaveBeenCalledWith(
+      "ws_test123",
+      "user_lead",
+    );
   });
 });
