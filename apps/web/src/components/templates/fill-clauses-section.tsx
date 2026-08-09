@@ -1,18 +1,12 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -109,14 +103,12 @@ const ClauseFillItem = ({
   onReset,
 }: ClauseFillItemProps) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  const [instruction, setInstruction] = useState("");
   const [adjusting, setAdjusting] = useState(false);
 
   const body = override ?? slot.body;
   const edited = override !== undefined;
 
-  const handleAdjust = async () => {
+  const handleAdjust = async (instruction: string) => {
     const trimmed = instruction.trim();
     if (trimmed === "") {
       return;
@@ -139,8 +131,6 @@ const ClauseFillItem = ({
       return;
     }
     onChange(response.data.body);
-    setOpen(false);
-    setInstruction("");
   };
 
   return (
@@ -162,50 +152,12 @@ const ClauseFillItem = ({
               {t("common.reset")}
             </Button>
           )}
-          <Popover onOpenChange={setOpen} open={open}>
-            <PopoverTrigger
-              render={
-                <Button
-                  aria-label={t("ai.editWithAI")}
-                  size="icon-xs"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <WandSparklesIcon className="size-3.5" />
-            </PopoverTrigger>
-            <PopoverPopup align="end" className="w-80" side="bottom">
-              <div className="flex flex-col gap-2 p-1">
-                <Textarea
-                  autoFocus
-                  className="min-h-16 text-sm"
-                  onChange={(e) => setInstruction(e.target.value)}
-                  placeholder={t("ai.refinePlaceholder")}
-                  value={instruction}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    onClick={() => setOpen(false)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    disabled={adjusting || instruction.trim() === ""}
-                    onClick={() => detached(handleAdjust(), "ClauseFillItem")}
-                    size="sm"
-                    type="button"
-                  >
-                    <WandSparklesIcon className="size-3.5" />
-                    {t("ai.editWithAI")}
-                  </Button>
-                </div>
-              </div>
-            </PopoverPopup>
-          </Popover>
+          <AiRewriteControl
+            isPending={adjusting}
+            onRewrite={(instruction) => {
+              detached(handleAdjust(instruction), "ClauseFillItem");
+            }}
+          />
         </div>
       </div>
       <p className="text-muted-foreground mt-2 line-clamp-4 text-xs whitespace-pre-wrap">

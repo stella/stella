@@ -38,7 +38,10 @@ import {
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-import { timeEntrySummaryOptions } from "@/lib/workspaces/queries/time-entries";
+import {
+  timeEntrySummaryOptions,
+  timeEntryTeamSummaryOptions,
+} from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
@@ -111,6 +114,11 @@ export const Route = createFileRoute(
       if (!canReadTimeEntries) {
         return;
       }
+      const canReviewTimeEntries =
+        authClient.organization.checkRolePermission({
+          role,
+          permissions: { timeEntry: ["approve"] },
+        });
 
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);
@@ -120,20 +128,37 @@ export const Route = createFileRoute(
       const prevWeekEnd = new Date(weekStart);
       prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
-      detached(
-        prefetchRouteQuery(
-          queryClient,
-          timeEntrySummaryOptions(
-            workspaceId,
-            toISODate(weekStart),
-            toISODate(weekEnd),
+      if (canReviewTimeEntries) {
+        detached(
+          prefetchRouteQuery(
+            queryClient,
+            timeEntryTeamSummaryOptions(
+              workspaceId,
+              toISODate(weekStart),
+              toISODate(weekEnd),
+            ),
+            (error: unknown) => {
+              getAnalytics().captureError(error);
+            },
           ),
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        ),
-        "loader",
-      );
+          "loader",
+        );
+      } else {
+        detached(
+          prefetchRouteQuery(
+            queryClient,
+            timeEntrySummaryOptions(
+              workspaceId,
+              toISODate(weekStart),
+              toISODate(weekEnd),
+            ),
+            (error: unknown) => {
+              getAnalytics().captureError(error);
+            },
+          ),
+          "loader",
+        );
+      }
       detached(
         prefetchRouteQuery(
           queryClient,

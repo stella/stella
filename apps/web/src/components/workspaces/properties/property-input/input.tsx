@@ -58,7 +58,7 @@ type PropertyPromptInputProps = {
     disabled: boolean;
     isPending: boolean;
     label: string;
-    onClick: () => void;
+    onClick: (instruction: string) => void;
   };
 };
 

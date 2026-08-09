@@ -39,6 +39,7 @@ const suggestPromptBodySchema = t.Object({
   // Plain-text version of the user's current prompt. When non-empty,
   // the LLM is asked to refine it instead of starting from scratch.
   currentPrompt: t.Optional(t.String({ maxLength: 2000 })),
+  instruction: t.String({ minLength: 1, maxLength: 2000 }),
 });
 
 const config = {
@@ -84,9 +85,13 @@ const suggestPrompt = createSafeHandler(
   // eslint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({ session, request, body, safeDb, user, workspaceId }) {
     const trimmedName = body.name.trim();
-    if (trimmedName.length === 0) {
+    const instruction = body.instruction.trim();
+    if (trimmedName.length === 0 || instruction.length === 0) {
       return Result.err(
-        new HandlerError({ status: 400, message: "Column name is required" }),
+        new HandlerError({
+          status: 400,
+          message: "Column name and rewrite instruction are required",
+        }),
       );
     }
 
@@ -119,6 +124,7 @@ const suggestPrompt = createSafeHandler(
       contentType: body.contentType,
       options: body.options?.map((o) => o.value),
       currentPrompt: body.currentPrompt?.trim() || undefined,
+      instruction,
     });
 
     const generateResult = await Result.tryPromise({

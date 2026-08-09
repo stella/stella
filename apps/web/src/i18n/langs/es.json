@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Analizar con IA",
+    "chooseRewriteInstruction": "Elegir instrucción de reescritura",
+    "customRewriteInstruction": "Instrucción personalizada",
     "editWithAI": "Editar con IA",
     "keyRequired": {
       "cta": "Abrir ajustes de IA",
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
       "title": "Conectar proveedor de IA"
     },
-    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?"
+    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
+    "rewriteDraftChanged": "El borrador cambió, por lo que no se aplicó la reescritura.",
+    "rewritePresets": {
+      "clarify": "Mejorar la claridad",
+      "concise": "Hacer más conciso",
+      "formal": "Usar un tono más formal",
+      "polish": "Mejorar la redacción"
+    }
   },
   "app": {
     "versionMismatch": {

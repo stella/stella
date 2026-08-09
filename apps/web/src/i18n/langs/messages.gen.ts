@@ -32,6 +32,8 @@ type Messages = {
   };
   "ai": {
     "analyzeWithAI": "Analyze with AI";
+    "chooseRewriteInstruction": "Choose rewrite instruction";
+    "customRewriteInstruction": "Custom instruction";
     "editWithAI": "Edit with AI";
     "keyRequired": {
       "cta": "Open AI settings";
@@ -39,6 +41,13 @@ type Messages = {
       "title": "Connect AI provider";
     };
     "refinePlaceholder": "How should the AI adjust the wording?";
+    "rewriteDraftChanged": "The draft changed, so the rewrite wasn't applied.";
+    "rewritePresets": {
+      "clarify": "Improve clarity";
+      "concise": "Make concise";
+      "formal": "Use a more formal tone";
+      "polish": "Polish the writing";
+    };
   };
   "app": {
     "versionMismatch": {

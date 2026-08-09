@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Analyzovať pomocou AI",
+    "chooseRewriteInstruction": "Vybrať spôsob úpravy",
+    "customRewriteInstruction": "Vlastný pokyn",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
       "title": "Pripojiť poskytovateľa AI"
     },
-    "refinePlaceholder": "Ako má AI upraviť znenie?"
+    "refinePlaceholder": "Ako má AI upraviť znenie?",
+    "rewriteDraftChanged": "Text sa zmenil, takže úprava nebola použitá.",
+    "rewritePresets": {
+      "clarify": "Vyjasniť znenie",
+      "concise": "Skrátiť",
+      "formal": "Použiť formálnejší tón",
+      "polish": "Vylepšiť znenie"
+    }
   },
   "app": {
     "versionMismatch": {

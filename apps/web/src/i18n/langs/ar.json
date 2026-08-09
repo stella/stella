@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "التحليل باستخدام AI",
+    "chooseRewriteInstruction": "اختيار تعليمات إعادة الصياغة",
+    "customRewriteInstruction": "تعليمات مخصصة",
     "editWithAI": "التعديل باستخدام AI",
     "keyRequired": {
       "cta": "فتح إعدادات AI",
       "description": "أضِف بيانات اعتماد المزوّد لبدء استخدام ميزات AI.",
       "title": "ربط مزوّد AI"
     },
-    "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟"
+    "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟",
+    "rewriteDraftChanged": "تغيّرت المسودة، لذلك لم تُطبّق إعادة الصياغة.",
+    "rewritePresets": {
+      "clarify": "تحسين الوضوح",
+      "concise": "صياغة أكثر إيجازًا",
+      "formal": "استخدام أسلوب أكثر رسمية",
+      "polish": "تحسين الصياغة"
+    }
   },
   "app": {
     "versionMismatch": {

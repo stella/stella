@@ -5,11 +5,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Label } from "@stll/ui/components/label";
-import { Textarea } from "@stll/ui/components/textarea";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 
 export type ManualTimeEntryValues = {
   dateWorked: string;
@@ -21,6 +21,7 @@ export type ManualTimeEntryValues = {
 type ManualTimeEntryFormProps = {
   defaultValues: ManualTimeEntryValues;
   pending: boolean;
+  workspaceId: string;
   onCancel: () => void;
   onSubmit: (values: ManualTimeEntryValues) => Promise<void>;
 };
@@ -28,6 +29,7 @@ type ManualTimeEntryFormProps = {
 export const ManualTimeEntryForm = ({
   defaultValues,
   pending,
+  workspaceId,
   onCancel,
   onSubmit,
 }: ManualTimeEntryFormProps) => {
@@ -86,18 +88,12 @@ export const ManualTimeEntryForm = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="time-entry-narrative">{t("common.description")}</Label>
-        <Textarea
-          id="time-entry-narrative"
-          maxLength={10_000}
-          onChange={(event) => setNarrative(event.currentTarget.value)}
-          placeholder={t("billing.narrativePlaceholder")}
-          required
-          rows={4}
-          value={narrative}
-        />
-      </div>
+      <TimeEntryNarrativeField
+        id="time-entry-narrative"
+        onChange={setNarrative}
+        value={narrative}
+        workspaceId={workspaceId}
+      />
 
       <div className="flex min-h-11 items-center gap-2">
         <Checkbox

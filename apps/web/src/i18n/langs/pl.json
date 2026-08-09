@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuj z AI",
+    "chooseRewriteInstruction": "Wybierz sposób przeredagowania",
+    "customRewriteInstruction": "Własna instrukcja",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
       "title": "Połącz dostawcę AI"
     },
-    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?"
+    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
+    "rewriteDraftChanged": "Wersja robocza zmieniła się, więc przeredagowanie nie zostało zastosowane.",
+    "rewritePresets": {
+      "clarify": "Popraw jasność",
+      "concise": "Skróć",
+      "formal": "Użyj bardziej formalnego tonu",
+      "polish": "Popraw sformułowanie"
+    }
   },
   "app": {
     "versionMismatch": {

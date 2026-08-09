@@ -27,6 +27,7 @@ import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
+import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -243,19 +244,17 @@ export const TimeEntryForm = ({
         )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("common.description")}</Label>
-        <form.Field name="narrative">
-          {(field) => (
-            <Textarea
-              onChange={(e) => field.handleChange(e.currentTarget.value)}
-              placeholder={t("billing.narrativePlaceholder")}
-              rows={3}
-              value={field.state.value}
-            />
-          )}
-        </form.Field>
-      </div>
+      <form.Field name="narrative">
+        {(field) => (
+          <TimeEntryNarrativeField
+            id="billing-time-entry-narrative"
+            onChange={field.handleChange}
+            rows={3}
+            value={field.state.value}
+            workspaceId={workspaceId}
+          />
+        )}
+      </form.Field>
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("billing.invoiceNarrative")}</Label>

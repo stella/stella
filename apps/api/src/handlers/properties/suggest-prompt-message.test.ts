@@ -12,6 +12,7 @@ describe("suggest prompt language", () => {
       contentType: "text",
       options: undefined,
       currentPrompt: undefined,
+      instruction: "Polish the writing.",
     });
 
     expect(message).toContain(
@@ -25,11 +26,13 @@ describe("suggest prompt language", () => {
       contentType: "text",
       options: undefined,
       currentPrompt: "Popište rozsah odpovědnosti jednatele.",
+      instruction: "Make it concise.",
     });
 
     expect(message).toContain(
       "Output language: Match the current draft's language.",
     );
+    expect(message).toContain("Requested adjustment: Make it concise.");
   });
 
   test("prevents the English instructions from becoming the output default", () => {

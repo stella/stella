@@ -218,6 +218,7 @@ export const PersonalTimesheetDay = ({
               onCancel={() => setDialog({ type: "closed" })}
               onSubmit={submit}
               pending={pending}
+              workspaceId={workspaceId}
             />
           </DialogPanel>
         </DialogPopup>

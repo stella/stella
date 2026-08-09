@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Mit KI analysieren",
+    "chooseRewriteInstruction": "Überarbeitungsanweisung auswählen",
+    "customRewriteInstruction": "Eigene Anweisung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
       "cta": "AI-Einstellungen öffnen",
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
     },
-    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?"
+    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
+    "rewriteDraftChanged": "Der Entwurf wurde geändert, daher wurde die Überarbeitung nicht angewendet.",
+    "rewritePresets": {
+      "clarify": "Verständlichkeit verbessern",
+      "concise": "Kürzer formulieren",
+      "formal": "Formeller formulieren",
+      "polish": "Formulierung verbessern"
+    }
   },
   "app": {
     "versionMismatch": {

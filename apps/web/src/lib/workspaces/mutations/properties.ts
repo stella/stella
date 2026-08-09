@@ -248,6 +248,7 @@ type SuggestPromptVars = {
   contentType: "text" | "single-select" | "multi-select" | "date" | "int";
   options?: { value: string }[];
   currentPrompt?: string;
+  instruction: string;
 };
 
 export const useSuggestPrompt = () => {
@@ -260,12 +261,14 @@ export const useSuggestPrompt = () => {
       contentType,
       options,
       currentPrompt,
+      instruction,
     }: SuggestPromptVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["suggest-prompt"].post({
           name,
           contentType,
+          instruction,
           ...(options && options.length > 0
             ? { options: options.map((o) => ({ value: o.value })) }
             : {}),

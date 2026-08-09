@@ -544,7 +544,7 @@ const DraftCard = ({
   const autoPromptDisabled =
     !isAi || trimmedName.length === 0 || suggestPrompt.isPending;
 
-  const handleAutoPrompt = useCallback(() => {
+  const handleAutoPrompt = useCallback((instruction: string) => {
     if (autoPromptDisabled) {
       return;
     }
@@ -553,6 +553,7 @@ const DraftCard = ({
         workspaceId,
         name: trimmedName,
         contentType: draft.contentType,
+        instruction,
       },
       {
         onSuccess: ({ prompt: suggested }) => {

@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -60,6 +61,11 @@ export const timeEntriesKeys = {
   summary: (workspaceId: string, dateFrom: string, dateTo: string) => [
     ...timeEntriesKeys.all(workspaceId),
     "summary",
+    { dateFrom, dateTo },
+  ],
+  teamSummary: (workspaceId: string, dateFrom: string, dateTo: string) => [
+    ...timeEntriesKeys.all(workspaceId),
+    "teamSummary",
     { dateFrom, dateTo },
   ],
 };
@@ -134,7 +140,33 @@ export const timeEntrySummaryOptions = (
         query: { dateFrom, dateTo },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      const summary = unwrapEden(response);
+      if ("scope" in summary) {
+        return panic("Expected a personal time-entry summary");
+      }
+      return summary;
+    },
+  });
+
+export const timeEntryTeamSummaryOptions = (
+  workspaceId: string,
+  dateFrom: string,
+  dateTo: string,
+) =>
+  queryOptions({
+    queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
+    queryFn: async ({ signal }) => {
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).summary.get({
+        query: { dateFrom, dateTo, scope: "team" },
+        fetch: { signal },
+      });
+      const summary = unwrapEden(response);
+      if (!("scope" in summary) || summary.scope !== "team") {
+        return panic("Expected a team time-entry summary");
+      }
+      return summary;
     },
   });
 

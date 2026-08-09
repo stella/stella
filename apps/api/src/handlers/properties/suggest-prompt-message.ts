@@ -10,6 +10,8 @@ document. Rules:
 - If the user supplied a current draft, REFINE it: keep their intent and
   vocabulary, fix grammar, tighten wording, and align with the result type.
   Do not invent constraints they didn't ask for.
+- Follow the separate requested adjustment when it does not conflict with the
+  result type or the factual constraints above.
 - If no draft, write a fresh prompt grounded in the column name.
 - Match the result type:
   - text → ask for the value as a short string.
@@ -25,6 +27,7 @@ type BuildSuggestPromptUserMessageOptions = {
   contentType: string;
   options: string[] | undefined;
   currentPrompt: string | undefined;
+  instruction: string;
 };
 
 export const buildSuggestPromptUserMessage = ({
@@ -32,6 +35,7 @@ export const buildSuggestPromptUserMessage = ({
   contentType,
   options,
   currentPrompt,
+  instruction,
 }: BuildSuggestPromptUserMessageOptions): string => {
   const lines = [`Column name: ${name}`, `Result type: ${contentType}`];
   if (options && options.length > 0) {
@@ -43,6 +47,7 @@ export const buildSuggestPromptUserMessage = ({
   } else {
     lines.push("Output language: Match the column name's language.");
   }
+  lines.push(`Requested adjustment: ${instruction}`);
   lines.push("Write the extraction prompt:");
   return lines.join("\n");
 };

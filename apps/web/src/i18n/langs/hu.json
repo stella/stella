@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Elemzés AI-val",
+    "chooseRewriteInstruction": "Átírási utasítás kiválasztása",
+    "customRewriteInstruction": "Egyéni utasítás",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
       "cta": "AI-beállítások megnyitása",
       "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
     },
-    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?"
+    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?",
+    "rewriteDraftChanged": "A piszkozat megváltozott, ezért az átírás nem lett alkalmazva.",
+    "rewritePresets": {
+      "clarify": "Tisztább megfogalmazás",
+      "concise": "Tömörítés",
+      "formal": "Formálisabb hangnem",
+      "polish": "Megfogalmazás javítása"
+    }
   },
   "app": {
     "versionMismatch": {

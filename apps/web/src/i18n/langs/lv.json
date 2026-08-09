@@ -29,13 +29,22 @@
   },
   "ai": {
     "analyzeWithAI": "Analizēt ar AI",
+    "chooseRewriteInstruction": "Izvēlēties pārrakstīšanas norādi",
+    "customRewriteInstruction": "Pielāgota norāde",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
       "cta": "Atvērt AI iestatījumus",
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
-    "refinePlaceholder": "Kā AI jāpielāgo formulējums?"
+    "refinePlaceholder": "Kā AI jāpielāgo formulējums?",
+    "rewriteDraftChanged": "Melnraksts mainījās, tāpēc pārrakstīšana netika lietota.",
+    "rewritePresets": {
+      "clarify": "Uzlabot skaidrību",
+      "concise": "Saīsināt",
+      "formal": "Izmantot formālāku toni",
+      "polish": "Uzlabot formulējumu"
+    }
   },
   "app": {
     "versionMismatch": {
