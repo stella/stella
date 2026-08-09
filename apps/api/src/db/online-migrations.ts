@@ -99,6 +99,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_one_active_timer_per_user_idx" ON public."time_entries" USING btree ("user_id") WHERE "timer_started_at" IS NOT NULL',
+    definitionBody:
+      "ON public.time_entries USING btree (user_id) WHERE (timer_started_at IS NOT NULL)",
+    isUnique: true,
+    name: "time_entries_one_active_timer_per_user_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
