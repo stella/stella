@@ -379,3 +379,20 @@ export const uncheckedConditionalResponse = async () => {
   }
   return response.data;
 };
+
+// MUST flag: a sibling declarator consumes data before the later error check.
+export const siblingDeclaratorConsumesDataFirst = async () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: sibling initializer consumes data before error inspection
+  const response = await api.tasks.get(),
+    data = response.data;
+  consume(response.error);
+  return data;
+};
+
+// MUST flag: a dynamic direct-await property can select data at runtime.
+export const dynamicDirectAwaitKey = async () => {
+  const key: "data" | "error" = condition ? "data" : "error";
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: dynamic direct-await property is not proof of error handling
+  const value = (await api.tasks.get())[key];
+  return value;
+};

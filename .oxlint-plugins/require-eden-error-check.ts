@@ -1005,6 +1005,22 @@ export default eslintCompatPlugin({
           let unsafe = false;
           let unsafeExit: AstNode | undefined;
 
+          if (
+            current?.type === "VariableDeclarator" &&
+            isAstNode(current.parent) &&
+            current.parent.type === "VariableDeclaration"
+          ) {
+            const declaration = analyzeStatement(
+              current.parent,
+              states,
+              binding,
+            );
+            states = declaration.states;
+            unsafe = declaration.unsafe;
+            unsafeExit = declaration.unsafeExit;
+            current = current.parent;
+          }
+
           while (current !== null) {
             const parent = isAstNode(current.parent) ? current.parent : null;
             if (
@@ -1209,7 +1225,10 @@ export default eslintCompatPlugin({
             if (
               parent?.type === "MemberExpression" &&
               parent.object === expression &&
-              getPropertyName(parent.property) === "error"
+              (parent.computed === true
+                ? isStringLiteral(parent.property) &&
+                  parent.property.value === "error"
+                : getPropertyName(parent.property) === "error")
             ) {
               return;
             }

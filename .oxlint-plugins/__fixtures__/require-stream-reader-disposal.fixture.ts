@@ -536,3 +536,29 @@ export const throwingSequenceBeforeRelease = async (
     (mightThrow(), reader.releaseLock());
   }
 };
+
+// MUST flag: Bun stdin exposes a genuine Web Stream reader.
+export const leakedBunStdinReader = async () => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: Bun stdin reader is never released
+  const reader = Bun.stdin.stream().getReader();
+  return await reader.read();
+};
+
+// MUST flag: a mutable done binding cannot prove that a break means EOF.
+export const reassignedDoneGuard = async () => {
+  const stream = new ReadableStream<Uint8Array>();
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: reassigned done binding can break before EOF without cancellation
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      let { done } = await reader.read();
+      done = stopEarly;
+      if (done) {
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};

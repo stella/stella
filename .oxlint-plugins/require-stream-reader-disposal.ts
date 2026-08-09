@@ -46,6 +46,10 @@ type ScopeVariable = {
     parent: unknown;
     type: string;
   }[];
+  references: {
+    init?: boolean;
+    isWrite?: () => boolean;
+  }[];
 };
 
 type IdentifierNode = ESTree.IdentifierReference;
@@ -496,6 +500,19 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isBunStdinStream = (node: unknown): boolean => {
+          const matched = memberCall(node, "stream");
+          const stdin = matched === null ? null : unwrapValue(matched.object);
+          return (
+            matched !== null &&
+            Array.isArray(matched.call.arguments) &&
+            matched.call.arguments.length === 0 &&
+            stdin?.type === "MemberExpression" &&
+            staticMemberName(stdin) === "stdin" &&
+            isGlobalReference(stdin.object, "Bun")
+          );
+        };
+
         const isResponseExpression = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
@@ -536,6 +553,9 @@ export default eslintCompatPlugin({
             return false;
           }
           if (isGlobalConstructor(expression, "ReadableStream")) {
+            return true;
+          }
+          if (isBunStdinStream(expression)) {
             return true;
           }
           if (expression.type === "MemberExpression") {
@@ -934,11 +954,22 @@ export default eslintCompatPlugin({
           if (variable === null) {
             return null;
           }
+          if (
+            variable.references.some(
+              (reference) =>
+                reference.init !== true && reference.isWrite?.() === true,
+            )
+          ) {
+            return null;
+          }
           for (const definition of variable.defs) {
             if (
               definition.type !== "Variable" ||
               !isAstNode(definition.node) ||
-              definition.node.type !== "VariableDeclarator"
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
             ) {
               continue;
             }

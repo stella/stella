@@ -201,13 +201,20 @@ const readInput = async (args: Args): Promise<string> => {
     const reader = Bun.stdin.stream().getReader();
     const decoder = new TextDecoder();
 
-    while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential stream reads: each chunk depends on the previous read advancing the stdin reader
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+    try {
+      while (true) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential stream reads: each chunk depends on the previous read advancing the stdin reader
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        chunks.push(decoder.decode(value, { stream: true }));
       }
-      chunks.push(decoder.decode(value, { stream: true }));
+    } catch (error) {
+      await reader.cancel(error).catch(() => undefined);
+      throw error;
+    } finally {
+      reader.releaseLock();
     }
 
     return chunks.join("");
