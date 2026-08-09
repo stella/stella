@@ -67,13 +67,14 @@ describe("email viewer", () => {
     expect(html).toContain(">عائشة &lt;aisha@example.ae&gt;</bdi>");
     expect(html).toContain('dateTime="2026-06-02T10:00:00.000Z"');
     expect(html).toContain("Show details");
+    expect(html).toContain(">blind@example.org</bdi>");
     expect(html).toContain("contract.pdf");
     expect(html).toContain(">٢ kB</span>");
     expect(html).toContain('sandbox=""');
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
     expect(html).not.toContain("href=");
-    expect(html).not.toContain('role="button"');
+    expect(html).not.toContain("<button");
   });
 
   test("renders the scoped loading state", () => {
