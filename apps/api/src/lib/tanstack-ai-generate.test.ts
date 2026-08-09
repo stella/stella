@@ -62,6 +62,7 @@ void mock.module("@/api/lib/tanstack-ai-models", () => ({
 
 const {
   generateTanStackTextForRole,
+  generateTanStackTextResultForRole,
   generateTanStackObjectForRole,
   mergeGenerationOptions,
   streamTanStackTextForRole,
@@ -571,6 +572,23 @@ describe("TanStack AI model-ingress guard", () => {
 });
 
 describe("TanStack AI text generation", () => {
+  test("returns the provider finish reason with collected text", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createTextStream(["partial"], "length");
+
+    const result = await generateTanStackTextResultForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    });
+
+    expect(result).toEqual({ text: "partial", finishReason: "length" });
+  });
+
   test("collects text through the error-aware streaming boundary", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["hello", " world"]);
@@ -705,11 +723,20 @@ const createStructuredOutputStream = async function* ({
   };
 };
 
-const createTextStream = async function* (deltas: string[]) {
+const createTextStream = async function* (
+  deltas: string[],
+  finishReason?: "stop" | "length",
+) {
   for (const delta of deltas) {
     yield {
       delta,
       type: realTanStackAI.EventType.TEXT_MESSAGE_CONTENT,
+    };
+  }
+  if (finishReason) {
+    yield {
+      type: realTanStackAI.EventType.RUN_FINISHED,
+      finishReason,
     };
   }
 };

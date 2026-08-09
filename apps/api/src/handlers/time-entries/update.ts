@@ -267,6 +267,10 @@ export const updateTimeEntryHandler = async function* ({
             eq(timeEntries.id, body.id),
             eq(timeEntries.workspaceId, workspaceId),
             eq(timeEntries.status, existing.status),
+            eq(timeEntries.dateWorked, existing.dateWorked),
+            eq(timeEntries.billable, existing.billable),
+            eq(timeEntries.rateAtEntry, existing.rateAtEntry),
+            eq(timeEntries.currency, existing.currency),
             canApproveTimeEntries(actor.memberRole)
               ? undefined
               : eq(timeEntries.userId, actor.userId),

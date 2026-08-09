@@ -1,6 +1,7 @@
 import { EventType, chat, parsePartialJSON } from "@tanstack/ai";
 import type {
   ModelMessage,
+  RunFinishedEvent,
   RunErrorEvent,
   StreamChunk,
   StructuredOutputPart,
@@ -117,6 +118,11 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
+export type TanStackTextGenerationResult = {
+  finishReason: NonNullable<RunFinishedEvent["finishReason"]> | null;
+  text: string;
+};
+
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
@@ -124,13 +130,18 @@ type ResolveTextModelOptions = Pick<
 
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-): Promise<string> => {
+): Promise<string> => (await generateTanStackTextResultForRole(options)).text;
+
+export const generateTanStackTextResultForRole = async (
+  options: GenerateTanStackTextForRoleOptions,
+): Promise<TanStackTextGenerationResult> => {
   const model = resolveTanStackTextModel(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
   let output = "";
+  let finishReason: TanStackTextGenerationResult["finishReason"] = null;
 
   for await (const delta of streamTanStackTextDeltas({
     abortController,
@@ -142,11 +153,14 @@ export const generateTanStackTextForRole = async (
     serviceTier: options.serviceTier,
     system: guardedSystemPrompt(options),
     temperature: options.temperature,
+    onFinishReason: (value) => {
+      finishReason = value;
+    },
   })) {
     output += delta;
   }
 
-  return output;
+  return { text: output, finishReason };
 };
 
 export const streamTanStackTextForRole = (
@@ -181,6 +195,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier,
   system,
   temperature,
+  onFinishReason,
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
@@ -191,6 +206,9 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
+  onFinishReason?:
+    | ((reason: TanStackTextGenerationResult["finishReason"]) => void)
+    | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
     model,
@@ -211,6 +229,10 @@ const streamTanStackTextDeltas = async function* ({
         ...(abortController ? { abortController } : {}),
       }),
     onChunk: (chunk) => {
+      if (chunk.type === EventType.RUN_FINISHED) {
+        onFinishReason?.(chunk.finishReason ?? null);
+        return undefined;
+      }
       if (
         chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
         chunk.delta.length > 0

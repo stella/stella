@@ -40,7 +40,13 @@ repaired_timers AS (
   UPDATE "time_entries" AS "entry"
   SET
     "duration_minutes" = GREATEST("entry"."duration_minutes", 1),
-    "billed_minutes" = GREATEST("entry"."billed_minutes", 6),
+    -- Billed entries already contributed their snapshotted minutes to an
+    -- invoice total. Closing a legacy timer must not rewrite that financial
+    -- quantity underneath a materialized invoice.
+    "billed_minutes" = CASE
+      WHEN "entry"."status" = 'billed' THEN "entry"."billed_minutes"
+      ELSE GREATEST("entry"."billed_minutes", 6)
+    END,
     "timer_started_at" = NULL,
     "timer_stopped_at" = "entry"."timer_started_at" + INTERVAL '1 minute',
     "updated_at" = NOW()
@@ -50,7 +56,8 @@ repaired_timers AS (
     "entry"."id",
     "entry"."organization_id",
     "entry"."workspace_id",
-    "entry"."user_id"
+    "entry"."user_id",
+    "entry"."status"
 )
 INSERT INTO "audit_logs" (
   "id",
@@ -86,7 +93,11 @@ SELECT
     ),
     'billedMinutes', jsonb_build_object(
       'old', timers_to_repair."billed_minutes",
-      'new', GREATEST(timers_to_repair."billed_minutes", 6)
+      'new', CASE
+        WHEN repaired_timers."status" = 'billed'
+          THEN timers_to_repair."billed_minutes"
+        ELSE GREATEST(timers_to_repair."billed_minutes", 6)
+      END
     ),
     'timerStartedAt', jsonb_build_object(
       'old', timers_to_repair."timer_started_at",
