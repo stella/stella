@@ -22,9 +22,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
-  // "update" rather than the sibling AI reads' "create": the suggestion
-  // exists only to feed a rename, so a user who cannot rename must not be
-  // able to spend model calls proposing one.
+  // The other AI reads (recap, suggested prompts, improve-prompt) require
+  // chat "create" because they assist with conversing. This one requires
+  // "update" — the permission of the rename PATCH it feeds — so a user who
+  // cannot rename cannot spend metered model calls proposing a title they
+  // have no way to apply.
   permissions: { chat: ["update"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
