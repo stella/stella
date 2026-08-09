@@ -159,7 +159,8 @@ export const emailToPreview = async (
 export const buildEmailPreview = (
   parsed: ParsedEmail,
   {
-    createAttachmentId = (attachmentIndex) => `attachment-${String(attachmentIndex)}`,
+    createAttachmentId = (attachmentIndex) =>
+      `attachment-${String(attachmentIndex)}`,
   }: { createAttachmentId?: (attachmentIndex: number) => string } = {},
 ): EmailPreview => {
   const inlineContentIds = new Set(
@@ -202,7 +203,7 @@ export const isEmailAttachmentPreviewable = (
   const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
   return (
     normalized === "application/pdf" ||
-    /^image\/(?:png|jpe?g|gif|webp|bmp|tiff)$/u.test(normalized)
+    /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
   );
 };
 

@@ -13,11 +13,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   emailToPreview,
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
-import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   convertToPdf,
   isConvertibleMimeType,

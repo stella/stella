@@ -9,16 +9,21 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { parseEmail, buildEmailPreview, isEmailAttachmentPreviewable, resolveEmailMimeType } from "@/api/lib/files/email-to-html";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
 } from "@/api/lib/files/email-attachment-token";
+import {
+  parseEmail,
+  buildEmailPreview,
+  isEmailAttachmentPreviewable,
+  resolveEmailMimeType,
+} from "@/api/lib/files/email-to-html";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 const emailAttachmentFieldQuery = async (
   scopedDb: ScopedDb,
@@ -111,7 +116,9 @@ export default createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(parsedResult)) {
-      return Result.ok(status(422, { message: "Failed to parse email attachment" }));
+      return Result.ok(
+        status(422, { message: "Failed to parse email attachment" }),
+      );
     }
     const preview = buildEmailPreview(parsedResult.value, {
       createAttachmentId: (index) =>
@@ -122,7 +129,9 @@ export default createSafeHandler(
           sourceVersionId: row.entityVersionId,
         }),
     });
-    const descriptor = preview.attachments.find(({ id }) => id === attachmentId);
+    const descriptor = preview.attachments.find(
+      ({ id }) => id === attachmentId,
+    );
     const attachment = parsedResult.value.attachments.at(attachmentIndex);
     if (!descriptor || !attachment) {
       return Result.ok(status(404));

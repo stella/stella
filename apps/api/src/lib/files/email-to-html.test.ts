@@ -67,6 +67,8 @@ describe("email attachment preview policy", () => {
   test("allows passive image and PDF types but not active or unknown content", () => {
     expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
     expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
+    expect(isEmailAttachmentPreviewable("image/bmp")).toBe(false);
+    expect(isEmailAttachmentPreviewable("image/tiff")).toBe(false);
     expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
     expect(isEmailAttachmentPreviewable("text/html")).toBe(false);
     expect(isEmailAttachmentPreviewable(null)).toBe(false);

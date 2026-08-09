@@ -1,4 +1,7 @@
-import type { Facet } from "@/components/inspector/file-facets";
+import {
+  FILE_FACETS,
+  type FileFacet as Facet,
+} from "@/components/inspector/inspector-store-types";
 import { isEmailFile, isMarkdownFile } from "@/lib/consts";
 
 // Sidepeek shows every facet, including Preview (the file viewer
@@ -7,23 +10,10 @@ import { isEmailFile, isMarkdownFile } from "@/lib/consts";
 // FullViewPreviewGuard handles users who land in Full view with a
 // stale "preview" facet by swapping to Metadata + flashing the
 // Minimize button.
-export const FACETS: readonly Facet[] = [
-  "preview",
-  "attachments",
-  "metadata",
-  "versions",
-  "suggestions",
-  "playbook",
-  "anonymization",
-];
-export const FULLVIEW_FACETS: readonly Facet[] = [
-  "attachments",
-  "metadata",
-  "versions",
-  "suggestions",
-  "playbook",
-  "anonymization",
-];
+export const FACETS: readonly Facet[] = FILE_FACETS;
+export const FULLVIEW_FACETS: readonly Facet[] = FILE_FACETS.filter(
+  (facet) => facet !== "preview",
+);
 
 export type FileTabNativePreviewKind = "email" | "markdown" | "pdf";
 

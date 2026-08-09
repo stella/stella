@@ -34,7 +34,9 @@ export const createEmailAttachmentDescriptor = ({
   }
 
   const digest = createHmac("sha256", secret)
-    .update(descriptorMessage({ attachmentIndex, sourceFileId, sourceVersionId }))
+    .update(
+      descriptorMessage({ attachmentIndex, sourceFileId, sourceVersionId }),
+    )
     .digest("base64url");
   return `${DESCRIPTOR_PREFIX}.${digest}`;
 };
@@ -54,7 +56,11 @@ export const findEmailAttachmentIndex = ({
     return null;
   }
 
-  for (let attachmentIndex = 0; attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS; attachmentIndex += 1) {
+  for (
+    let attachmentIndex = 0;
+    attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS;
+    attachmentIndex += 1
+  ) {
     if (
       createEmailAttachmentDescriptor({
         attachmentIndex,

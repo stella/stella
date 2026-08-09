@@ -8,13 +8,16 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
-import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import type {
+  FileFacet,
+  FileTab,
+} from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
-export type Facet = NonNullable<FileTab["facet"]>;
+export type Facet = FileFacet;
 
 /**
  * Mounted only inside the fullscreen branch. If the user enters Full
@@ -136,7 +139,15 @@ export const TabFacetBar = ({
       facets: gated.filter((f) => isEmail || f !== "attachments"),
       disabledFacets: undefined,
     };
-  }, [baseFacets, fileName, isDocx, isEmail, mimeType, suggestionCount, playbooksEnabled]);
+  }, [
+    baseFacets,
+    fileName,
+    isDocx,
+    isEmail,
+    mimeType,
+    suggestionCount,
+    playbooksEnabled,
+  ]);
 
   const labels: Record<Facet, string> = {
     preview: t("common.preview"),

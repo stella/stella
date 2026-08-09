@@ -97,7 +97,9 @@ const AttachmentPreview = ({
   workspaceId: string;
 }) => {
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
-  const isPdf = attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() === "application/pdf";
+  const isPdf =
+    attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ===
+    "application/pdf";
   const pdfQuery = useQuery(
     emailAttachmentPdfOptions({
       attachmentId: isPdf ? attachment.id : "",
@@ -106,6 +108,8 @@ const AttachmentPreview = ({
     }),
   );
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [imageAttempt, setImageAttempt] = useState(0);
 
   useExternalSyncEffect(() => {
     if (!pdfQuery.data) {
@@ -147,6 +151,13 @@ const AttachmentPreview = ({
         {renderAttachmentPreview({
           fileName,
           mimeType: attachment.mimeType,
+          imageFailed,
+          onImageError: () => setImageFailed(true),
+          onRetryImage: () => {
+            setImageFailed(false);
+            setImageAttempt((attempt) => attempt + 1);
+          },
+          imageAttempt,
           previewUrl: isPdf ? pdfObjectUrl : previewUrl,
           previewError: pdfQuery.isError,
           t,
@@ -158,13 +169,21 @@ const AttachmentPreview = ({
 
 const renderAttachmentPreview = ({
   fileName,
+  imageFailed,
+  imageAttempt,
   mimeType,
+  onImageError,
+  onRetryImage,
   previewUrl,
   previewError,
   t,
 }: {
   fileName: string;
+  imageFailed: boolean;
+  imageAttempt: number;
   mimeType: string | null;
+  onImageError: () => void;
+  onRetryImage: () => void;
   previewUrl: string | null;
   previewError: boolean;
   t: ReturnType<typeof useTranslations>;
@@ -172,6 +191,19 @@ const renderAttachmentPreview = ({
   if (previewError) {
     return (
       <FacetMessage
+        icon={<AlertTriangleIcon aria-hidden="true" className="size-5" />}
+        message={t("common.somethingWentWrong")}
+      />
+    );
+  }
+  if (imageFailed) {
+    return (
+      <FacetMessage
+        action={
+          <Button onClick={onRetryImage} size="sm" variant="outline">
+            {t("common.tryAgain")}
+          </Button>
+        }
         icon={<AlertTriangleIcon aria-hidden="true" className="size-5" />}
         message={t("common.somethingWentWrong")}
       />
@@ -185,6 +217,8 @@ const renderAttachmentPreview = ({
       <img
         alt={fileName}
         className="max-h-full max-w-full object-contain"
+        key={imageAttempt}
+        onError={onImageError}
         referrerPolicy="no-referrer"
         src={previewUrl}
       />
@@ -280,14 +314,17 @@ const AttachmentListItem = ({
 };
 
 const FacetMessage = ({
+  action,
   icon,
   message,
 }: {
+  action?: ReactNode;
   icon: ReactNode;
   message: string;
 }) => (
   <div className="text-muted-foreground flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm">
     {icon}
     <p>{message}</p>
+    {action}
   </div>
 );

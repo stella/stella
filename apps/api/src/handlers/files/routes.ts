@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
   readFileHandler,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
-import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
