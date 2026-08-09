@@ -12,8 +12,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { DocumentIcon } from "@/components/document-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
-  emailAttachmentPdfOptions,
-  emailAttachmentPreviewUrl,
+  emailAttachmentPreviewOptions,
   emailHtmlPreviewOptions,
 } from "@/lib/files/queries";
 
@@ -95,39 +94,32 @@ const AttachmentPreview = ({
 }) => {
   const t = useTranslations();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
-  const isPdf =
-    attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ===
-    "application/pdf";
-  const pdfQuery = useQuery(
-    emailAttachmentPdfOptions({
-      attachmentId: isPdf ? attachment.id : "",
+  const attachmentQuery = useQuery(
+    emailAttachmentPreviewOptions({
+      attachmentId: attachment.id,
       fieldId,
       workspaceId,
     }),
   );
-  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
 
   useExternalSyncEffect(() => {
-    if (!pdfQuery.data) {
-      setPdfObjectUrl(null);
+    if (!attachmentQuery.data) {
+      setPreviewObjectUrl(null);
       return undefined;
     }
     const objectUrl = URL.createObjectURL(
-      new Blob([pdfQuery.data], { type: "application/pdf" }),
+      new Blob([attachmentQuery.data], {
+        type: attachment.mimeType ?? "application/octet-stream",
+      }),
     );
-    setPdfObjectUrl(objectUrl);
+    setPreviewObjectUrl(objectUrl);
     return () => {
       URL.revokeObjectURL(objectUrl);
     };
-  }, [pdfQuery.data]);
-
-  const previewUrl = emailAttachmentPreviewUrl({
-    attachmentId: attachment.id,
-    fieldId,
-    workspaceId,
-  });
+  }, [attachment.mimeType, attachmentQuery.data]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -155,8 +147,8 @@ const AttachmentPreview = ({
             setImageFailed(false);
             setImageAttempt((attempt) => attempt + 1);
           }}
-          previewUrl={isPdf ? pdfObjectUrl : previewUrl}
-          previewError={pdfQuery.isError}
+          previewUrl={previewObjectUrl}
+          previewError={attachmentQuery.isError}
         />
       </div>
     </div>
@@ -226,7 +218,7 @@ const AttachmentPreviewContent = ({
       referrerPolicy="no-referrer"
       sandbox=""
       src={previewUrl}
-      title={t("emailViewer.bodyTitle")}
+      title={fileName}
     />
   );
 };
@@ -317,7 +309,10 @@ const FacetMessage = ({
   icon: ReactNode;
   message: string;
 }) => (
-  <div className="text-muted-foreground flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm">
+  <div
+    className="text-muted-foreground flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm"
+    role="alert"
+  >
     {icon}
     <p>{message}</p>
     {action}

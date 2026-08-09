@@ -133,7 +133,7 @@ export const emailAttachmentPreviewUrl = ({
     `/files/${encodeURIComponent(workspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}?disposition=inline`,
   );
 
-export const emailAttachmentPdfOptions = ({
+export const emailAttachmentPreviewOptions = ({
   attachmentId,
   fieldId,
   workspaceId,
@@ -145,7 +145,7 @@ export const emailAttachmentPdfOptions = ({
     staleTime: 0,
     queryKey: [
       ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
-      "attachment-pdf",
+      "attachment-preview",
       attachmentId,
     ],
     queryFn: async ({ signal }) => {
