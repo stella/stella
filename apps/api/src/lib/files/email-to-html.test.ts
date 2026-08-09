@@ -679,7 +679,7 @@ describe("renderEmailHtml", () => {
     )?.text;
 
     expect(text).toEndWith("😀");
-    expect(text ? [...text] : []).toHaveLength(500);
+    expect(Array.from(text ?? "")).toHaveLength(500);
     expect(text).not.toContain("trailing");
   });
 
