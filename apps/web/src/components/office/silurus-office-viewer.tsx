@@ -51,8 +51,8 @@ const DEFAULT_OFFICE_VIEWER_RESOURCE_LIMITS = {
 
 const DEFAULT_OFFICE_VIEWER_WORKER_TIMEOUT_MS = 60_000;
 
-const loadPptxViewer = () => import("@silurus/ooxml/pptx");
-const loadXlsxViewer = () => import("@silurus/ooxml/xlsx");
+const loadPptxViewer = async () => import("@silurus/ooxml/pptx");
+const loadXlsxViewer = async () => import("@silurus/ooxml/xlsx");
 
 type ViewerInstance = {
   destroy: () => void;
