@@ -9,7 +9,6 @@ import {
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 
-const LEGACY_RUNNING_LOCK_VALUE = "1";
 const RECOVERY_LOCK_VALUE = "recovery";
 
 describe("selectExpiredStaleRunWorkspaceIds", () => {
@@ -40,7 +39,9 @@ describe("parseRunningLockWorkspaceId", () => {
   });
 
   test("ignores sibling run-state keys so only locks are reconciled", () => {
-    expect(parseRunningLockWorkspaceId("workflow:ws-123:completed")).toBeNull();
+    expect(
+      parseRunningLockWorkspaceId("workflow:ws-123:completed-entities"),
+    ).toBeNull();
     expect(
       parseRunningLockWorkspaceId("workflow:ws-123:request-id"),
     ).toBeNull();
@@ -155,29 +156,26 @@ describe("isCurrentWorkflowRequestState", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-a",
       }),
     ).toBe(true);
   });
 
-  test("keeps legacy locks current for in-flight workers", () => {
+  test("rejects obsolete constant-valued running locks", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
-        runningValue: LEGACY_RUNNING_LOCK_VALUE,
+        runningValue: "1",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("does not let a recovery reservation look current", () => {
     expect(
       isCurrentWorkflowRequestState({
         currentRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         requestId: "request-a",
         runningValue: RECOVERY_LOCK_VALUE,
       }),
@@ -190,7 +188,6 @@ describe("selectRunningLockReservation", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-a",
@@ -202,7 +199,6 @@ describe("selectRunningLockReservation", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
         runningValue: "request-b",
@@ -210,15 +206,28 @@ describe("selectRunningLockReservation", () => {
     ).toEqual({ status: "skip" });
   });
 
-  test("settles legacy locks before reserving them", () => {
+  test("reserves a recovery-owned lock", () => {
     expect(
       selectRunningLockReservation({
         expectedRequestId: "request-a",
-        legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
         recoveryLockValue: RECOVERY_LOCK_VALUE,
         requestId: "request-a",
-        runningValue: LEGACY_RUNNING_LOCK_VALUE,
+        runningValue: RECOVERY_LOCK_VALUE,
       }),
-    ).toEqual({ status: "settle-legacy" });
+    ).toEqual({
+      status: "reserve",
+      expectedRunningValue: RECOVERY_LOCK_VALUE,
+    });
+  });
+
+  test("skips obsolete constant-valued running locks", () => {
+    expect(
+      selectRunningLockReservation({
+        expectedRequestId: "request-a",
+        recoveryLockValue: RECOVERY_LOCK_VALUE,
+        requestId: "request-a",
+        runningValue: "1",
+      }),
+    ).toEqual({ status: "skip" });
   });
 });

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import type { Job } from "bullmq";
-import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -36,7 +35,6 @@ import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createBullMqConnection,
-  createRedisClient,
   isRecoverableRedisPollError,
 } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -55,10 +53,6 @@ import {
   readFullWorkflowSnapshotCursor,
 } from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
-import {
-  recordEntityCompletion,
-  resetCompletionState,
-} from "@/api/lib/workflow/completion-tracking";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   AIJustification,
@@ -77,12 +71,9 @@ import {
 } from "@/api/lib/workflow/get-execution-plan";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import {
-  isCurrentWorkflowRequestState,
-  parseRunningLockWorkspaceId,
   selectExpiredStaleRunWorkspaceIds,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
-  selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 import {
   combineLiveWorkflowJobSnapshots,
@@ -93,6 +84,7 @@ import {
   type WorkflowQueueClass,
   type WorkflowWorkerSpec,
 } from "@/api/lib/workflow/queue-topology";
+import { getRootWorkflowRunStateStore } from "@/api/lib/workflow/root-run-state-store";
 import {
   classifierParticipatedInPlan,
   routeClassifiedDocuments,
@@ -105,37 +97,10 @@ import {
   WORKFLOW_ENTITY_JOB_ATTEMPTS,
   WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
 } from "@/api/lib/workflow/run-logic";
-import { parseStoredWorkflowServiceTier } from "@/api/lib/workflow/service-tier-state";
+import { requireWorkflowFinalizationManifest } from "@/api/lib/workflow/run-state-store";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 import { computeVerdictBatch } from "@/api/lib/workflow/verdict-engine";
-
-// ── Redis keys ─────────────────────────────────────────
-const WORKFLOW_KEY_PREFIX = "workflow";
-
-const workflowKey = (workspaceId: SafeId<"workspace">, field: string) =>
-  `${WORKFLOW_KEY_PREFIX}:${workspaceId}:${field}`;
-
-const WORKFLOW_RUN_STATE_FIELDS = [
-  "running",
-  "total",
-  "completed-entities",
-  // Legacy pre-set INCR counter. Kept in the cleanup surface so a run that
-  // straddled the deploy (read via the completion script's compat path) has
-  // its counter deleted on finish/skip/orphan, and so the compat path dies
-  // with the transition.
-  "completed",
-  // Marker written by `resetCompletionState` for every run started under
-  // this code. Gates the completion script's legacy-counter read so a
-  // straggler old-code replica cannot contaminate a run that provably
-  // started under set-mode tracking (see completion-tracking.ts guarantee
-  // 3). Cleaned up here like every sibling run-state key.
-  "set-mode",
-  "plan-properties",
-  "request-id",
-  "scoped",
-  "service-tier",
-] as const;
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const EXTRACTION_PREVIEW_THROTTLE_MS = 500;
@@ -178,16 +143,10 @@ type WorkflowEntityJob = Job<EntityJobData, void, WorkflowEntityJobName>;
 
 const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-let redisClient: RedisClient | null = null;
 
 const getQueueConnection = () => {
   queueConnection ??= createBullMqConnection();
   return queueConnection;
-};
-
-const getRedis = (): RedisClient => {
-  redisClient ??= createRedisClient();
-  return redisClient;
 };
 
 const getQueueForClass = (
@@ -223,36 +182,17 @@ const getQueueForClass = (
 const getAllWorkflowQueues = (): WorkflowEntityQueue[] =>
   WORKFLOW_QUEUE_CLASSES.map(getQueueForClass);
 
-const clearWorkflowRunState = async (
-  redis: RedisClient,
-  workspaceId: SafeId<"workspace">,
-): Promise<void> => {
-  await redis.del(
-    ...WORKFLOW_RUN_STATE_FIELDS.map((field) =>
-      workflowKey(workspaceId, field),
-    ),
-  );
-};
-
 const isCurrentWorkflowRequest = async ({
   requestId,
   workspaceId,
 }: {
   requestId: string;
   workspaceId: SafeId<"workspace">;
-}): Promise<boolean> => {
-  const redis = getRedis();
-  const [currentRequestId, runningValue] = await Promise.all([
-    redis.get(workflowKey(workspaceId, "request-id")),
-    redis.get(workflowKey(workspaceId, "running")),
-  ]);
-  return isCurrentWorkflowRequestState({
-    currentRequestId,
-    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
+}): Promise<boolean> =>
+  await getRootWorkflowRunStateStore().isCurrentRequest({
     requestId,
-    runningValue,
+    workspaceId,
   });
-};
 
 // Self-heal levers. Tuned conservatively so the happy path is never
 // disrupted, but a stuck job/worker can't block the workspace.
@@ -281,27 +221,15 @@ const MAX_STALLED_COUNT = 2;
 // extended on each entity completion below, so a long-running workflow
 // keeps the TTL fresh regardless of this initial value.
 const RUNNING_LOCK_TTL_SEC = 60 * 60;
-const RECOVERY_LOCK_SETTLE_MS = 100;
-const LEGACY_RUNNING_LOCK_VALUE = "1";
 const RECOVERY_LOCK_VALUE = "recovery";
-const RESERVE_RECOVERY_LOCK_SCRIPT = `
-local current = redis.call("GET", KEYS[1])
-if current == ARGV[1] then
-  redis.call("SET", KEYS[1], ARGV[2], "EX", ARGV[3])
-  return 1
-end
-return 0
-`;
 
 /**
  * Check if a workflow is currently running for a workspace.
  */
 export const isWorkflowRunning = async (
   workspaceId: SafeId<"workspace">,
-): Promise<boolean> => {
-  const val = await getRedis().get(workflowKey(workspaceId, "running"));
-  return val !== null;
-};
+): Promise<boolean> =>
+  await getRootWorkflowRunStateStore().isRunning(workspaceId);
 
 type StartWorkflowArgs = {
   workspaceId: SafeId<"workspace">;
@@ -474,30 +402,27 @@ export const startWorkflow = async ({
   propertyIds: inputPropertyIds,
   serviceTier = "standard",
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
-  const redis = getRedis();
+  const runStateStore = getRootWorkflowRunStateStore();
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
 
   // Check if already running (atomic check-and-set). The TTL is the
   // safety net for an uncleanly-killed worker; tuned tight enough that
   // a recovered workspace doesn't sit blocked for hours.
-  const wasSet = await redis.set(
-    workflowKey(workspaceId, "running"),
+  const wasSet = await runStateStore.tryClaim({
     requestId,
-    "EX",
-    String(RUNNING_LOCK_TTL_SEC),
-    "NX",
-  );
+    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+    workspaceId,
+  });
   if (!wasSet) {
     return { status: "already-running" };
   }
 
-  await redis.set(
-    workflowKey(workspaceId, "request-id"),
+  await runStateStore.setRequestId({
     requestId,
-    "EX",
-    RUNNING_LOCK_TTL_SEC,
-  );
+    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+    workspaceId,
+  });
 
   const createdRunKey = await extractionRunStore
     .create({
@@ -553,23 +478,14 @@ export const startWorkflow = async ({
           .skip(createdRunKey)
           .catch((error: unknown) => captureError(error, { workspaceId }));
       }
-      await clearWorkflowRunState(redis, workspaceId);
+      await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
     const runLockTtlSec = computeWorkflowRunLockTtlSec(
       executionPlan,
       serviceTier,
     );
-    await Promise.all([
-      redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
-      redis.expire(workflowKey(workspaceId, "request-id"), runLockTtlSec),
-    ]);
-    await redis.set(
-      workflowKey(workspaceId, "service-tier"),
-      serviceTier,
-      "EX",
-      runLockTtlSec,
-    );
+    await runStateStore.extendPlanningLease({ runLockTtlSec, workspaceId });
 
     const isExplicitRun =
       inputEntityIds !== undefined && inputEntityIds.length > 0;
@@ -607,77 +523,33 @@ export const startWorkflow = async ({
           .skip(createdRunKey)
           .catch((error: unknown) => captureError(error, { workspaceId }));
       }
-      await clearWorkflowRunState(redis, workspaceId);
+      await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
 
-    // Start from an empty completion set and mark this run as set-mode. The
-    // set grows lazily via SADD, so a prior run whose run-state outlived it
-    // (worker death between the completion script's EXPIRE and the
-    // sibling-key refresh, a manual lock deletion, a TTL discrepancy) could
-    // leave stale members that inflate this run's SCARD and finalize it
-    // early. The set-mode marker gates the completion script's legacy
-    // counter out of this run's count entirely, even if a straggler
-    // old-code replica recreates the legacy counter for one of this run's
-    // entities mid-rollout (see completion-tracking.ts guarantee 3). We
-    // hold the run lock (NX) here, so no live run shares these keys.
-    await resetCompletionState({
-      redis,
-      completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
-      legacyCompletedKey: workflowKey(workspaceId, "completed"),
-      setModeKey: workflowKey(workspaceId, "set-mode"),
-      runStateTtlSec: runLockTtlSec,
-    });
-
-    // Store entity count for completion tracking. Carries the run-lock TTL
-    // (refreshed on each entity completion) so it self-heals with the rest
-    // of the run-state instead of leaking after the run lapses. The
-    // completed-entities set is (re)given its TTL by the completion script's
-    // first SADD, so it needs no seed here.
-    await redis.set(
-      workflowKey(workspaceId, "total"),
-      String(targetCount),
-      "EX",
-      runLockTtlSec,
-    );
-
-    // Snapshot the property IDs in this workflow's plan so finishWorkflow
-    // can freshen only the ones it actually processed. Without this,
-    // properties created mid-workflow get marked fresh without ever
-    // running, leaving cells permanently empty.
+    // Finalization requires one request-bound snapshot. Keeping the scope,
+    // properties, and service tier in one versioned value prevents partial
+    // expiry from silently widening a run's freshness scope.
     const planPropertyIds = executionPlan.flatMap((level) =>
       level.flatMap((batch) => batch.properties.map((p) => p.id)),
     );
-    await redis.set(
-      workflowKey(workspaceId, "plan-properties"),
-      JSON.stringify(planPropertyIds),
-      "EX",
-      runLockTtlSec,
-    );
-
-    // Single-cell retries (propertyIds + entityIds) only touch a
-    // subset of (entity, property) pairs. `finishWorkflow` must NOT
-    // freshen those properties workspace-wide afterwards: the other
-    // entities still hold values from the previous extraction, so
-    // the property is genuinely still stale at workspace scope. The
-    // flag lets us tell scoped runs apart from a full sweep.
-    //
-    // Column reruns (propertyIds without entityIds) re-process every
-    // entity for the property, so finishWorkflow may freshen as
-    // usual — do NOT set the scoped flag in that case.
     const isCellScopedRun =
       inputPropertyIds &&
       inputPropertyIds.length > 0 &&
       inputEntityIds &&
       inputEntityIds.length > 0;
-    if (isCellScopedRun) {
-      await redis.set(
-        workflowKey(workspaceId, "scoped"),
-        "1",
-        "EX",
-        runLockTtlSec,
-      );
-    }
+    await runStateStore.initializeCompletion({
+      manifest: {
+        version: 1,
+        requestId,
+        freshnessScope: isCellScopedRun ? "cells" : "workspace",
+        propertyIds: planPropertyIds,
+        serviceTier,
+      },
+      runLockTtlSec,
+      targetCount,
+      workspaceId,
+    });
 
     if (createdRunKey) {
       await extractionRunStore
@@ -732,7 +604,7 @@ export const startWorkflow = async ({
         .fail({ ...createdRunKey, errorCode: errorTag(error) })
         .catch((runError: unknown) => captureError(runError, { workspaceId }));
     }
-    await clearWorkflowRunState(redis, workspaceId);
+    await runStateStore.clear(workspaceId);
     broadcastWorkflowStatus(workspaceId, false);
     captureError(error, { workspaceId });
     return { status: "failed" };
@@ -776,53 +648,6 @@ const LIVE_JOB_STATES = [
 // jobs than this, skip the cycle rather than risk treating a busy
 // workspace as orphaned from a truncated scan — a false positive must
 // never clobber a healthy run. A later, quieter cycle reconciles it.
-const RUNNING_LOCK_SCAN_PATTERN = `${WORKFLOW_KEY_PREFIX}:*:running`;
-const RUNNING_LOCK_SCAN_COUNT = "200";
-
-// `Array.isArray` widens `unknown` to `any[]`; this guard narrows to
-// `unknown[]` instead so the SCAN reply stays type-checked.
-const isUnknownArray = (value: unknown): value is readonly unknown[] =>
-  Array.isArray(value);
-
-const scanRunningLockWorkspaceIds = async (
-  redis: RedisClient,
-): Promise<string[]> => {
-  const workspaceIds: string[] = [];
-  let cursor = "0";
-  do {
-    // Bun's RedisClient exposes raw commands via `send`; SCAN returns
-    // [nextCursor, keys]. Iterating the cursor keeps a large keyspace off
-    // a single blocking pass (unlike KEYS).
-    // oxlint-disable-next-line no-await-in-loop -- SCAN cursor iteration: each call depends on the previous cursor
-    const reply: unknown = await redis.send("SCAN", [
-      cursor,
-      "MATCH",
-      RUNNING_LOCK_SCAN_PATTERN,
-      "COUNT",
-      RUNNING_LOCK_SCAN_COUNT,
-    ]);
-    if (!isUnknownArray(reply) || reply.length < 2) {
-      break;
-    }
-    const nextCursor = reply[0];
-    const keys = reply[1];
-    if (typeof nextCursor !== "string" || !isUnknownArray(keys)) {
-      break;
-    }
-    for (const key of keys) {
-      if (typeof key !== "string") {
-        continue;
-      }
-      const workspaceId = parseRunningLockWorkspaceId(key);
-      if (workspaceId !== null) {
-        workspaceIds.push(workspaceId);
-      }
-    }
-    cursor = nextCursor;
-  } while (cursor !== "0");
-  return workspaceIds;
-};
-
 const selectWorkspacesWithPendingCells = async (
   workspaceIds?: readonly string[],
 ): Promise<string[]> => {
@@ -875,9 +700,9 @@ const snapshotLiveWorkspaceIds = async () => {
 };
 
 const readWorkflowRequestIds = async (
-  redis: RedisClient,
   workspaceIds: readonly string[],
 ): Promise<Map<string, string | null>> => {
+  const runStateStore = getRootWorkflowRunStateStore();
   const requestIds = new Map<string, string | null>();
   for (const workspaceIdBatch of chunkItems(
     workspaceIds,
@@ -886,8 +711,8 @@ const readWorkflowRequestIds = async (
     // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
-        const requestId = await redis.get(
-          workflowKey(brandPersistedWorkspaceId(id), "request-id"),
+        const requestId = await runStateStore.getRequestId(
+          brandPersistedWorkspaceId(id),
         );
         requestIds.set(id, requestId);
       }),
@@ -897,9 +722,9 @@ const readWorkflowRequestIds = async (
 };
 
 const readWorkflowRunningValues = async (
-  redis: RedisClient,
   workspaceIds: readonly string[],
 ): Promise<Map<string, string | null>> => {
+  const runStateStore = getRootWorkflowRunStateStore();
   const runningValues = new Map<string, string | null>();
   for (const workspaceIdBatch of chunkItems(
     workspaceIds,
@@ -908,8 +733,8 @@ const readWorkflowRunningValues = async (
     // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
-        const runningValue = await redis.get(
-          workflowKey(brandPersistedWorkspaceId(id), "running"),
+        const runningValue = await runStateStore.getRunningValue(
+          brandPersistedWorkspaceId(id),
         );
         runningValues.set(id, runningValue);
       }),
@@ -918,101 +743,21 @@ const readWorkflowRunningValues = async (
   return runningValues;
 };
 
-const reserveExistingRunningLock = async (
-  redis: RedisClient,
-  runningKey: string,
-  expectedRunningValue: string,
-): Promise<boolean> => {
-  const reply: unknown = await redis.send("EVAL", [
-    RESERVE_RECOVERY_LOCK_SCRIPT,
-    "1",
-    runningKey,
-    expectedRunningValue,
-    RECOVERY_LOCK_VALUE,
-    String(RUNNING_LOCK_TTL_SEC),
-  ]);
-  return Number(reply) === 1;
-};
-
 type ShouldRecoverWorkflowOptions = {
   expectedRequestId: string | null;
-  redis: RedisClient;
   workspaceId: SafeId<"workspace">;
 };
 
 const shouldRecoverWorkflow = async ({
   expectedRequestId,
-  redis,
   workspaceId,
-}: ShouldRecoverWorkflowOptions): Promise<boolean> => {
-  const runningKey = workflowKey(workspaceId, "running");
-  const requestIdKey = workflowKey(workspaceId, "request-id");
-  const wasSet = await redis.set(
-    runningKey,
-    RECOVERY_LOCK_VALUE,
-    "EX",
-    String(RUNNING_LOCK_TTL_SEC),
-    "NX",
-  );
-
-  if (wasSet) {
-    const requestId = await redis.get(requestIdKey);
-    if (requestId === expectedRequestId) {
-      return true;
-    }
-
-    await redis.del(runningKey);
-    return false;
-  }
-
-  const [runningValue, requestId] = await Promise.all([
-    redis.get(runningKey),
-    redis.get(requestIdKey),
-  ]);
-
-  if (runningValue === null || requestId !== expectedRequestId) {
-    return false;
-  }
-
-  const reservation = selectRunningLockReservation({
+}: ShouldRecoverWorkflowOptions): Promise<boolean> =>
+  await getRootWorkflowRunStateStore().reserveForRecovery({
     expectedRequestId,
-    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
     recoveryLockValue: RECOVERY_LOCK_VALUE,
-    requestId,
-    runningValue,
+    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+    workspaceId,
   });
-  if (reservation.status === "reserve") {
-    return reserveExistingRunningLock(
-      redis,
-      runningKey,
-      reservation.expectedRunningValue,
-    );
-  }
-  if (reservation.status === "skip") {
-    return false;
-  }
-
-  // Legacy locks used "1" as the running value and wrote request-id
-  // separately. Let that startup window settle before treating one as
-  // a stable orphan.
-  await sleep(RECOVERY_LOCK_SETTLE_MS);
-  const [settledRunningValue, settledRequestId] = await Promise.all([
-    redis.get(runningKey),
-    redis.get(requestIdKey),
-  ]);
-  if (
-    settledRunningValue !== LEGACY_RUNNING_LOCK_VALUE ||
-    settledRequestId !== expectedRequestId
-  ) {
-    return false;
-  }
-
-  return reserveExistingRunningLock(
-    redis,
-    runningKey,
-    LEGACY_RUNNING_LOCK_VALUE,
-  );
-};
 
 type RecoverOrphanedWorkflowOptions = {
   expectedRequestId: string | null;
@@ -1023,10 +768,8 @@ const recoverOrphanedWorkflow = async ({
   expectedRequestId,
   workspaceId,
 }: RecoverOrphanedWorkflowOptions): Promise<void> => {
-  const redis = getRedis();
   const shouldRecover = await shouldRecoverWorkflow({
     expectedRequestId,
-    redis,
     workspaceId,
   });
   if (!shouldRecover) {
@@ -1057,7 +800,7 @@ const recoverOrphanedWorkflow = async ({
 
   // Then release the run-state so retries / new runs stop hitting the
   // "a workflow is already running" 409.
-  await clearWorkflowRunState(redis, workspaceId);
+  await getRootWorkflowRunStateStore().clear(workspaceId);
 
   logger.warn("workflow.orphan_reconciled", {
     workspaceId,
@@ -1084,8 +827,8 @@ type ReconcileOrphanedWorkflowsOptions = {
 export const reconcileOrphanedWorkflows = async ({
   scanPendingCells,
 }: ReconcileOrphanedWorkflowsOptions): Promise<void> => {
-  const redis = getRedis();
-  const lockedWorkspaceIds = await scanRunningLockWorkspaceIds(redis);
+  const lockedWorkspaceIds =
+    await getRootWorkflowRunStateStore().scanRunningWorkspaceIds();
   const pendingWorkspaceIds = scanPendingCells
     ? await selectWorkspacesWithPendingCells()
     : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
@@ -1120,10 +863,7 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  const initialRequestIds = await readWorkflowRequestIds(
-    redis,
-    orphanCandidates,
-  );
+  const initialRequestIds = await readWorkflowRequestIds(orphanCandidates);
 
   // Re-confirm after a settle delay so a workflow that is mid-startup
   // (lock taken, first batch not yet enqueued) is not mistaken for an
@@ -1137,8 +877,8 @@ export const reconcileOrphanedWorkflows = async ({
   // Independent reads of two distinct Redis keys per workspace; neither
   // depends on the other's result.
   const [currentRequestIds, currentRunningValues] = await Promise.all([
-    readWorkflowRequestIds(redis, orphanCandidates),
-    readWorkflowRunningValues(redis, orphanCandidates),
+    readWorkflowRequestIds(orphanCandidates),
+    readWorkflowRunningValues(orphanCandidates),
   ]);
   // Pending cells are immediate recovery evidence. A stale durable row is
   // evidence only once both Redis state keys have actually expired: flex runs
@@ -2040,7 +1780,7 @@ const onEntityCompleted = async ({
   requestId,
   runLockTtlSec,
 }: OnEntityCompletedArgs) => {
-  const redis = getRedis();
+  const runStateStore = getRootWorkflowRunStateStore();
 
   // Atomically re-check that this job still belongs to the active workflow
   // request AND record this entity's completion in the same Redis command
@@ -2050,20 +1790,11 @@ const onEntityCompleted = async ({
   // entity, so a re-driven entity (timeout after completion, stalled-job
   // reclaim, exhausted-retry failure handler) cannot double-count and push
   // the run to finalize while an entity is still mid-flight.
-  const result = await recordEntityCompletion({
-    redis,
-    keys: {
-      requestId: workflowKey(workspaceId, "request-id"),
-      running: workflowKey(workspaceId, "running"),
-      completedEntities: workflowKey(workspaceId, "completed-entities"),
-      total: workflowKey(workspaceId, "total"),
-      legacyCompleted: workflowKey(workspaceId, "completed"),
-      setMode: workflowKey(workspaceId, "set-mode"),
-    },
-    activeRequestId: requestId,
-    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
+  const result = await runStateStore.recordEntityCompletion({
     entityId,
-    runStateTtlSec: runLockTtlSec,
+    requestId,
+    runLockTtlSec,
+    workspaceId,
   });
   if (!result.matched) {
     return;
@@ -2084,50 +1815,10 @@ const onEntityCompleted = async ({
     return;
   }
 
-  // Long workflows can outlast the initial TTL on the run-state keys. Each
-  // completed entity refreshes them back to the full window so progress
-  // keeps the lock alive instead of letting a slow batch fall back to the
-  // "freshen everything" path, admit a parallel run, or leak `total`. The
-  // completed-entities set and the set-mode marker are both refreshed
+  // Long workflows can outlast the initial TTL. Refresh the request-bound
+  // manifest with the lock and total; the completion set refreshes atomically
   // inside the completion script above.
-  await Promise.all([
-    redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
-    redis.expire(workflowKey(workspaceId, "plan-properties"), runLockTtlSec),
-    redis.expire(workflowKey(workspaceId, "request-id"), runLockTtlSec),
-    redis.expire(workflowKey(workspaceId, "service-tier"), runLockTtlSec),
-    redis.expire(workflowKey(workspaceId, "total"), runLockTtlSec),
-    // Refresh the scoped flag's TTL for the same reason: if it
-    // expires mid-run, `finishWorkflow` would mistake a long-running
-    // scoped retry for a full sweep and freshen the property globally.
-    redis.expire(workflowKey(workspaceId, "scoped"), runLockTtlSec),
-  ]);
-};
-
-// Read the plan-properties snapshot recorded at workflow start. Returns [] when
-// absent (pre-snapshot workflows) or unparseable; the caller treats [] as "freshen
-// everything" for backwards-compat and as "classifier did not run" for routing.
-const readPlanPropertyIds = async (
-  redis: RedisClient,
-  workspaceId: SafeId<"workspace">,
-): Promise<SafeId<"property">[]> => {
-  try {
-    const planRaw = await redis.get(
-      workflowKey(workspaceId, "plan-properties"),
-    );
-    if (planRaw === null) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(planRaw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => brandPersistedPropertyId(value));
-  } catch (error: unknown) {
-    captureError(error, { workspaceId });
-    return [];
-  }
+  await runStateStore.refreshActiveLease({ runLockTtlSec, workspaceId });
 };
 
 type MaybeRouteClassifiedDocumentsArgs = {
@@ -2193,56 +1884,64 @@ const finishWorkflow = async (
     return;
   }
 
-  const redis = getRedis();
+  const runStateStore = getRootWorkflowRunStateStore();
   const scopedDb = createRootScopedDb({
     organizationId,
     userId,
     workspaceIds: [workspaceId],
   });
 
-  // Scoped runs (single-cell retry) only touch a subset of entities
-  // for the chosen property. Workspace-wide freshness and straggler
-  // detection both reason about all entities, so they're meaningless
-  // here and would actively hide still-stale cells from the next full
-  // sweep.
-  const wasScopedRun =
-    (await redis.get(workflowKey(workspaceId, "scoped"))) === "1";
-  const serviceTier = parseStoredWorkflowServiceTier(
-    await redis.get(workflowKey(workspaceId, "service-tier")),
-  );
+  const finalizationResult = await runStateStore.readFinalizationState({
+    requestId,
+    workspaceId,
+  });
+  if (Result.isError(finalizationResult)) {
+    // A transient Redis failure leaves the run intact so BullMQ can retry it.
+    // It must never be reinterpreted as an empty or workspace-wide snapshot.
+    captureError(finalizationResult.error, { workspaceId });
+    throw finalizationResult.error;
+  }
+  const manifestResult = requireWorkflowFinalizationManifest({
+    state: finalizationResult.value,
+    workspaceId,
+  });
+  if (Result.isError(manifestResult)) {
+    const invalidStateError = manifestResult.error;
+    captureError(invalidStateError, { workspaceId });
+    await extractionRunStore
+      .fail({
+        id: brandPersistedExtractionRunId(requestId),
+        organizationId,
+        workspaceId,
+        errorCode: errorTag(invalidStateError),
+      })
+      .catch((error: unknown) => captureError(error, { workspaceId }));
+    await runStateStore.clear(workspaceId);
+    broadcastWorkflowStatus(workspaceId, false);
+    broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+    return;
+  }
 
-  // Snapshot the plan's property ids before clearing run state; used both to
-  // freshen exactly the processed properties and to gate classification-driven
-  // routing on whether the Document Type classifier actually ran this pass.
-  const planPropertyIds = await readPlanPropertyIds(redis, workspaceId);
+  const manifest = manifestResult.value;
+  const wasScopedRun = manifest.freshnessScope === "cells";
+  const { propertyIds: planPropertyIds, serviceTier } = manifest;
 
   if (!wasScopedRun) {
     // Freshen only the properties that were part of this workflow's
     // plan. Properties created mid-workflow are not in the snapshot —
     // they stay stale and trigger an automatic follow-up run below.
     try {
-      if (planPropertyIds.length > 0) {
-        await scopedDb((tx) =>
-          tx
-            .update(properties)
-            .set({ status: "fresh" })
-            .where(
-              and(
-                eq(properties.workspaceId, workspaceId),
-                inArray(properties.id, planPropertyIds),
-              ),
+      await scopedDb((tx) =>
+        tx
+          .update(properties)
+          .set({ status: "fresh" })
+          .where(
+            and(
+              eq(properties.workspaceId, workspaceId),
+              inArray(properties.id, planPropertyIds),
             ),
-        );
-      } else {
-        // Backwards-compat: pre-snapshot workflows had no plan recorded.
-        // Behave as before so they still finalize.
-        await scopedDb((tx) =>
-          tx
-            .update(properties)
-            .set({ status: "fresh" })
-            .where(eq(properties.workspaceId, workspaceId)),
-        );
-      }
+          ),
+      );
     } catch (error: unknown) {
       captureError(error, { workspaceId });
     }
@@ -2257,7 +1956,7 @@ const finishWorkflow = async (
     .catch((error: unknown) => captureError(error, { workspaceId }));
 
   // Clean up Redis state
-  await clearWorkflowRunState(redis, workspaceId);
+  await runStateStore.clear(workspaceId);
 
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);
