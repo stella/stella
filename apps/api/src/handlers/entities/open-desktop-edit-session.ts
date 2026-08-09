@@ -334,7 +334,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     } satisfies OpenDesktopEditSessionResponse;
   }
 
-  const baseVersionContent = await readVersionDesktopEditTarget({
+  const baseVersionTarget = await readVersionDesktopEditTarget({
     entityVersionId: existingSession.baseVersionId,
     fileType: existingSession.fileType,
     propertyId,
@@ -342,7 +342,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     workspaceId,
   });
 
-  if (!baseVersionContent) {
+  if (!baseVersionTarget) {
     return {
       error: {
         message: "Desktop edit session source file is no longer available.",
@@ -354,11 +354,11 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   return {
     baseVersionNumber: baseVersion.versionNumber,
     downloadUrl: await presignDesktopEditFileDownload({
-      fileContent: baseVersionContent,
+      fileTarget: baseVersionTarget,
       organizationId,
       workspaceId,
     }),
-    fileName: baseVersionContent.fileName,
+    fileName: baseVersionTarget.fileContent.fileName,
     fileType: existingSession.fileType,
     lastCheckpointAt: null,
     resumedFromCheckpoint: false,
@@ -581,7 +581,7 @@ export const openDesktopEditSessionHandler = async function* ({
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
-            fileContent: currentTarget.fileContent,
+            fileTarget: currentTarget,
             organizationId,
             workspaceId,
           }),

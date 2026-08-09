@@ -8,25 +8,22 @@ import {
   desktopEditFileTypeForMimeType,
   desktopEditMimeTypeForFileType,
 } from "@/api/lib/desktop-edit-file-types";
-import type {
-  DesktopEditFileType,
-  DesktopEditMimeType,
-} from "@/api/lib/desktop-edit-file-types";
+import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type DatabaseTransaction = Transaction;
 
-type DocxFieldContent = Extract<FieldContent, { type: "file" }> & {
+type FileFieldContent = Extract<FieldContent, { type: "file" }>;
+
+type DocxFieldContent = FileFieldContent & {
   mimeType: typeof DOCX_MIME_TYPE;
 };
 
-export type DesktopEditableFileContent = Extract<
-  FieldContent,
-  { type: "file" }
-> & {
-  mimeType: DesktopEditMimeType;
+type DesktopEditableFileTarget = {
+  fileContent: FileFieldContent;
+  fileType: DesktopEditFileType;
 };
 
 type FileFieldEntry = {
@@ -56,10 +53,7 @@ export const lockDocxEditTarget = lockDesktopEditTarget;
 
 export const asDesktopEditableFileContent = (
   content: FieldContent,
-): {
-  fileContent: DesktopEditableFileContent;
-  fileType: DesktopEditFileType;
-} | null => {
+): DesktopEditableFileTarget | null => {
   if (content.type !== "file") {
     return null;
   }
@@ -70,10 +64,7 @@ export const asDesktopEditableFileContent = (
   }
 
   return {
-    fileContent: {
-      ...content,
-      mimeType: desktopEditMimeTypeForFileType(fileType),
-    },
+    fileContent: content,
     fileType,
   };
 };
@@ -343,7 +334,7 @@ export const readVersionDesktopEditTarget = async ({
     return null;
   }
 
-  return target.fileContent;
+  return target;
 };
 
 export const presignDocxFieldDownload = async ({
@@ -395,24 +386,24 @@ export const presignDocxDownloadFromFileId = async ({
   );
 
 export const presignDesktopEditFileDownload = async ({
-  fileContent,
+  fileTarget,
   organizationId,
   workspaceId,
 }: {
-  fileContent: DesktopEditableFileContent;
+  fileTarget: DesktopEditableFileTarget;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 }) =>
   await presignDownloadUrl(
     createFileKey({
-      fileId: fileContent.id,
-      mimeType: fileContent.mimeType,
+      fileId: fileTarget.fileContent.id,
+      mimeType: fileTarget.fileContent.mimeType,
       organizationId,
       workspaceId,
     }),
     {
       expiresIn: 900,
-      fileName: fileContent.fileName,
+      fileName: fileTarget.fileContent.fileName,
       scope: { organizationId, workspaceId },
     },
   );
