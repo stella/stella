@@ -62345,6 +62345,15 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: false,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--narrative",
                     prop: "narrative",
                     required: false,
@@ -62397,6 +62406,11 @@ export const generatedRouteMap: RouteNode = {
                         },
                         dateWorked: {
                           format: "date",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
                           type: "string",
                         },
                         durationMinutes: {
