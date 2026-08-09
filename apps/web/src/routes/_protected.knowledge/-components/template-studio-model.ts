@@ -345,9 +345,14 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   // parser/store at every boundary, so stale optional siblings from a legacy
   // manifest cannot leak into the persisted union.
   switch (f.valueSource.type) {
-    case "formula":
-      field.formula = f.valueSource.formula;
-      return field;
+    case "formula": {
+      const formula = f.valueSource.formula.trim();
+      if (formula !== "") {
+        field.formula = formula;
+        return field;
+      }
+      break;
+    }
     case "condition":
       if (f.valueSource.conditionAst !== undefined) {
         field.conditionAst = f.valueSource.conditionAst;
