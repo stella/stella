@@ -22,6 +22,10 @@ declare const url: string;
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves a sibling path can bypass a bare root prefix
 const _directResolve = path.resolve(root, candidate).startsWith(root);
 
+// `join` also normalizes `..`, so a sibling can pass the same prefix check.
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves path.join retains rooted path provenance
+const _directJoin = path.join(root, candidate).startsWith(root);
+
 const resolvedRoot = path.resolve("/safe/root");
 const resolvedCandidate = path.resolve(resolvedRoot, "../root-backup");
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves aliases retain Node path provenance
@@ -87,6 +91,7 @@ export const noPathPrefixContainmentFixture = {
   _aliasedResolve,
   _boundaryHelper,
   _computed,
+  _directJoin,
   _directResolve,
   _domainPrefix,
   _fakeNormalize,

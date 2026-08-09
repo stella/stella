@@ -22,6 +22,11 @@ window.sessionStorage.setItem("refresh-token", credential);
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: const key indirection cannot bypass the rule
 globalThis.localStorage.setItem(ACCESS_TOKEN_KEY, credential);
 
+// MUST flag: stable aliases preserve the browser storage provenance.
+const aliasedStorage = window.localStorage;
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: a const alias cannot bypass the storage boundary
+aliasedStorage.setItem("accessToken", credential);
+
 // MUST flag: static bracket notation for the storage and method.
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, typescript/dot-notation -- fixture: static bracket notation is the same storage sink
 window["localStorage"]["setItem"]("jwt", credential);

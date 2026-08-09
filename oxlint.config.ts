@@ -108,6 +108,14 @@ const fixtureRuleOverrides = [
   ]),
 ];
 
+const browserSurfaceFiles = [
+  "apps/web/src/**/*.{ts,tsx}",
+  "apps/desktop/src/**/*.{ts,tsx}",
+  "apps/landing/src/**/*.{ts,tsx}",
+  "apps/playground/src/**/*.{ts,tsx}",
+  "packages/ui/src/**/*.{ts,tsx}",
+] as const;
+
 export default defineConfig({
   extends: [core, react],
   rules: {
@@ -901,11 +909,7 @@ export default defineConfig({
       // Browser surfaces only: `document` does not exist in apps/api's
       // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
       files: [
-        "apps/web/src/**/*.{ts,tsx}",
-        "apps/desktop/src/**/*.{ts,tsx}",
-        "apps/landing/src/**/*.{ts,tsx}",
-        "apps/playground/src/**/*.{ts,tsx}",
-        "packages/ui/src/**/*.{ts,tsx}",
+        ...browserSurfaceFiles,
         ".oxlint-plugins/__fixtures__/no-document-cookie.fixture.ts",
       ],
       rules: {
@@ -913,18 +917,11 @@ export default defineConfig({
       },
     },
     {
-      // Browser-owned resources and credentials must pass through durable
-      // boundaries: isolated navigation, paired object-URL cleanup, and
-      // server-managed auth cookies.
+      // Window-opening primitives are restricted to the isolated navigation
+      // boundary and the validated OAuth compatibility path.
       files: [
-        "apps/web/src/**/*.{ts,tsx}",
-        "apps/desktop/src/**/*.{ts,tsx}",
-        "apps/landing/src/**/*.{ts,tsx}",
-        "apps/playground/src/**/*.{ts,tsx}",
-        "packages/ui/src/**/*.{ts,tsx}",
+        ...browserSurfaceFiles,
         ".oxlint-plugins/__fixtures__/require-safe-window-open.fixture.ts",
-        ".oxlint-plugins/__fixtures__/no-object-url-leak.fixture.ts",
-        ".oxlint-plugins/__fixtures__/no-auth-token-in-web-storage.fixture.ts",
       ],
       excludeFiles: [
         "apps/web/src/lib/open-isolated-window.ts",
@@ -934,6 +931,18 @@ export default defineConfig({
       ],
       rules: {
         "require-safe-window-open/require-safe-window-open": "error",
+      },
+    },
+    {
+      // Browser-owned resources and credentials require paired object-URL
+      // cleanup and server-managed auth cookies. Navigation exceptions above
+      // must not weaken these independent boundaries.
+      files: [
+        ...browserSurfaceFiles,
+        ".oxlint-plugins/__fixtures__/no-object-url-leak.fixture.ts",
+        ".oxlint-plugins/__fixtures__/no-auth-token-in-web-storage.fixture.ts",
+      ],
+      rules: {
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
       },

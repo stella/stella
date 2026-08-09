@@ -28,6 +28,7 @@ import type { AstNode } from "./utils.ts";
 
 const PATH_MODULES = new Set(["node:path", "path"]);
 const PATH_VALUE_APIS = new Set(["dirname", "join", "normalize", "resolve"]);
+const ROOTED_PATH_VALUE_APIS = new Set(["join", "resolve"]);
 const PATH_PLATFORMS = new Set(["posix", "win32"]);
 const PATH_SEPARATORS = new Set(["/", "\\"]);
 
@@ -365,7 +366,8 @@ export default eslintCompatPlugin({
               ? candidateCall.arguments.at(0)
               : undefined;
             const resolvesFromPrefix =
-              candidateApi === "resolve" &&
+              candidateApi !== undefined &&
+              ROOTED_PATH_VALUE_APIS.has(candidateApi) &&
               Array.isArray(candidateCall.arguments) &&
               candidateCall.arguments.length >= 2 &&
               sameStableExpression(firstCandidateArgument, prefix);

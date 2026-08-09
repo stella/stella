@@ -34,6 +34,72 @@ export const revokeBeforeCreate = () => {
   return url;
 };
 
+// MUST flag: an early return can bypass the lexically later revocation.
+export const conditionalEarlyReturn = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: cleanup does not cover the early-return path
+  const url = URL.createObjectURL(blob);
+  if (condition) {
+    return;
+  }
+  URL.revokeObjectURL(url);
+};
+
+// MUST flag: conditional cleanup does not cover the false branch.
+export const conditionalRevocation = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: cleanup is not guaranteed on every branch
+  const url = URL.createObjectURL(blob);
+  if (condition) {
+    URL.revokeObjectURL(url);
+  }
+};
+
+// MUST flag: an early return can bypass registration of the cleanup callback.
+export const conditionalCleanupCallback = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: the returned cleanup does not cover the early-return path
+  const url = URL.createObjectURL(blob);
+  if (condition) {
+    return () => undefined;
+  }
+  return () => URL.revokeObjectURL(url);
+};
+
+// MUST flag: an early return can bypass timer registration.
+export const conditionalTimerRegistration = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: timer cleanup does not cover the early-return path
+  const url = URL.createObjectURL(blob);
+  const cleanup = () => URL.revokeObjectURL(url);
+  if (condition) {
+    return;
+  }
+  setTimeout(cleanup, 1000);
+};
+
+// MUST flag: registering a callback does not help when that callback can skip
+// revocation internally.
+export const conditionalTimerCleanup = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: callback cleanup is conditional
+  const url = URL.createObjectURL(blob);
+  const cleanup = () => {
+    if (condition) {
+      URL.revokeObjectURL(url);
+    }
+  };
+  setTimeout(cleanup, 1000);
+};
+
+// MUST flag: a `finally` block must revoke on every path through the block.
+export const conditionalFinallyCleanup = () => {
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: finally cleanup is conditional
+  const url = URL.createObjectURL(blob);
+  try {
+    return;
+  } finally {
+    if (condition) {
+      URL.revokeObjectURL(url);
+    }
+  }
+};
+
 // Allowed: direct local pairing with the same binding.
 export const downloadUrl = () => {
   const url = URL.createObjectURL(blob);
@@ -53,6 +119,14 @@ export const cleanupCallback = () => {
   return () => URL.revokeObjectURL(url);
 };
 
+// Allowed: an unconditionally registered timer provides bounded cleanup for a
+// resource that must outlive the current synchronous operation.
+export const scheduledCleanup = () => {
+  const url = URL.createObjectURL(blob);
+  const cleanup = () => URL.revokeObjectURL(url);
+  setTimeout(cleanup, 1000);
+};
+
 // Allowed: conditional creation has one ownership write and revokes whichever
 // branch produced the value.
 export const conditionalCleanup = () => {
@@ -60,6 +134,18 @@ export const conditionalCleanup = () => {
     ? URL.createObjectURL(blob)
     : globalThis.URL.createObjectURL(blob);
   URL.revokeObjectURL(url);
+};
+
+// Allowed: `finally` revokes the URL even when the work exits abruptly.
+export const finallyCleanup = () => {
+  const url = URL.createObjectURL(blob);
+  try {
+    if (condition) {
+      return;
+    }
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 };
 
 // Allowed: immediate create/revoke is unusual but does not retain the Blob.

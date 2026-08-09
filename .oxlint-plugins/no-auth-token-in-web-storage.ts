@@ -125,13 +125,37 @@ export default eslintCompatPlugin({
           return variable === null || variable.defs.length === 0;
         };
 
-        const isWebStorage = (node: unknown): boolean => {
+        const isWebStorage = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
           const expression = unwrapExpression(node);
           if (expression === null) {
             return false;
           }
           if (isIdentifier(expression) && STORAGE_NAMES.has(expression.name)) {
             return isGlobalReference(expression, expression.name);
+          }
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visited.has(variable)) {
+              return false;
+            }
+            visited.add(variable);
+            for (const definition of variable.defs) {
+              if (
+                definition.type !== "Variable" ||
+                !isAstNode(definition.node) ||
+                definition.node.type !== "VariableDeclarator" ||
+                !isAstNode(definition.parent) ||
+                definition.parent.type !== "VariableDeclaration" ||
+                definition.parent.kind !== "const"
+              ) {
+                continue;
+              }
+              return isWebStorage(definition.node.init, visited);
+            }
+            return false;
           }
           if (expression.type !== "MemberExpression") {
             return false;

@@ -17,12 +17,12 @@ export const printPdfBuffer = (buffer: ArrayBuffer) => {
 
   let cleaned = false;
   const cleanup = () => {
+    URL.revokeObjectURL(url);
     if (cleaned) {
       return;
     }
     cleaned = true;
     frame.remove();
-    URL.revokeObjectURL(url);
   };
   setTimeout(cleanup, PRINT_IFRAME_CLEANUP_MS);
 
