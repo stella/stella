@@ -913,6 +913,62 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF"
           fi
 
+  # These suites use Postgres behavior that PGlite cannot reproduce (partial
+  # indexes, advisory locks, roles, and policies). The runner derives its file
+  # set from the gate each suite declares; PR and nightly coverage therefore
+  # share one source of truth instead of mirrored YAML manifests.
+  postgres-suites:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.package_checks_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:18.3
+        env:
+          POSTGRES_USER: stella
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Apply migrations to service Postgres
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+        run: bun run src/db/migrate.ts
+
+      - name: Run Postgres-gated API suites
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+        run: bun run test:postgres
+
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
   # generic path (Eden surface, route trees, query options) lands as
@@ -1887,6 +1943,7 @@ jobs:
         agent-sandbox-docker,
         ci-checks,
         code-quality,
+        postgres-suites,
         typecheck-baseline,
         web-build,
         mobile-build,
@@ -1918,6 +1975,7 @@ jobs:
           OCR_IMAGE_RESULT: ${{ needs.ocr-image.result }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
+          POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
@@ -1934,6 +1992,7 @@ jobs:
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
                   || "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" \
                   || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
+                  || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
@@ -1969,12 +2028,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

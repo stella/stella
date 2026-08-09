@@ -316,7 +316,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
       await db
         .update(caseLawDecisions)
-        .set({ redactedAt: new Date("2026-07-31T12:00:01.000Z") })
+        .set({
+          contentHash: null,
+          documentAst: null,
+          fulltext: null,
+          redactedAt: new Date("2026-07-31T12:00:01.000Z"),
+          sections: null,
+        })
         .where(
           and(
             eq(caseLawDecisions.sourceId, sourceId),
@@ -1287,29 +1293,23 @@ if (!databaseUrl || !runPostgresTests) {
       const firstScopedDb: ScopedDb = async (transactionWork) => {
         const call = firstCallCount;
         firstCallCount += 1;
-        return await scopedDb(async (tx) => {
-          if (call === 0) {
-            const result = await transactionWork(tx);
-            await synchronizeInitialRead();
-            return result;
-          }
-          return await transactionWork(tx);
-        });
+        const result = await scopedDb(async (tx) => await transactionWork(tx));
+        if (call === 0) {
+          await synchronizeInitialRead();
+        }
+        return result;
       };
 
       let secondCallCount = 0;
       const secondScopedDb: ScopedDb = async (transactionWork) => {
         const call = secondCallCount;
         secondCallCount += 1;
-        return await scopedDb(async (tx) => {
-          if (call === 0) {
-            const result = await transactionWork(tx);
-            await synchronizeInitialRead();
-            await firstWriteCompleted;
-            return result;
-          }
-          return await transactionWork(tx);
-        });
+        const result = await scopedDb(async (tx) => await transactionWork(tx));
+        if (call === 0) {
+          await synchronizeInitialRead();
+          await firstWriteCompleted;
+        }
+        return result;
       };
 
       // Gate the second writer on the first writer finishing, not on a

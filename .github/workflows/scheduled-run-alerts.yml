@@ -1,6 +1,8 @@
 name: Scheduled run alerts
 
 on:
+  # Deliberate delivery test after configuring or rotating webhook credentials.
+  workflow_dispatch:
   workflow_run:
     workflows:
       - Nightly Full Test
@@ -16,7 +18,9 @@ permissions: {}
 
 jobs:
   notify:
-    if: github.event.workflow_run.conclusion == 'failure'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -25,11 +29,12 @@ jobs:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}
           WEBHOOK_HEADERS: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_HEADERS }}
-          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          ALERT_KIND: ${{ github.event_name == 'workflow_dispatch' && 'Alert delivery test' || 'Failed workflow' }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || github.workflow }}
+          RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_EVENT: ${{ github.event.workflow_run.event || github.event_name }}
         run: |
           if [ -z "$WEBHOOK_URL" ]; then
             echo "::error::scheduled-run alert webhook URL is not configured"
@@ -50,7 +55,7 @@ jobs:
             echo "::error::scheduled-run alert webhook credentials are not configured"
             exit 1
           fi
-          jq -n --arg text "Failed workflow: $WORKFLOW_NAME (event: $RUN_EVENT, branch: $HEAD_BRANCH, head sha: $HEAD_SHA). Run: $RUN_URL" '{text: $text}' |
+          jq -n --arg text "$ALERT_KIND: $WORKFLOW_NAME (event: $RUN_EVENT, branch: $HEAD_BRANCH, head sha: $HEAD_SHA). Run: $RUN_URL" '{text: $text}' |
             curl --fail-with-body -sS -X POST \
               -H "content-type: application/json" \
               "${header_args[@]}" \

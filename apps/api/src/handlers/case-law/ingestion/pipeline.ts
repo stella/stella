@@ -571,6 +571,8 @@ type CaseLawDecisionIdentityOptions = Pick<
   "caseNumber" | "language" | "sourceDocumentId"
 > & { sourceId: SafeId<"caseLawSource"> };
 
+const NULL_SOURCE_DOCUMENT_ID_FILTER = { isNull: true } as const;
+
 /** Match exactly the two partial unique indexes that define source identity. */
 const caseLawDecisionIdentityWhere = ({
   caseNumber,
@@ -584,6 +586,7 @@ const caseLawDecisionIdentityWhere = ({
         sourceId: { eq: sourceId },
         caseNumber,
         language,
+        sourceDocumentId: NULL_SOURCE_DOCUMENT_ID_FILTER,
       };
 
 /**
