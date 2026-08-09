@@ -720,11 +720,34 @@ const EMAIL_FOLD_KIND = {
   quote: "quoted-history",
   signature: "signature",
 } as const;
+const EMAIL_FOLD_FLOW_PARENT_TAGS = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "body",
+  "center",
+  "dd",
+  "details",
+  "dialog",
+  "div",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "header",
+  "li",
+  "main",
+  "nav",
+  "section",
+  "td",
+  "th",
+]);
 
-export type EmailFoldKind =
-  (typeof EMAIL_FOLD_KIND)[keyof typeof EMAIL_FOLD_KIND];
+type EmailFoldKind = (typeof EMAIL_FOLD_KIND)[keyof typeof EMAIL_FOLD_KIND];
 
-export type EmailBodyFold = {
+type EmailBodyFold = {
   id: string;
   kind: EmailFoldKind;
 };
@@ -859,7 +882,9 @@ const foldQuotedHistoryAndSignatures = ($: CheerioApi): EmailBodyFold[] => {
       id: `fold-${bodyFolds.length}`,
       kind: token.candidate.kind,
     } satisfies EmailBodyFold;
-    wrapEmailFold($, token.candidate, bodyFold.id);
+    if (!wrapEmailFold($, token.candidate, bodyFold.id)) {
+      continue;
+    }
     bodyFolds.push(bodyFold);
   }
   return bodyFolds;
@@ -869,12 +894,22 @@ const wrapEmailFold = (
   $: CheerioApi,
   { element, kind }: EmailFoldCandidate,
   id: string,
-): void => {
+): boolean => {
+  const parent = element.parent;
+  if (
+    !parent ||
+    !isTag(parent) ||
+    !EMAIL_FOLD_FLOW_PARENT_TAGS.has(parent.name)
+  ) {
+    return false;
+  }
+
   const details = $(
     `<details data-stella-email-fold="${kind}"><summary data-stella-email-fold-summary="${id}"></summary></details>`,
   );
   $(element).before(details);
   details.append(element);
+  return true;
 };
 
 type PlainTextSection = {

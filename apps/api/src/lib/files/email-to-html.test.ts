@@ -482,6 +482,41 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Child");
   });
 
+  test("keeps fold markers expanded inside restricted table parents", () => {
+    const tableBodies = [
+      '<table><tbody class="gmail_quote"><tr><td>Section history</td></tr></tbody></table>',
+      '<table><tbody><tr class="gmail_quote"><td>Row history</td></tr></tbody></table>',
+      '<table><tbody><tr><td class="gmail_quote">Cell history</td></tr></tbody></table>',
+    ];
+
+    for (const html of tableBodies) {
+      const preview = buildEmailPreview(
+        htmlEmail({
+          body: { type: "html", html: `<p>Reply</p>${html}` },
+        }),
+      );
+
+      expect(preview.bodyFolds).toEqual([]);
+      expect(preview.bodyHtml).not.toContain("<details");
+      expect(preview.bodyHtml).toContain("history");
+    }
+
+    const flowContentInCell = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<p>Reply</p><table><tbody><tr><td><div class="gmail_quote">Nested history</div></td></tr></tbody></table>',
+        },
+      }),
+    );
+    expect(flowContentInCell.bodyFolds).toEqual([
+      { id: "fold-0", kind: "quoted-history" },
+    ]);
+    expect(flowContentInCell.bodyHtml).toContain(
+      '<td><details data-stella-email-fold="quoted-history">',
+    );
+  });
+
   test("folds only trailing plain-text quote runs and standard signatures", () => {
     const body = [
       "Aktuální odpověď",
