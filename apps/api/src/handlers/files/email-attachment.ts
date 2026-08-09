@@ -1,16 +1,13 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type {
-  HandlerConfig,
-  SafeHandlerGenerator,
-} from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
@@ -69,19 +66,18 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const attachmentNotFound = () => status(404);
-const attachmentNotPreviewable = () => status(415);
+const attachmentNotFound = () => new Response(null, { status: 404 });
+const attachmentNotPreviewable = () => new Response(null, { status: 415 });
 const attachmentSourceTooLarge = () =>
-  status(413, { message: "Email exceeds the preview size limit" });
+  Response.json(
+    { message: "Email exceeds the preview size limit" },
+    { status: 413 },
+  );
 const attachmentUnreadable = () =>
-  status(422, { message: "Failed to parse email attachment" });
-
-type EmailAttachmentResult =
-  | ReturnType<typeof attachmentNotFound>
-  | ReturnType<typeof attachmentNotPreviewable>
-  | ReturnType<typeof attachmentSourceTooLarge>
-  | ReturnType<typeof attachmentUnreadable>
-  | Response;
+  Response.json(
+    { message: "Failed to parse email attachment" },
+    { status: 422 },
+  );
 
 export default createSafeHandler(
   config,
@@ -92,7 +88,7 @@ export default createSafeHandler(
     scopedDb,
     session,
     workspaceId,
-  }): SafeHandlerGenerator<EmailAttachmentResult> {
+  }) {
     const rows = yield* Result.await(
       Result.tryPromise(
         async () =>
