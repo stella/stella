@@ -401,7 +401,11 @@ const DERIVATION_CASES: readonly DerivationCase[] = [
     projection: READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
     expected: {
       outputRefs: [],
-      passthroughIdPaths: ["results[].decisionId", "nextCursor"],
+      passthroughIdPaths: [
+        "results[].decisionId",
+        "results[].resourceName",
+        "nextCursor",
+      ],
       stripPaths: [],
     },
   },
@@ -412,6 +416,7 @@ const DERIVATION_CASES: readonly DerivationCase[] = [
       outputRefs: [],
       passthroughIdPaths: [
         "decision.decisionId",
+        "decision.resourceName",
         "decision.citationsFrom[].id",
         "decision.citationsFrom[].citedDecisionId",
         "decision.citationsTo[].id",
