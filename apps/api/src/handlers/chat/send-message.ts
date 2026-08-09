@@ -14,8 +14,12 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import {
+  getActiveFileModelBinding,
+  type ActiveFileModelBinding,
+  type ActiveFileSourceForModel,
+} from "@/api/handlers/chat/active-file-model-source";
 import {
   getResumedUserInteraction,
   isChatPart,
@@ -180,11 +184,17 @@ import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-men
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import {
+  FILE_SIZE_LIMIT_BYTES,
+  FILE_SIZE_LIMITS,
+  LIMITS,
+} from "@/api/lib/limits";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
+import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   requireTanStackAIAvailableForRole,
   validateTanStackDevModelOverride,
@@ -2251,7 +2261,7 @@ const prepareChatContext = async ({
       );
 
     const messagesWithActiveFileFallback = yield* Result.await(
-      attachActivePdfWhenExtractionIsEmpty({
+      attachActiveFileFallbackWhenExtractionIsEmpty({
         activeFile,
         hydratedMessages,
         organizationId,
@@ -2275,7 +2285,7 @@ const prepareChatContext = async ({
     });
   });
 
-type AttachActivePdfWhenExtractionIsEmptyProps = {
+type AttachActiveFileFallbackWhenExtractionIsEmptyProps = {
   activeFile: IncomingActiveFile | undefined;
   hydratedMessages: ChatMessage[];
   organizationId: SafeId<"organization">;
@@ -2284,14 +2294,14 @@ type AttachActivePdfWhenExtractionIsEmptyProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const attachActivePdfWhenExtractionIsEmpty = async ({
+const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   activeFile,
   hydratedMessages,
   organizationId,
   safeDb,
   sendMode,
   workspaceId,
-}: AttachActivePdfWhenExtractionIsEmptyProps): Promise<
+}: AttachActiveFileFallbackWhenExtractionIsEmptyProps): Promise<
   Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
@@ -2311,35 +2321,29 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
       return Result.ok(hydratedMessages);
     }
 
-    const extracted = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.extractedContent.findFirst({
-          where: {
-            entityId: { eq: activeFile.entityId },
-            organizationId: { eq: organizationId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { charCount: true },
-        }),
-      ),
-    );
-    if (extracted && extracted.charCount > 0) {
-      return Result.ok(hydratedMessages);
-    }
-
-    const activePdf = yield* Result.await(
-      readActivePdfForModel({
+    const activeFileBinding = yield* Result.await(
+      resolveActiveFileModelBinding({
         activeFile,
         fileFieldId: activeFile.fileFieldId,
-        organizationId,
         safeDb,
         workspaceId,
       }),
     );
-    if (activePdf === null) {
+    if (
+      activeFileBinding === null ||
+      activeFileBinding.type === "durable-current"
+    ) {
       return Result.ok(hydratedMessages);
     }
 
+    const activeFileFallback = yield* Result.await(
+      readActiveFileFallbackForModel({
+        organizationId,
+        source: activeFileBinding.source,
+        sourceVersion: activeFileBinding.version,
+        workspaceId,
+      }),
+    );
     const nextMessages = [...hydratedMessages];
     const latestUserMessage = hydratedMessages.at(latestUserIndex);
     if (!latestUserMessage) {
@@ -2350,64 +2354,87 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
         }),
       );
     }
+    const fallbackParts: ChatMessage["parts"] = [];
+    switch (activeFileFallback.type) {
+      case "pdf":
+        fallbackParts.push(
+          {
+            type: "text",
+            content: `The exact ${activeFileFallback.sourceVersion} version of the active file "${activeFileFallback.fileName}" is attached directly as a PDF. Use this attachment for the current question instead of entity-level retrieval.`,
+          },
+          createRawChatFilePart({
+            bytes: activeFileFallback.bytes,
+            fileName: activeFileFallback.fileName,
+            mimeType: PDF_MIME_TYPE,
+          }),
+        );
+        break;
+      case "extracted-text":
+        fallbackParts.push(
+          {
+            type: "text",
+            content: `The exact ${activeFileFallback.sourceVersion} version of the active file "${activeFileFallback.fileName}" is attached as extracted text. Use this text for the current question instead of entity-level retrieval.${activeFileFallback.truncated ? " The attachment is truncated to the first available window." : ""}`,
+          },
+          {
+            type: "text",
+            content: sanitizeForPrompt(
+              untrustedText(activeFileFallback.content),
+            ),
+          },
+        );
+        break;
+      default:
+        activeFileFallback satisfies never;
+    }
+
     nextMessages[latestUserIndex] = {
       ...latestUserMessage,
-      parts: [
-        ...latestUserMessage.parts,
-        {
-          type: "text",
-          content: `The active file "${activePdf.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
-        },
-        createRawChatFilePart({
-          bytes: activePdf.bytes,
-          fileName: activePdf.fileName,
-          mimeType: PDF_MIME_TYPE,
-        }),
-      ],
+      parts: [...latestUserMessage.parts, ...fallbackParts],
     };
 
     return Result.ok(nextMessages);
   });
 
-type ReadActivePdfForModelProps = {
+type ResolveActiveFileModelBindingProps = {
   activeFile: IncomingActiveFile;
   fileFieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
 };
 
-type ActivePdfForModel = {
-  bytes: Uint8Array;
-  fileName: string;
-};
-
-const readActivePdfForModel = async ({
+const resolveActiveFileModelBinding = async ({
   activeFile,
   fileFieldId,
-  organizationId,
   safeDb,
   workspaceId,
-}: ReadActivePdfForModelProps): Promise<
-  Result<ActivePdfForModel | null, HandlerError<422 | 500> | SafeDbError>
+}: ResolveActiveFileModelBindingProps): Promise<
+  Result<ActiveFileModelBinding | null, SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const entity = yield* Result.await(
+    const field = yield* Result.await(
       safeDb((tx) =>
-        tx.query.entities.findFirst({
+        tx.query.fields.findFirst({
           where: {
-            id: { eq: activeFile.entityId },
+            id: { eq: fileFieldId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true },
+          columns: { content: true },
           with: {
-            currentVersion: {
-              columns: {},
+            entityVersion: {
+              columns: { deletedAt: true, id: true },
               with: {
-                fields: {
-                  columns: {
-                    content: true,
-                    id: true,
+                entity: {
+                  columns: { currentVersionId: true, id: true },
+                  with: {
+                    extractedContent: {
+                      columns: {
+                        charCount: true,
+                        sourceEntityVersionId: true,
+                        sourceFieldId: true,
+                        sourceFileId: true,
+                        sourceSha256Hex: true,
+                      },
+                    },
                   },
                 },
               },
@@ -2416,24 +2443,83 @@ const readActivePdfForModel = async ({
         }),
       ),
     );
-    const field = entity?.currentVersion?.fields.find(
-      (candidate) => candidate.id === fileFieldId,
-    );
-    const content = field?.content;
-    if (content?.type !== "file") {
+    if (!field) {
+      return Result.ok(null);
+    }
+    if (!field.entityVersion) {
+      panic("Active file field is missing its entity version relation");
+    }
+    if (!field.entityVersion.entity) {
+      panic("Active file version is missing its entity relation");
+    }
+    if (
+      field.entityVersion.deletedAt !== null ||
+      field.entityVersion.entity.id !== activeFile.entityId ||
+      field.content.type !== "file"
+    ) {
       return Result.ok(null);
     }
 
-    const pdfRef = getPdfFileRefForModel(content);
-    if (pdfRef === null || content.encrypted) {
-      return Result.ok(null);
+    return Result.ok(
+      getActiveFileModelBinding({
+        content: field.content,
+        currentVersionId: field.entityVersion.entity.currentVersionId,
+        extractedContent: field.entityVersion.entity.extractedContent ?? null,
+        fieldId: fileFieldId,
+        fieldVersionId: field.entityVersion.id,
+      }),
+    );
+  });
+
+type ReadActiveFileFallbackForModelProps = {
+  organizationId: SafeId<"organization">;
+  source: ActiveFileSourceForModel;
+  sourceVersion: "current" | "historical";
+  workspaceId: SafeId<"workspace">;
+};
+
+type ActiveFileFallbackForModel =
+  | {
+      type: "pdf";
+      bytes: Uint8Array;
+      fileName: string;
+      sourceVersion: "current" | "historical";
+    }
+  | {
+      type: "extracted-text";
+      content: string;
+      fileName: string;
+      sourceVersion: "current" | "historical";
+      truncated: boolean;
+    };
+
+const activeFileSizeLimitError = () =>
+  new HandlerError({
+    status: 422,
+    message: `Active file exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
+  });
+
+const readActiveFileFallbackForModel = async ({
+  organizationId,
+  source,
+  sourceVersion,
+  workspaceId,
+}: ReadActiveFileFallbackForModelProps): Promise<
+  Result<ActiveFileFallbackForModel, HandlerError<422 | 500>>
+> =>
+  await Result.gen(async function* () {
+    if (
+      source.knownSizeBytes !== null &&
+      source.knownSizeBytes > FILE_SIZE_LIMIT_BYTES.chatContextFile
+    ) {
+      return Result.err(activeFileSizeLimitError());
     }
 
     const s3Key = createFileKey({
       organizationId,
       workspaceId,
-      fileId: pdfRef.fileId,
-      mimeType: PDF_MIME_TYPE,
+      fileId: source.fileId,
+      mimeType: source.mimeType,
     });
     const buffer = yield* Result.await(
       Result.tryPromise({
@@ -2441,46 +2527,53 @@ const readActivePdfForModel = async ({
         catch: (cause) =>
           new HandlerError({
             status: 500,
-            message: "Failed to read active PDF for AI context",
+            message: "Failed to read active file for AI context",
             cause,
           }),
       }),
     );
-    const bytes = new Uint8Array(buffer);
-    if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `Active PDF exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
-        }),
-      );
+    if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
+      return Result.err(activeFileSizeLimitError());
     }
 
-    return Result.ok({
+    if (source.type === "extracted-text") {
+      const extracted = await extractFileTextResult(buffer, source.mimeType);
+      if (Result.isError(extracted)) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to extract active file for AI context",
+            cause: extracted.error,
+          }),
+        );
+      }
+      if (extracted.value === null) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Active file does not contain extractable text",
+          }),
+        );
+      }
+      const fallback: ActiveFileFallbackForModel = {
+        type: "extracted-text",
+        content: extracted.value.slice(0, LIMITS.chatContextFileMaxChars),
+        fileName: source.fileName,
+        sourceVersion,
+        truncated: extracted.value.length > LIMITS.chatContextFileMaxChars,
+      };
+      return Result.ok(fallback);
+    }
+
+    const bytes = new Uint8Array(buffer);
+    const fallback: ActiveFileFallbackForModel = {
+      type: "pdf",
       bytes,
-      fileName: pdfRef.fileName,
-    });
-  });
-
-const getPdfFileRefForModel = (
-  content: Extract<FieldContent, { type: "file" }>,
-): { fileId: string; fileName: string } | null => {
-  if (content.mimeType === PDF_MIME_TYPE) {
-    return {
-      fileId: content.id,
-      fileName: content.fileName,
+      fileName: source.fileName,
+      sourceVersion,
     };
-  }
-
-  if (content.pdfFileId === null) {
-    return null;
-  }
-
-  return {
-    fileId: content.pdfFileId,
-    fileName: content.fileName,
-  };
-};
+    return Result.ok(fallback);
+  });
 
 type ResolveAssistantMessageRefsProps = {
   accessibleWorkspaceIds: ReadonlySet<string>;

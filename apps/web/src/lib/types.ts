@@ -16,7 +16,12 @@ import type {
 } from "@stll/workspace-ui/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
-import { DOCX_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
+import {
+  DOCX_MIME,
+  getNativeOfficeViewerFormat,
+  isEmailFile,
+  isMarkdownFile,
+} from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type { OptionColor, WorkspaceFieldContent };
@@ -54,8 +59,11 @@ export const isFileDisplayable = (file: {
     return true;
   }
 
-  // DOCX files are rendered natively via Folio
-  if (file.mimeType === DOCX_MIME) {
+  // OOXML files are rendered natively in-browser.
+  if (
+    file.mimeType === DOCX_MIME ||
+    getNativeOfficeViewerFormat(file.mimeType) !== null
+  ) {
     return true;
   }
 

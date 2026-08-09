@@ -3609,6 +3609,7 @@
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
+        "editLocallyPrompt": "Edita este archivo localmente y sincroniza los cambios con stella.",
         "forceRelease": "Forzar liberación",
         "notOpenedDescription": "stella desktop no confirmó que <bdi>{application}</bdi> se abriera. Inicia stella desktop e inténtalo de nuevo.",
         "openAction": "Abrir en la app de escritorio",

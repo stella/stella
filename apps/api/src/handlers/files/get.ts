@@ -165,10 +165,8 @@ export const readFileHandler = async ({
     };
   }
 
-  // Natively-renderable types (DOCX) serve their original bytes
-  // for display — the frontend renders them via Folio, never via
-  // Gotenberg. PDFs serve themselves. Anything else needs a
-  // PDF derivative on the field.
+  // Natively-renderable OOXML types serve their original bytes for display.
+  // PDFs serve themselves. Anything else needs a PDF derivative on the field.
   if (isNativelyRenderableMimeType(content.mimeType)) {
     const nativeFileKey = createFileKey({
       organizationId,

@@ -3609,6 +3609,7 @@
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
+        "editLocallyPrompt": "Redaguokite šį failą vietoje ir sinchronizuokite pakeitimus su stella.",
         "forceRelease": "Priverstinai atlaisvinti",
         "notOpenedDescription": "stella desktop nepatvirtino, kad atsidarė <bdi>{application}</bdi>. Paleiskite stella desktop ir bandykite dar kartą.",
         "openAction": "Atidaryti darbalaukio programoje",

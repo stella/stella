@@ -22,6 +22,11 @@ const excelMimeTypes = Object.freeze({
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
 });
 
+const powerpointMimeTypes = Object.freeze({
+  "application/vnd.ms-powerpoint": true,
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+});
+
 const openDocumentSheetMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.spreadsheet": true,
 });
@@ -46,6 +51,7 @@ export type DocumentIconKind =
   | "rtf"
   | "openDocumentText"
   | "excel"
+  | "powerpoint"
   | "openDocumentSheet"
   | "csv"
   | "image"
@@ -76,6 +82,10 @@ export const getDocumentIconKind = (
 
   if (Object.hasOwn(excelMimeTypes, mimeType)) {
     return "excel";
+  }
+
+  if (Object.hasOwn(powerpointMimeTypes, mimeType)) {
+    return "powerpoint";
   }
 
   if (Object.hasOwn(openDocumentSheetMimeTypes, mimeType)) {

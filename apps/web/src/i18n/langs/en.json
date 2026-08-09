@@ -3609,6 +3609,7 @@
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
+        "editLocallyPrompt": "Edit this file locally and sync changes with stella.",
         "forceRelease": "Force release",
         "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.",
         "openAction": "Open in desktop",

@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
-import { buildWorkflowAIAnalyticsProps } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  buildWorkflowAIAnalyticsProps,
+  EXTRACTED_TEXT_PROMPT_LIMITS,
+  limitExtractedTextPromptContent,
+} from "@/api/lib/workflow/ai-generate-batch";
 
 const organizationId = toSafeId<"organization">("organization-1");
 const userId = toSafeId<"user">("user-1");
@@ -44,5 +48,34 @@ describe("buildWorkflowAIAnalyticsProps", () => {
       sessionId: "entity-version-1",
       usageMetering,
     });
+  });
+});
+
+describe("extracted-text prompt limits", () => {
+  test("enforces per-file and aggregate bounds with visible truncation", () => {
+    const contents = [
+      "a".repeat(80_000),
+      "b".repeat(80_000),
+      "c".repeat(80_000),
+    ];
+    const limited = contents.map((content) =>
+      limitExtractedTextPromptContent({
+        content,
+        fileCount: contents.length,
+      }),
+    );
+
+    expect(
+      limited.every(
+        (content) =>
+          content.length <= EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars,
+      ),
+    ).toBe(true);
+    expect(
+      limited.reduce((total, content) => total + content.length, 0),
+    ).toBeLessThanOrEqual(EXTRACTED_TEXT_PROMPT_LIMITS.totalChars);
+    expect(limited.every((content) => content.includes("truncated"))).toBe(
+      true,
+    );
   });
 });

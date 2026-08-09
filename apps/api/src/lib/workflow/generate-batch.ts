@@ -5,9 +5,17 @@ import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import {
+  Unreachable,
+  WorkflowIntegrationError,
+} from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import {
+  canPrepareExtractedTextFile,
+  isAISupportedFile,
+} from "@/api/lib/workflow/ai-file-support";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import {
@@ -29,17 +37,14 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 /**
  * A file is AI-supported when it can be sent to the model in some
  * form: a non-encrypted PDF, a file that's already been converted
- * to PDF (`pdfFileId`), or a DOCX whose folio blocks we serialise
- * into the prompt directly.
+ * to PDF (`pdfFileId`), a DOCX whose folio blocks we serialise, or a
+ * natively rendered Office file whose anydoc text we serialise.
  */
 // Exported (with `fetchAndPrepareFiles` / `buildJustificationFilenames` below)
 // so the single-doc ephemeral review (`handlers/playbooks/review-extract.ts`)
 // reuses the exact same file-preparation + citation-allow-list wiring the batch
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
-export const isAISupportedFile = (file: ResolvedFile): boolean =>
-  (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
-  file.pdfFileId !== null ||
-  file.mimeType === DOCX_MIME_TYPE;
+export { isAISupportedFile };
 
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
@@ -104,7 +109,18 @@ export type PreparedDocxFile = {
   simplifiedName: string;
 };
 
-export type PreparedInputFile = PreparedPdfFile | PreparedDocxFile;
+export type PreparedExtractedTextFile = {
+  kind: "extracted-text";
+  fileFieldId: SafeId<"field">;
+  fileId: string;
+  content: string;
+  simplifiedName: string;
+};
+
+export type PreparedInputFile =
+  | PreparedPdfFile
+  | PreparedDocxFile
+  | PreparedExtractedTextFile;
 
 export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
@@ -139,6 +155,33 @@ export const fetchAndPrepareFiles = async (
         };
       }
 
+      if (canPrepareExtractedTextFile(meta)) {
+        const fileKey = createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: meta.fileId,
+          mimeType: meta.mimeType,
+        });
+        const fileBuffer = await readS3ArrayBuffer(fileKey);
+        const extracted = await extractFileTextResult(
+          fileBuffer,
+          meta.mimeType,
+        );
+        if (Result.isError(extracted)) {
+          throw new WorkflowIntegrationError({
+            message: "Failed to extract native Office file for AI review",
+            cause: extracted.error,
+          });
+        }
+        return {
+          kind: "extracted-text",
+          fileFieldId: meta.fileFieldId,
+          fileId: meta.fileId,
+          content: extracted.value ?? "",
+          simplifiedName,
+        };
+      }
+
       // PDF or PDF-converted file. Prefer the converted PDF; fall
       // back to source if the source is already a PDF.
       const pdfFileId = meta.pdfFileId ?? meta.fileId;
@@ -163,24 +206,31 @@ export const fetchAndPrepareFiles = async (
 
 export const buildJustificationFilenames = (
   files: PreparedInputFile[],
-): JustificationFilenames =>
-  files.map((file) => {
+): JustificationFilenames => {
+  const filenames: JustificationFilenames = [];
+  for (const file of files) {
     if (file.kind === "pdf") {
-      return {
+      filenames.push({
         kind: "pdf-bates",
         original: file.fileId,
         simplified: file.simplifiedName,
         fileFieldId: file.fileFieldId,
-      };
+      });
+      continue;
     }
-    return {
+    if (file.kind === "extracted-text") {
+      continue;
+    }
+    filenames.push({
       kind: "docx-folio",
       original: file.fileId,
       simplified: file.simplifiedName,
       fileFieldId: file.fileFieldId,
       blocksById: new Map(file.blocks.map((block) => [block.id, block.text])),
-    };
-  });
+    });
+  }
+  return filenames;
+};
 
 export const generateBatch = async ({
   abortSignal,

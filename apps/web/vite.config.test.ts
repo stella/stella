@@ -73,6 +73,12 @@ describe("vite config", () => {
       }
     }
   });
+
+  test("serves Silurus WASM outside the dependency optimizer", () => {
+    expect(resolveConfig("test").optimizeDeps?.exclude).toContain(
+      "@silurus/ooxml",
+    );
+  });
 });
 
 const resolveConfig = (mode: string): UserConfig => {

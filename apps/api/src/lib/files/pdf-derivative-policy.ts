@@ -1,3 +1,5 @@
+import { desktopEditFileTypeForMimeType } from "@stll/api-contract";
+
 /** MIME types accepted by Gotenberg's LibreOffice conversion route. */
 const CONVERTIBLE_MIME_TYPES = {
   "application/msword": null,
@@ -28,14 +30,9 @@ const CONVERTIBLE_MIME_TYPES = {
 export const isConvertibleMimeType = (mimeType: string): boolean =>
   Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
-/** DOCX is rendered by Folio and therefore has no derivative queue. */
-const NATIVELY_RENDERABLE_MIME_TYPES = {
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    null,
-} as const satisfies Record<string, null>;
-
+/** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
-  Object.hasOwn(NATIVELY_RENDERABLE_MIME_TYPES, mimeType);
+  desktopEditFileTypeForMimeType(mimeType) !== null;
 
 type ShouldGeneratePdfDerivativeOptions = {
   encrypted?: boolean;

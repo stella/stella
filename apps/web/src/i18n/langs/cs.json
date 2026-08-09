@@ -3609,6 +3609,7 @@
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
+        "editLocallyPrompt": "Upravte tento soubor lokálně a synchronizujte změny se stellou.",
         "forceRelease": "Vynutit uvolnění",
         "notOpenedDescription": "stella desktop nepotvrdil otevření aplikace <bdi>{application}</bdi>. Spusťte stella desktop a zkuste to znovu.",
         "openAction": "Otevřít v desktopu",

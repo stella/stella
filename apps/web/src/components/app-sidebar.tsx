@@ -15,7 +15,11 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  hashKey,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getRouteApi,
   Link,
@@ -1018,11 +1022,16 @@ const MatterItem = ({
   const activityQueryKey = workspacesKeys.activity(activeOrganizationId, {
     workspaceId: ws.id,
   });
+  const activityQueryHash = hashKey(activityQueryKey);
   const activityIsInvalidated = useSyncExternalStore(
     useCallback(
       (onStoreChange: () => void) =>
-        queryClient.getQueryCache().subscribe(onStoreChange),
-      [queryClient],
+        queryClient.getQueryCache().subscribe((event) => {
+          if (event.query.queryHash === activityQueryHash) {
+            onStoreChange();
+          }
+        }),
+      [activityQueryHash, queryClient],
     ),
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,

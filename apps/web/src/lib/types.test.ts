@@ -4,10 +4,31 @@ import {
   EML_MIME,
   MARKDOWN_MIME,
   MSG_MIME,
+  PPTX_MIME,
+  XLSX_MIME,
   isEmailFile,
   isMarkdownFile,
 } from "@/lib/consts";
 import { isFileDisplayable } from "@/lib/types";
+
+describe("native office file displayability", () => {
+  test("allows XLSX and PPTX files to open without a PDF derivative", () => {
+    for (const mimeType of [
+      XLSX_MIME,
+      PPTX_MIME,
+      `${XLSX_MIME}; charset=binary`,
+      PPTX_MIME.toUpperCase(),
+    ]) {
+      expect(
+        isFileDisplayable({
+          mimeType,
+          pdfFileId: null,
+          encrypted: false,
+        }),
+      ).toBe(true);
+    }
+  });
+});
 
 describe("markdown file displayability", () => {
   test("detects markdown from MIME type and filename", () => {

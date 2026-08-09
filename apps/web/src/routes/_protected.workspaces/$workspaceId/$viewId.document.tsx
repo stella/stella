@@ -54,9 +54,16 @@ import { TranslateDocumentDialog } from "@/components/translate-document-dialog"
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import {
+  DOCX_MIME,
+  getNativeOfficeViewerFormat,
+  PPTX_MIME,
+  TOOLBAR_ROW_HEIGHT,
+  XLSX_MIME,
+} from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
@@ -94,6 +101,11 @@ const ReadOnlyDocxViewer = lazy(async () => {
 const DocxBrowserEditor = lazy(async () => {
   const m = await import("@/components/docx/docx-browser-editor");
   return { default: m.DocxBrowserEditor };
+});
+
+const OfficeFileViewer = lazy(async () => {
+  const m = await import("@/components/office/office-file-viewer");
+  return { default: m.OfficeFileViewer };
 });
 
 export const Route = createFileRoute(
@@ -175,8 +187,8 @@ export const Route = createFileRoute(
     // below), so the value is already known here. Only PDF-family fields
     // render through PdfViewer/fileOptions; docx fields take an entirely
     // different display path (DocxBrowserEditor/fieldFileOptions) that never
-    // reads fileOptions, so gate the prefetch on the resolved mimeType to
-    // avoid downloading a file buffer the component will never use.
+    // reads fileOptions, while XLSX/PPTX need their originals. Gate each
+    // prefetch on the resolved mimeType so no unused derivative is downloaded.
     const field = entity.fields.find((f) => f.id === deps.field);
 
     // The DOCX editor hydrates its review store from persisted AI suggestions
@@ -203,8 +215,31 @@ export const Route = createFileRoute(
       );
     }
 
+    const officeViewerFormat =
+      field?.content.type === "file"
+        ? getNativeOfficeViewerFormat(field.content.mimeType)
+        : null;
+    if (officeViewerFormat !== null) {
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          fileOptions({
+            workspaceId: params.workspaceId,
+            fieldId: deps.field,
+            purpose: "native-display",
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
+      );
+    }
+
     const rendersInPdfViewer =
-      field?.content.type === "file" && field.content.mimeType !== DOCX_MIME;
+      field?.content.type === "file" &&
+      field.content.mimeType !== DOCX_MIME &&
+      officeViewerFormat === null;
     if (rendersInPdfViewer) {
       // Warm the file query without blocking route commit: a large PDF
       // download shouldn't hold the user on the pendingComponent. The
@@ -396,6 +431,7 @@ function RouteComponentInner({
   const [activeFieldId, setActiveFieldId] = useState(initialFieldId);
   const fieldId = activeFieldId;
   const t = useTranslations();
+  const canUpdateEntity = usePermissions({ entity: ["update"] });
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const justificationId = Route.useSearch({
@@ -539,6 +575,7 @@ function RouteComponentInner({
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
   const usesNativeDocxDisplay = isDocxFile;
+  const officeViewerFormat = getNativeOfficeViewerFormat(activeMimeType);
   const filePropertyId =
     activeFileField?.propertyId ?? resolvedVersionFile?.propertyId;
   const useDocxBrowserEditor = shouldUseDocxBrowserEditor({
@@ -572,7 +609,8 @@ function RouteComponentInner({
     filePropertyId !== undefined &&
     !isComparing &&
     compareState === null;
-  const usesEmbeddedDocxToolbar = shouldRenderDocxBrowserShell;
+  const usesEmbeddedDocumentToolbar =
+    shouldRenderDocxBrowserShell || officeViewerFormat !== null;
   const latestFileFieldForProperty =
     filePropertyId !== undefined
       ? entity.fields.findLast(
@@ -650,7 +688,7 @@ function RouteComponentInner({
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <section className="flex h-full min-w-0 flex-1 flex-col">
-          {!usesEmbeddedDocxToolbar && (
+          {!usesEmbeddedDocumentToolbar && (
             <div
               className={cn(
                 "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
@@ -780,6 +818,37 @@ function RouteComponentInner({
                       scaleOffset={scaleOffset}
                       onClose={() => setCompareState(null)}
                     />
+                  </VersionDropZone>
+                );
+              }
+
+              if (officeViewerFormat !== null) {
+                return (
+                  <VersionDropZone
+                    disabled={false}
+                    entityId={entityId}
+                    workspaceId={workspaceId}
+                  >
+                    <Suspense fallback={<DocxLoadingShell />}>
+                      <OfficeFileViewer
+                        desktopEditTarget={
+                          canUpdateEntity &&
+                          filePropertyId !== undefined &&
+                          activeFileField !== undefined
+                            ? {
+                                fileType: officeViewerFormat,
+                                propertyId: filePropertyId,
+                              }
+                            : null
+                        }
+                        entityId={entityId}
+                        fieldId={fieldId}
+                        fileName={activeFileLabel}
+                        format={officeViewerFormat}
+                        key={fieldId}
+                        workspaceId={workspaceId}
+                      />
+                    </Suspense>
                   </VersionDropZone>
                 );
               }
@@ -929,9 +998,6 @@ const ReadOnlyDocxDocumentViewer = ({
 
 // -- Redline comparison overlay --
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
 type RedlineOverlayProps = {
   compareState: {
     baseVersionLabel: string;
@@ -1026,6 +1092,8 @@ const ACCEPTED_MIME_TYPES = {
   "application/pdf": true,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
   "application/msword": true,
+  [PPTX_MIME]: true,
+  [XLSX_MIME]: true,
 } as const;
 
 type VersionDropZoneProps = React.PropsWithChildren<{

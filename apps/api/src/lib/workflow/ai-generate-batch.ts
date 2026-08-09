@@ -3,7 +3,7 @@ import type {
   AnthropicDocumentMetadata,
   AnthropicTextMetadata,
 } from "@tanstack/ai-anthropic";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -11,11 +11,13 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { streamTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
+  buildExtractedFileMessage,
   buildPromptsMessage,
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
@@ -70,6 +72,42 @@ type BuildWorkflowAIAnalyticsPropsInput = {
   workspaceId: SafeId<"workspace">;
 };
 
+export const EXTRACTED_TEXT_PROMPT_LIMITS = {
+  perFileChars: 40_000,
+  totalChars: 100_000,
+} as const;
+
+const EXTRACTED_TEXT_TRUNCATION_MARKER =
+  "\n\n[… content truncated to fit AI prompt limits …]";
+
+type LimitExtractedTextPromptContentOptions = {
+  content: string;
+  fileCount: number;
+};
+
+export const limitExtractedTextPromptContent = ({
+  content,
+  fileCount,
+}: LimitExtractedTextPromptContentOptions): string => {
+  if (fileCount < 1) {
+    panic("Extracted-text prompt file count must be positive");
+  }
+  const fairShare = Math.floor(
+    EXTRACTED_TEXT_PROMPT_LIMITS.totalChars / fileCount,
+  );
+  const maxChars = Math.min(
+    EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars,
+    fairShare,
+  );
+  if (content.length <= maxChars) {
+    return content;
+  }
+  if (maxChars <= EXTRACTED_TEXT_TRUNCATION_MARKER.length) {
+    return EXTRACTED_TEXT_TRUNCATION_MARKER.slice(0, maxChars);
+  }
+  return `${content.slice(0, maxChars - EXTRACTED_TEXT_TRUNCATION_MARKER.length)}${EXTRACTED_TEXT_TRUNCATION_MARKER}`;
+};
+
 export const buildWorkflowAIAnalyticsProps = ({
   entityVersionId,
   organizationId,
@@ -121,6 +159,9 @@ export const generateWorkflowData = async ({
     | TextPart<AnthropicTextMetadata>;
 
   const messageContent: WorkflowMessagePart[] = [];
+  const extractedTextFileCount = files.filter(
+    (file) => file.kind === "extracted-text",
+  ).length;
 
   for (const file of files) {
     if (file.kind === "pdf") {
@@ -135,8 +176,25 @@ export const generateWorkflowData = async ({
       });
       continue;
     }
-    // DOCX: serialise folio blocks inline. The model cites block
-    // ids back in `justification.citations` instead of bates stamps.
+    if (file.kind === "extracted-text") {
+      messageContent.push({
+        type: "text",
+        content: buildExtractedFileMessage({
+          content: sanitizeForPrompt(
+            untrustedText(
+              limitExtractedTextPromptContent({
+                content: file.content,
+                fileCount: extractedTextFileCount,
+              }),
+            ),
+          ),
+          simplifiedName: file.simplifiedName,
+        }),
+      });
+      continue;
+    }
+    // DOCX: serialise folio blocks inline. The model cites block ids back in
+    // `justification.citations` instead of bates stamps.
     messageContent.push({
       type: "text",
       content: buildDocxBlocksMessage({

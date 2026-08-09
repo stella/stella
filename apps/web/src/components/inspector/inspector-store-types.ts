@@ -151,6 +151,10 @@ export type InspectorTabsState = {
 };
 
 export type InspectorCommandState = {
+  desktopOpenAttention: {
+    fieldId: string;
+    sequence: number;
+  } | null;
   pendingRenameTabId: string | null;
   pendingBlockScroll: {
     tabId: string;
@@ -269,6 +273,8 @@ export type InspectorTabsActions = {
 };
 
 export type InspectorCommandActions = {
+  requestDesktopOpenAttention: (fieldId: string) => void;
+  clearDesktopOpenAttention: (sequence: number) => void;
   requestRename: (id: string) => void;
   clearRenameRequest: () => void;
   requestDocxEdit: (tabId: string) => void;

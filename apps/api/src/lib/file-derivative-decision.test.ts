@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import { decidePdfDerivativeAction } from "./file-derivative-decision";
 
 type FileContent = Extract<FieldContent, { type: "file" }>;
 
-// A convertible, non-natively-rendered MIME type (.xlsx) drives PDF generation.
-const CONVERTIBLE_MIME =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+// A convertible, non-natively-rendered legacy Word file drives PDF generation.
+const CONVERTIBLE_MIME = "application/msword";
 // A native PDF is not convertible, so no derivative is generated.
 const NON_CONVERTIBLE_MIME = "application/pdf";
 
@@ -16,7 +16,7 @@ const fileContent = (overrides: Partial<FileContent> = {}): FileContent => ({
   version: 1,
   type: "file",
   id: "11111111-1111-1111-1111-111111111111",
-  fileName: "report.xlsx",
+  fileName: "report.doc",
   mimeType: CONVERTIBLE_MIME,
   sizeBytes: 1024,
   encrypted: false,
@@ -54,6 +54,17 @@ describe("decidePdfDerivativeAction", () => {
       fileName: "report.pdf",
     });
     expect(decidePdfDerivativeAction(content)).toEqual({ type: "skip" });
+  });
+
+  it("skips native Office files", () => {
+    for (const { fileName, mimeType } of [
+      { fileName: "schedule.xlsx", mimeType: XLSX_MIME_TYPE },
+      { fileName: "presentation.pptx", mimeType: PPTX_MIME_TYPE },
+    ]) {
+      expect(
+        decidePdfDerivativeAction(fileContent({ mimeType, fileName })),
+      ).toEqual({ type: "skip" });
+    }
   });
 
   it("skips encrypted files", () => {

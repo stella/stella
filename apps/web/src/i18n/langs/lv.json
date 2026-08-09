@@ -3609,6 +3609,7 @@
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
+        "editLocallyPrompt": "Rediģējiet šo failu lokāli un sinhronizējiet izmaiņas ar stella.",
         "forceRelease": "Piespiedu atbrīvošana",
         "notOpenedDescription": "stella desktop neapstiprināja, ka <bdi>{application}</bdi> ir atvērts. Palaidiet stella desktop un mēģiniet vēlreiz.",
         "openAction": "Atvērt datora lietotnē",

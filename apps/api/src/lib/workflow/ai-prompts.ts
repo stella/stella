@@ -4,6 +4,7 @@ import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import type { PromptSafeText } from "@/api/lib/prompt-safety";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
@@ -34,6 +35,19 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "showing the tag syntax.";
 
 const ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 1500;
+
+export const buildExtractedFileMessage = ({
+  content,
+  simplifiedName,
+}: {
+  content: PromptSafeText;
+  simplifiedName: string;
+}): string =>
+  [
+    `EXTRACTED FILE ${simplifiedName}:`,
+    "This source has text content but no navigable citation locator. Analyze it normally; the justification schema will omit it.",
+    content,
+  ].join("\n\n");
 
 // --------------- Schema context ---------------
 
@@ -96,6 +110,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
       return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. seq-0010)`;
     })
     .join("\n");
+  const hasCitableFiles = filenames.length > 0;
 
   const citationGuide: string[] = [];
   if (hasPdf) {
@@ -130,44 +145,63 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   // here strictly to constraints (`v.minLength`, `v.nonEmpty`).
   // Stripping incidental whitespace, if needed, is a parse-side
   // concern handled in `normalizeJustification`.
+  const items = v.array(
+    v.strictObject({
+      file: v.string(),
+      statements: v.array(
+        v.strictObject({
+          text: v.pipe(v.string(), v.minLength(1)),
+          citations: v.pipe(
+            v.array(v.pipe(v.string(), v.minLength(1))),
+            v.nonEmpty(),
+          ),
+        }),
+      ),
+    }),
+  );
+  const constrainedItems = hasCitableFiles
+    ? items
+    : v.pipe(items, v.maxLength(0));
+
   return v.pipe(
-    v.array(
-      v.strictObject({
-        file: v.string(),
-        statements: v.array(
-          v.strictObject({
-            text: v.pipe(v.string(), v.minLength(1)),
-            citations: v.pipe(
-              v.array(v.pipe(v.string(), v.minLength(1))),
-              v.nonEmpty(),
-            ),
-          }),
-        ),
-      }),
-    ),
+    constrainedItems,
     v.description(
       [
-        "Generate structured justifications that reference the file " +
-          "context you received.",
-        'Create one array item per source file with "file" equal to ' +
-          "the exact filename attached with the file in the message.",
-        `Filenames:\n${filenamesList}`,
-        'For each statement, write concise supporting text in "text" ' +
-          'and the matching citations in "citations".',
+        hasCitableFiles
+          ? "Generate structured justifications that reference the file " +
+            "context you received."
+          : "Return an empty justification array. The supplied " +
+            "extracted-text sources have no supported citation locator.",
+        hasCitableFiles
+          ? 'Create one array item per cited source file with "file" equal ' +
+            "to the exact filename attached with the file in the message."
+          : "Do not invent a filename or citation for an extracted-text " +
+            "source.",
+        `Citable filenames:\n${filenamesList || "- none"}`,
+        ...(hasCitableFiles
+          ? [
+              'For each statement, write concise supporting text in "text" ' +
+                'and the matching citations in "citations".',
+            ]
+          : []),
         ...citationGuide,
         "Do not include markup, HTML, Markdown, or narrative outside " +
           "the object.",
-        `Example: ${JSON.stringify([
-          {
-            file: exampleFile?.simplified ?? "F0",
-            statements: [
-              {
-                text: "The document identifies the contracting party.",
-                citations: [exampleCitation],
-              },
-            ],
-          },
-        ])}`,
+        `Example: ${JSON.stringify(
+          hasCitableFiles
+            ? [
+                {
+                  file: exampleFile?.simplified ?? "F0",
+                  statements: [
+                    {
+                      text: "The document identifies the contracting party.",
+                      citations: [exampleCitation],
+                    },
+                  ],
+                },
+              ]
+            : [],
+        )}`,
       ].join("\n\n"),
     ),
   ) satisfies v.GenericSchema<AIJustificationOutput>;

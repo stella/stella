@@ -3609,6 +3609,7 @@
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",
+        "editLocallyPrompt": "حرّر هذا الملف محليًا وزامن التغييرات مع stella.",
         "forceRelease": "فرض التحرير",
         "notOpenedDescription": "لم يؤكد تطبيق stella لسطح المكتب فتح <bdi>{application}</bdi>. شغّل تطبيق stella لسطح المكتب وحاول مرة أخرى.",
         "openAction": "الفتح في تطبيق سطح المكتب",

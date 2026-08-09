@@ -7,9 +7,25 @@ import type {
 export const createInspectorCommandSlice = (
   set: InspectorCommandSet,
 ): InspectorCommandStore => ({
+  desktopOpenAttention: null,
   pendingRenameTabId: null,
   pendingBlockScroll: null,
   pendingDocxEditTabId: null,
+
+  requestDesktopOpenAttention: (fieldId) =>
+    set((state) => {
+      state.desktopOpenAttention = {
+        fieldId,
+        sequence: (state.desktopOpenAttention?.sequence ?? 0) + 1,
+      };
+    }),
+
+  clearDesktopOpenAttention: (sequence) =>
+    set((state) => {
+      if (state.desktopOpenAttention?.sequence === sequence) {
+        state.desktopOpenAttention = null;
+      }
+    }),
 
   requestRename: (id) =>
     set((state) => {
@@ -60,6 +76,12 @@ export const createInspectorCommandSlice = (
         !tabIds.has(state.pendingBlockScroll.tabId)
       ) {
         state.pendingBlockScroll = null;
+      }
+      if (
+        state.desktopOpenAttention !== null &&
+        !tabIds.has(state.desktopOpenAttention.fieldId)
+      ) {
+        state.desktopOpenAttention = null;
       }
     }),
 });
