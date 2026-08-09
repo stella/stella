@@ -353,17 +353,28 @@ export const RowActions = ({
       DESKTOP_EDIT_FILE_TYPES[desktopEditFileType].application;
     await showDesktopEditOpenResultToast({
       messages: {
-        notOpenedDescription: t(
+        notOpenedDescription: t.rich(
           "workspaces.files.desktopEdit.notOpenedDescription",
-          { application },
+          {
+            application,
+            bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+          },
         ),
-        openedDescription: t("workspaces.files.desktopEdit.openedDescription", {
-          application,
-        }),
+        openedDescription: t.rich(
+          "workspaces.files.desktopEdit.openedDescription",
+          {
+            application,
+            bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+          },
+        ),
         openedTitle: t("workspaces.files.desktopEdit.openedTitle"),
-        sentDescription: t("workspaces.files.desktopEdit.sentDescription", {
-          application,
-        }),
+        sentDescription: t.rich(
+          "workspaces.files.desktopEdit.sentDescription",
+          {
+            application,
+            bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+          },
+        ),
         sentTitle: t("workspaces.files.desktopEdit.sentTitle"),
         unavailableTitle: t("workspaces.files.desktopEdit.unavailableTitle"),
         updateRequiredDescription: t(
