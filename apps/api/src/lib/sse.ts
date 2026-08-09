@@ -11,6 +11,7 @@ import { createRedisClient } from "@/api/lib/redis-client";
 import {
   brandPersistedDesktopEditSessionId,
   brandPersistedOrganizationId,
+  brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
@@ -18,6 +19,7 @@ import {
   parseRedisPayload,
   publishOrganizationEvent,
   publishSessionEvent,
+  publishWorkspaceAccessRevoked,
   publishWorkspaceEvent,
   REDIS_CHANNEL,
 } from "@/api/lib/sse-broadcast";
@@ -28,6 +30,7 @@ const KEEP_ALIVE_INTERVAL_MS = 20_000;
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 /** Workspace ID → connected SSE streams on THIS instance. */
@@ -46,11 +49,19 @@ const formatKeepAlive = (): Uint8Array => encoder.encode(`:keep-alive\n\n`);
  * Register a new SSE connection for a workspace.
  * Returns a ReadableStream that stays open until the client disconnects.
  */
-export const subscribe = (
-  workspaceId: SafeId<"workspace">,
-  organizationId: SafeId<"organization">,
-  signal: AbortSignal,
-): ReadableStream => {
+type SubscribeOptions = {
+  organizationId: SafeId<"organization">;
+  signal: AbortSignal;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const subscribe = ({
+  organizationId,
+  signal,
+  userId,
+  workspaceId,
+}: SubscribeOptions): ReadableStream => {
   const stream = new ReadableStream({
     start(controller) {
       // The request signal can already be aborted here: the async auth
@@ -70,7 +81,7 @@ export const subscribe = (
         return;
       }
 
-      const conn: SSEConnection = { controller, organizationId };
+      const conn: SSEConnection = { controller, organizationId, userId };
 
       let set = connections.get(workspaceId);
       if (!set) {
@@ -96,6 +107,32 @@ export const subscribe = (
   });
 
   return stream;
+};
+
+const closeLocalWorkspaceUserConnections = (
+  workspaceId: SafeId<"workspace">,
+  userId: SafeId<"user">,
+): void => {
+  const set = connections.get(workspaceId);
+  if (!set) {
+    return;
+  }
+
+  for (const conn of set) {
+    if (conn.userId !== userId) {
+      continue;
+    }
+    set.delete(conn);
+    try {
+      conn.controller.close();
+    } catch {
+      // Already closed.
+    }
+  }
+
+  if (set.size === 0 && connections.get(workspaceId) === set) {
+    connections.delete(workspaceId);
+  }
 };
 
 // ── Local delivery ──────────────────────────────────────
@@ -177,6 +214,13 @@ const handleMessage = (message: string) => {
     if (!parsed) {
       return;
     }
+    if (parsed.scope === "workspace-access-revoked") {
+      closeLocalWorkspaceUserConnections(
+        brandPersistedWorkspaceId(parsed.id),
+        brandPersistedUserId(parsed.userId),
+      );
+      return;
+    }
     if (parsed.scope === "workspace") {
       if (isOwnInlineDelivery(parsed)) {
         return;
@@ -202,6 +246,21 @@ const handleMessage = (message: string) => {
       "payload.bytes": message.length,
     });
   }
+};
+
+/** Close a removed member's streams on every API replica before later events. */
+export const revokeWorkspaceSseAccess = async (
+  workspaceId: SafeId<"workspace">,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  closeLocalWorkspaceUserConnections(workspaceId, userId);
+  await publishWorkspaceAccessRevoked(workspaceId, userId, {
+    originInstanceId: INSTANCE_ID,
+  }).catch((error: unknown) => {
+    logger.error("sse.access_revocation_publish_failed", {
+      "error.type": errorTag(error),
+    });
+  });
 };
 
 /**

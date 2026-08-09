@@ -28,6 +28,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -272,6 +273,8 @@ export const removeWorkspaceMemberHandler = async function* ({
       new HandlerError({ status: 404, message: "Member not found" }),
     );
   }
+
+  await revokeWorkspaceSseAccess(workspaceId, userId);
 
   for (const sessionId of txResult.closedSessionIds) {
     pushSessionEvent(sessionId, {

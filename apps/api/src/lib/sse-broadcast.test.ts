@@ -52,6 +52,15 @@ describe("SSE Redis payload parsing", () => {
         }),
       )?.scope,
     ).toBe("session");
+    expect(
+      parseRedisPayload(
+        JSON.stringify({
+          scope: "workspace-access-revoked",
+          id: "00000000-0000-4000-8000-000000000001",
+          userId: "00000000-0000-4000-8000-000000000005",
+        }),
+      )?.scope,
+    ).toBe("workspace-access-revoked");
   });
 
   test("rejects events that are malformed or invalid for their scope", () => {
@@ -101,6 +110,14 @@ describe("SSE Redis payload parsing", () => {
         redisPayload("session", {
           type: REALTIME_EVENT_TYPE.SESSION_TAKEN_OVER,
           data: {},
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseRedisPayload(
+        JSON.stringify({
+          scope: "workspace-access-revoked",
+          id: "00000000-0000-4000-8000-000000000001",
         }),
       ),
     ).toBeNull();

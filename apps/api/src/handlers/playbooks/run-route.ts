@@ -11,9 +11,10 @@ import {
   workspaceResourceSetUpdates,
 } from "@/api/lib/resource-realtime-macro";
 
-const playbookRunRealtimeUpdates = workspaceResourceSetUpdates(
+const playbookRunRealtimeUpdates = workspaceResourceSetUpdates([
   RESOURCE_TYPE.ENTITY,
-);
+  RESOURCE_TYPE.PROPERTY,
+]);
 
 // Running a playbook is workspace-scoped (it materializes columns where the
 // documents live) even though the definition it reads is org-scoped. Mounted

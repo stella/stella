@@ -18,6 +18,10 @@ import {
 } from "@/api/lib/resource-realtime-macro";
 
 const taskRealtimeUpdates = workspaceResourceSetUpdates(RESOURCE_TYPE.ENTITY);
+const taskCreateRealtimeUpdates = workspaceResourceSetUpdates([
+  RESOURCE_TYPE.ENTITY,
+  RESOURCE_TYPE.LEGAL_LIST,
+]);
 
 export const tasksRoute = new Elysia({
   prefix: "/tasks/:workspaceId",
@@ -30,7 +34,7 @@ export const tasksRoute = new Elysia({
   })
   .put("/", createTask.handler, {
     body: createTask.config.body,
-    resourceSetUpdated: taskRealtimeUpdates,
+    resourceSetUpdated: taskCreateRealtimeUpdates,
     permissions: createTask.config.permissions,
   })
   .patch("/", updateTask.handler, {

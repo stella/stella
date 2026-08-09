@@ -21,10 +21,12 @@ export const workspaceEventsRoute = new Elysia({
     ({
       request,
       session,
+      user,
       workspaceId,
     }: {
       request: Request;
       session: { activeOrganizationId: SafeId<"organization"> };
+      user: { id: SafeId<"user"> };
       workspaceId: SafeId<"workspace">;
     }) => {
       if (new URL(request.url).searchParams.has("token")) {
@@ -35,11 +37,12 @@ export const workspaceEventsRoute = new Elysia({
 
       // Create the SSE stream. Use the request's abort signal to
       // clean up when the client disconnects.
-      const stream = subscribe(
+      const stream = subscribe({
+        organizationId: session.activeOrganizationId,
+        signal: request.signal,
+        userId: user.id,
         workspaceId,
-        session.activeOrganizationId,
-        request.signal,
-      );
+      });
 
       return new Response(stream, {
         headers: {

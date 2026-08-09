@@ -37,6 +37,12 @@ type RedisPayload =
       event: WorkspaceRealtimeEvent;
       originInstanceId?: string | undefined;
       deliveredInline?: boolean | undefined;
+    }
+  | {
+      scope: "workspace-access-revoked";
+      id: string;
+      userId: string;
+      originInstanceId?: string | undefined;
     };
 
 /**
@@ -72,15 +78,12 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
   if (
     scope !== "workspace" &&
     scope !== "organization" &&
-    scope !== "session"
+    scope !== "session" &&
+    scope !== "workspace-access-revoked"
   ) {
     return null;
   }
-  if (
-    !("id" in parsed) ||
-    !("event" in parsed) ||
-    typeof parsed.id !== "string"
-  ) {
+  if (!("id" in parsed) || typeof parsed.id !== "string") {
     return null;
   }
 
@@ -88,6 +91,22 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     "originInstanceId" in parsed && typeof parsed.originInstanceId === "string"
       ? parsed.originInstanceId
       : undefined;
+
+  if (scope === "workspace-access-revoked") {
+    if (!("userId" in parsed) || typeof parsed.userId !== "string") {
+      return null;
+    }
+    return {
+      scope,
+      id: parsed.id,
+      userId: parsed.userId,
+      originInstanceId,
+    };
+  }
+
+  if (!("event" in parsed)) {
+    return null;
+  }
 
   if (scope === "session") {
     const event = parseDesktopEditSessionRealtimeEvent(parsed.event);
@@ -142,6 +161,19 @@ export const publishWorkspaceEvent = async (
     event,
     originInstanceId: options.originInstanceId,
     deliveredInline: options.deliveredInline,
+  });
+};
+
+export const publishWorkspaceAccessRevoked = async (
+  workspaceId: SafeId<"workspace">,
+  userId: SafeId<"user">,
+  options: { originInstanceId?: string | undefined } = {},
+): Promise<void> => {
+  await publishRedisPayload({
+    scope: "workspace-access-revoked",
+    id: workspaceId,
+    userId,
+    originInstanceId: options.originInstanceId,
   });
 };
 

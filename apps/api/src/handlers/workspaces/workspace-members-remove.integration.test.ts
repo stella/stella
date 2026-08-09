@@ -42,12 +42,18 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 const pushSessionEventMock = mock(() => undefined);
 const closeSessionConnectionsMock = mock(() => undefined);
 const broadcastMock = mock(() => undefined);
+const broadcastToOrganizationMock = mock(() => undefined);
+const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 
 void mock.module("@/api/lib/desktop-edit-session-notifications", () => ({
   closeSessionConnections: closeSessionConnectionsMock,
   pushSessionEvent: pushSessionEventMock,
 }));
-void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+void mock.module("@/api/lib/sse", () => ({
+  broadcast: broadcastMock,
+  broadcastToOrganization: broadcastToOrganizationMock,
+  revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
+}));
 
 const { removeWorkspaceMemberHandler } =
   await import("./workspace-members-remove");
@@ -220,6 +226,10 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
         expect(pushSessionEventMock).not.toHaveBeenCalled();
         expect(closeSessionConnectionsMock).not.toHaveBeenCalled();
         expect(broadcastMock).not.toHaveBeenCalled();
+        expect(revokeWorkspaceSseAccessMock).toHaveBeenCalledWith(
+          ids.wsA2,
+          ids.userA1,
+        );
 
         outerTx.rollback();
       });

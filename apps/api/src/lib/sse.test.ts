@@ -123,7 +123,7 @@ void mock.module("@/api/lib/redis-client", () => ({
 const setIntervalSpy = spyOn(globalThis, "setInterval");
 const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 
-const { broadcast, startSse, stopSse, subscribe } =
+const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
 
 // Let the fire-and-forget subscribe promise inside startSse settle.
@@ -135,6 +135,17 @@ const flushMicrotasks = async (): Promise<void> => {
 
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
+const userId = toSafeId<"user">("user_1");
+const subscribeToWorkspace = (
+  signal: AbortSignal,
+  subscribingUserId = userId,
+): ReadableStream =>
+  subscribe({
+    organizationId,
+    signal,
+    userId: subscribingUserId,
+    workspaceId,
+  });
 const testEvent = (marker: string): WorkspaceRealtimeEvent =>
   resourceUpdatedRealtimeEvent(
     resourceRef({
@@ -153,9 +164,7 @@ describe("sse module import", () => {
   test("registering a local connection before startSse does not throw", () => {
     const controller = new AbortController();
 
-    expect(() =>
-      subscribe(workspaceId, organizationId, controller.signal),
-    ).not.toThrow();
+    expect(() => subscribeToWorkspace(controller.signal)).not.toThrow();
 
     controller.abort();
   });
@@ -304,7 +313,7 @@ describe("subscribe: already-aborted signal", () => {
     // would stay open and registered forever; the fix closes it up front.
     controller.abort();
 
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     const first = await reader.read();
@@ -328,7 +337,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     await flushMicrotasks();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     broadcast(workspaceId, testEvent("local-only"));
@@ -346,7 +355,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     await flushMicrotasks();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
     const entityId = toSafeId<"entity">("entity-semantic-event");
 
@@ -365,6 +374,60 @@ describe("broadcast: local delivery without an attached subscriber", () => {
   });
 });
 
+describe("workspace access revocation", () => {
+  test("closes only the removed member's streams before later events", async () => {
+    stopSse();
+    await flushMicrotasks();
+
+    const removedController = new AbortController();
+    const retainedController = new AbortController();
+    const removedReader = subscribeToWorkspace(
+      removedController.signal,
+    ).getReader();
+    const retainedReader = subscribeToWorkspace(
+      retainedController.signal,
+      toSafeId<"user">("user_2"),
+    ).getReader();
+
+    await revokeWorkspaceSseAccess(workspaceId, userId);
+
+    expect((await removedReader.read()).done).toBe(true);
+
+    broadcast(workspaceId, testEvent("after-access-revocation"));
+    const retainedEvent = new TextDecoder().decode(
+      (await retainedReader.read()).value,
+    );
+    expect(retainedEvent).toContain("after-access-revocation");
+
+    removedController.abort();
+    retainedController.abort();
+    await flushMicrotasks();
+  });
+
+  test("a revocation from another API replica closes the local stream", async () => {
+    createdClients.length = 0;
+    startSse();
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const reader = subscribeToWorkspace(controller.signal).getReader();
+    createdClients.at(-1)?.messageHandler?.(
+      JSON.stringify({
+        scope: "workspace-access-revoked",
+        id: workspaceId,
+        userId,
+        originInstanceId: "another-api-instance",
+      }),
+    );
+
+    expect((await reader.read()).done).toBe(true);
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+});
+
 describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
   const decode = (value: Uint8Array | undefined): string =>
     new TextDecoder().decode(value);
@@ -378,7 +441,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     await flushMicrotasks();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     // Subscribed: each event must arrive exactly once through the Redis
@@ -407,7 +470,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     expect(original).toBeDefined();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     // Baseline: loopback delivery works while subscribed.
@@ -454,7 +517,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     expect(original).toBeDefined();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     // The replacement attach will fail, so no subscriber is live: the instance
@@ -487,7 +550,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     expect(original).toBeDefined();
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     // Enter the attach window: the replacement client's SUBSCRIBE is accepted
@@ -528,7 +591,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const original = createdClients.at(-1);
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     if (original) {
@@ -568,7 +631,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     expect(original?.subscribedLive).toBe(true);
 
     const controller = new AbortController();
-    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
     // The reconnect teardown's close() throws, so the old client keeps its live
