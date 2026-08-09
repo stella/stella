@@ -66,7 +66,7 @@ const config = {
   }),
   params: workspaceParams({
     fieldId: tSafeId("field"),
-    attachmentId: t.String({ minLength: 1, maxLength: 64 }),
+    attachmentId: t.String(),
   }),
 } satisfies HandlerConfig;
 
