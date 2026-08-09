@@ -10,8 +10,6 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
-import { authClient } from "@/lib/auth";
-import { roleOptions } from "@/lib/auth-queries";
 import {
   getWeekStart,
   isWorkspaceDocumentRoutePath,
@@ -21,6 +19,8 @@ import {
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {

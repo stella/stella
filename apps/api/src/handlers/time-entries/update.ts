@@ -139,9 +139,11 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
-  const dateChanged =
-    body.dateWorked !== undefined && body.dateWorked !== existing.dateWorked;
-  if (dateChanged) {
+  const changedDateWorked =
+    body.dateWorked !== undefined && body.dateWorked !== existing.dateWorked
+      ? body.dateWorked
+      : null;
+  if (changedDateWorked !== null) {
     if (body.timezoneId === undefined) {
       return Result.err(
         new HandlerError({
@@ -154,7 +156,7 @@ export const updateTimeEntryHandler = async function* ({
       timezoneId: body.timezoneId,
     });
     const dateValidationError = getTimeEntryDateValidationError({
-      dateWorked: body.dateWorked,
+      dateWorked: changedDateWorked,
       today,
     });
     if (dateValidationError) {
@@ -193,7 +195,7 @@ export const updateTimeEntryHandler = async function* ({
   const shouldResolveRate =
     willBeBillable &&
     (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
-      dateChanged ||
+      changedDateWorked !== null ||
       becomingBillable);
   let resolvedRateUpdate: ResolvedRateUpdate = { type: "unchanged" };
   if (shouldResolveRate) {
@@ -210,7 +212,7 @@ export const updateTimeEntryHandler = async function* ({
       safeDb,
       workspaceId,
       userId: brandPersistedUserId(existing.userId),
-      dateWorked: body.dateWorked ?? existing.dateWorked,
+      dateWorked: changedDateWorked ?? existing.dateWorked,
     });
     if (!resolvedRate) {
       return Result.err(
