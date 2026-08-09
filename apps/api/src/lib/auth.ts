@@ -17,16 +17,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import {
-  and,
-  eq,
-  exists,
-  inArray,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import type { Context as RateLimitContext } from "elysia-rate-limit";
@@ -36,7 +27,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
-import { timeEntries, workspaceMembers, workspaces } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -44,21 +35,14 @@ import {
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditRecorder,
-  createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth-paths";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -117,6 +101,7 @@ import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
+import { revokeRemovedMemberAccess } from "@/api/lib/time-entry-offboarding";
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
@@ -675,134 +660,6 @@ const socialSignInTwoFactorRedirectPlugin = {
     ],
   },
 } satisfies BetterAuthPlugin;
-
-/**
- * Organization removal can revoke workspace access before an ordinary timer
- * stop request can run. Close those timers while the offboarding transaction
- * still owns the user/workspace locks, and leave a service audit trail for the
- * elapsed work rather than silently dropping the running interval.
- */
-const revokeRemovedMemberAccess = async ({
-  organizationId,
-  userId,
-}: {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-}) => {
-  await rootDb.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
-
-    const [activeTimer] = await tx
-      .select({
-        id: timeEntries.id,
-        workspaceId: timeEntries.workspaceId,
-      })
-      .from(timeEntries)
-      .innerJoin(workspaces, eq(workspaces.id, timeEntries.workspaceId))
-      .where(
-        and(
-          eq(workspaces.organizationId, organizationId),
-          eq(timeEntries.userId, userId),
-          isNotNull(timeEntries.timerStartedAt),
-          isNull(timeEntries.timerStoppedAt),
-        ),
-      )
-      .limit(1);
-
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      execution: {
-        performer: {
-          type: "service",
-          id: "organization-member-removal",
-          name: "Organization member removal",
-        },
-        trigger: {
-          type: "system",
-          source: "organization_member_removal",
-        },
-      },
-      organizationId,
-      userId,
-      workspaceId: null,
-    });
-
-    if (activeTimer) {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
-      );
-      const [lockedWorkspace] = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(eq(workspaces.id, activeTimer.workspaceId))
-        .for("update");
-      const [timer] = lockedWorkspace
-        ? await tx
-            .select({
-              billedMinutes: timeEntries.billedMinutes,
-              durationMinutes: timeEntries.durationMinutes,
-              id: timeEntries.id,
-              timerStartedAt: timeEntries.timerStartedAt,
-            })
-            .from(timeEntries)
-            .where(
-              and(
-                eq(timeEntries.id, activeTimer.id),
-                eq(timeEntries.workspaceId, activeTimer.workspaceId),
-                eq(timeEntries.userId, userId),
-                isNotNull(timeEntries.timerStartedAt),
-                isNull(timeEntries.timerStoppedAt),
-              ),
-            )
-            .limit(1)
-            .for("update")
-        : [];
-
-      if (timer?.timerStartedAt) {
-        const now = new Date();
-        const durationMinutes = Math.max(
-          1,
-          Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
-        );
-        const billedMinutes = roundToBillingIncrement(durationMinutes);
-        await tx
-          .update(timeEntries)
-          .set({
-            durationMinutes,
-            billedMinutes,
-            timerStartedAt: null,
-            timerStoppedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(timeEntries.id, timer.id));
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: timer.id,
-          workspaceId: activeTimer.workspaceId,
-          changes: {
-            timerStartedAt: {
-              old: timer.timerStartedAt.toISOString(),
-              new: null,
-            },
-            timerStoppedAt: { old: null, new: now.toISOString() },
-            durationMinutes: {
-              old: timer.durationMinutes,
-              new: durationMinutes,
-            },
-            billedMinutes: { old: timer.billedMinutes, new: billedMinutes },
-          },
-          metadata: { cause: "organization_member_removed" },
-        });
-      }
-    }
-
-    await revokeOrganizationMemberAuthArtifacts(tx, {
-      organizationId,
-      userId,
-    });
-  });
-};
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
