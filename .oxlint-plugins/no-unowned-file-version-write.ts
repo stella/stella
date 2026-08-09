@@ -4,7 +4,7 @@
 // creation, import, restore, deletion, and durable edit sessions receive narrow,
 // reviewable capabilities for the physical mutations their lifecycles require.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import {
   REVIEWED_VERSION_MUTATION_OWNERS,
@@ -26,6 +26,9 @@ const VERSION_WRITE_HELPERS = new Set([
   "cloneFieldsForRevision",
   "nextEntityVersionNumber",
 ]);
+
+const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
+  isIdentifier(node);
 
 const isVersionUtilsModule = (moduleSpecifier: string): boolean =>
   moduleSpecifier === "@/api/lib/entity-versions/version-utils" ||
@@ -68,7 +71,10 @@ const isTableReference = (node: unknown, bindings: TableBindings): boolean => {
   );
 };
 
-const getCurrentVersionSetTarget = (node: unknown): unknown => {
+const getCurrentVersionSetTarget = (
+  node: unknown,
+  payloadSetsCurrentVersion: (payload: unknown) => boolean,
+): unknown => {
   if (!isMemberCall(node, "set") || !isAstNode(node)) {
     return null;
   }
@@ -84,18 +90,9 @@ const getCurrentVersionSetTarget = (node: unknown): unknown => {
     Array.isArray(node.arguments) ? node.arguments.at(0) : null,
   );
   if (
-    values?.type !== "ObjectExpression" ||
-    !Array.isArray(values.properties)
+    !payloadSetsCurrentVersion(values) ||
+    !Array.isArray(updateCall.arguments)
   ) {
-    return null;
-  }
-  const setsCurrentVersion = values.properties.some(
-    (property) =>
-      isAstNode(property) &&
-      property.type === "Property" &&
-      getPropertyName(property.key) === "currentVersionId",
-  );
-  if (!setsCurrentVersion || !Array.isArray(updateCall.arguments)) {
     return null;
   }
   return updateCall.arguments.at(0) ?? null;
@@ -142,6 +139,71 @@ export default eslintCompatPlugin({
         const versionUtilsNamespaces = new Set<string>();
         const observedCapabilities = new Set<VersionWriteCapability>();
         let ownerCapabilities = new Set<VersionWriteCapability>();
+
+        const resolveVariable = (identifierNode: unknown) => {
+          if (!isScopeIdentifier(identifierNode)) {
+            return null;
+          }
+          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
+            context.sourceCode.getScope(identifierNode);
+          while (scope) {
+            const variable = scope.set.get(identifierNode.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const payloadSetsCurrentVersion = (
+          payload: unknown,
+          seenVariables = new Set<unknown>(),
+        ): boolean => {
+          const expression = unwrapExpression(payload);
+          if (expression?.type === "ObjectExpression") {
+            if (!Array.isArray(expression.properties)) {
+              return false;
+            }
+            return expression.properties.some((property) => {
+              if (!isAstNode(property)) {
+                return false;
+              }
+              if (property.type === "Property") {
+                return getPropertyName(property.key) === "currentVersionId";
+              }
+              return (
+                property.type === "SpreadElement" &&
+                payloadSetsCurrentVersion(property.argument, seenVariables)
+              );
+            });
+          }
+          if (!isIdentifier(expression)) {
+            return false;
+          }
+
+          const variable = resolveVariable(expression);
+          if (variable === null || seenVariables.has(variable)) {
+            return false;
+          }
+          seenVariables.add(variable);
+          return variable.defs.some((definition) => {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              return false;
+            }
+            return payloadSetsCurrentVersion(
+              definition.node.init,
+              seenVariables,
+            );
+          });
+        };
 
         const claimCapability = (
           capability: VersionWriteCapability,
@@ -251,7 +313,10 @@ export default eslintCompatPlugin({
               }
             }
 
-            const currentVersionTarget = getCurrentVersionSetTarget(node);
+            const currentVersionTarget = getCurrentVersionSetTarget(
+              node,
+              payloadSetsCurrentVersion,
+            );
             if (isTableReference(currentVersionTarget, entityBindings)) {
               claimCapability(
                 VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
