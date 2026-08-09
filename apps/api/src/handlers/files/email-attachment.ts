@@ -6,7 +6,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -59,6 +62,17 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+const attachmentNotFound = () => status(404);
+const attachmentNotPreviewable = () => status(415);
+const attachmentUnreadable = () =>
+  status(422, { message: "Failed to parse email attachment" });
+
+type EmailAttachmentResult =
+  | ReturnType<typeof attachmentNotFound>
+  | ReturnType<typeof attachmentNotPreviewable>
+  | ReturnType<typeof attachmentUnreadable>
+  | Response;
+
 export default createSafeHandler(
   config,
   async function* ({
@@ -67,7 +81,7 @@ export default createSafeHandler(
     scopedDb,
     session,
     workspaceId,
-  }) {
+  }): SafeHandlerGenerator<EmailAttachmentResult> {
     const rows = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -76,7 +90,7 @@ export default createSafeHandler(
     );
     const row = rows.at(0);
     if (!row || row.content.type !== "file" || row.content.encrypted) {
-      return Result.ok(status(404));
+      return Result.ok(attachmentNotFound());
     }
 
     const content = row.content;
@@ -85,7 +99,7 @@ export default createSafeHandler(
       mimeType: content.mimeType,
     });
     if (!emailMimeType) {
-      return Result.ok(status(404));
+      return Result.ok(attachmentNotFound());
     }
 
     const attachmentIndex = findEmailAttachmentIndex({
@@ -95,7 +109,7 @@ export default createSafeHandler(
       sourceVersionId: row.entityVersionId,
     });
     if (attachmentIndex === null) {
-      return Result.ok(status(404));
+      return Result.ok(attachmentNotFound());
     }
 
     const sourceBuffer = yield* Result.await(
@@ -116,9 +130,7 @@ export default createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(parsedResult)) {
-      return Result.ok(
-        status(422, { message: "Failed to parse email attachment" }),
-      );
+      return Result.ok(attachmentUnreadable());
     }
     const preview = buildEmailPreview(parsedResult.value, {
       createAttachmentId: (index) =>
@@ -134,13 +146,13 @@ export default createSafeHandler(
     );
     const attachment = parsedResult.value.attachments.at(attachmentIndex);
     if (!descriptor || !attachment) {
-      return Result.ok(status(404));
+      return Result.ok(attachmentNotFound());
     }
     if (
       disposition === "inline" &&
       !isEmailAttachmentPreviewable(attachment.mimeType)
     ) {
-      return Result.ok(status(415));
+      return Result.ok(attachmentNotPreviewable());
     }
 
     const mimeType =
@@ -151,7 +163,7 @@ export default createSafeHandler(
     const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
     const safeDisposition = contentDisposition(fileName).replace(
       /^attachment;/u,
-      `${disposition};`,
+      () => `${disposition};`,
     );
     return Result.ok(
       new Response(attachment.bytes, {

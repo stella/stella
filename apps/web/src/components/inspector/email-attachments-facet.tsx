@@ -67,7 +67,6 @@ export const EmailAttachmentsFacet = ({
         attachment={selected}
         fieldId={fieldId}
         onBack={() => setSelectedId(null)}
-        t={t}
         workspaceId={workspaceId}
       />
     );
@@ -78,7 +77,6 @@ export const EmailAttachmentsFacet = ({
       attachments={previewQuery.data.attachments}
       fieldId={fieldId}
       onSelect={setSelectedId}
-      t={t}
     />
   );
 };
@@ -87,15 +85,14 @@ const AttachmentPreview = ({
   attachment,
   fieldId,
   onBack,
-  t,
   workspaceId,
 }: {
   attachment: AttachmentDescriptor;
   fieldId: string;
   onBack: () => void;
-  t: ReturnType<typeof useTranslations>;
   workspaceId: string;
 }) => {
+  const t = useTranslations();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
   const isPdf =
     attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ===
@@ -122,7 +119,6 @@ const AttachmentPreview = ({
     setPdfObjectUrl(objectUrl);
     return () => {
       URL.revokeObjectURL(objectUrl);
-      setPdfObjectUrl(null);
     };
   }, [pdfQuery.data]);
 
@@ -148,26 +144,25 @@ const AttachmentPreview = ({
         </BidiText>
       </div>
       <div className="bg-muted/30 flex min-h-0 flex-1 items-center justify-center p-2">
-        {renderAttachmentPreview({
-          fileName,
-          mimeType: attachment.mimeType,
-          imageFailed,
-          onImageError: () => setImageFailed(true),
-          onRetryImage: () => {
+        <AttachmentPreviewContent
+          fileName={fileName}
+          imageAttempt={imageAttempt}
+          imageFailed={imageFailed}
+          mimeType={attachment.mimeType}
+          onImageError={() => setImageFailed(true)}
+          onRetryImage={() => {
             setImageFailed(false);
             setImageAttempt((attempt) => attempt + 1);
-          },
-          imageAttempt,
-          previewUrl: isPdf ? pdfObjectUrl : previewUrl,
-          previewError: pdfQuery.isError,
-          t,
-        })}
+          }}
+          previewUrl={isPdf ? pdfObjectUrl : previewUrl}
+          previewError={pdfQuery.isError}
+        />
       </div>
     </div>
   );
 };
 
-const renderAttachmentPreview = ({
+const AttachmentPreviewContent = ({
   fileName,
   imageFailed,
   imageAttempt,
@@ -176,7 +171,6 @@ const renderAttachmentPreview = ({
   onRetryImage,
   previewUrl,
   previewError,
-  t,
 }: {
   fileName: string;
   imageFailed: boolean;
@@ -186,8 +180,8 @@ const renderAttachmentPreview = ({
   onRetryImage: () => void;
   previewUrl: string | null;
   previewError: boolean;
-  t: ReturnType<typeof useTranslations>;
 }) => {
+  const t = useTranslations();
   if (previewError) {
     return (
       <FacetMessage
@@ -240,50 +234,50 @@ const AttachmentList = ({
   attachments,
   fieldId,
   onSelect,
-  t,
 }: {
   attachments: readonly AttachmentDescriptor[];
   fieldId: string;
   onSelect: (id: string) => void;
-  t: ReturnType<typeof useTranslations>;
-}) => (
-  <section
-    aria-labelledby={`${fieldId}-attachment-facet`}
-    className="min-h-0 flex-1 overflow-y-auto p-3"
-  >
-    <h2
-      className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium"
-      id={`${fieldId}-attachment-facet`}
+}) => {
+  const t = useTranslations();
+
+  return (
+    <section
+      aria-labelledby={`${fieldId}-attachment-facet`}
+      className="min-h-0 flex-1 overflow-y-auto p-3"
     >
-      <PaperclipIcon aria-hidden="true" className="size-3.5" />
-      {t("emailViewer.attachments")}
-    </h2>
-    {attachments.length === 0 ? (
-      <p className="text-muted-foreground text-sm">{t("common.noResults")}</p>
-    ) : (
-      <ul className="grid gap-1.5">
-        {attachments.map((attachment) => (
-          <AttachmentListItem
-            attachment={attachment}
-            key={attachment.id}
-            onSelect={onSelect}
-            t={t}
-          />
-        ))}
-      </ul>
-    )}
-  </section>
-);
+      <h2
+        className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium"
+        id={`${fieldId}-attachment-facet`}
+      >
+        <PaperclipIcon aria-hidden="true" className="size-3.5" />
+        {t("emailViewer.attachments")}
+      </h2>
+      {attachments.length === 0 ? (
+        <p className="text-muted-foreground text-sm">{t("common.noResults")}</p>
+      ) : (
+        <ul className="grid gap-1.5">
+          {attachments.map((attachment) => (
+            <AttachmentListItem
+              attachment={attachment}
+              key={attachment.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
 
 const AttachmentListItem = ({
   attachment,
   onSelect,
-  t,
 }: {
   attachment: AttachmentDescriptor;
   onSelect: (id: string) => void;
-  t: ReturnType<typeof useTranslations>;
 }) => {
+  const t = useTranslations();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
   const unsupportedLabel = t("chat.unsupportedFileType");
 

@@ -139,15 +139,7 @@ export const TabFacetBar = ({
       facets: gated.filter((f) => isEmail || f !== "attachments"),
       disabledFacets: undefined,
     };
-  }, [
-    baseFacets,
-    fileName,
-    isDocx,
-    isEmail,
-    mimeType,
-    suggestionCount,
-    playbooksEnabled,
-  ]);
+  }, [baseFacets, isDocx, isEmail, suggestionCount, playbooksEnabled]);
 
   const labels: Record<Facet, string> = {
     preview: t("common.preview"),
