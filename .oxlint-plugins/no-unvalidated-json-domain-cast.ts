@@ -18,6 +18,7 @@
 //   v.safeParse(openSchema, JSON.parse(raw))
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree, Scope, Variable } from "@oxlint/plugins";
 
 import {
   filenameForContext,
@@ -150,6 +151,34 @@ export default eslintCompatPlugin({
         const isRawJsonBoundary = (node: unknown): boolean =>
           isJsonParseCall(node, jsonParseAliases) || isResponseJsonCall(node);
 
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const hasClosedTypeAnnotation = (
+          identifier: ESTree.IdentifierReference,
+        ): boolean => {
+          const variable = resolveVariable(identifier);
+          return (
+            variable?.defs.some(
+              (definition) =>
+                isAstNode(definition.name) &&
+                definition.name.typeAnnotation !== undefined &&
+                !isRawJsonType(definition.name.typeAnnotation),
+            ) ?? false
+          );
+        };
+
         const checkAssertion = (node: unknown) => {
           if (!isAstNode(node)) {
             return;
@@ -220,6 +249,16 @@ export default eslintCompatPlugin({
             }
           },
           ArrowFunctionExpression: checkFunctionReturn,
+          AssignmentExpression(node) {
+            if (
+              node.operator === "=" &&
+              node.left.type === "Identifier" &&
+              isRawJsonBoundary(node.right) &&
+              hasClosedTypeAnnotation(node.left)
+            ) {
+              context.report({ node, messageId: "unvalidatedDomain" });
+            }
+          },
           FunctionDeclaration: checkFunctionReturn,
           FunctionExpression: checkFunctionReturn,
           VariableDeclarator(node) {

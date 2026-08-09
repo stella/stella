@@ -60,6 +60,17 @@ export const annotatedParse = () => {
   return parsed;
 };
 
+export const assignedParse = () => {
+  let parsed: RegistryCompany;
+  if (raw === "") {
+    parsed = v.parse(schema, null);
+  } else {
+    // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+    parsed = JSON.parse(raw);
+  }
+  return parsed;
+};
+
 // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
 export const annotatedFunctionReturn = (): RegistryCompany => JSON.parse(raw);
 
@@ -87,6 +98,16 @@ export const readonlyRawJsonValue = () => {
 export const rawJsonFunctionReturn = (): JsonValue => JSON.parse(raw);
 export const rawJsonAsyncFunctionReturn = async (): Promise<unknown> =>
   await response.json();
+
+export const rawJsonAssignment = () => {
+  let value: unknown;
+  if (raw === "") {
+    value = null;
+  } else {
+    value = JSON.parse(raw);
+  }
+  return value;
+};
 
 declare const responseBuilder: { json: (payload: unknown) => RegistryCompany };
 export const responseBuilderCall = () =>
