@@ -22,7 +22,7 @@ export const rawPrefixConcatHref =
   CHAT_RESOURCE_HREF_PREFIX.entity.concat(entityId);
 
 export const rawResourceName =
-  // oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri, prefer-template -- regression case
+  // oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri -- regression case
   RESOURCE_NAME_PREFIX + entityId;
 
 export const parsedPrefixCheck = "candidate".startsWith(
