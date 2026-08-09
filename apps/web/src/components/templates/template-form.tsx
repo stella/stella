@@ -2038,19 +2038,17 @@ export const TemplateForm = ({
 
       const fillResponse = async () => {
         if (templateId) {
-          return await api
-            .templates({ templateId })
-            .fill.post(
-              { values: valuesJson, clauseOverrides },
-              { query: { format } },
-            );
+          return api.templates({ templateId }).fill.post(
+            { values: valuesJson, clauseOverrides },
+            { query: { format } },
+          );
         }
         if (!file) {
           panic(
             "TemplateForm: transient fill requires a file when templateId is absent",
           );
         }
-        return await api.templates.fill.post(
+        return api.templates.fill.post(
           { file, values: valuesJson },
           { query: { format } },
         );

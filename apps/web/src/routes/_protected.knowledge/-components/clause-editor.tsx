@@ -373,6 +373,7 @@ export const ClauseEditor = ({
       usageNotes: usageNotes ?? null,
       title: title ?? null,
     });
+    const { data, error } = response;
 
     if (requestId !== rewriteRequestIdRef.current) {
       // Superseded by a newer request or a cancel — whichever owns the
@@ -389,14 +390,11 @@ export const ClauseEditor = ({
       }
       return;
     }
-    if (response.error) {
+    if (error) {
       stellaToast.add({
         type: "error",
         title: t("ai.editWithAI"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorMessage(error, t("common.unexpectedError")),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
       if (isUsableEditor(editor)) {
@@ -409,7 +407,7 @@ export const ClauseEditor = ({
       return;
     }
 
-    const rewritten = response.data.body;
+    const rewritten = data.body;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
       stellaToast.add({
         type: "error",

@@ -302,6 +302,19 @@ export default eslintCompatPlugin({
           return isGenuineApiRoot(getChainRoot(call)) ? call : null;
         };
 
+        const containsAwaitedTerminalEdenValue = (node: unknown): boolean => {
+          if (awaitedTerminalEdenCall(node) !== null) {
+            return true;
+          }
+          const expression = unwrapExpression(node);
+          return (
+            isAstNode(expression) &&
+            expression.type === "ConditionalExpression" &&
+            (containsAwaitedTerminalEdenValue(expression.consequent) ||
+              containsAwaitedTerminalEdenValue(expression.alternate))
+          );
+        };
+
         const isApprovedResponseAdapter = (node: unknown): boolean => {
           const callee = unwrapExpression(node);
           if (!isIdentifier(callee)) {
@@ -971,7 +984,7 @@ export default eslintCompatPlugin({
           },
 
           VariableDeclarator(node) {
-            if (awaitedTerminalEdenCall(node.init) === null) {
+            if (!containsAwaitedTerminalEdenValue(node.init)) {
               return;
             }
             if (isIdentifier(node.id)) {
@@ -987,7 +1000,7 @@ export default eslintCompatPlugin({
           },
 
           AssignmentExpression(node) {
-            if (awaitedTerminalEdenCall(node.right) === null) {
+            if (!containsAwaitedTerminalEdenValue(node.right)) {
               return;
             }
             if (isIdentifier(node.left)) {
@@ -1016,7 +1029,10 @@ export default eslintCompatPlugin({
               (parent.type === "TSAsExpression" ||
                 parent.type === "TSNonNullExpression" ||
                 parent.type === "TSSatisfiesExpression" ||
-                parent.type === "TSTypeAssertion")
+                parent.type === "TSTypeAssertion" ||
+                (parent.type === "ConditionalExpression" &&
+                  (parent.consequent === expression ||
+                    parent.alternate === expression)))
             ) {
               expression = parent;
               parent = isAstNode(expression.parent)

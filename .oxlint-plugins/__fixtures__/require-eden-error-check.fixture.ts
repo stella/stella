@@ -169,6 +169,25 @@ export const checkedOnBothBranches = async () => {
   return response.data;
 };
 
+// Allowed: mutually exclusive awaited branches flow into one binding whose
+// error channel is inspected before its data is consumed.
+export const checkedConditionalAcquisition = async () => {
+  const response = condition
+    ? await api.tasks.get()
+    : await api.tasks.get();
+  consume(response.error);
+  return response.data;
+};
+
+// MUST flag: a conditional acquisition still needs one dominating error check.
+export const uncheckedConditionalAcquisition = async () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: both conditional branches flow to one unchecked response binding
+  const response = condition
+    ? await api.tasks.get()
+    : await api.tasks.get();
+  return response.data;
+};
+
 // Allowed: the only deliberate throw happens after `.error` is read, and
 // both the success return and catch return exit with a handled response.
 export const checkedBeforeCaughtThrow = async () => {
