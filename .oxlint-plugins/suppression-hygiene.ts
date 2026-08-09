@@ -26,6 +26,8 @@
 //   // SAFETY: url validated as http/https
 //   // eslint-disable-next-line typescript/no-unsafe-type-assertion
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 const DISABLE_RE = /\b(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
 const ENABLE_RE = /\b(?:eslint|oxlint)-enable\b/u;
 const INLINE_DESCRIPTION_RE = /--\s*\S/u;
@@ -45,7 +47,7 @@ const collectComments = (node) =>
     ? node.comments.filter(isComment)
     : [];
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "suppression-hygiene" },
   rules: {
     "require-description": {
@@ -58,7 +60,7 @@ export default {
             "is suppressed here.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Program(node) {
             const comments = collectComments(node);
@@ -97,7 +99,7 @@ export default {
             "Remove it; use an oxlint disable directive or oxfmt formatting.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Program(node) {
             for (const comment of collectComments(node)) {
@@ -115,4 +117,4 @@ export default {
       },
     },
   },
-};
+});

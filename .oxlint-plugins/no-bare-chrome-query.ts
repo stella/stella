@@ -13,9 +13,14 @@
 // modules; route/page content stays free to use `useQuery` with loader-backed
 // cache guarantees.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName, isIdentifier } from "./utils.ts";
 
 const QUERY_MODULE = "@tanstack/react-query";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 const filenameForContext = (context) =>
   context.filename ?? context.getFilename?.() ?? "";
@@ -25,7 +30,7 @@ const isAllowedFile = (context, allowedFiles) => {
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-bare-chrome-query" },
   rules: {
     "no-bare-chrome-query": {
@@ -45,20 +50,23 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         const queryAliases = new Set();
         const queryNamespaces = new Set();
 
         return {
+          before() {
+            queryAliases.clear();
+            queryNamespaces.clear();
+            const configuredOptions = context.options?.[0];
+            const options = isRecord(configuredOptions)
+              ? configuredOptions
+              : {};
+            const allowedFiles = Array.isArray(options.allowedFiles)
+              ? options.allowedFiles
+              : [];
+            return !isAllowedFile(context, allowedFiles);
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== QUERY_MODULE) {
               return;
@@ -100,4 +108,4 @@ export default {
       },
     },
   },
-};
+});

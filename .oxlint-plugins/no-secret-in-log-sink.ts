@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow secret-named identifiers or properties inside log / serialize sinks.
 // The TypeScript ecosystem cannot prove a string isn't a secret. Stella handles
 // privileged legal data; an accidental `console.error(err, { apiKey })`,
@@ -250,7 +251,7 @@ const checkExpression = (context, node, contextLabel) => {
   }
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-secret-in-log-sink" },
   rules: {
     "no-secret-in-log-sink": {
@@ -261,7 +262,7 @@ export default {
             "Do not pass '{{name}}' to {{sink}}. Sinks (JSON.stringify, analytics, Sentry, Error constructors) may serialize the value into logs, telemetry, or response bodies. Strip the field, mask it (maskApiKey), or use a structural error tag.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             if (!isSinkCall(node)) {
@@ -285,4 +286,4 @@ export default {
       },
     },
   },
-};
+});

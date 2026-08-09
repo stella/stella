@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { sanitizeHref } from "./sanitize-href";
+
 const CHANNEL_NAME = "mcp-oauth";
 const MESSAGE_KIND = "stll.mcp-oauth";
 
@@ -26,6 +28,36 @@ const mcpOAuthMessageSchema = v.union([
 export type McpOAuthOutcome =
   | { status: "connected" }
   | { status: "error"; reason: string };
+
+export type McpOAuthWindowStatus = "invalid" | "opened" | "redirected";
+
+export const openMcpOAuthWindow = (
+  authorizeUrl: string,
+): McpOAuthWindowStatus => {
+  const authorizeHref = sanitizeHref(authorizeUrl);
+  if (authorizeHref === undefined || !URL.canParse(authorizeHref)) {
+    return "invalid";
+  }
+
+  const parsedAuthorizeUrl = new URL(authorizeHref);
+  if (
+    parsedAuthorizeUrl.protocol !== "http:" &&
+    parsedAuthorizeUrl.protocol !== "https:"
+  ) {
+    return "invalid";
+  }
+
+  // This OAuth popup intentionally retains its opener as a compatibility
+  // fallback when BroadcastChannel is unavailable. The callback validates
+  // both the message schema and same-origin sender below.
+  const popup = window.open(authorizeHref, "_blank", "width=560,height=720");
+  if (popup) {
+    return "opened";
+  }
+
+  window.location.assign(authorizeHref);
+  return "redirected";
+};
 
 const hasPostMessage = (value: object): value is PostMessageOpener => {
   if (!("postMessage" in value)) {

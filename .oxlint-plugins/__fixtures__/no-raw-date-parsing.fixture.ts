@@ -21,7 +21,7 @@ const _dateOnlyLiteral = new Date("2024-01-01");
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dateOnlyTemplate = new Date(`${year}-${month}-${day}`);
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
-const _dateOnlyGrouped = new Date(("2024-01-01"));
+const _dateOnlyGrouped = new Date("2024-01-01");
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dateOnlyTyped = new Date("2024-01-01" satisfies string);
 

@@ -15,8 +15,7 @@ const sanitizeHtml = (value: string): string => escapeHtml(value);
 const escapeRegex = (value: string): string =>
   value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const sanitizeFilename = (value: string): string =>
-  value.replaceAll("/", "_");
+const sanitizeFilename = (value: string): string => value.replaceAll("/", "_");
 
 export const UnsafeDangerouslySetInnerHtml = () => (
   // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html

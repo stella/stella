@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
 // Ban render-body ref mirrors.
 //
 // The pattern `const valueRef = useRef(value); valueRef.current = value`
@@ -46,7 +48,11 @@ const findContainingFunction = (node) => {
   return null;
 };
 
-const isUseRefCall = (node, useRefAliases, reactNamespaces) => {
+const isUseRefCall = (
+  node,
+  useRefAliases,
+  reactNamespaces,
+): node is ESTree.CallExpression => {
   if (node?.type !== "CallExpression") {
     return false;
   }
@@ -65,7 +71,7 @@ const isUseRefCall = (node, useRefAliases, reactNamespaces) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-ref-mirror" },
   rules: {
     "no-ref-mirror": {
@@ -101,19 +107,10 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         const useRefAliases = new Set();
         const reactNamespaces = new Set();
-        const mirroredRefsByFunction = new WeakMap();
+        let mirroredRefsByFunction = new WeakMap();
 
         const mirroredRefsForFunction = (functionNode) => {
           const existing = mirroredRefsByFunction.get(functionNode);
@@ -126,6 +123,20 @@ export default {
         };
 
         return {
+          before() {
+            useRefAliases.clear();
+            reactNamespaces.clear();
+            mirroredRefsByFunction = new WeakMap();
+            const options = context.options?.at(0);
+            const allowedFiles =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options) &&
+              Array.isArray(options.allowedFiles)
+                ? options.allowedFiles
+                : [];
+            return !isAllowedFile(context, allowedFiles);
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== REACT_MODULE) {
               return;
@@ -207,4 +218,4 @@ export default {
       },
     },
   },
-};
+});

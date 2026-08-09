@@ -6,7 +6,9 @@
 // bypasses brand checks, discriminated-union narrowing, and every
 // other safety the type system provides.
 
-export default {
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+export default eslintCompatPlugin({
   meta: { name: "no-any-casts" },
   rules: {
     "no-any-casts": {
@@ -20,7 +22,7 @@ export default {
             "cast isn't needed.",
         },
       },
-      create(context) {
+      createOnce(context) {
         function check(node) {
           if (node.typeAnnotation?.type === "TSAnyKeyword") {
             context.report({ node, messageId: "noAnyCast" });
@@ -33,4 +35,4 @@ export default {
       },
     },
   },
-};
+});

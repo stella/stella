@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban bare `String.prototype.localeCompare` in application code.
 //
 // `"a".localeCompare("b")` without an explicit locale sorts with the
@@ -37,7 +38,7 @@ const isAllowedFile = (context, allowedFiles) => {
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-cached-collator" },
   rules: {
     "require-cached-collator": {
@@ -57,17 +58,26 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
+      createOnce(context) {
+        let enabled = true;
 
         return {
+          before() {
+            const options = context.options?.[0] ?? {};
+            const configuredFiles =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options)
+                ? options["allowedFiles"]
+                : undefined;
+            const allowedFiles = Array.isArray(configuredFiles)
+              ? configuredFiles.filter(
+                  (file): file is string => typeof file === "string",
+                )
+              : [];
+            enabled = !isAllowedFile(context, allowedFiles);
+            return enabled;
+          },
           CallExpression(node) {
             const callee = node.callee;
             if (
@@ -85,4 +95,4 @@ export default {
       },
     },
   },
-};
+});

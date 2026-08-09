@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Numbers rendered without the locale formatter show Latin digits even when
 // the user has Eastern-Arabic (or other) numerals enabled — e.g. a matter
 // overview card shows "4" instead of "٤".
@@ -91,7 +93,7 @@ const inNonDisplayAttr = (node) =>
   node.parent.name?.type === "JSXIdentifier" &&
   NON_DISPLAY_ATTRS.has(node.parent.name.name);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-unformatted-number" },
   rules: {
     "no-unformatted-number": {
@@ -104,7 +106,7 @@ export default {
             "(non-React) or useFormatter().number(x) (React).",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           JSXExpressionContainer(node) {
             if (inNonDisplayAttr(node)) {
@@ -130,4 +132,4 @@ export default {
       },
     },
   },
-};
+});

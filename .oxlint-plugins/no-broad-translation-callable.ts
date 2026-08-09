@@ -16,6 +16,8 @@
 //   const keys = { title: "feature.title" } as const
 //     satisfies Record<string, TranslationKey>;          // data, not a callable
 
+import { eslintCompatPlugin, type ESTree, type Scope } from "@oxlint/plugins";
+
 const isIdentifierNamed = (node, name: string): boolean =>
   node?.type === "Identifier" && node.name === name;
 
@@ -115,7 +117,7 @@ const isCanonicalTranslationKeyDerivation = (node): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-broad-translation-callable" },
   rules: {
     "no-broad-translation-callable": {
@@ -128,7 +130,7 @@ export default {
             "Do not pass the full use-intl translator across a helper boundary; translate fixed keys at the UI call site, pass plain strings, or expose a narrow key union.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const broadTranslatorTypeNames = new Set([
           "getTranslator",
           "getTranslations",
@@ -137,20 +139,22 @@ export default {
         const broadKeyVariables = new Set();
         const broadKeyNamespaceVariables = new Set();
         const broadTranslatorNamespaceVariables = new Set();
-        const typeAliases = new Array<{
-          id?: { name: string; type: string };
-          typeAnnotation?: unknown;
-        }>();
-        const broadParameterCandidates = new Array<unknown>();
-        const broadReturnTypeCandidates = new Array<unknown>();
-        const exportedAliasNodes = new Map();
-        const localExportCandidates = new Array<{
-          local?: { name: string; type: string };
-        }>();
-        const renamedReexportCandidates = new Array<unknown>();
+        const typeAliases = new Array<ESTree.TSTypeAliasDeclaration>();
+        const broadParameterCandidates = new Array<
+          | ESTree.TSCallSignatureDeclaration
+          | ESTree.TSFunctionType
+          | ESTree.TSMethodSignature
+        >();
+        const broadReturnTypeCandidates = new Array<ESTree.TSTypeReference>();
+        const exportedAliasNodes = new Map<
+          ESTree.TSTypeAliasDeclaration,
+          ESTree.ExportNamedDeclaration
+        >();
+        const localExportCandidates = new Array<ESTree.ExportSpecifier>();
+        const renamedReexportCandidates = new Array<ESTree.ExportSpecifier>();
 
         const resolveVariable = (identifierNode) => {
-          let scope = context.sourceCode.getScope(identifierNode);
+          let scope: Scope | null = context.sourceCode.getScope(identifierNode);
           while (scope) {
             const variable = scope.set.get(identifierNode.name);
             if (variable) {
@@ -193,6 +197,21 @@ export default {
         };
 
         return {
+          before() {
+            broadTranslatorTypeNames.clear();
+            broadTranslatorTypeNames.add("getTranslator");
+            broadTranslatorTypeNames.add("getTranslations");
+            broadTranslatorTypeNames.add("useTranslations");
+            broadKeyVariables.clear();
+            broadKeyNamespaceVariables.clear();
+            broadTranslatorNamespaceVariables.clear();
+            typeAliases.length = 0;
+            broadParameterCandidates.length = 0;
+            broadReturnTypeCandidates.length = 0;
+            exportedAliasNodes.clear();
+            localExportCandidates.length = 0;
+            renamedReexportCandidates.length = 0;
+          },
           Program(node) {
             for (const statement of node.body ?? []) {
               if (statement.type !== "ImportDeclaration") {
@@ -380,4 +399,4 @@ export default {
       },
     },
   },
-};
+});

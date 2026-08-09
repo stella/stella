@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Forbid `JSON.parse()` directly on a localStorage/sessionStorage-sourced
 // string. Persisted-storage shapes drift across releases (a renamed
 // field, a stale key format, a value written by an older build); a raw
@@ -35,7 +36,6 @@
 // The helper module itself (apps/web/src/lib/stored-json.ts) is excluded
 // via `oxlint.config.ts` `excludeFiles`, since it is the one place raw
 // `JSON.parse` on a persisted string is intentional.
-
 import { panic } from "better-result";
 
 import { isIdentifier, unwrapExpression } from "./utils.ts";
@@ -101,7 +101,7 @@ const isJsonParseCallee = (callee: unknown): boolean =>
   isIdentifier((callee as { object: unknown }).object, "JSON") &&
   isIdentifier((callee as { property: unknown }).property, "parse");
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-stored-json" },
   rules: {
     "no-raw-stored-json": {
@@ -116,7 +116,7 @@ export default {
             "Valibot schema, returning null on any failure.",
         },
       },
-      create(context) {
+      createOnce(context) {
         type Scope = {
           declaredNames: Set<string>;
           storageNames: Set<string>;
@@ -190,7 +190,7 @@ export default {
         };
 
         return {
-          Program() {
+          before() {
             storageVarStack.length = 1;
             storageVarStack[0] = createScope();
           },
@@ -250,4 +250,4 @@ export default {
       },
     },
   },
-};
+});

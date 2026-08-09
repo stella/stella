@@ -44,6 +44,8 @@
 // or a call site that manages its own independent abort/timeout
 // lifecycle that fetchWithTimeout's single-timeoutMs shape can't express).
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
@@ -381,7 +383,7 @@ const optionsObjectHasSignal = (options: unknown): "yes" | "no" | "opaque" => {
   return "no";
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-fetch-timeout" },
   rules: {
     "require-fetch-timeout": {
@@ -399,8 +401,8 @@ export default {
             "timeout is mandatory, not opt-in.",
         },
       },
-      create(context) {
-        const strictFetchWrapperFile = isStrictFetchWrapperFile(context);
+      createOnce(context) {
+        let strictFetchWrapperFile = false;
 
         type RequestSignalScope = Map<string, RequestConstructorSignalState>;
 
@@ -483,6 +485,10 @@ export default {
         };
 
         return {
+          before() {
+            strictFetchWrapperFile = isStrictFetchWrapperFile(context);
+            requestSignalScopes.length = 0;
+          },
           Program() {
             requestSignalScopes.length = 0;
             pushRequestSignalScope();
@@ -608,4 +614,4 @@ export default {
       },
     },
   },
-};
+});

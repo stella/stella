@@ -1,10 +1,12 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Ban nanoid imports.
 //
 // The project uses native Bun.randomUUIDv7() for ID generation
 // and crypto.getRandomValues() for custom alphabets. nanoid is
 // a removed dependency; this rule prevents re-introduction.
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-nanoid" },
   rules: {
     "no-nanoid": {
@@ -17,7 +19,7 @@ export default {
             "alphabets.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           ImportDeclaration(node) {
             if (node.source.value === "nanoid") {
@@ -31,4 +33,4 @@ export default {
       },
     },
   },
-};
+});

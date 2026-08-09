@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Timestamp cursor SQL must come from db-pagination's projection and boundary
 // helpers. Several list implementations repeated the PostgreSQL format
 // without the canonical UTC marker and rebuilt the re-anchor expression at
@@ -10,17 +11,7 @@
 // The `inline-timestamp-cursor-sql` ratchet metric covers textual cursor SQL
 // variants the literal-based AST rule cannot identify.
 
-import type { AstNode } from "./utils.ts";
-import { filenameForContext } from "./utils.ts";
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "inlineBoundary" | "legacyFormat";
-  }) => void;
-};
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 const LEGACY_CURSOR_FORMAT = /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")/u;
 const INLINE_UTC_BOUNDARY = /::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/iu;
@@ -32,7 +23,10 @@ const ALLOWED_FILES = [
   ".oxlint-plugins/__fixtures__/no-truncated-timestamp-comparison.fixture.ts",
 ];
 
-const textForLiteralNode = (node: AstNode): string | null => {
+const textForLiteralNode = (node: unknown): string | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
   if (node.type === "Literal" && typeof node.value === "string") {
     return node.value;
   }
@@ -52,7 +46,7 @@ const textForLiteralNode = (node: AstNode): string | null => {
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-inline-timestamp-cursor-sql" },
   rules: {
     "no-inline-timestamp-cursor-sql": {
@@ -67,33 +61,44 @@ export default {
             "timestamp cursor boundary inline.",
         },
       },
-      create(context: RuleContext) {
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/api/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/no-inline-timestamp-cursor-sql.fixture.ts",
-          )
-        ) {
-          return {};
-        }
-        if (ALLOWED_FILES.some((allowed) => filename.endsWith(allowed))) {
-          return {};
-        }
-        const check = (node: AstNode) => {
+      createOnce(context) {
+        const messageIdsFor = (node: unknown) => {
           const value = textForLiteralNode(node);
           if (value === null) {
-            return;
+            return [];
           }
+          const messageIds: ("inlineBoundary" | "legacyFormat")[] = [];
           if (LEGACY_CURSOR_FORMAT.test(value)) {
-            context.report({ node, messageId: "legacyFormat" });
+            messageIds.push("legacyFormat");
           }
           if (INLINE_UTC_BOUNDARY.test(value)) {
-            context.report({ node, messageId: "inlineBoundary" });
+            messageIds.push("inlineBoundary");
           }
+          return messageIds;
         };
-        return { Literal: check, TemplateElement: check };
+        return {
+          before() {
+            const filename = filenameForContext(context);
+            return (
+              (filename.includes("apps/api/src/") ||
+                filename.endsWith(
+                  ".oxlint-plugins/__fixtures__/no-inline-timestamp-cursor-sql.fixture.ts",
+                )) &&
+              !ALLOWED_FILES.some((allowed) => filename.endsWith(allowed))
+            );
+          },
+          Literal(node) {
+            for (const messageId of messageIdsFor(node)) {
+              context.report({ node, messageId });
+            }
+          },
+          TemplateElement(node) {
+            for (const messageId of messageIdsFor(node)) {
+              context.report({ node, messageId });
+            }
+          },
+        };
       },
     },
   },
-};
+});

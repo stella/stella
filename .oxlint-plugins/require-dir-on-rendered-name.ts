@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Require BidiText/UserText when rendering a user-provided identifier as an
 // element's text, so it isn't bidi-reordered under an RTL UI.
 //
@@ -53,7 +55,7 @@ const isNameExpr = (expr) =>
   expr.property.type === "Identifier" &&
   NAME_PROPS.has(expr.property.name);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-dir-on-rendered-name" },
   rules: {
     "require-dir-on-rendered-name": {
@@ -74,7 +76,7 @@ export default {
             "contract.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           JSXElement(node) {
             const opening = node.openingElement;
@@ -119,4 +121,4 @@ export default {
       },
     },
   },
-};
+});

@@ -15,19 +15,15 @@
 //   *.test.ts / *.spec.ts
 //   scripts, test setup, and explicitly configured boundary files
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier, isStringLiteral } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
 
-type RuleContext = {
+type FilenameContext = {
   filename?: string;
   getFilename?: () => string;
-  options?: unknown[];
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "processEnv";
-    data: { envName: string };
-  }) => void;
 };
 
 const DEFAULT_ALLOWED_FILE_PATTERNS = [
@@ -37,7 +33,7 @@ const DEFAULT_ALLOWED_FILE_PATTERNS = [
   /\.(?:config|test|spec)\.[cm]?[jt]sx?$/u,
 ];
 
-const filenameForContext = (context: RuleContext): string =>
+const filenameForContext = (context: FilenameContext): string =>
   context.filename ?? context.getFilename?.() ?? "";
 
 const normalizePath = (filename: string): string =>
@@ -87,11 +83,12 @@ const isProcessEnvRoot = (node: unknown): boolean =>
   isIdentifier(node.object, "process") &&
   staticMemberPropertyName(node) === "env";
 
-const envNameForAccess = (node: AstNode): string => {
+const envNameForAccess = (node: unknown): string => {
   if (isProcessEnvRoot(node)) {
     return "process.env";
   }
   if (
+    isAstNode(node) &&
     node.type === "MemberExpression" &&
     isProcessEnvRoot(node.object) &&
     isAstNode(node.property)
@@ -108,8 +105,8 @@ const envNameForAccess = (node: AstNode): string => {
   return "process.env";
 };
 
-const isNestedProcessEnvRoot = (node: AstNode): boolean => {
-  if (!isProcessEnvRoot(node)) {
+const isNestedProcessEnvRoot = (node: unknown): boolean => {
+  if (!isAstNode(node) || !isProcessEnvRoot(node)) {
     return false;
   }
   const parent = node.parent;
@@ -120,7 +117,10 @@ const isNestedProcessEnvRoot = (node: AstNode): boolean => {
   );
 };
 
-const isProcessEnvAccess = (node: AstNode): boolean => {
+const isProcessEnvAccess = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
   if (isNestedProcessEnvRoot(node)) {
     return false;
   }
@@ -130,7 +130,7 @@ const isProcessEnvAccess = (node: AstNode): boolean => {
   return node.type === "MemberExpression" && isProcessEnvRoot(node.object);
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "forbid-process-env-outside-env-ts" },
   rules: {
     "forbid-process-env-outside-env-ts": {
@@ -153,18 +153,16 @@ export default {
           },
         ],
       },
-      create(context: RuleContext) {
-        const options = isRecord(context.options?.[0])
-          ? context.options[0]
-          : {};
-        const allowedFiles = stringArrayOption(options, "allowedFiles");
-
-        if (isAllowedFile(filenameForContext(context), allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
-          MemberExpression(node: AstNode) {
+          before() {
+            const options = isRecord(context.options?.[0])
+              ? context.options[0]
+              : {};
+            const allowedFiles = stringArrayOption(options, "allowedFiles");
+            return !isAllowedFile(filenameForContext(context), allowedFiles);
+          },
+          MemberExpression(node) {
             if (!isProcessEnvAccess(node)) {
               return;
             }
@@ -178,4 +176,4 @@ export default {
       },
     },
   },
-};
+});

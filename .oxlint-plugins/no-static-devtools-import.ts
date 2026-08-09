@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Devtools packages can schedule browser work while React routes are still
 // mounting. Keep them in explicit lazy-loaded islands so normal dev pages do
 // not import the packages unless the devtools toggle is enabled.
@@ -67,7 +69,7 @@ const isTypeOnlyImport = (node) => {
   return node.specifiers.every((specifier) => specifier.importKind === "type");
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-static-devtools-import" },
   rules: {
     "no-static-devtools-import": {
@@ -80,7 +82,7 @@ export default {
             "Keep devtools modules behind a dynamic import so route shells can mount before devtools code loads.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           ImportDeclaration(node) {
             const source = node.source?.value;
@@ -105,4 +107,4 @@ export default {
       },
     },
   },
-};
+});

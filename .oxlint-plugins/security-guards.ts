@@ -5,6 +5,8 @@
 //   2. no-unsanitized-href    — dynamic href without sanitization
 //   3. no-unscoped-user-query — user table import without member scoping
 
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+
 import {
   getImportedName,
   getPropertyName,
@@ -94,7 +96,7 @@ const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 
 const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "security-guards" },
   rules: {
     // ── no-raw-filename-write ──────────────────────────────────
@@ -108,7 +110,7 @@ export default {
             "traversal segments.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Property(node) {
             // Only check property assignments named "fileName"
@@ -202,7 +204,7 @@ export default {
             "allowed.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           JSXAttribute(node) {
             // Only check href attributes
@@ -310,11 +312,15 @@ export default {
             "to scope user queries.",
         },
       },
-      create(context) {
-        let userImportNode = null;
+      createOnce(context) {
+        let userImportNode: Ranged | null = null;
         let hasMemberImport = false;
 
         return {
+          before() {
+            userImportNode = null;
+            hasMemberImport = false;
+          },
           ImportDeclaration(node) {
             if (node.source.value !== AUTH_SCHEMA_MODULE) {
               return;
@@ -347,4 +353,4 @@ export default {
       },
     },
   },
-};
+});

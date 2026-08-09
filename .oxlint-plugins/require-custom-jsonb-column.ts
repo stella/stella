@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Require the custom JSONB column in Drizzle schema files.
 //
 // Drizzle's stock `p.jsonb()` from drizzle-orm/pg-core hands the bun-sql
@@ -23,10 +24,9 @@ import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
 
-type RuleContext = {
+type FilenameContext = {
   filename?: string;
   getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: string }) => void;
 };
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
@@ -41,7 +41,7 @@ const isAstNode = (node: unknown): node is AstNode =>
   "type" in node &&
   typeof node.type === "string";
 
-const filenameForContext = (context: RuleContext): string =>
+const filenameForContext = (context: FilenameContext): string =>
   (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
 
 const isAllowlistedFile = (filename: string): boolean =>
@@ -157,7 +157,7 @@ const hasJsonbDataType = (node: unknown): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-custom-jsonb-column" },
   rules: {
     "require-custom-jsonb-column": {
@@ -172,11 +172,7 @@ export default {
             "Import the safe `jsonb` from @/api/db/columns instead.",
         },
       },
-      create(context: RuleContext) {
-        if (isAllowlistedFile(filenameForContext(context))) {
-          return {};
-        }
-
+      createOnce(context) {
         // Namespace / default bindings for drizzle-orm/pg-core, e.g. the `p`
         // in `import * as p from "drizzle-orm/pg-core"`. Used to match
         // `<ns>.jsonb(...)`.
@@ -190,7 +186,13 @@ export default {
         const customTypeAliases = new Set<string>();
 
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            pgCoreNamespaceAliases.clear();
+            pgCoreJsonbAliases.clear();
+            customTypeAliases.clear();
+            return !isAllowlistedFile(filenameForContext(context));
+          },
+          ImportDeclaration(node) {
             if (
               node.source === null ||
               node.source === undefined ||
@@ -239,7 +241,7 @@ export default {
             }
           },
 
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             const callee = node.callee;
 
             // Bare `jsonb(...)` where `jsonb` came from pg-core.
@@ -283,4 +285,4 @@ export default {
       },
     },
   },
-};
+});

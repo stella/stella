@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Forbid injecting un-proven HTML into the DOM.
 //
 // Raw HTML may only reach the DOM from a value that is provably
@@ -164,7 +165,7 @@ const isDangerouslySetInnerHtmlValue = (property) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-unsafe-inner-html" },
   rules: {
     "no-unsafe-inner-html": {
@@ -184,7 +185,7 @@ export default {
             "sanitized or escaped.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const escapeHatchLines = new Set();
 
         const recordEscapeHatches = (node) => {
@@ -228,6 +229,9 @@ export default {
         };
 
         return {
+          before() {
+            escapeHatchLines.clear();
+          },
           Program(node) {
             recordEscapeHatches(node);
           },
@@ -278,4 +282,4 @@ export default {
       },
     },
   },
-};
+});

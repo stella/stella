@@ -13,6 +13,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { templateVersionsOptions } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
 // ── Types ────────────────────────────────────────────
@@ -69,7 +70,7 @@ export const TemplateVersionsTab = ({
 
     const { data: version } = response;
     if ("downloadUrl" in version && typeof version.downloadUrl === "string") {
-      window.open(version.downloadUrl, "_blank");
+      openIsolatedWindow(version.downloadUrl);
     }
   };
 

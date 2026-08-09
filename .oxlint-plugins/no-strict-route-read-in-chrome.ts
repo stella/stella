@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban strict, route-scoped reads in persistent chrome.
 //
 // TanStack Router's `from:` reads are strict by default: `useRouteContext`,
@@ -61,7 +62,7 @@ const namesRoute = (objectExpression) =>
       isIdentifier(property.key, "from"),
   );
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-strict-route-read-in-chrome" },
   rules: {
     "no-strict-route-read-in-chrome": {
@@ -74,12 +75,17 @@ export default {
             "This route API data hook is bound strictly to one route, but persistent chrome mounts across routes. Use a non-strict router hook, or read the value from a provider that wraps every tree.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const getRouteApiAliases = new Set();
         const routeApiBindings = new Set();
         const strictReadAliases = new Map();
 
         return {
+          before() {
+            getRouteApiAliases.clear();
+            routeApiBindings.clear();
+            strictReadAliases.clear();
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== ROUTER_MODULE) {
               return;
@@ -147,4 +153,4 @@ export default {
       },
     },
   },
-};
+});

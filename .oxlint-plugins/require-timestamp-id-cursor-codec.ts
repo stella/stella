@@ -9,7 +9,8 @@
 // codec. The `repeated-timestamp-cursor-boundary` ratchet metric covers
 // equivalent predicate spellings outside the exact imported-binding shape.
 
-import type { AstNode } from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   filenameForContext,
   getImportedName,
@@ -21,12 +22,6 @@ import {
 
 const DB_PAGINATION_MODULE = "@/api/lib/db-pagination";
 const DRIZZLE_MODULE = "drizzle-orm";
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: "useCodec" }) => void;
-};
 
 const countBoundaryCalls = (
   node: unknown,
@@ -56,7 +51,7 @@ const countBoundaryCalls = (
   return count;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-timestamp-id-cursor-codec" },
   rules: {
     "require-timestamp-id-cursor-codec": {
@@ -68,20 +63,24 @@ export default {
             "(timestamp, id) keyset predicate.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         const boundaryBindings = new Set(["pgTimestampCursorBoundary"]);
         const orBindings = new Set(["or"]);
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/api/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/require-timestamp-id-cursor-codec.fixture.ts",
-          )
-        ) {
-          return {};
-        }
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            boundaryBindings.clear();
+            boundaryBindings.add("pgTimestampCursorBoundary");
+            orBindings.clear();
+            orBindings.add("or");
+            const filename = filenameForContext(context);
+            return (
+              filename.includes("apps/api/src/") ||
+              filename.endsWith(
+                ".oxlint-plugins/__fixtures__/require-timestamp-id-cursor-codec.fixture.ts",
+              )
+            );
+          },
+          ImportDeclaration(node) {
             const source = node.source;
             if (!isStringLiteral(source) || !Array.isArray(node.specifiers)) {
               return;
@@ -105,7 +104,7 @@ export default {
               }
             }
           },
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             if (
               isIdentifier(node.callee) &&
               orBindings.has(node.callee.name) &&
@@ -118,4 +117,4 @@ export default {
       },
     },
   },
-};
+});

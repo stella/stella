@@ -5,6 +5,8 @@
 //
 // Safe: var(--token), transparent, inherit, currentColor, none, unset, initial.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName } from "./utils.ts";
 
 // Hex color pattern anywhere in a string
@@ -97,7 +99,7 @@ function containsHardcodedColor(value: string): string | null {
   return null;
 }
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-inline-style-colors" },
   rules: {
     "no-inline-style-colors": {
@@ -109,7 +111,7 @@ export default {
             "Use a CSS variable or Tailwind class instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           // Check every Property node — any object property with a
           // string value containing a hardcoded color is flagged.
@@ -134,4 +136,4 @@ export default {
       },
     },
   },
-};
+});

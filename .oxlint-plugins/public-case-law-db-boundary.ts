@@ -1,18 +1,8 @@
-import {
-  getImportedName,
-  getPropertyName,
-  isIdentifier,
-  isStringLiteral,
-} from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+import { getImportedName, getPropertyName, isIdentifier } from "./utils.ts";
 
 type AstNode = Record<string, unknown> & { type: string };
-
-type RuleContext = {
-  report: (descriptor: {
-    node: unknown;
-    messageId: "privateCaseLawImport" | "privateTxQuery" | "privateSqlText";
-  }) => void;
-};
 
 const PRIVATE_SQL_TOKEN_RE =
   /\b(?:workspace|workspaces|organization|organizations|entity|entities|field|fields|file|files|chat|user|session|account|matter|matters|task|tasks|contact|contacts)\b/iu;
@@ -40,7 +30,7 @@ const isTxQueryMember = (node: unknown): boolean => {
   );
 };
 
-const rawTemplateText = (node: AstNode): string | null => {
+const rawTemplateText = (node): string | null => {
   if (node.type !== "TemplateElement") {
     return null;
   }
@@ -55,7 +45,7 @@ const rawTemplateText = (node: AstNode): string | null => {
 const hasPrivateSqlText = (text: string): boolean =>
   PRIVATE_SQL_TOKEN_RE.test(text);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "public-case-law-db-boundary" },
   rules: {
     "public-case-law-db-boundary": {
@@ -70,16 +60,13 @@ export default {
             "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          ImportDeclaration(node: unknown) {
-            if (!isAstNode(node) || node.source !== "@/api/db/schema") {
+          ImportDeclaration(node) {
+            if (node.source.value !== "@/api/db/schema") {
               return;
             }
             const specifiers = node.specifiers;
-            if (!Array.isArray(specifiers)) {
-              return;
-            }
             for (const specifier of specifiers) {
               const imported = getImportedName(specifier);
               if (imported !== null && !isCaseLawName(imported)) {
@@ -90,8 +77,8 @@ export default {
               }
             }
           },
-          MemberExpression(node: unknown) {
-            if (!isTxQueryMember(node) || !isAstNode(node)) {
+          MemberExpression(node) {
+            if (!isTxQueryMember(node)) {
               return;
             }
             const propertyName = getPropertyName(node.property);
@@ -99,15 +86,15 @@ export default {
               context.report({ node, messageId: "privateTxQuery" });
             }
           },
-          Literal(node: unknown) {
-            if (isStringLiteral(node) && hasPrivateSqlText(node.value)) {
+          Literal(node) {
+            if (
+              typeof node.value === "string" &&
+              hasPrivateSqlText(node.value)
+            ) {
               context.report({ node, messageId: "privateSqlText" });
             }
           },
-          TemplateElement(node: unknown) {
-            if (!isAstNode(node)) {
-              return;
-            }
+          TemplateElement(node) {
             const raw = rawTemplateText(node);
             if (raw !== null && hasPrivateSqlText(raw)) {
               context.report({ node, messageId: "privateSqlText" });
@@ -117,4 +104,4 @@ export default {
       },
     },
   },
-};
+});

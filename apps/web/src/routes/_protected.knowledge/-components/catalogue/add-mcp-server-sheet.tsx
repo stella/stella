@@ -23,6 +23,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
+import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
 
 type CreatedConnector = {
   slug: string;
@@ -94,13 +95,14 @@ export const AddMcpServerSheet = ({
         return;
       }
       if (data.type === "oauth2") {
-        const popup = window.open(
-          data.authorizeUrl,
-          "_blank",
-          "width=560,height=720",
-        );
-        if (!popup) {
-          window.location.assign(data.authorizeUrl);
+        const openStatus = openMcpOAuthWindow(data.authorizeUrl);
+        if (openStatus === "invalid") {
+          stellaToast.add({
+            title: t("knowledge.mcp.errorTitle"),
+            description: t("knowledge.mcp.errorDescription"),
+            type: "error",
+          });
+          return;
         }
         invalidate();
         close();

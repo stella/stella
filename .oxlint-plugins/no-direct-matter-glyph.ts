@@ -6,6 +6,8 @@
 // structurally impossible, ban the raw `LayersIcon` (and `Layers`) import
 // from `lucide-react` everywhere except that one component.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName } from "./utils.ts";
 
 const LUCIDE_MODULE = "lucide-react";
@@ -25,7 +27,7 @@ const ALLOWED_FILE = "apps/web/src/components/matter-icon.tsx";
 const filenameForContext = (context) =>
   (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-direct-matter-glyph" },
   rules: {
     "no-direct-matter-glyph": {
@@ -40,12 +42,11 @@ export default {
             "The raw glyph is only allowed in matter-icon.tsx.",
         },
       },
-      create(context) {
-        if (filenameForContext(context).endsWith(ALLOWED_FILE)) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
+          before() {
+            return !filenameForContext(context).endsWith(ALLOWED_FILE);
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== LUCIDE_MODULE) {
               return;
@@ -68,4 +69,4 @@ export default {
       },
     },
   },
-};
+});

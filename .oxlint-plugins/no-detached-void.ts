@@ -22,7 +22,9 @@
 // synchronous call statement, use `x satisfies never` for an exhaustive
 // switch default, or `() => undefined` for a deliberate no-op.
 
-export default {
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+export default eslintCompatPlugin({
   meta: { name: "no-detached-void" },
   rules: {
     "no-detached-void": {
@@ -37,7 +39,7 @@ export default {
             "exhaustive default, or `() => undefined` for a no-op).",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           UnaryExpression(node) {
             if (node.operator !== "void") {
@@ -52,4 +54,4 @@ export default {
       },
     },
   },
-};
+});

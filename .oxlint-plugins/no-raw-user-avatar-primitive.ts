@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // User avatars must render through UserAvatar or UserIdentity. Six user
 // surfaces composed the raw Avatar primitive and independently rebuilt
 // initials, display-name fallbacks, image alternatives, deleted styling, or
@@ -10,22 +11,11 @@
 // identities. The `raw-user-avatar-primitive` ratchet metric covers aliases or
 // indirect imports the module-level AST rule cannot identify.
 
-import type { AstNode } from "./utils.ts";
 import {
   filenameForContext,
   getImportedName,
   isStringLiteral,
 } from "./utils.ts";
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "rawAvatar";
-    data: { name: string };
-  }) => void;
-};
 
 const AVATAR_MODULE = "@stll/ui/components/avatar";
 const ALLOWED_FILES = [
@@ -36,7 +26,7 @@ const ALLOWED_FILES = [
   "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
 ];
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-user-avatar-primitive" },
   rules: {
     "no-raw-user-avatar-primitive": {
@@ -49,21 +39,19 @@ export default {
             "'@/components/user-avatar' instead.",
         },
       },
-      create(context: RuleContext) {
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/web/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/no-raw-user-avatar-primitive.fixture.tsx",
-          )
-        ) {
-          return {};
-        }
-        if (ALLOWED_FILES.some((allowed) => filename.endsWith(allowed))) {
-          return {};
-        }
+      createOnce(context) {
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            const filename = filenameForContext(context);
+            return (
+              (filename.includes("apps/web/src/") ||
+                filename.endsWith(
+                  ".oxlint-plugins/__fixtures__/no-raw-user-avatar-primitive.fixture.tsx",
+                )) &&
+              !ALLOWED_FILES.some((allowed) => filename.endsWith(allowed))
+            );
+          },
+          ImportDeclaration(node) {
             const source = node.source;
             if (
               !isStringLiteral(source) ||
@@ -87,4 +75,4 @@ export default {
       },
     },
   },
-};
+});

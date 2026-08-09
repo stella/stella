@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
 // Ban Bun's native S3 object-body reads.
 //
 // Up to and including Bun 1.3.14, `S3Client.file(key).bytes()` /
@@ -20,7 +22,6 @@
 // not in 1.3.14 itself). See TODO(bun-s3-native-read).
 
 import { isAstNode, isIdentifier } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
 
 // Body-materialising reads only. `.exists()`, `.stat()`, `.write()`,
 // `.delete()`, and `.presign()` carry no response body and do not leak.
@@ -29,6 +30,11 @@ const BODY_READS = new Set(["arrayBuffer", "bytes", "text", "json"]);
 // Accessors that hand back a Bun S3 client. A local `new Bun.S3Client(...)`
 // is caught through the `.file(...)` receiver check below instead.
 const S3_ACCESSORS = new Set(["getS3", "getCorpusS3"]);
+
+const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference =>
+  isIdentifier(node) && Array.isArray(node.range);
 
 const isS3AccessorCall = (node) =>
   node?.type === "CallExpression" &&
@@ -56,7 +62,7 @@ const bodyReadMethod = (member) => {
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-native-s3-object-read" },
   rules: {
     "no-native-s3-object-read": {
@@ -70,7 +76,7 @@ export default {
             "@/api/lib/s3 instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const isS3ClientConstruction = (init) =>
           init?.type === "NewExpression" &&
           ((isIdentifier(init.callee) && init.callee.name === "S3Client") ||
@@ -79,9 +85,10 @@ export default {
               isIdentifier(init.callee.property, "S3Client")));
 
         const resolveVariable = (
-          identifierNode: AstNode & { name: string },
+          identifierNode: ESTree.IdentifierReference,
         ) => {
-          let scope = context.sourceCode.getScope(identifierNode);
+          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
+            context.sourceCode.getScope(identifierNode);
           while (scope) {
             const variable = scope.set.get(identifierNode.name);
             if (variable) {
@@ -130,7 +137,7 @@ export default {
           if (isS3AccessorCall(node) || isS3ClientConstruction(node)) {
             return true;
           }
-          if (!isIdentifier(node)) {
+          if (!isIdentifierReference(node)) {
             return false;
           }
           const variable = resolveVariable(node);
@@ -148,7 +155,7 @@ export default {
           if (isFileCall(node)) {
             return isS3ClientExpression(node.callee.object, visited);
           }
-          if (!isIdentifier(node)) {
+          if (!isIdentifierReference(node)) {
             return false;
           }
           const variable = resolveVariable(node);
@@ -184,4 +191,4 @@ export default {
       },
     },
   },
-};
+});

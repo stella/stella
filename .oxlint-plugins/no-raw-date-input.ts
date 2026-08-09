@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Disallow native HTML date inputs in product UI.
 //
 // `<input type="date">` (and friends: datetime-local, time, month, week)
@@ -35,50 +37,27 @@ const INPUT_LIKE_COMPONENTS = new Set([
   "Input", // @stll/ui Input
 ]);
 
-type RuleContext = {
-  report: (descriptor: {
-    node: unknown;
-    messageId: string;
-    data?: Record<string, string>;
-  }) => void;
-};
-
-type JSXIdentifier = { type: "JSXIdentifier"; name: string };
-type JSXLiteral = { type: "Literal"; value: unknown };
-type JSXExpressionContainer = {
-  type: "JSXExpressionContainer";
-  expression: { type: string; value?: unknown };
-};
-type JSXAttribute = {
-  type: "JSXAttribute";
-  name: JSXIdentifier | { type: string; name?: string };
-  value: JSXLiteral | JSXExpressionContainer | null;
-  parent?: { type: string; name?: { type: string; name?: string } };
-};
-
-type MaybeExpr =
-  | {
-      type: string;
-      value?: unknown;
-      consequent?: MaybeExpr;
-      alternate?: MaybeExpr;
-    }
-  | null
-  | undefined;
-
 // Collect the string literals an expression can evaluate to. Covers a bare
 // literal plus both branches of a ternary (recursing for nested ones), so a
 // dynamic `type={isDate ? "date" : "text"}` is caught the same as a static
 // `type="date"`. Deliberately conservative: only literal branches are read, so
 // genuinely runtime-computed values are left alone.
-const literalStringsOf = (expr: MaybeExpr): string[] => {
-  if (!expr) {
+const literalStringsOf = (expr: unknown): string[] => {
+  if (typeof expr !== "object" || expr === null || !("type" in expr)) {
     return [];
   }
-  if (expr.type === "Literal" && typeof expr.value === "string") {
+  if (
+    expr.type === "Literal" &&
+    "value" in expr &&
+    typeof expr.value === "string"
+  ) {
     return [expr.value];
   }
-  if (expr.type === "ConditionalExpression") {
+  if (
+    expr.type === "ConditionalExpression" &&
+    "consequent" in expr &&
+    "alternate" in expr
+  ) {
     return [
       ...literalStringsOf(expr.consequent),
       ...literalStringsOf(expr.alternate),
@@ -87,18 +66,18 @@ const literalStringsOf = (expr: MaybeExpr): string[] => {
   return [];
 };
 
-const getBannedKind = (value: JSXAttribute["value"]): string | undefined => {
-  if (!value) {
+const getBannedKind = (value: unknown): string | undefined => {
+  if (typeof value !== "object" || value === null || !("type" in value)) {
     return undefined;
   }
   const candidates =
-    value.type === "JSXExpressionContainer"
-      ? literalStringsOf(value.expression as MaybeExpr)
-      : literalStringsOf(value as MaybeExpr);
+    value.type === "JSXExpressionContainer" && "expression" in value
+      ? literalStringsOf(value.expression)
+      : literalStringsOf(value);
   return candidates.find((candidate) => BANNED_TYPES.has(candidate));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-date-input" },
   rules: {
     "no-raw-date-input": {
@@ -112,9 +91,9 @@ export default {
             "@/components/date-picker-popover instead.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          JSXAttribute(node: JSXAttribute) {
+          JSXAttribute(node) {
             if (
               node.name.type !== "JSXIdentifier" ||
               node.name.name !== "type"
@@ -146,4 +125,4 @@ export default {
       },
     },
   },
-};
+});

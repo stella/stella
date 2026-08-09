@@ -25,6 +25,8 @@
 //   // oxlint-disable-next-line require-escape-like/require-escape-like
 //   with a `// SAFETY:` note when the interpolation is provably wildcard-free.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isCallTo, isIdentifier, unwrapExpression } from "./utils.ts";
 
 const LIKE_OPERATORS = new Set(["like", "ilike", "notLike", "notIlike"]);
@@ -45,7 +47,7 @@ const hasUnescapedInterpolation = (template: unknown): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-escape-like" },
   rules: {
     "require-escape-like": {
@@ -58,7 +60,7 @@ export default {
             "matches literally instead of acting as a wildcard.",
         },
       },
-      create(context) {
+      createOnce(context) {
         // `const p = `…`;` inits, so `like(col, p)` resolves to the template
         // that built it. Declarations are visited before the call site.
         const templateConsts = new Map<string, unknown>();
@@ -72,6 +74,9 @@ export default {
         };
 
         return {
+          before() {
+            templateConsts.clear();
+          },
           VariableDeclarator(node) {
             const id = (node as { id?: unknown }).id;
             const init = unwrapExpression((node as { init?: unknown }).init);
@@ -101,4 +106,4 @@ export default {
       },
     },
   },
-};
+});

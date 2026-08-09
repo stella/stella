@@ -59,6 +59,7 @@
 // bounded/cheap scan this rule relies on; do not write that literal pattern
 // in prose comments inside `-components`/`-hooks`/`-queries` files.
 
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -173,15 +174,18 @@ const readColocatedFile = (basePath) => {
 // also decline to attribute (e.g. `useSuspenseQuery(factory.options())`).
 const CHILD_SUSPENSE_RE = /useSuspenseQuery\(\s*([A-Za-z_$][\w$]*)\s*([(),])/g;
 
-const suspenseFactoriesInSource = (sourceText) => {
-  const factories = new Set();
+const suspenseFactoriesInSource = (sourceText: string): Set<string> => {
+  const factories = new Set<string>();
   for (const match of sourceText.matchAll(CHILD_SUSPENSE_RE)) {
-    factories.add(match[1]);
+    const factory = match[1];
+    if (factory !== undefined) {
+      factories.add(factory);
+    }
   }
   return factories;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-loader-prefetch" },
   rules: {
     "require-loader-prefetch": {
@@ -226,14 +230,21 @@ export default {
             "then consumes the warm cache.",
         },
       },
-      create(context) {
+      createOnce(context) {
         let isRouteFile = false;
         let routeOptions: { properties: unknown } | null = null;
-        const suspenseCalls: { factory: string; node: unknown }[] = [];
+        const suspenseCalls: { factory: string; node: Ranged }[] = [];
         const referencedInLoader = new Set();
-        const colocatedImports: { node: unknown; source: string }[] = [];
+        const colocatedImports: { node: Ranged; source: string }[] = [];
 
         return {
+          before() {
+            isRouteFile = false;
+            routeOptions = null;
+            suspenseCalls.length = 0;
+            referencedInLoader.clear();
+            colocatedImports.length = 0;
+          },
           CallExpression(node) {
             const callee = node.callee;
 
@@ -352,4 +363,4 @@ export default {
       },
     },
   },
-};
+});

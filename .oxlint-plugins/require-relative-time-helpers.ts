@@ -11,7 +11,8 @@
 // remain valid. The `ad-hoc-relative-time-formatting` ratchet metric covers
 // aliases and textual variants these exact AST shapes cannot identify.
 
-import type { AstNode } from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   filenameForContext,
   getImportedName,
@@ -19,15 +20,6 @@ import {
   isAstNode,
   isStringLiteral,
 } from "./utils.ts";
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "duplicateImport" | "inlineFullTimestamp" | "nativeTitle";
-  }) => void;
-};
 
 const DUPLICATE_MODULE = "@/components/workspaces/entity-utils";
 const CANONICAL_MODULE = "@/lib/relative-time";
@@ -68,7 +60,7 @@ const objectPropertyNames = (node: unknown): Set<string> => {
   return names;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-relative-time-helpers" },
   rules: {
     "require-relative-time-helpers": {
@@ -85,19 +77,22 @@ export default {
             "attribute for a full timestamp.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         const fullTimestampBindings = new Set(["formatFullTimestamp"]);
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/web/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/require-relative-time-helpers.fixture.tsx",
-          )
-        ) {
-          return {};
-        }
+        let filename = "";
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            filename = filenameForContext(context);
+            fullTimestampBindings.clear();
+            fullTimestampBindings.add("formatFullTimestamp");
+            return (
+              filename.includes("apps/web/src/") ||
+              filename.endsWith(
+                ".oxlint-plugins/__fixtures__/require-relative-time-helpers.fixture.tsx",
+              )
+            );
+          },
+          ImportDeclaration(node) {
             const source = node.source;
             if (!isStringLiteral(source) || !Array.isArray(node.specifiers)) {
               return;
@@ -125,7 +120,7 @@ export default {
               }
             }
           },
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             if (filename.endsWith("apps/web/src/lib/relative-time.ts")) {
               return;
             }
@@ -146,7 +141,7 @@ export default {
               }
             }
           },
-          JSXAttribute(node: AstNode) {
+          JSXAttribute(node) {
             if (staticName(node.name) !== "title" || !isAstNode(node.value)) {
               return;
             }
@@ -172,4 +167,4 @@ export default {
       },
     },
   },
-};
+});

@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban direct React `useEffect` in app code.
 //
 // Most useEffect usage compensates for primitives React already gives you:
@@ -22,7 +23,7 @@ const isAllowedFile = (context, allowedFiles) => {
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-use-effect" },
   rules: {
     "no-raw-use-effect": {
@@ -42,16 +43,7 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         // Local names bound to React's `useEffect` (named import, possibly
         // aliased) and React namespace bindings (default or `* as React`).
         // Tracking the import keeps the rule from firing on an unrelated
@@ -60,6 +52,21 @@ export default {
         const reactNamespaces = new Set();
 
         return {
+          before() {
+            useEffectAliases.clear();
+            reactNamespaces.clear();
+            const options = context.options?.at(0);
+            const allowedFiles =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options) &&
+              Array.isArray(options.allowedFiles)
+                ? options.allowedFiles.filter(
+                    (value) => typeof value === "string",
+                  )
+                : [];
+            return !isAllowedFile(context, allowedFiles);
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== REACT_MODULE) {
               return;
@@ -105,4 +112,4 @@ export default {
       },
     },
   },
-};
+});

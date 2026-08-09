@@ -10,7 +10,8 @@
 // `apps/api/src/lib/audit-log.ts` is the sole owner of the physical insert. The
 // `direct-audit-log-insert` ratchet metric covers the same imported aliases.
 
-import type { AstNode } from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   filenameForContext,
   getImportedName,
@@ -20,16 +21,10 @@ import {
   isStringLiteral,
 } from "./utils.ts";
 
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: "directInsert" }) => void;
-};
-
 const isIdentifierNamed = (node: unknown, name: string): boolean =>
   isIdentifier(node, name);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-direct-audit-log-insert" },
   rules: {
     "no-direct-audit-log-insert": {
@@ -42,22 +37,22 @@ export default {
             "consistent.",
         },
       },
-      create(context: RuleContext) {
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/api/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/no-direct-audit-log-insert.fixture.ts",
-          )
-        ) {
-          return {};
-        }
-        if (filename.endsWith("apps/api/src/lib/audit-log.ts")) {
-          return {};
-        }
+      createOnce(context) {
         const auditLogBindings = new Set(["auditLogs"]);
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            auditLogBindings.clear();
+            auditLogBindings.add("auditLogs");
+            const filename = filenameForContext(context);
+            return (
+              (filename.includes("apps/api/src/") ||
+                filename.endsWith(
+                  ".oxlint-plugins/__fixtures__/no-direct-audit-log-insert.fixture.ts",
+                )) &&
+              !filename.endsWith("apps/api/src/lib/audit-log.ts")
+            );
+          },
+          ImportDeclaration(node) {
             if (
               !isStringLiteral(node.source) ||
               node.source.value !== "@/api/db/schema" ||
@@ -75,15 +70,15 @@ export default {
               }
             }
           },
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             const callee = node.callee;
+            const firstArgument = node.arguments.at(0);
             if (
               !isAstNode(callee) ||
               callee.type !== "MemberExpression" ||
               !isIdentifierNamed(callee.property, "insert") ||
-              !Array.isArray(node.arguments) ||
-              !isIdentifier(node.arguments.at(0)) ||
-              !auditLogBindings.has(node.arguments[0].name)
+              !isIdentifier(firstArgument) ||
+              !auditLogBindings.has(firstArgument.name)
             ) {
               return;
             }
@@ -93,4 +88,4 @@ export default {
       },
     },
   },
-};
+});

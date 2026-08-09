@@ -24,7 +24,9 @@
 // The `message` member must be present, non-optional, and typed `string`;
 // `message?: string` or `message: <not string>` is flagged too.
 
-export default {
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+export default eslintCompatPlugin({
   meta: { name: "tagged-error-requires-message" },
   rules: {
     "tagged-error-requires-message": {
@@ -37,7 +39,7 @@ export default {
             "reporting, and serialize paths have no human-readable text.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const checkClass = (node) => {
           // superClass is the tag factory call: TaggedError("Name").
           const superClass = node.superClass;
@@ -96,4 +98,4 @@ export default {
       },
     },
   },
-};
+});

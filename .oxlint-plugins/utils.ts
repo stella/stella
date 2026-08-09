@@ -4,7 +4,9 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-export type AstNode = { type: string } & Record<string, unknown>;
+import type { Ranged } from "@oxlint/plugins";
+
+export type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
 type FilenameContext = {
   filename?: string;
@@ -18,12 +20,13 @@ export const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
   "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
+  typeof (node as { type: unknown }).type === "string" &&
+  "range" in node;
 
 export const isIdentifier = (
   node: unknown,
   name?: string,
-): node is AstNode & { name: string } => {
+): node is AstNode & { type: "Identifier"; name: string } => {
   if (!isAstNode(node) || node.type !== "Identifier") {
     return false;
   }
@@ -35,7 +38,7 @@ export const isIdentifier = (
 
 export const isStringLiteral = (
   node: unknown,
-): node is AstNode & { value: string } =>
+): node is AstNode & { type: "Literal"; value: string } =>
   isAstNode(node) && node.type === "Literal" && typeof node.value === "string";
 
 // Resolve the static name of a Property or MemberExpression key:

@@ -16,6 +16,8 @@
 // mailto buttons, hyperlinks), so policing them would be noise. The
 // `entity-kind-glyph-adhoc` ratchet metric covers whatever the ban cannot.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName } from "./utils.ts";
 
 const LUCIDE_MODULE = "lucide-react";
@@ -44,7 +46,7 @@ const ALLOWED_FILES = [
 const filenameForContext = (context) =>
   (context.filename ?? context.getFilename?.() ?? "").replaceAll("\\", "/");
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-direct-entity-glyph" },
   rules: {
     "no-direct-entity-glyph": {
@@ -60,13 +62,12 @@ export default {
             "when the entity is still resolving.",
         },
       },
-      create(context) {
-        const filename = filenameForContext(context);
-        if (ALLOWED_FILES.some((allowed) => filename.endsWith(allowed))) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
+          before() {
+            const filename = filenameForContext(context);
+            return !ALLOWED_FILES.some((allowed) => filename.endsWith(allowed));
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== LUCIDE_MODULE) {
               return;
@@ -89,4 +90,4 @@ export default {
       },
     },
   },
-};
+});

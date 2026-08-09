@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Disallow untranslated user-facing JSX text in product UI.
 // Stella uses use-intl for runtime translations. Raw JSX text children
 // regress i18n coverage because they do not appear in locale JSON files
@@ -16,14 +18,8 @@
 
 type AstNode = { type: string } & Record<string, unknown>;
 
-type RuleContext = {
+type SourceTextContext = {
   getSourceCode?: () => { text?: unknown };
-  options?: unknown[];
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "untranslatedText";
-    data: { text: string };
-  }) => void;
   sourceCode?: { text?: unknown };
 };
 
@@ -194,7 +190,7 @@ const regexArrayOption = (
     }
   });
 
-const sourceTextForContext = (context: RuleContext): string => {
+const sourceTextForContext = (context: SourceTextContext): string => {
   if (typeof context.sourceCode?.text === "string") {
     return context.sourceCode.text;
   }
@@ -202,7 +198,7 @@ const sourceTextForContext = (context: RuleContext): string => {
   return typeof fallback?.text === "string" ? fallback.text : "";
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-untranslated-jsx-literal" },
   rules: {
     "no-untranslated-jsx-literal": {
@@ -238,40 +234,10 @@ export default {
           },
         ],
       },
-      create(context: RuleContext) {
-        const options = isRecord(context.options?.[0])
-          ? context.options[0]
-          : {};
-        const configuredMarkers = stringArrayOption(
-          options,
-          "translationMarkers",
-        );
-        const translationMarkers =
-          configuredMarkers.length > 0
-            ? configuredMarkers
-            : ["useTranslations", "getTranslations", "TranslationKey"];
-
-        if (options.requireTranslationUsage === true) {
-          const sourceText = sourceTextForContext(context);
-          if (
-            !translationMarkers.some((marker) => sourceText.includes(marker))
-          ) {
-            return {};
-          }
-        }
-
-        const ignoredElementNames = new Set([
-          ...DEFAULT_IGNORED_ELEMENT_NAMES,
-          ...stringArrayOption(options, "ignoredElementNames"),
-        ]);
-        const allowedText = new Set([
-          ...DEFAULT_ALLOWED_TEXT,
-          ...stringArrayOption(options, "allowedText"),
-        ]);
-        const allowedTextPatterns = regexArrayOption(
-          options,
-          "allowedTextPatterns",
-        );
+      createOnce(context) {
+        const ignoredElementNames = new Set<string>();
+        const allowedText = new Set<string>();
+        let allowedTextPatterns: RegExp[] = [];
 
         const shouldIgnoreText = (text: string): boolean => {
           if (text.length <= 1) {
@@ -292,7 +258,7 @@ export default {
           return allowedTextPatterns.some((pattern) => pattern.test(text));
         };
 
-        const checkText = (node: unknown, rawValue: string) => {
+        const checkText = (node, rawValue: string) => {
           const text = normalizeText(rawValue);
           if (shouldIgnoreText(text)) {
             return;
@@ -308,13 +274,59 @@ export default {
         };
 
         return {
-          JSXText(node: AstNode) {
+          before() {
+            const options = isRecord(context.options?.[0])
+              ? context.options[0]
+              : {};
+            const configuredMarkers = stringArrayOption(
+              options,
+              "translationMarkers",
+            );
+            const translationMarkers =
+              configuredMarkers.length > 0
+                ? configuredMarkers
+                : ["useTranslations", "getTranslations", "TranslationKey"];
+
+            if (
+              options.requireTranslationUsage === true &&
+              !translationMarkers.some((marker) =>
+                sourceTextForContext(context).includes(marker),
+              )
+            ) {
+              return false;
+            }
+
+            ignoredElementNames.clear();
+            for (const name of DEFAULT_IGNORED_ELEMENT_NAMES) {
+              ignoredElementNames.add(name);
+            }
+            for (const name of stringArrayOption(
+              options,
+              "ignoredElementNames",
+            )) {
+              ignoredElementNames.add(name);
+            }
+
+            allowedText.clear();
+            for (const text of DEFAULT_ALLOWED_TEXT) {
+              allowedText.add(text);
+            }
+            for (const text of stringArrayOption(options, "allowedText")) {
+              allowedText.add(text);
+            }
+            allowedTextPatterns = regexArrayOption(
+              options,
+              "allowedTextPatterns",
+            );
+            return true;
+          },
+          JSXText(node) {
             if (typeof node.value !== "string") {
               return;
             }
             checkText(node, node.value);
           },
-          JSXExpressionContainer(node: AstNode) {
+          JSXExpressionContainer(node) {
             if (!isJsxChildExpression(node)) {
               return;
             }
@@ -328,4 +340,4 @@ export default {
       },
     },
   },
-};
+});

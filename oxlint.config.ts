@@ -13,6 +13,109 @@ import {
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
 
+const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
+  files: [`.oxlint-plugins/__fixtures__/${file}`],
+  rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
+});
+
+const fixtureRuleOverrides = [
+  fixtureRuleOverride("auth-lifecycle.fixture.ts", [
+    "auth-lifecycle/after-remove-member-revokes-artifacts",
+    "auth-lifecycle/no-direct-auth-artifact-delete",
+  ]),
+  fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
+    "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
+  ]),
+  fixtureRuleOverride("mcp-security.fixture.ts", [
+    "mcp-security/no-direct-oauth-client-join",
+    "mcp-security/redact-oauth-registration-response",
+  ]),
+  fixtureRuleOverride("no-body-ownership-ids.fixture.ts", [
+    "no-body-ownership-ids/no-body-ownership-ids",
+  ]),
+  fixtureRuleOverride("no-crypto-random-uuid.fixture.ts", [
+    "no-crypto-random-uuid/no-crypto-random-uuid",
+  ]),
+  fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
+    "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
+  ]),
+  fixtureRuleOverride("no-inline-style-colors.fixture.ts", [
+    "no-inline-style-colors/no-inline-style-colors",
+  ]),
+  fixtureRuleOverride("no-offset-pagination.fixture.ts", [
+    "no-offset-pagination/no-offset-pagination",
+  ]),
+  fixtureRuleOverride("no-physical-properties.fixture.ts", [
+    "no-physical-properties/no-physical-properties",
+  ]),
+  fixtureRuleOverride("no-public-law-browser-globals.fixture.ts", [
+    "no-public-law-browser-globals/no-public-law-browser-globals",
+  ]),
+  fixtureRuleOverride("no-raw-api-url.fixture.ts", [
+    "no-raw-api-url/no-raw-api-url",
+  ]),
+  fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
+    "no-raw-error-logging/no-raw-error-logging",
+  ]),
+  fixtureRuleOverride("no-raw-foreground-opacity.fixture.ts", [
+    "no-raw-foreground-opacity/no-raw-foreground-opacity",
+  ]),
+  fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
+    "no-raw-public-law-seo/no-raw-public-law-seo",
+  ]),
+  fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
+    "no-raw-user-id-schema/no-raw-user-id-schema",
+  ]),
+  fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
+    "no-secret-in-log-sink/no-secret-in-log-sink",
+  ]),
+  fixtureRuleOverride("no-unbranded-ownership-id-param.fixture.ts", [
+    "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param",
+  ]),
+  fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
+    "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
+  ]),
+  fixtureRuleOverride("no-untyped-updates.fixture.ts", [
+    "no-untyped-updates/no-untyped-updates",
+  ]),
+  fixtureRuleOverride("public-case-law-db-boundary.fixture.ts", [
+    "public-case-law-db-boundary/public-case-law-db-boundary",
+  ]),
+  fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
+    "require-audit-on-mutation/require-audit-on-mutation",
+  ]),
+  fixtureRuleOverride("require-eden-error-check.fixture.ts", [
+    "require-eden-error-check/require-eden-error-check",
+  ]),
+  fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
+    "require-fetch-timeout/require-fetch-timeout",
+  ]),
+  fixtureRuleOverride("require-router-select.fixture.ts", [
+    "require-router-select/require-router-select",
+  ]),
+  fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
+    "require-safe-route-handlers/require-safe-route-handlers",
+  ]),
+  fixtureRuleOverride("security-guards.fixture.tsx", [
+    "security-guards/no-raw-filename-write",
+    "security-guards/no-unsanitized-href",
+    "security-guards/no-unscoped-user-query",
+  ]),
+  fixtureRuleOverride("stella-toast.fixture.ts", ["stella-toast/stella-toast"]),
+  fixtureRuleOverride("suppression-hygiene.fixture.ts", [
+    "suppression-hygiene/no-foreign-directive",
+    "suppression-hygiene/require-description",
+  ]),
+];
+
+const browserSurfaceFiles = [
+  "apps/web/src/**/*.{ts,tsx}",
+  "apps/desktop/src/**/*.{ts,tsx}",
+  "apps/landing/src/**/*.{ts,tsx}",
+  "apps/playground/src/**/*.{ts,tsx}",
+  "packages/ui/src/**/*.{ts,tsx}",
+] as const;
+
 export default defineConfig({
   extends: [core, react],
   rules: {
@@ -442,6 +545,10 @@ export default defineConfig({
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
+    "./.oxlint-plugins/require-safe-window-open.ts",
+    "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
+    "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -802,15 +909,55 @@ export default defineConfig({
       // Browser surfaces only: `document` does not exist in apps/api's
       // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
       files: [
-        "apps/web/src/**/*.{ts,tsx}",
-        "apps/desktop/src/**/*.{ts,tsx}",
-        "apps/landing/src/**/*.{ts,tsx}",
-        "apps/playground/src/**/*.{ts,tsx}",
-        "packages/ui/src/**/*.{ts,tsx}",
+        ...browserSurfaceFiles,
         ".oxlint-plugins/__fixtures__/no-document-cookie.fixture.ts",
       ],
       rules: {
         "no-document-cookie/no-document-cookie": "error",
+      },
+    },
+    {
+      // Window-opening primitives are restricted to the isolated navigation
+      // boundary and the validated OAuth compatibility path.
+      files: [
+        ...browserSurfaceFiles,
+        ".oxlint-plugins/__fixtures__/require-safe-window-open.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/web/src/lib/open-isolated-window.ts",
+        // OAuth intentionally preserves opener as a BroadcastChannel fallback;
+        // this module owns origin/schema validation for that narrow exception.
+        "apps/web/src/lib/mcp-oauth-channel.ts",
+      ],
+      rules: {
+        "require-safe-window-open/require-safe-window-open": "error",
+      },
+    },
+    {
+      // Browser-owned resources and credentials require paired object-URL
+      // cleanup and server-managed auth cookies. Navigation exceptions above
+      // must not weaken these independent boundaries.
+      files: [
+        ...browserSurfaceFiles,
+        ".oxlint-plugins/__fixtures__/no-object-url-leak.fixture.ts",
+        ".oxlint-plugins/__fixtures__/no-auth-token-in-web-storage.fixture.ts",
+      ],
+      rules: {
+        "no-object-url-leak/no-object-url-leak": "error",
+        "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
+      },
+    },
+    {
+      // Path containment is a filesystem concern. The rule traces Node path
+      // imports and ignores generic string-prefix checks.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-path-prefix-containment.fixture.ts",
+      ],
+      rules: {
+        "no-path-prefix-containment/no-path-prefix-containment": "error",
       },
     },
     {
@@ -2155,5 +2302,6 @@ export default defineConfig({
         ],
       },
     },
+    ...fixtureRuleOverrides,
   ],
 });

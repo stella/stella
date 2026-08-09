@@ -93,6 +93,8 @@
 //   // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
 //   // SAFETY: <reason the loop cannot scale with tenant/input data>
 
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier, unwrapExpression } from "./utils.ts";
 
 const LOOP_TYPES = new Set([
@@ -478,7 +480,7 @@ const findLoopOrMapContext = (
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-db-await-in-loop" },
   rules: {
     "no-db-await-in-loop": {
@@ -494,9 +496,9 @@ export default {
             "explaining the bound.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const reportAwaitedExpression = (
-          node: unknown,
+          node: ESTree.AwaitExpression | ESTree.YieldExpression,
           argument: unknown,
         ): void => {
           if (isDbAwaitCall(argument)) {
@@ -511,11 +513,11 @@ export default {
         };
 
         return {
-          AwaitExpression(node: unknown) {
+          AwaitExpression(node) {
             const argument = unwrapExpression(getField(node, "argument"));
             reportAwaitedExpression(node, argument);
           },
-          YieldExpression(node: unknown) {
+          YieldExpression(node) {
             if (getField(node, "delegate") !== true) {
               return;
             }
@@ -530,4 +532,4 @@ export default {
       },
     },
   },
-};
+});

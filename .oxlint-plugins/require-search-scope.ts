@@ -8,6 +8,13 @@
 // adversarial integration tests prove the predicates those builders emit.
 
 import {
+  eslintCompatPlugin,
+  type ESTree,
+  type Scope as OxlintScope,
+  type Variable,
+} from "@oxlint/plugins";
+
+import {
   getImportedName,
   isAstNode,
   isIdentifier,
@@ -16,52 +23,14 @@ import {
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
-type ScopeDefinition = {
-  node: unknown;
-  parent?: unknown;
-  type: string;
-};
-
-type ScopeVariable = {
-  defs: ScopeDefinition[];
-};
+type ScopeVariable = Variable;
 
 type SqlParameterBindings = ReadonlyMap<ScopeVariable, unknown>;
 
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
+type Scope = OxlintScope;
 
-type RuleContext = {
-  report: (
-    descriptor:
-      | {
-          data: { table: string };
-          messageId: "missingScope";
-          node: unknown;
-        }
-      | {
-          messageId: "unavailableIdentifier";
-          node: unknown;
-        }
-      | {
-          messageId: "unavailableRaw";
-          node: unknown;
-        }
-      | {
-          messageId: "unavailableRelation";
-          node: unknown;
-        }
-      | {
-          messageId: "unavailableCooked";
-          node: unknown;
-        },
-  ) => void;
-  sourceCode: {
-    getScope: (node: unknown) => Scope;
-  };
-};
+const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
+  isIdentifier(node);
 
 type ApprovedImport = {
   importedName: string;
@@ -387,22 +356,15 @@ const normalizeProjectionAlias = (alias: string | undefined): string | null => {
   return SQL_ALIAS_STOP_WORDS.has(normalized) ? null : normalized;
 };
 
-const SQL_UNICODE_IDENTIFIER_PATTERN =
-  `U&"(?:[^"]|"")*"` + `(?:\\s*UESCAPE\\s*'(?:[^']|'')*')?`;
-const SQL_IDENTIFIER_PATTERN =
-  `(?:${SQL_UNICODE_IDENTIFIER_PATTERN}|` +
-  `"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
-const SQL_RELATION_PATH_PATTERN =
-  `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
+const SQL_UNICODE_IDENTIFIER_PATTERN = `U&"(?:[^"]|"")*"(?:\\s*UESCAPE\\s*'(?:[^']|'')*')?`;
+const SQL_IDENTIFIER_PATTERN = `(?:${SQL_UNICODE_IDENTIFIER_PATTERN}|"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const SQL_RELATION_PATH_PATTERN = `${SQL_IDENTIFIER_PATTERN}(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
 const SQL_RELATION_REFERENCE = new RegExp(
-  `(?:\\b(?:from|join|table|using)\\s+|,\\s*)` +
-    `(?:only\\s+)?(?:\\(\\s*)*(?:only\\s+)?` +
-    `(${SQL_RELATION_PATH_PATTERN})` +
-    `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
+  `(?:\\b(?:from|join|table|using)\\s+|,\\s*)(?:only\\s+)?(?:\\(\\s*)*(?:only\\s+)?(${SQL_RELATION_PATH_PATTERN})(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
   "giu",
 );
 const SQL_COPY_TO_RELATION_REFERENCE = new RegExp(
-  `\\bcopy\\s+(${SQL_RELATION_PATH_PATTERN})` + `(?:\\s*\\([^)]*\\))?\\s+to\\b`,
+  `\\bcopy\\s+(${SQL_RELATION_PATH_PATTERN})(?:\\s*\\([^)]*\\))?\\s+to\\b`,
   "giu",
 );
 const SQL_FROM_CLAUSE_BOUNDARY =
@@ -451,16 +413,16 @@ const unicodeEscapedIdentifierValue = (identifier: string): string | null => {
     index = digitsStart + digitCount - 1;
     if (
       codePoint === 0 ||
-      codePoint > 0x10_ffff ||
-      (usesSixDigits && codePoint >= 0xd800 && codePoint <= 0xdfff)
+      codePoint > 0x10_ff_ff ||
+      (usesSixDigits && codePoint >= 0xd8_00 && codePoint <= 0xdf_ff)
     ) {
       return null;
     }
-    if (codePoint < 0xd800 || codePoint > 0xdfff) {
+    if (codePoint < 0xd8_00 || codePoint > 0xdf_ff) {
       decoded += String.fromCodePoint(codePoint);
       continue;
     }
-    if (codePoint > 0xdbff) {
+    if (codePoint > 0xdb_ff) {
       return null;
     }
     const lowSurrogatePrefix = encoded.slice(index + 1, index + 2);
@@ -472,11 +434,11 @@ const unicodeEscapedIdentifierValue = (identifier: string): string | null => {
       return null;
     }
     const lowSurrogate = Number.parseInt(lowSurrogateDigits, 16);
-    if (lowSurrogate < 0xdc00 || lowSurrogate > 0xdfff) {
+    if (lowSurrogate < 0xdc_00 || lowSurrogate > 0xdf_ff) {
       return null;
     }
     decoded += String.fromCodePoint(
-      0x10_000 + (codePoint - 0xd800) * 0x400 + lowSurrogate - 0xdc00,
+      0x1_00_00 + (codePoint - 0xd8_00) * 0x4_00 + lowSurrogate - 0xdc_00,
     );
     index += 5;
   }
@@ -1435,7 +1397,7 @@ const sqlScopeContextAfter = (
   return context;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-search-scope" },
   rules: {
     "require-search-scope": {
@@ -1460,7 +1422,7 @@ export default {
             "so authorization scope can be verified.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         type MutableSqlRoot = {
           declarationContainer: unknown;
           initializer: unknown;
@@ -1487,9 +1449,10 @@ export default {
           }
         >();
 
-        const resolveVariable = (
-          identifier: AstNode & { name: string },
-        ): ScopeVariable | null => {
+        const resolveVariable = (identifier: unknown): ScopeVariable | null => {
+          if (!isScopeIdentifier(identifier)) {
+            return null;
+          }
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope) {
             const variable = scope.set.get(identifier.name);
@@ -3294,7 +3257,7 @@ export default {
             ) {
               if (
                 !Array.isArray(parent.arguments) ||
-                !parent.arguments.some((argument) => argument === child)
+                !parent.arguments.includes(child)
               ) {
                 return false;
               }
@@ -3346,6 +3309,10 @@ export default {
         };
 
         return {
+          before() {
+            mutableSqlAppendSequences.clear();
+            deferredConstSqlTemplates.clear();
+          },
           "Program:exit"() {
             for (const [variable, deferred] of deferredConstSqlTemplates) {
               if (!mutableSqlAppendSequences.has(variable)) {
@@ -3528,4 +3495,4 @@ export default {
       },
     },
   },
-};
+});

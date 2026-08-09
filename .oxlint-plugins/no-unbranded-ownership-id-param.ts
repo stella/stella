@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow ownership-ID parameters typed as bare `string`.
 //
 // Companion to `no-body-ownership-ids`. That rule blocks the
@@ -189,7 +190,7 @@ const checkParam = (context, param, triggerNames) => {
   }
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-unbranded-ownership-id-param" },
   rules: {
     "no-unbranded-ownership-id-param": {
@@ -215,12 +216,8 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const triggerNames =
-          Array.isArray(options.names) && options.names.length > 0
-            ? new Set(options.names)
-            : DEFAULT_NAMES;
+      createOnce(context) {
+        let triggerNames = DEFAULT_NAMES;
 
         const visitFunctionLike = (node) => {
           if (!Array.isArray(node.params)) {
@@ -240,6 +237,23 @@ export default {
         };
 
         return {
+          before() {
+            const options = context.options?.[0] ?? {};
+            const configuredNames =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options)
+                ? options["names"]
+                : undefined;
+            triggerNames =
+              Array.isArray(configuredNames) && configuredNames.length > 0
+                ? new Set(
+                    configuredNames.filter(
+                      (name): name is string => typeof name === "string",
+                    ),
+                  )
+                : DEFAULT_NAMES;
+          },
           FunctionDeclaration: visitFunctionLike,
           FunctionExpression: visitFunctionLike,
           ArrowFunctionExpression: visitFunctionLike,
@@ -250,4 +264,4 @@ export default {
       },
     },
   },
-};
+});

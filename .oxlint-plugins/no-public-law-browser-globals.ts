@@ -1,11 +1,4 @@
-import { isIdentifier } from "./utils.ts";
-
-type RuleContext = {
-  report: (descriptor: {
-    node: unknown;
-    messageId: "publicLawBrowserGlobal";
-  }) => void;
-};
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
 const BROWSER_GLOBALS = new Set([
   "document",
@@ -15,7 +8,7 @@ const BROWSER_GLOBALS = new Set([
   "window",
 ]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
   rules: {
     "no-public-law-browser-globals": {
@@ -26,10 +19,10 @@ export default {
             "Public law modules must be SSR-safe for crawlers. Do not reference browser globals directly.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          Identifier(node: unknown) {
-            if (isIdentifier(node) && BROWSER_GLOBALS.has(node.name)) {
+          Identifier(node) {
+            if (BROWSER_GLOBALS.has(node.name)) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
             }
           },
@@ -37,4 +30,4 @@ export default {
       },
     },
   },
-};
+});

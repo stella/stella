@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 // Disallow user ID request schemas typed as raw strings.
 // User IDs are auth-provider strings, but handlers should still use the
 // branded `tUserId` schema at boundaries. That prevents ownership-like fields
@@ -58,7 +60,7 @@ const containsRawStringSchema = (node) => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-user-id-schema" },
   rules: {
     "no-raw-user-id-schema": {
@@ -71,9 +73,9 @@ export default {
             "Contact owner field '{{name}}' must be validated with validateOrgUserId before it is written.",
         },
       },
-      create(context) {
+      createOnce(context) {
         let hasValidateOrgUserId = false;
-        const ownerFieldNodes: { name: string; node: unknown }[] = [];
+        const ownerFieldNodes: { name: string; node: Ranged }[] = [];
 
         const checkProperty = (node) => {
           const name = getPropertyName(node.key);
@@ -100,6 +102,10 @@ export default {
         };
 
         return {
+          before() {
+            hasValidateOrgUserId = false;
+            ownerFieldNodes.length = 0;
+          },
           Identifier(node) {
             if (node.name === "validateOrgUserId") {
               hasValidateOrgUserId = true;
@@ -122,4 +128,4 @@ export default {
       },
     },
   },
-};
+});

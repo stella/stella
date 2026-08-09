@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow spreading a bare input object into a TanStack Query key array.
 //
 // A `queryKey` array (and the arrays returned by `*Keys` query-key-factory
@@ -226,7 +227,7 @@ const isQueryKeyFactoryReturn = (arrayNode) => {
   return isInsideKeysFactoryObject(objectExpression);
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-spread-input-in-query-key" },
   rules: {
     "no-spread-input-in-query-key": {
@@ -242,7 +243,7 @@ export default {
             "fields explicitly instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const reportLeakyValue = (node) => {
           const value = unwrapExpression(node);
           if (!value || typeof value.type !== "string") {
@@ -322,4 +323,4 @@ export default {
       },
     },
   },
-};
+});

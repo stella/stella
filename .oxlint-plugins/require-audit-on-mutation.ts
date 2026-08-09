@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 // Require an audit emission in every handler function that mutates the
 // database, so a new write endpoint cannot land without leaving a
 // SOC 2 / ISO 27001 audit trail.
@@ -93,7 +95,7 @@ const isAuditCall = (node: unknown): boolean => {
 type Range = [number, number];
 
 type FunctionScope = {
-  mutationNodes: unknown[];
+  mutationNodes: Ranged[];
   hasAuditCall: boolean;
   hasSkipDirective: boolean;
   bodyRange: Range | null;
@@ -111,7 +113,7 @@ const asRange = (value: unknown): Range | null => {
   return [start, end];
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-audit-on-mutation" },
   rules: {
     "require-audit-on-mutation": {
@@ -128,7 +130,7 @@ export default {
             "ephemeral state).",
         },
       },
-      create(context) {
+      createOnce(context) {
         const scopes: FunctionScope[] = [];
 
         const pushScope = (node: unknown) => {
@@ -165,7 +167,7 @@ export default {
           }
         };
 
-        const recordCall = (node: unknown) => {
+        const recordCall = (node) => {
           const scope = currentScope();
           if (!scope) {
             return;
@@ -186,6 +188,10 @@ export default {
         const skipDirectiveRanges: Range[] = [];
 
         return {
+          before() {
+            scopes.length = 0;
+            skipDirectiveRanges.length = 0;
+          },
           Program(node) {
             const comments =
               isAstNode(node) &&
@@ -258,4 +264,4 @@ export default {
       },
     },
   },
-};
+});

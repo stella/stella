@@ -9,14 +9,17 @@
 // legitimate variants. The `hand-rolled-user-identity` ratchet metric covers
 // expressions and nesting shapes this exact AST comparison cannot recognize.
 
-import type { AstNode } from "./utils.ts";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+
 import { filenameForContext, isAstNode } from "./utils.ts";
 
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: "useIdentity" }) => void;
-};
+type RangedAstNode = Ranged & { type: string } & Record<string, unknown>;
+
+const isRangedAstNode = (node: unknown): node is RangedAstNode =>
+  isAstNode(node) &&
+  Array.isArray(node.range) &&
+  node.range.length === 2 &&
+  node.range.every((offset) => typeof offset === "number");
 
 const getJsxName = (node: unknown): string | null => {
   if (!isAstNode(node)) {
@@ -79,7 +82,7 @@ const userAvatarNameKey = (node: unknown): string | null => {
 
 type UserAvatarMatch = {
   key: string;
-  node: AstNode;
+  node: RangedAstNode;
 };
 
 const findUserAvatars = (node: unknown): UserAvatarMatch[] => {
@@ -87,7 +90,7 @@ const findUserAvatars = (node: unknown): UserAvatarMatch[] => {
     return [];
   }
   const key = userAvatarNameKey(node);
-  if (key !== null) {
+  if (key !== null && isRangedAstNode(node)) {
     return [{ key, node }];
   }
   if (!Array.isArray(node.children)) {
@@ -119,7 +122,7 @@ const containsRenderedExpression = (node: unknown, key: string): boolean => {
   return node.children.some((child) => containsRenderedExpression(child, key));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-hand-rolled-user-identity" },
   rules: {
     "no-hand-rolled-user-identity": {
@@ -131,19 +134,20 @@ export default {
             "same user name.",
         },
       },
-      create(context: RuleContext) {
-        const reportedAvatars = new Set<AstNode>();
-        const filename = filenameForContext(context);
-        if (
-          !filename.includes("apps/web/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/no-hand-rolled-user-identity.fixture.tsx",
-          )
-        ) {
-          return {};
-        }
+      createOnce(context) {
+        const reportedAvatars = new Set<RangedAstNode>();
         return {
-          JSXElement(node: AstNode) {
+          before() {
+            reportedAvatars.clear();
+            const filename = filenameForContext(context);
+            return (
+              filename.includes("apps/web/src/") ||
+              filename.endsWith(
+                ".oxlint-plugins/__fixtures__/no-hand-rolled-user-identity.fixture.tsx",
+              )
+            );
+          },
+          JSXElement(node) {
             if (!Array.isArray(node.children)) {
               return;
             }
@@ -170,4 +174,4 @@ export default {
       },
     },
   },
-};
+});

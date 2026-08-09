@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow direct casts to chat prompt boundary brands.
 //
 // The brands are minted by the chat prompt assembler only. Casting
@@ -1167,7 +1168,7 @@ const hasPromptBoundaryType = (
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-prompt-boundary-casts" },
   rules: {
     "no-prompt-boundary-casts": {
@@ -1179,10 +1180,7 @@ export default {
             "Return branded values from the prompt assembler instead.",
         },
       },
-      create(context) {
-        if (isAllowedFile(context)) {
-          return {};
-        }
+      createOnce(context) {
         const promptBoundaryTypeNames = new Set(PROMPT_BOUNDARY_TYPES);
         const namedTypeAnnotations = new Map();
         const assertionNodes: unknown[] = [];
@@ -1202,6 +1200,15 @@ export default {
         }
 
         return {
+          before() {
+            promptBoundaryTypeNames.clear();
+            for (const boundaryTypeName of PROMPT_BOUNDARY_TYPES) {
+              promptBoundaryTypeNames.add(boundaryTypeName);
+            }
+            namedTypeAnnotations.clear();
+            assertionNodes.length = 0;
+            return !isAllowedFile(context);
+          },
           ImportDeclaration(node) {
             for (const specifier of node.specifiers) {
               if (specifier.type !== "ImportSpecifier") {
@@ -1237,4 +1244,4 @@ export default {
       },
     },
   },
-};
+});

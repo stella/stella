@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban `<object literal> satisfies Partial<Record<Union, T>>` (with or
 // without a leading `as const`).
 //
@@ -89,7 +90,7 @@ const isObjectLiteralExpression = (node) => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-partial-record-satisfies" },
   rules: {
     "no-partial-record-satisfies": {
@@ -105,7 +106,7 @@ export default {
             "for genuinely sparse data.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           TSSatisfiesExpression(node) {
             if (!isPartialRecordType(node.typeAnnotation)) {
@@ -120,4 +121,4 @@ export default {
       },
     },
   },
-};
+});

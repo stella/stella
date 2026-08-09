@@ -1,10 +1,8 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isStringLiteral } from "./utils.ts";
 
 type AstNode = Record<string, unknown> & { type: string };
-
-type RuleContext = {
-  report: (descriptor: { node: unknown; messageId: "rawPublicLawSeo" }) => void;
-};
 
 const isAstNode = (value: unknown): value is AstNode =>
   typeof value === "object" &&
@@ -18,8 +16,8 @@ const isRawSeoToken = (value: string): boolean =>
   value.startsWith("og:") ||
   value.startsWith("twitter:");
 
-const rawTemplateText = (node: AstNode): string | null => {
-  if (node.type !== "TemplateElement") {
+const rawTemplateText = (node: unknown): string | null => {
+  if (!isAstNode(node) || node.type !== "TemplateElement") {
     return null;
   }
   const value = node.value;
@@ -30,7 +28,7 @@ const rawTemplateText = (node: AstNode): string | null => {
   return typeof raw === "string" ? raw : null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-public-law-seo" },
   rules: {
     "no-raw-public-law-seo": {
@@ -41,17 +39,14 @@ export default {
             "Public law routes must build canonical, robots, Open Graph, and Twitter metadata through createPublicLawHead().",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          Literal(node: unknown) {
+          Literal(node) {
             if (isStringLiteral(node) && isRawSeoToken(node.value)) {
               context.report({ node, messageId: "rawPublicLawSeo" });
             }
           },
-          TemplateElement(node: unknown) {
-            if (!isAstNode(node)) {
-              return;
-            }
+          TemplateElement(node) {
             const raw = rawTemplateText(node);
             if (raw !== null && isRawSeoToken(raw)) {
               context.report({ node, messageId: "rawPublicLawSeo" });
@@ -61,4 +56,4 @@ export default {
       },
     },
   },
-};
+});

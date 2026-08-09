@@ -35,6 +35,8 @@
 // with a comment explaining why. New singleton modules must use the lazy
 // `getX()` pattern instead of adding to that exemption list.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isIdentifier } from "./utils.ts";
 
 const CALL_DENYLIST = new Set([
@@ -52,7 +54,7 @@ const NEW_DENYLIST = new Set([
   "SQL",
 ]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-eager-singleton" },
   rules: {
     "no-eager-singleton": {
@@ -68,7 +70,7 @@ export default {
             "apps/api/src/lib/auth.ts or getS3() in apps/api/src/lib/s3.ts).",
         },
       },
-      create(context) {
+      createOnce(context) {
         let functionDepth = 0;
         // A non-static class field initializer (`class X { db = drizzle() }`)
         // evaluates once per instantiation, not at module evaluation time,
@@ -102,7 +104,7 @@ export default {
           functionDepth > 0 || nonStaticClassFieldDepth > 0;
 
         return {
-          Program() {
+          before() {
             functionDepth = 0;
             nonStaticClassFieldDepth = 0;
           },
@@ -146,4 +148,4 @@ export default {
       },
     },
   },
-};
+});

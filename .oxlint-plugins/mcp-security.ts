@@ -7,6 +7,8 @@
 //   2. OAuth client joins must stay behind the typed chat-time MCP connection
 //      loader, which normalizes raw nullable DB rows into a discriminated union.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isCallTo, isIdentifier } from "./utils.ts";
 
 const MCP_OAUTH_CLIENTS = "mcpOAuthClients";
@@ -39,7 +41,7 @@ const isAllowedOAuthClientJoinFile = (context) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "mcp-security" },
   rules: {
     "redact-oauth-registration-response": {
@@ -50,7 +52,7 @@ export default {
             "Persist MCP OAuth registrationResponse only via redactMcpOAuthRegistrationResponse(...). DCR responses can contain client secrets or registration tokens.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Property(node) {
             if (getPropertyName(node.key) !== "registrationResponse") {
@@ -78,10 +80,13 @@ export default {
             "Load mcpOAuthClients through the typed MCP connection loader. Direct joins can miss authorization-server identity and produce invalid OAuth rows.",
         },
       },
-      create(context) {
-        const isAllowedFile = isAllowedOAuthClientJoinFile(context);
+      createOnce(context) {
+        let isAllowedFile = false;
 
         return {
+          before() {
+            isAllowedFile = isAllowedOAuthClientJoinFile(context);
+          },
           CallExpression(node) {
             if (isAllowedFile || !isJoinCall(node)) {
               return;
@@ -96,4 +101,4 @@ export default {
       },
     },
   },
-};
+});
