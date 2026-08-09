@@ -18,6 +18,8 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
@@ -62,6 +64,7 @@ import {
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import {
@@ -69,7 +72,6 @@ import {
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
 import { getSearchProvider } from "@/api/lib/search/provider";
-import { broadcast } from "@/api/lib/sse";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { toSafeId } from "@/api/types";
@@ -858,10 +860,10 @@ const completeDocumentProcessingRun = async ({
   if (!completed.at(0)) {
     return false;
   }
-  broadcast(run.workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", run.workspaceId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    run.workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: run.entityId }),
+  );
   return true;
 };
 
@@ -2112,10 +2114,10 @@ const recoverFailedSearchIndex = async ({
         return false;
       }
 
-      broadcast(workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", workspaceId],
-      });
+      broadcastWorkspaceResourceUpdated(
+        workspaceId,
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      );
       return true;
     },
   });

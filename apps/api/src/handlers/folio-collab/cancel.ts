@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { folioCollabSessions } from "@/api/db/schema";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
@@ -19,7 +21,7 @@ import {
   permissiveBodySchema,
   permissiveRouteSchema,
 } from "@/api/lib/permissive-route-schema";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
 import { authorizeFolioCollabCredentials } from "./session-credentials";
 
@@ -40,6 +42,7 @@ const cancelFolioCollabSession = createSafeTokenHandler(
     );
     const {
       canEdit,
+      entityId,
       organizationId,
       scopedDb,
       sessionId,
@@ -140,10 +143,10 @@ const cancelFolioCollabSession = createSafeTokenHandler(
       workspaceId,
     });
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+    );
 
     return Result.ok({
       cancelledAt: cancelled.cancelledAt.toISOString(),

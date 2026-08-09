@@ -150,6 +150,7 @@ export const deleteFolioCollabStoredSessionFiles = async ({
 
 export type AuthorizedFolioCollabSession = {
   canEdit: boolean;
+  entityId: SafeId<"entity">;
   fileName: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
@@ -298,6 +299,7 @@ export const authorizeFolioCollabSession = async ({
   const rows = await rootDb
     .select({
       canEdit: folioCollabSessionTokens.permissions,
+      entityId: folioCollabSessions.entityId,
       expiresAt: folioCollabSessionTokens.expiresAt,
       fileName: folioCollabSessions.fileName,
       organizationId: workspaces.organizationId,
@@ -359,6 +361,7 @@ export const authorizeFolioCollabSession = async ({
     status: "authorized",
     value: {
       canEdit: row.canEdit.canEdit,
+      entityId: row.entityId,
       fileName: row.fileName,
       organizationId: row.organizationId,
       scopedDb: createRootScopedDb({

@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { desktopEditSessions } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
@@ -24,9 +26,9 @@ import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validat
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { broadcast } from "@/api/lib/sse";
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -326,10 +328,13 @@ export const checkpointDesktopEditSessionHandler = async ({
 
   // Only broadcast when a real checkpoint was saved (not on noop/error)
   if ("noop" in result && !result.noop) {
-    broadcast(authorizedSession.value.workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", authorizedSession.value.workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      authorizedSession.value.workspaceId,
+      resourceRef({
+        type: RESOURCE_TYPE.ENTITY,
+        id: authorizedSession.value.entityId,
+      }),
+    );
   }
 
   return result;

@@ -1,6 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { desktopEditSessions } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
@@ -21,8 +23,8 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { broadcast } from "@/api/lib/sse";
 
 export const respondDesktopEditTakeoverParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -187,10 +189,13 @@ export const respondDesktopEditTakeoverHandler = async ({
     closeSessionConnections(txResult.sessionId);
   }
 
-  broadcast(txResult.workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", txResult.workspaceId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    txResult.workspaceId,
+    resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: authorizedSession.value.entityId,
+    }),
+  );
 
   return { status: txResult.outcome };
 };

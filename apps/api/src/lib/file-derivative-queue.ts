@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -22,6 +24,7 @@ import {
 import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
@@ -31,7 +34,6 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "file-derivatives";
@@ -367,18 +369,10 @@ const processPdfDerivativeJob = async ({
     throw error;
   }
 
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", branded.workspaceId],
-  });
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["files", branded.workspaceId, brandedFieldId],
-  });
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["files", "metadata", branded.workspaceId, brandedFieldId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    branded.workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.FIELD, id: brandedFieldId }),
+  );
 
   await processExtraction(brandedEntityId);
 };
@@ -552,18 +546,10 @@ const processImageThumbnailJob = async ({
     throw error;
   }
 
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", branded.workspaceId],
-  });
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["files", branded.workspaceId, brandedFieldId],
-  });
-  broadcast(branded.workspaceId, {
-    type: "invalidate-query",
-    data: ["files", "metadata", branded.workspaceId, brandedFieldId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    branded.workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.FIELD, id: brandedFieldId }),
+  );
 };
 
 const isPendingThumbnailDerivative = (

@@ -9,6 +9,10 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import {
+  fileContentByFieldQueryRoot,
+  fileMetadataByFieldQueryRoot,
+} from "@/lib/files/file-metadata-query.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 
@@ -40,6 +44,7 @@ export type WorkspaceRealtimeQueryAction =
 const RESOURCE_QUERY_DISPOSITION = {
   NONE: "none",
   WORKSPACE_ENTITIES: "workspace_entities",
+  WORKSPACE_FIELD: "workspace_field",
   WORKSPACE_VIEWS: "workspace_views",
 } as const;
 
@@ -65,7 +70,7 @@ const RESOURCE_REALTIME_QUERY_POLICY = {
   [RESOURCE_TYPE.ENTITY]: RESOURCE_QUERY_DISPOSITION.WORKSPACE_ENTITIES,
   [RESOURCE_TYPE.ENTITY_VERSION]: RESOURCE_QUERY_DISPOSITION.NONE,
   [RESOURCE_TYPE.EXPENSE]: RESOURCE_QUERY_DISPOSITION.NONE,
-  [RESOURCE_TYPE.FIELD]: RESOURCE_QUERY_DISPOSITION.NONE,
+  [RESOURCE_TYPE.FIELD]: RESOURCE_QUERY_DISPOSITION.WORKSPACE_FIELD,
   [RESOURCE_TYPE.FLOW_DEFINITION]: RESOURCE_QUERY_DISPOSITION.NONE,
   [RESOURCE_TYPE.FLOW_RUN]: RESOURCE_QUERY_DISPOSITION.NONE,
   [RESOURCE_TYPE.INVOICE]: RESOURCE_QUERY_DISPOSITION.NONE,
@@ -112,6 +117,27 @@ const getResourceRealtimeQueryActions = (
         queryKey: entitiesKeys.all(workspaceId),
       });
       return actions;
+    }
+    case RESOURCE_QUERY_DISPOSITION.WORKSPACE_FIELD: {
+      const fileActionType =
+        event.type === REALTIME_EVENT_TYPE.RESOURCE_DELETED
+          ? WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX
+          : WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE;
+      const fieldKey = { workspaceId, fieldId: event.resource.id };
+      return [
+        {
+          type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+          queryKey: entitiesKeys.all(workspaceId),
+        },
+        {
+          type: fileActionType,
+          queryKey: fileContentByFieldQueryRoot(fieldKey),
+        },
+        {
+          type: fileActionType,
+          queryKey: fileMetadataByFieldQueryRoot(fieldKey),
+        },
+      ];
     }
     case RESOURCE_QUERY_DISPOSITION.WORKSPACE_VIEWS:
       return [

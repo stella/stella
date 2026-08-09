@@ -46,6 +46,7 @@ const {
 const { DOCX_MIME_TYPE } = await import("@/api/mime-types");
 
 const sessionId = toSafeId<"folioCollabSession">("fcs_1");
+const entityId = toSafeId<"entity">("entity_1");
 const orgId = toSafeId<"organization">("org_1");
 const wsId = toSafeId<"workspace">("ws_1");
 const yjsSnapshotFileId = toSafeId<"userFile">("file_yjs");
@@ -55,6 +56,7 @@ type Row = Record<string, unknown>;
 
 const validRow = (overrides: Row = {}): Row => ({
   canEdit: { canEdit: true },
+  entityId,
   expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   fileName: "contract.docx",
   organizationId: orgId,
@@ -149,6 +151,7 @@ describe("authorizeFolioCollabSession (the collab trust boundary)", () => {
     const result = await authorize(validRow());
     expect(result.status).toBe("authorized");
     if (result.status === "authorized") {
+      expect(result.value.entityId).toBe(entityId);
       expect(result.value.organizationId).toBe(orgId);
       expect(result.value.workspaceId).toBe(wsId);
     }

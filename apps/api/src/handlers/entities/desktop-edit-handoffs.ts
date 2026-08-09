@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -28,8 +30,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { broadcast } from "@/api/lib/sse";
 
 import type { DesktopEditHandoffStatusResponse } from "./desktop-edit-handoffs.logic";
 import { resolveDesktopEditHandoffStatus } from "./desktop-edit-handoffs.logic";
@@ -309,10 +311,10 @@ export const redeemDesktopEditHandoffHandler = async ({
     return status(500, { message: "Internal server error" });
   }
 
-  broadcast(handoff.workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", handoff.workspaceId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    handoff.workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: handoff.entityId }),
+  );
 
   return {
     apiBaseUrl: handoff.apiBaseUrl,

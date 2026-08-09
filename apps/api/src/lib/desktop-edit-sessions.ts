@@ -20,6 +20,7 @@ import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type AuthorizedDesktopEditSession = {
+  entityId: SafeId<"entity">;
   fileName: string;
   fileType: DesktopEditFileType;
   organizationId: SafeId<"organization">;
@@ -142,6 +143,7 @@ export const authorizeDesktopEditSession = async ({
   const rows = await rootDb
     .select({
       createdBy: desktopEditSessions.createdBy,
+      entityId: desktopEditSessions.entityId,
       fileName: desktopEditSessions.fileName,
       fileType: desktopEditSessions.fileType,
       organizationId: workspaces.organizationId,
@@ -206,6 +208,7 @@ export const authorizeDesktopEditSession = async ({
   return {
     status: "authorized",
     value: {
+      entityId: session.entityId,
       fileName: session.fileName,
       fileType: session.fileType,
       organizationId: session.organizationId,

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { desktopEditSessions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -12,7 +14,7 @@ import {
   pushSessionEvent,
 } from "@/api/lib/desktop-edit-session-notifications";
 import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
 const config = {
   permissions: { entity: ["update"] },
@@ -76,10 +78,10 @@ export default createSafeHandler(
         data: { reason: "released" },
       });
       closeSessionConnections(releasedSessionId);
-      broadcast(workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", workspaceId],
-      });
+      broadcastWorkspaceResourceUpdated(
+        workspaceId,
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: body.entityId }),
+      );
     }
 
     return Result.ok({ released: releasedSessionId !== null });

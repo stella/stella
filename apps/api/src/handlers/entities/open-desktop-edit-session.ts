@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -43,7 +45,7 @@ import {
 } from "@/api/lib/folio-collab-sessions";
 import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
 export const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -689,10 +691,10 @@ const openDesktopEditSession = createSafeHandler(
       workspaceId,
     });
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: body.entityId }),
+    );
 
     return result;
   },

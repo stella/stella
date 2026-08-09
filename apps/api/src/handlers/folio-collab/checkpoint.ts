@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { folioCollabSessions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
@@ -20,8 +22,8 @@ import {
   permissiveRouteSchema,
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3 } from "@/api/lib/s3";
-import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { authorizeFolioCollabCredentials } from "./session-credentials";
@@ -56,6 +58,7 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
     );
     const {
       canEdit,
+      entityId,
       fileName,
       organizationId,
       scopedDb,
@@ -253,10 +256,10 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
     }
 
     if (!result.noop) {
-      broadcast(workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", workspaceId],
-      });
+      broadcastWorkspaceResourceUpdated(
+        workspaceId,
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      );
     }
 
     return Result.ok(result);

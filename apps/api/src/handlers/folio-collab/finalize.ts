@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import {
   entities,
   entityVersions,
@@ -39,9 +41,9 @@ import {
   permissiveBodySchema,
   permissiveRouteSchema,
 } from "@/api/lib/permissive-route-schema";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
@@ -75,8 +77,15 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
       token: body?.token,
     }),
   );
-  const { canEdit, organizationId, scopedDb, sessionId, userId, workspaceId } =
-    authorizedSession;
+  const {
+    canEdit,
+    entityId,
+    organizationId,
+    scopedDb,
+    sessionId,
+    userId,
+    workspaceId,
+  } = authorizedSession;
 
   const recordAuditEvent = createAuditRecorder({
     organizationId,
@@ -510,10 +519,10 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
     shouldRollbackUploadedKeys = false;
     await deleteS3Key(checkpointKey, { checkpointKey, sessionId });
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+    );
 
     await processCollaborativeEditDerivatives({
       entityId: result.entityId,

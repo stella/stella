@@ -8,18 +8,32 @@ export type FileMetadataQueryKey = {
 
 export const filesQueryRoot = () => ["files"];
 
-export const fileContentQueryKey = (key: FileMetadataQueryKey) => [
+export const fileContentByFieldQueryRoot = ({
+  workspaceId,
+  fieldId,
+}: Pick<FileMetadataQueryKey, "workspaceId" | "fieldId">) => [
   ...filesQueryRoot(),
-  key.workspaceId,
-  key.fieldId,
+  workspaceId,
+  fieldId,
+];
+
+export const fileContentQueryKey = (key: FileMetadataQueryKey) => [
+  ...fileContentByFieldQueryRoot(key),
   key.purpose ?? "display",
 ];
 
 export const fileMetadataQueryRoot = () => [...filesQueryRoot(), "metadata"];
 
-export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
+export const fileMetadataByFieldQueryRoot = ({
+  workspaceId,
+  fieldId,
+}: Pick<FileMetadataQueryKey, "workspaceId" | "fieldId">) => [
   ...fileMetadataQueryRoot(),
-  key.workspaceId,
-  key.fieldId,
+  workspaceId,
+  fieldId,
+];
+
+export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
+  ...fileMetadataByFieldQueryRoot(key),
   key.purpose ?? "display",
 ];

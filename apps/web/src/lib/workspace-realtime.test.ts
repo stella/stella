@@ -91,6 +91,52 @@ describe("workspace realtime policy", () => {
     expect(getWorkspaceRealtimeQueryActions(contact, WORKSPACE_ID)).toEqual([]);
   });
 
+  test("maps field changes to entity and field-file caches", () => {
+    const updated = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+      resource: { type: RESOURCE_TYPE.FIELD, id: "field-1" },
+    });
+    const deleted = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+      resource: { type: RESOURCE_TYPE.FIELD, id: "field-1" },
+    });
+
+    expect(updated).not.toBeNull();
+    expect(deleted).not.toBeNull();
+    if (!(updated && deleted)) {
+      return;
+    }
+
+    expect(getWorkspaceRealtimeQueryActions(updated, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["files", WORKSPACE_ID, "field-1"],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["files", "metadata", WORKSPACE_ID, "field-1"],
+      },
+    ]);
+    expect(getWorkspaceRealtimeQueryActions(deleted, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
+        queryKey: ["files", WORKSPACE_ID, "field-1"],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
+        queryKey: ["files", "metadata", WORKSPACE_ID, "field-1"],
+      },
+    ]);
+  });
+
   test("rejects malformed JSON, unknown events, query keys, and resources", () => {
     expect(parseWorkspaceRealtimeMessage("not-json")).toBeNull();
     expect(parseEvent({ type: "unknown", data: null })).toBeNull();

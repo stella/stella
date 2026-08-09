@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import {
   desktopEditSessions,
   entities,
@@ -43,10 +45,10 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -589,10 +591,13 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
-    broadcast(authorizedSession.value.workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", authorizedSession.value.workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      authorizedSession.value.workspaceId,
+      resourceRef({
+        type: RESOURCE_TYPE.ENTITY,
+        id: authorizedSession.value.entityId,
+      }),
+    );
     closeSessionConnections(sessionId);
 
     if (result.outcome === "finalized") {

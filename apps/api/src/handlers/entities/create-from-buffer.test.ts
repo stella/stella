@@ -302,8 +302,8 @@ describe("createEntityFromBuffer", () => {
       expect.objectContaining({ encrypted: true }),
     );
     expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
+      type: "resource.updated",
+      resource: { type: "entity", id: expect.any(String) },
     });
     expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
       type: "invalidate-query",
