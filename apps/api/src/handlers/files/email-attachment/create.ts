@@ -2,10 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { env } from "@/api/env";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler, type HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
@@ -89,6 +92,26 @@ export default createSafeHandler(
       }),
     );
 
+    let encrypted = false;
+    if (attachment.mimeType === PDF_MIME_TYPE) {
+      const pdfBuffer = new ArrayBuffer(attachment.bytes.byteLength);
+      new Uint8Array(pdfBuffer).set(attachment.bytes);
+      const encryptedResult = await isEncryptedPdf(pdfBuffer);
+      if (Result.isError(encryptedResult)) {
+        captureError(encryptedResult.error, {
+          mimeType: PDF_MIME_TYPE,
+          sizeBytes: attachment.bytes.byteLength,
+        });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Failed to open PDF: file appears corrupted",
+          }),
+        );
+      }
+      encrypted = encryptedResult.value;
+    }
+
     const created = yield* Result.await(
       createEntityFromBuffer({
         scopedDb,
@@ -101,6 +124,7 @@ export default createSafeHandler(
         buffer: attachment.bytes,
         fileName: attachment.fileName,
         mimeType: attachment.mimeType,
+        encrypted,
         parentId,
         provenance: {
           type: "email_attachment",

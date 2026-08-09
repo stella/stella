@@ -46,7 +46,12 @@ export const resolveUploadMime = ({
   if (!GENERIC_UPLOAD_MIME_TYPES.has(declaredMime)) {
     return declaredMime;
   }
-  return Bun.file(fileName).type || declaredMime;
+  const dotIndex = fileName.lastIndexOf(".");
+  const lookupName =
+    dotIndex === -1
+      ? fileName
+      : `${fileName.slice(0, dotIndex + 1)}${fileName.slice(dotIndex + 1).toLowerCase()}`;
+  return Bun.file(lookupName).type || declaredMime;
 };
 
 /**

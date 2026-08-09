@@ -38,7 +38,7 @@ describe("resolveUploadMime", () => {
     expect(
       resolveUploadMime({
         declaredMime: "application/octet-stream",
-        fileName: "contract.pdf",
+        fileName: "CONTRACT.PDF",
       }),
     ).toBe("application/pdf");
     expect(
@@ -53,10 +53,10 @@ describe("resolveUploadMime", () => {
 
   test("recovers previewable images without a mirrored extension map", () => {
     for (const [fileName, mimeType] of [
-      ["photo.png", "image/png"],
-      ["photo.jpg", "image/jpeg"],
-      ["photo.gif", "image/gif"],
-      ["photo.webp", "image/webp"],
+      ["photo.PNG", "image/png"],
+      ["photo.JPG", "image/jpeg"],
+      ["photo.GIF", "image/gif"],
+      ["photo.WEBP", "image/webp"],
     ] as const) {
       expect(
         resolveUploadMime({

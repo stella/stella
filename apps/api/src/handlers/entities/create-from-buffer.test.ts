@@ -142,6 +142,8 @@ describe("createEntityFromBuffer", () => {
     s3DeleteMock.mockReset();
     s3DeleteMock.mockResolvedValue(undefined);
     processExtractionMock.mockClear();
+    enqueueImageThumbnailOrMarkFailedMock.mockClear();
+    enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     broadcastMock.mockClear();
     intentStatuses = [];
   });
@@ -178,6 +180,7 @@ describe("createEntityFromBuffer", () => {
   test("writes an entity create audit log with the DB insert", async () => {
     let nextDocumentSequence = 0;
     let insertedEntity: unknown;
+    let insertedField: unknown;
     const tx = {
       query: {
         properties: {
@@ -215,6 +218,9 @@ describe("createEntityFromBuffer", () => {
             if (table === entities) {
               insertedEntity = values;
             }
+            if (table === fields) {
+              insertedField = values;
+            }
             return undefined;
           }
 
@@ -238,10 +244,10 @@ describe("createEntityFromBuffer", () => {
       recordAuditEvent: async (_tx, event) => {
         recordedAuditEvents.push(event);
       },
-      buffer: new TextEncoder().encode("docx bytes"),
-      fileName: "Generated Agreement.docx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      buffer: new TextEncoder().encode("pdf bytes"),
+      fileName: "Encrypted Agreement.pdf",
+      mimeType: "application/pdf",
+      encrypted: true,
       parentId,
       provenance: {
         type: "email_attachment",
@@ -258,22 +264,24 @@ describe("createEntityFromBuffer", () => {
       action: "create",
       changes: {
         created: {
-          old: {
-            type: "email_attachment",
-            attachmentId: "ea1.example",
-            sourceEntityId,
-            sourceFieldId,
-            sourceWorkspaceId: workspaceId,
-          },
+          old: null,
           new: {
             kind: "document",
-            fileName: "Generated Agreement.docx",
-            mimeType:
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            sizeBytes: 10,
+            fileName: "Encrypted Agreement.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 9,
             propertyId,
             parentId,
           },
+        },
+      },
+      metadata: {
+        provenance: {
+          type: "email_attachment",
+          attachmentId: "ea1.example",
+          sourceEntityId,
+          sourceFieldId,
+          sourceWorkspaceId: workspaceId,
         },
       },
       resourceId: expect.any(String),
@@ -281,6 +289,17 @@ describe("createEntityFromBuffer", () => {
     });
     expect(insertedEntity).toEqual(
       expect.objectContaining({ parentId, workspaceId }),
+    );
+    expect(insertedField).toEqual(
+      expect.objectContaining({
+        content: expect.objectContaining({ encrypted: true }),
+      }),
+    );
+    expect(enqueuePdfDerivativeOrMarkFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ encrypted: true }),
+    );
+    expect(enqueueImageThumbnailOrMarkFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ encrypted: true }),
     );
     expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
       type: "invalidate-query",
