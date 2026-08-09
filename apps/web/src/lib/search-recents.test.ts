@@ -165,6 +165,26 @@ describe("search recents", () => {
     expect(readRecentFiles(scope, storage)).toEqual([]);
   });
 
+  test("does not overwrite recents with empty file identity fields", () => {
+    const storage = new MemoryStorage();
+    const validFile = {
+      entityId: "entity-1",
+      title: "Existing.pdf",
+      workspaceId: "workspace-1",
+      workspaceName: "Matter A",
+    };
+    recordRecentFile(validFile, scope, storage);
+    const existing = readRecentFiles(scope, storage);
+
+    expect(
+      recordRecentFile({ ...validFile, entityId: "" }, scope, storage),
+    ).toEqual(existing);
+    expect(
+      recordRecentFile({ ...validFile, workspaceId: "" }, scope, storage),
+    ).toEqual(existing);
+    expect(readRecentFiles(scope, storage)).toEqual(existing);
+  });
+
   test("scopes recents by organization and user", () => {
     const storage = new MemoryStorage();
     const otherScope: SearchRecentsScope = {

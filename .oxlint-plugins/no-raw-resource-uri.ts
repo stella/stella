@@ -2,7 +2,12 @@
 // outside its canonical serializer can skip strict component encoding and
 // break persistence or Markdown parsing for valid IDs.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import {
+  eslintCompatPlugin,
+  type ESTree,
+  type Scope,
+  type Variable,
+} from "@oxlint/plugins";
 
 import {
   getImportedName,
@@ -30,6 +35,10 @@ const RESOURCE_URI_PREFIX_BINDINGS = new Set([
 
 const containsRawResourceUriPrefix = (value: string): boolean =>
   RAW_RESOURCE_URI_PREFIXES.some((prefix) => value.includes(prefix));
+
+const isScopeIdentifier = (
+  value: unknown,
+): value is ESTree.IdentifierReference => isIdentifier(value);
 
 const templateElementText = (value: unknown): string | null => {
   if (!isAstNode(value) || value.type !== "TemplateElement") {
@@ -73,9 +82,11 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier) => {
-          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
-            context.sourceCode.getScope(identifier);
+        const resolveVariable = (identifier: unknown): Variable | null => {
+          if (!isScopeIdentifier(identifier)) {
+            return null;
+          }
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope) {
             const variable = scope.set.get(identifier.name);
             if (variable) {
@@ -86,7 +97,7 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const getStableInitializer = (variable) => {
+        const getStableInitializer = (variable: Variable): unknown => {
           for (const definition of variable.defs) {
             if (
               definition.type !== "Variable" ||
