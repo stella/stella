@@ -81,6 +81,27 @@ const readTimeEntrySummary = createSafeHandler(
     }
 
     if (query.scope === "team") {
+      // Keep the viewer's aggregate independent from workspace_members. Firm
+      // admins and owners can have workspace access through organization
+      // permissions without a row in this matter's member list.
+      const [viewerSummary] = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({
+              totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
+            })
+            .from(timeEntries)
+            .where(
+              and(
+                eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.userId, currentUser.id),
+                gte(timeEntries.dateWorked, query.dateFrom),
+                lte(timeEntries.dateWorked, query.dateTo),
+              ),
+            ),
+        ),
+      );
+
       const rows = yield* Result.await(
         safeDb((tx) =>
           tx
@@ -133,7 +154,6 @@ const readTimeEntrySummary = createSafeHandler(
           daily: { dateWorked: string; totalMinutes: number }[];
         }
       >();
-      let viewerTotalMinutes = 0;
       for (const row of rows) {
         const teamMember = membersById.get(row.userId) ?? {
           userId: row.userId,
@@ -147,16 +167,13 @@ const readTimeEntrySummary = createSafeHandler(
             dateWorked: row.dateWorked,
             totalMinutes: row.totalMinutes,
           });
-          if (row.userId === currentUser.id) {
-            viewerTotalMinutes += row.totalMinutes;
-          }
         }
         membersById.set(row.userId, teamMember);
       }
 
       return okTimeEntrySummary({
         scope: "team",
-        viewerTotalMinutes,
+        viewerTotalMinutes: viewerSummary?.totalMinutes ?? 0,
         members: [...membersById.values()],
       });
     }

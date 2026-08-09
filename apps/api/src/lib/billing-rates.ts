@@ -1,10 +1,130 @@
 import type { Err } from "better-result";
 import { Result } from "better-result";
-import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+
+export type RateLookup = {
+  dateWorked: string;
+  userId: SafeId<"user">;
+};
+
+export type ResolvedRate = { hourlyRate: number; currency: string };
+
+export const rateLookupKey = ({ dateWorked, userId }: RateLookup): string =>
+  `${userId}:${dateWorked}`;
+
+/**
+ * Resolve a batch of entries against one consistent rate-table snapshot.
+ * Keeping this transaction-aware lets batch mutations lock their target rows,
+ * resolve every effective rate, and either snapshot all rates or write none.
+ */
+export const resolveRatesInTransaction = async ({
+  tx,
+  workspaceId,
+  lookups,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  lookups: readonly RateLookup[];
+}): Promise<Map<string, ResolvedRate>> => {
+  const resolved = new Map<string, ResolvedRate>();
+  if (lookups.length === 0) {
+    return resolved;
+  }
+
+  const defaultTable = await tx.query.rateTables.findFirst({
+    where: { workspaceId: { eq: workspaceId }, isDefault: true },
+    columns: { id: true, currency: true },
+  });
+  if (!defaultTable) {
+    return resolved;
+  }
+
+  const firstLookup = lookups.at(0);
+  if (!firstLookup) {
+    return resolved;
+  }
+  const uniqueUsers = new Set<SafeId<"user">>();
+  let earliestDate = firstLookup.dateWorked;
+  let latestDate = firstLookup.dateWorked;
+  for (const lookup of lookups) {
+    uniqueUsers.add(lookup.userId);
+    if (lookup.dateWorked < earliestDate) {
+      earliestDate = lookup.dateWorked;
+    }
+    if (lookup.dateWorked > latestDate) {
+      latestDate = lookup.dateWorked;
+    }
+  }
+  const entries = await tx
+    .select({
+      effectiveFrom: rateEntries.effectiveFrom,
+      effectiveTo: rateEntries.effectiveTo,
+      hourlyRate: rateEntries.hourlyRate,
+      userId: rateEntries.userId,
+    })
+    .from(rateEntries)
+    .where(
+      and(
+        eq(rateEntries.rateTableId, defaultTable.id),
+        lte(rateEntries.effectiveFrom, latestDate),
+        or(
+          isNull(rateEntries.effectiveTo),
+          gte(rateEntries.effectiveTo, earliestDate),
+        ),
+        or(
+          isNull(rateEntries.userId),
+          inArray(rateEntries.userId, [...uniqueUsers]),
+        ),
+      ),
+    )
+    .orderBy(desc(rateEntries.effectiveFrom))
+    .limit(LIMITS.rateEntriesPerTable);
+
+  const entriesByUser = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const key = entry.userId ?? "__default__";
+    const bucket = entriesByUser.get(key);
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      entriesByUser.set(key, [entry]);
+    }
+  }
+
+  for (const lookup of lookups) {
+    const userEntry = entriesByUser
+      .get(lookup.userId)
+      ?.find(
+        (entry) =>
+          entry.effectiveFrom <= lookup.dateWorked &&
+          (entry.effectiveTo === null ||
+            entry.effectiveTo >= lookup.dateWorked),
+      );
+    const defaultEntry = entriesByUser
+      .get("__default__")
+      ?.find(
+        (entry) =>
+          entry.effectiveFrom <= lookup.dateWorked &&
+          (entry.effectiveTo === null ||
+            entry.effectiveTo >= lookup.dateWorked),
+      );
+    const entry = userEntry ?? defaultEntry;
+    if (entry) {
+      resolved.set(rateLookupKey(lookup), {
+        hourlyRate: entry.hourlyRate,
+        currency: defaultTable.currency,
+      });
+    }
+  }
+
+  return resolved;
+};
 
 export const resolveRate = async function* ({
   safeDb,
@@ -16,81 +136,15 @@ export const resolveRate = async function* ({
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   dateWorked: string;
-}): AsyncGenerator<
-  Err<never, SafeDbError>,
-  { hourlyRate: number; currency: string } | null,
-  unknown
-> {
-  const defaultTable = yield* Result.await(
+}): AsyncGenerator<Err<never, SafeDbError>, ResolvedRate | null, unknown> {
+  const rates = yield* Result.await(
     safeDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: { workspaceId: { eq: workspaceId }, isDefault: true },
-        columns: { id: true, currency: true },
+      resolveRatesInTransaction({
+        lookups: [{ dateWorked, userId }],
+        tx,
+        workspaceId,
       }),
     ),
   );
-
-  if (!defaultTable) {
-    return null;
-  }
-
-  const dateCondition = and(
-    lte(rateEntries.effectiveFrom, dateWorked),
-    or(
-      isNull(rateEntries.effectiveTo),
-      gte(rateEntries.effectiveTo, dateWorked),
-    ),
-  );
-
-  const userRate = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({ hourlyRate: rateEntries.hourlyRate })
-        .from(rateEntries)
-        .where(
-          and(
-            eq(rateEntries.rateTableId, defaultTable.id),
-            eq(rateEntries.userId, userId),
-            dateCondition,
-          ),
-        )
-        .orderBy(desc(rateEntries.effectiveFrom))
-        .limit(1),
-    ),
-  );
-
-  const userRateRow = userRate.at(0);
-  if (userRateRow) {
-    return {
-      hourlyRate: userRateRow.hourlyRate,
-      currency: defaultTable.currency,
-    };
-  }
-
-  const defaultRate = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({ hourlyRate: rateEntries.hourlyRate })
-        .from(rateEntries)
-        .where(
-          and(
-            eq(rateEntries.rateTableId, defaultTable.id),
-            isNull(rateEntries.userId),
-            dateCondition,
-          ),
-        )
-        .orderBy(desc(rateEntries.effectiveFrom))
-        .limit(1),
-    ),
-  );
-
-  const defaultRateRow = defaultRate.at(0);
-  if (defaultRateRow) {
-    return {
-      hourlyRate: defaultRateRow.hourlyRate,
-      currency: defaultTable.currency,
-    };
-  }
-
-  return null;
+  return rates.get(rateLookupKey({ dateWorked, userId })) ?? null;
 };

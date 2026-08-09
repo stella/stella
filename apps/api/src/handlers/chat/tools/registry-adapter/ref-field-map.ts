@@ -23,7 +23,6 @@ import {
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
   READ_DOCUMENT_PROJECTION,
-  RESOLVE_RATE_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
   SAVE_CONTACT_PROJECTION,
@@ -208,9 +207,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
     projection: LIST_TIME_ENTRIES_PROJECTION,
   },
   resolve_rate: {
-    chatProjectable: true,
-    inputRefs: [{ kind: "matter", param: "matter_id" }],
-    projection: RESOLVE_RATE_PROJECTION,
+    // Rate visibility is restricted to billing administrators. The chat
+    // prompt is request-independent, so this privileged tool must stay out of
+    // both the static prompt catalog and the runtime projected surface.
+    chatProjectable: false,
   },
   list_invoices: {
     chatProjectable: true,

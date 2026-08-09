@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import { timeEntriesApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -26,7 +26,7 @@ export const useCreateTimeEntry = () => {
       workItemId,
       ...body
     }: CreateTimeEntryVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put({
         ...body,
@@ -64,7 +64,7 @@ export const useUpdateTimeEntry = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
       const { id, workItemId, ...restBody } = body;
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).patch({
         ...restBody,
@@ -92,7 +92,7 @@ export const useDeleteTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).delete({
         id: toSafeId<"timeEntry">(id),
@@ -118,7 +118,7 @@ export const useStartTimer = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: StartTimerVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.start.post({
         ...body,
@@ -142,7 +142,7 @@ export const useStopTimer = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId }: StopTimerVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.stop.post({});
 
@@ -165,7 +165,7 @@ export const useBatchUpdateTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.post({
         ...body,
@@ -190,7 +190,7 @@ export const useBatchDeleteTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.delete({
         ids: ids.map((id) => toSafeId<"timeEntry">(id)),
@@ -215,7 +215,7 @@ export const useSplitTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).split.post({
         ...body,

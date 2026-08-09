@@ -68,9 +68,12 @@ export const ManualTimeEntryForm = ({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="time-entry-date">{t("common.date")}</Label>
+          <Label id="time-entry-date-label" htmlFor="time-entry-date">
+            {t("common.date")}
+          </Label>
           <DatePickerPopover
             id="time-entry-date"
+            labelledBy="time-entry-date-label"
             onChange={(value) => setDateWorked(value ?? "")}
             value={dateWorked}
           />

@@ -154,7 +154,7 @@ const READ_DOCUMENT_CONTENT_STRIPS = [
  * The remaining pre-conversion hand lists, one per tool, copied verbatim from
  * the map they were deleted from. Each case's `expected` is those lists plus
  * any documented departure. Empty lists are stated explicitly: a tool whose
- * payload carries no ids at all (resolve_rate, lookup_business_registry) is
+ * payload carries no ids at all (lookup_business_registry) is
  * an assertion too.
  */
 type DerivationCase = {
@@ -344,11 +344,6 @@ const DERIVATION_CASES: readonly DerivationCase[] = [
       ],
       stripPaths: [],
     },
-  },
-  {
-    tool: "resolve_rate",
-    projection: READ_TOOL_REF_FIELD_MAP.resolve_rate.projection,
-    expected: { outputRefs: [], passthroughIdPaths: [], stripPaths: [] },
   },
   {
     tool: "list_invoices",

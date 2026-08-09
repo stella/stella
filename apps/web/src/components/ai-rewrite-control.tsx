@@ -92,7 +92,7 @@ export const AiRewriteControl = ({
     >
       <Button
         aria-label={actionLabel}
-        className="rounded-e-none"
+        className="min-h-11 min-w-11 rounded-e-none"
         disabled={unavailable}
         onClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
         size="icon-sm"
@@ -111,7 +111,7 @@ export const AiRewriteControl = ({
           render={
             <Button
               aria-label={t("ai.chooseRewriteInstruction")}
-              className="-ms-px rounded-s-none px-1"
+              className="min-h-11 min-w-11 rounded-s-none border-s px-1"
               disabled={unavailable}
               size="icon-sm"
               tooltip={t("ai.chooseRewriteInstruction")}

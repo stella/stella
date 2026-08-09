@@ -12,6 +12,10 @@ SET statement_timeout = 0;
 WITH ranked_active_timers AS (
   SELECT
     "id",
+    "duration_minutes",
+    "billed_minutes",
+    "timer_started_at",
+    "timer_stopped_at",
     ROW_NUMBER() OVER (
       PARTITION BY "user_id"
       ORDER BY
@@ -23,20 +27,86 @@ WITH ranked_active_timers AS (
   WHERE "timer_started_at" IS NOT NULL
     AND "timer_stopped_at" IS NULL
     AND "user_id" IS NOT NULL
-)
-UPDATE "time_entries" AS "entry"
-SET
-  "duration_minutes" = GREATEST("entry"."duration_minutes", 1),
-  "billed_minutes" = GREATEST("entry"."billed_minutes", 6),
-  "timer_started_at" = NULL,
-  "timer_stopped_at" = "entry"."timer_started_at" + INTERVAL '1 minute',
-  "updated_at" = NOW()
-FROM ranked_active_timers
-WHERE "entry"."id" = ranked_active_timers."id"
-  AND (
-    "entry"."status" <> 'draft'
+),
+timers_to_repair AS MATERIALIZED (
+  SELECT ranked_active_timers.*
+  FROM ranked_active_timers
+  INNER JOIN "time_entries" AS "entry"
+    ON "entry"."id" = ranked_active_timers."id"
+  WHERE "entry"."status" <> 'draft'
     OR ranked_active_timers."timer_rank" > 1
-  );
+),
+repaired_timers AS (
+  UPDATE "time_entries" AS "entry"
+  SET
+    "duration_minutes" = GREATEST("entry"."duration_minutes", 1),
+    "billed_minutes" = GREATEST("entry"."billed_minutes", 6),
+    "timer_started_at" = NULL,
+    "timer_stopped_at" = "entry"."timer_started_at" + INTERVAL '1 minute',
+    "updated_at" = NOW()
+  FROM timers_to_repair
+  WHERE "entry"."id" = timers_to_repair."id"
+  RETURNING
+    "entry"."id",
+    "entry"."organization_id",
+    "entry"."workspace_id",
+    "entry"."user_id"
+)
+INSERT INTO "audit_logs" (
+  "id",
+  "organization_id",
+  "workspace_id",
+  "user_id",
+  "action",
+  "resource_type",
+  "resource_id",
+  "metadata",
+  "changes",
+  "performer_type",
+  "performer_id",
+  "performer_name",
+  "trigger_type",
+  "trigger_source",
+  "trigger_source_id",
+  "activity_category"
+)
+SELECT
+  gen_random_uuid(),
+  repaired_timers."organization_id",
+  repaired_timers."workspace_id",
+  repaired_timers."user_id",
+  'update',
+  'time_entry',
+  repaired_timers."id",
+  jsonb_build_object('cause', 'legacy_active_timer_repair'),
+  jsonb_build_object(
+    'durationMinutes', jsonb_build_object(
+      'old', timers_to_repair."duration_minutes",
+      'new', GREATEST(timers_to_repair."duration_minutes", 1)
+    ),
+    'billedMinutes', jsonb_build_object(
+      'old', timers_to_repair."billed_minutes",
+      'new', GREATEST(timers_to_repair."billed_minutes", 6)
+    ),
+    'timerStartedAt', jsonb_build_object(
+      'old', timers_to_repair."timer_started_at",
+      'new', NULL
+    ),
+    'timerStoppedAt', jsonb_build_object(
+      'old', timers_to_repair."timer_stopped_at",
+      'new', timers_to_repair."timer_started_at" + INTERVAL '1 minute'
+    )
+  ),
+  'service',
+  'database-migration',
+  'Time entry timer repair',
+  'system',
+  'database_migration',
+  '20260809120002_unique_active_time_entry_timer',
+  'other'
+FROM repaired_timers
+INNER JOIN timers_to_repair
+  ON timers_to_repair."id" = repaired_timers."id";
 --> statement-breakpoint
 
 -- Enforce the one-running-timer invariant at the persistence boundary. Build

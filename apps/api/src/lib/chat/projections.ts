@@ -922,10 +922,12 @@ export const LIST_PLAYBOOKS_PROJECTION = v.union([
 const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   ({
     id: passthroughId(),
-    entityId: chatEntityRef(
-      workspace.from === "inputParam"
-        ? { from: "inputParam", param: "matter_id" }
-        : { from: "sibling", key: "workspaceId" },
+    entityId: v.nullable(
+      chatEntityRef(
+        workspace.from === "inputParam"
+          ? { from: "inputParam", param: "matter_id" }
+          : { from: "sibling", key: "workspaceId" },
+      ),
     ),
     userId: v.nullable(passthroughId()),
     dateWorked: v.string(),

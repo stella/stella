@@ -229,6 +229,32 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     ).toBe(false);
     expect(guessedDefinition).toBeUndefined();
   });
+
+  test("hides every time-entry mutation from external roles", async () => {
+    const ownerDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "owner"),
+      mode: "default",
+      scopes: ["stella:billing_write"],
+    });
+    const externalDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "external"),
+      mode: "default",
+      scopes: ["stella:billing_write"],
+    });
+
+    expect(
+      ownerDefinitions.some(({ name }) => name === "save_time_entry"),
+    ).toBe(true);
+    expect(
+      ownerDefinitions.some(({ name }) => name === "delete_time_entry"),
+    ).toBe(true);
+    expect(
+      externalDefinitions.some(({ name }) => name === "save_time_entry"),
+    ).toBe(false);
+    expect(
+      externalDefinitions.some(({ name }) => name === "delete_time_entry"),
+    ).toBe(false);
+  });
 });
 
 describe("toMcpTools input schema conversion", () => {

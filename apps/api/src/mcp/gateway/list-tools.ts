@@ -1,12 +1,11 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
 
-import { roles } from "@stll/permissions";
-
 import { env } from "@/api/env";
 import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -69,15 +68,13 @@ const isStaticToolVisibleToRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
 ): boolean => {
-  switch (definition.name) {
-    case "list_time_entries":
-      return roles[context.memberRole].authorize({ timeEntry: ["read"] })
-        .success;
-    case "resolve_rate":
-      return roles[context.memberRole].authorize({ rate: ["read"] }).success;
-    default:
-      return true;
+  if (definition.memberPermissionAlternatives === undefined) {
+    return true;
   }
+
+  return definition.memberPermissionAlternatives.some((permissions) =>
+    hasMemberPermission({ role: context.memberRole }, permissions),
+  );
 };
 
 /**

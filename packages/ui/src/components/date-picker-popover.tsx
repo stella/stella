@@ -196,6 +196,8 @@ type PickerView = "days" | "months" | "years";
 
 type DatePickerPopoverProps = {
   id?: string;
+  /** ID of the visible field label, when the picker is part of a form field. */
+  labelledBy?: string;
   value: string | Date | null;
   onChange: (value: string | null) => void;
   locale?: string;
@@ -219,6 +221,7 @@ type DatePickerPopoverProps = {
 
 const DatePickerPopover = ({
   id,
+  labelledBy,
   value: rawValue,
   onChange,
   locale: localeProp,
@@ -482,7 +485,8 @@ const DatePickerPopover = ({
       <PopoverTrigger
         render={
           <button
-            aria-label={value ? displayLabel : undefined}
+            aria-label={!labelledBy && value ? displayLabel : undefined}
+            aria-labelledby={labelledBy}
             className={cn(
               "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
               "rounded-md px-1.5 text-sm",

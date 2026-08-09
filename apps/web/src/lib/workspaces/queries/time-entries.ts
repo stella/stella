@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { api } from "@/lib/api";
+import { timeEntriesApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -82,7 +82,7 @@ const listTimeEntries = async ({
   signal?: AbortSignal;
 }) => {
   const { workItemId, userId, ...restFilters } = filters;
-  const response = await api["time-entries"]({
+  const response = await timeEntriesApi({
     workspaceId: toSafeId<"workspace">(workspaceId),
   }).get({
     query: {
@@ -141,7 +141,7 @@ const getTimeEntrySummary = async ({
   scope,
   signal,
 }: GetTimeEntrySummaryOptions) => {
-  const response = await api["time-entries"]({
+  const response = await timeEntriesApi({
     workspaceId: toSafeId<"workspace">(workspaceId),
   }).summary.get({
     query: {
@@ -209,7 +209,7 @@ export const activeTimerOptions = (workspaceId: string) =>
     staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).get({
         query: {
