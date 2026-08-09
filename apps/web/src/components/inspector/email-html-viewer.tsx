@@ -28,6 +28,8 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
+  isKnownEmailCitationTarget,
+  registerEmailCitationBlocks,
   type EmailCitationTarget,
 } from "@/lib/files/email-citations";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
@@ -60,14 +62,8 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
   const t = useTranslations();
   const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
   const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
-  const previewQuery = useQuery(
-    emailHtmlPreviewOptions({ workspaceId, fieldId }),
-  );
   const fileChatContext = isContextual
     ? getEmailFileChatContext({
-        citationSnapshot: previewQuery.data
-          ? { blocks: previewQuery.data.citationBlocks }
-          : undefined,
         entityId,
         fieldId,
         fileName,
@@ -133,10 +129,20 @@ export const EmailHtmlViewer = ({
   );
 
   useExternalSyncEffect(() => {
+    if (!previewQuery.data) {
+      return undefined;
+    }
+    return registerEmailCitationBlocks({
+      blockIds: previewQuery.data.citationBlocks.map(({ id }) => id),
+      fieldId,
+    });
+  }, [fieldId, previewQuery.data]);
+
+  useExternalSyncEffect(() => {
     const handleCitation = ({
       detail,
     }: CustomEvent<EmailCitationTarget>): void => {
-      if (detail.fieldId !== fieldId) {
+      if (detail.fieldId !== fieldId || !isKnownEmailCitationTarget(detail)) {
         return;
       }
       setActiveCitationBlockId(detail.blockId);

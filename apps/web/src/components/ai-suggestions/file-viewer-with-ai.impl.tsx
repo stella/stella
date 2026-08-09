@@ -30,7 +30,6 @@ import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { createChatThreadId, type ChatThreadId } from "@/lib/chat-thread-ref";
-import type { EmailCitationSnapshot } from "@/lib/files/email-citations";
 
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
@@ -45,7 +44,6 @@ import { stageReviewSuggestions } from "./review-suggestion-staging";
 import "./file-viewer-with-ai.css";
 
 type ActiveFile = {
-  emailCitationSnapshot?: EmailCitationSnapshot | undefined;
   entityId: string;
   editable?: boolean | undefined;
   fileFieldId?: string | undefined;

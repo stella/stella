@@ -45,10 +45,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  MAX_EMAIL_CITATION_BLOCKS,
-  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
-} from "@/api/lib/files/email-citations";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
 export { CHAT_RUN_MODE };
@@ -102,27 +98,16 @@ const docxEditSnapshotSchema = t.Object({
   ),
 });
 
-const emailCitationSnapshotSchema = t.Object({
-  blocks: t.Array(
-    t.Object({
-      id: t.String({
-        maxLength: 32,
-        pattern: "^(?:header-(?:bcc|cc|date|from|subject|to)|body-[0-9]{4})$",
-      }),
-      text: t.String({ maxLength: MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH }),
-    }),
-    { maxItems: MAX_EMAIL_CITATION_BLOCKS },
-  ),
-});
-
-export const activeFileSchema = t.Object({
-  entityId: tSafeId("entity"),
-  fileFieldId: t.Optional(tSafeId("field")),
-  fileName: t.String(),
-  supportsDocxEdits: t.Optional(t.Boolean()),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
-  emailCitationSnapshot: t.Optional(emailCitationSnapshotSchema),
-});
+export const activeFileSchema = t.Object(
+  {
+    entityId: tSafeId("entity"),
+    fileFieldId: t.Optional(tSafeId("field")),
+    fileName: t.String(),
+    supportsDocxEdits: t.Optional(t.Boolean()),
+    docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  },
+  { additionalProperties: false },
+);
 
 export const activeDraftSchema = t.Object({
   originChatMessageId: tSafeId("chatMessage"),

@@ -7,7 +7,7 @@
 
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
-import { asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
@@ -16,6 +16,8 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
   entities,
+  entityVersions,
+  fields,
   properties,
   workspaces,
 } from "@/api/db/schema";
@@ -45,6 +47,7 @@ import {
   listAvailableChatSkillMetadata,
   resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { parseDocumentAst } from "@/api/lib/case-law/document-ast";
@@ -52,8 +55,16 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { EmailCitationBlock } from "@/api/lib/files/email-citations";
 import { MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH } from "@/api/lib/files/email-citations";
+import {
+  emailToPreview,
+  resolveEmailMimeType,
+} from "@/api/lib/files/email-to-html";
+import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -68,6 +79,26 @@ const ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT = 100;
  * model's window; tune down if we ship larger documents.
  */
 const ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT = 600;
+
+type ActiveFilePromptContext = IncomingActiveFile & {
+  emailCitationSnapshot?: { blocks: EmailCitationBlock[] } | undefined;
+};
+
+const toActiveFilePromptBase = (
+  activeFile: IncomingActiveFile,
+): ActiveFilePromptContext => ({
+  entityId: activeFile.entityId,
+  fileName: activeFile.fileName,
+  ...(activeFile.fileFieldId === undefined
+    ? {}
+    : { fileFieldId: activeFile.fileFieldId }),
+  ...(activeFile.supportsDocxEdits === undefined
+    ? {}
+    : { supportsDocxEdits: activeFile.supportsDocxEdits }),
+  ...(activeFile.docxEditSnapshot === undefined
+    ? {}
+    : { docxEditSnapshot: activeFile.docxEditSnapshot }),
+});
 
 const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
   type: "region",
@@ -350,6 +381,120 @@ type BuildChatSystemPromptProps = {
   userId?: SafeId<"user"> | undefined;
 };
 
+const resolveActiveFilePromptContext = async ({
+  activeFile,
+  organizationId,
+  safeDb,
+  workspaceId,
+}: {
+  activeFile: IncomingActiveFile;
+  organizationId?: SafeId<"organization"> | undefined;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+}): Promise<Result<ActiveFilePromptContext | null, SafeDbError>> => {
+  const activeFilePromptBase = toActiveFilePromptBase(activeFile);
+  const fileFieldId = activeFile.fileFieldId;
+  if (!fileFieldId || !organizationId) {
+    const entityResult = await safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: { eq: activeFile.entityId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    );
+    return entityResult.map((entity) => (entity ? activeFilePromptBase : null));
+  }
+
+  const rowsResult = await safeDb((tx) =>
+    tx
+      .select({
+        content: fields.content,
+        entityVersionId: entityVersions.id,
+      })
+      .from(entities)
+      .leftJoin(
+        entityVersions,
+        and(
+          eq(entityVersions.id, entities.currentVersionId),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
+      .leftJoin(
+        fields,
+        and(
+          eq(fields.entityVersionId, entityVersions.id),
+          eq(fields.id, fileFieldId),
+        ),
+      )
+      .where(
+        and(
+          eq(entities.id, activeFile.entityId),
+          eq(entities.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(rowsResult)) {
+    return rowsResult;
+  }
+  const row = rowsResult.value.at(0);
+  if (!row) {
+    return Result.ok(null);
+  }
+  if (
+    !row.content ||
+    row.content.type !== "file" ||
+    row.content.encrypted ||
+    !row.entityVersionId ||
+    row.content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document
+  ) {
+    return Result.ok(activeFilePromptBase);
+  }
+  const emailMimeType = resolveEmailMimeType({
+    fileName: row.content.fileName,
+    mimeType: row.content.mimeType,
+  });
+  if (!emailMimeType) {
+    return Result.ok(activeFilePromptBase);
+  }
+
+  const readResult = await Result.tryPromise({
+    try: async () =>
+      await readS3ArrayBuffer(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: row.content.id,
+          mimeType: row.content.mimeType,
+        }),
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(readResult)) {
+    captureError(readResult.error, {
+      fieldId: fileFieldId,
+      workspaceId,
+    });
+    return Result.ok(activeFilePromptBase);
+  }
+  const previewResult = await emailToPreview(readResult.value, emailMimeType);
+  if (Result.isError(previewResult)) {
+    captureError(previewResult.error, {
+      fieldId: fileFieldId,
+      mimeType: emailMimeType,
+      workspaceId,
+    });
+    return Result.ok(activeFilePromptBase);
+  }
+
+  return Result.ok({
+    ...activeFilePromptBase,
+    emailCitationSnapshot: { blocks: previewResult.value.citationBlocks },
+  });
+};
+
 export const buildChatSystemPromptParts = async ({
   activeDecision,
   activeDraft,
@@ -446,24 +591,23 @@ export const buildChatSystemPromptParts = async ({
 
     let activeFileSection = "";
     if (workspaceId !== null && activeFile) {
-      const entity = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: activeFile.entityId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true },
-          }),
-        ),
+      const activeFilePromptContext = yield* Result.await(
+        resolveActiveFilePromptContext({
+          activeFile,
+          organizationId,
+          safeDb,
+          workspaceId,
+        }),
       );
-      activeFileSection = buildActiveFileSection({
-        activeFile,
-        entityExists: Boolean(entity),
-        refRegistry,
-        toolAvailability,
-        workspaceId,
-      });
+      if (activeFilePromptContext) {
+        activeFileSection = buildActiveFileSection({
+          activeFile: activeFilePromptContext,
+          entityExists: true,
+          refRegistry,
+          toolAvailability,
+          workspaceId,
+        });
+      }
     }
 
     const activeDraftSection =
@@ -931,7 +1075,7 @@ export const buildWorkspacePromptParts = ({
   });
 
 type BuildActiveFilePromptProps = {
-  activeFile: IncomingActiveFile;
+  activeFile: ActiveFilePromptContext;
   refRegistry: ChatRefRegistry;
   toolAvailability: ChatToolAvailability;
   workspaceId: SafeId<"workspace">;
@@ -981,7 +1125,7 @@ const buildActiveFilePrompt = ({
 };
 
 const buildActiveEmailCitationPrompt = (
-  activeFile: IncomingActiveFile,
+  activeFile: ActiveFilePromptContext,
 ): string => {
   const snapshot = activeFile.emailCitationSnapshot;
   const fileFieldId = activeFile.fileFieldId;
@@ -1451,7 +1595,7 @@ export const buildActiveSkillSection = (
 };
 
 type AppendActiveFilePromptIfEntityExistsProps = {
-  activeFile: IncomingActiveFile;
+  activeFile: ActiveFilePromptContext;
   entityExists: boolean;
   prompt: string;
   refRegistry: ChatRefRegistry;
@@ -1466,7 +1610,7 @@ const buildActiveFileSection = ({
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   workspaceId,
 }: {
-  activeFile: IncomingActiveFile;
+  activeFile: ActiveFilePromptContext;
   entityExists: boolean;
   refRegistry: ChatRefRegistry;
   toolAvailability?: ChatToolAvailability | undefined;

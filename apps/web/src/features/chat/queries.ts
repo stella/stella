@@ -50,7 +50,6 @@ import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
-import type { EmailCitationSnapshot } from "@/lib/files/email-citations";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -71,7 +70,6 @@ type ActiveFileContext = {
       }
     | undefined;
   entityId: string;
-  emailCitationSnapshot?: EmailCitationSnapshot | undefined;
   fileFieldId?: string | undefined;
   fileName: string;
   supportsDocxEdits?: boolean | undefined;
@@ -1276,9 +1274,6 @@ export const buildSendRequestBody = ({
               activeFile.docxEditSnapshot,
             ),
           }),
-      ...(activeFile.emailCitationSnapshot === undefined
-        ? {}
-        : { emailCitationSnapshot: activeFile.emailCitationSnapshot }),
     };
   }
 

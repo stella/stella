@@ -144,7 +144,6 @@ import {
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import type { EmailCitationSnapshot } from "@/lib/files/email-citations";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -155,7 +154,6 @@ type ActiveFile = {
       })
     | undefined;
   entityId: string;
-  emailCitationSnapshot?: EmailCitationSnapshot | undefined;
   editable?: boolean | undefined;
   fileFieldId?: string | undefined;
   fileName: string;

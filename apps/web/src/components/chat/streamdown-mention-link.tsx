@@ -35,7 +35,7 @@ import { detached } from "@/lib/detached";
 import {
   EMAIL_CITATION_HREF_PREFIX,
   EMAIL_CITATION_SCROLL_EVENT,
-  parseEmailCitationHref,
+  useKnownEmailCitationTarget,
   type EmailCitationTarget,
 } from "@/lib/files/email-citations";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
@@ -527,6 +527,7 @@ export const StreamdownMentionLink = ({
   workspaceId,
   ...props
 }: StreamdownMentionLinkProps) => {
+  const emailCitationTarget = useKnownEmailCitationTarget(href ?? "");
   if (!href) {
     return <span {...props}>{children}</span>;
   }
@@ -552,12 +553,11 @@ export const StreamdownMentionLink = ({
   }
 
   if (href.startsWith(EMAIL_CITATION_HREF_PREFIX)) {
-    const target = parseEmailCitationHref(href);
-    if (!target) {
+    if (!emailCitationTarget) {
       return <span {...props}>{children}</span>;
     }
     return (
-      <EmailCitationChip interactive={interactive} target={target}>
+      <EmailCitationChip interactive={interactive} target={emailCitationTarget}>
         {children}
       </EmailCitationChip>
     );

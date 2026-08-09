@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseEmailCitationHref } from "@/lib/files/email-citations";
+import {
+  isKnownEmailCitationTarget,
+  parseEmailCitationHref,
+  registerEmailCitationBlocks,
+} from "@/lib/files/email-citations";
 
 const FIELD_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -22,5 +26,23 @@ describe("email citation hrefs", () => {
     expect(
       parseEmailCitationHref(`#email:${FIELD_ID}:attachment-0001`),
     ).toBeNull();
+  });
+
+  test("recognizes only blocks registered by the active email viewer", () => {
+    const knownTarget = { blockId: "body-0001", fieldId: FIELD_ID };
+    const cleanup = registerEmailCitationBlocks({
+      blockIds: [knownTarget.blockId],
+      fieldId: FIELD_ID,
+    });
+
+    expect(isKnownEmailCitationTarget(knownTarget)).toBe(true);
+    expect(
+      isKnownEmailCitationTarget({
+        blockId: "body-9999",
+        fieldId: FIELD_ID,
+      }),
+    ).toBe(false);
+    cleanup();
+    expect(isKnownEmailCitationTarget(knownTarget)).toBe(false);
   });
 });
