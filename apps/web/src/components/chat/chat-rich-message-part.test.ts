@@ -9,7 +9,6 @@ import { propertyConfig } from "@stll/property-testing";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import messages from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 
 process.env["VITE_API_URL"] ??= "https://api.example.test";
 
@@ -29,10 +28,7 @@ const renderMediaPart = (part: RichChatPart) =>
     createElement(IntlProvider, {
       children: createElement(ChatRichMessagePart, { part }),
       locale: "en",
-      // SAFETY: this mirrors the app provider boundary; locale files are
-      // checked separately, while use-intl preserves English literal values.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      messages: messages as Messages,
+      messages,
       timeZone: "UTC",
     }),
   );

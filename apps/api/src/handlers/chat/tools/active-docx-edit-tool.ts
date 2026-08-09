@@ -66,18 +66,27 @@ type AcceptedFolioOperation = Exclude<
 >;
 
 // Distributes over the union so the `type` discriminator survives: drop the
-// rejected `precondition`, make the operation `id` optional, and require the
-// review metadata (`severity` / `area`).
-type NarrowToActiveDocxEditOperation<TOperation> = TOperation extends unknown
-  ? Omit<TOperation, "id" | "precondition" | "severity" | "area"> & {
-      id?: string;
-      severity: FolioAIEditSeverity;
-      area: string;
-    }
-  : never;
+// rejected `precondition` and require the review metadata (`severity` /
+// `area`). The parser-facing form keeps folio's required id; the tool-facing
+// form makes it optional because execution generates omitted ids.
+type NarrowValidatedActiveDocxEditOperation<TOperation> =
+  TOperation extends unknown
+    ? Omit<TOperation, "precondition" | "severity" | "area"> & {
+        severity: FolioAIEditSeverity;
+        area: string;
+        precondition?: never;
+      }
+    : never;
+
+type WithOptionalOperationId<TOperation> = TOperation extends { id: string }
+  ? Omit<TOperation, "id"> & { id?: string }
+  : TOperation;
+
+type ValidatedActiveDocxEditOperation =
+  NarrowValidatedActiveDocxEditOperation<AcceptedFolioOperation>;
 
 type ActiveDocxEditOperation =
-  NarrowToActiveDocxEditOperation<AcceptedFolioOperation>;
+  WithOptionalOperationId<ValidatedActiveDocxEditOperation>;
 
 type ActiveDocxEditToolInput = {
   version?: typeof FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION;
@@ -253,6 +262,15 @@ const REJECTED_OPERATION_TYPE_SET: ReadonlySet<string> = new Set(
   REJECTED_OPERATION_TYPES,
 );
 
+const isValidatedActiveDocxEditOperation = (
+  operation: FolioAIEditOperation,
+): operation is ValidatedActiveDocxEditOperation =>
+  !REJECTED_OPERATION_TYPE_SET.has(operation.type) &&
+  operation.precondition === undefined &&
+  operation.severity !== undefined &&
+  typeof operation.area === "string" &&
+  operation.area.length > 0;
+
 const ACCEPTED_OPERATION_VARIANTS = FOLIO_DOCUMENT_OPERATION_JSON_SCHEMA.oneOf
   .map((variant) => deriveOperationVariant(variant))
   .filter((variant) => !REJECTED_OPERATION_TYPE_SET.has(variant.operationType));
@@ -421,6 +439,19 @@ const narrowOperation = ({
   return stripped;
 };
 
+const restoreOmittedOperationIds = (
+  validated: ValidatedActiveDocxEditOperation[],
+  original: JsonObject[],
+): ActiveDocxEditOperation[] =>
+  validated.map((operation, index) => {
+    if (original.at(index)?.["id"] !== undefined) {
+      return operation;
+    }
+
+    const { id: _validationId, ...withoutValidationId } = operation;
+    return withoutValidationId;
+  });
+
 const validateActiveDocxEditToolInput = (
   input: unknown,
 ): StandardSchemaV1.Result<ValidatedActiveDocxEditToolInput> => {
@@ -489,17 +520,25 @@ const validateActiveDocxEditToolInput = (
     return { issues: folioResult.issues };
   }
 
+  const validatedOperations: ValidatedActiveDocxEditOperation[] = [];
+  for (const operation of folioResult.value.operations) {
+    if (!isValidatedActiveDocxEditOperation(operation)) {
+      panic("Folio parser violated the active DOCX edit narrowings");
+    }
+    validatedOperations.push(operation);
+  }
+
+  const operationsWithoutValidationIds = restoreOmittedOperationIds(
+    validatedOperations,
+    stripped,
+  );
+
   return {
     value: {
       version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
-      // SAFETY: folio's strict batch parser just validated every
-      // operation's shape against the same contract the derived JSON
-      // schema advertises, and the loop above enforced stella's
-      // narrowings (accepted type, required severity/area). The stripped
-      // copies differ from the parsed batch only by the generated
-      // placeholder ids, which are validation-only.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the parser validated the exact shape
-      operations: stripped as ActiveDocxEditOperation[],
+      // Folio owns the parsed operation values. Validation-only ids are
+      // removed so execution remains the one place that mints durable ids.
+      operations: operationsWithoutValidationIds,
     },
   };
 };

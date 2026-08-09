@@ -20,7 +20,6 @@ import {
   bundledEnglishMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -117,17 +116,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   return (
     <IntlProvider
       locale={messageLocale}
-      // SAFETY: activeMessages is the fully-populated catalog for the active
-      // locale. use-intl types its `messages` prop with the generated Messages
-      // schema (literal string leaves, which also drives `t()` ICU-argument
-      // inference app-wide), but locales load as dynamic JSON so LocaleMessages
-      // widens every leaf to `string`. The runtime values conform to the
-      // schema; only the literal-vs-string widening differs at this boundary.
-      // This is the single sanctioned as-cast in app source (ratchet baseline).
-      messages={
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- documented i18n provider boundary (see comment above); translated locale JSON widens leaves to string vs use-intl's literal Messages schema
-        activeMessages as Messages
-      }
+      messages={activeMessages}
       timeZone={resolveAppTimeZone()}
     >
       <FormattingProvider

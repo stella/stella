@@ -9,7 +9,6 @@ import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -31,15 +30,7 @@ afterAll(() => {
 const renderWithProviders = (children: ReactNode) =>
   renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider
-        locale="en"
-        // SAFETY: this mirrors the app provider boundary; locale
-        // files are checked separately, while use-intl preserves
-        // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- mirrors app provider boundary; use-intl Messages keeps English literal values
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <ChatMattersContext
           value={{
             createDocumentMatters: [],

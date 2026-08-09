@@ -21,7 +21,6 @@ import {
 } from "@/components/inspector/email-html-viewer.logic";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 
@@ -30,14 +29,7 @@ const FORMATTING_LOCALE = "en-u-nu-arab";
 const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
   renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
-      <IntlProvider
-        locale="en"
-        // SAFETY: locale catalogs are checked by i18n:check; this mirrors the
-        // app's provider boundary used by the other static component tests.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale={FORMATTING_LOCALE} timeZone="UTC">
           {children}
         </FormattingProvider>
