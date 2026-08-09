@@ -57,18 +57,28 @@ export const DesktopOpenButton = ({
 
       await showDesktopEditOpenResultToast({
         messages: {
-          notOpenedDescription: t(
+          notOpenedDescription: t.rich(
             "workspaces.files.desktopEdit.notOpenedDescription",
-            { application },
+            {
+              application,
+              bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+            },
           ),
-          openedDescription: t(
+          openedDescription: t.rich(
             "workspaces.files.desktopEdit.openedDescription",
-            { application },
+            {
+              application,
+              bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+            },
           ),
           openedTitle: t("workspaces.files.desktopEdit.openedTitle"),
-          sentDescription: t("workspaces.files.desktopEdit.sentDescription", {
-            application,
-          }),
+          sentDescription: t.rich(
+            "workspaces.files.desktopEdit.sentDescription",
+            {
+              application,
+              bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+            },
+          ),
           sentTitle: t("workspaces.files.desktopEdit.sentTitle"),
           unavailableTitle: t("workspaces.files.desktopEdit.unavailableTitle"),
           updateRequiredDescription: t(
