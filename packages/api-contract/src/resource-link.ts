@@ -4,6 +4,7 @@ import {
   type ResourceRef,
   type ResourceType,
 } from "./resource-ref";
+import { encodeRfc3986Component } from "./rfc3986";
 import { toSafeId } from "./safe-id";
 
 export const CHAT_RESOURCE_HREF_PREFIX = {
@@ -128,8 +129,6 @@ export type ChatMentionResourceHref =
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.entity}${string}`
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.workspace}${string}`;
 
-const encodeChatResourceId = (id: string) => encodeURIComponent(id);
-
 const decodeChatResourceId = (value: string): string | null => {
   try {
     const id = decodeURIComponent(value);
@@ -144,15 +143,15 @@ export const toChatMentionResourceHref = (
 ): ChatMentionResourceHref => {
   switch (target.type) {
     case RESOURCE_TYPE.ENTITY: {
-      const entityId = encodeChatResourceId(target.resource.id);
+      const entityId = encodeRfc3986Component(target.resource.id);
       if (target.location.type === "render_context") {
         return `${CHAT_RESOURCE_HREF_PREFIX.entity}${entityId}`;
       }
-      const workspaceId = encodeChatResourceId(target.location.workspace.id);
+      const workspaceId = encodeRfc3986Component(target.location.workspace.id);
       return `${CHAT_RESOURCE_HREF_PREFIX.entity}${workspaceId}:${entityId}`;
     }
     case RESOURCE_TYPE.WORKSPACE:
-      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeChatResourceId(target.resource.id)}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeRfc3986Component(target.resource.id)}`;
     default:
       return target satisfies never;
   }
@@ -163,7 +162,7 @@ export const toChatResourceHref = (
 ): ChatResourceHref => {
   switch (target.type) {
     case RESOURCE_TYPE.CASE_LAW_DECISION:
-      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeChatResourceId(target.resource.id)}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeRfc3986Component(target.resource.id)}`;
     case RESOURCE_TYPE.ENTITY:
     case RESOURCE_TYPE.WORKSPACE:
       return toChatMentionResourceHref(target);

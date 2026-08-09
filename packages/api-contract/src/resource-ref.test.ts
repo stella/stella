@@ -34,7 +34,7 @@ describe("canonical resource identity", () => {
   test("opaque identifier characters survive canonical serialization", () => {
     const resource = parseResourceRef({
       type: RESOURCE_TYPE.ENTITY,
-      id: "opaque/id with spaces:and?symbols",
+      id: "opaque/id with spaces:and?symbols)!",
     });
     expect(resource).not.toBeNull();
     if (resource === null) {
@@ -43,7 +43,7 @@ describe("canonical resource identity", () => {
 
     const name = toResourceName(resource);
     expect(String(name)).toBe(
-      `${RESOURCE_NAME_PREFIX}entity/opaque%2Fid%20with%20spaces%3Aand%3Fsymbols`,
+      `${RESOURCE_NAME_PREFIX}entity/opaque%2Fid%20with%20spaces%3Aand%3Fsymbols%29%21`,
     );
     expect(parseResourceName(name)).toEqual(resource);
   });

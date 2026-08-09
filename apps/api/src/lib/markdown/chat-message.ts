@@ -4,6 +4,7 @@ import {
   resourceRef,
   RESOURCE_TYPE,
   toChatMentionResourceHref,
+  toChatResourceHref,
   toSafeId,
 } from "@stll/api-contract";
 
@@ -13,7 +14,6 @@ import type {
   ChatMentionHref,
   ChatReferenceCategory,
 } from "@/api/lib/chat/references";
-import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 const ALLOWED_TAGS = new Set([
@@ -151,13 +151,14 @@ const toMentionHref = (mention: ChatMention): ChatMentionHref => {
   });
 };
 
-const toReferenceHref = ({
-  category,
-  id,
-}: {
-  category: ChatReferenceCategory;
-  id: string;
-}) => `${CHAT_REFERENCE_HREF_PREFIXES[category]}${encodeURIComponent(id)}`;
+const toDecisionReferenceHref = (id: string) =>
+  toChatResourceHref({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: toSafeId<"caseLawDecision">(id),
+    }),
+  });
 
 const dedupeMentions = (mentions: readonly ChatMention[]): ChatMention[] => {
   const seen = new Set<string>();
@@ -216,7 +217,7 @@ const replaceMentionsWithAnchors = (
     }
 
     if (!category) {
-      const href = toReferenceHref({ category: referenceCategory, id });
+      const href = toDecisionReferenceHref(id);
       const anchor = $("<a></a>").attr("href", href).text(label);
       $(node).replaceWith(anchor);
       return;

@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { encodeRfc3986Component } from "./rfc3986";
 import type { SafeId } from "./safe-id";
 
 /** Stable product nouns. Presentation labels and storage table names may differ. */
@@ -162,7 +163,7 @@ export type ResourceName = v.InferOutput<typeof resourceNameSchema>;
 export const toResourceName = (resource: ResourceRef): ResourceName =>
   v.parse(
     resourceNameSchema,
-    `${RESOURCE_NAME_PREFIX}${resource.type}/${encodeURIComponent(resource.id)}`,
+    `${RESOURCE_NAME_PREFIX}${resource.type}/${encodeRfc3986Component(resource.id)}`,
   );
 
 /** Parse only complete canonical names; aliases and UI routes belong elsewhere. */

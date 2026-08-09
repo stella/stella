@@ -57,6 +57,7 @@ export {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
 } from "./realtime-events";
+export { encodeRfc3986Component } from "./rfc3986";
 export { toSafeId } from "./safe-id";
 export type { SafeId } from "./safe-id";
 export type {

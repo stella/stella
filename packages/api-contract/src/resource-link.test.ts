@@ -63,7 +63,7 @@ describe("chat resource links", () => {
       type: RESOURCE_TYPE.ENTITY,
       resource: resourceRef({
         type: RESOURCE_TYPE.ENTITY,
-        id: toSafeId<"entity">("document:1/notes"),
+        id: toSafeId<"entity">("document:1/brief)final"),
       }),
       location: {
         type: "workspace",
@@ -75,8 +75,16 @@ describe("chat resource links", () => {
     } as const;
 
     const href = toChatResourceHref(target);
-    expect(href).toBe("#stella-entity=matter%3Aeu:document%3A1%2Fnotes");
+    expect(href).toBe(
+      "#stella-entity=matter%3Aeu:document%3A1%2Fbrief%29final",
+    );
     expect(parseChatResourceHref(href)).toEqual(target);
+
+    const renderedHref = Bun.markdown
+      .html(`[Document](${href})`)
+      .match(/href="(?<href>[^"]+)"/)?.groups?.["href"];
+    expect(renderedHref).toBe(href);
+    expect(parseChatResourceHref(renderedHref ?? "")).toEqual(target);
 
     const relativeTarget = {
       type: RESOURCE_TYPE.ENTITY,
