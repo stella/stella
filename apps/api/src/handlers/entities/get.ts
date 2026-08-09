@@ -127,12 +127,17 @@ const config = {
 const readEntityById = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params }) {
-    const entity = yield* readEntityByIdHandler({
+    const entityResult = yield* readEntityByIdHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
     });
-    return {
+    if (Result.isError(entityResult)) {
+      return entityResult;
+    }
+
+    const entity = entityResult.value;
+    return Result.ok({
       entityId: entity.entityId,
       kind: entity.kind,
       name: entity.name,
@@ -140,7 +145,7 @@ const readEntityById = createSafeHandler(
       currentVersionCreatedAt: entity.currentVersionCreatedAt,
       extractionFileFieldId: entity.extractionFileFieldId,
       fields: entity.fields,
-    };
+    });
   },
 );
 
