@@ -173,7 +173,8 @@ export const exportLedesHandler = async ({
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "LEDES export contains time entries without an effective rate",
+          message:
+            "LEDES export contains time entries without an effective rate",
         }),
       );
     }

@@ -82,9 +82,7 @@ const timerStart = createSafeHandler(
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the workspace time entry limit.
     const txResult = await safeDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`,
-      );
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`);
       const activeTimerCount = await tx.$count(
         timeEntries,
         and(
