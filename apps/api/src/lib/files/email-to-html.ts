@@ -1116,7 +1116,7 @@ const EMAIL_CITATION_BLOCK_SELECTOR = [
 ].join(", ");
 
 const isEmailCitationHidden = (element: Element): boolean =>
-  element.attribs.hidden !== undefined ||
+  element.attribs["hidden"] !== undefined ||
   element.attribs["aria-hidden"]?.trim().toLowerCase() === "true";
 
 const annotateEmailCitationBlocks = (
