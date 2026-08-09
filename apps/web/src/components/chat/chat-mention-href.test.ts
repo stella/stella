@@ -18,7 +18,6 @@ describe("chat mention hrefs", () => {
       ),
     ).toEqual({
       category: "entity",
-      id: `${workspaceId}:${entityId}`,
       target: {
         type: RESOURCE_TYPE.ENTITY,
         resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
