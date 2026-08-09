@@ -1,131 +1,278 @@
-import * as v from "valibot";
+export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
-const timeEntryStatusSchema = v.picklist([
-  "draft",
-  "approved",
-  "billed",
-  "written_off",
-]);
+export type TimeEntrySource = "manual" | "timer";
 
-const timeEntrySourceSchema = v.picklist(["manual", "timer"]);
+export type TimeEntry = {
+  activityCode: string | null;
+  billable: boolean;
+  billedMinutes: number;
+  createdAt: string;
+  currency: string;
+  dateWorked: string;
+  durationMinutes: number;
+  id: string;
+  invoiceNarrative: string | null;
+  narrative: string;
+  noCharge: boolean;
+  rateAtEntry: number;
+  source: TimeEntrySource;
+  status: TimeEntryStatus;
+  taskCode: string | null;
+  timerStartedAt: string | null;
+  timerStoppedAt: string | null;
+  timezoneId: string;
+  updatedAt: string | null;
+  userId: string | null;
+  userName: string | null;
+  workItemId: string | null;
+};
 
-const timeEntrySchema = v.object({
-  activityCode: v.nullable(v.string()),
-  billable: v.boolean(),
-  billedMinutes: v.number(),
-  createdAt: v.string(),
-  currency: v.string(),
-  dateWorked: v.string(),
-  durationMinutes: v.number(),
-  id: v.string(),
-  invoiceNarrative: v.nullable(v.string()),
-  narrative: v.string(),
-  noCharge: v.boolean(),
-  rateAtEntry: v.number(),
-  source: timeEntrySourceSchema,
-  status: timeEntryStatusSchema,
-  taskCode: v.nullable(v.string()),
-  timerStartedAt: v.nullable(v.string()),
-  timerStoppedAt: v.nullable(v.string()),
-  timezoneId: v.string(),
-  updatedAt: v.nullable(v.string()),
-  userId: v.nullable(v.string()),
-  userName: v.nullable(v.string()),
-  workItemId: v.nullable(v.string()),
-});
+export type TimeEntryListPage = {
+  items: TimeEntry[];
+  limit: number;
+  nextCursor: string | null;
+};
 
-const timeEntryListPageSchema = v.object({
-  items: v.array(timeEntrySchema),
-  limit: v.number(),
-  nextCursor: v.nullable(v.string()),
-});
+export type TimeEntrySummary =
+  | {
+      billedMinutes: number;
+      entryCount: number;
+      scope: "personal";
+      totalMinutes: number;
+    }
+  | {
+      members: {
+        daily: { dateWorked: string; totalMinutes: number }[];
+        email: string;
+        image: string | null;
+        name: string;
+        userId: string;
+      }[];
+      scope: "team";
+      viewerTotalMinutes: number;
+    };
 
-const personalTimeEntrySummarySchema = v.object({
-  billedMinutes: v.number(),
-  entryCount: v.number(),
-  scope: v.literal("personal"),
-  totalMinutes: v.number(),
-});
+type UnknownRecord = Record<string, unknown>;
 
-const teamTimeEntrySummarySchema = v.object({
-  members: v.array(
-    v.object({
-      daily: v.array(
-        v.object({
-          dateWorked: v.string(),
-          totalMinutes: v.number(),
-        }),
-      ),
-      email: v.string(),
-      image: v.nullable(v.string()),
-      name: v.string(),
-      userId: v.string(),
-    }),
-  ),
-  scope: v.literal("team"),
-  viewerTotalMinutes: v.number(),
-});
+const isRecord = (input: unknown): input is UnknownRecord =>
+  typeof input === "object" && input !== null && !Array.isArray(input);
 
-const timeEntrySummarySchema = v.variant("scope", [
-  personalTimeEntrySummarySchema,
-  teamTimeEntrySummarySchema,
-]);
+const isNullableString = (input: unknown): input is string | null =>
+  input === null || typeof input === "string";
 
-const idResponseSchema = v.object({ id: v.string() });
-const deleteResponseSchema = v.object({ deleted: v.boolean() });
-const timerStartResponseSchema = v.object({
-  id: v.string(),
-  timerStartedAt: v.optional(v.string()),
-});
-const timerStopResponseSchema = v.object({
-  billedMinutes: v.number(),
-  durationMinutes: v.number(),
-  id: v.string(),
-});
-const updatedResponseSchema = v.object({ updated: v.number() });
-const splitResponseSchema = v.object({
-  entryIds: v.array(v.string()),
-  splitGroupId: v.string(),
-});
-const polishedNarrativeResponseSchema = v.object({ narrative: v.string() });
+const isInteger = (input: unknown): input is number =>
+  typeof input === "number" && Number.isInteger(input);
 
-export type TimeEntry = v.InferOutput<typeof timeEntrySchema>;
-export type TimeEntryListPage = v.InferOutput<typeof timeEntryListPageSchema>;
-export type TimeEntrySummary = v.InferOutput<typeof timeEntrySummarySchema>;
+const isTimeEntryStatus = (input: unknown): input is TimeEntryStatus =>
+  input === "draft" ||
+  input === "approved" ||
+  input === "billed" ||
+  input === "written_off";
 
-const parse = <TSchema extends v.GenericSchema>(
-  schema: TSchema,
-  input: unknown,
-): v.InferOutput<TSchema> | null => {
-  const result = v.safeParse(schema, input);
-  return result.success ? result.output : null;
+const isTimeEntrySource = (input: unknown): input is TimeEntrySource =>
+  input === "manual" || input === "timer";
+
+const parseTimeEntry = (input: unknown): TimeEntry | null => {
+  if (
+    !isRecord(input) ||
+    !isNullableString(input.activityCode) ||
+    typeof input.billable !== "boolean" ||
+    !isInteger(input.billedMinutes) ||
+    typeof input.createdAt !== "string" ||
+    typeof input.currency !== "string" ||
+    typeof input.dateWorked !== "string" ||
+    !isInteger(input.durationMinutes) ||
+    typeof input.id !== "string" ||
+    !isNullableString(input.invoiceNarrative) ||
+    typeof input.narrative !== "string" ||
+    typeof input.noCharge !== "boolean" ||
+    !isInteger(input.rateAtEntry) ||
+    !isTimeEntrySource(input.source) ||
+    !isTimeEntryStatus(input.status) ||
+    !isNullableString(input.taskCode) ||
+    !isNullableString(input.timerStartedAt) ||
+    !isNullableString(input.timerStoppedAt) ||
+    typeof input.timezoneId !== "string" ||
+    !isNullableString(input.updatedAt) ||
+    !isNullableString(input.userId) ||
+    !isNullableString(input.userName) ||
+    !isNullableString(input.workItemId)
+  ) {
+    return null;
+  }
+  return {
+    activityCode: input.activityCode,
+    billable: input.billable,
+    billedMinutes: input.billedMinutes,
+    createdAt: input.createdAt,
+    currency: input.currency,
+    dateWorked: input.dateWorked,
+    durationMinutes: input.durationMinutes,
+    id: input.id,
+    invoiceNarrative: input.invoiceNarrative,
+    narrative: input.narrative,
+    noCharge: input.noCharge,
+    rateAtEntry: input.rateAtEntry,
+    source: input.source,
+    status: input.status,
+    taskCode: input.taskCode,
+    timerStartedAt: input.timerStartedAt,
+    timerStoppedAt: input.timerStoppedAt,
+    timezoneId: input.timezoneId,
+    updatedAt: input.updatedAt,
+    userId: input.userId,
+    userName: input.userName,
+    workItemId: input.workItemId,
+  };
 };
 
 export const parseTimeEntryListPage = (
   input: unknown,
-): TimeEntryListPage | null => parse(timeEntryListPageSchema, input);
+): TimeEntryListPage | null => {
+  if (
+    !isRecord(input) ||
+    !Array.isArray(input.items) ||
+    !isInteger(input.limit) ||
+    !isNullableString(input.nextCursor)
+  ) {
+    return null;
+  }
+  const items: TimeEntry[] = [];
+  for (const item of input.items) {
+    const parsed = parseTimeEntry(item);
+    if (parsed === null) {
+      return null;
+    }
+    items.push(parsed);
+  }
+  return { items, limit: input.limit, nextCursor: input.nextCursor };
+};
+
+const parsePersonalSummary = (
+  input: UnknownRecord,
+): TimeEntrySummary | null => {
+  if (
+    input.scope !== "personal" ||
+    !isInteger(input.billedMinutes) ||
+    !isInteger(input.entryCount) ||
+    !isInteger(input.totalMinutes)
+  ) {
+    return null;
+  }
+  return {
+    billedMinutes: input.billedMinutes,
+    entryCount: input.entryCount,
+    scope: "personal",
+    totalMinutes: input.totalMinutes,
+  };
+};
+
+const parseTeamSummary = (input: UnknownRecord): TimeEntrySummary | null => {
+  if (
+    input.scope !== "team" ||
+    !Array.isArray(input.members) ||
+    !isInteger(input.viewerTotalMinutes)
+  ) {
+    return null;
+  }
+  const members: Extract<TimeEntrySummary, { scope: "team" }>["members"] = [];
+  for (const member of input.members) {
+    if (
+      !isRecord(member) ||
+      !Array.isArray(member.daily) ||
+      typeof member.email !== "string" ||
+      !isNullableString(member.image) ||
+      typeof member.name !== "string" ||
+      typeof member.userId !== "string"
+    ) {
+      return null;
+    }
+    const daily: { dateWorked: string; totalMinutes: number }[] = [];
+    for (const day of member.daily) {
+      if (
+        !isRecord(day) ||
+        typeof day.dateWorked !== "string" ||
+        !isInteger(day.totalMinutes)
+      ) {
+        return null;
+      }
+      daily.push({
+        dateWorked: day.dateWorked,
+        totalMinutes: day.totalMinutes,
+      });
+    }
+    members.push({
+      daily,
+      email: member.email,
+      image: member.image,
+      name: member.name,
+      userId: member.userId,
+    });
+  }
+  return {
+    members,
+    scope: "team",
+    viewerTotalMinutes: input.viewerTotalMinutes,
+  };
+};
 
 export const parseTimeEntrySummary = (
   input: unknown,
-): TimeEntrySummary | null => parse(timeEntrySummarySchema, input);
+): TimeEntrySummary | null => {
+  if (!isRecord(input)) {
+    return null;
+  }
+  return input.scope === "personal"
+    ? parsePersonalSummary(input)
+    : parseTeamSummary(input);
+};
 
 export const parseTimeEntryIdResponse = (input: unknown) =>
-  parse(idResponseSchema, input);
+  isRecord(input) && typeof input.id === "string" ? { id: input.id } : null;
 
 export const parseTimeEntryDeleteResponse = (input: unknown) =>
-  parse(deleteResponseSchema, input);
+  isRecord(input) && typeof input.deleted === "boolean"
+    ? { deleted: input.deleted }
+    : null;
 
 export const parseTimerStartResponse = (input: unknown) =>
-  parse(timerStartResponseSchema, input);
+  isRecord(input) &&
+  typeof input.id === "string" &&
+  (input.timerStartedAt === undefined ||
+    typeof input.timerStartedAt === "string")
+    ? { id: input.id, timerStartedAt: input.timerStartedAt }
+    : null;
 
 export const parseTimerStopResponse = (input: unknown) =>
-  parse(timerStopResponseSchema, input);
+  isRecord(input) &&
+  typeof input.id === "string" &&
+  isInteger(input.billedMinutes) &&
+  isInteger(input.durationMinutes)
+    ? {
+        billedMinutes: input.billedMinutes,
+        durationMinutes: input.durationMinutes,
+        id: input.id,
+      }
+    : null;
 
 export const parseTimeEntryUpdatedResponse = (input: unknown) =>
-  parse(updatedResponseSchema, input);
+  isRecord(input) && isInteger(input.updated)
+    ? { updated: input.updated }
+    : null;
 
-export const parseTimeEntrySplitResponse = (input: unknown) =>
-  parse(splitResponseSchema, input);
+export const parseTimeEntrySplitResponse = (input: unknown) => {
+  if (
+    !isRecord(input) ||
+    !Array.isArray(input.entryIds) ||
+    !input.entryIds.every((id) => typeof id === "string") ||
+    typeof input.splitGroupId !== "string"
+  ) {
+    return null;
+  }
+  return { entryIds: input.entryIds, splitGroupId: input.splitGroupId };
+};
 
 export const parsePolishedTimeEntryNarrativeResponse = (input: unknown) =>
-  parse(polishedNarrativeResponseSchema, input);
+  isRecord(input) && typeof input.narrative === "string"
+    ? { narrative: input.narrative }
+    : null;

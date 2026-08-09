@@ -1,5 +1,3 @@
-import * as v from "valibot";
-
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
 export type ApiValidationErrorValue = {
@@ -37,32 +35,50 @@ export type NormalizedApiError = {
   status: number;
 };
 
-const apiValidationErrorValueSchema = v.looseObject({
-  expected: v.optional(v.string()),
-  found: v.optional(v.unknown()),
-  message: v.optional(v.string()),
-  on: v.string(),
-  property: v.optional(v.string()),
-  summary: v.optional(v.string()),
-  type: v.literal(API_VALIDATION_ERROR_CODE),
-});
-
-const apiErrorObjectValueSchema = v.looseObject({
-  code: v.optional(v.string()),
-  message: v.string(),
-});
-
-const apiErrorValueSchema = v.union([
-  apiValidationErrorValueSchema,
-  apiErrorObjectValueSchema,
-  v.string(),
-  v.null(),
-  v.undefined(),
-]);
-
 export const parseApiErrorValue = (input: unknown): ApiErrorValue => {
-  const result = v.safeParse(apiErrorValueSchema, input);
-  return result.success ? result.output : null;
+  if (input === null || input === undefined || typeof input === "string") {
+    return input;
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  if (
+    "type" in input &&
+    input.type === API_VALIDATION_ERROR_CODE &&
+    "on" in input &&
+    typeof input.on === "string"
+  ) {
+    return {
+      type: API_VALIDATION_ERROR_CODE,
+      on: input.on,
+      ...("expected" in input && typeof input.expected === "string"
+        ? { expected: input.expected }
+        : {}),
+      ...("found" in input ? { found: input.found } : {}),
+      ...("message" in input && typeof input.message === "string"
+        ? { message: input.message }
+        : {}),
+      ...("property" in input && typeof input.property === "string"
+        ? { property: input.property }
+        : {}),
+      ...("summary" in input && typeof input.summary === "string"
+        ? { summary: input.summary }
+        : {}),
+    };
+  }
+  if (!("message" in input) || typeof input.message !== "string") {
+    return null;
+  }
+  const result: ApiErrorObjectValue = { message: input.message };
+  for (const [key, value] of Object.entries(input)) {
+    if (key !== "code" && key !== "message" && key !== "type") {
+      result[key] = value;
+    }
+  }
+  if ("code" in input && typeof input.code === "string") {
+    result.code = input.code;
+  }
+  return result;
 };
 
 const ERROR_TEXT_KEYS = new Set(["code", "message"]);
