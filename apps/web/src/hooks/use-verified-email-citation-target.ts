@@ -1,4 +1,4 @@
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   isVerifiedEmailCitationTarget,
@@ -30,12 +30,10 @@ export const useVerifiedEmailCitationTarget = (
   const knownTarget = useKnownEmailCitationTarget(href);
   const shouldVerify = Boolean(target && workspaceId && !knownTarget);
   const previewQuery = useQuery({
-    ...(shouldVerify && target && workspaceId
-      ? emailHtmlPreviewOptions({ fieldId: target.fieldId, workspaceId })
-      : {
-          queryKey: ["email-citation-preview-disabled", href] as const,
-          queryFn: skipToken,
-        }),
+    ...emailHtmlPreviewOptions({
+      fieldId: target?.fieldId ?? "",
+      workspaceId: workspaceId ?? "",
+    }),
     enabled: shouldVerify,
     staleTime: Number.POSITIVE_INFINITY,
   });
