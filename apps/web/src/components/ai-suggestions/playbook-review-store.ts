@@ -220,9 +220,6 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       if (response.error) {
         return { status: "error" as const, error: response.error };
       }
-      if (!response.data) {
-        return { status: "missing" as const };
-      }
       return { status: "success" as const, data: response.data };
     });
 
@@ -232,10 +229,6 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     if (Result.isError(result)) {
       return failUnexpected();
     }
-    if (result.value.status === "missing") {
-      return failUnexpected();
-    }
-
     if (result.value.status === "error") {
       const message = userErrorMessage(
         result.value.error,
