@@ -39,7 +39,7 @@ export const parseStellaMentionHref = (
   target: ChatMentionResourceLinkTarget;
 } | null => {
   const target = parseChatResourceHref(href);
-  if (target?.resource.type === RESOURCE_TYPE.ENTITY) {
+  if (target?.type === RESOURCE_TYPE.ENTITY) {
     return {
       category: "entity",
       id:
@@ -49,7 +49,7 @@ export const parseStellaMentionHref = (
       target,
     };
   }
-  if (target?.resource.type === RESOURCE_TYPE.WORKSPACE) {
+  if (target?.type === RESOURCE_TYPE.WORKSPACE) {
     return { category: "workspace", id: target.resource.id, target };
   }
 

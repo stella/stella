@@ -67,7 +67,9 @@ describe("chat mention suggestions", () => {
       ],
     });
 
-    expect(result.map((item) => item.resource.id)).toEqual(["decision-1"]);
+    expect(result.map((item) => String(item.resource.id))).toEqual([
+      "decision-1",
+    ]);
   });
 
   test("still filters local cached mentions by label", () => {
@@ -80,6 +82,8 @@ describe("chat mention suggestions", () => {
       searchedItems: [],
     });
 
-    expect(result.map((item) => item.resource.id)).toEqual(["entity-1"]);
+    expect(result.map((item) => String(item.resource.id))).toEqual([
+      "entity-1",
+    ]);
   });
 });

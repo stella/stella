@@ -8,7 +8,7 @@ describe("task link resource identity", () => {
   test("upgrades a legacy entity ID at the client boundary", () => {
     expect(getEntityLinkResource({ id: "entity-1" })).toEqual({
       type: RESOURCE_TYPE.ENTITY,
-      id: "entity-1",
+      id: toSafeId<"entity">("entity-1"),
     });
   });
 

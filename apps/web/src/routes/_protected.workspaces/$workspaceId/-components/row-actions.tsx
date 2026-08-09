@@ -636,8 +636,8 @@ export const RowActions = ({
   };
 
   const handleChatAbout = () => {
-    const mentions = bulkTargets.map((entity) =>
-      buildEntityMentionOption({ entity }),
+    const mentions = bulkTargets.map((target) =>
+      buildEntityMentionOption({ entity: target }),
     );
     requestChatAbout(mentions);
   };

@@ -18,14 +18,23 @@ describe("resource identity census", () => {
   });
 
   test("binds each canonical resource to its exact storage ID brand", () => {
+    const backendMappings = new Set<string>();
     for (const [idType, disposition] of Object.entries(
       RESOURCE_IDENTITY_DISPOSITION,
     )) {
       if (disposition.type !== "resource") {
         continue;
       }
-      expect(RESOURCE_ID_TYPE[disposition.resourceType]).toBe(idType);
+      backendMappings.add(`${disposition.resourceType}:${idType}`);
     }
+
+    const portableMappings = new Set(
+      Object.entries(RESOURCE_ID_TYPE).map(
+        ([resourceType, idType]) => `${resourceType}:${idType}`,
+      ),
+    );
+    expect(backendMappings.size).toBe(portableMappings.size);
+    expect(backendMappings).toEqual(portableMappings);
   });
 
   test("presentation aliases resolve to one underlying identity", () => {
