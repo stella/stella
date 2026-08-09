@@ -162,12 +162,3 @@ export const useKnownEmailCitationTarget = (
   );
   return known ? target : null;
 };
-
-declare global {
-  // eslint-disable-next-line typescript-eslint/consistent-type-definitions -- interface declaration merging is required to augment lib.dom WindowEventMap
-  interface WindowEventMap {
-    "email:citation-registration": Event;
-    "email:lookup-citation": CustomEvent<EmailCitationTarget>;
-    "email:scroll-to-citation": CustomEvent<EmailCitationTarget>;
-  }
-}
