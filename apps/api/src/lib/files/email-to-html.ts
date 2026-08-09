@@ -1180,7 +1180,7 @@ const annotateEmailCitationBlocks = (
 type EmailCitationTraversalNode = Element["children"][number];
 
 const hasNestedEmailCitationBlock = (element: Element): boolean => {
-  const stack = [...element.children].reverse();
+  const stack = element.children.toReversed();
   while (stack.length > 0) {
     const child = stack.pop();
     if (!child || !isTag(child) || isEmailCitationExcluded(child)) {
@@ -1204,7 +1204,7 @@ const hasNestedEmailCitationBlock = (element: Element): boolean => {
 
 const collectEmailCitationText = (element: Element): string => {
   const parts: string[] = [];
-  const stack: EmailCitationTraversalNode[] = [...element.children].reverse();
+  const stack: EmailCitationTraversalNode[] = element.children.toReversed();
   while (stack.length > 0) {
     const child = stack.pop();
     if (!child) {
