@@ -1119,6 +1119,13 @@ const isEmailCitationHidden = (element: Element): boolean =>
   element.attribs["hidden"] !== undefined ||
   element.attribs["aria-hidden"]?.trim().toLowerCase() === "true";
 
+const isEmailCitationInert = (element: Element): boolean =>
+  element.name === "template" ||
+  (element.name === "dialog" && element.attribs["open"] === undefined);
+
+const isEmailCitationExcluded = (element: Element): boolean =>
+  isEmailCitationHidden(element) || isEmailCitationInert(element);
+
 const annotateEmailCitationBlocks = (
   $: CheerioApi,
   maxBlocks: number,
@@ -1129,11 +1136,11 @@ const annotateEmailCitationBlocks = (
       return;
     }
     if (
-      isEmailCitationHidden(element) ||
+      isEmailCitationExcluded(element) ||
       $(element)
         .parents()
         .toArray()
-        .some((parent) => isTag(parent) && isEmailCitationHidden(parent))
+        .some((parent) => isTag(parent) && isEmailCitationExcluded(parent))
     ) {
       return;
     }
@@ -1166,7 +1173,7 @@ const collectEmailCitationText = (element: Element): string => {
     if (!isTag(child)) {
       continue;
     }
-    if (isEmailCitationHidden(child)) {
+    if (isEmailCitationExcluded(child)) {
       continue;
     }
     if (child.name === "br") {

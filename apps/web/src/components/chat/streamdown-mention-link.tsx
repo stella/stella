@@ -623,8 +623,13 @@ const EmailCitationChip = ({
   interactive: boolean;
   workspaceId: string | undefined;
 }) => {
+  const tCommon = useTranslations("common");
   const { target } = citation;
   const handleActivate = (): void => {
+    if (citation.type === "error") {
+      detached(citation.retry(), "email-citation.retry");
+      return;
+    }
     if (!workspaceId) {
       return;
     }
@@ -648,9 +653,18 @@ const EmailCitationChip = ({
 
   return (
     <InlinePill
+      ariaLabel={citation.type === "error" ? tCommon("retry") : undefined}
       data-block-id={target.blockId}
       leadingIcon={<MailIcon className="size-3 shrink-0" />}
-      onActivate={interactive && workspaceId ? handleActivate : undefined}
+      onActivate={
+        interactive && (citation.type === "error" || Boolean(workspaceId))
+          ? handleActivate
+          : undefined
+      }
+      tone={citation.type === "error" ? "info" : "accent"}
+      tooltip={
+        citation.type === "error" && interactive ? tCommon("retry") : undefined
+      }
       truncate
     >
       {children}

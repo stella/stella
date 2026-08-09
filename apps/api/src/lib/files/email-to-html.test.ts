@@ -698,6 +698,35 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("secret");
   });
 
+  test("excludes content inside inert containers from citations", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>Visible</p>",
+            "<dialog><p>Closed dialog</p></dialog>",
+            "<template><p>Template content</p></template>",
+            "<dialog open><p>Open dialog</p></dialog>",
+          ].join(""),
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain("Visible");
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain(
+      "Open dialog",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Closed dialog",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Template content",
+    );
+    expect(preview.bodyHtml).toContain("Closed dialog");
+    expect(preview.bodyHtml).toContain("Template content");
+  });
+
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
     const nonstandardDelimiter = buildEmailPreview(
       htmlEmail({

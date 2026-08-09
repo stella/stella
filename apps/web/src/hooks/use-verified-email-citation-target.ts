@@ -12,6 +12,11 @@ import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 export type VerifiedEmailCitationTarget =
   | { type: "active"; target: EmailCitationTarget }
   | {
+      type: "error";
+      retry: () => Promise<unknown>;
+      target: EmailCitationTarget;
+    }
+  | {
       type: "verified";
       source: EmailCitationSource;
       target: EmailCitationTarget;
@@ -38,7 +43,13 @@ export const useVerifiedEmailCitationTarget = (
   if (knownTarget) {
     return { type: "active", target: knownTarget };
   }
-  if (!target || !previewQuery.data) {
+  if (!target) {
+    return null;
+  }
+  if (previewQuery.isError && !previewQuery.data) {
+    return { retry: previewQuery.refetch, target, type: "error" };
+  }
+  if (!previewQuery.data) {
     return null;
   }
 
