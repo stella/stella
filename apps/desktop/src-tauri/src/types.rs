@@ -18,6 +18,7 @@ macro_rules! define_desktop_edit_file_types {
       )+
     }
 
+    #[cfg(test)]
     impl DesktopEditFileType {
       pub const ALL: &[Self] = &[$(Self::$variant),+];
 
