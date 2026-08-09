@@ -16,7 +16,6 @@ import {
   type DesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
-import { detached } from "@/lib/detached";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 
 export type DesktopOpenTarget = {
@@ -48,7 +47,7 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
         workspaceId: target.workspaceId,
       });
 
-      const toastPromise = showDesktopEditOpenResultToast({
+      await showDesktopEditOpenResultToast({
         messages: {
           notOpenedDescription: t.rich(
             "workspaces.files.desktopEdit.notOpenedDescription",
@@ -83,11 +82,6 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
         },
         result: openResult,
       });
-      if (openResult.type !== "opened") {
-        detached(toastPromise, "useDesktopFileOpen");
-      } else {
-        await toastPromise;
-      }
     } catch (error) {
       setIsOpening(false);
       if (error instanceof Error && isUnauthorizedError(error)) {

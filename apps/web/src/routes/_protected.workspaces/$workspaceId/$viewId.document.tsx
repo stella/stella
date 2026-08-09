@@ -832,7 +832,9 @@ function RouteComponentInner({
                     <Suspense fallback={<DocxLoadingShell />}>
                       <OfficeFileViewer
                         desktopEditTarget={
-                          canUpdateEntity && filePropertyId !== undefined
+                          canUpdateEntity &&
+                          filePropertyId !== undefined &&
+                          activeFileField !== undefined
                             ? {
                                 fileType: officeViewerFormat,
                                 propertyId: filePropertyId,

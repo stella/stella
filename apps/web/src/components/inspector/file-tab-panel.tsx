@@ -194,6 +194,7 @@ export const FileTabPanel = ({
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorCommandStore((s) => s.requestDocxEdit);
   const playbooksEnabled = usePlaybooksPreviewEnabled();
+  const isActive = tab.id === activeId;
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const nativePreviewKind = getFileTabNativePreviewKind({
     fileName: tab.fileName,
@@ -205,9 +206,18 @@ export const FileTabPanel = ({
   const isMarkdownDisplay = nativePreviewKind === "markdown";
   const officeViewerFormat = getNativeOfficeViewerFormat(tab.mimeType);
   const isOfficeDisplay = nativePreviewKind === "office";
-  const emailEntityQuery = useQuery({
+  const desktopEditFileType = getDesktopEditFileType({
+    fileName: tab.fileName,
+    mimeType: tab.mimeType,
+  });
+  const entityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
-    enabled: isEmailViewerActive,
+    enabled:
+      isEmailViewerActive ||
+      (isActive &&
+        !minimized &&
+        canUpdateEntity &&
+        desktopEditFileType !== null),
     refetchInterval: ({ state }) =>
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: state.data?.extractionFileFieldId,
@@ -215,13 +225,13 @@ export const FileTabPanel = ({
       }),
   });
   const emailChatMode = getEmailChatMode({
-    extractionFileFieldId: emailEntityQuery.data?.extractionFileFieldId,
+    extractionFileFieldId: entityQuery.data?.extractionFileFieldId,
     fieldId: tab.id,
   });
   const shouldSurfaceEmailResolutionError =
     shouldSurfaceEmailChatResolutionError({
-      hasData: emailEntityQuery.data !== undefined,
-      isError: emailEntityQuery.isError,
+      hasData: entityQuery.data !== undefined,
+      isError: entityQuery.isError,
     });
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
@@ -326,7 +336,6 @@ export const FileTabPanel = ({
   if (minimized) {
     return null;
   }
-  const isActive = tab.id === activeId;
   if (!mountedPdfIds.has(tab.id)) {
     return null;
   }
@@ -350,14 +359,16 @@ export const FileTabPanel = ({
   const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
   const metadataLane = tab.metadataLane ?? "closed";
   const isMetadataLaneExpanded = metadataLane === "expanded";
-  const desktopEditFileType = getDesktopEditFileType({
-    fileName: tab.fileName,
-    mimeType: tab.mimeType,
-  });
+  const isCurrentDesktopEditField =
+    tab.propertyId !== undefined &&
+    entityQuery.data?.fields.some(
+      (field) => field.id === tab.id && field.propertyId === tab.propertyId,
+    ) === true;
   const desktopEditTarget =
     canUpdateEntity &&
     desktopEditFileType !== null &&
-    tab.propertyId !== undefined
+    tab.propertyId !== undefined &&
+    isCurrentDesktopEditField
       ? { fileType: desktopEditFileType, propertyId: tab.propertyId }
       : null;
   const desktopOpenButton =
@@ -797,7 +808,7 @@ export const FileTabPanel = ({
             fieldId={tab.id}
             fileName={tab.fileName}
             onRetryChatResolution={() => {
-              detached(emailEntityQuery.refetch(), "FileTabPanel");
+              detached(entityQuery.refetch(), "FileTabPanel");
             }}
             workspaceId={tab.workspaceId}
           />
