@@ -188,6 +188,54 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.sourceRaw).toContain('"verdictText":"Vyrok"');
   });
 
+  test("CZ Regional preserves decisions without a final-document URL", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/opendata/",
+        body: JSON.stringify({
+          items: [
+            {
+              jednaciCislo: "15 Co 2/2024",
+              soud: "Krajsky soud v Brne",
+              datumVydani: "2024-03-06",
+              odkaz: null,
+            },
+            {
+              jednaciCislo: "15 Co 3/2024",
+              soud: "Krajsky soud v Brne",
+              datumVydani: "2024-03-07",
+            },
+            {
+              jednaciCislo: "15 Co 4/2024",
+              soud: "Krajsky soud v Brne",
+              datumVydani: "2024-03-08",
+              odkaz: "http://rozhodnuti.justice.cz/api/finaldoc/legacy",
+            },
+          ],
+          totalPages: 1,
+          pageNumber: 0,
+        }),
+      },
+    ]);
+
+    const result = await czRegionalAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    const decisions = result.unwrap().decisions;
+    expect(decisions.map(({ caseNumber }) => caseNumber)).toEqual([
+      "15 Co 2/2024",
+      "15 Co 3/2024",
+      "15 Co 4/2024",
+    ]);
+    expect(decisions.every(({ sourceUrl }) => sourceUrl === undefined)).toBe(
+      true,
+    );
+    expect(
+      decisions.every(({ documentUrl }) => documentUrl === undefined),
+    ).toBe(true);
+    expect(decisions.at(2)?.sourceDocumentId).toBe("legacy");
+  });
+
   test("PL Courts accepts null optional detail fields and maps local decision type", async () => {
     mockFetchWithBodies([
       {

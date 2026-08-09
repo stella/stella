@@ -16,6 +16,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const BATCH_SIZE = 50;
 
@@ -30,8 +31,20 @@ const BODY_START_MARKERS = [
 const fetchCzSupremeFulltext = async (
   sourceUrl: string,
 ): Promise<string | undefined> => {
+  const target = restrictOutboundUrl({
+    rawUrl: sourceUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ["https://rozhodnuti.nsoud.cz"],
+    },
+    pathPrefixes: ["/Judikatura/"],
+  });
+  if (target === null) {
+    return undefined;
+  }
   try {
-    const response = await fetchWithTimeout(sourceUrl, {
+    const response = await fetchWithTimeout(target, {
+      redirect: "error",
       timeoutMs: 15_000,
     });
     if (!response.ok) {

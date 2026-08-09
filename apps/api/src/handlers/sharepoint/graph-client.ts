@@ -26,7 +26,6 @@ import {
   encryptSharepointSecret,
 } from "@/api/handlers/sharepoint/crypto";
 import {
-  GRAPH_API_BASE_URL,
   getSharepointOAuthConfig,
   refreshAccessToken,
   tokenExpiresAt,
@@ -38,6 +37,7 @@ import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
+const GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0";
 // Refresh a little early so a token does not expire mid-request.
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 

@@ -7,7 +7,10 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -35,8 +38,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
 import { logger } from "@/api/lib/observability/logger";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -269,10 +272,22 @@ const fetchFinaldoc = async (
     richMetadata: {},
   };
 
+  const target = restrictCzRegionalFinaldocUrl(docUrl);
+  if (target === null) {
+    logger.warn("case_law.ingestion.outbound_url_rejected", {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      caseNumber: item.caseNumber,
+    });
+    return empty;
+  }
+
   try {
     const response = await fetchWithRetry(
-      docUrl,
-      { headers: { Accept: "application/json" } },
+      target.toString(),
+      {
+        headers: { Accept: "application/json" },
+        redirect: "error",
+      },
       {
         maxRetries: 1,
         signal,
@@ -296,7 +311,7 @@ const fetchFinaldoc = async (
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           cursor: null,
         }),
-        { docUrl, caseNumber: item.caseNumber },
+        { docUrl: target.toString(), caseNumber: item.caseNumber },
       );
 
       return {
@@ -397,7 +412,8 @@ const documentIdFromLink = (link: string | undefined): string | undefined => {
   if (link === undefined) {
     return undefined;
   }
-  return /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
+  const id = /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
+  return id !== undefined && isPersistableSourceDocumentId(id) ? id : undefined;
 };
 
 const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
@@ -408,6 +424,16 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   const raw = JSON.stringify(item);
   // This source publishes the docket with the sheet number appended.
   const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const publishedDocumentUrl = toOptionalValue(item.odkaz);
+  const documentUrl = publishedDocumentUrl
+    ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
+    : null;
+  if (publishedDocumentUrl && documentUrl === null) {
+    logger.warn("case_law.ingestion.outbound_url_rejected", {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      caseNumber,
+    });
+  }
 
   return {
     caseNumber,
@@ -417,9 +443,9 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     country: "CZE",
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
-    sourceDocumentId: documentIdFromLink(toOptionalValue(item.odkaz)),
-    sourceUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
-    documentUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
+    sourceDocumentId: documentIdFromLink(publishedDocumentUrl),
+    sourceUrl: documentUrl?.toString(),
+    documentUrl: documentUrl?.toString(),
     metadata: {
       caseNumber,
       sheetNumber,
@@ -485,16 +511,6 @@ const makeCursor = (state: CursorState): string =>
     ? `${state.date}:${state.page}:${state.emptyDays}`
     : `${state.date}:${state.page}`;
 
-/** Build the day endpoint URL from a YYYY-MM-DD date. */
-const buildDayUrl = (date: string, page: number): string => {
-  const parts = date.split("-").map(Number);
-  const year = parts[0] ?? 0;
-  const month = parts[1] ?? 1;
-  const day = parts[2] ?? 1;
-
-  return `${BASE_URL}/opendata/${year}/${month}/${day}?page=${page}`;
-};
-
 /** Advance a YYYY-MM-DD string by N days (default 1). */
 const advanceDate = (dateStr: string, days: number = 1): string => {
   const parts = dateStr.split("-").map(Number);
@@ -547,7 +563,6 @@ type FetchListPageOptions = {
   cursor: string | null;
   signal?: AbortSignal | undefined;
   state: CursorState;
-  url: string;
 };
 
 const isRetryableListFailure = (error: AdapterFetchError): boolean =>
@@ -556,12 +571,7 @@ const isRetryableListFailure = (error: AdapterFetchError): boolean =>
     error.cause.status !== undefined &&
     error.cause.status >= 500);
 
-const fetchListPage = async ({
-  cursor,
-  signal,
-  state,
-  url,
-}: FetchListPageOptions) =>
+const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
   await Result.tryPromise(
     {
       try: async ({ signal: attemptSignal }) => {
@@ -569,6 +579,10 @@ const fetchListPage = async ({
           throw new DOMException("Cycle aborted", "AbortError");
         }
 
+        const [year = 0, month = 1, day = 1] = state.date
+          .split("-")
+          .map(Number);
+        const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
         const response = await fetchWithTimeout(url, {
           signal: attemptSignal,
           headers: {
@@ -712,14 +726,12 @@ export const czRegionalAdapter: SourceAdapter = {
           ? parseCursor(cursor)
           : { date: defaultDate(), page: 0, emptyDays: 0 };
 
-        const url = buildDayUrl(state.date, state.page);
         const fetchT0 = performance.now();
 
         const responseResult = await fetchListPage({
           cursor,
           signal,
           state,
-          url,
         });
         if (Result.isError(responseResult)) {
           if (signal?.aborted) {

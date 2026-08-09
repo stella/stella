@@ -6,7 +6,6 @@
 // cover proven disposal, ownership transfer, and provenance boundaries.
 
 declare const stopEarly: boolean;
-declare const streamFailure: Error;
 declare const processChunk: (value: Uint8Array) => void;
 declare const mightThrow: () => void;
 
@@ -112,7 +111,7 @@ export const throwWithoutCancel = async (
   const reader = stream.getReader();
   try {
     await reader.read();
-    throw streamFailure;
+    throw new DOMException("stream failure", "OperationError");
   } finally {
     reader.releaseLock();
   }
@@ -120,9 +119,7 @@ export const throwWithoutCancel = async (
 
 // MUST flag: cancellation on only one branch does not cover the successful
 // partial-read path through the other branch.
-export const branchOnlyCancel = async (
-  stream: ReadableStream<Uint8Array>,
-) => {
+export const branchOnlyCancel = async (stream: ReadableStream<Uint8Array>) => {
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: conditional cancel does not dominate every partial-read path
   const reader = stream.getReader();
   try {
@@ -150,9 +147,7 @@ export const conditionalRelease = async (
   }
 };
 
-export const conditionalCancel = async (
-  stream: ReadableStream<Uint8Array>,
-) => {
+export const conditionalCancel = async (stream: ReadableStream<Uint8Array>) => {
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: conditional cancel cannot cover premature completion
   const reader = stream.getReader();
   try {
@@ -210,9 +205,7 @@ export const consumeToEnd = async (stream: ReadableStream<Uint8Array>) => {
 
 // Allowed: unconditional cancellation in finally covers early return and read
 // rejection before releaseLock runs.
-export const cancelEarlyExit = async (
-  stream: ReadableStream<Uint8Array>,
-) => {
+export const cancelEarlyExit = async (stream: ReadableStream<Uint8Array>) => {
   const reader = stream.getReader();
   try {
     const result = await reader.read();
@@ -312,9 +305,7 @@ export const fetchedBodyCleanup = async (url: string) => {
 export const transferReader = (stream: ReadableStream<Uint8Array>) =>
   stream.getReader();
 
-export const transferAliasedReader = (
-  stream: ReadableStream<Uint8Array>,
-) => {
+export const transferAliasedReader = (stream: ReadableStream<Uint8Array>) => {
   const reader = stream.getReader();
   const transferredReader = reader;
   return transferredReader;
