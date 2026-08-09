@@ -1,6 +1,7 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -36,6 +37,7 @@ import {
   type MatterTarget,
 } from "@/components/matter-target-picker";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import {
   emailAttachmentPreviewOptions,
   emailHtmlPreviewOptions,
@@ -50,6 +52,21 @@ type EmailAttachmentsFacetProps = {
   workspaceId: string;
 };
 
+const EMAIL_ATTACHMENT_SAVE_STATUS = {
+  idle: "idle",
+  saving: "saving",
+} as const;
+
+type EmailAttachmentSaveState = {
+  status:
+    | typeof EMAIL_ATTACHMENT_SAVE_STATUS.idle
+    | typeof EMAIL_ATTACHMENT_SAVE_STATUS.saving;
+};
+
+const createInitialSaveState = (): EmailAttachmentSaveState => ({
+  status: EMAIL_ATTACHMENT_SAVE_STATUS.idle,
+});
+
 export const EmailAttachmentsFacet = ({
   fieldId,
   workspaceId,
@@ -59,31 +76,11 @@ export const EmailAttachmentsFacet = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
   const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
+  const [saveState, setSaveState] = useState(createInitialSaveState);
+  const savingRef = useRef(false);
   const previewQuery = useQuery(
     emailHtmlPreviewOptions({ fieldId, workspaceId }),
   );
-  const saveMutation = useMutation({
-    mutationFn: saveEmailAttachment,
-    onSuccess: async ({ workspaceId: destinationWorkspaceId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(destinationWorkspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(destinationWorkspaceId),
-        }),
-      ]);
-      setSaveTargetId(null);
-      setMatterTarget(null);
-      stellaToast.add({
-        title: t("workspaces.copyToMatter.copied"),
-        type: "success",
-      });
-    },
-    onError: () => {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    },
-  });
 
   if (previewQuery.isPending) {
     return <Skeleton className="m-3 h-24 rounded-sm" />;
@@ -117,15 +114,51 @@ export const EmailAttachmentsFacet = ({
   }: {
     attachment: EmailAttachmentDescriptor;
     destination: MatterTarget;
-  }) => {
-    saveMutation.mutate({
-      attachmentId: attachment.id,
-      destinationWorkspaceId: destination.workspaceId,
-      fieldId,
-      parentId: destination.parentId,
-      sourceWorkspaceId: workspaceId,
-    });
+  }): void => {
+    if (savingRef.current) {
+      return;
+    }
+    savingRef.current = true;
+    setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.saving });
+    detached(
+      (async () => {
+        const result = await Result.tryPromise(async () => {
+          const saved = await saveEmailAttachment({
+            attachmentId: attachment.id,
+            destinationWorkspaceId: destination.workspaceId,
+            fieldId,
+            parentId: destination.parentId,
+            sourceWorkspaceId: workspaceId,
+          });
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: entitiesKeys.all(saved.workspaceId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.overview(saved.workspaceId),
+            }),
+          ]);
+        });
+        savingRef.current = false;
+        setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.idle });
+        if (Result.isError(result)) {
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+          return;
+        }
+        setSaveTargetId(null);
+        setMatterTarget(null);
+        stellaToast.add({
+          title: t("workspaces.copyToMatter.copied"),
+          type: "success",
+        });
+      })(),
+      "email-attachment.save",
+    );
   };
+  const saving = saveState.status === EMAIL_ATTACHMENT_SAVE_STATUS.saving;
   const openMatterPicker = (attachmentId: string) => {
     setMatterTarget(null);
     setSaveTargetId(attachmentId);
@@ -147,7 +180,7 @@ export const EmailAttachmentsFacet = ({
             destination: { workspaceId, parentId: null },
           })
         }
-        saving={saveMutation.isPending}
+        saving={saving}
         workspaceId={workspaceId}
       />
     ) : (
@@ -162,7 +195,7 @@ export const EmailAttachmentsFacet = ({
           })
         }
         onSelect={setSelectedId}
-        saving={saveMutation.isPending}
+        saving={saving}
       />
     );
 
@@ -196,7 +229,7 @@ export const EmailAttachmentsFacet = ({
               disabled={
                 matterTarget === null ||
                 saveTargetAttachment === undefined ||
-                saveMutation.isPending
+                saving
               }
               onClick={() => {
                 if (matterTarget && saveTargetAttachment) {
@@ -207,7 +240,7 @@ export const EmailAttachmentsFacet = ({
                 }
               }}
             >
-              {saveMutation.isPending ? t("common.loading") : t("common.save")}
+              {saving ? t("common.loading") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogPopup>

@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
-import { rateLimit } from "elysia-rate-limit";
 
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -18,9 +17,6 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 
 const readFileEndpoint = createSafeHandler(
   {
@@ -217,18 +213,6 @@ filesRoute.get(
   },
 );
 
-filesRoute.use(
-  rateLimit({
-    scoping: "scoped",
-    duration: API_RATE_LIMITS.upload.duration,
-    max: API_RATE_LIMITS.upload.max,
-    ...createRedisRateLimit({
-      failurePolicy: "fail_open_local",
-      scope: "upload",
-    }),
-    skip: (request) => !isUploadRateLimitedPath(new URL(request.url).pathname),
-  }),
-);
 filesRoute.post(
   "/email-attachment/:fieldId/:attachmentId/save",
   saveEmailAttachmentEndpoint.handler,

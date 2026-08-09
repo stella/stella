@@ -14,6 +14,7 @@ import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
   loadEmailAttachment,
 } from "../email-attachment-loader";
+import { consumeEmailAttachmentSaveRateLimit } from "../email-attachment-save-rate-limit";
 import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
 
 const config = {
@@ -38,11 +39,31 @@ export default createSafeHandler(
     createAuditRecorder,
     getWorkspaceAccess,
     params: { attachmentId, fieldId },
+    request,
     scopedDb,
+    server,
     session,
     user,
     workspaceId,
   }) {
+    const withinRateLimit = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await consumeEmailAttachmentSaveRateLimit({
+            request,
+            server: server ?? null,
+          }),
+      ),
+    );
+    if (!withinRateLimit) {
+      return Result.err(
+        new HandlerError({
+          status: 429,
+          message: "Too many attachment saves. Try again shortly.",
+        }),
+      );
+    }
+
     const destinationWorkspace = yield* Result.await(
       Result.tryPromise(
         async () => await getWorkspaceAccess(destinationWorkspaceId),
