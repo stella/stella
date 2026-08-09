@@ -6,7 +6,10 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
+import {
+  EmailFileViewer,
+  EmailHtmlViewer,
+} from "@/components/inspector/email-html-viewer";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -34,6 +37,21 @@ const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
   );
 
 describe("email viewer", () => {
+  test("reuses the contextual file chat surface", () => {
+    const html = renderWithProviders(
+      <EmailFileViewer
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        workspaceId="workspace-1"
+      />,
+      new QueryClient(),
+    );
+
+    expect(html).toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('role="status"');
+  });
+
   test("renders native metadata and keeps attachments informational", () => {
     const queryClient = new QueryClient();
     const options = emailHtmlPreviewOptions({

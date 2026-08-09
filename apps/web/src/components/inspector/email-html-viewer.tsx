@@ -8,6 +8,7 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { DocumentIcon } from "@/components/document-icon";
 import {
   getEmailAttachmentSize,
@@ -25,6 +26,25 @@ type EmailHtmlViewerProps = {
   fieldId: string;
   workspaceId: string;
 };
+
+type EmailFileViewerProps = EmailHtmlViewerProps & {
+  entityId: string;
+  fileName: string;
+};
+
+export const EmailFileViewer = ({
+  entityId,
+  fieldId,
+  fileName,
+  workspaceId,
+}: EmailFileViewerProps) => (
+  <FileViewerWithAI
+    activeFile={{ entityId, fileFieldId: fieldId, fileName }}
+    workspaceId={workspaceId}
+  >
+    <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
+  </FileViewerWithAI>
+);
 
 export const EmailHtmlViewer = ({
   fieldId,

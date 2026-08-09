@@ -25,7 +25,7 @@ import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.lo
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
-import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
+import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
 import {
@@ -732,7 +732,14 @@ export const FileTabPanel = ({
 
   const fileViewer = (() => {
     if (isEmailDisplay) {
-      return <EmailHtmlViewer fieldId={tab.id} workspaceId={tab.workspaceId} />;
+      return (
+        <EmailFileViewer
+          entityId={tab.entityId}
+          fieldId={tab.id}
+          fileName={tab.fileName}
+          workspaceId={tab.workspaceId}
+        />
+      );
     }
     if (isMarkdownDisplay) {
       if (markdownTextQuery.isPending) {
