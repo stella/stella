@@ -7,6 +7,7 @@
 
 declare const stopEarly: boolean;
 declare const streamFailure: Error;
+declare const processChunk: (value: Uint8Array) => void;
 
 // MUST flag: a locally owned reader keeps its stream locked when it is neither
 // transferred nor released in a finally block.
@@ -456,4 +457,37 @@ export const rejectingProcessingWithoutCancel = async (
   } finally {
     reader.releaseLock();
   }
+};
+
+// MUST flag: synchronous processing can throw after a partial read and also
+// requires cancellation before the release-only finalizer.
+export const throwingSynchronousProcessing = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: synchronous processing throw after a read requires cancellation
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+      processChunk(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: qualified global fetch produces a genuine Response body whose
+// reader ownership cannot be abandoned.
+export const leakedQualifiedFetchReader = async (url: string) => {
+  const response = await globalThis.fetch(url);
+  if (!response.body) {
+    return;
+  }
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: qualified global fetch reader is never released
+  const reader = response.body.getReader();
+  return await reader.read();
 };

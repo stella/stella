@@ -419,10 +419,21 @@ export default eslintCompatPlugin({
 
         const isGlobalFetch = (node: unknown): boolean => {
           const expression = unwrapValue(node);
-          return (
-            expression !== null &&
-            expression.type === "CallExpression" &&
-            isGlobalReference(expression.callee, "fetch")
+          if (expression?.type !== "CallExpression") {
+            return false;
+          }
+          if (isGlobalReference(expression.callee, "fetch")) {
+            return true;
+          }
+          const callee = unwrapValue(expression.callee);
+          if (
+            callee?.type !== "MemberExpression" ||
+            staticMemberName(callee) !== "fetch"
+          ) {
+            return false;
+          }
+          return ["globalThis", "self", "window"].some((host) =>
+            isGlobalReference(callee.object, host),
           );
         };
 
@@ -1062,6 +1073,16 @@ export default eslintCompatPlugin({
                   unsafeExit =
                     !handlerCancels && !hasPriorCancel(node, binding);
                 }
+                return;
+              }
+              if (
+                node.type === "CallExpression" &&
+                !containsReaderMethod(node, "read", binding) &&
+                !containsReaderMethod(node, "cancel", binding) &&
+                !containsReaderMethod(node, "releaseLock", binding)
+              ) {
+                unsafeExit =
+                  !handlerCancels && !hasPriorCancel(node, binding);
                 return;
               }
               if (node.type === "ReturnStatement") {

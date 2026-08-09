@@ -13,7 +13,7 @@
  * entity id, cleared on document close / reload.
  */
 
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { create } from "zustand";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -178,6 +178,30 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       },
     }));
 
+    const failUnexpected = () => {
+      set((state) => {
+        const current = state.sessions[key] ?? EMPTY_SESSION;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              status: "error" as const,
+              playbookId,
+              findings: current.findings,
+              fixState: current.fixState,
+              error: unexpectedErrorMessage,
+              reviewedAt: current.reviewedAt,
+            },
+          },
+        };
+      });
+      return {
+        ok: false as const,
+        message: unexpectedErrorMessage,
+        error: null,
+      };
+    };
+
     const result = await Result.tryPromise(async () => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -197,7 +221,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         return { status: "error" as const, error: response.error };
       }
       if (!response.data) {
-        panic("Playbook review response is missing findings");
+        return { status: "missing" as const };
       }
       return { status: "success" as const, data: response.data };
     });
@@ -206,23 +230,10 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     // returning an Eden response — move to the error state so the facet is not
     // stuck on "Reviewing…". There is no Eden error payload to report.
     if (Result.isError(result)) {
-      set((state) => {
-        const current = state.sessions[key] ?? EMPTY_SESSION;
-        return {
-          sessions: {
-            ...state.sessions,
-            [key]: {
-              status: "error",
-              playbookId,
-              findings: current.findings,
-              fixState: current.fixState,
-              error: unexpectedErrorMessage,
-              reviewedAt: current.reviewedAt,
-            },
-          },
-        };
-      });
-      return { ok: false, message: unexpectedErrorMessage, error: null };
+      return failUnexpected();
+    }
+    if (result.value.status === "missing") {
+      return failUnexpected();
     }
 
     if (result.value.status === "error") {

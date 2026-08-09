@@ -8,6 +8,7 @@ import {
 
 declare const consume: (value: unknown) => void;
 declare const condition: boolean;
+declare const shouldRetry: () => boolean;
 
 // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: then does not inspect Eden's error channel
 api.tasks.get().then(consume);
@@ -314,13 +315,11 @@ export const dynamicComputedResponseKey = async () => {
 // data can be consumed.
 export const checkedInDoWhileBody = async () => {
   const response = await api.tasks.get();
-  let repeat = condition;
   do {
     if (response.error) {
       return null;
     }
-    repeat = false;
-  } while (repeat);
+  } while (shouldRetry());
   return response.data;
 };
 
