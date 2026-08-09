@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@/api/lib/branded-types";
 import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createTimeEntryHandler } from "./create";
