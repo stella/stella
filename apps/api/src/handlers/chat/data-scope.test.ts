@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -167,6 +171,46 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
+  test("regression: canonical links widen scope for opaque workspace IDs", () => {
+    const workspaceId = toSafeId<"workspace">("imported:matter");
+    const entityId = toSafeId<"entity">("document:42");
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId }),
+    });
+    const entityHref = toChatResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      location: {
+        type: "workspace",
+        workspace: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: workspaceId,
+        }),
+      },
+    });
+    const parts = [
+      {
+        type: "text" as const,
+        content: `See [Matter](${workspaceHref}) and [Document](${entityHref}).`,
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
+  });
+
+  test("does not partially accept malformed canonical links", () => {
+    const parts = [
+      {
+        type: "text" as const,
+        content:
+          "Ignore #stella-workspace=imported-matter%ZZ and #stella-entity=imported-matter:%ZZ.",
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+
   test("text and source-document metadata are unioned", () => {
     const message = {
       id: "assistant-1",
@@ -194,12 +238,12 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
-  test("malformed UUIDs in text refs are ignored", () => {
+  test("malformed encoded IDs in text refs are ignored", () => {
     const parts = [
       {
         type: "text" as const,
         content:
-          "garbage #stella-workspace=not-a-uuid and #stella-entity=zz:yy",
+          "garbage #stella-workspace=bad%encoding and #stella-entity=bad%encoding:entity-1",
       },
     ];
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);

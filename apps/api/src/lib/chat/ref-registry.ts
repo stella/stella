@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   CHAT_RESOURCE_HREF_PREFIX,
+  parseCanonicalChatResourceHref,
   resourceRef,
   RESOURCE_TYPE,
   toChatResourceHref,
@@ -33,29 +34,25 @@ const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
 const UUID_PATTERN =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
+const escapeRegex = (value: string) =>
+  value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
+
 const createRefLinkRegex = (prefix: string) =>
-  new RegExp(
-    `${prefix.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}([^\\s)]+)`,
-    "gu",
-  );
+  new RegExp(`${escapeRegex(prefix)}([^\\s)]+)`, "gu");
 
 const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
 const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "iu");
-const PERSISTED_ENTITY_LINK_REGEX = new RegExp(
-  `${CHAT_RESOURCE_HREF_PREFIX.entity.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}(${UUID_PATTERN}):(${UUID_PATTERN})`,
-  "giu",
-);
-const PERSISTED_WORKSPACE_LINK_REGEX = new RegExp(
-  `${CHAT_RESOURCE_HREF_PREFIX.workspace.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}(${UUID_PATTERN})`,
-  "giu",
+const PERSISTED_CHAT_RESOURCE_LINK_REGEX = new RegExp(
+  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)})[^\\s)]+`,
+  "gu",
 );
 
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
 
 const createEntityRefKey = ({ entityId, workspaceId }: EntityTarget) =>
-  `${workspaceId}:${entityId}`;
+  JSON.stringify([workspaceId, entityId]);
 
 const toWorkspaceResource = (workspaceId: SafeId<"workspace">) =>
   resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId });
@@ -322,22 +319,34 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     });
   };
 
-  const hydrateAssistantTextRefs = (text: string) => {
-    const withWorkspaceRefs = text.replaceAll(
-      PERSISTED_WORKSPACE_LINK_REGEX,
-      (_href, rawWorkspaceId: string) =>
-        `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(brandPersistedWorkspaceId(rawWorkspaceId))}`,
-    );
+  const hydrateAssistantTextRefs = (text: string) =>
+    text.replaceAll(PERSISTED_CHAT_RESOURCE_LINK_REGEX, (href) => {
+      const target = parseCanonicalChatResourceHref(href);
+      if (target === null) {
+        return href;
+      }
 
-    return withWorkspaceRefs.replaceAll(
-      PERSISTED_ENTITY_LINK_REGEX,
-      (_href, rawWorkspaceId: string, rawEntityId: string) =>
-        `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
-          entityId: brandPersistedEntityId(rawEntityId),
-          workspaceId: brandPersistedWorkspaceId(rawWorkspaceId),
-        })}`,
-    );
-  };
+      switch (target.type) {
+        case RESOURCE_TYPE.WORKSPACE:
+          return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(
+            brandPersistedWorkspaceId(target.resource.id),
+          )}`;
+        case RESOURCE_TYPE.ENTITY:
+          if (target.location.type !== "workspace") {
+            return href;
+          }
+          return `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
+            entityId: brandPersistedEntityId(target.resource.id),
+            workspaceId: brandPersistedWorkspaceId(
+              target.location.workspace.id,
+            ),
+          })}`;
+        case RESOURCE_TYPE.CASE_LAW_DECISION:
+          return href;
+        default:
+          return target satisfies never;
+      }
+    });
 
   const resolveAssistantValueRefs = (value: unknown): unknown => {
     if (typeof value === "string") {

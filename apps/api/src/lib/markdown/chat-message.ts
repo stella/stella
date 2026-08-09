@@ -167,8 +167,12 @@ const dedupeMentions = (mentions: readonly ChatMention[]): ChatMention[] => {
   for (const mention of mentions) {
     const key =
       mention.category === "entity"
-        ? `${mention.resource.type}:${mention.workspaceId ?? ""}:${mention.resource.id}`
-        : `${mention.resource.type}:${mention.resource.id}`;
+        ? JSON.stringify([
+            mention.resource.type,
+            mention.workspaceId,
+            mention.resource.id,
+          ])
+        : JSON.stringify([mention.resource.type, mention.resource.id]);
 
     if (seen.has(key)) {
       continue;

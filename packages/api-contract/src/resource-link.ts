@@ -255,3 +255,15 @@ export const parseChatResourceHref = (
 
   return null;
 };
+
+/** Parse only hrefs emitted exactly by the canonical chat-link serializer. */
+export const parseCanonicalChatResourceHref = (
+  href: string,
+): ChatResourceLinkTarget | null => {
+  const target = parseChatResourceHref(href);
+  if (target === null || toChatResourceHref(target) !== href) {
+    return null;
+  }
+
+  return target;
+};

@@ -1,6 +1,6 @@
 import {
   CHAT_RESOURCE_HREF_PREFIX,
-  parseChatResourceHref,
+  parseCanonicalChatResourceHref,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 
@@ -137,14 +137,13 @@ const collectStructuralWorkspaceIds = (
   }
 };
 
-const UUID_PATTERN =
-  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
 const escapeRegex = (value: string) =>
   value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
+
 const STELLA_TEXT_REF_REGEX = new RegExp(
-  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)}${UUID_PATTERN}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)}${UUID_PATTERN}:${UUID_PATTERN})`,
-  "giu",
+  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)})[^\\s)]+`,
+  "gu",
 );
 
 const collectTextRefWorkspaceIds = (
@@ -161,7 +160,7 @@ const collectTextRefWorkspaceIds = (
     return;
   }
   for (const match of part.content.matchAll(STELLA_TEXT_REF_REGEX)) {
-    const target = parseChatResourceHref(match[0]);
+    const target = parseCanonicalChatResourceHref(match[0]);
     if (target === null) {
       continue;
     }

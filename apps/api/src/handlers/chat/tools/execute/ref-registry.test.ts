@@ -1,5 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -170,6 +178,67 @@ describe("chat ref registry", () => {
     ]);
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("hydrates canonical links with opaque IDs without replacing a UUID prefix", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("matter:eu-west-1");
+    const entityId = toSafeId<"entity">(
+      "0198c0de-0000-4000-8000-000000000000-supplement",
+    );
+    const workspaceRef = registry.toMatterRef(workspaceId);
+    const entityRef = registry.toEntityRef({ entityId, workspaceId });
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId }),
+    });
+    const entityHref = toChatResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      location: {
+        type: "workspace",
+        workspace: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: workspaceId,
+        }),
+      },
+    });
+
+    expect(
+      registry.hydrateAssistantTextRefs(
+        `[Matter](${workspaceHref}) [Supplement](${entityHref})`,
+      ),
+    ).toBe(
+      `[Matter](#stella-workspace-ref=${workspaceRef}) ` +
+        `[Supplement](#stella-entity-ref=${entityRef})`,
+    );
+  });
+
+  test("mints distinct refs for arbitrary opaque entity identity tuples", () => {
+    const segment = fc.stringMatching(/^[a-z0-9]{1,12}$/u);
+
+    fc.assert(
+      fc.property(segment, segment, segment, (a, b, c) => {
+        const registry = createChatRefRegistry();
+        const firstTarget = {
+          entityId: toSafeId<"entity">(`${b}:${c}`),
+          workspaceId: toSafeId<"workspace">(a),
+        };
+        const secondTarget = {
+          entityId: toSafeId<"entity">(c),
+          workspaceId: toSafeId<"workspace">(`${a}:${b}`),
+        };
+
+        const firstRef = registry.toEntityRef(firstTarget);
+        const secondRef = registry.toEntityRef(secondTarget);
+
+        expect(firstRef).not.toBe(secondRef);
+        expect(registry.resolveEntityRefTargets([firstRef, secondRef])).toEqual(
+          Result.ok([firstTarget, secondTarget]),
+        );
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 });
 

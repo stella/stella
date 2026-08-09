@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseChatResourceHref, toChatResourceHref } from "./resource-link";
+import {
+  parseCanonicalChatResourceHref,
+  parseChatResourceHref,
+  toChatResourceHref,
+} from "./resource-link";
 import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
 import { toSafeId } from "./safe-id";
 
@@ -102,5 +106,16 @@ describe("chat resource links", () => {
     expect(parseChatResourceHref("#stella-decision=")).toBeNull();
     expect(parseChatResourceHref("#stella-entity=bad%encoding")).toBeNull();
     expect(parseChatResourceHref("https://example.com/resource/1")).toBeNull();
+  });
+
+  test("distinguishes canonical links from permissive legacy input", () => {
+    const canonicalHref = "#stella-workspace=matter%3Aeu";
+
+    expect(parseCanonicalChatResourceHref(canonicalHref)).toEqual(
+      parseChatResourceHref(canonicalHref),
+    );
+    expect(
+      parseCanonicalChatResourceHref("#stella-workspace=matter:eu"),
+    ).toBeNull();
   });
 });

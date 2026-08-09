@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
@@ -114,5 +116,43 @@ describe("chat message markdown serializer", () => {
       },
     ]);
     expect(text).toBe("and [Doc B](#stella-entity=ws_ok:ent_2).");
+  });
+
+  test("keeps distinct opaque mention identity tuples", () => {
+    const segment = fc.stringMatching(/^[a-z0-9]{1,12}$/u);
+
+    fc.assert(
+      fc.property(segment, segment, segment, (a, b, c) => {
+        const firstWorkspaceId = a;
+        const secondWorkspaceId = `${a}:${b}`;
+        const firstEntityId = `${b}:${c}`;
+        const secondEntityId = c;
+        const html =
+          `<p><entity-mention data-id="${firstEntityId}" data-label="Entity 1" data-category="entity" data-source-workspace-id="${firstWorkspaceId}"></entity-mention>` +
+          ` and <entity-mention data-id="${secondEntityId}" data-label="Entity 2" data-category="entity" data-source-workspace-id="${secondWorkspaceId}"></entity-mention>.</p>`;
+
+        const { mentions } = normalizeChatMessageHtml(html, [
+          firstWorkspaceId,
+          secondWorkspaceId,
+        ]);
+
+        const identities = mentions.map((mention) => {
+          switch (mention.category) {
+            case "entity":
+              return [mention.workspaceId, mention.id];
+            case "workspace":
+              return [null, mention.id];
+            default:
+              return mention satisfies never;
+          }
+        });
+
+        expect(identities).toEqual([
+          [firstWorkspaceId, firstEntityId],
+          [secondWorkspaceId, secondEntityId],
+        ]);
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 });
