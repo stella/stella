@@ -8,6 +8,7 @@ describe("application RLS role posture", () => {
     [
       {
         bypassesRls: false,
+        canAssumeRole: true,
         canLogin: true,
         isSuperuser: false,
         ownsRlsTable: false,
@@ -17,6 +18,7 @@ describe("application RLS role posture", () => {
     [
       {
         bypassesRls: true,
+        canAssumeRole: true,
         canLogin: false,
         isSuperuser: false,
         ownsRlsTable: false,
@@ -26,6 +28,7 @@ describe("application RLS role posture", () => {
     [
       {
         bypassesRls: false,
+        canAssumeRole: true,
         canLogin: false,
         isSuperuser: true,
         ownsRlsTable: false,
@@ -35,6 +38,7 @@ describe("application RLS role posture", () => {
     [
       {
         bypassesRls: false,
+        canAssumeRole: true,
         canLogin: false,
         isSuperuser: false,
         ownsRlsTable: true,
@@ -44,6 +48,17 @@ describe("application RLS role posture", () => {
     [
       {
         bypassesRls: false,
+        canAssumeRole: false,
+        canLogin: false,
+        isSuperuser: false,
+        ownsRlsTable: false,
+      },
+      "Database login must be able to assume the application RLS role.",
+    ],
+    [
+      {
+        bypassesRls: false,
+        canAssumeRole: true,
         canLogin: false,
         isSuperuser: false,
         ownsRlsTable: false,

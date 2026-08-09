@@ -1,5 +1,6 @@
 export type ApplicationRlsRolePosture = {
   bypassesRls: boolean;
+  canAssumeRole: boolean;
   canLogin: boolean;
   isSuperuser: boolean;
   ownsRlsTable: boolean;
@@ -19,6 +20,9 @@ export const applicationRlsRolePostureViolation = (
   }
   if (posture.ownsRlsTable) {
     return "Application RLS role must not own RLS-protected tables.";
+  }
+  if (!posture.canAssumeRole) {
+    return "Database login must be able to assume the application RLS role.";
   }
   return null;
 };

@@ -22,6 +22,7 @@ export const assertApplicationRlsRolePosture = async (): Promise<void> => {
   const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
     SELECT
       app_role.rolbypassrls AS "bypassesRls",
+      pg_has_role(CURRENT_USER, app_role.oid, 'SET') AS "canAssumeRole",
       app_role.rolcanlogin AS "canLogin",
       app_role.rolsuper AS "isSuperuser",
       EXISTS (
