@@ -12,8 +12,6 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { TimeEntryListPage } from "@stll/api-contract/time-entry-types";
-
 import { member, user } from "@/api/db/auth-schema";
 import {
   timeEntrySourceSchema,
@@ -309,7 +307,7 @@ const readTimeEntries = createSafeHandler(
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
-    } satisfies TimeEntryListPage);
+    });
   },
 );
 

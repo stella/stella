@@ -11,7 +11,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextResultForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const POLISH_TIMEOUT_MS = 20_000;
@@ -96,7 +96,7 @@ const polishTimeEntryNarrative = createSafeHandler(
     const generation = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await generateTanStackTextResultForRole({
+          await generateTanStackTextForRole({
             abortSignal: AbortSignal.any([
               request.signal,
               AbortSignal.timeout(POLISH_TIMEOUT_MS),
@@ -117,6 +117,7 @@ const polishTimeEntryNarrative = createSafeHandler(
               },
             ],
             maxOutputTokens: MAX_OUTPUT_TOKENS,
+            finishPolicy: "require-complete",
             organizationId,
             orgAIConfig,
             role: "fast",
@@ -135,16 +136,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       }),
     );
 
-    if (generation.finishReason !== "stop") {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          message: "AI returned an incomplete time narrative",
-        }),
-      );
-    }
-
-    const polished = generation.text.trim();
+    const polished = generation.trim();
 
     if (polished.length === 0 || polished.length > MAX_NARRATIVE_LENGTH) {
       return Result.err(

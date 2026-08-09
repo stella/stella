@@ -88,7 +88,9 @@ type GenerateTanStackBaseOptions = {
 };
 
 type GenerateTanStackTextForRoleOptions = GenerateTanStackBaseOptions &
-  GenerateTanStackInputOptions;
+  GenerateTanStackInputOptions & {
+    finishPolicy?: "allow-incomplete" | "require-complete" | undefined;
+  };
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
   GenerateTanStackTextForRoleOptions & {
@@ -124,11 +126,6 @@ type TanStackTextFinishReason =
   | "tool_calls"
   | null;
 
-export type TanStackTextGenerationResult = {
-  finishReason: TanStackTextFinishReason;
-  text: string;
-};
-
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
@@ -136,20 +133,16 @@ type ResolveTextModelOptions = Pick<
 
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-): Promise<string> => (await generateTanStackTextResultForRole(options)).text;
-
-export const generateTanStackTextResultForRole = async (
-  options: GenerateTanStackTextForRoleOptions,
-) => {
+): Promise<string> => {
   const model = resolveTanStackTextModel(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
-  const result: TanStackTextGenerationResult = {
+  const state: { finishReason: TanStackTextFinishReason } = {
     finishReason: null,
-    text: "",
   };
+  let output = "";
 
   for await (const delta of streamTanStackTextDeltas({
     abortController,
@@ -162,13 +155,23 @@ export const generateTanStackTextResultForRole = async (
     system: guardedSystemPrompt(options),
     temperature: options.temperature,
     onFinishReason: (value) => {
-      result.finishReason = value;
+      state.finishReason = value;
     },
   })) {
-    result.text += delta;
+    output += delta;
   }
 
-  return result;
+  if (
+    options.finishPolicy === "require-complete" &&
+    state.finishReason !== "stop"
+  ) {
+    throw new HandlerError({
+      status: 502,
+      message: "AI generation did not complete",
+    });
+  }
+
+  return output;
 };
 
 export const streamTanStackTextForRole = (

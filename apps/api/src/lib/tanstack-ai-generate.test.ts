@@ -62,7 +62,6 @@ void mock.module("@/api/lib/tanstack-ai-models", () => ({
 
 const {
   generateTanStackTextForRole,
-  generateTanStackTextResultForRole,
   generateTanStackObjectForRole,
   mergeGenerationOptions,
   streamTanStackTextForRole,
@@ -572,21 +571,25 @@ describe("TanStack AI model-ingress guard", () => {
 });
 
 describe("TanStack AI text generation", () => {
-  test("returns the provider finish reason with collected text", async () => {
+  test("rejects incomplete output when complete generation is required", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["partial"], "length");
 
-    const result = await generateTanStackTextResultForRole({
+    const error = await generateTanStackTextForRole({
       caching: noCaching,
+      finishPolicy: "require-complete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-    });
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    expect(result).toEqual({ text: "partial", finishReason: "length" });
+    expect(error).toMatchObject({ status: 502 });
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
