@@ -131,7 +131,9 @@ const ChatEditModeSelector = ({
         title={t(OPTION_LABEL_KEY[optionId])}
       >
         <TriggerIcon aria-hidden="true" className="size-3 shrink-0" />
-        <span className="min-w-0 truncate">{t(OPTION_LABEL_KEY[optionId])}</span>
+        <span className="min-w-0 truncate">
+          {t(OPTION_LABEL_KEY[optionId])}
+        </span>
         <ChevronDownIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-70"

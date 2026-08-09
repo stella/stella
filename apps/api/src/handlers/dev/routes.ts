@@ -106,9 +106,8 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       firmKnowledgeStatus = { status: "running", startedAt };
       firmKnowledgeInFlight = (async () => {
         try {
-          const { seedFirmKnowledge } = await import(
-            "../../../scripts/seed-firm-knowledge"
-          );
+          const { seedFirmKnowledge } =
+            await import("../../../scripts/seed-firm-knowledge");
           await seedFirmKnowledge({
             apiOrigin,
             cookie,

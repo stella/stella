@@ -11,7 +11,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createEntityVersionFromBuffer } from "@/api/handlers/entities/create-version-from-buffer";
+import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import {
   DOCUMENT_PROPERTIES_MAX_BYTES,
   writeDocumentProperties,
@@ -152,6 +152,10 @@ export const updateDocumentProperties = async ({
     source: null,
     userId,
     workspaceId,
+    // Not `automatic-docx-edit`: that policy fences an AI edit against the
+    // version it was computed from. This rewrites the current file's own
+    // properties, so replacing whatever is current is the correct semantics.
+    writePolicy: { type: "replace-current-file" },
   });
 
   if (result.isErr()) {

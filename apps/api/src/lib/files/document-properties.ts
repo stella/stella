@@ -619,10 +619,7 @@ const setElement = (xml: string, name: string, value: string, root: string) => {
   if (!closingRoot.test(xml)) {
     return xml;
   }
-  return xml.replace(
-    closingRoot,
-    () => `<${name}>${text}</${name}></${root}>`,
-  );
+  return xml.replace(closingRoot, () => `<${name}>${text}</${name}></${root}>`);
 };
 
 export type WriteDocumentPropertiesOptions = {
@@ -657,7 +654,10 @@ export const writeDocumentProperties = async ({
 
   // Driven by the contract's key list rather than the caller's object keys, so
   // an unknown key cannot reach the archive and no cast is needed to narrow it.
-  const byPart = new Map<"core" | "app", { element: string; value: string }[]>();
+  const byPart = new Map<
+    "core" | "app",
+    { element: string; value: string }[]
+  >();
   for (const key of AUTHORED_DOCUMENT_PROPERTY_KEYS) {
     const value = values[key];
     if (value === undefined) {
