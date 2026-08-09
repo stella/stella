@@ -1356,6 +1356,18 @@ describe("workspaces table — wrong scope", () => {
     expect(rows).toHaveLength(0);
   });
 
+  test("UPDATE workspace organization_id with time entries → foreign key violation", async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () =>
+        tx
+          .update(workspaces)
+          .set({ organizationId: ids.orgB })
+          .where(eq(workspaces.id, ids.wsA1)),
+      ),
+    );
+    expect(isPgError(error, PG_ERROR.FOREIGN_KEY_VIOLATION)).toBe(true);
+  });
+
   test("DELETE other org's workspace → zero affected", async () => {
     const rows = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
       tx

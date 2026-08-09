@@ -510,20 +510,6 @@ describe("workspaces table — correct scope", () => {
     );
     expect(rows).toHaveLength(1);
   });
-
-  test("UPDATE workspace organization_id → allowed (ws scope only)", async () => {
-    // The workspace UPDATE policy checks id = ANY(wsIds),
-    // not organization_id. Changing org_id is permitted at
-    // the RLS level; the application layer prevents it.
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const rows = await tx
-        .update(workspaces)
-        .set({ organizationId: ids.orgB })
-        .where(eq(workspaces.id, ids.wsA1))
-        .returning({ id: workspaces.id });
-      expect(rows).toHaveLength(1);
-    });
-  });
 });
 
 // ════════════════════════════════════════════════════════
