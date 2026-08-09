@@ -260,13 +260,14 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       return { ok: false, message, error: result.value.error };
     }
 
+    const findings = result.value.data;
     set((state) => ({
       sessions: {
         ...state.sessions,
         [key]: {
           status: "idle",
           playbookId,
-          findings: result.value.data,
+          findings,
           // A fresh run supersedes prior fixes — old revision ids
           // belong to a stale set of findings.
           fixState: {},

@@ -485,7 +485,7 @@ export const throwingSynchronousProcessing = async (
 export const leakedQualifiedFetchReader = async (url: string) => {
   const response = await globalThis.fetch(url);
   if (!response.body) {
-    return;
+    return null;
   }
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: qualified global fetch reader is never released
   const reader = response.body.getReader();
