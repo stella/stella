@@ -19,6 +19,8 @@
 // and `<Navigate>` are route control flow, not user-facing affordances,
 // and are intentionally not covered.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isStringLiteral } from "./utils.ts";
 
 const MATTER_ROUTE = "/workspaces/$workspaceId";
@@ -103,7 +105,7 @@ const filenameOf = (context: {
   getFilename?: () => string;
 }): string => context.filename ?? context.getFilename?.() ?? "";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-matter-affordance" },
   rules: {
     "require-matter-affordance": {
@@ -119,22 +121,13 @@ export default {
             "{...}>.",
         },
       },
-      create(context: {
-        filename?: string;
-        getFilename?: () => string;
-        report: (descriptor: {
-          node: unknown;
-          messageId: string;
-          data?: Record<string, string>;
-        }) => void;
-      }) {
-        const filename = filenameOf(context);
-        if (SANCTIONED_FILES.some((file) => filename.endsWith(file))) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
-          JSXAttribute(node: AstNode) {
+          before() {
+            const filename = filenameOf(context);
+            return !SANCTIONED_FILES.some((file) => filename.endsWith(file));
+          },
+          JSXAttribute(node) {
             if (getJsxName(node.name) !== "to") {
               return;
             }
@@ -164,4 +157,4 @@ export default {
       },
     },
   },
-};
+});

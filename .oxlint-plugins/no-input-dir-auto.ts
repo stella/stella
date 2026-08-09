@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Forbid `dir="auto"` on free-text form controls. The shared `<Input>` and
 // `<Textarea>` (packages/ui) resolve direction themselves via `useContentDir`:
 // an empty field omits `dir` so it inherits the ambient UI direction (caret on
@@ -56,7 +58,7 @@ const getAttr = (node, name) =>
       attr.name.name === name,
   );
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-input-dir-auto" },
   rules: {
     "no-input-dir-auto": {
@@ -79,7 +81,7 @@ export default {
             '<Input>/<Textarea>), or `dir="ltr"` for fixed-direction fields.',
         },
       },
-      create(context) {
+      createOnce(context) {
         // Resolve a string/boolean literal whether written as a bare attribute
         // (dir="auto") or wrapped in an expression container (dir={"auto"}), so
         // the latter cannot bypass the rule.
@@ -148,4 +150,4 @@ export default {
       },
     },
   },
-};
+});

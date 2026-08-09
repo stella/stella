@@ -14,6 +14,8 @@
 //   popovers/menus (`absolute`/`fixed`) and self-contained scroll boxes
 //   (`max-h-*`) legitimately scroll their own max-w box.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 const SPLIT = /[\s"'`{}()]+/;
 
 // Drop Tailwind variant prefixes (sm:, hover:, dark:, group-hover:, etc.).
@@ -49,7 +51,7 @@ const isCenteredScrollColumn = (value: string): boolean => {
   return !exempt;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-centered-scroll-column" },
   rules: {
     "no-centered-scroll-column": {
@@ -65,7 +67,7 @@ export default {
             "inner content wrapper. (absolute/fixed/max-h-* boxes are exempt.)",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Literal(node) {
             if (typeof node.value !== "string") {
@@ -84,4 +86,4 @@ export default {
       },
     },
   },
-};
+});

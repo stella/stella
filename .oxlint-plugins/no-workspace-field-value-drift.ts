@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   type AstNode,
   getPropertyName,
@@ -153,7 +155,7 @@ const isFieldTypeExpression = (node, aliases) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-workspace-field-value-drift" },
   rules: {
     "no-workspace-field-value-drift": {
@@ -164,10 +166,13 @@ export default {
             'Workspace field value display for "{{type}}" must go through <FieldValue /> or <EditableField />. Keep surface behavior local, but do not reimplement field-type rendering branches.',
         },
       },
-      create(context) {
+      createOnce(context) {
         const fieldTypeAliases = new Set();
 
         return {
+          before() {
+            fieldTypeAliases.clear();
+          },
           VariableDeclarator(node) {
             if (
               !isIdentifier(node.id) ||
@@ -227,7 +232,7 @@ export default {
             'Workspace field value text with `dir="auto"` must use <BidiText /> so bidi isolation stays attached.',
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           JSXOpeningElement(node) {
             const elementName = jsxElementName(node.name);
@@ -250,4 +255,4 @@ export default {
       },
     },
   },
-};
+});

@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow raw error values in production log sinks.
 // Stella logs privileged legal workflows. Production logs should carry
 // structural error information (`errorTag(error)`, `"error.type"`) and
@@ -184,7 +185,7 @@ const checkLoggerAttributeObject = (context, objectNode) => {
   }
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-error-logging" },
   rules: {
     "no-raw-error-logging": {
@@ -197,7 +198,7 @@ export default {
             "Do not write raw error messages, stacks, causes, or String(error) to stderr. Use the error class/tag instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             if (isLoggerCall(node)) {
@@ -222,4 +223,4 @@ export default {
       },
     },
   },
-};
+});

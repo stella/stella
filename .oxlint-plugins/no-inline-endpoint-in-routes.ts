@@ -25,6 +25,8 @@
 //   .get("/", readThing.handler)               // route file only wires it
 //   // createSafeHandler(...) called inside read-thing.ts (its own module)
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getCalleeName } from "./utils.ts";
 
 // The safe-handler factory family from `@/api/lib/api-handlers`. A bare
@@ -40,14 +42,6 @@ type AstNode = Record<string, unknown> & { type: string };
 
 type CallExpressionNode = AstNode & { callee: unknown };
 
-type RuleContext = {
-  report: (descriptor: {
-    data: { factory: string };
-    messageId: "inlineEndpoint";
-    node: unknown;
-  }) => void;
-};
-
 const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
@@ -57,7 +51,7 @@ const isAstNode = (node: unknown): node is AstNode =>
 const isCallExpression = (node: unknown): node is CallExpressionNode =>
   isAstNode(node) && node.type === "CallExpression" && "callee" in node;
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-inline-endpoint-in-routes" },
   rules: {
     "no-inline-endpoint-in-routes": {
@@ -72,9 +66,9 @@ export default {
             "public/dev exception, grandfather it in oxlint.config.ts.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          CallExpression(node: unknown) {
+          CallExpression(node) {
             if (!isCallExpression(node)) {
               return;
             }
@@ -100,4 +94,4 @@ export default {
       },
     },
   },
-};
+});

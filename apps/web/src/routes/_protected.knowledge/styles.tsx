@@ -41,6 +41,7 @@ import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -120,7 +121,7 @@ const StyleSetsPage = () => {
       );
       return;
     }
-    window.open(response.data.presignedUrl, "_blank");
+    openIsolatedWindow(response.data.presignedUrl);
   };
 
   const downloadHandler = (styleSet: StyleSetItem) => () => {

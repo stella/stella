@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Forbid naive `::timestamp` casts in SQL text.
 //
 // Every timestamp column is `timestamptz` (see require-timestamptz-column), so
@@ -19,10 +20,6 @@
 import { isStringLiteral } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
-
-type RuleContext = {
-  report: (diagnostic: { node: unknown; messageId: string }) => void;
-};
 
 // A naive timestamp cast in either PostgreSQL shorthand (`::timestamp`) or
 // ANSI form (`CAST(x AS timestamp)`), with optional precision and the
@@ -75,7 +72,7 @@ const hasNaiveCast = (text: string): boolean => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-naive-timestamp-cast" },
   rules: {
     "no-naive-timestamp-cast": {
@@ -89,9 +86,9 @@ export default {
             "converting a zoneless value to an instant.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          TemplateLiteral(node: AstNode) {
+          TemplateLiteral(node) {
             const quasis = node.quasis;
             if (!Array.isArray(quasis)) {
               return;
@@ -119,7 +116,7 @@ export default {
               }
             }
           },
-          Literal(node: AstNode) {
+          Literal(node) {
             if (isStringLiteral(node) && hasNaiveCast(node.value)) {
               context.report({ node, messageId: "naiveCast" });
             }
@@ -128,4 +125,4 @@ export default {
       },
     },
   },
-};
+});

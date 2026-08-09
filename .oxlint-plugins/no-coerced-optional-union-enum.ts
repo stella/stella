@@ -23,6 +23,8 @@
 // `t.Optional(t.UnionEnum(...))` and a destructured `Optional(UnionEnum(...))`
 // (`const { Optional, UnionEnum } = t`) are caught the same way.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Resolve a callee's leaf name whether it is namespaced (`t.Optional`,
 // a MemberExpression) or a bare/destructured `Optional` (an Identifier).
 const memberName = (node) => {
@@ -42,7 +44,7 @@ const memberName = (node) => {
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-coerced-optional-union-enum" },
   rules: {
     "no-coerced-optional-union-enum": {
@@ -56,7 +58,7 @@ export default {
             "in the handler.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             if (memberName(node.callee) !== "Optional") {
@@ -75,4 +77,4 @@ export default {
       },
     },
   },
-};
+});

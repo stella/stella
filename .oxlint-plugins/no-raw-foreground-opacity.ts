@@ -1,3 +1,6 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Context, Ranged } from "@oxlint/plugins";
+
 // Detect foreground opacity utilities that should use named attenuation
 // tokens instead.
 //
@@ -16,23 +19,7 @@
 const TEXT_FOREGROUND_OPACITY_PATTERN =
   /(?:^|:)(?:text|decoration|bg|border|ring)-(?:muted-foreground|foreground)\/(?:40|45|50|60|64|70|72|80)(?:\b|$)/;
 
-type ReportContext = {
-  report: (descriptor: {
-    node: unknown;
-    messageId: string;
-    data?: Record<string, string>;
-  }) => void;
-};
-
-type LiteralNode = {
-  value: unknown;
-};
-
-type TemplateElementNode = {
-  value: {
-    raw: string;
-  };
-};
+type ReportContext = Pick<Context, "report">;
 
 const findRawForegroundOpacity = (value: string): string | undefined => {
   for (const token of value.split(/\s+/)) {
@@ -44,7 +31,7 @@ const findRawForegroundOpacity = (value: string): string | undefined => {
   return undefined;
 };
 
-function checkValue(context: ReportContext, node: unknown, value: string) {
+function checkValue(context: ReportContext, node: Ranged, value: string) {
   const match = findRawForegroundOpacity(value);
 
   if (!match) {
@@ -58,7 +45,7 @@ function checkValue(context: ReportContext, node: unknown, value: string) {
   });
 }
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-foreground-opacity" },
   rules: {
     "no-raw-foreground-opacity": {
@@ -72,20 +59,20 @@ export default {
             "or text-foreground-strong-muted.",
         },
       },
-      create(context: ReportContext) {
+      createOnce(context) {
         return {
-          Literal(node: LiteralNode) {
+          Literal(node) {
             if (typeof node.value !== "string") {
               return;
             }
 
             checkValue(context, node, node.value);
           },
-          TemplateElement(node: TemplateElementNode) {
+          TemplateElement(node) {
             checkValue(context, node, node.value.raw);
           },
         };
       },
     },
   },
-};
+});

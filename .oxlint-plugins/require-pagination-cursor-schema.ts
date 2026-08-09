@@ -11,13 +11,9 @@
 // The `unbounded-pagination-cursor-schema` ratchet metric covers whitespace and
 // alias variants the exact call-shape AST rule cannot identify.
 
-type AstNode = { type: string } & Record<string, unknown>;
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: "unboundedCursor" }) => void;
-};
+type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
 const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
@@ -71,7 +67,7 @@ const hasMaxLength = (call: AstNode): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-pagination-cursor-schema" },
   rules: {
     "require-pagination-cursor-schema": {
@@ -84,22 +80,22 @@ export default {
             "external continuation token needs a larger bound.",
         },
       },
-      create(context: RuleContext) {
-        const filename = (
-          context.filename ??
-          context.getFilename?.() ??
-          ""
-        ).replaceAll("\\", "/");
-        if (
-          !filename.includes("apps/api/src/") &&
-          !filename.endsWith(
-            ".oxlint-plugins/__fixtures__/require-pagination-cursor-schema.fixture.ts",
-          )
-        ) {
-          return {};
-        }
+      createOnce(context) {
         return {
-          Property(node: AstNode) {
+          before() {
+            const filename = (
+              context.filename ??
+              context.getFilename?.() ??
+              ""
+            ).replaceAll("\\", "/");
+            return (
+              filename.includes("apps/api/src/") ||
+              filename.endsWith(
+                ".oxlint-plugins/__fixtures__/require-pagination-cursor-schema.fixture.ts",
+              )
+            );
+          },
+          Property(node) {
             if (getStaticName(node.key) !== "cursor") {
               return;
             }
@@ -126,4 +122,4 @@ export default {
       },
     },
   },
-};
+});

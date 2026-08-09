@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Prevent new internal navigation through the legacy entity detail route.
 //
 // The public `/workspaces/$workspaceId/entities/$entityId` route was removed.
@@ -18,13 +19,6 @@ const LEGACY_ENTITY_ROUTE =
   /^\/workspaces\/(?:[^/?#\u{E000}]|\u{E000})+\/entities\/(?:[^/?#\u{E000}]|\u{E000})+(?=[/?#]|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
-
-type RuleContext = {
-  report: (descriptor: {
-    node: unknown;
-    messageId: "legacyEntityRoute";
-  }) => void;
-};
 
 const isAstNode = (value: unknown): value is AstNode =>
   typeof value === "object" &&
@@ -152,7 +146,7 @@ const isLegacyEntityRouteConstruction = (node: unknown): boolean => {
   return LEGACY_ENTITY_ROUTE.test(routeParts(node).join(DYNAMIC_PART));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-legacy-entity-route" },
   rules: {
     "no-legacy-entity-route": {
@@ -164,20 +158,30 @@ export default {
             "workspace or document destination.",
         },
       },
-      create(context: RuleContext) {
-        const check = (node: unknown) => {
-          if (isLegacyEntityRouteConstruction(node)) {
-            context.report({ node, messageId: "legacyEntityRoute" });
-          }
-        };
-
+      createOnce(context) {
         return {
-          BinaryExpression: check,
-          CallExpression: check,
-          Literal: check,
-          TemplateLiteral: check,
+          BinaryExpression(node) {
+            if (isLegacyEntityRouteConstruction(node)) {
+              context.report({ node, messageId: "legacyEntityRoute" });
+            }
+          },
+          CallExpression(node) {
+            if (isLegacyEntityRouteConstruction(node)) {
+              context.report({ node, messageId: "legacyEntityRoute" });
+            }
+          },
+          Literal(node) {
+            if (isLegacyEntityRouteConstruction(node)) {
+              context.report({ node, messageId: "legacyEntityRoute" });
+            }
+          },
+          TemplateLiteral(node) {
+            if (isLegacyEntityRouteConstruction(node)) {
+              context.report({ node, messageId: "legacyEntityRoute" });
+            }
+          },
         };
       },
     },
   },
-};
+});

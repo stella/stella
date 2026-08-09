@@ -10,6 +10,8 @@
 // expression of an ExpressionStatement — i.e. that its result lands
 // somewhere downstream.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getCalleeName } from "./utils.ts";
 
 const RESULT_FUNCTIONS = new Set([
@@ -24,7 +26,7 @@ const RESULT_FUNCTIONS = new Set([
   "createSafeRootHandler",
 ]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "must-use-result" },
   rules: {
     "must-use-result": {
@@ -37,7 +39,7 @@ export default {
             "Discarding a Result silently swallows errors.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             const name = getCalleeName(node.callee);
@@ -68,7 +70,7 @@ export default {
             //   the Result when the whole expression is a statement
             // If the outermost wrapper sits inside an ExpressionStatement,
             // the call result is discarded.
-            let current = node;
+            let current: NonNullable<typeof node.parent> = node;
             let isDiscardedByNonLastSequence = false;
             while (current.parent) {
               const parent = current.parent;
@@ -145,4 +147,4 @@ export default {
       },
     },
   },
-};
+});

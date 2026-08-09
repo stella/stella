@@ -21,14 +21,15 @@
 //   at: timestamptz("at")
 //   apps/api/src/db/columns.ts                        // defines the helper
 
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+
 import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
 
-type AstNode = { type: string } & Record<string, unknown>;
+type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
 type RuleContext = {
   filename?: string;
   getFilename?: () => string;
-  report: (diagnostic: { node: unknown; messageId: string }) => void;
 };
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
@@ -169,7 +170,7 @@ const hasNaiveTimestampDataType = (node: unknown): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-timestamptz-column" },
   rules: {
     "require-timestamptz-column": {
@@ -186,11 +187,7 @@ export default {
             "@/api/db/columns instead.",
         },
       },
-      create(context: RuleContext) {
-        if (isAllowlistedFile(filenameForContext(context))) {
-          return {};
-        }
-
+      createOnce(context) {
         // Namespace / default bindings for drizzle-orm/pg-core, e.g. the `p`
         // in `import * as p from "drizzle-orm/pg-core"`. Used to match
         // `<ns>.timestamp(...)`.
@@ -205,7 +202,13 @@ export default {
         const customTypeAliases = new Set<string>();
 
         return {
-          ImportDeclaration(node: AstNode) {
+          before() {
+            pgCoreNamespaceAliases.clear();
+            pgCoreTimestampAliases.clear();
+            customTypeAliases.clear();
+            return !isAllowlistedFile(filenameForContext(context));
+          },
+          ImportDeclaration(node) {
             if (
               node.source === null ||
               node.source === undefined ||
@@ -254,7 +257,7 @@ export default {
             }
           },
 
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             const callee = node.callee;
 
             // Bare `timestamp(...)` where `timestamp` came from pg-core.
@@ -302,4 +305,4 @@ export default {
       },
     },
   },
-};
+});

@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Detect physical directional Tailwind CSS properties that should
 // use logical equivalents for RTL support.
 //
@@ -14,7 +15,7 @@
 // import rather than whatever the caller was linting.
 import { hasPhysicalProperty } from "./physical-properties.ts";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-physical-properties" },
   rules: {
     "no-physical-properties": {
@@ -31,7 +32,7 @@ export default {
             "rounded-l→rounded-s, rounded-r→rounded-e.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Literal(node) {
             if (typeof node.value !== "string") {
@@ -56,4 +57,4 @@ export default {
       },
     },
   },
-};
+});

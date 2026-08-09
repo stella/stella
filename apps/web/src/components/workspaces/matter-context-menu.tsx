@@ -56,6 +56,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationOptions } from "@/lib/organization/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import {
@@ -300,7 +301,7 @@ export const useMatterActions = (
     },
     onDelete: () => setDeleteOpen(true),
     onOpenInNewTab: () => {
-      window.open(`/workspaces/${target.id}`, "_blank");
+      openIsolatedWindow(`/workspaces/${target.id}`);
     },
     onRename,
     onTogglePin: () => togglePin(target.id),

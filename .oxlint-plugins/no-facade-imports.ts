@@ -2,15 +2,7 @@
 // migrated to explicit leaf modules. These aliases hide side effects, obscure
 // ownership, and turn small leaf changes into high-fanout dependency edges.
 
-type AstNode = { type: string } & Record<string, unknown>;
-
-type RuleContext = {
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "facadeImport" | "leafReexport";
-    data: { specifier: string };
-  }) => void;
-};
+import { eslintCompatPlugin, type Context, type Node } from "@oxlint/plugins";
 
 const MANAGED_NAMESPACES = ["@/api/db", "@/api/lib/analytics", "@/lib/errors"];
 
@@ -64,9 +56,10 @@ const stringLiteralValue = (node: unknown): string | undefined => {
   return node.value;
 };
 
-const reportInvalidImport = (context: RuleContext, source: unknown): void => {
+const reportInvalidImport = (context: Context, source: Node | null): void => {
   const specifier = stringLiteralValue(source);
   if (
+    source === null ||
     specifier === undefined ||
     !isManagedSpecifier(specifier) ||
     ALLOWED_LEAF_IMPORTS.has(specifier)
@@ -80,9 +73,13 @@ const reportInvalidImport = (context: RuleContext, source: unknown): void => {
   });
 };
 
-const reportLeafReexport = (context: RuleContext, source: unknown): void => {
+const reportLeafReexport = (context: Context, source: Node | null): void => {
   const specifier = stringLiteralValue(source);
-  if (specifier === undefined || !isManagedSpecifier(specifier)) {
+  if (
+    source === null ||
+    specifier === undefined ||
+    !isManagedSpecifier(specifier)
+  ) {
     return;
   }
   context.report({
@@ -92,7 +89,7 @@ const reportLeafReexport = (context: RuleContext, source: unknown): void => {
   });
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-facade-imports" },
   rules: {
     "no-facade-imports": {
@@ -106,22 +103,22 @@ export default {
         },
         schema: [],
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          ImportDeclaration(node: AstNode) {
+          ImportDeclaration(node) {
             reportInvalidImport(context, node.source);
           },
-          ExportAllDeclaration(node: AstNode) {
+          ExportAllDeclaration(node) {
             reportLeafReexport(context, node.source);
           },
-          ExportNamedDeclaration(node: AstNode) {
+          ExportNamedDeclaration(node) {
             reportLeafReexport(context, node.source);
           },
-          ImportExpression(node: AstNode) {
+          ImportExpression(node) {
             reportInvalidImport(context, node.source);
           },
         };
       },
     },
   },
-};
+});

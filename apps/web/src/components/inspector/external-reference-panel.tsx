@@ -47,6 +47,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -707,7 +708,7 @@ export const ExternalReferencePanel = ({
       return;
     }
 
-    window.open(confirmHref, "_blank", "noopener,noreferrer");
+    openIsolatedWindow(confirmHref);
     setConfirmHref(undefined);
   }, [confirmHref, setConfirmHref]);
   const copyConfirmHref = useCallback(async () => {

@@ -69,6 +69,8 @@
 //   string `replace(pattern, value)` method takes a non-object second
 //   argument, add a callee-name/type exclusion here.
 
+import { eslintCompatPlugin, type ESTree, type Scope } from "@oxlint/plugins";
+
 import { isIdentifier, isStringLiteral, unwrapExpression } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
@@ -78,6 +80,9 @@ const isAstNode = (node: unknown): node is AstNode =>
   node !== null &&
   "type" in node &&
   typeof (node as { type: unknown }).type === "string";
+
+const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
+  isIdentifier(node);
 
 const REPLACE_METHODS = new Set(["replace", "replaceAll"]);
 
@@ -108,7 +113,7 @@ const isNoSubstitutionTemplateLiteral = (node: unknown): boolean =>
   Array.isArray(node.expressions) &&
   node.expressions.length === 0;
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-function-replacer" },
   rules: {
     "require-function-replacer": {
@@ -124,15 +129,16 @@ export default {
             ".{{method}}(pattern, () => value).",
         },
       },
-      create(context) {
+      createOnce(context) {
         // Resolve the `Variable` an Identifier reference binds to by
         // walking the scope chain outward from its use site (mirrors
         // require-eden-error-check.ts's resolveVariable — this plugin API
         // has no ready-made `findVariable` helper of its own).
-        const resolveVariable = (
-          identifierNode: AstNode & { name: string },
-        ) => {
-          let scope = context.sourceCode.getScope(identifierNode);
+        const resolveVariable = (identifierNode: unknown) => {
+          if (!isScopeIdentifier(identifierNode)) {
+            return null;
+          }
+          let scope: Scope | null = context.sourceCode.getScope(identifierNode);
           while (scope) {
             const variable = scope.set.get(identifierNode.name);
             if (variable) {
@@ -149,9 +155,7 @@ export default {
         // Any other resolution (`var`, parameter, import binding, class
         // name, catch binding, or unresolved) is not provably a function
         // from syntax alone and returns false.
-        const isFunctionBinding = (
-          identifierNode: AstNode & { name: string },
-        ): boolean => {
+        const isFunctionBinding = (identifierNode: unknown): boolean => {
           const variable = resolveVariable(identifierNode);
           if (variable === null) {
             return false;
@@ -250,4 +254,4 @@ export default {
       },
     },
   },
-};
+});

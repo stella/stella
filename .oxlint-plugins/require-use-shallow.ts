@@ -24,6 +24,8 @@
 //   - `useStore(store, (s) => ({ ... }))` — the bare zustand `useStore`
 //     two-argument form, selector in argument position 1.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName, isIdentifier, unwrapExpression } from "./utils.ts";
 
 const STORE_HOOK_NAME = /^use\w*Store$/u;
@@ -116,7 +118,7 @@ const isUseShallowCall = (node, useShallowAliases) =>
   isIdentifier(node.callee) &&
   useShallowAliases.has(node.callee.name);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-use-shallow" },
   rules: {
     "require-use-shallow": {
@@ -128,10 +130,13 @@ export default {
         },
         schema: [],
       },
-      create(context) {
+      createOnce(context) {
         const useShallowAliases = new Set();
 
         return {
+          before() {
+            useShallowAliases.clear();
+          },
           ImportDeclaration(node) {
             if (!USE_SHALLOW_MODULES.has(node.source?.value)) {
               return;
@@ -178,4 +183,4 @@ export default {
       },
     },
   },
-};
+});

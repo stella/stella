@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Prevents Eden treaty responses from being consumed through promise
 // chaining or discarded outright, either of which lets a failed API call
 // masquerade as success.
@@ -134,7 +135,7 @@ const isThenOrCatchCall = (node: unknown): boolean => {
   return method === "then" || method === "catch";
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-eden-error-check" },
   rules: {
     "require-eden-error-check": {
@@ -155,7 +156,7 @@ export default {
             "(toAPIError for the message) instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const apiLocalNames = new Set<string>();
 
         // Resolve the `Variable` an Identifier reference binds to by
@@ -163,18 +164,11 @@ export default {
         // nearest-enclosing-declaration search ESLint's `findVariable`
         // utility does, built on oxlint's `getScope`/`Scope.set` since this
         // plugin API has no ready-made `findVariable` helper of its own.
-        const resolveVariable = (
-          identifierNode: AstNode & { name: string },
-        ) => {
-          let scope = context.sourceCode.getScope(identifierNode);
-          while (scope) {
-            const variable = scope.set.get(identifierNode.name);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
+        const resolveVariable = (identifierNode) => {
+          const findVariable = (scope) =>
+            scope?.set.get(identifierNode.name) ??
+            (scope?.upper ? findVariable(scope.upper) : null);
+          return findVariable(context.sourceCode.getScope(identifierNode));
         };
 
         // True when `variable` is the binding introduced by `import { api }
@@ -227,7 +221,7 @@ export default {
         // above. `visited` guards against declaration cycles across hops.
         const isGenuineApiRoot = (
           root: unknown,
-          visited: Set<unknown> = new Set(),
+          visited = new Set<unknown>(),
           depth = 0,
         ): boolean => {
           if (isDirectApiRoot(root)) {
@@ -267,6 +261,9 @@ export default {
         };
 
         return {
+          before() {
+            apiLocalNames.clear();
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== API_MODULE) {
               return;
@@ -387,4 +384,4 @@ export default {
       },
     },
   },
-};
+});

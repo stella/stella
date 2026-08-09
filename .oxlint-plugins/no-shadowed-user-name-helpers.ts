@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // getInitials and getDisplayName have one canonical implementation under the
 // web lib directory. A workspace component redeclared both names with
 // different token selection and fallback behavior, and another component
@@ -10,18 +11,7 @@
 // `shadowed-user-name-helpers` ratchet metric covers re-exports and syntactic
 // variants the declaration-based AST rule cannot identify.
 
-import type { AstNode } from "./utils.ts";
-import { filenameForContext } from "./utils.ts";
-
-type RuleContext = {
-  filename?: string;
-  getFilename?: () => string;
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "shadowedHelper";
-    data: { name: string };
-  }) => void;
-};
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 const BANNED_NAMES = new Set(["getDisplayName", "getInitials"]);
 
@@ -35,7 +25,10 @@ const declaredName = (node: unknown): string | null =>
     ? node.name
     : null;
 
-const isModuleLevel = (node: AstNode): boolean => {
+const isModuleLevel = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
   const parent = node.parent;
   if (typeof parent !== "object" || parent === null) {
     return false;
@@ -64,7 +57,7 @@ const isModuleLevel = (node: AstNode): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-shadowed-user-name-helpers" },
   rules: {
     "no-shadowed-user-name-helpers": {
@@ -76,23 +69,19 @@ export default {
             "canonical helper instead.",
         },
       },
-      create(context: RuleContext) {
-        const filename = filenameForContext(context);
-        if (
-          (!filename.includes("apps/web/src/") &&
-            !filename.endsWith(
-              ".oxlint-plugins/__fixtures__/no-shadowed-user-name-helpers.fixture.ts",
-            )) ||
-          filename.includes("apps/web/src/lib/")
-        ) {
-          return {};
-        }
-        const check = (node: AstNode) => {
+      createOnce(context) {
+        const shadowedName = (node: unknown): string | null => {
           if (!isModuleLevel(node)) {
-            return;
+            return null;
+          }
+          if (!isAstNode(node)) {
+            return null;
           }
           const name = declaredName(node.id);
-          if (name !== null && BANNED_NAMES.has(name)) {
+          return name !== null && BANNED_NAMES.has(name) ? name : null;
+        };
+        const report = (node, name: string | null) => {
+          if (name !== null) {
             context.report({
               node,
               messageId: "shadowedHelper",
@@ -100,8 +89,25 @@ export default {
             });
           }
         };
-        return { FunctionDeclaration: check, VariableDeclarator: check };
+        return {
+          before() {
+            const filename = filenameForContext(context);
+            return (
+              (filename.includes("apps/web/src/") ||
+                filename.endsWith(
+                  ".oxlint-plugins/__fixtures__/no-shadowed-user-name-helpers.fixture.ts",
+                )) &&
+              !filename.includes("apps/web/src/lib/")
+            );
+          },
+          FunctionDeclaration(node) {
+            report(node, shadowedName(node));
+          },
+          VariableDeclarator(node) {
+            report(node, shadowedName(node));
+          },
+        };
       },
     },
   },
-};
+});

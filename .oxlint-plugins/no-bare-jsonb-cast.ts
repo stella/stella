@@ -43,6 +43,8 @@
 //   db.unsafe(`... SET doc = ($1)::jsonb ...`, [JSON.stringify(value)])
 //   db.unsafe(`... SET doc = CAST($1 AS jsonb) ...`, [JSON.stringify(value)])
 
+import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
+
 type AstNode = { type: string } & Record<string, unknown>;
 
 const isAstNode = (node: unknown): node is AstNode =>
@@ -175,7 +177,10 @@ const rawTextOf = (quasi: unknown): string => {
 
 // Any string the rule can read SQL out of: a plain literal, or a template
 // literal's static chunks.
-const sqlTextsOf = (node: AstNode): string[] => {
+const sqlTextsOf = (node: unknown): string[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
   if (node.type === "Literal") {
     return typeof node.value === "string" ? [node.value] : [];
   }
@@ -211,7 +216,10 @@ const dottedNameOf = (node: unknown): string | undefined => {
     : undefined;
 };
 
-export default {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+export default eslintCompatPlugin({
   meta: { name: "no-bare-jsonb-cast" },
   rules: {
     "no-bare-jsonb-cast": {
@@ -237,19 +245,14 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedColumnExpressions = new Set<string>(
-          Array.isArray(options.allowedColumnExpressions)
-            ? options.allowedColumnExpressions
-            : [],
-        );
+      createOnce(context) {
+        let allowedColumnExpressions = new Set<string>();
 
         // A positional cast is reported wherever the SQL text carrying it
         // appears, so guard against reporting the same node twice.
-        const reportedPositional = new WeakSet<object>();
+        let reportedPositional = new WeakSet<object>();
 
-        const reportPositionalCasts = (node: AstNode) => {
+        const reportPositionalCasts = (node: Node) => {
           if (reportedPositional.has(node)) {
             return;
           }
@@ -264,11 +267,25 @@ export default {
         };
 
         return {
-          Literal(node: AstNode) {
+          before() {
+            const configuredOptions = context.options?.[0];
+            const options = isRecord(configuredOptions)
+              ? configuredOptions
+              : {};
+            allowedColumnExpressions = new Set<string>(
+              Array.isArray(options.allowedColumnExpressions)
+                ? options.allowedColumnExpressions.filter(
+                    (value): value is string => typeof value === "string",
+                  )
+                : [],
+            );
+            reportedPositional = new WeakSet<object>();
+          },
+          Literal(node) {
             reportPositionalCasts(node);
           },
 
-          TemplateLiteral(node: AstNode) {
+          TemplateLiteral(node) {
             reportPositionalCasts(node);
             const expressions = Array.isArray(node.expressions)
               ? node.expressions
@@ -304,4 +321,4 @@ export default {
       },
     },
   },
-};
+});

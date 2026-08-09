@@ -78,11 +78,13 @@ export const BadReturnTernaryRoute = createFileRoute(
 });
 
 // Safe: a ternary where only one branch redirects can fall through to render.
-export const SafeTernaryGuardRoute = createFileRoute("/__fixture/safe-ternary")({
-  beforeLoad: ({ context }) =>
-    context.flag ? redirect({ to: "/a" }) : undefined,
-  component: GuardedComponent,
-});
+export const SafeTernaryGuardRoute = createFileRoute("/__fixture/safe-ternary")(
+  {
+    beforeLoad: ({ context }) =>
+      context.flag ? redirect({ to: "/a" }) : undefined,
+    component: GuardedComponent,
+  },
+);
 
 // Safe: redirect from a mounted inert component.
 export const SafeRedirectRoute = createFileRoute("/__fixture/safe-redirect")({

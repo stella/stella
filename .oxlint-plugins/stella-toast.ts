@@ -4,6 +4,8 @@
 // That wrapper applies default timeouts and keeps app code away from
 // raw Base UI toast managers.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName } from "./utils.ts";
 
 const STELLA_TOAST_MODULE = "@stll/ui/components/toast";
@@ -16,35 +18,7 @@ const DISALLOWED_STELLA_IMPORTS = new Set([
   "toastManager",
 ]);
 
-type RuleContext = {
-  report: (diagnostic: {
-    node: unknown;
-    messageId: string;
-    data?: Record<string, string>;
-  }) => void;
-};
-
-type IdentifierNode = {
-  type: "Identifier";
-  name: string;
-};
-
-type LiteralNode = {
-  type: "Literal";
-  value: unknown;
-};
-
-type ImportSpecifierLike = {
-  type: string;
-  imported?: IdentifierNode | LiteralNode;
-};
-
-type ImportDeclarationNode = {
-  source: LiteralNode;
-  specifiers: ImportSpecifierLike[];
-};
-
-export default {
+export default eslintCompatPlugin({
   meta: { name: "stella-toast" },
   rules: {
     "stella-toast": {
@@ -57,9 +31,9 @@ export default {
             "Use `stellaToast` from `@stll/ui/components/toast`; `{{name}}` bypasses stella toast guarantees.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
-          ImportDeclaration(node: ImportDeclarationNode) {
+          ImportDeclaration(node) {
             if (typeof node.source.value !== "string") {
               return;
             }
@@ -90,4 +64,4 @@ export default {
       },
     },
   },
-};
+});

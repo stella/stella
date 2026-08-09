@@ -77,6 +77,7 @@ import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/_protected.knowledge/-components/category-sidebar";
@@ -467,7 +468,7 @@ const downloadTemplateSource = async (
     stellaToast.add({ type: "error", title: errorTitle });
     return;
   }
-  window.open(response.data.presignedUrl, "_blank");
+  openIsolatedWindow(response.data.presignedUrl);
 };
 
 /** Builds a category submenu entry, marking the current one with a check and

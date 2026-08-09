@@ -5,16 +5,13 @@
 // is to wrap icon-only actions in the shared Tooltip component, or to use a
 // component-level `tooltip` prop when the primitive provides one.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 type AstNode = { type: string } & Record<string, unknown>;
 
-type RuleContext = {
+type FilenameContext = {
   filename?: string;
   getFilename?: () => string;
-  report: (diagnostic: {
-    node: unknown;
-    messageId: "missingTooltip";
-    data?: Record<string, string>;
-  }) => void;
 };
 
 const INTERACTIVE_ELEMENTS = new Set([
@@ -354,10 +351,10 @@ const isIconOnlyInteractive = (node: unknown): boolean => {
   return hasIconChild(node);
 };
 
-const filenameOf = (context: RuleContext): string =>
+const filenameOf = (context: FilenameContext): string =>
   context.filename ?? context.getFilename?.() ?? "";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "icon-button-requires-tooltip" },
   rules: {
     "icon-button-requires-tooltip": {
@@ -368,14 +365,12 @@ export default {
             "Icon-only {{tag}} needs a tooltip. Wrap it in <Tooltip> with content, or use a component-level tooltip prop.",
         },
       },
-      create(context: RuleContext) {
-        const filename = filenameOf(context);
-        if (!filename.endsWith(".tsx")) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
-          JSXElement(node: AstNode) {
+          before() {
+            return filenameOf(context).endsWith(".tsx");
+          },
+          JSXElement(node) {
             if (!isIconOnlyInteractive(node) || hasTooltip(node)) {
               return;
             }
@@ -390,4 +385,4 @@ export default {
       },
     },
   },
-};
+});

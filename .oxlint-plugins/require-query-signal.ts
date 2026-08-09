@@ -46,6 +46,8 @@
 // race (e.g. a one-shot dev-only probe) or the signal already reaches the
 // call through an opaque context identifier instead of a destructure.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const FUNCTION_TYPES = new Set([
@@ -253,7 +255,7 @@ const callThreadsSignal = (node, bindingName) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-query-signal" },
   rules: {
     "require-query-signal": {
@@ -268,7 +270,7 @@ export default {
             "and apply stale data after a newer one wins.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             const callee = node.callee;
@@ -292,4 +294,4 @@ export default {
       },
     },
   },
-};
+});

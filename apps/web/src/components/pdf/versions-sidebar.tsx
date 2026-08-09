@@ -43,6 +43,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import {
   type EntityVersion as Version,
@@ -379,7 +380,7 @@ export const VersionsSidebar = ({
       .url({ fieldId: toSafeId<"field">(fieldId) })
       .get({ query: { purpose: "download" } });
     if (!response.error) {
-      window.open(response.data.presignedUrl, "_blank");
+      openIsolatedWindow(response.data.presignedUrl);
     }
   };
 

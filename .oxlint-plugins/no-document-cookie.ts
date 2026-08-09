@@ -19,6 +19,8 @@
 //   const has = document.cookie.includes("x");  // reads are fine
 //   cookieStore.set("theme", "dark");           // different API entirely
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isIdentifier, isStringLiteral } from "./utils.ts";
 
 const DOCUMENT_HOSTS = new Set(["document", "globalThis", "window", "self"]);
@@ -104,7 +106,7 @@ const isDocumentCookieAccess = (node: unknown): boolean => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-document-cookie" },
   rules: {
     "no-document-cookie": {
@@ -118,7 +120,7 @@ export default {
             "utility instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           AssignmentExpression(node) {
             if (!isDocumentCookieAccess(node.left)) {
@@ -133,4 +135,4 @@ export default {
       },
     },
   },
-};
+});

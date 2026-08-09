@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Keep the Tools route as a lightweight shell.
 //
 // The catalogue browser owns heavy UI and route-local query subscriptions. The
@@ -38,7 +40,7 @@ const isTypeOnlyImport = (node) => {
   return node.specifiers.every((specifier) => specifier.importKind === "type");
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-static-catalogue-route-import" },
   rules: {
     "no-static-catalogue-route-import": {
@@ -58,12 +60,11 @@ export default {
           },
         ],
       },
-      create(context) {
-        if (!isGuardedRouteFile(context)) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
+          before() {
+            return isGuardedRouteFile(context);
+          },
           ImportDeclaration(node) {
             const source = node.source?.value;
             if (
@@ -83,4 +84,4 @@ export default {
       },
     },
   },
-};
+});

@@ -9,7 +9,9 @@
 // Allows `as any` / `as unknown` (those have dedicated rules / are
 // often used as the first step of an explicit launder).
 
-export default {
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+export default eslintCompatPlugin({
   meta: { name: "no-dangerous-type-assertions" },
   rules: {
     "no-dangerous-type-assertions": {
@@ -22,7 +24,7 @@ export default {
             "required fields fail typecheck.",
         },
       },
-      create(context) {
+      createOnce(context) {
         function unwrapExpression(expression) {
           let current = expression;
           while (
@@ -68,4 +70,4 @@ export default {
       },
     },
   },
-};
+});

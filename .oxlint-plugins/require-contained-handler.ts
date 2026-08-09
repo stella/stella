@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Require event handlers on ref-tracked containers to be wrapped in
 // `containedHandler` from `@stll/ui/hooks/use-contained-handler`.
 //
@@ -172,7 +174,7 @@ const findRefDisplayName = (attributes) => {
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-contained-handler" },
   rules: {
     "require-contained-handler": {
@@ -187,7 +189,7 @@ export default {
             "will trigger this handler.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const checkOpening = (opening) => {
           const elementName =
             opening.name?.type === "JSXIdentifier" ? opening.name.name : null;
@@ -253,4 +255,4 @@ export default {
       },
     },
   },
-};
+});

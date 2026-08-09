@@ -7,6 +7,7 @@
       "devDependencies": {
         "@changesets/changelog-github": "^0.7.0",
         "@changesets/cli": "^2.31.0",
+        "@oxlint/plugins": "catalog:",
         "@stll/oxlint-config": "0.6.0",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
@@ -801,6 +802,7 @@
     "@better-auth/oauth-provider": "1.6.25",
     "@libpdf/core": "0.4.1",
     "@mcp-ui/client": "7.1.1",
+    "@oxlint/plugins": "1.75.0",
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.3",
     "@stll/folio-agents": "0.8.2",
@@ -1829,6 +1831,8 @@
     "@oxlint/binding-win32-ia32-msvc": ["@oxlint/binding-win32-ia32-msvc@1.77.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-zja5b7+6a7UsRFgAQSrnax5vrzliEyNPLCjfXONu/vTWswaIVZGFajJZptaeRvPE4LghtFdAzVFlexTm7MVTGA=="],
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.77.0", "", { "os": "win32", "cpu": "x64" }, "sha512-+teyvPDZ2RjUvo+SuCqS/UhaJl1QtdW5fWT5NJTV61V5MIuIS90Db9LixmtEGvXixyttiK62P96MSu3UlpviBw=="],
+
+    "@oxlint/plugins": ["@oxlint/plugins@1.75.0", "", {}, "sha512-dNQBRuvkeecm9nxi1cXRxXA1oAyqJqHof6cdnjY/WDBU1nZ9V07rp9X9gG7+JgShrjJW4VR2dTo7t2EcX4XD8g=="],
 
     "@pagefind/darwin-arm64": ["@pagefind/darwin-arm64@1.5.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-MXpI+7HsAdPkvJ0gk9xj9g541BCqBZOBbdwj9g6lB5LCj6kSV6nqDSjzcAJwvOsfu0fjwvC8hQU+ecfhp+MpiQ=="],
 

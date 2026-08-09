@@ -32,6 +32,8 @@
 //     `Object.assign`/`Array.from` still require the literal global
 //     identifier since they are matched by fully-qualified name.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName, isIdentifier, unwrapExpression } from "./utils.ts";
 
 const REACT_MODULE = "react";
@@ -164,7 +166,7 @@ const snapshotReturnsFreshReference = (fn) => {
   );
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-stable-snapshot" },
   rules: {
     "require-stable-snapshot": {
@@ -176,7 +178,7 @@ export default {
         },
         schema: [],
       },
-      create(context) {
+      createOnce(context) {
         const useSyncExternalStoreAliases = new Set();
         const reactNamespaces = new Set();
 
@@ -197,6 +199,10 @@ export default {
         };
 
         return {
+          before() {
+            useSyncExternalStoreAliases.clear();
+            reactNamespaces.clear();
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== REACT_MODULE) {
               return;
@@ -238,4 +244,4 @@ export default {
       },
     },
   },
-};
+});

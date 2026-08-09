@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban `useSuspenseQuery` in shared chrome.
 //
 // `useSuspenseQuery` is appropriate in route/page content where the route
@@ -18,7 +19,7 @@ const isAllowedFile = (context, allowedFiles) => {
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-shared-suspense-query" },
   rules: {
     "no-shared-suspense-query": {
@@ -38,20 +39,26 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         const suspenseQueryAliases = new Set();
         const queryNamespaces = new Set();
 
         return {
+          before() {
+            suspenseQueryAliases.clear();
+            queryNamespaces.clear();
+            const options = context.options?.at(0);
+            const allowedFiles =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options) &&
+              Array.isArray(options.allowedFiles)
+                ? options.allowedFiles.filter(
+                    (value) => typeof value === "string",
+                  )
+                : [];
+            return !isAllowedFile(context, allowedFiles);
+          },
           ImportDeclaration(node) {
             if (node.source?.value !== QUERY_MODULE) {
               return;
@@ -93,4 +100,4 @@ export default {
       },
     },
   },
-};
+});

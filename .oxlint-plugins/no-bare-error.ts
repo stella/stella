@@ -16,7 +16,9 @@
 //   panic("invariant violated");
 //   throw err;  // re-throw
 
-export default {
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+export default eslintCompatPlugin({
   meta: { name: "no-bare-error" },
   rules: {
     "no-bare-error": {
@@ -29,7 +31,7 @@ export default {
             "`throw new Error(...)` bypasses structured error handling.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           ThrowStatement(node) {
             const argument = node.argument;
@@ -57,4 +59,4 @@ export default {
       },
     },
   },
-};
+});

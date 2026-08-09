@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow Record<string, unknown> variable assignments in handlers.
 //
 // Handlers that build partial update objects should use
@@ -11,7 +12,7 @@
 
 import { isIdentifier } from "./utils.ts";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-untyped-updates" },
   rules: {
     "no-untyped-updates": {
@@ -24,7 +25,7 @@ export default {
             "lib/pick-defined.ts instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           VariableDeclarator(node) {
             // Match: const/let foo: Record<string, unknown> =
@@ -46,7 +47,11 @@ export default {
                 return;
               }
 
-              const [keyType, valueType] = params;
+              const keyType = params.at(0);
+              const valueType = params.at(1);
+              if (!keyType || !valueType) {
+                return;
+              }
 
               // Record<string, unknown> or Record<string, any>
               if (
@@ -65,4 +70,4 @@ export default {
       },
     },
   },
-};
+});

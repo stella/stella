@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Require an exact-precision form when comparing against a timestamp column.
 //
 // Postgres stores `timestamptz` at microsecond precision; a JavaScript `Date`
@@ -372,7 +374,7 @@ const isFreshClockRead = (node: unknown): boolean => {
 // codebase applies it to a timestamp column — add it here if that changes.
 const DRIZZLE_COMPARISONS = new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-truncated-timestamp-comparison" },
   rules: {
     "no-truncated-timestamp-comparison": {
@@ -404,27 +406,17 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedOperandCalls = new Set<string>(
-          Array.isArray(options.allowedOperandCalls)
-            ? options.allowedOperandCalls
-            : [],
-        );
+      createOnce(context) {
+        const allowedOperandCalls = new Set<string>();
 
         // Resolve the `Variable` an Identifier binds to by walking the scope
         // chain outward from its use site (this plugin API has no ready-made
         // `findVariable`; mirrors require-function-replacer.ts).
-        const resolveVariable = (identifier: AstNode) => {
-          let scope = context.sourceCode?.getScope?.(identifier);
-          while (scope) {
-            const variable = scope.set.get(identifier["name"]);
-            if (variable) {
-              return variable;
-            }
-            scope = scope.upper;
-          }
-          return null;
+        const resolveVariable = (identifier) => {
+          const findVariable = (scope) =>
+            scope?.set.get(identifier.name) ??
+            (scope?.upper ? findVariable(scope.upper) : null);
+          return findVariable(context.sourceCode.getScope(identifier));
         };
 
         // One hop from an identifier to the `const` initializer it was bound
@@ -542,7 +534,7 @@ export default {
           return bindsToClockRead(node) || bindsToSafeSqlFragment(node);
         };
 
-        const report = (node: unknown) => {
+        const report = (node) => {
           context.report({
             node,
             messageId: "truncatedTimestampComparison",
@@ -592,7 +584,24 @@ export default {
         };
 
         return {
-          TemplateLiteral(node: AstNode) {
+          before() {
+            const options = context.options?.[0] ?? {};
+            allowedOperandCalls.clear();
+            const configuredCalls =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options)
+                ? options["allowedOperandCalls"]
+                : undefined;
+            if (Array.isArray(configuredCalls)) {
+              for (const call of configuredCalls) {
+                if (typeof call === "string") {
+                  allowedOperandCalls.add(call);
+                }
+              }
+            }
+          },
+          TemplateLiteral(node) {
             const expressions = Array.isArray(node.expressions)
               ? node.expressions
               : [];
@@ -660,7 +669,7 @@ export default {
           // side. This is the shape that produced every recent regression:
           // the column reads as a column, and the operand reads as an
           // innocuous `cursor.createdAt`.
-          CallExpression(node: AstNode) {
+          CallExpression(node) {
             const callee = calleeName(node);
             if (callee === undefined || !DRIZZLE_COMPARISONS.has(callee)) {
               return;
@@ -695,4 +704,4 @@ export default {
       },
     },
   },
-};
+});

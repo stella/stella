@@ -1,3 +1,6 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
+
 import { getImportedName, getPropertyName, isIdentifier } from "./utils.ts";
 
 const RAW_QUERY_CLIENT_METHODS = new Map([
@@ -110,7 +113,7 @@ const getQuerySubscriptionHookName = (
     : null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-route-query-client" },
   rules: {
     "no-raw-route-query-client": {
@@ -132,19 +135,27 @@ export default {
             "so abandoned pending renders cannot receive async state updates.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const genericHelperAliases = new Map();
         const pendingComponentNames = new Set();
         const pendingQueryHookCalls: {
           component: string;
           hook: string;
-          node: unknown;
+          node: Ranged;
         }[] = [];
         const queryHookAliases = new Set();
         const routeQueryHelperNamespaces = new Set();
         const tanstackQueryNamespaces = new Set();
 
         return {
+          before() {
+            genericHelperAliases.clear();
+            pendingComponentNames.clear();
+            pendingQueryHookCalls.length = 0;
+            queryHookAliases.clear();
+            routeQueryHelperNamespaces.clear();
+            tanstackQueryNamespaces.clear();
+          },
           ImportDeclaration(node) {
             if (node.source?.value === TANSTACK_QUERY_MODULE) {
               for (const specifier of node.specifiers) {
@@ -310,4 +321,4 @@ export default {
       },
     },
   },
-};
+});

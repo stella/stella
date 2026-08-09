@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Disallow new request-level offset pagination in API handlers.
 // Large list endpoints should use cursor pagination and the standard Page<T>
 // envelope. Legacy offset endpoints must be listed explicitly in oxlint.config.ts
@@ -21,7 +22,11 @@ const HARDCODED_ALLOWED_FILES = new Set([
 
 const isAllowedFile = (context, allowedFiles) => {
   const filename = filenameForContext(context).replace(/\\/g, "/");
-  if (Array.from(HARDCODED_ALLOWED_FILES).some((allowed) => filename.endsWith(allowed))) {
+  if (
+    Array.from(HARDCODED_ALLOWED_FILES).some((allowed) =>
+      filename.endsWith(allowed),
+    )
+  ) {
     return true;
   }
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
@@ -47,7 +52,7 @@ const containsRequestSchemaCall = (node) => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-offset-pagination" },
   rules: {
     "no-offset-pagination": {
@@ -70,17 +75,21 @@ export default {
           },
         ],
       },
-      create(context) {
-        const options = context.options?.[0] ?? {};
-        const allowedFiles = Array.isArray(options.allowedFiles)
-          ? options.allowedFiles
-          : [];
-
-        if (isAllowedFile(context, allowedFiles)) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
+          before() {
+            const options = context.options?.at(0);
+            const allowedFiles =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options) &&
+              Array.isArray(options.allowedFiles)
+                ? options.allowedFiles.filter(
+                    (value) => typeof value === "string",
+                  )
+                : [];
+            return !isAllowedFile(context, allowedFiles);
+          },
           Property(node) {
             if (getPropertyName(node.key) !== "offset") {
               return;
@@ -99,4 +108,4 @@ export default {
       },
     },
   },
-};
+});

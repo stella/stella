@@ -9,11 +9,13 @@
 // Catches both standalone calls (useParams()) and route-
 // scoped calls (Route.useParams()).
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { isIdentifier } from "./utils.ts";
 
 const HOOKS = new Set(["useParams", "useSearch", "useRouteContext"]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-router-select" },
   rules: {
     "require-router-select": {
@@ -26,7 +28,7 @@ export default {
             "to the entire {{kind}} object.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             const callee = node.callee;
@@ -99,4 +101,4 @@ export default {
       },
     },
   },
-};
+});

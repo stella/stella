@@ -1,3 +1,5 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 // Disallow ad-hoc locale-sensitive formatting that ignores the user's
 // formatting preferences.
 //
@@ -52,7 +54,7 @@ const isBareLocaleArg = (arg) => {
   return arg.type === "Literal" && typeof arg.value === "string";
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-locale-format" },
   rules: {
     "no-raw-locale-format": {
@@ -65,7 +67,7 @@ export default {
             "getFormattingLocale() (from @/i18n/i18n-store) as the locale.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           NewExpression(node) {
             const callee = node.callee;
@@ -95,4 +97,4 @@ export default {
       },
     },
   },
-};
+});

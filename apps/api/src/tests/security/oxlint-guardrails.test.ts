@@ -26,7 +26,9 @@ describe("custom oxlint guardrails", () => {
     const oxlintConfig = readRootFixture("oxlint.config.ts");
 
     expect(pluginSource).toContain("options.requireTranslationUsage === true");
-    expect(pluginSource).toContain("sourceText.includes(marker)");
+    expect(pluginSource).toContain(
+      "sourceTextForContext(context).includes(marker)",
+    );
     expect(pluginSource).toContain("useTranslations");
     expect(pluginSource).toContain("TranslationKey");
     expect(oxlintConfig).toContain(

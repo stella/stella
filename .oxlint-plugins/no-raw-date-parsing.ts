@@ -1,3 +1,6 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
+
 // Disallow the three classic date/timezone footguns in app source.
 //
 // 1. `new Date("YYYY-MM-DD")` (string or template argument without a "T")
@@ -48,10 +51,6 @@ const DAY_FACTOR_REQUIREMENTS: ReadonlyMap<number, number> = new Map([
 ]);
 
 const DAY_IN_MS_VALUE = 86_400_000;
-
-type RuleContext = {
-  report: (descriptor: { node: unknown; messageId: string }) => void;
-};
 
 const PRODUCT_WRAPPER_TYPES = new Set([
   "ParenthesizedExpression",
@@ -118,7 +117,7 @@ const isDateOnlyStringArg = (arg): boolean => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-date-parsing" },
   rules: {
     "no-raw-date-parsing": {
@@ -140,7 +139,7 @@ export default {
             "24-hour duration.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
           NewExpression(node) {
             const callee = node.callee;
@@ -174,9 +173,9 @@ export default {
               return;
             }
             // Only report the maximal chain, not every nested `*` inside it.
-            let parent = node.parent;
+            let parent: ESTree.Node | undefined = node.parent;
             while (parent && PRODUCT_WRAPPER_TYPES.has(parent.type)) {
-              parent = parent.parent;
+              parent = parent.parent ?? undefined;
             }
             if (
               parent &&
@@ -195,4 +194,4 @@ export default {
       },
     },
   },
-};
+});

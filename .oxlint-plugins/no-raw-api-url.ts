@@ -1,3 +1,4 @@
+import { eslintCompatPlugin } from "@oxlint/plugins";
 // Ban hand-written API URL strings in fetch() / new Request() / new URL().
 //
 // Bug class: a relative path like `fetch("/api/entities/...")` resolves
@@ -28,10 +29,6 @@ const RELATIVE_API_PATH = /^\/(?:api|v1)(?:\/|$)/u;
 const V1_PATH = /^\/v1(?:\/|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
-
-type RuleContext = {
-  report: (descriptor: { node: unknown; messageId: "rawApiUrl" }) => void;
-};
 
 const isAstNode = (value: unknown): value is AstNode =>
   typeof value === "object" &&
@@ -84,7 +81,7 @@ const isHandWrittenApiUrl = (arg: unknown): boolean => {
   return next !== null && V1_PATH.test(next);
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-raw-api-url" },
   rules: {
     "no-raw-api-url": {
@@ -97,7 +94,7 @@ export default {
             "'/api/...' resolves against the web origin, not the API.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         const checkFirstArg = (args: unknown) => {
           if (!Array.isArray(args) || args.length === 0) {
             return;
@@ -128,4 +125,4 @@ export default {
       },
     },
   },
-};
+});

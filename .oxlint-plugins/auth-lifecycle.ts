@@ -4,6 +4,8 @@
 // Better Auth organization hook, Stella sessions, and OAuth token rows are one
 // lifecycle boundary, so this rule keeps that coupling explicit.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isCallTo, isIdentifier } from "./utils.ts";
 
 const HELPER_NAME = "revokeOrganizationMemberAuthArtifacts";
@@ -84,7 +86,7 @@ const getDeleteTarget = (node): string | null => {
   return null;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "auth-lifecycle" },
   rules: {
     "after-remove-member-revokes-artifacts": {
@@ -95,7 +97,7 @@ export default {
             "afterRemoveMember must call revokeOrganizationMemberAuthArtifacts(...) so org-scoped auth artifacts stay on one lifecycle path.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           Property(node) {
             if (getPropertyName(node.key) !== "afterRemoveMember") {
@@ -123,10 +125,13 @@ export default {
             "Delete org-member auth artifacts through revokeOrganizationMemberAuthArtifacts(...), not by deleting {{table}} directly.",
         },
       },
-      create(context) {
-        const allowedFile = isAllowedFile(context);
+      createOnce(context) {
+        let allowedFile = false;
 
         return {
+          before() {
+            allowedFile = isAllowedFile(context);
+          },
           CallExpression(node) {
             if (allowedFile) {
               return;
@@ -147,4 +152,4 @@ export default {
       },
     },
   },
-};
+});

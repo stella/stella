@@ -17,11 +17,13 @@
 // Protocol, public, streaming, and dev-only routes should disable this rule in
 // oxlint.config.ts with a short justification.
 
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+
 import { getPropertyName } from "./utils.ts";
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 
-type AstNode = Record<string, unknown> & { type: string };
+type AstNode = Ranged & Record<string, unknown> & { type: string };
 
 type MemberExpressionNode = AstNode & {
   computed: boolean;
@@ -31,14 +33,6 @@ type MemberExpressionNode = AstNode & {
 type CallExpressionNode = AstNode & {
   arguments: unknown[];
   callee: unknown;
-};
-
-type RuleContext = {
-  report: (descriptor: {
-    data: { method: string };
-    messageId: "requireSafeHandler";
-    node: unknown;
-  }) => void;
 };
 
 const isAstNode = (node: unknown): node is AstNode =>
@@ -64,7 +58,7 @@ const isSafeHandlerMember = (node: unknown) =>
   !node.computed &&
   getPropertyName(node.property) === "handler";
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-safe-route-handlers" },
   rules: {
     "require-safe-route-handlers": {
@@ -78,7 +72,7 @@ export default {
             "document this file as an explicit protocol/public/dev exception.",
         },
       },
-      create(context: RuleContext) {
+      createOnce(context) {
         return {
           CallExpression(node: unknown) {
             if (!isCallExpression(node)) {
@@ -103,6 +97,9 @@ export default {
             ) {
               return;
             }
+            if (!isAstNode(routeHandler)) {
+              return;
+            }
 
             context.report({
               node: routeHandler,
@@ -114,4 +111,4 @@ export default {
       },
     },
   },
-};
+});

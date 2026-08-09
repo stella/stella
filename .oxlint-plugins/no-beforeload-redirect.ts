@@ -31,6 +31,8 @@
 // Keep redirect control flow inline in the handler, or — for an alias route —
 // in a mounted component, so a helper cannot hide the dangerous shape.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const LOAD_PROPERTIES = new Set(["beforeLoad", "loader"]);
@@ -96,10 +98,13 @@ const hasNonRedirectExit = (node, seen) => {
       }
       continue;
     }
-    if (value && typeof value === "object" && typeof value.type === "string") {
-      if (hasNonRedirectExit(value, seen)) {
-        return true;
-      }
+    if (
+      value &&
+      typeof value === "object" &&
+      typeof value.type === "string" &&
+      hasNonRedirectExit(value, seen)
+    ) {
+      return true;
     }
   }
   return false;
@@ -119,7 +124,7 @@ const statementAlwaysRedirects = (node) => {
   // Both branches must exist and both must redirect.
   if (node.type === "IfStatement") {
     return (
-      node.alternate != null &&
+      node.alternate !== null &&
       statementAlwaysRedirects(node.consequent) &&
       statementAlwaysRedirects(node.alternate)
     );
@@ -178,7 +183,7 @@ const getStaticProperties = (node) => {
   return properties;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-beforeload-redirect" },
   rules: {
     "no-beforeload-redirect": {
@@ -196,7 +201,7 @@ export default {
             "guards that fall through to render a route are fine.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           ObjectExpression(node) {
             if (!isCreateFileRouteConfig(node)) {
@@ -224,4 +229,4 @@ export default {
       },
     },
   },
-};
+});

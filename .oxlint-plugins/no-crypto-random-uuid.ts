@@ -3,11 +3,13 @@
 // Backend code runs on Bun; use Bun.randomUUIDv7() so generated
 // UUIDs are Bun-native and database-friendly for ordered inserts.
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getImportedName, isIdentifier } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-crypto-random-uuid" },
   rules: {
     "no-crypto-random-uuid": {
@@ -22,11 +24,16 @@ export default {
             "Use Bun.randomUUIDv7() instead.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const randomUuidAliases = new Set();
         const cryptoAliases = new Set(["crypto"]);
 
         return {
+          before() {
+            randomUuidAliases.clear();
+            cryptoAliases.clear();
+            cryptoAliases.add("crypto");
+          },
           ImportDeclaration(node) {
             if (
               typeof node.source.value !== "string" ||
@@ -90,4 +97,4 @@ export default {
       },
     },
   },
-};
+});

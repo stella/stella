@@ -49,7 +49,9 @@
 //   // eslint-disable-next-line require-query-limit/require-query-limit
 //   // SAFETY: writes are capped at LIMITS.fooPerOrg, so this cannot grow unbounded.
 
-import { getPropertyName } from "./utils.ts";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+import { getPropertyName, isAstNode } from "./utils.ts";
 
 const getType = (node: unknown): string | null => {
   if (typeof node !== "object" || node === null || !("type" in node)) {
@@ -248,7 +250,7 @@ const scanRelationalWith = (
   }
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "require-query-limit" },
   rules: {
     "require-query-limit": {
@@ -273,9 +275,9 @@ export default {
             "when the relation is provably bounded.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
-          CallExpression(node: unknown) {
+          CallExpression(node) {
             const method = calleeMethodName(node);
             if (method === null) {
               return;
@@ -307,7 +309,8 @@ export default {
               // several lines up), so the diagnostic — and any
               // disable-next-line — lands on the `.orderBy(` line.
               const callee = getField(node, "callee");
-              const reportNode = getField(callee, "property") ?? node;
+              const property = getField(callee, "property");
+              const reportNode = isAstNode(property) ? property : node;
               context.report({ node: reportNode, messageId: "orderByNoLimit" });
             }
           },
@@ -315,4 +318,4 @@ export default {
       },
     },
   },
-};
+});

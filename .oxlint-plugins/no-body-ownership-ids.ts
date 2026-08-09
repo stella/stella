@@ -8,13 +8,15 @@
 // Catches both direct access (body.workspaceId) and
 // destructured access (const { workspaceId } = body).
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const OWNERSHIP_FIELDS = new Set(["workspaceId", "organizationId"]);
 
 const SOURCE_OBJECTS = new Set(["body", "query"]);
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-body-ownership-ids" },
   rules: {
     "no-body-ownership-ids": {
@@ -34,7 +36,7 @@ export default {
             "request {{object}}.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           // body.workspaceId, query.organizationId
           MemberExpression(node) {
@@ -93,4 +95,4 @@ export default {
       },
     },
   },
-};
+});

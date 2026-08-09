@@ -23,6 +23,8 @@
 //   await tx.update(sources).set({ lastSyncAt: new Date() }).where(...);
 //   await tx.insert(sources).values({ syncCursor: null });
 
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
 import {
   getPropertyName,
   isAstNode,
@@ -131,7 +133,7 @@ const isInsideCheckpointBoundary = (node: unknown): boolean => {
   return false;
 };
 
-export default {
+export default eslintCompatPlugin({
   meta: { name: "no-direct-ingestion-checkpoint-write" },
   rules: {
     "no-direct-ingestion-checkpoint-write": {
@@ -143,12 +145,11 @@ export default {
         },
         schema: [],
       },
-      create(context) {
-        if (filenameForContext(context).endsWith(CHECKPOINT_MODULE)) {
-          return {};
-        }
-
+      createOnce(context) {
         return {
+          before() {
+            return !filenameForContext(context).endsWith(CHECKPOINT_MODULE);
+          },
           CallExpression(node) {
             const object = getDrizzleSetObject(node);
             if (object === null || isInsideCheckpointBoundary(node)) {
@@ -174,4 +175,4 @@ export default {
       },
     },
   },
-};
+});
