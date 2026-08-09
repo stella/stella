@@ -29,7 +29,7 @@ const timeEntrySchema = v.object({
   timerStoppedAt: v.nullable(v.string()),
   timezoneId: v.string(),
   updatedAt: v.nullable(v.string()),
-  userId: v.string(),
+  userId: v.nullable(v.string()),
   userName: v.nullable(v.string()),
   workItemId: v.nullable(v.string()),
 });

@@ -3,12 +3,12 @@ import * as v from "valibot";
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
 export type ApiValidationErrorValue = {
-  expected?: string;
+  expected?: string | undefined;
   found?: unknown;
-  message?: string;
+  message?: string | undefined;
   on: string;
-  property?: string;
-  summary?: string;
+  property?: string | undefined;
+  summary?: string | undefined;
   type: typeof API_VALIDATION_ERROR_CODE;
 };
 
