@@ -17,11 +17,3 @@ export type {
 export const desktopEditMimeTypeForFileType = (
   fileType: DesktopEditFileType,
 ): DesktopEditMimeType => DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType].mimeType;
-
-export const canCreateDesktopEditSessionForFileType = ({
-  fileType,
-  multiFormatEnabled,
-}: {
-  fileType: DesktopEditFileType;
-  multiFormatEnabled: boolean;
-}) => fileType === "docx" || multiFormatEnabled;

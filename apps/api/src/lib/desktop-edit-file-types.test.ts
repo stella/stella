@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  canCreateDesktopEditSessionForFileType,
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
@@ -9,25 +8,6 @@ import {
 } from "./desktop-edit-file-types";
 
 describe("desktop edit file types", () => {
-  test.each([
-    ["docx", false, true],
-    ["docx", true, true],
-    ["xlsx", false, false],
-    ["xlsx", true, true],
-    ["pptx", false, false],
-    ["pptx", true, true],
-  ] as const)(
-    "gates new %s sessions when multi-format is %s",
-    (fileType, multiFormatEnabled, expected) => {
-      expect(
-        canCreateDesktopEditSessionForFileType({
-          fileType,
-          multiFormatEnabled,
-        }),
-      ).toBe(expected);
-    },
-  );
-
   test("round-trips every supported file type through its canonical MIME", () => {
     for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
       const mimeType = desktopEditMimeTypeForFileType(fileType);

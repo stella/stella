@@ -190,10 +190,6 @@ stella desktop, open **Settings → Account → Desktop** in the self-hosted web
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
 
-For XLSX and PPTX, first deploy the compatible API version to every replica.
-Then enable `FEATURE_DESKTOP_MULTI_FORMAT_EDITING="true"` on the API and
-`VITE_FEATURE_DESKTOP_MULTI_FORMAT_EDITING="true"` in a new web build.
-
 ## Database migrations
 
 Apply SQL migrations from `apps/api/drizzle/` before running the API against a

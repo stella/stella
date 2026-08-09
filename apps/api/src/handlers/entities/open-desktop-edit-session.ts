@@ -10,7 +10,6 @@ import {
   entityVersions,
   folioCollabSessions,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -18,10 +17,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  canCreateDesktopEditSessionForFileType,
-  type DesktopEditFileType,
-} from "@/api/lib/desktop-edit-file-types";
+import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   expiredOwnDesktopEditSessionTargetPredicates,
   liveDesktopEditSessionPredicates,
@@ -510,24 +506,6 @@ export const openDesktopEditSessionHandler = async function* ({
               message:
                 "Target property is not an editable DOCX, XLSX, or PPTX field.",
               statusCode: 400 as const,
-            },
-          },
-        } as const;
-      }
-
-      if (
-        !canCreateDesktopEditSessionForFileType({
-          fileType: currentTarget.fileType,
-          multiFormatEnabled:
-            env.isDev || env.FEATURE_DESKTOP_MULTI_FORMAT_EDITING,
-        })
-      ) {
-        return {
-          expiredFolioCollabSessionFiles,
-          value: {
-            error: {
-              message: "Desktop editing for this file type is not enabled yet.",
-              statusCode: 503 as const,
             },
           },
         } as const;

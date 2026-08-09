@@ -102,7 +102,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_CHAT",
   "FEATURE_CONTACTS",
   "FEATURE_DESKTOP_EDITING",
-  "FEATURE_DESKTOP_MULTI_FORMAT_EDITING",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
@@ -353,8 +352,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
   VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
-  VITE_FEATURE_DESKTOP_MULTI_FORMAT_EDITING:
-    "Show XLSX/PPTX desktop editing after the API rollout is complete.",
   VITE_FEATURE_GOVERNED_WORKFLOW: "Show governed work obligations and My Work.",
   VITE_FEATURE_LEGAL_LISTS:
     "Show first-class legal lists and list-item task controls.",

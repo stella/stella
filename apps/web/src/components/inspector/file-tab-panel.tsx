@@ -58,7 +58,6 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import Tooltip from "@/components/tooltip";
-import { env } from "@/env";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -314,8 +313,6 @@ export const FileTabPanel = ({
   const desktopEditFileType = getDesktopEditFileType({
     fileName: tab.fileName,
     mimeType: tab.mimeType,
-    multiFormatEnabled:
-      import.meta.env.DEV || env.VITE_FEATURE_DESKTOP_MULTI_FORMAT_EDITING,
   });
   const desktopOpenButton =
     canUpdateEntity &&

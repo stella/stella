@@ -253,9 +253,6 @@ export const RowActions = ({
       ? getDesktopEditFileType({
           fileName: file.fileName,
           mimeType: file.mimeType,
-          multiFormatEnabled:
-            import.meta.env.DEV ||
-            env.VITE_FEATURE_DESKTOP_MULTI_FORMAT_EDITING,
         })
       : null;
   const hasDesktopEditFileType = desktopEditFileType !== null;

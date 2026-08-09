@@ -247,12 +247,6 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
-  /**
-   * Rollout gate for creating XLSX/PPTX desktop edit sessions. Keep disabled
-   * until every API replica supports multi-format checkpoint/finalize, then
-   * enable it and remove the gate after that compatibility boundary expires.
-   */
-  FEATURE_DESKTOP_MULTI_FORMAT_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
