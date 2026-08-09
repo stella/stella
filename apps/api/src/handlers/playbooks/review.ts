@@ -319,7 +319,6 @@ const reviewPlaybook = createSafeHandler(
       ),
       contentBySourceId: extractionResult.value.contentBySourceId,
       tiersBySourceId,
-      lastBlockId: extractionResult.value.lastBlockId,
       abortSignal,
       organizationId,
       workspaceId,

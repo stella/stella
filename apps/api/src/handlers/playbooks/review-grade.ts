@@ -11,6 +11,10 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  buildGroundedReviewFix,
+  type GroundedReviewFix,
+} from "@/api/lib/grounded-review-fix";
 import type {
   Position,
   PositionSeverity,
@@ -35,11 +39,7 @@ import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 // A one-click redline aligned with the folio editor's AI-edit op vocabulary
 // (`packages/folio` ai-edits/types.ts: `replaceBlock` / `insertAfterBlock`) so
 // the frontend can feed it straight into `applyAIEditOperations`.
-export type ReviewFix = {
-  kind: "replaceBlock" | "insertAfterBlock";
-  blockId: string;
-  text: string;
-};
+export type ReviewFix = GroundedReviewFix;
 
 export type ReviewFinding = {
   positionId: string;
@@ -72,7 +72,6 @@ export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
-  lastBlockId: string | null;
 };
 
 type GradedVerdict = {
@@ -119,40 +118,27 @@ const extractedFromContent = (
   }
 };
 
-// FIX targets only an actionable gap: a flagged verdict (deviation/missing) and
-// resolved ideal language to insert. A located deviating clause (primary
-// citation) is replaced; a missing clause with no citation is appended after the
-// last block. Null when there is no anchor or no ideal text.
+// A replacement is safe only for a located deviation. A missing clause has no
+// semantically verified insertion anchor, so it remains a finding until the
+// reviewer chooses where it belongs.
 const buildFix = ({
   verdict,
   citations,
   ideal,
-  lastBlockId,
 }: {
   verdict: VerdictTier | null;
   citations: readonly DocxFolioCitation[];
   ideal: string | undefined;
-  lastBlockId: string | null;
 }): ReviewFix | null => {
-  if (verdict !== "deviation" && verdict !== "missing") {
+  if (verdict !== "deviation") {
     return null;
   }
-  const text = ideal?.trim();
-  if (!text || text.length === 0) {
-    return null;
-  }
-  // Only a deviation replaces the cited paragraph; a missing clause appends the
-  // ideal language after the last block so an unrelated citation attached to a
-  // "missing" verdict never overwrites existing document text.
-  const primaryBlockId =
-    verdict === "deviation" ? citations.at(0)?.blockId : undefined;
-  if (primaryBlockId !== undefined) {
-    return { kind: "replaceBlock", blockId: primaryBlockId, text };
-  }
-  if (lastBlockId !== null) {
-    return { kind: "insertAfterBlock", blockId: lastBlockId, text };
-  }
-  return null;
+  return buildGroundedReviewFix({
+    kind: "replaceBlock",
+    proposedText: ideal,
+    supportingEvidenceVerified: true,
+    targetAnchors: citations,
+  });
 };
 
 // A graded position grades by its deterministic `check` (presence/constraint,
@@ -245,7 +231,6 @@ export const buildFindings = async ({
   positions,
   contentBySourceId,
   tiersBySourceId,
-  lastBlockId,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
   const fieldContentBySourceId = new Map<string, FieldContent>();
@@ -282,7 +267,6 @@ export const buildFindings = async ({
         verdict,
         citations,
         ideal: tiers?.ideal,
-        lastBlockId,
       }),
     };
   };

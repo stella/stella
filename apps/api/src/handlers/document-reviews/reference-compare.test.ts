@@ -111,7 +111,7 @@ describe("reference review normalization", () => {
         issue: "Liability",
         assessment: "different",
         consensus: "single",
-        rationale: "Different allocation.",
+        explanation: { type: "comparison", text: "Different allocation." },
         targetCitations: [{ blockId: "target-1", text: "Target clause" }],
         referenceCitations: [
           {
@@ -170,12 +170,11 @@ describe("reference review normalization", () => {
     expect(findings.at(0)).toMatchObject({
       assessment: "not-comparable",
       fix: null,
-      rationale:
-        "The supplied documents do not provide grounded evidence for this topic.",
+      explanation: { type: "insufficient-evidence" },
     });
   });
 
-  test("anchors a missing-clause suggestion only after the target's last block", () => {
+  test("does not invent a document-end anchor for a missing clause", () => {
     const findings = normalizeReferenceReview({
       target,
       references: [reference],
@@ -201,10 +200,31 @@ describe("reference review normalization", () => {
       ],
     });
 
+    expect(findings.at(0)?.fix).toBeNull();
+  });
+
+  test("anchors a missing-clause suggestion only to a verified target citation", () => {
+    const findings = normalizeReferenceReview({
+      target,
+      references: [reference],
+      topics,
+      rawFindings: [
+        {
+          topicId,
+          assessment: "missing-from-target",
+          consensus: "single",
+          rationale: "The reference contains a clause absent from the target.",
+          targetCitations: [{ sourceKey: "F0", blockId: "target-1" }],
+          referenceCitations: [{ sourceKey: "F1", blockId: "reference-1" }],
+          proposedText: "Suggested clause wording",
+        },
+      ],
+    });
+
     expect(findings.at(0)?.fix).toEqual({
       kind: "insertAfterBlock",
-      blockId: "target-2",
-      text: "Notice wording",
+      blockId: "target-1",
+      text: "Suggested clause wording",
     });
   });
 
@@ -233,8 +253,7 @@ describe("reference review normalization", () => {
         issue: "Liability",
         assessment: "not-comparable",
         consensus: "single",
-        rationale:
-          "The supplied documents do not provide grounded evidence for this topic.",
+        explanation: { type: "insufficient-evidence" },
         targetCitations: [],
         referenceCitations: [],
         fix: null,

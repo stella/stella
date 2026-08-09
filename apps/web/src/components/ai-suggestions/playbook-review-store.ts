@@ -13,6 +13,7 @@ import {
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
+import { topicsFromPlaybookFindings } from "@/components/ai-suggestions/playbook-review-topics.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { api } from "@/lib/api";
 import type { toAPIError } from "@/lib/errors/api";
@@ -89,29 +90,18 @@ export type PlaybookFinding = {
   matchedRef?: PlaybookMatchedRef | null;
 };
 
-export type ReferenceAssessment =
-  | "aligned"
-  | "different"
-  | "missing-from-target"
-  | "additional-in-target"
-  | "deal-specific"
-  | "not-comparable";
-export type ReferenceConsensus = "single" | "consistent" | "mixed";
+type WorkspaceApi = ReturnType<typeof api.workspaces>;
+type ReferenceReviewResponse = Awaited<
+  ReturnType<WorkspaceApi["document-reviews"]["references"]["post"]>
+>;
+type ReferenceReviewData = Exclude<
+  NonNullable<Extract<ReferenceReviewResponse, { data: unknown }>["data"]>,
+  Response
+>;
 
-export type ReferenceFinding = {
-  findingId: string;
-  topicId: string;
-  issue: string;
-  assessment: ReferenceAssessment;
-  consensus: ReferenceConsensus;
-  rationale: string;
-  targetCitations: PlaybookCitation[];
-  referenceCitations: {
-    fileFieldId: string;
-    citations: PlaybookCitation[];
-  }[];
-  fix: ReviewFindingFix | null;
-};
+export type ReferenceFinding = ReferenceReviewData["findings"][number];
+export type ReferenceAssessment = ReferenceFinding["assessment"];
+export type ReferenceConsensus = ReferenceFinding["consensus"];
 
 export type ReviewFixStatus = "pending" | "applied" | "accepted";
 
@@ -466,6 +456,16 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       playbook: playbookResponse?.data ?? null,
       references: referenceResponse?.data?.findings ?? null,
     };
+    const completedTopics =
+      references.length === 0 && results.playbook !== null
+        ? topicsFromPlaybookFindings(
+            results.playbook,
+            seededTopics.filter(
+              (topic): topic is Extract<ReviewTopic, { type: "playbook" }> =>
+                topic.type === "playbook",
+            ),
+          )
+        : seededTopics;
     set((state) => {
       if (state.sessions[key]?.runId !== runId) {
         return state;
@@ -481,7 +481,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             error: null,
             reviewedAt: Date.now(),
             runId: null,
-            topics: seededTopics,
+            topics: completedTopics,
             workspaceId,
           },
         },

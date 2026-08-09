@@ -36,7 +36,10 @@ const referenceFinding: ReferenceFinding = {
   issue: "Notice period",
   assessment: "different",
   consensus: "single",
-  rationale: "The reference uses a longer period.",
+  explanation: {
+    type: "comparison",
+    text: "The reference uses a longer period.",
+  },
   targetCitations: [],
   referenceCitations: [],
   fix: null,

@@ -10,6 +10,10 @@ import {
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import {
+  buildGroundedReviewFix,
+  type GroundedReviewFix,
+} from "@/api/lib/grounded-review-fix";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
@@ -60,11 +64,7 @@ export type ReferenceCitation = {
   text: string;
 };
 
-export type ReferenceReviewFix = {
-  kind: "replaceBlock" | "insertAfterBlock";
-  blockId: string;
-  text: string;
-};
+export type ReferenceReviewFix = GroundedReviewFix;
 
 export type ReferenceReviewFinding = {
   findingId: string;
@@ -72,7 +72,9 @@ export type ReferenceReviewFinding = {
   issue: string;
   assessment: ReferenceAssessment;
   consensus: ReferenceConsensus;
-  rationale: string;
+  explanation:
+    | { type: "comparison"; text: string }
+    | { type: "insufficient-evidence" };
   targetCitations: ReferenceCitation[];
   referenceCitations: {
     fileFieldId: SafeId<"field">;
@@ -124,26 +126,27 @@ const buildReferenceFix = ({
   proposedText,
   hasReferenceCitation,
   targetCitations,
-  targetLastBlockId,
 }: {
   assessment: ReferenceAssessment;
   proposedText: string | null;
   hasReferenceCitation: boolean;
   targetCitations: readonly ReferenceCitation[];
-  targetLastBlockId: string | null;
 }): ReferenceReviewFix | null => {
-  const text = proposedText?.trim();
-  if (!text || !hasReferenceCitation) {
-    return null;
-  }
   if (assessment === "different") {
-    const targetBlockId = targetCitations.at(0)?.blockId;
-    return targetBlockId
-      ? { kind: "replaceBlock", blockId: targetBlockId, text }
-      : null;
+    return buildGroundedReviewFix({
+      kind: "replaceBlock",
+      proposedText,
+      supportingEvidenceVerified: hasReferenceCitation,
+      targetAnchors: targetCitations,
+    });
   }
-  if (assessment === "missing-from-target" && targetLastBlockId !== null) {
-    return { kind: "insertAfterBlock", blockId: targetLastBlockId, text };
+  if (assessment === "missing-from-target") {
+    return buildGroundedReviewFix({
+      kind: "insertAfterBlock",
+      proposedText,
+      supportingEvidenceVerified: hasReferenceCitation,
+      targetAnchors: targetCitations,
+    });
   }
   return null;
 };
@@ -194,7 +197,6 @@ export const normalizeReferenceReview = ({
       ),
     ]),
   );
-  const targetLastBlockId = target.blocks.at(-1)?.id ?? null;
   const findings: ReferenceReviewFinding[] = [];
   const topicById = new Map(topics.map((topic) => [topic.topicId, topic]));
   const seenTopicIds = new Set<string>();
@@ -268,9 +270,9 @@ export const normalizeReferenceReview = ({
       issue: topic.title,
       assessment,
       consensus: references.length === 1 ? "single" : raw.consensus,
-      rationale: hasGroundedEvidence
-        ? raw.rationale.trim()
-        : "The supplied documents do not provide grounded evidence for this topic.",
+      explanation: hasGroundedEvidence
+        ? { type: "comparison", text: raw.rationale.trim() }
+        : { type: "insufficient-evidence" },
       targetCitations,
       referenceCitations,
       fix: hasGroundedEvidence
@@ -279,7 +281,6 @@ export const normalizeReferenceReview = ({
             proposedText: raw.proposedText,
             hasReferenceCitation,
             targetCitations,
-            targetLastBlockId,
           })
         : null,
     });
@@ -296,8 +297,7 @@ export const normalizeReferenceReview = ({
       issue: topic.title,
       assessment: "not-comparable",
       consensus: references.length === 1 ? "single" : "consistent",
-      rationale:
-        "The supplied documents do not provide grounded evidence for this topic.",
+      explanation: { type: "insufficient-evidence" },
       targetCitations: [],
       referenceCitations: [],
       fix: null,
@@ -311,7 +311,7 @@ const SYSTEM_PROMPT = `You compare one target legal document with one or more re
 
 References are examples, not policy and not proof of market practice. Never call the target compliant, non-compliant, standard, or non-standard. Compare substantive drafting only.
 
-Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. Use not-comparable when the documents do not support a grounded conclusion.`;
+Assess every supplied review topic exactly once. Preserve its topicId exactly. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Set consensus to mixed when the reference documents materially disagree with each other. Cite only exact block IDs supplied in the input. F0 is always the target; every other source is a reference. proposedText must be null unless the cited reference language directly supports a concrete target edit. For missing-from-target proposed text, the first target citation must identify the verified block after which the new text belongs; without a safe target anchor, proposedText must be null. Use not-comparable when the documents do not support a grounded conclusion.`;
 
 const buildReferencePrompt = (
   target: PreparedDocxFile,

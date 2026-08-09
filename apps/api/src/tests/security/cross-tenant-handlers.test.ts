@@ -256,11 +256,11 @@ const isolationCases: IsolationCase[] = [
     name: "document review source list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listDocumentReviewSources, workspaceA, {
-        query: { limit: 100 },
+        query: { limit: 50 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listDocumentReviewSources, workspaceB, {
-        query: { limit: 100 },
+        query: { limit: 50 },
       }),
     expectDenied: (result, { ids: testIds }) =>
       expectSourcePageExcludesEntityId(result, testIds.entityB1),

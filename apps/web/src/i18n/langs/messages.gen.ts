@@ -1968,11 +1968,12 @@ type Messages = {
       };
       "changeBasis": "Change review basis";
       "commentFailed": "Couldn't add the comment";
-      "comparedWithReferences": "Compared with {count} reference documents";
+      "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}";
       "description": "Choose an authored playbook, reference documents, or both.";
       "failed": "Document review failed";
       "insertFailed": "Couldn't insert the suggested wording";
       "insertSuggestion": "Insert suggested wording";
+      "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.";
       "newTopic": "New review topic";
       "noMaterialDifferences": "No material differences found";
       "noPlaybook": "No playbook";
@@ -1991,6 +1992,7 @@ type Messages = {
       "removeTopic": "Remove topic {name}";
       "results": "Review results";
       "reviewAgain": "Run another review";
+      "reviewedAgainstCombined": "{count, plural, one {Reviewed against {name} and # reference document} other {Reviewed against {name} and # reference documents}}";
       "reviewing": "Review in progress…";
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";

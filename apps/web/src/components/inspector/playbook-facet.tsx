@@ -267,7 +267,11 @@ export const PlaybookFacet = ({
 
   const addFindingComment = async (finding: ReferenceFinding) => {
     const blockId = finding.targetCitations.at(0)?.blockId;
-    if (!blockId || !registration) {
+    if (
+      !blockId ||
+      !registration ||
+      finding.explanation.type !== "comparison"
+    ) {
       return;
     }
     const editor = registration.editorRef.current;
@@ -295,7 +299,7 @@ export const PlaybookFacet = ({
           id: `review-comment-${uuidv7()}`,
           type: "commentOnBlock",
           blockId,
-          comment: { text: finding.rationale },
+          comment: { text: finding.explanation.text },
         },
       ],
       mode: "tracked-changes",
@@ -592,8 +596,8 @@ const ReferenceFilePicker = ({
         </label>
         <span className="text-muted-foreground text-[11px] tabular-nums">
           {t("inspector.review.referencesCount", {
-            count: String(references.length),
-            max: String(DOCUMENT_REVIEW_LIMITS.referencesMax),
+            count: references.length,
+            max: DOCUMENT_REVIEW_LIMITS.referencesMax,
           })}
         </span>
       </div>
@@ -703,6 +707,7 @@ const TopicEditor = ({
   onBack,
 }: TopicEditorProps) => {
   const t = useTranslations();
+  const atTopicLimit = topics.length >= DOCUMENT_REVIEW_LIMITS.topicsMax;
 
   const updateTopic = (topicId: string, next: ReviewTopic) => {
     onChange(topics.map((topic) => (topic.topicId === topicId ? next : topic)));
@@ -807,6 +812,7 @@ const TopicEditor = ({
         ))}
         <Button
           className="w-full"
+          disabled={atTopicLimit}
           onClick={() =>
             onChange([
               ...topics,
@@ -1031,6 +1037,16 @@ const ReviewBasisDescription = ({
   referenceCount: number;
 }) => {
   const t = useTranslations();
+  if (playbookName.length > 0 && referenceCount > 0) {
+    return (
+      <p className="text-muted-foreground truncate text-xs">
+        {t("inspector.review.reviewedAgainstCombined", {
+          name: playbookName,
+          count: referenceCount,
+        })}
+      </p>
+    );
+  }
   if (playbookName.length > 0) {
     return (
       <p className="text-muted-foreground truncate text-xs">
@@ -1044,7 +1060,7 @@ const ReviewBasisDescription = ({
     return (
       <p className="text-muted-foreground truncate text-xs">
         {t("inspector.review.comparedWithReferences", {
-          count: String(referenceCount),
+          count: referenceCount,
         })}
       </p>
     );
@@ -1350,11 +1366,11 @@ const ReviewResultCard = ({
                   {t("inspector.review.referenceFindings")}
                 </h4>
               )}
-              {reference.rationale.length > 0 && (
-                <p className="text-muted-foreground text-xs leading-snug text-pretty">
-                  {reference.rationale}
-                </p>
-              )}
+              <p className="text-muted-foreground text-xs leading-snug text-pretty">
+                {reference.explanation.type === "comparison"
+                  ? reference.explanation.text
+                  : t("inspector.review.insufficientEvidence")}
+              </p>
             </section>
           )}
           <ReviewEvidence
@@ -1543,7 +1559,9 @@ const ReviewResultActions = ({
   const showReferenceActions =
     reference !== null &&
     (reference.fix !== null ||
-      (reference.targetCitations.length > 0 && reference.rationale.length > 0));
+      (reference.targetCitations.length > 0 &&
+        reference.explanation.type === "comparison" &&
+        reference.explanation.text.length > 0));
   if (!showPlaybookActions && !showReferenceActions) {
     return null;
   }
@@ -1615,7 +1633,8 @@ const ReviewResultActions = ({
             />
           )}
           {reference.targetCitations.length > 0 &&
-            reference.rationale.length > 0 && (
+            reference.explanation.type === "comparison" &&
+            reference.explanation.text.length > 0 && (
               <Button
                 className="mt-2 h-7 px-2.5 text-xs"
                 disabled={!editorAvailable}
