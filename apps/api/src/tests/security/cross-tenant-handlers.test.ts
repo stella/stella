@@ -22,7 +22,10 @@ import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import readExpenses from "@/api/handlers/expenses/list";
-import { readFileHandler } from "@/api/handlers/files/get";
+import {
+  readEmailHtmlPreviewHandler,
+  readFileHandler,
+} from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
@@ -209,6 +212,27 @@ const isolationCases: IsolationCase[] = [
         recordAuditEvent: noopAuditRecorder,
       }),
     expectDenied: expectStatus(404),
+    expectPositive: expectStatus(400),
+  },
+  {
+    name: "email preview file lookup",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readEmailHtmlPreviewHandler, workspaceA, {
+        scopedDb: asTestRaw<ScopedDb>(workspaceA.scopedDb),
+        fieldId: testIds.fieldB1,
+        organizationId: testIds.orgA,
+        workspaceId: testIds.wsA1,
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readEmailHtmlPreviewHandler, workspaceB, {
+        scopedDb: asTestRaw<ScopedDb>(workspaceB.scopedDb),
+        fieldId: testIds.fieldB1,
+        organizationId: testIds.orgB,
+        workspaceId: testIds.wsB1,
+      }),
+    expectDenied: expectStatus(404),
+    // The shared isolation fixture has a text field. A same-workspace lookup
+    // reaches the MIME boundary and is rejected before any object read.
     expectPositive: expectStatus(400),
   },
   {

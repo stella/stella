@@ -32,6 +32,12 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
   msg: MSG_MIME_TYPE,
 };
 
+const EMAIL_WRITING_DIRECTIONS = {
+  auto: null,
+  ltr: null,
+  rtl: null,
+} as const;
+
 export const isEmailMimeType = (mimeType: string): boolean =>
   mimeType in EMAIL_MIME_TYPES;
 
@@ -78,10 +84,32 @@ export type ParsedEmail = {
   from: string | null;
   to: string[];
   cc: string[];
+  bcc: string[];
   date: string | null;
   body: EmailBody;
   inlineImages: InlineImage[];
   attachments: EmailAttachment[];
+};
+
+/**
+ * The safe, structured representation returned to the email inspector.
+ * Downloadable attachment content remains parser-local: the preview never
+ * returns attachment bytes or links. Safe inline CID image bytes may be
+ * embedded in bodyHtml so the sandbox can render the message faithfully.
+ */
+type EmailPreview = {
+  subject: string | null;
+  from: string | null;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  date: string | null;
+  attachments: {
+    fileName: string | null;
+    mimeType: string | null;
+    sizeBytes: number;
+  }[];
+  bodyHtml: string;
 };
 
 /**
@@ -106,6 +134,49 @@ export const emailToHtml = async (
       }),
   });
 
+export const emailToPreview = async (
+  fileBuffer: ArrayBuffer,
+  mimeType: string,
+): Promise<Result<EmailPreview, EmailParseError>> =>
+  await Result.tryPromise({
+    try: async () => buildEmailPreview(await parseEmail(fileBuffer, mimeType)),
+    catch: (cause) =>
+      new EmailParseError({
+        message: "Failed to parse email preview",
+        mimeType,
+        cause,
+      }),
+  });
+
+export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
+  const inlineContentIds = new Set(
+    parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
+  );
+  const renderedBody = renderEmailBody(parsed);
+
+  return {
+    subject: parsed.subject,
+    from: parsed.from,
+    to: parsed.to,
+    cc: parsed.cc,
+    bcc: parsed.bcc,
+    date: parsed.date,
+    attachments: parsed.attachments
+      .filter(
+        ({ contentId }) =>
+          !contentId ||
+          !inlineContentIds.has(contentId.toLowerCase()) ||
+          !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
+      )
+      .map(({ fileName, mimeType, bytes }) => ({
+        fileName,
+        mimeType,
+        sizeBytes: bytes.byteLength,
+      })),
+    bodyHtml: renderedBody.bodyHtml,
+  };
+};
+
 export const parseEmail = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
@@ -122,6 +193,7 @@ export const parsedEmailToText = (parsed: ParsedEmail): string => {
     ["From", parsed.from],
     ["To", parsed.to.join(", ")],
     ["Cc", parsed.cc.join(", ")],
+    ["Bcc", parsed.bcc.join(", ")],
     ["Date", parsed.date],
     ["Subject", parsed.subject],
   ] as const;
@@ -193,12 +265,20 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
       cc.push(formatted);
     }
   }
+  const bcc: string[] = [];
+  for (const address of arrayOrEmpty(email.bcc)) {
+    const formatted = formatAddress(address);
+    if (nonEmpty(formatted)) {
+      bcc.push(formatted);
+    }
+  }
 
   return {
     subject: email.subject ?? null,
     from: email.from ? formatAddress(email.from) : null,
     to,
     cc,
+    bcc,
     date: email.date ?? null,
     body: email.html
       ? { type: "html", html: email.html }
@@ -293,12 +373,20 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
       cc.push(formatted);
     }
   }
+  const bcc: string[] = [];
+  for (const recipient of data.bcc) {
+    const formatted = formatNameAddress(recipient.name, recipient.email);
+    if (nonEmpty(formatted)) {
+      bcc.push(formatted);
+    }
+  }
 
   return {
     subject: data.subject ?? null,
     from: formatNameAddress(data.fromName, data.fromEmail),
     to,
     cc,
+    bcc,
     date: data.date,
     body: data.html
       ? { type: "html", html: data.html }
@@ -337,6 +425,8 @@ const isSafeInlineImage = (
 const HR_STYLE = "border: none; border-top: 1px solid #d4d4d8; margin: 12px 0;";
 const PRE_STYLE =
   "white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; font-size: 13px; margin: 0;";
+const EMAIL_PREVIEW_CSP =
+  "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
 const EMAIL_PREVIEW_CSS = `
 :root {
   color-scheme: light;
@@ -413,7 +503,7 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
   const header = buildHeaderHtml(parsed);
 
   if (parsed.body.type === "text") {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
   }
 
   const $ = load(parsed.body.html);
@@ -424,11 +514,82 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
   if ($("meta[charset]").length === 0) {
     $("head").prepend('<meta charset="utf-8">');
   }
+  $("head").append(
+    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
+  );
   $("head").append('<meta name="color-scheme" content="light">');
   $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
   $("body").prepend(`${header}<hr style="${HR_STYLE}">`);
 
   return $.html();
+};
+
+/**
+ * Render a self-contained document suitable for a sandboxed iframe. The
+ * primary message metadata is intentionally excluded so the inspector can
+ * display it once, outside untrusted email HTML. Nested message headers are
+ * retained because they describe forwarded message content.
+ */
+type RenderedEmailBody = {
+  bodyHtml: string;
+  referencedContentIds: Set<string>;
+};
+
+const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
+  if (parsed.body.type === "text") {
+    return {
+      bodyHtml: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`,
+      referencedContentIds: new Set(),
+    };
+  }
+
+  const $ = load(parsed.body.html);
+  sanitizeDom($);
+  stripDuplicateNestedMessageHeaders($);
+  const referencedContentIds = getReferencedInlineContentIds($);
+  inlineCidImages($, parsed.inlineImages);
+
+  if ($("meta[charset]").length === 0) {
+    $("head").prepend('<meta charset="utf-8">');
+  }
+  $("head").append(
+    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
+  );
+  $("head").append('<meta name="color-scheme" content="light">');
+  $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
+  if (!hasExplicitWritingDirection($)) {
+    $("body").attr("dir", "auto");
+  }
+
+  return {
+    bodyHtml: `<!DOCTYPE html>${$.html()}`,
+    referencedContentIds,
+  };
+};
+
+export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
+  renderEmailBody(parsed).bodyHtml;
+
+const getReferencedInlineContentIds = ($: CheerioApi): Set<string> => {
+  const contentIds = new Set<string>();
+  $("img").each((_, element) => {
+    const src = $(element).attr("src")?.trim();
+    if (!src || !src.toLowerCase().startsWith("cid:")) {
+      return;
+    }
+    contentIds.add(stripAngleBrackets(src.slice("cid:".length)).toLowerCase());
+  });
+  return contentIds;
+};
+
+const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
+  const htmlDirection = $("html").attr("dir")?.trim().toLowerCase();
+  const bodyDirection = $("body").attr("dir")?.trim().toLowerCase();
+  return (
+    (htmlDirection !== undefined &&
+      htmlDirection in EMAIL_WRITING_DIRECTIONS) ||
+    (bodyDirection !== undefined && bodyDirection in EMAIL_WRITING_DIRECTIONS)
+  );
 };
 
 const emailBodyToText = (body: EmailBody): string => {
@@ -473,6 +634,7 @@ const URL_ATTRIBUTES = new Set([
   "background",
   "formaction",
   "poster",
+  "ping",
   "srcset",
   "xlink:href",
 ]);
@@ -480,6 +642,7 @@ const FETCHING_URL_ATTRIBUTES = new Set([
   "src",
   "background",
   "poster",
+  "ping",
   "srcset",
   "xlink:href",
 ]);
@@ -547,29 +710,33 @@ const sanitizeDom = ($: CheerioApi): void => {
 const stripDuplicateNestedMessageHeaders = ($: CheerioApi): void => {
   $(".postal-email-header").each((_, header) => {
     const body = $(header).next();
-    const bodyNode = body.get(0);
-    if (!bodyNode || !isTag(bodyNode)) {
-      return;
-    }
-
-    const html = body.html();
-    if (!html) {
-      return;
-    }
-
-    const parts = html.split(BR_TAG_RE);
-    const blankIndex = parts.findIndex((part) => part.trim() === "");
-    if (blankIndex <= 0) {
-      return;
-    }
-
-    const headerLines = parts.slice(0, blankIndex);
-    if (!headerLines.every((part) => RFC822_HEADER_LINE_RE.test(part.trim()))) {
-      return;
-    }
-
-    body.html(parts.slice(blankIndex + 1).join("<br>"));
+    stripLeadingRfc822Headers(body);
   });
+};
+
+const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
+  const bodyNode = body.get(0);
+  if (!bodyNode || !isTag(bodyNode)) {
+    return;
+  }
+
+  const html = body.html();
+  if (!html) {
+    return;
+  }
+
+  const parts = html.split(BR_TAG_RE);
+  const blankIndex = parts.findIndex((part) => part.trim() === "");
+  if (blankIndex <= 0) {
+    return;
+  }
+
+  const headerLines = parts.slice(0, blankIndex);
+  if (!headerLines.every((part) => RFC822_HEADER_LINE_RE.test(part.trim()))) {
+    return;
+  }
+
+  body.html(parts.slice(blankIndex + 1).join("<br>"));
 };
 
 const normalizeUrlAttribute = (value: string): string => {
@@ -633,6 +800,7 @@ const buildHeaderHtml = (parsed: ParsedEmail): string => {
   addRow("From", parsed.from);
   addRow("To", parsed.to.join(", "));
   addRow("Cc", parsed.cc.join(", "));
+  addRow("Bcc", parsed.bcc.join(", "));
   addRow("Date", parsed.date);
   addRow("Subject", parsed.subject);
 

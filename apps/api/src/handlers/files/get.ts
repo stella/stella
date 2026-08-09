@@ -14,7 +14,7 @@ import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
-  emailToHtml,
+  emailToPreview,
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
 import {
@@ -254,10 +254,10 @@ export const readEmailHtmlPreviewHandler = async ({
     mimeType: content.mimeType,
   });
   const fileBuffer = await readS3ArrayBuffer(fileKey);
-  const htmlResult = await emailToHtml(fileBuffer, emailMimeType);
+  const previewResult = await emailToPreview(fileBuffer, emailMimeType);
 
-  if (Result.isError(htmlResult)) {
-    captureError(htmlResult.error, {
+  if (Result.isError(previewResult)) {
+    captureError(previewResult.error, {
       fieldId,
       mimeType: emailMimeType,
       workspaceId,
@@ -265,13 +265,7 @@ export const readEmailHtmlPreviewHandler = async ({
     return status(422, { message: "Failed to render email preview" });
   }
 
-  return {
-    fileId: content.id,
-    fileName: content.fileName,
-    html: htmlResult.value,
-    mimeType: "text/html",
-    originalMimeType: emailMimeType,
-  };
+  return previewResult.value;
 };
 
 // ── Stamped download (separate endpoint) ────────────────

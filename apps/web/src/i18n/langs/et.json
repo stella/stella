@@ -1223,6 +1223,16 @@
     "wordShortcut": "Initsiaalid",
     "wordShortcutPlaceholder": "nt JK"
   },
+  "emailViewer": {
+    "attachments": "Manused",
+    "bcc": "Pimekoopia",
+    "bodyTitle": "E-kirja sisu",
+    "cc": "Koopia",
+    "from": "Saatja",
+    "noSubject": "(Teema puudub)",
+    "to": "Saajad",
+    "unnamedAttachment": "Nimetu manus"
+  },
   "errors": {
     "actionFailed": "Toiming ebaõnnestus",
     "api": {

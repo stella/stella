@@ -1223,6 +1223,16 @@
     "wordShortcut": "Initialen",
     "wordShortcutPlaceholder": "z. B. JK"
   },
+  "emailViewer": {
+    "attachments": "Anhänge",
+    "bcc": "Blindkopie",
+    "bodyTitle": "E-Mail-Inhalt",
+    "cc": "Kopie",
+    "from": "Absender",
+    "noSubject": "(Kein Betreff)",
+    "to": "Empfänger",
+    "unnamedAttachment": "Unbenannter Anhang"
+  },
   "errors": {
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {

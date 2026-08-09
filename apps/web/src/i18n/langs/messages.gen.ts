@@ -1226,6 +1226,16 @@ type Messages = {
     "wordShortcut": "Initials";
     "wordShortcutPlaceholder": "e.g. JK";
   };
+  "emailViewer": {
+    "attachments": "Attachments";
+    "bcc": "Bcc";
+    "bodyTitle": "Email body";
+    "cc": "Cc";
+    "from": "Sender";
+    "noSubject": "(No subject)";
+    "to": "Recipients";
+    "unnamedAttachment": "Unnamed attachment";
+  };
   "errors": {
     "actionFailed": "Action failed";
     "api": {
