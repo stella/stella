@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -97,14 +98,22 @@ describe("email viewer", () => {
       fieldId: "field-3",
       workspaceId: "workspace-3",
     });
-    await expect(
-      queryClient.fetchQuery({
-        ...options,
-        queryFn: async () => {
-          throw new Error("preview unavailable");
-        },
-      }),
-    ).rejects.toThrow("preview unavailable");
+    const fetchResult = await Result.tryPromise({
+      try: async () =>
+        await queryClient.fetchQuery({
+          ...options,
+          queryFn: async () => {
+            throw new Error("preview unavailable");
+          },
+        }),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(fetchResult)).toBe(true);
+    if (Result.isError(fetchResult)) {
+      expect(fetchResult.error).toMatchObject({
+        message: "preview unavailable",
+      });
+    }
 
     const html = renderWithProviders(
       <EmailHtmlViewer fieldId="field-3" workspaceId="workspace-3" />,
