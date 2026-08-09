@@ -161,7 +161,6 @@ export const AiRewriteControl = ({
                   runRewrite(customInstruction.trim());
                 }
               }}
-              placeholder={t("refinePlaceholder")}
               rows={3}
               value={customInstruction}
             />
