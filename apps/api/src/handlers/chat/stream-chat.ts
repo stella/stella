@@ -484,31 +484,35 @@ export const streamChat = async ({
     workspaceId,
   });
 
-  const output = processServerChatStream({
+  const persistenceVisibleStream = transformPersistenceVisibleStream({
+    boundary: thirdPartyBoundary,
+    initialRestorationPlaceholders:
+      thirdPartyBoundary.type === "anonymized"
+        ? collectInitialRestorationPlaceholders({
+            latestMessageId,
+            messages: preparedMessageList,
+            redactionMap: thirdPartyBoundary.redactionMap,
+          })
+        : new Set<string>(),
+    restorationPairs,
+    source: stream,
+  });
+  const processedStream = processServerChatStream({
     abortSignal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     preservedTerminalMessageId: owningAssistantMessageId,
     onFinish,
     processor,
-    source: transformOutgoingStream({
-      boundary: thirdPartyBoundary,
-      initialRestorationPlaceholders:
-        thirdPartyBoundary.type === "anonymized"
-          ? collectInitialRestorationPlaceholders({
-              latestMessageId,
-              messages: preparedMessageList,
-              redactionMap: thirdPartyBoundary.redactionMap,
-            })
-          : new Set<string>(),
-      resolveAssistantTextRefs,
-      resolveAssistantToolInputRefs,
-      resolveAssistantToolOutputRefs,
-      resolveAssistantValueRefs,
-      restorationPairs,
-      source: stream,
-    }),
+    source: persistenceVisibleStream,
     mapMessageId: mapAssistantMessageId,
     getResponseMessage: () => responseMessage,
+  });
+  const output = transformClientVisibleStream({
+    resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
+    resolveAssistantValueRefs,
+    source: processedStream,
   });
 
   return toServerSentEventsResponse(output, { abortController });
@@ -1862,6 +1866,53 @@ export const transformOutgoingStream = async function* ({
     yield flushed;
   }
 };
+
+type TransformPersistenceVisibleStreamProps = Pick<
+  TransformOutgoingStreamProps,
+  "boundary" | "initialRestorationPlaceholders" | "restorationPairs" | "source"
+>;
+
+/** Deanonymize the processor's copy while preserving model-facing chat refs. */
+export const transformPersistenceVisibleStream = ({
+  boundary,
+  initialRestorationPlaceholders,
+  restorationPairs,
+  source,
+}: TransformPersistenceVisibleStreamProps): AsyncIterable<StreamChunk> =>
+  transformOutgoingStream({
+    boundary,
+    initialRestorationPlaceholders,
+    restorationPairs,
+    source,
+  });
+
+type TransformClientVisibleStreamProps = Pick<
+  TransformOutgoingStreamProps,
+  | "resolveAssistantTextRefs"
+  | "resolveAssistantToolInputRefs"
+  | "resolveAssistantToolOutputRefs"
+  | "resolveAssistantValueRefs"
+  | "source"
+>;
+
+/** Resolve refs only after the server-side processor has consumed its copy. */
+export const transformClientVisibleStream = ({
+  resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
+  resolveAssistantValueRefs,
+  source,
+}: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
+  transformOutgoingStream({
+    boundary: { type: "raw" },
+    initialRestorationPlaceholders: new Set(),
+    resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
+    resolveAssistantValueRefs,
+    restorationPairs: [],
+    source,
+  });
 
 type OutgoingChunkTransformerOptions = {
   boundary: ChatThirdPartyBoundary;

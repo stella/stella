@@ -151,9 +151,6 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null &&
   Object.getPrototypeOf(value) === Object.prototype;
 
-const isUnknownArray = (value: unknown): value is unknown[] =>
-  Array.isArray(value);
-
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
@@ -206,30 +203,6 @@ export type ResolveRefIdProps = {
   value: unknown;
 };
 
-type AssistantRefFieldPolicy = {
-  kind: ChatRefKind;
-  shape: "many" | "one";
-};
-
-/**
- * Structured fields whose values are model-facing chat refs. The same policy
- * drives persistence resolution and replay hydration, so an opaque string in
- * any other field can never be mistaken for a ref merely because it is named
- * `mat_1`, `ent_1`, `contact_1`, or `prop_1`.
- */
-const ASSISTANT_REF_FIELD_POLICY = new Map<string, AssistantRefFieldPolicy>([
-  ["contactRef", { kind: "contact", shape: "one" }],
-  ["contactRefs", { kind: "contact", shape: "many" }],
-  ["dependsOnPropertyRef", { kind: "property", shape: "one" }],
-  ["entityRef", { kind: "entity", shape: "one" }],
-  ["entityRefs", { kind: "entity", shape: "many" }],
-  ["matterRef", { kind: "matter", shape: "one" }],
-  ["matterRefs", { kind: "matter", shape: "many" }],
-  ["parentRef", { kind: "entity", shape: "one" }],
-  ["propertyRef", { kind: "property", shape: "one" }],
-  ["propertyRefs", { kind: "property", shape: "many" }],
-]);
-
 export type ChatRefRegistry = {
   /**
    * Deduped union of every workspace id any tool (including subagents)
@@ -242,17 +215,12 @@ export type ChatRefRegistry = {
    */
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
-  hydrateAssistantValueRefs: (
-    value: unknown,
-    inputState: ChatRefInputState,
-  ) => unknown;
+  hydrateAssistantValueRefs: (value: unknown) => unknown;
   /**
    * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
-   * kind rather than by key name. `hydrateAssistantValueRefs` recognizes the
-   * *output* projection's key names (`matterRef`, `entityRef`, ...); a tool
-   * call's own input params are named per tool (`matter_id`, `task_id`), so
-   * their kinds come from the registry adapter's declared input-ref map and
-   * land here. Empty and non-string values are returned unchanged.
+   * kind rather than by key name. Tool input and output kinds come from the
+   * registry adapter's declared path policies. Empty and non-string values
+   * are returned unchanged.
    */
   hydrateRefId: (props: HydrateRefIdProps) => unknown;
   /** Resolve one declared model-facing ref without guessing from its text. */
@@ -437,23 +405,12 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       return value;
     }
 
-    const entries: [string, unknown][] = [];
-    for (const [key, child] of Object.entries(value)) {
-      const policy = ASSISTANT_REF_FIELD_POLICY.get(key);
-      if (policy?.shape === "one") {
-        entries.push([key, resolveRefId({ kind: policy.kind, value: child })]);
-        continue;
-      }
-      if (policy?.shape === "many" && Array.isArray(child)) {
-        entries.push([
-          key,
-          child.map((item) => resolveRefId({ kind: policy.kind, value: item })),
-        ]);
-        continue;
-      }
-      entries.push([key, resolveAssistantValueRefs(child)]);
-    }
-    return Object.fromEntries(entries);
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        resolveAssistantValueRefs(child),
+      ]),
+    );
   };
 
   const toHydratedMatterRef = (
@@ -507,31 +464,6 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     });
   };
 
-  const getHydrationWorkspaceId = (
-    value: Record<string, unknown>,
-    inputState: ChatRefInputState,
-  ): unknown => {
-    if (isPersistedIdForInput(value["matterRef"], inputState)) {
-      return value["matterRef"];
-    }
-
-    if (isPersistedIdForInput(value["workspaceId"], inputState)) {
-      return value["workspaceId"];
-    }
-
-    const matterRefs = value["matterRefs"];
-    if (isUnknownArray(matterRefs) && matterRefs.length === 1) {
-      return matterRefs[0];
-    }
-
-    return undefined;
-  };
-
-  const getHydrationWorkspaceIds = (value: Record<string, unknown>) => {
-    const matterRefs = value["matterRefs"];
-    return isUnknownArray(matterRefs) ? matterRefs : [];
-  };
-
   const hydrateRefId = ({
     inputState,
     kind,
@@ -556,63 +488,25 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     }
   };
 
-  const hydrateAssistantValueRefs = (
-    value: unknown,
-    inputState: ChatRefInputState,
-  ): unknown => {
+  const hydrateAssistantValueRefs = (value: unknown): unknown => {
     if (typeof value === "string") {
       return hydrateAssistantTextRefs(value);
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => hydrateAssistantValueRefs(item, inputState));
+      return value.map((item) => hydrateAssistantValueRefs(item));
     }
 
     if (!isPlainRecord(value)) {
       return value;
     }
 
-    const workspaceId = getHydrationWorkspaceId(value, inputState);
-    const workspaceIds = getHydrationWorkspaceIds(value);
-    const entries: [string, unknown][] = [];
-
-    for (const [key, child] of Object.entries(value)) {
-      const policy = ASSISTANT_REF_FIELD_POLICY.get(key);
-      if (policy?.shape === "one") {
-        entries.push([
-          key,
-          hydrateRefId({
-            inputState,
-            kind: policy.kind,
-            value: child,
-            workspaceId,
-          }),
-        ]);
-        continue;
-      }
-
-      if (policy?.shape === "many" && Array.isArray(child)) {
-        entries.push([
-          key,
-          child.map((item, index) =>
-            hydrateRefId({
-              inputState,
-              kind: policy.kind,
-              value: item,
-              workspaceId:
-                policy.kind === "entity" && workspaceIds.length === child.length
-                  ? workspaceIds.at(index)
-                  : workspaceId,
-            }),
-          ),
-        ]);
-        continue;
-      }
-
-      entries.push([key, hydrateAssistantValueRefs(child, inputState)]);
-    }
-
-    return Object.fromEntries(entries);
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        hydrateAssistantValueRefs(child),
+      ]),
+    );
   };
 
   const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {

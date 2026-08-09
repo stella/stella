@@ -5,6 +5,11 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
 import {
+  CREATE_DOCUMENT_TOOL_NAME,
+  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  UPDATE_ENTITY_FIELDS_TOOL_NAME,
+} from "../native-chat-tool-names";
+import {
   hydrateRegistryToolOutputRefs,
   resolveRegistryToolOutputRefs,
 } from "./output-ref-resolution";
@@ -125,5 +130,104 @@ describe("registry tool output ref resolution", () => {
         toolName: "read_document",
       }),
     ).toEqual({ entityId: "ent_1" });
+  });
+
+  test("round-trips create-document refs without rewriting opaque fields", () => {
+    const resolvingRegistry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const matterRef = resolvingRegistry.toMatterRef(workspaceId);
+    const entityRef = resolvingRegistry.toEntityRef({ entityId, workspaceId });
+    const modelOutput = {
+      decisionId: entityRef,
+      entityRef,
+      matterRef,
+      workspaceId,
+    };
+
+    const persistedOutput = resolveRegistryToolOutputRefs({
+      output: modelOutput,
+      refRegistry: resolvingRegistry,
+      toolName: CREATE_DOCUMENT_TOOL_NAME,
+    });
+
+    expect(persistedOutput).toEqual({
+      decisionId: entityRef,
+      entityRef: entityId,
+      matterRef: workspaceId,
+      workspaceId,
+    });
+    expect(
+      hydrateRegistryToolOutputRefs({
+        inputState: PERSISTED_REF_INPUT_STATE,
+        output: persistedOutput,
+        refRegistry: createChatRefRegistry(),
+        toolName: CREATE_DOCUMENT_TOOL_NAME,
+      }),
+    ).toEqual(modelOutput);
+  });
+
+  test("round-trips create-workspace-document refs", () => {
+    const resolvingRegistry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const matterRef = resolvingRegistry.toMatterRef(workspaceId);
+    const entityRef = resolvingRegistry.toEntityRef({ entityId, workspaceId });
+    const modelOutput = { entityRef, matterRef };
+
+    const persistedOutput = resolveRegistryToolOutputRefs({
+      output: modelOutput,
+      refRegistry: resolvingRegistry,
+      toolName: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+    });
+
+    expect(persistedOutput).toEqual({
+      entityRef: entityId,
+      matterRef: workspaceId,
+    });
+    expect(
+      hydrateRegistryToolOutputRefs({
+        inputState: PERSISTED_REF_INPUT_STATE,
+        output: persistedOutput,
+        refRegistry: createChatRefRegistry(),
+        toolName: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+      }),
+    ).toEqual(modelOutput);
+  });
+
+  test("round-trips entity update output refs from persisted input context", () => {
+    const resolvingRegistry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const propertyId = toSafeId<"property">("property-opaque");
+    const entityRef = resolvingRegistry.toEntityRef({ entityId, workspaceId });
+    const propertyRef = resolvingRegistry.toPropertyRef(propertyId);
+    const persistedOutput = resolveRegistryToolOutputRefs({
+      output: { entityRef, propertyRef },
+      refRegistry: resolvingRegistry,
+      toolName: UPDATE_ENTITY_FIELDS_TOOL_NAME,
+    });
+
+    expect(persistedOutput).toEqual({
+      entityRef: entityId,
+      propertyRef: propertyId,
+    });
+
+    expect(
+      hydrateRegistryToolOutputRefs({
+        entityContexts: [
+          {
+            entity: { type: "entity", id: entityId },
+            toolCallId: "tool-1",
+            workspace: { type: "workspace", id: workspaceId },
+          },
+        ],
+        input: { entityRef: entityId },
+        inputState: PERSISTED_REF_INPUT_STATE,
+        output: persistedOutput,
+        refRegistry: createChatRefRegistry(),
+        toolName: UPDATE_ENTITY_FIELDS_TOOL_NAME,
+      }),
+    ).toEqual({ entityRef, propertyRef });
   });
 });

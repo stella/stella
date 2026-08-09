@@ -11,6 +11,7 @@ import {
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
 
+import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "../native-chat-tool-names";
 import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
@@ -60,6 +61,43 @@ describe("registry tool input ref hydration", () => {
       matter_id: workspaceId,
       nested: { title: matterRef },
     });
+  });
+
+  test("round-trips the native entity update's declared refs", () => {
+    const resolvingRegistry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(WS_UUID);
+    const entityId = toSafeId<"entity">(TASK_UUID);
+    const propertyId = toSafeId<"property">("property-status");
+    const matterRef = resolvingRegistry.toMatterRef(workspaceId);
+    const entityRef = resolvingRegistry.toEntityRef({ entityId, workspaceId });
+    const propertyRef = resolvingRegistry.toPropertyRef(propertyId);
+    const modelInput = {
+      matterRef,
+      entityRef,
+      propertyRef,
+      value: { matterRef },
+    };
+
+    const persistedInput = resolveRegistryToolInputRefs({
+      input: modelInput,
+      refRegistry: resolvingRegistry,
+      toolName: UPDATE_ENTITY_FIELDS_TOOL_NAME,
+    });
+
+    expect(persistedInput).toEqual({
+      matterRef: workspaceId,
+      entityRef: entityId,
+      propertyRef: propertyId,
+      value: { matterRef },
+    });
+    expect(
+      hydrateRegistryToolInputRefs({
+        input: persistedInput,
+        inputState: PERSISTED_REF_INPUT_STATE,
+        refRegistry: createChatRefRegistry(),
+        toolName: UPDATE_ENTITY_FIELDS_TOOL_NAME,
+      }),
+    ).toEqual(modelInput);
   });
 
   /**

@@ -10,6 +10,7 @@ import type {
   ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
 
+import { NATIVE_CHAT_REF_POLICY } from "./native-chat-ref-policy";
 import type { InputRefParam, RegistryRefFieldMapEntry } from "./ref-field-map";
 import {
   READ_TOOL_REF_FIELD_MAP,
@@ -26,11 +27,10 @@ import {
  * Replaying the row therefore re-mints only resolved refs; a failed call stays
  * failed instead of turning its unknown token into an invented resource id.
  *
- * `hydrateAssistantValueRefs` cannot do this on its own: it recognizes the
- * *output* projection's key names (`matterRef`, `entityRef`, ...), while a tool
- * call's input params are named per tool (`matter_id`, `task_id`). The kinds
- * come from the same declared map that drives dehydration, so the two sides
- * cannot drift.
+ * Generic value hydration only rewrites canonical links. Tool-call input ids
+ * are mediated through the declared map that also drives dehydration, so
+ * external payload keys cannot acquire ref semantics by coincidence and the
+ * two directions cannot drift.
  */
 
 /**
@@ -47,8 +47,16 @@ const buildInputRefsByTool = (): ReadonlyMap<
     ...Object.entries(READ_TOOL_REF_FIELD_MAP),
     ...Object.entries(WRITE_TOOL_REF_FIELD_MAP),
   ];
+  for (const [toolName, policy] of Object.entries(NATIVE_CHAT_REF_POLICY)) {
+    if (policy.inputRefs.length > 0) {
+      byTool.set(toolName, policy.inputRefs);
+    }
+  }
   for (const [toolName, entry] of entries) {
     if (entry.chatProjectable && entry.inputRefs.length > 0) {
+      if (byTool.has(toolName)) {
+        panic(`Duplicate chat input ref policy: ${toolName}`);
+      }
       byTool.set(toolName, entry.inputRefs);
     }
   }

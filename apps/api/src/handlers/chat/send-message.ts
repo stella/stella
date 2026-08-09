@@ -2695,10 +2695,8 @@ const hydrateAssistantMessageRefs = ({
         }
       }
     }
-    const hydrated = refRegistry.hydrateAssistantValueRefs(
-      withDeclaredToolRefs,
-      inputState,
-    );
+    const hydrated =
+      refRegistry.hydrateAssistantValueRefs(withDeclaredToolRefs);
     if (!isChatPart(hydrated)) {
       panic("Hydrating assistant refs changed the message part shape");
     }

@@ -11,6 +11,7 @@ import type {
   ChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 
+import { NATIVE_CHAT_REF_POLICY } from "./native-chat-ref-policy";
 import type { RegistryRefFieldMapEntry } from "./ref-field-map";
 import {
   READ_TOOL_REF_FIELD_MAP,
@@ -57,6 +58,10 @@ const buildOutputRefPathsByTool = (): ReadonlyMap<
     ...Object.entries(WRITE_TOOL_REF_FIELD_MAP),
   ];
 
+  for (const [toolName, policy] of Object.entries(NATIVE_CHAT_REF_POLICY)) {
+    pathsByTool.set(toolName, policy.outputRefs.map(parseRefPath));
+  }
+
   for (const [toolName, entry] of entries) {
     if (!entry.chatProjectable) {
       continue;
@@ -65,6 +70,9 @@ const buildOutputRefPathsByTool = (): ReadonlyMap<
       parseRefPath,
     );
     if (paths.length > 0) {
+      if (pathsByTool.has(toolName)) {
+        panic(`Duplicate chat output ref policy: ${toolName}`);
+      }
       pathsByTool.set(toolName, paths);
     }
   }

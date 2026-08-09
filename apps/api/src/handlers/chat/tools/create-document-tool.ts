@@ -1,9 +1,10 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
-export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
+export { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 
 // Client-executed: the server defines schema only (no `execute`).
 // The chat client resolves the destination matter (using the
