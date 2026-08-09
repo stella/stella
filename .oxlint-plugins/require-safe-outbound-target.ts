@@ -272,16 +272,21 @@ export default eslintCompatPlugin({
 
         const variableHasDeepMutation = (variable: ScopeVariable): boolean =>
           variable.references.some((reference) => {
-            let current = reference.identifier;
-            if (!isAstNode(current)) {
+            const identifier = reference.identifier;
+            if (!isAstNode(identifier)) {
               return false;
             }
-            while (
-              isAstNode(current.parent) &&
-              current.parent.type === "MemberExpression" &&
-              current.parent.object === current
-            ) {
-              current = current.parent;
+            let current: AstNode = identifier;
+            while (true) {
+              const member = current.parent;
+              if (
+                !isAstNode(member) ||
+                member.type !== "MemberExpression" ||
+                member.object !== current
+              ) {
+                break;
+              }
+              current = member;
               const parent = current.parent;
               if (
                 isAstNode(parent) &&
@@ -301,10 +306,10 @@ export default eslintCompatPlugin({
                 parent.callee === current
               ) {
                 const methodName =
-                  current.computed === false
-                    ? getPropertyName(current.property)
-                    : isStringLiteral(current.property)
-                      ? current.property.value
+                  member.computed === false
+                    ? getPropertyName(member.property)
+                    : isStringLiteral(member.property)
+                      ? member.property.value
                       : null;
                 if (
                   methodName !== null &&
@@ -747,7 +752,7 @@ export default eslintCompatPlugin({
             }
             const target = node.arguments.at(0);
             const pattern = staticPattern(target);
-            if (!hasFixedOrigin(pattern)) {
+            if (pattern === null || !hasFixedOrigin(pattern)) {
               context.report({
                 node: target ?? node,
                 messageId: "unsafeOutboundTarget",

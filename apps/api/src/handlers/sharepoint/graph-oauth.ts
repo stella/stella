@@ -24,9 +24,6 @@ import type { RefreshToken } from "@/api/lib/secret-brands";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
 
-/** Microsoft Graph v1.0 API base. */
-export const GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0";
-
 // A scope is read-only unless its (case-insensitive) name contains "write".
 // Passing a write scope to `readOnlyScope` makes the argument type `never`,
 // so a `*.ReadWrite.*` scope cannot be added to the set below — the bug class

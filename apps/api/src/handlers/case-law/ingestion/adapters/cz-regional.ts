@@ -507,16 +507,6 @@ const makeCursor = (state: CursorState): string =>
     ? `${state.date}:${state.page}:${state.emptyDays}`
     : `${state.date}:${state.page}`;
 
-/** Build the day endpoint URL from a YYYY-MM-DD date. */
-const buildDayUrl = (date: string, page: number): string => {
-  const parts = date.split("-").map(Number);
-  const year = parts[0] ?? 0;
-  const month = parts[1] ?? 1;
-  const day = parts[2] ?? 1;
-
-  return `${BASE_URL}/opendata/${year}/${month}/${day}?page=${page}`;
-};
-
 /** Advance a YYYY-MM-DD string by N days (default 1). */
 const advanceDate = (dateStr: string, days: number = 1): string => {
   const parts = dateStr.split("-").map(Number);
@@ -569,7 +559,6 @@ type FetchListPageOptions = {
   cursor: string | null;
   signal?: AbortSignal | undefined;
   state: CursorState;
-  url: string;
 };
 
 const isRetryableListFailure = (error: AdapterFetchError): boolean =>
@@ -582,7 +571,6 @@ const fetchListPage = async ({
   cursor,
   signal,
   state,
-  url,
 }: FetchListPageOptions) =>
   await Result.tryPromise(
     {
@@ -591,9 +579,10 @@ const fetchListPage = async ({
           throw new DOMException("Cycle aborted", "AbortError");
         }
 
-        // SAFETY: this private helper's only caller supplies buildDayUrl(),
-        // which fixes the origin to BASE_URL.
-        // eslint-disable-next-line require-safe-outbound-target/require-safe-outbound-target
+        const [year = 0, month = 1, day = 1] = state.date
+          .split("-")
+          .map(Number);
+        const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
         const response = await fetchWithTimeout(url, {
           signal: attemptSignal,
           headers: {
@@ -737,14 +726,12 @@ export const czRegionalAdapter: SourceAdapter = {
           ? parseCursor(cursor)
           : { date: defaultDate(), page: 0, emptyDays: 0 };
 
-        const url = buildDayUrl(state.date, state.page);
         const fetchT0 = performance.now();
 
         const responseResult = await fetchListPage({
           cursor,
           signal,
           state,
-          url,
         });
         if (Result.isError(responseResult)) {
           if (signal?.aborted) {
