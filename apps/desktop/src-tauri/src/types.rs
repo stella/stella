@@ -8,13 +8,33 @@ pub const XLSX_MIME_TYPE: &str =
 pub const PPTX_MIME_TYPE: &str =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DesktopEditFileType {
-  Docx,
-  Xlsx,
-  Pptx,
+macro_rules! define_desktop_edit_file_types {
+  ($($variant:ident => $wire_name:literal),+ $(,)?) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum DesktopEditFileType {
+      $(
+        #[serde(rename = $wire_name)]
+        $variant,
+      )+
+    }
+
+    impl DesktopEditFileType {
+      pub const ALL: &[Self] = &[$(Self::$variant),+];
+
+      pub const fn wire_name(self) -> &'static str {
+        match self {
+          $(Self::$variant => $wire_name),+
+        }
+      }
+    }
+  };
 }
+
+define_desktop_edit_file_types!(
+  Docx => "docx",
+  Xlsx => "xlsx",
+  Pptx => "pptx",
+);
 
 impl DesktopEditFileType {
   pub const fn mime_type(self) -> &'static str {
@@ -274,11 +294,34 @@ mod tests {
   fn shared_desktop_edit_file_contract_matches_rust() {
     let source =
       include_str!("../../../../packages/api-contract/src/desktop-edit-file-types.ts");
-    for (key, file_type) in [
-      ("docx", DesktopEditFileType::Docx),
-      ("xlsx", DesktopEditFileType::Xlsx),
-      ("pptx", DesktopEditFileType::Pptx),
-    ] {
+    let list_prefix = "export const DESKTOP_EDIT_FILE_TYPES = [";
+    let list_start = source
+      .find(list_prefix)
+      .unwrap_or_else(|| panic!("shared contract has no file type list"));
+    let list = &source[list_start + list_prefix.len()..];
+    let list_end = list
+      .find("] as const;")
+      .unwrap_or_else(|| panic!("shared contract file type list has no end"));
+    let shared_file_types = list[..list_end]
+      .split(',')
+      .map(str::trim)
+      .filter(|value| !value.is_empty())
+      .map(|value| {
+        value
+          .strip_prefix('"')
+          .and_then(|value| value.strip_suffix('"'))
+          .unwrap_or_else(|| panic!("invalid shared file type {value}"))
+      })
+      .collect::<Vec<_>>();
+    let rust_file_types = DesktopEditFileType::ALL
+      .iter()
+      .map(|file_type| file_type.wire_name())
+      .collect::<Vec<_>>();
+
+    assert_eq!(shared_file_types, rust_file_types);
+
+    for file_type in DesktopEditFileType::ALL {
+      let key = file_type.wire_name();
       let block_start = source
         .find(&format!("  {key}: {{"))
         .unwrap_or_else(|| panic!("shared contract is missing {key}"));
