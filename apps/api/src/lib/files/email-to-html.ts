@@ -17,6 +17,7 @@ import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 
 export const EML_MIME_TYPE = "message/rfc822";
@@ -75,6 +76,14 @@ export type EmailAttachment = {
   bytes: Uint8Array;
 };
 
+export type EmailAttachmentDescriptor = {
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number;
+  previewable: boolean;
+};
+
 type EmailBody =
   | { type: "html"; html: string }
   | { type: "text"; text: string };
@@ -97,18 +106,14 @@ export type ParsedEmail = {
  * returns attachment bytes or links. Safe inline CID image bytes may be
  * embedded in bodyHtml so the sandbox can render the message faithfully.
  */
-type EmailPreview = {
+export type EmailPreview = {
   subject: string | null;
   from: string | null;
   to: string[];
   cc: string[];
   bcc: string[];
   date: string | null;
-  attachments: {
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-  }[];
+  attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
@@ -138,9 +143,11 @@ export const emailToHtml = async (
 export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
+  options: { createAttachmentId?: (attachmentIndex: number) => string } = {},
 ): Promise<Result<EmailPreview, EmailParseError>> =>
   await Result.tryPromise({
-    try: async () => buildEmailPreview(await parseEmail(fileBuffer, mimeType)),
+    try: async () =>
+      buildEmailPreview(await parseEmail(fileBuffer, mimeType), options),
     catch: (cause) =>
       new EmailParseError({
         message: "Failed to parse email preview",
@@ -149,7 +156,12 @@ export const emailToPreview = async (
       }),
   });
 
-export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
+export const buildEmailPreview = (
+  parsed: ParsedEmail,
+  {
+    createAttachmentId = (attachmentIndex) => `attachment-${String(attachmentIndex)}`,
+  }: { createAttachmentId?: (attachmentIndex: number) => string } = {},
+): EmailPreview => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
@@ -163,20 +175,35 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
     bcc: parsed.bcc,
     date: parsed.date,
     attachments: parsed.attachments
+      .map((attachment, attachmentIndex) => ({ attachment, attachmentIndex }))
       .filter(
-        ({ contentId }) =>
-          !contentId ||
-          !inlineContentIds.has(contentId.toLowerCase()) ||
-          !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
+        ({ attachment: { contentId }, attachmentIndex }) =>
+          attachmentIndex < MAX_EMAIL_ATTACHMENT_DESCRIPTORS &&
+          (!contentId ||
+            !inlineContentIds.has(contentId.toLowerCase()) ||
+            !renderedBody.referencedContentIds.has(contentId.toLowerCase())),
       )
-      .map(({ fileName, mimeType, bytes }) => ({
-        fileName,
-        mimeType,
-        sizeBytes: bytes.byteLength,
+      .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
+      .map(({ attachment, attachmentIndex }) => ({
+        id: createAttachmentId(attachmentIndex),
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.bytes.byteLength,
+        previewable: isEmailAttachmentPreviewable(attachment.mimeType),
       })),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
   };
+};
+
+export const isEmailAttachmentPreviewable = (
+  mimeType: string | null,
+): boolean => {
+  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
+  return (
+    normalized === "application/pdf" ||
+    /^image\/(?:png|jpe?g|gif|webp|bmp|tiff)$/u.test(normalized)
+  );
 };
 
 export const parseEmail = async (

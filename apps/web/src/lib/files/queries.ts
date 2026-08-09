@@ -30,9 +30,11 @@ type EmailHtmlPreviewData = {
   bcc: string[];
   date: string | null;
   attachments: {
+    id: string;
     fileName: string | null;
     mimeType: string | null;
     sizeBytes: number;
+    previewable: boolean;
   }[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
@@ -117,6 +119,30 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         bodyFolds: data.bodyFolds,
         bodyHtml: data.bodyHtml,
       } satisfies EmailHtmlPreviewData;
+    },
+  });
+
+export const emailAttachmentPreviewOptions = ({
+  attachmentId,
+  fieldId,
+  workspaceId,
+}: FileOptionsProps & { attachmentId: string }) =>
+  queryOptions({
+    enabled: attachmentId.length > 0,
+    queryKey: [...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }), "attachment", attachmentId],
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .files({ workspaceId })
+        ["email-attachment"]({ fieldId, attachmentId })
+        .get({ query: { disposition: "inline" }, fetch: { signal } });
+      const data = unwrapEden(response);
+      if (!(data instanceof Response)) {
+        throw new TypeError("Email attachment preview returned no bytes");
+      }
+      return {
+        buffer: await data.arrayBuffer(),
+        mimeType: data.headers.get("content-type") ?? "application/octet-stream",
+      };
     },
   });
 

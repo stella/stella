@@ -9,6 +9,7 @@ import { isEmailFile, isMarkdownFile } from "@/lib/consts";
 // Minimize button.
 export const FACETS: readonly Facet[] = [
   "preview",
+  "attachments",
   "metadata",
   "versions",
   "suggestions",
@@ -16,6 +17,7 @@ export const FACETS: readonly Facet[] = [
   "anonymization",
 ];
 export const FULLVIEW_FACETS: readonly Facet[] = [
+  "attachments",
   "metadata",
   "versions",
   "suggestions",

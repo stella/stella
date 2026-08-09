@@ -22,6 +22,7 @@ export type FileTab = {
   metadataLane?: "closed" | "expanded" | undefined;
   facet?:
     | "preview"
+    | "attachments"
     | "metadata"
     | "versions"
     | "suggestions"

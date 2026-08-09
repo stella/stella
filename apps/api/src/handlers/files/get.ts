@@ -14,9 +14,16 @@ import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
+  buildEmailPreview,
+  isEmailAttachmentPreviewable,
+  parseEmail,
   emailToPreview,
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
+import {
+  createEmailAttachmentDescriptor,
+  findEmailAttachmentIndex,
+} from "@/api/lib/files/email-attachment-token";
 import {
   convertToPdf,
   isConvertibleMimeType,
@@ -26,6 +33,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -53,6 +61,7 @@ const fileFieldQuery = async (
       .select({
         content: fields.content,
         entityId: entities.id,
+        entityVersionId: entityVersions.id,
         versionStamp: entityVersions.stamp,
         verificationCode: entityVersions.verificationCode,
       })
@@ -254,7 +263,15 @@ export const readEmailHtmlPreviewHandler = async ({
     mimeType: content.mimeType,
   });
   const fileBuffer = await readS3ArrayBuffer(fileKey);
-  const previewResult = await emailToPreview(fileBuffer, emailMimeType);
+  const previewResult = await emailToPreview(fileBuffer, emailMimeType, {
+    createAttachmentId: (attachmentIndex) =>
+      createEmailAttachmentDescriptor({
+        attachmentIndex,
+        secret: env.BETTER_AUTH_SECRET,
+        sourceFileId: content.id,
+        sourceVersionId: row.entityVersionId,
+      }),
+  });
 
   if (Result.isError(previewResult)) {
     captureError(previewResult.error, {
@@ -266,6 +283,108 @@ export const readEmailHtmlPreviewHandler = async ({
   }
 
   return previewResult.value;
+};
+
+type EmailAttachmentDisposition = "inline" | "download";
+
+type ReadEmailAttachmentHandlerProps = {
+  attachmentId: string;
+  disposition: EmailAttachmentDisposition;
+  scopedDb: ScopedDb;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Reauthorize and reparse the source before serving attachment bytes. */
+export const readEmailAttachmentHandler = async ({
+  attachmentId,
+  disposition,
+  scopedDb,
+  fieldId,
+  organizationId,
+  workspaceId,
+}: ReadEmailAttachmentHandlerProps) => {
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const row = rows.at(0);
+  if (!row || row.content.type !== "file" || row.content.encrypted) {
+    return status(404);
+  }
+
+  const content = row.content;
+  const emailMimeType = resolveEmailMimeType({
+    fileName: content.fileName,
+    mimeType: content.mimeType,
+  });
+  if (!emailMimeType) {
+    return status(404);
+  }
+
+  const attachmentIndex = findEmailAttachmentIndex({
+    descriptor: attachmentId,
+    secret: env.BETTER_AUTH_SECRET,
+    sourceFileId: content.id,
+    sourceVersionId: row.entityVersionId,
+  });
+  if (attachmentIndex === null) {
+    return status(404);
+  }
+
+  const fileKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: content.id,
+    mimeType: content.mimeType,
+  });
+  const sourceBuffer = await readS3ArrayBuffer(fileKey);
+  const parsedResult = await Result.tryPromise({
+    try: async () => await parseEmail(sourceBuffer, emailMimeType),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(parsedResult)) {
+    return status(422, { message: "Failed to parse email attachment" });
+  }
+
+  const preview = buildEmailPreview(parsedResult.value, {
+    createAttachmentId: (index) =>
+      createEmailAttachmentDescriptor({
+        attachmentIndex: index,
+        secret: env.BETTER_AUTH_SECRET,
+        sourceFileId: content.id,
+        sourceVersionId: row.entityVersionId,
+      }),
+  });
+  const descriptor = preview.attachments.find(({ id }) => id === attachmentId);
+  const attachment = parsedResult.value.attachments.at(attachmentIndex);
+  if (!descriptor || !attachment) {
+    return status(404);
+  }
+  if (
+    disposition === "inline" &&
+    !isEmailAttachmentPreviewable(attachment.mimeType)
+  ) {
+    return status(415);
+  }
+
+  const mimeType =
+    disposition === "inline"
+      ? (attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ??
+        "application/octet-stream")
+      : "application/octet-stream";
+  const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
+  const safeDisposition = contentDisposition(fileName).replace(
+    /^attachment;/u,
+    `${disposition};`,
+  );
+  return new Response(attachment.bytes, {
+    headers: {
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
+      "Cache-Control": "private, no-store",
+      "Content-Disposition": safeDisposition,
+      "Content-Length": String(attachment.bytes.byteLength),
+      "Content-Type": mimeType,
+    },
+  });
 };
 
 // ── Stamped download (separate endpoint) ────────────────

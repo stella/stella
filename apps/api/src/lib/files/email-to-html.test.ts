@@ -11,6 +11,7 @@ import {
   renderEmailBodyHtml,
   renderEmailHtml,
   resolveEmailMimeType,
+  isEmailAttachmentPreviewable,
 } from "./email-to-html";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
@@ -59,6 +60,16 @@ describe("resolveEmailMimeType", () => {
         mimeType: "application/octet-stream",
       }),
     ).toBeNull();
+  });
+});
+
+describe("email attachment preview policy", () => {
+  test("allows passive image and PDF types but not active or unknown content", () => {
+    expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
+    expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
+    expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
+    expect(isEmailAttachmentPreviewable("text/html")).toBe(false);
+    expect(isEmailAttachmentPreviewable(null)).toBe(false);
   });
 });
 
@@ -335,16 +346,20 @@ describe("renderEmailHtml", () => {
       bcc: ["عائشة <aisha@example.ae>"],
       attachments: [
         {
+          id: "attachment-0",
           fileName: "evidence.pdf",
           mimeType: "application/pdf",
           sizeBytes: 3,
+          previewable: true,
         },
       ],
     });
     expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
+      "id",
       "fileName",
       "mimeType",
       "sizeBytes",
+      "previewable",
     ]);
     expect(preview.bodyHtml).toStartWith("<!DOCTYPE html>");
     expect(preview.bodyHtml).toContain(
@@ -391,9 +406,11 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        id: "attachment-0",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: 3,
+        previewable: true,
       },
     ]);
     expect(preview.bodyHtml).toContain("Visible body");
@@ -724,14 +741,18 @@ describe("emailToHtml (.eml)", () => {
 
     expect(result.value.attachments).toEqual([
       {
+        id: "attachment-0",
         fileName: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 16,
+        previewable: false,
       },
       {
+        id: "attachment-1",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: Buffer.from(PNG_BASE64, "base64").byteLength,
+        previewable: true,
       },
     ]);
   });
