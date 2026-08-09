@@ -63,6 +63,9 @@ const isByteStreamReadResult = (
     : done === false && chunk instanceof Uint8Array;
 };
 
+const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
+  body.getReader();
+
 const formatUnknownToolName = (toolName: string): string =>
   toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
     ? toolName
@@ -561,8 +564,7 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
-      // eslint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- SAFETY: monitoredBody owns this reader; every terminal callback cancels when needed and releases it through completeExchange
-      const reader = response.body.getReader();
+      const reader = takeStreamReaderOwnership(response.body);
       let readerReleased = false;
       const completeExchange = async () => {
         request.signal.removeEventListener("abort", abortExchange);

@@ -1451,26 +1451,22 @@ const RegistryAutofillControl = ({
       getAnalytics().captureError(error);
       return;
     }
+    const { data, error } = response;
     if (seq !== lookupSeq.current) {
       // A newer lookup started while this one was in flight; drop its result.
-      // eslint-disable-next-line require-eden-error-check/require-eden-error-check -- SAFETY: the superseded lookup response is intentionally discarded
       return;
     }
     setLoading(false);
 
-    if (response.error) {
+    if (error) {
       stellaToast.add({
         type: "error",
         title: t("templates.registryNotFound"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorMessage(error, t("common.unexpectedError")),
       });
       return;
     }
 
-    const { data } = response;
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
       stellaToast.add({
         type: "error",
