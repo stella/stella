@@ -152,7 +152,7 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
-  const referencedContentIds = getReferencedInlineContentIds(parsed.body);
+  const renderedBody = renderEmailBody(parsed);
 
   return {
     subject: parsed.subject,
@@ -166,32 +166,15 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
         ({ contentId }) =>
           !contentId ||
           !inlineContentIds.has(contentId.toLowerCase()) ||
-          !referencedContentIds.has(contentId.toLowerCase()),
+          !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
       .map(({ fileName, mimeType, bytes }) => ({
         fileName,
         mimeType,
         sizeBytes: bytes.byteLength,
       })),
-    bodyHtml: renderEmailBodyHtml(parsed),
+    bodyHtml: renderedBody.bodyHtml,
   };
-};
-
-const getReferencedInlineContentIds = (body: EmailBody): Set<string> => {
-  const contentIds = new Set<string>();
-  if (body.type !== "html") {
-    return contentIds;
-  }
-
-  const $ = load(body.html);
-  $("img").each((_, element) => {
-    const src = $(element).attr("src")?.trim();
-    if (!src || !src.toLowerCase().startsWith("cid:")) {
-      return;
-    }
-    contentIds.add(stripAngleBrackets(src.slice("cid:".length)).toLowerCase());
-  });
-  return contentIds;
 };
 
 export const parseEmail = async (
@@ -547,14 +530,23 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
  * display it once, outside untrusted email HTML. Nested message headers are
  * retained because they describe forwarded message content.
  */
-export const renderEmailBodyHtml = (parsed: ParsedEmail): string => {
+type RenderedEmailBody = {
+  bodyHtml: string;
+  referencedContentIds: Set<string>;
+};
+
+const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   if (parsed.body.type === "text") {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
+    return {
+      bodyHtml: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`,
+      referencedContentIds: new Set(),
+    };
   }
 
   const $ = load(parsed.body.html);
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
+  const referencedContentIds = getReferencedInlineContentIds($);
   inlineCidImages($, parsed.inlineImages);
 
   if ($("meta[charset]").length === 0) {
@@ -569,7 +561,25 @@ export const renderEmailBodyHtml = (parsed: ParsedEmail): string => {
     $("body").attr("dir", "auto");
   }
 
-  return `<!DOCTYPE html>${$.html()}`;
+  return {
+    bodyHtml: `<!DOCTYPE html>${$.html()}`,
+    referencedContentIds,
+  };
+};
+
+export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
+  renderEmailBody(parsed).bodyHtml;
+
+const getReferencedInlineContentIds = ($: CheerioApi): Set<string> => {
+  const contentIds = new Set<string>();
+  $("img").each((_, element) => {
+    const src = $(element).attr("src")?.trim();
+    if (!src || !src.toLowerCase().startsWith("cid:")) {
+      return;
+    }
+    contentIds.add(stripAngleBrackets(src.slice("cid:".length)).toLowerCase());
+  });
+  return contentIds;
 };
 
 const hasExplicitWritingDirection = ($: CheerioApi): boolean => {

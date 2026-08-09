@@ -12,6 +12,8 @@ import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 
+const FORMATTING_LOCALE = "en-u-nu-arab";
+
 const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
   renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -23,7 +25,7 @@ const renderWithProviders = (children: ReactNode, queryClient: QueryClient) =>
         messages={messages as Messages}
         timeZone="UTC"
       >
-        <FormattingProvider locale="en" timeZone="UTC">
+        <FormattingProvider locale={FORMATTING_LOCALE} timeZone="UTC">
           {children}
         </FormattingProvider>
       </IntlProvider>
@@ -66,7 +68,7 @@ describe("email viewer", () => {
     expect(html).toContain('dateTime="2026-06-02T10:00:00.000Z"');
     expect(html).toContain("Show details");
     expect(html).toContain("contract.pdf");
-    expect(html).toContain(">2 kB</span>");
+    expect(html).toContain(">٢ kB</span>");
     expect(html).toContain('sandbox=""');
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");

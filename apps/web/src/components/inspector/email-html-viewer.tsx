@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, PaperclipIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
@@ -13,6 +13,7 @@ import {
   getEmailAttachmentSize,
   parseEmailDate,
 } from "@/components/inspector/email-html-viewer.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";

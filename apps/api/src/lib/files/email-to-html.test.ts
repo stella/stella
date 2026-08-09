@@ -364,6 +364,43 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).not.toContain("onerror");
   });
 
+  test("keeps a CID attachment when sanitization removes its only reference", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<form><img src="cid:evidence"></form><p>Visible body</p>',
+        },
+        inlineImages: [
+          {
+            cid: "evidence",
+            mimeType: "image/png",
+            dataBase64: PNG_BASE64,
+          },
+        ],
+        attachments: [
+          {
+            contentId: "evidence",
+            fileName: "evidence.png",
+            mimeType: "image/png",
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+        ],
+      }),
+    );
+
+    expect(preview.attachments).toEqual([
+      {
+        fileName: "evidence.png",
+        mimeType: "image/png",
+        sizeBytes: 3,
+      },
+    ]);
+    expect(preview.bodyHtml).toContain("Visible body");
+    expect(preview.bodyHtml).not.toContain("cid:evidence");
+    expect(preview.bodyHtml).not.toContain("<form");
+  });
+
   test("formats sanitized headers and body text for extraction", () => {
     const text = parsedEmailToText(
       htmlEmail({
