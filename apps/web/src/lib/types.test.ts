@@ -13,7 +13,12 @@ import { isFileDisplayable } from "@/lib/types";
 
 describe("native office file displayability", () => {
   test("allows XLSX and PPTX files to open without a PDF derivative", () => {
-    for (const mimeType of [XLSX_MIME, PPTX_MIME]) {
+    for (const mimeType of [
+      XLSX_MIME,
+      PPTX_MIME,
+      `${XLSX_MIME}; charset=binary`,
+      PPTX_MIME.toUpperCase(),
+    ]) {
       expect(
         isFileDisplayable({
           mimeType,

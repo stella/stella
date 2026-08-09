@@ -16,6 +16,7 @@ import { streamTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
+  buildExtractedFileMessage,
   buildPromptsMessage,
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
@@ -135,8 +136,18 @@ export const generateWorkflowData = async ({
       });
       continue;
     }
-    // DOCX: serialise folio blocks inline. The model cites block
-    // ids back in `justification.citations` instead of bates stamps.
+    if (file.kind === "extracted-text") {
+      messageContent.push({
+        type: "text",
+        content: buildExtractedFileMessage({
+          content: file.content,
+          simplifiedName: file.simplifiedName,
+        }),
+      });
+      continue;
+    }
+    // DOCX: serialise folio blocks inline. The model cites block ids back in
+    // `justification.citations` instead of bates stamps.
     messageContent.push({
       type: "text",
       content: buildDocxBlocksMessage({

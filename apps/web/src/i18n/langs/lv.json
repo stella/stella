@@ -3607,9 +3607,9 @@
       "defaultPropertyName": "Dokumenti",
       "desktopEdit": {
         "action": "Rediģēt datora lietotnē",
-        "editLocallyPrompt": "Lai rediģētu šo failu lokāli un sinhronizētu ar stella, noklikšķiniet šeit.",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
+        "editLocallyPrompt": "Rediģējiet šo failu lokāli un sinhronizējiet izmaiņas ar stella.",
         "forceRelease": "Piespiedu atbrīvošana",
         "notOpenedDescription": "stella desktop neapstiprināja, ka <bdi>{application}</bdi> ir atvērts. Palaidiet stella desktop un mēģiniet vēlreiz.",
         "openAction": "Atvērt datora lietotnē",

@@ -10,7 +10,12 @@ import {
   useDesktopFileOpen,
 } from "@/components/inspector/use-desktop-file-open";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+
+const DESKTOP_OPEN_ATTENTION_TIMEOUT_MS = 2500;
+
+type DesktopOpenButtonProps = DesktopOpenTarget & { fieldId: string };
 
 export const DesktopOpenButton = ({
   entityId,
@@ -18,12 +23,16 @@ export const DesktopOpenButton = ({
   fileType,
   propertyId,
   workspaceId,
-}: DesktopOpenTarget & { fieldId: string }) => {
+}: DesktopOpenButtonProps) => {
   const t = useTranslations();
   const label = t("workspaces.files.desktopEdit.openAction");
-  const { isOpening, open } = useDesktopFileOpen(
-    { entityId, fileType, propertyId, workspaceId },
-  );
+  const target = {
+    entityId,
+    fileType,
+    propertyId,
+    workspaceId,
+  } satisfies DesktopOpenTarget;
+  const { isOpening, open } = useDesktopFileOpen(target);
   const desktopOpenAttention = useInspectorCommandStore(
     (state) => state.desktopOpenAttention,
   );
@@ -34,6 +43,18 @@ export const DesktopOpenButton = ({
     desktopOpenAttention?.fieldId === fieldId
       ? desktopOpenAttention.sequence
       : null;
+
+  useExternalSyncEffect(() => {
+    if (attentionSequence === null) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      clearDesktopOpenAttention(attentionSequence);
+    }, DESKTOP_OPEN_ATTENTION_TIMEOUT_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [attentionSequence, clearDesktopOpenAttention]);
 
   return (
     <Tooltip

@@ -3607,9 +3607,9 @@
       "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Modifier dans l’app de bureau",
-        "editLocallyPrompt": "Pour modifier ce fichier localement et le synchroniser avec stella, cliquez ici.",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
+        "editLocallyPrompt": "Modifiez ce fichier localement et synchronisez les changements avec stella.",
         "forceRelease": "Forcer la libération",
         "notOpenedDescription": "stella desktop n’a pas confirmé l’ouverture de <bdi>{application}</bdi>. Lancez stella desktop puis réessayez.",
         "openAction": "Ouvrir dans l’app de bureau",

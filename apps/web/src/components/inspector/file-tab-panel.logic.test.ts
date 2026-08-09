@@ -37,6 +37,15 @@ describe("file tab native preview kind", () => {
       }),
     ).toBe("office");
   });
+
+  test("keeps unsupported MIME types on the PDF fallback", () => {
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "workbook.xlsx",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("pdf");
+  });
 });
 
 describe("markdown draft sync", () => {

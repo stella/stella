@@ -14,8 +14,8 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { getActiveFileSourceForModel } from "@/api/handlers/chat/active-file-model-source";
 import {
   getResumedUserInteraction,
   isChatPart,
@@ -180,11 +180,16 @@ import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-men
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import {
+  FILE_SIZE_LIMIT_BYTES,
+  FILE_SIZE_LIMITS,
+  LIMITS,
+} from "@/api/lib/limits";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
+import { extractFileText } from "@/api/lib/search/extract-content";
 import {
   requireTanStackAIAvailableForRole,
   validateTanStackDevModelOverride,
@@ -2251,7 +2256,7 @@ const prepareChatContext = async ({
       );
 
     const messagesWithActiveFileFallback = yield* Result.await(
-      attachActivePdfWhenExtractionIsEmpty({
+      attachActiveFileFallbackWhenExtractionIsEmpty({
         activeFile,
         hydratedMessages,
         organizationId,
@@ -2275,7 +2280,7 @@ const prepareChatContext = async ({
     });
   });
 
-type AttachActivePdfWhenExtractionIsEmptyProps = {
+type AttachActiveFileFallbackWhenExtractionIsEmptyProps = {
   activeFile: IncomingActiveFile | undefined;
   hydratedMessages: ChatMessage[];
   organizationId: SafeId<"organization">;
@@ -2284,14 +2289,14 @@ type AttachActivePdfWhenExtractionIsEmptyProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const attachActivePdfWhenExtractionIsEmpty = async ({
+const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   activeFile,
   hydratedMessages,
   organizationId,
   safeDb,
   sendMode,
   workspaceId,
-}: AttachActivePdfWhenExtractionIsEmptyProps): Promise<
+}: AttachActiveFileFallbackWhenExtractionIsEmptyProps): Promise<
   Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
@@ -2327,8 +2332,8 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
       return Result.ok(hydratedMessages);
     }
 
-    const activePdf = yield* Result.await(
-      readActivePdfForModel({
+    const activeFileFallback = yield* Result.await(
+      readActiveFileFallbackForModel({
         activeFile,
         fileFieldId: activeFile.fileFieldId,
         organizationId,
@@ -2336,7 +2341,7 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
         workspaceId,
       }),
     );
-    if (activePdf === null) {
+    if (activeFileFallback === null) {
       return Result.ok(hydratedMessages);
     }
 
@@ -2350,26 +2355,43 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
         }),
       );
     }
+    const fallbackParts: ChatMessage["parts"] = [];
+    switch (activeFileFallback.type) {
+      case "pdf":
+        fallbackParts.push(
+          {
+            type: "text",
+            content: `The active file "${activeFileFallback.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
+          },
+          createRawChatFilePart({
+            bytes: activeFileFallback.bytes,
+            fileName: activeFileFallback.fileName,
+            mimeType: PDF_MIME_TYPE,
+          }),
+        );
+        break;
+      case "extracted-text":
+        fallbackParts.push(
+          {
+            type: "text",
+            content: `The active file "${activeFileFallback.fileName}" is attached as extracted text because durable extraction is not ready. Use this text for the current question.${activeFileFallback.truncated ? " The attachment is truncated to the first available window." : ""}`,
+          },
+          { type: "text", content: activeFileFallback.content },
+        );
+        break;
+      default:
+        activeFileFallback satisfies never;
+    }
+
     nextMessages[latestUserIndex] = {
       ...latestUserMessage,
-      parts: [
-        ...latestUserMessage.parts,
-        {
-          type: "text",
-          content: `The active file "${activePdf.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
-        },
-        createRawChatFilePart({
-          bytes: activePdf.bytes,
-          fileName: activePdf.fileName,
-          mimeType: PDF_MIME_TYPE,
-        }),
-      ],
+      parts: [...latestUserMessage.parts, ...fallbackParts],
     };
 
     return Result.ok(nextMessages);
   });
 
-type ReadActivePdfForModelProps = {
+type ReadActiveFileFallbackForModelProps = {
   activeFile: IncomingActiveFile;
   fileFieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
@@ -2377,19 +2399,26 @@ type ReadActivePdfForModelProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-type ActivePdfForModel = {
-  bytes: Uint8Array;
-  fileName: string;
-};
+type ActiveFileFallbackForModel =
+  | { type: "pdf"; bytes: Uint8Array; fileName: string }
+  | {
+      type: "extracted-text";
+      content: string;
+      fileName: string;
+      truncated: boolean;
+    };
 
-const readActivePdfForModel = async ({
+const readActiveFileFallbackForModel = async ({
   activeFile,
   fileFieldId,
   organizationId,
   safeDb,
   workspaceId,
-}: ReadActivePdfForModelProps): Promise<
-  Result<ActivePdfForModel | null, HandlerError<422 | 500> | SafeDbError>
+}: ReadActiveFileFallbackForModelProps): Promise<
+  Result<
+    ActiveFileFallbackForModel | null,
+    HandlerError<422 | 500> | SafeDbError
+  >
 > =>
   await Result.gen(async function* () {
     const entity = yield* Result.await(
@@ -2424,16 +2453,16 @@ const readActivePdfForModel = async ({
       return Result.ok(null);
     }
 
-    const pdfRef = getPdfFileRefForModel(content);
-    if (pdfRef === null || content.encrypted) {
+    const source = getActiveFileSourceForModel(content);
+    if (source === null) {
       return Result.ok(null);
     }
 
     const s3Key = createFileKey({
       organizationId,
       workspaceId,
-      fileId: pdfRef.fileId,
-      mimeType: PDF_MIME_TYPE,
+      fileId: source.fileId,
+      mimeType: source.mimeType,
     });
     const buffer = yield* Result.await(
       Result.tryPromise({
@@ -2441,11 +2470,26 @@ const readActivePdfForModel = async ({
         catch: (cause) =>
           new HandlerError({
             status: 500,
-            message: "Failed to read active PDF for AI context",
+            message: "Failed to read active file for AI context",
             cause,
           }),
       }),
     );
+    if (source.type === "extracted-text") {
+      const extracted = await extractFileText(buffer, source.mimeType, {
+        feature: "active-file-fallback",
+      });
+      if (extracted === null) {
+        return Result.ok(null);
+      }
+      return Result.ok({
+        type: "extracted-text",
+        content: extracted.slice(0, LIMITS.chatContextFileMaxChars),
+        fileName: source.fileName,
+        truncated: extracted.length > LIMITS.chatContextFileMaxChars,
+      });
+    }
+
     const bytes = new Uint8Array(buffer);
     if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
       return Result.err(
@@ -2457,30 +2501,11 @@ const readActivePdfForModel = async ({
     }
 
     return Result.ok({
+      type: "pdf",
       bytes,
-      fileName: pdfRef.fileName,
+      fileName: source.fileName,
     });
   });
-
-const getPdfFileRefForModel = (
-  content: Extract<FieldContent, { type: "file" }>,
-): { fileId: string; fileName: string } | null => {
-  if (content.mimeType === PDF_MIME_TYPE) {
-    return {
-      fileId: content.id,
-      fileName: content.fileName,
-    };
-  }
-
-  if (content.pdfFileId === null) {
-    return null;
-  }
-
-  return {
-    fileId: content.pdfFileId,
-    fileName: content.fileName,
-  };
-};
 
 type ResolveAssistantMessageRefsProps = {
   accessibleWorkspaceIds: ReadonlySet<string>;

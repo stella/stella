@@ -44,9 +44,7 @@ describe("inspector commands", () => {
 
     expect(useInspectorCommandStore.getState().pendingRenameTabId).toBeNull();
     expect(useInspectorCommandStore.getState().pendingDocxEditTabId).toBeNull();
-    expect(
-      useInspectorCommandStore.getState().desktopOpenAttention,
-    ).toBeNull();
+    expect(useInspectorCommandStore.getState().desktopOpenAttention).toBeNull();
     expect(useInspectorCommandStore.getState().pendingBlockScroll).toEqual({
       tabId: "open-tab",
       blockId: "block-1",
@@ -70,5 +68,8 @@ describe("inspector commands", () => {
       fieldId: "file-1",
       sequence: firstSequence + 1,
     });
+
+    commands.clearDesktopOpenAttention(firstSequence + 1);
+    expect(useInspectorCommandStore.getState().desktopOpenAttention).toBeNull();
   });
 });

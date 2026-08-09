@@ -21,6 +21,9 @@ describe("document icon MIME classification", () => {
     expect(getDocumentIconKind(PDF_MIME_TYPE)).toBe("pdf");
     expect(getDocumentIconKind(DOCX_MIME)).toBe("word");
     expect(getDocumentIconKind(PPTX_MIME)).toBe("powerpoint");
+    expect(getDocumentIconKind("application/vnd.ms-powerpoint")).toBe(
+      "powerpoint",
+    );
     expect(getDocumentIconKind("text/plain")).toBe("text");
   });
 

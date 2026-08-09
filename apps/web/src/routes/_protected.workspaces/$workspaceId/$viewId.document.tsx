@@ -60,7 +60,9 @@ import { api } from "@/lib/api";
 import {
   DOCX_MIME,
   getNativeOfficeViewerFormat,
+  PPTX_MIME,
   TOOLBAR_ROW_HEIGHT,
+  XLSX_MIME,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
@@ -1088,6 +1090,8 @@ const ACCEPTED_MIME_TYPES = {
   "application/pdf": true,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
   "application/msword": true,
+  [PPTX_MIME]: true,
+  [XLSX_MIME]: true,
 } as const;
 
 type VersionDropZoneProps = React.PropsWithChildren<{

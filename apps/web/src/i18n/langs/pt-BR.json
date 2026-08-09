@@ -3607,9 +3607,9 @@
       "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar no desktop",
-        "editLocallyPrompt": "Para editar este arquivo localmente e sincronizá-lo com o stella, clique aqui.",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
         "authRequiredTitle": "Sua sessão expirou",
+        "editLocallyPrompt": "Edite este arquivo localmente e sincronize as alterações com o stella.",
         "forceRelease": "Forçar liberação",
         "notOpenedDescription": "O stella desktop não confirmou que o <bdi>{application}</bdi> abriu. Abra o stella desktop e tente novamente.",
         "openAction": "Abrir no desktop",

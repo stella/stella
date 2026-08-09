@@ -9,13 +9,14 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import {
   type DesktopOpenTarget,
   useDesktopFileOpen,
 } from "@/components/inspector/use-desktop-file-open";
-import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import {
   INITIAL_OFFICE_EDIT_INTENT_STATE,
   isOfficeEditIntentKey,
@@ -32,7 +33,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
-
 import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
@@ -178,11 +178,13 @@ export const OfficeFileViewer = ({
               aria-hidden="true"
               className="text-muted-foreground px-3 font-serif text-sm italic"
             >
+              {/* oxlint-disable-next-line no-untranslated-jsx-literal/no-untranslated-jsx-literal -- conventional formula-bar symbol */}
               fx
             </span>
             <input
               aria-label={t("common.formula")}
               className="text-foreground focus-visible:ring-ring h-full min-w-0 flex-1 bg-transparent px-2 font-mono outline-none focus-visible:ring-2 focus-visible:ring-inset"
+              dir={contentDir(formulaBarValue)}
               readOnly
               value={formulaBarValue}
             />

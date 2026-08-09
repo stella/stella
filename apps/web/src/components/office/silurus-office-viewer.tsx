@@ -1,9 +1,11 @@
 import { useState } from "react";
-import type { Cell, CellRange, Row } from "@silurus/ooxml/xlsx";
 
+import type { Cell, CellRange, Row } from "@silurus/ooxml/xlsx";
 import { panic } from "better-result";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
+import { ClientOperationError } from "@/lib/errors/client";
 
 export type OfficeViewerFormat = "pptx" | "xlsx";
 
@@ -50,11 +52,17 @@ const DEFAULT_OFFICE_VIEWER_RESOURCE_LIMITS = {
 const DEFAULT_OFFICE_VIEWER_WORKER_TIMEOUT_MS = 60_000;
 
 type ViewerInstance = {
-  destroy(): void;
+  destroy: () => void;
 };
 
 const toError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
+  error instanceof Error
+    ? error
+    : new ClientOperationError({
+        action: "load Office file",
+        message: "Office viewer failed with an unknown error",
+        cause: error,
+      });
 
 export const SilurusOfficeFileViewer = ({
   className,
@@ -72,14 +80,15 @@ export const SilurusOfficeFileViewer = ({
 
   useExternalSyncEffect(() => {
     if (!container) {
-      return;
+      return undefined;
     }
 
     let disposed = false;
-    let failedDuringLoad = false;
-    let ready = false;
+    const loadState: { type: OfficeViewerStatus["type"] } = {
+      type: "loading",
+    };
     let viewer: ViewerInstance | null = null;
-    let workbook: { destroy(): void } | null = null;
+    let workbook: { destroy: () => void } | null = null;
     let selectionRequest = 0;
     let resolveSpreadsheetReady: (() => void) | null = null;
 
@@ -96,9 +105,9 @@ export const SilurusOfficeFileViewer = ({
         return;
       }
       const error = toError(value);
-      failedDuringLoad = !ready;
       onError?.(error);
-      if (failedDuringLoad) {
+      if (loadState.type === "loading") {
+        loadState.type = "failed";
         onStatusChange?.({ error, type: "failed" });
       }
       finishSpreadsheetLoad();
@@ -107,9 +116,8 @@ export const SilurusOfficeFileViewer = ({
     const load = async () => {
       try {
         if (format === "xlsx") {
-          const { XlsxViewer, XlsxWorkbook } = await import(
-            "@silurus/ooxml/xlsx"
-          );
+          const { XlsxViewer, XlsxWorkbook } =
+            await import("@silurus/ooxml/xlsx");
           const loadedWorkbook = await XlsxWorkbook.load(
             documentBuffer.slice(0),
             {
@@ -140,22 +148,24 @@ export const SilurusOfficeFileViewer = ({
 
             const sheetIndex = currentSheetIndex;
             const { col, row } = selection.active;
-            void loadedWorkbook
-              .getWorksheet(sheetIndex)
-              .then((worksheet) => {
-                if (disposed || request !== selectionRequest) {
-                  return;
-                }
-                const cell = findWorksheetCell(worksheet.rows, row, col);
-                onSpreadsheetSelectionChange?.({
-                  cellReference: `${toSpreadsheetColumnName(col)}${String(row)}`,
-                  formula: cell?.formula ?? null,
-                  value: cell
-                    ? loadedWorkbook.cellText(worksheet, cell)
-                    : "",
-                });
-              })
-              .catch(reportError);
+            detached(
+              loadedWorkbook
+                .getWorksheet(sheetIndex)
+                .then((worksheet) => {
+                  if (disposed || request !== selectionRequest) {
+                    return undefined;
+                  }
+                  const cell = findWorksheetCell(worksheet.rows, row, col);
+                  onSpreadsheetSelectionChange?.({
+                    cellReference: `${toSpreadsheetColumnName(col)}${String(row)}`,
+                    formula: cell?.formula ?? null,
+                    value: cell ? loadedWorkbook.cellText(worksheet, cell) : "",
+                  });
+                  return undefined;
+                })
+                .catch(reportError),
+              "SilurusOfficeFileViewer.selection",
+            );
           };
 
           viewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
@@ -190,16 +200,18 @@ export const SilurusOfficeFileViewer = ({
             enableTextSelection: true,
             mode: "worker",
             onError: reportError,
-            paddingBottom: presentationPaddingBottomPx,
             resourceLimits,
             useGoogleFonts: false,
             workerTimeoutMs,
+            ...(presentationPaddingBottomPx === undefined
+              ? {}
+              : { paddingBottom: presentationPaddingBottomPx }),
           });
           viewer = pptxViewer;
           await pptxViewer.load(documentBuffer.slice(0));
         }
-        if (!disposed && !failedDuringLoad) {
-          ready = true;
+        if (!disposed && loadState.type === "loading") {
+          loadState.type = "ready";
           onStatusChange?.({ type: "ready" });
         }
       } catch (error) {
@@ -209,7 +221,7 @@ export const SilurusOfficeFileViewer = ({
       }
     };
 
-    void load();
+    detached(load(), "SilurusOfficeFileViewer.load");
 
     return () => {
       disposed = true;
@@ -245,7 +257,10 @@ const findWorksheetCell = (
 
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
-    const row = rows[middle];
+    const row = rows.at(middle);
+    if (!row) {
+      panic("Worksheet row index is out of bounds");
+    }
     if (row.index < rowIndex) {
       low = middle + 1;
       continue;
@@ -259,7 +274,10 @@ const findWorksheetCell = (
     let cellHigh = row.cells.length - 1;
     while (cellLow <= cellHigh) {
       const cellMiddle = Math.floor((cellLow + cellHigh) / 2);
-      const cell = row.cells[cellMiddle];
+      const cell = row.cells.at(cellMiddle);
+      if (!cell) {
+        panic("Worksheet cell index is out of bounds");
+      }
       if (cell.col < columnIndex) {
         cellLow = cellMiddle + 1;
         continue;
@@ -293,7 +311,7 @@ const setSpreadsheetFooterHeight = (container: HTMLElement, height: number) => {
 
   const tabStrip = container.querySelector(".xlsx-tab-strip");
   const tabBar = tabStrip?.parentElement;
-  if (!(tabStrip instanceof HTMLElement) || tabBar === null) {
+  if (!(tabStrip instanceof HTMLElement) || !(tabBar instanceof HTMLElement)) {
     panic("Silurus XLSX tab strip is missing");
   }
 

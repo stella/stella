@@ -64,6 +64,7 @@ import {
   PeekPdfViewer,
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -852,8 +853,11 @@ export const FileTabPanel = ({
     }
     if (isOfficeDisplay && officeViewerFormat !== null) {
       return (
-        <Suspense
-          fallback={
+        <QuerySuspenseBoundary
+          area="office-file-viewer"
+          errorFallback={viewerErrorFallback}
+          resetKeys={[tab.id]}
+          suspenseFallback={
             <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
               {t("common.loading")}
             </div>
@@ -868,7 +872,7 @@ export const FileTabPanel = ({
             key={tab.id}
             workspaceId={tab.workspaceId}
           />
-        </Suspense>
+        </QuerySuspenseBoundary>
       );
     }
     if (isNativeDocxDisplay && tab.propertyId !== undefined) {

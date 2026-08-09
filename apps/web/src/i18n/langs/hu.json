@@ -3607,9 +3607,9 @@
       "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",
-        "editLocallyPrompt": "A fájl helyi szerkesztéséhez és a stellával való szinkronizálásához kattintson ide.",
         "authRequiredDescription": "Frissítsd a stella felületét, és jelentkezz be újra, mielőtt az asztali szerkesztést használod.",
         "authRequiredTitle": "A munkamenet lejárt",
+        "editLocallyPrompt": "Szerkessze a fájlt helyben, és szinkronizálja a módosításokat a stellával.",
         "forceRelease": "Kényszerített feloldás",
         "notOpenedDescription": "A stella desktop nem erősítette meg, hogy a(z) <bdi>{application}</bdi> megnyílt. Indítsa el a stella desktop alkalmazást, majd próbálja újra.",
         "openAction": "Megnyitás asztali alkalmazásban",
