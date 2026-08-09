@@ -5,6 +5,10 @@ import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import type {
+  EmailCitationBlock,
+  EmailCitationSource,
+} from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   fileContentQueryKey,
@@ -43,6 +47,8 @@ type EmailHtmlPreviewData = {
   attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
+  citationBlocks: EmailCitationBlock[];
+  source: EmailCitationSource;
 };
 
 type TextFileData = {
@@ -130,6 +136,8 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         attachments: data.attachments,
         bodyFolds: data.bodyFolds,
         bodyHtml: data.bodyHtml,
+        citationBlocks: data.citationBlocks,
+        source: data.source,
       } satisfies EmailHtmlPreviewData;
     },
   });

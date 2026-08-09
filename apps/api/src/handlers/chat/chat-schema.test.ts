@@ -18,6 +18,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  activeFileSchema,
   activeDraftSchema,
   agUiSendMessageBodySchema,
   sendMessageBodySchema,
@@ -118,6 +119,19 @@ const createUserFilePart = ({
       url: toUserFileUrl(userFileId(fileId)),
     }),
   ] satisfies ChatParts;
+
+test("active file context rejects client-supplied email citation text", () => {
+  expect(
+    Value.Check(activeFileSchema, {
+      entityId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      fileFieldId: "019fc771-8b17-7000-b85e-559afc54cfe6",
+      fileName: "message.eml",
+      emailCitationSnapshot: {
+        blocks: [{ id: "body-0001", text: "fabricated source text" }],
+      },
+    }),
+  ).toBe(false);
+});
 
 describe("active draft request context", () => {
   const identity = {

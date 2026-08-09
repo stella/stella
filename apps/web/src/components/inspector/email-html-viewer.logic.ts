@@ -68,7 +68,11 @@ export const getEmailFileChatContext = ({
   fileName: string;
   workspaceId: string;
 }) => ({
-  activeFile: { entityId, fileFieldId: fieldId, fileName },
+  activeFile: {
+    entityId,
+    fileFieldId: fieldId,
+    fileName,
+  },
   workspaceId,
 });
 

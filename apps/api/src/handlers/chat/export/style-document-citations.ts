@@ -1,4 +1,8 @@
-import { CHAT_RESOURCE_HREF_PREFIX } from "@stll/api-contract";
+import {
+  CHAT_RESOURCE_HREF_PREFIX,
+  EMAIL_CITATION_HREF_PREFIX,
+  parseEmailCitationHref,
+} from "@stll/api-contract";
 import type {
   BlockContent,
   Footnote,
@@ -34,6 +38,7 @@ const isCitationHyperlink = (
     href.startsWith("https://") ||
     href.startsWith("http://") ||
     href.startsWith(FOLIO_CITATION_PREFIX) ||
+    parseEmailCitationHref(href) !== null ||
     href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision) ||
     (internalReferenceMode !== "references" &&
       (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
@@ -132,6 +137,12 @@ const transformHyperlink = (
   hyperlink: Hyperlink,
   context: CitationTransformContext,
 ): ParagraphContent[] => {
+  if (
+    hyperlink.href?.startsWith(EMAIL_CITATION_HREF_PREFIX) &&
+    parseEmailCitationHref(hyperlink.href) === null
+  ) {
+    return hyperlink.children;
+  }
   if (!isCitationHyperlink(hyperlink, context.internalReferenceMode)) {
     return [hyperlink];
   }

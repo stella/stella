@@ -7,6 +7,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import type { EmailCitationSource } from "@/lib/files/email-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -179,4 +180,25 @@ export const openEntityInInspector = async (
     });
     return { type: "unsupported" };
   }
+};
+
+export const openEmailCitationSource = ({
+  source,
+  workspaceId,
+}: {
+  source: EmailCitationSource;
+  workspaceId: string;
+}): void => {
+  const inspector = useInspectorTabsStore.getState();
+  inspector.openFile({
+    id: source.fieldId,
+    entityId: source.entityId,
+    label: source.entityName ?? source.fileName,
+    fileName: source.fileName,
+    mimeType: source.mimeType,
+    pdfFileId: source.pdfFileId,
+    propertyId: source.propertyId,
+    workspaceId,
+  });
+  inspector.setFileFacet(source.fieldId, "preview");
 };

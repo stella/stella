@@ -6,6 +6,7 @@ import {
   FileTextIcon,
   GlobeIcon,
   LandmarkIcon,
+  MailIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -20,7 +21,10 @@ import {
   resolveMentionWorkspaceId,
 } from "@/components/chat/chat-mention-href";
 import { useEntityIconSource } from "@/components/chat/entity-icon-source";
-import { openEntityInInspector } from "@/components/chat/entity-open";
+import {
+  openEmailCitationSource,
+  openEntityInInspector,
+} from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { InlinePill } from "@/components/inline-pill";
@@ -29,8 +33,13 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
+import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import {
+  EMAIL_CITATION_HREF_PREFIX,
+  requestEmailCitationScroll,
+} from "@/lib/files/email-citations";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -520,6 +529,7 @@ export const StreamdownMentionLink = ({
   workspaceId,
   ...props
 }: StreamdownMentionLinkProps) => {
+  const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
   if (!href) {
     return <span {...props}>{children}</span>;
   }
@@ -541,6 +551,21 @@ export const StreamdownMentionLink = ({
       <FolioBlockChip blockId={rawBlockId} interactive={interactive}>
         {children}
       </FolioBlockChip>
+    );
+  }
+
+  if (href.startsWith(EMAIL_CITATION_HREF_PREFIX)) {
+    if (!emailCitation) {
+      return <span {...props}>{children}</span>;
+    }
+    return (
+      <EmailCitationChip
+        citation={emailCitation}
+        interactive={interactive}
+        workspaceId={workspaceId}
+      >
+        {children}
+      </EmailCitationChip>
     );
   }
 
@@ -584,6 +609,82 @@ export const StreamdownMentionLink = ({
     <a href={href} rel="noopener noreferrer" target="_blank" {...props}>
       {children}
     </a>
+  );
+};
+
+const EmailCitationChip = ({
+  citation,
+  children,
+  interactive,
+  workspaceId,
+}: {
+  citation: NonNullable<ReturnType<typeof useVerifiedEmailCitationTarget>>;
+  children: React.ReactNode;
+  interactive: boolean;
+  workspaceId: string | undefined;
+}) => {
+  const tCommon = useTranslations("common");
+  const { target } = citation;
+  const retryLabel = tCommon("retry");
+  const handleActivate = (): void => {
+    if (citation.type === "error") {
+      detached(citation.retry(), "email-citation.retry");
+      return;
+    }
+    if (!workspaceId) {
+      return;
+    }
+    if (citation.type === "unverified") {
+      detached(
+        (async () => {
+          const source = await citation.verify();
+          if (!source) {
+            return;
+          }
+          openEmailCitationSource({ source, workspaceId });
+          requestEmailCitationScroll(target);
+        })(),
+        "email-citation.verify",
+      );
+      return;
+    }
+    if (citation.type === "verified") {
+      openEmailCitationSource({ source: citation.source, workspaceId });
+    } else {
+      const inspector = useInspectorTabsStore.getState();
+      const mountedTab = inspector.tabs.find(
+        (tab) =>
+          tab.type === "pdf" &&
+          tab.id === target.fieldId &&
+          tab.entityId === target.entityId,
+      );
+      if (mountedTab) {
+        inspector.setActive(mountedTab.id);
+        inspector.setFileFacet(mountedTab.id, "preview");
+        inspector.setMinimized(false);
+      }
+    }
+    requestEmailCitationScroll(target);
+  };
+
+  return (
+    <InlinePill
+      {...(citation.type === "error" ? { ariaLabel: retryLabel } : {})}
+      {...(citation.type === "error" && interactive
+        ? { tooltip: retryLabel }
+        : {})}
+      data-block-id={target.blockId}
+      leadingIcon={<MailIcon className="size-3 shrink-0" />}
+      onActivate={
+        interactive && (citation.type === "error" || Boolean(workspaceId))
+          ? handleActivate
+          : undefined
+      }
+      tone={citation.type === "error" ? "info" : "accent"}
+      truncate
+    >
+      {children}
+    </InlinePill>
   );
 };
 

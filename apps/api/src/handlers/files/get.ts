@@ -54,7 +54,9 @@ const fileFieldQuery = async (
       .select({
         content: fields.content,
         entityId: entities.id,
+        entityName: entities.name,
         entityVersionId: entityVersions.id,
+        propertyId: fields.propertyId,
         versionStamp: entityVersions.stamp,
         verificationCode: entityVersions.verificationCode,
       })
@@ -275,7 +277,18 @@ export const readEmailHtmlPreviewHandler = async ({
     return status(422, { message: "Failed to render email preview" });
   }
 
-  return previewResult.value;
+  return {
+    ...previewResult.value,
+    source: {
+      entityId: row.entityId,
+      entityName: row.entityName,
+      fieldId,
+      fileName: content.fileName,
+      mimeType: content.mimeType,
+      pdfFileId: content.pdfFileId,
+      propertyId: row.propertyId,
+    },
+  };
 };
 
 // ── Stamped download (separate endpoint) ────────────────

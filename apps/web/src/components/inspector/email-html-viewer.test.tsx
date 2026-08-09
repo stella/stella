@@ -23,6 +23,7 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
+import { toSafeId } from "@/lib/safe-id";
 
 const FORMATTING_LOCALE = "en-u-nu-arab";
 
@@ -184,15 +185,26 @@ describe("email viewer", () => {
       ],
       bodyHtml:
         '<p>Message body</p><details data-stella-email-fold="quoted-history"><summary data-stella-email-fold-summary="fold-0"></summary><blockquote>Previous message</blockquote></details><details data-stella-email-fold="signature"><summary data-stella-email-fold-summary="fold-1"></summary><p>Kind regards</p></details>',
+      citationBlocks: [{ id: "body-0001", text: "Message body" }],
       cc: ["copy@example.org"],
       date: "Mon, 02 Jun 2026 10:00:00 +0000",
       from: "Sender <sender@example.org>",
+      source: {
+        entityId: toSafeId<"entity">("entity-1"),
+        entityName: "Contract",
+        fieldId: toSafeId<"field">("field-1"),
+        fileName: "message.eml",
+        mimeType: "message/rfc822",
+        pdfFileId: null,
+        propertyId: toSafeId<"property">("property-1"),
+      },
       subject: "Contract draft",
       to: ["client@example.org", "عائشة <aisha@example.ae>"],
     });
 
     const html = renderWithProviders(
       <EmailHtmlViewer
+        entityId="entity-1"
         fieldId="field-1"
         layout={EMAIL_VIEWER_LAYOUT.contextualChat}
         workspaceId="workspace-1"
@@ -209,10 +221,12 @@ describe("email viewer", () => {
     expect(html).toContain(">blind@example.org</bdi>");
     expect(html).toContain("contract.pdf");
     expect(html).toContain(">٢ kB</span>");
-    expect(html).toContain('sandbox=""');
+    expect(html).toContain('sandbox="allow-same-origin"');
+    expect(html).not.toContain("allow-scripts");
     expect(html).toContain("pb-40");
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
+    expect(html).toContain('data-stella-email-anchor="header-subject"');
     expect(html).toContain("Show previous messages");
     expect(html).toContain("Hide previous messages");
     expect(html).toContain("Previous message");
@@ -225,7 +239,11 @@ describe("email viewer", () => {
 
   test("renders the scoped loading state", () => {
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-2" workspaceId="workspace-2" />,
+      <EmailHtmlViewer
+        entityId="entity-2"
+        fieldId="field-2"
+        workspaceId="workspace-2"
+      />,
       new QueryClient(),
     );
 
@@ -265,7 +283,11 @@ describe("email viewer", () => {
     }
 
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-3" workspaceId="workspace-3" />,
+      <EmailHtmlViewer
+        entityId="entity-3"
+        fieldId="field-3"
+        workspaceId="workspace-3"
+      />,
       queryClient,
     );
 

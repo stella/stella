@@ -9,9 +9,19 @@
  * practice.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
+import { openEmailCitationSource } from "@/components/chat/entity-open";
 import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+
+afterEach(() => {
+  useInspectorTabsStore.setState({
+    activeId: null,
+    minimized: false,
+    tabs: [],
+  });
+});
 
 const at = (pathname: string, search = "") => ({ pathname, search });
 
@@ -89,4 +99,48 @@ describe("isEntityActiveInMainRoute", () => {
   test("returns false when no location is available (server-side render)", () => {
     expect(isEntityActiveInMainRoute("ent_1", "ws_1", null)).toBe(false);
   });
+});
+
+test("opening an email citation switches an existing tab to preview", () => {
+  const source = {
+    entityId: "entity-1",
+    entityName: "Message",
+    fieldId: "field-email",
+    fileName: "message.eml",
+    mimeType: "message/rfc822",
+    pdfFileId: null,
+    propertyId: "property-1",
+  };
+
+  for (const facet of ["attachments", "metadata", "versions"] as const) {
+    useInspectorTabsStore.setState({
+      activeId: null,
+      minimized: true,
+      tabs: [],
+    });
+    useInspectorTabsStore.getState().openFile({
+      id: source.fieldId,
+      entityId: source.entityId,
+      label: source.entityName,
+      fileName: source.fileName,
+      mimeType: source.mimeType,
+      pdfFileId: source.pdfFileId,
+      propertyId: source.propertyId,
+      workspaceId: "workspace-1",
+    });
+    useInspectorTabsStore.getState().setFileFacet(source.fieldId, facet);
+    useInspectorTabsStore.getState().setMinimized(true);
+
+    openEmailCitationSource({ source, workspaceId: "workspace-1" });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: source.fieldId,
+      minimized: false,
+    });
+    expect(
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((tab) => tab.id === source.fieldId),
+    ).toMatchObject({ facet: "preview", type: "pdf" });
+  }
 });

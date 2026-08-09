@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { MAX_EMAIL_CITATION_BLOCKS } from "@/api/lib/files/email-citations";
+
 import {
   buildEmailPreview,
   emailToHtml,
@@ -343,7 +345,7 @@ describe("renderEmailHtml", () => {
             "From: Žofie Nováková &lt;zofie@example.cz&gt;<br>",
             "To: 李雷 &lt;li@example.cn&gt;<br>",
             "Subject: Návrh smlouvy ⚖️<br><br>",
-            '<p style="background: url(https://attacker.example/style)">Message content</p>',
+            '<p data-stella-email-anchor="forged" style="background: url(https://attacker.example/style)">Message content</p>',
             '<img src="https://attacker.example/pixel.gif" onerror="steal()">',
             '<a href="https://attacker.example/link" ping="https://attacker.example/ping">safe text</a>',
             '<form action="https://attacker.example/submit"><input value="x"></form>',
@@ -392,6 +394,22 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain('<body dir="auto">');
     expect(preview.bodyHtml).toContain("Forwarded message");
     expect(preview.bodyHtml).toContain("Message content");
+    expect(preview.citationBlocks).toContainEqual({
+      id: "header-subject",
+      text: "Návrh smlouvy ⚖️",
+    });
+    const bodyCitationBlocks = preview.citationBlocks.filter(({ id }) =>
+      id.startsWith("body-"),
+    );
+    expect(bodyCitationBlocks.length).toBeGreaterThan(0);
+    for (const { id } of bodyCitationBlocks) {
+      expect(
+        preview.bodyHtml.match(
+          new RegExp(`data-stella-email-anchor="${id}"`, "gu"),
+        ),
+      ).toHaveLength(1);
+    }
+    expect(preview.bodyHtml).not.toContain('data-stella-email-anchor="forged"');
     expect(preview.bodyHtml).not.toContain("Návrh smlouvy ⚖️");
     expect(preview.bodyHtml).not.toContain("zofie@example.cz");
     expect(preview.bodyHtml).not.toContain("li@example.cn");
@@ -624,9 +642,195 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Aktuální odpověď");
     expect(preview.bodyHtml).toContain("Žofie Nováková");
     expect(preview.bodyHtml).toContain("&gt; Předchozí zpráva");
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Aktuální odpověď",
+    });
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0002",
+      text: "--",
+    });
     expect(
       parsedEmailToText(htmlEmail({ body: { type: "text", text: body } })),
     ).toContain("> Druhý řádek");
+  });
+
+  test("bounds citation blocks while leaving the complete body visible", () => {
+    const lines = Array.from({ length: 200 }, (_, index) => `Line ${index}`);
+    const preview = buildEmailPreview(
+      htmlEmail({ body: { type: "text", text: lines.join("\n") } }),
+    );
+
+    expect(preview.citationBlocks).toHaveLength(MAX_EMAIL_CITATION_BLOCKS);
+    expect(preview.bodyHtml).toContain("Line 199");
+  });
+
+  test("bounds citation text without splitting Unicode code points", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `<p>${"a".repeat(499)}😀trailing</p>`,
+        },
+      }),
+    );
+    const text = preview.citationBlocks.find(
+      ({ id }) => id === "body-0001",
+    )?.text;
+
+    expect(text).toEndWith("😀");
+    expect(Array.from(text ?? "")).toHaveLength(500);
+    expect(text).not.toContain("trailing");
+  });
+
+  test("preserves punctuation and CJK spacing across inline markup", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: "<p>Hello <strong>Jane</strong>, 你好<strong>世界</strong></p>",
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Hello Jane, 你好世界",
+    });
+  });
+
+  test("excludes hidden inline descendants from citation text", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<p>Visible<span hidden>secret</span><span aria-hidden="TRUE">also secret</span><span> shown</span></p>',
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Visible shown",
+    });
+    expect(preview.bodyHtml).toContain("secret");
+  });
+
+  test("excludes content inside inert containers from citations", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>Visible</p>",
+            "<dialog><p>Closed dialog</p></dialog>",
+            "<template><p>Template content</p></template>",
+            "<div popover><p>Closed popover</p></div>",
+            "<p>Visible before<datalist><option>Hidden option</option></datalist> visible after</p>",
+            "<dialog open><p>Open dialog</p></dialog>",
+          ].join(""),
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain("Visible");
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain(
+      "Open dialog",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Closed dialog",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Template content",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Closed popover",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain(
+      "Visible before visible after",
+    );
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "Visible beforeHidden option visible after",
+    );
+    expect(preview.bodyHtml).toContain("Closed dialog");
+    expect(preview.bodyHtml).toContain("Template content");
+    expect(preview.bodyHtml).toContain("Closed popover");
+    expect(preview.bodyHtml).toContain("Hidden option");
+  });
+
+  test("does not fabricate wrapper text around nested citation blocks", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: "<div>Before<p>Middle</p>After</div>",
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks.map(({ text }) => text)).toContain("Middle");
+    expect(preview.citationBlocks.map(({ text }) => text)).not.toContain(
+      "BeforeAfter",
+    );
+  });
+
+  test("extracts deeply nested inline citation text iteratively", () => {
+    const depth = 3000;
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `<p>${"<span>".repeat(depth)}Deep text${"</span>".repeat(depth)}</p>`,
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Deep text",
+    });
+  });
+
+  test("selects a deeply nested leaf block in one traversal", () => {
+    const depth = 3000;
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `${"<div>".repeat(depth)}Deep block${"</div>".repeat(depth)}`,
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Deep block",
+    });
+  });
+
+  test("excludes replaced-element fallback text from citations", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>Visible <progress>progress fallback</progress></p>",
+            "<canvas><p>canvas fallback</p></canvas>",
+            "<audio>audio fallback</audio>",
+          ].join(""),
+        },
+      }),
+    );
+    const citationText = preview.citationBlocks
+      .map(({ text }) => text)
+      .join(" ");
+
+    expect(citationText).toContain("Visible");
+    expect(citationText).not.toContain("progress fallback");
+    expect(citationText).not.toContain("canvas fallback");
+    expect(citationText).not.toContain("audio fallback");
+    expect(preview.bodyHtml).toContain("progress fallback");
+    expect(preview.bodyHtml).toContain("canvas fallback");
   });
 
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {

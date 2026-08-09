@@ -98,13 +98,16 @@ const docxEditSnapshotSchema = t.Object({
   ),
 });
 
-export const activeFileSchema = t.Object({
-  entityId: tSafeId("entity"),
-  fileFieldId: t.Optional(tSafeId("field")),
-  fileName: t.String(),
-  supportsDocxEdits: t.Optional(t.Boolean()),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
-});
+export const activeFileSchema = t.Object(
+  {
+    entityId: tSafeId("entity"),
+    fileFieldId: t.Optional(tSafeId("field")),
+    fileName: t.String(),
+    supportsDocxEdits: t.Optional(t.Boolean()),
+    docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  },
+  { additionalProperties: false },
+);
 
 export const activeDraftSchema = t.Object({
   originChatMessageId: tSafeId("chatMessage"),
