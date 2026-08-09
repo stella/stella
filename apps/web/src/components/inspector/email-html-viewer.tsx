@@ -342,6 +342,16 @@ export const EmailHtmlViewer = ({
       <div className="bg-muted/30 min-h-0 min-w-0 flex-1 overflow-hidden p-2">
         <iframe
           className="bg-background size-full border-0"
+          onLoad={() => {
+            if (!activeCitationBlockId) {
+              return;
+            }
+            scrollToEmailCitation({
+              article: articleRef.current,
+              blockId: activeCitationBlockId,
+              bodyFrame: bodyFrameRef.current,
+            });
+          }}
           ref={bodyFrameRef}
           referrerPolicy="no-referrer"
           sandbox="allow-same-origin"
