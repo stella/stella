@@ -470,16 +470,19 @@ describe("chat third-party anonymization boundary", () => {
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
-      read_secret: toolDefinition({
-        name: "read_secret",
-        description: "Read a secret fixture.",
-      }).server(async () => ({
-        documentId: "doc_123",
-        ids: ["person_456"],
-        nationalId: "Secret-123",
-        participants: ["Jan Novák", "Secret"],
-        text: "Secret notes for Jan Novák",
-      })),
+      read_secret: applyChatToolPolicy(
+        toolDefinition({
+          name: "read_secret",
+          description: "Read a secret fixture.",
+        }).server(async () => ({
+          documentId: "doc_123",
+          ids: ["person_456"],
+          nationalId: "Secret-123",
+          participants: ["Jan Novák", "Secret"],
+          text: "Secret notes for Jan Novák",
+        })),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
@@ -788,14 +791,17 @@ describe("chat third-party anonymization boundary", () => {
 
     const seenInputs: unknown[] = [];
     const tools = {
-      list_contacts: toolDefinition({
-        name: "list_contacts",
-        description: "List contacts fixture.",
-        inputSchema: v.strictObject({ query: v.string() }),
-      }).server(async (input) => {
-        seenInputs.push(input);
-        return { items: [{ name: input.query, id: "c1" }] };
-      }),
+      list_contacts: applyChatToolPolicy(
+        toolDefinition({
+          name: "list_contacts",
+          description: "List contacts fixture.",
+          inputSchema: v.strictObject({ query: v.string() }),
+        }).server(async (input) => {
+          seenInputs.push(input);
+          return { items: [{ name: input.query, id: "c1" }] };
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
@@ -827,14 +833,17 @@ describe("chat third-party anonymization boundary", () => {
 
     const seenInputs: unknown[] = [];
     const tools = {
-      run_query: toolDefinition({
-        name: "run_query",
-        description: "Run query fixture.",
-        inputSchema: v.strictObject({ code: v.string() }),
-      }).server(async (input) => {
-        seenInputs.push(input);
-        return { value: { items: [] } };
-      }),
+      run_query: applyChatToolPolicy(
+        toolDefinition({
+          name: "run_query",
+          description: "Run query fixture.",
+          inputSchema: v.strictObject({ code: v.string() }),
+        }).server(async (input) => {
+          seenInputs.push(input);
+          return { value: { items: [] } };
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
