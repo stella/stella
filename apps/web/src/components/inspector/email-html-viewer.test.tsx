@@ -12,6 +12,7 @@ import {
 } from "@/components/inspector/email-html-viewer";
 import {
   EMAIL_CHAT_MODE,
+  EMAIL_VIEWER_LAYOUT,
   getEmailChatMode,
   getEmailFileChatContext,
   shouldSurfaceEmailChatResolutionError,
@@ -73,7 +74,6 @@ describe("email viewer", () => {
 
     expect(html).toContain('data-file-viewer-ai="true"');
     expect(html).toContain('data-file-viewer-root="true"');
-    expect(html).toContain("pb-40");
     expect(html).toContain("flex min-h-0 flex-1 flex-col");
     expect(html).toContain('role="status"');
   });
@@ -175,7 +175,11 @@ describe("email viewer", () => {
     });
 
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-1" workspaceId="workspace-1" />,
+      <EmailHtmlViewer
+        fieldId="field-1"
+        layout={EMAIL_VIEWER_LAYOUT.contextualChat}
+        workspaceId="workspace-1"
+      />,
       queryClient,
     );
 
@@ -189,6 +193,7 @@ describe("email viewer", () => {
     expect(html).toContain("contract.pdf");
     expect(html).toContain(">٢ kB</span>");
     expect(html).toContain('sandbox=""');
+    expect(html).toContain("pb-40");
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
     expect(html).toContain("Show previous messages");
