@@ -268,8 +268,8 @@ describe("persisted chat message parts", () => {
           }),
         },
       ],
-      exactRefs: [],
       unresolvedInputs: [],
+      workspaceScope: [],
     };
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),

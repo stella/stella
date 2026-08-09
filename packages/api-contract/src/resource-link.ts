@@ -5,7 +5,7 @@ import {
   type ResourceType,
 } from "./resource-ref";
 import { encodeRfc3986Component } from "./rfc3986";
-import { toSafeId } from "./safe-id";
+import { isSafeIdValue, toSafeId } from "./safe-id";
 
 export const CHAT_RESOURCE_HREF_PREFIX = {
   [RESOURCE_TYPE.CASE_LAW_DECISION]: "#stella-decision=",
@@ -151,7 +151,7 @@ const encodeChatResourceId = (value: string): string =>
 const decodeChatResourceId = (value: string): string | null => {
   try {
     const id = decodeURIComponent(value);
-    return id.length > 0 ? id : null;
+    return isSafeIdValue(id) ? id : null;
   } catch {
     return null;
   }

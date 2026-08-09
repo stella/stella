@@ -527,8 +527,10 @@ describe("extractThreadDataWorkspaceIds", () => {
                 }),
               },
             ],
-            exactRefs: [],
             unresolvedInputs: [],
+            workspaceScope: [
+              resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsB }),
+            ],
           },
         },
       },
@@ -537,8 +539,7 @@ describe("extractThreadDataWorkspaceIds", () => {
     expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
   });
 
-  test("retains exact output ref scope from persisted context", () => {
-    const entityId = toSafeId<"entity">("entity-output-only");
+  test("retains output-only matter scope from persisted context", () => {
     const messages = [
       {
         id: "assistant-matter-list",
@@ -557,10 +558,7 @@ describe("extractThreadDataWorkspaceIds", () => {
             },
             output: {
               success: true,
-              result: {
-                documents: [{ id: "ent_1", name: "Document C" }],
-                matters: [{ id: "mat_1", name: "Matter B" }],
-              },
+              result: { matters: [{ id: "mat_1", name: "Matter B" }] },
             },
           },
         ],
@@ -569,37 +567,16 @@ describe("extractThreadDataWorkspaceIds", () => {
           refContext: {
             version: 1,
             entities: [],
-            exactRefs: [
-              {
-                kind: "matter",
-                ref: "mat_1",
-                resource: resourceRef({
-                  type: RESOURCE_TYPE.WORKSPACE,
-                  id: wsB,
-                }),
-                toolCallId: "tool-execute-typescript",
-              },
-              {
-                kind: "entity",
-                ref: "ent_1",
-                resource: resourceRef({
-                  type: RESOURCE_TYPE.ENTITY,
-                  id: entityId,
-                }),
-                toolCallId: "tool-execute-typescript",
-                workspace: resourceRef({
-                  type: RESOURCE_TYPE.WORKSPACE,
-                  id: wsC,
-                }),
-              },
-            ],
             unresolvedInputs: [],
+            workspaceScope: [
+              resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsB }),
+            ],
           },
         },
       },
     ] satisfies ChatMessage[];
 
-    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB, wsC]);
+    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
   });
 });
 
@@ -680,10 +657,11 @@ describe("computeAssistantTurnWorkspaceIds", () => {
         },
       ],
       workspaceIdsBeforeStream: new Set(),
-      registeredWorkspaceIdsAfterStream: [wsA],
+      registeredWorkspaceIdsAfterStream: [wsA, wsB],
       accessibleWorkspaceIds: new Set([wsA, wsB]),
     });
 
+    expect(ids).toHaveLength(2);
     expect(new Set(ids)).toEqual(new Set([wsA, wsB]));
   });
 });

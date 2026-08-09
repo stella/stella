@@ -41,7 +41,6 @@ describe("chat ref encoding validation", () => {
       isChatRefContext({
         version: 1,
         entities: [],
-        exactRefs: [],
         unresolvedInputs: [
           {
             kind: "matter",
@@ -50,6 +49,7 @@ describe("chat ref encoding validation", () => {
             toolCallId: "tool-1",
           },
         ],
+        workspaceScope: [],
       }),
     ).toBe(true);
     expect(isChatRefContext({ version: 1, entities: [] })).toBe(false);

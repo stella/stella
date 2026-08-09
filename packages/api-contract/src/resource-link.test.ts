@@ -110,6 +110,12 @@ describe("chat resource links", () => {
     expect(parseChatResourceHref("#stella-workspace=")).toBeNull();
     expect(parseChatResourceHref("#stella-decision=")).toBeNull();
     expect(parseChatResourceHref("#stella-entity=bad%encoding")).toBeNull();
+    expect(parseChatResourceHref("#stella-workspace=x\uD800")).toBeNull();
+    expect(parseChatResourceHref("#stella-entity=x\uD800")).toBeNull();
+    expect(
+      parseChatResourceHref("#stella-entity=workspace:x\uD800"),
+    ).toBeNull();
+    expect(parseChatResourceHref("#stella-decision=x\uD800")).toBeNull();
     expect(parseChatResourceHref("https://example.com/resource/1")).toBeNull();
   });
 

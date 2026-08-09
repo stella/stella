@@ -185,21 +185,6 @@ const isPersistedIdForInput = (
  */
 export type ChatRefKind = ChatRefTokenKind;
 
-type ChatRefTargetByKind = {
-  contact: { contactId: SafeId<"contact"> };
-  entity: EntityTarget;
-  matter: { workspaceId: SafeId<"workspace"> };
-  property: { propertyId: SafeId<"property"> };
-};
-
-export type ChatRefTarget = {
-  [TKind in ChatRefKind]: {
-    kind: TKind;
-    ref: string;
-    target: ChatRefTargetByKind[TKind];
-  };
-}[ChatRefKind];
-
 /**
  * One id to turn back into a chat ref. `workspaceId` applies only to
  * `kind: "entity"`, whose ref key is the (workspace, entity) pair; when it is
@@ -219,8 +204,6 @@ export type ResolveRefIdProps = {
 };
 
 export type ChatRefRegistry = {
-  /** Find exact registered-ref leaves present in one model-visible value. */
-  collectRefTargets: (value: unknown) => ChatRefTarget[];
   /**
    * Deduped union of every workspace id any tool (including subagents)
    * resolved a matter or entity ref for on this turn, regardless of
@@ -233,11 +216,6 @@ export type ChatRefRegistry = {
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
   hydrateAssistantValueRefs: (value: unknown) => unknown;
-  /** Re-mint persisted ref leaves into the current turn's namespace. */
-  hydrateRefTargets: (props: {
-    targets: readonly ChatRefTarget[];
-    value: unknown;
-  }) => unknown;
   /**
    * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
    * kind rather than by key name. Tool input and output kinds come from the
@@ -435,94 +413,6 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     );
   };
 
-  const findRegisteredRefTarget = (ref: string): ChatRefTarget | null => {
-    const contactId = contactState.refToTarget.get(ref);
-    if (contactId !== undefined) {
-      return { kind: "contact", ref, target: { contactId } };
-    }
-    const entity = entityState.refToTarget.get(ref);
-    if (entity !== undefined) {
-      return { kind: "entity", ref, target: entity };
-    }
-    const workspaceId = matterState.refToTarget.get(ref);
-    if (workspaceId !== undefined) {
-      return { kind: "matter", ref, target: { workspaceId } };
-    }
-    const propertyId = propertyState.refToTarget.get(ref);
-    return propertyId === undefined
-      ? null
-      : { kind: "property", ref, target: { propertyId } };
-  };
-
-  const collectRefTargets = (value: unknown): ChatRefTarget[] => {
-    const targetsByRef = new Map<string, ChatRefTarget>();
-    const collect = (candidate: unknown): void => {
-      if (typeof candidate === "string") {
-        const target = findRegisteredRefTarget(candidate);
-        if (target !== null) {
-          targetsByRef.set(candidate, target);
-        }
-        return;
-      }
-      if (Array.isArray(candidate)) {
-        for (const item of candidate) {
-          collect(item);
-        }
-        return;
-      }
-      if (!isPlainRecord(candidate)) {
-        return;
-      }
-      for (const child of Object.values(candidate)) {
-        collect(child);
-      }
-    };
-
-    collect(value);
-    return [...targetsByRef.values()];
-  };
-
-  const hydrateRefTargets = ({
-    targets,
-    value,
-  }: {
-    targets: readonly ChatRefTarget[];
-    value: unknown;
-  }): unknown => {
-    const targetsByRef = new Map(targets.map((target) => [target.ref, target]));
-    const toRef = (target: ChatRefTarget): string => {
-      switch (target.kind) {
-        case "contact":
-          return toContactRef(target.target.contactId);
-        case "entity":
-          return toEntityRef(target.target);
-        case "matter":
-          return toMatterRef(target.target.workspaceId);
-        case "property":
-          return toPropertyRef(target.target.propertyId);
-        default:
-          return target satisfies never;
-      }
-    };
-    const hydrate = (candidate: unknown): unknown => {
-      if (typeof candidate === "string") {
-        const target = targetsByRef.get(candidate);
-        return target === undefined ? candidate : toRef(target);
-      }
-      if (Array.isArray(candidate)) {
-        return candidate.map((item) => hydrate(item));
-      }
-      if (!isPlainRecord(candidate)) {
-        return candidate;
-      }
-      return Object.fromEntries(
-        Object.entries(candidate).map(([key, child]) => [key, hydrate(child)]),
-      );
-    };
-
-    return hydrate(value);
-  };
-
   const toHydratedMatterRef = (
     value: unknown,
     inputState: ChatRefInputState,
@@ -630,11 +520,9 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   return {
-    collectRefTargets,
     getRegisteredWorkspaceIds,
     hydrateAssistantTextRefs,
     hydrateAssistantValueRefs,
-    hydrateRefTargets,
     hydrateRefId,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,

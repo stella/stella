@@ -53,63 +53,6 @@ describe("chat ref registry", () => {
     );
   });
 
-  test("re-mints every exact output-only ref from persisted context", () => {
-    const sourceRegistry = createChatRefRegistry();
-    const workspaceId = toSafeId<"workspace">("workspace-opaque");
-    const entityId = toSafeId<"entity">("entity-opaque");
-    const propertyId = toSafeId<"property">("property-opaque");
-    const contactId = toSafeId<"contact">("contact-opaque");
-    const matterRef = sourceRegistry.toMatterRef(workspaceId);
-    const entityRef = sourceRegistry.toEntityRef({ entityId, workspaceId });
-    const propertyRef = sourceRegistry.toPropertyRef(propertyId);
-    const contactRef = sourceRegistry.toContactRef(contactId);
-    const persistedValue = {
-      refs: [matterRef, entityRef, propertyRef, contactRef],
-      text: `A label containing ${matterRef}`,
-    };
-    const targets = sourceRegistry.collectRefTargets(persistedValue);
-    expect(targets).toEqual([
-      { kind: "matter", ref: matterRef, target: { workspaceId } },
-      {
-        kind: "entity",
-        ref: entityRef,
-        target: { entityId, workspaceId },
-      },
-      { kind: "property", ref: propertyRef, target: { propertyId } },
-      { kind: "contact", ref: contactRef, target: { contactId } },
-    ]);
-
-    const replayRegistry = createChatRefRegistry();
-    replayRegistry.toMatterRef(toSafeId<"workspace">("workspace-existing"));
-    replayRegistry.toEntityRef({
-      entityId: toSafeId<"entity">("entity-existing"),
-      workspaceId: toSafeId<"workspace">("workspace-existing"),
-    });
-    replayRegistry.toPropertyRef(toSafeId<"property">("property-existing"));
-    replayRegistry.toContactRef(toSafeId<"contact">("contact-existing"));
-    expect(
-      replayRegistry.hydrateRefTargets({
-        targets,
-        value: persistedValue,
-      }),
-    ).toEqual({
-      refs: ["mat_2", "ent_2", "prop_2", "contact_2"],
-      text: `A label containing ${matterRef}`,
-    });
-    expect(replayRegistry.resolveMatterRefs(["mat_2"])).toEqual(
-      Result.ok([workspaceId]),
-    );
-    expect(replayRegistry.resolveEntityRefs(["ent_2"])).toEqual(
-      Result.ok([entityId]),
-    );
-    expect(replayRegistry.resolvePropertyRefs(["prop_2"])).toEqual(
-      Result.ok([propertyId]),
-    );
-    expect(replayRegistry.resolveContactRefs(["contact_2"])).toEqual(
-      Result.ok([contactId]),
-    );
-  });
-
   test("uses short refs for model-facing links and resolves canonical hrefs", () => {
     const registry = createChatRefRegistry();
     const workspaceId = toSafeId<"workspace">(
