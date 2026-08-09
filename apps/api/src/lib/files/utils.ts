@@ -56,7 +56,7 @@ export const resolveUploadMime = ({
     .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
     .toLowerCase();
   const lookupName = `file.${extension}`;
-  return Bun.file(lookupName).type || declaredMime;
+  return Bun.file(lookupName).type.split(";").at(0)?.trim() || declaredMime;
 };
 
 /**

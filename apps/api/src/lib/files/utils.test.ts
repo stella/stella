@@ -34,6 +34,21 @@ describe("resolveUploadMime", () => {
     ).toBe("text/markdown");
   });
 
+  test("strips parameters from inferred text MIME types", () => {
+    for (const [fileName, mimeType] of [
+      ["notes.txt", "text/plain"],
+      ["page.html", "text/html"],
+      ["data.json", "application/json"],
+    ] as const) {
+      expect(
+        resolveUploadMime({
+          declaredMime: "application/octet-stream",
+          fileName,
+        }),
+      ).toBe(mimeType);
+    }
+  });
+
   test("recovers previewable documents reported as generic", () => {
     expect(
       resolveUploadMime({
