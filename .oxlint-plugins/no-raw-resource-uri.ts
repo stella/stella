@@ -5,6 +5,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  getImportedName,
   getPropertyName,
   isAstNode,
   isCallTo,
@@ -58,48 +59,6 @@ const templateContainsRawResourceUriPrefix = (node: unknown): boolean =>
     return text !== null && containsRawResourceUriPrefix(text);
   });
 
-const referencesResourceUriPrefix = (value: unknown): boolean => {
-  const node = unwrapExpression(value);
-  if (node === null) {
-    return false;
-  }
-  if (isIdentifier(node)) {
-    return RESOURCE_URI_PREFIX_BINDINGS.has(node.name);
-  }
-  if (node.type === "MemberExpression") {
-    return referencesResourceUriPrefix(node.object);
-  }
-  if (node.type === "BinaryExpression" || node.type === "LogicalExpression") {
-    return (
-      referencesResourceUriPrefix(node.left) ||
-      referencesResourceUriPrefix(node.right)
-    );
-  }
-  if (node.type === "ConditionalExpression") {
-    return (
-      referencesResourceUriPrefix(node.consequent) ||
-      referencesResourceUriPrefix(node.alternate)
-    );
-  }
-  if (node.type === "TemplateLiteral" && Array.isArray(node.expressions)) {
-    return node.expressions.some(referencesResourceUriPrefix);
-  }
-  return false;
-};
-
-const isConcatCallOnResourceUriPrefix = (node: unknown): boolean => {
-  if (!isAstNode(node) || node.type !== "CallExpression") {
-    return false;
-  }
-  const callee = node.callee;
-  return (
-    isAstNode(callee) &&
-    callee.type === "MemberExpression" &&
-    getPropertyName(callee.property) === "concat" &&
-    referencesResourceUriPrefix(callee.object)
-  );
-};
-
 export default eslintCompatPlugin({
   meta: { name: "no-raw-resource-uri" },
   rules: {
@@ -114,6 +73,170 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const resolveVariable = (identifier) => {
+          let scope: ReturnType<typeof context.sourceCode.getScope> | null =
+            context.sourceCode.getScope(identifier);
+          while (scope) {
+            const variable = scope.set.get(identifier.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const getStableInitializer = (variable) => {
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration"
+            ) {
+              continue;
+            }
+            if (
+              definition.parent.kind !== "const" &&
+              variable.references.some(
+                (reference) =>
+                  typeof reference.isWrite === "function" &&
+                  reference.isWrite() &&
+                  reference.init !== true,
+              )
+            ) {
+              return null;
+            }
+            return definition.node.init;
+          }
+          return null;
+        };
+
+        const isResourcePrefixNamespaceMember = (node: unknown): boolean => {
+          if (
+            !isAstNode(node) ||
+            node.type !== "MemberExpression" ||
+            !isIdentifier(node.object)
+          ) {
+            return false;
+          }
+          const propertyName = getPropertyName(node.property);
+          if (
+            propertyName === null ||
+            !RESOURCE_URI_PREFIX_BINDINGS.has(propertyName)
+          ) {
+            return false;
+          }
+          const variable = resolveVariable(node.object);
+          return (
+            variable?.defs.some(
+              (definition) =>
+                definition.type === "ImportBinding" &&
+                isAstNode(definition.node) &&
+                definition.node.type === "ImportNamespaceSpecifier",
+            ) ?? false
+          );
+        };
+
+        const referencesResourceUriPrefix = (
+          value: unknown,
+          visited = new Set<unknown>(),
+        ): boolean => {
+          const node = unwrapExpression(value);
+          if (node === null) {
+            return false;
+          }
+          if (isIdentifier(node)) {
+            const variable = resolveVariable(node);
+            if (variable === null) {
+              return RESOURCE_URI_PREFIX_BINDINGS.has(node.name);
+            }
+            if (visited.has(variable)) {
+              return false;
+            }
+            visited.add(variable);
+            if (
+              variable.defs.some(
+                (definition) =>
+                  definition.type === "ImportBinding" &&
+                  RESOURCE_URI_PREFIX_BINDINGS.has(
+                    getImportedName(definition.node) ?? "",
+                  ),
+              )
+            ) {
+              return true;
+            }
+            return referencesResourceUriPrefix(
+              getStableInitializer(variable),
+              visited,
+            );
+          }
+          if (node.type === "MemberExpression") {
+            return (
+              isResourcePrefixNamespaceMember(node) ||
+              referencesResourceUriPrefix(node.object, visited)
+            );
+          }
+          if (
+            node.type === "BinaryExpression" ||
+            node.type === "LogicalExpression"
+          ) {
+            return (
+              referencesResourceUriPrefix(node.left, visited) ||
+              referencesResourceUriPrefix(node.right, visited)
+            );
+          }
+          if (node.type === "ConditionalExpression") {
+            return (
+              referencesResourceUriPrefix(node.consequent, visited) ||
+              referencesResourceUriPrefix(node.alternate, visited)
+            );
+          }
+          if (node.type === "TemplateLiteral") {
+            return (
+              Array.isArray(node.expressions) &&
+              node.expressions.some((expression) =>
+                referencesResourceUriPrefix(expression, visited),
+              )
+            );
+          }
+          if (node.type === "ObjectExpression") {
+            return (
+              Array.isArray(node.properties) &&
+              node.properties.some((property) => {
+                if (!isAstNode(property)) {
+                  return false;
+                }
+                if (property.type === "SpreadElement") {
+                  return referencesResourceUriPrefix(
+                    property.argument,
+                    visited,
+                  );
+                }
+                return (
+                  property.type === "Property" &&
+                  referencesResourceUriPrefix(property.value, visited)
+                );
+              })
+            );
+          }
+          return false;
+        };
+
+        const isConcatCallOnResourceUriPrefix = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "CallExpression") {
+            return false;
+          }
+          const callee = node.callee;
+          return (
+            isAstNode(callee) &&
+            callee.type === "MemberExpression" &&
+            getPropertyName(callee.property) === "concat" &&
+            referencesResourceUriPrefix(callee.object)
+          );
+        };
+
         const report = (node: unknown): void => {
           if (isAstNode(node)) {
             context.report({ node, messageId: "rawResourceUri" });
@@ -147,7 +270,9 @@ export default eslintCompatPlugin({
             if (
               templateContainsRawResourceUriPrefix(node) ||
               (Array.isArray(node.expressions) &&
-                node.expressions.some(referencesResourceUriPrefix))
+                node.expressions.some((expression) =>
+                  referencesResourceUriPrefix(expression),
+                ))
             ) {
               report(node);
             }
