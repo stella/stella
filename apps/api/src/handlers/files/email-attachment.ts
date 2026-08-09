@@ -1,62 +1,25 @@
 import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
-  createEmailAttachmentDescriptor,
-  findEmailAttachmentIndex,
-} from "@/api/lib/files/email-attachment-token";
-import {
-  parseEmail,
-  buildEmailPreview,
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
-  resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
-import { createFileKey } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
-const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
+import {
+  EMAIL_ATTACHMENT_LOAD_STATUS,
+  loadEmailAttachment,
+} from "./email-attachment-loader";
 
-const emailAttachmentFieldQuery = async (
-  scopedDb: ScopedDb,
-  fieldId: SafeId<"field">,
-  workspaceId: SafeId<"workspace">,
-) =>
-  await scopedDb((tx) =>
-    tx
-      .select({
-        content: fields.content,
-        entityId: entities.id,
-        entityVersionId: entityVersions.id,
-      })
-      .from(fields)
-      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-      .innerJoin(
-        entities,
-        and(
-          eq(entityVersions.entityId, entities.id),
-          eq(entities.workspaceId, workspaceId),
-        ),
-      )
-      // Withdrawn versions remain under legal hold, but their bytes must not
-      // remain reachable through a previously captured field identifier.
-      .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
-      .limit(1),
-  );
+const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -94,79 +57,22 @@ export default createSafeHandler(
     session,
     workspaceId,
   }) {
-    const rows = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await emailAttachmentFieldQuery(scopedDb, fieldId, workspaceId),
-      ),
-    );
-    const row = rows.at(0);
-    if (!row || row.content.type !== "file" || row.content.encrypted) {
-      return Result.ok(attachmentNotFound());
-    }
-
-    const content = row.content;
-    const emailMimeType = resolveEmailMimeType({
-      fileName: content.fileName,
-      mimeType: content.mimeType,
-    });
-    if (!emailMimeType) {
-      return Result.ok(attachmentNotFound());
-    }
-
-    const attachmentIndex = findEmailAttachmentIndex({
-      descriptor: attachmentId,
+    const attachment = yield* loadEmailAttachment({
+      attachmentId,
+      fieldId,
+      organizationId: session.activeOrganizationId,
+      scopedDb,
       secret: env.BETTER_AUTH_SECRET,
-      sourceFileId: content.id,
-      sourceVersionId: row.entityVersionId,
+      workspaceId,
     });
-    if (attachmentIndex === null) {
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.notFound) {
       return Result.ok(attachmentNotFound());
     }
-    if (content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document) {
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.tooLarge) {
       return Result.ok(attachmentSourceTooLarge());
     }
-
-    const sourceBuffer = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readS3ArrayBuffer(
-            createFileKey({
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              fileId: content.id,
-              mimeType: content.mimeType,
-            }),
-          ),
-      ),
-    );
-    const parsedResult = await Result.tryPromise({
-      try: async () => await parseEmail(sourceBuffer, emailMimeType),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(parsedResult)) {
-      captureError(parsedResult.error, {
-        fieldId,
-        mimeType: emailMimeType,
-        workspaceId,
-      });
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.unreadable) {
       return Result.ok(attachmentUnreadable());
-    }
-    const preview = buildEmailPreview(parsedResult.value, {
-      createAttachmentId: (index) =>
-        createEmailAttachmentDescriptor({
-          attachmentIndex: index,
-          secret: env.BETTER_AUTH_SECRET,
-          sourceFileId: content.id,
-          sourceVersionId: row.entityVersionId,
-        }),
-    });
-    const descriptor = preview.attachments.find(
-      ({ id }) => id === attachmentId,
-    );
-    const attachment = parsedResult.value.attachments.at(attachmentIndex);
-    if (!descriptor || !attachment) {
-      return Result.ok(attachmentNotFound());
     }
     const attachmentMimeType = resolveEmailAttachmentMimeType({
       fileName: attachment.fileName,
@@ -183,7 +89,7 @@ export default createSafeHandler(
       disposition === "inline"
         ? (attachmentMimeType ?? "application/octet-stream")
         : "application/octet-stream";
-    const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
+    const fileName = sanitizeFilename(attachment.fileName);
     const safeDisposition = contentDisposition(
       fileName,
       disposition === "download" ? "attachment" : "inline",
@@ -197,7 +103,7 @@ export default createSafeHandler(
                 await recordAuditEvent(tx, {
                   action: AUDIT_ACTION.DOWNLOAD,
                   resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-                  resourceId: row.entityId,
+                  resourceId: attachment.sourceEntityId,
                   metadata: {
                     attachmentId,
                     fieldId,
