@@ -11,7 +11,6 @@ minimumReleaseAgeExcludes = [
   # of the quarantine window; runs only inside the isolated extraction
   # subprocess, never in the API process. Listed with its platform
   # subpackages per the napi note below.
-  "@firecrawl/anydoc", # quarantine-expires: 2026-08-09T15:24:34.170Z
   "@firecrawl/anydoc-darwin-arm64",
   "@firecrawl/anydoc-darwin-x64",
   "@firecrawl/anydoc-linux-arm64-gnu",
