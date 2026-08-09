@@ -5,16 +5,19 @@ SET lock_timeout = '1s';
 SET statement_timeout = 0;
 --> statement-breakpoint
 
--- Older timer starts were not serialized. Preserve the newest running timer
--- and close any older duplicate at the minimum valid duration before enforcing
--- the invariant. The predicate changes only duplicate running timers.
--- stella-migration-safety: reviewed bulk-backfill - the update is bounded to rows ranked after the newest active timer for the same user; normally there are none, and at most duplicate running timers are repaired.
+-- Older timer starts were not serialized. Preserve the newest running draft
+-- timer and close non-draft or older duplicate timers at the minimum valid
+-- duration before enforcing the invariant.
+-- stella-migration-safety: reviewed bulk-backfill - the update is bounded to non-draft running timers and rows ranked after the newest active draft timer for the same user; normally there are none.
 WITH ranked_active_timers AS (
   SELECT
     "id",
     ROW_NUMBER() OVER (
       PARTITION BY "user_id"
-      ORDER BY "timer_started_at" DESC, "id" DESC
+      ORDER BY
+        ("status" = 'draft') DESC,
+        "timer_started_at" DESC,
+        "id" DESC
     ) AS "timer_rank"
   FROM "time_entries"
   WHERE "timer_started_at" IS NOT NULL
@@ -30,7 +33,10 @@ SET
   "updated_at" = NOW()
 FROM ranked_active_timers
 WHERE "entry"."id" = ranked_active_timers."id"
-  AND ranked_active_timers."timer_rank" > 1;
+  AND (
+    "entry"."status" <> 'draft'
+    OR ranked_active_timers."timer_rank" > 1
+  );
 --> statement-breakpoint
 
 -- Enforce the one-running-timer invariant at the persistence boundary. Build
