@@ -526,8 +526,7 @@ export const openDesktopEditSessionHandler = async function* ({
           expiredFolioCollabSessionFiles,
           value: {
             error: {
-              message:
-                "Desktop editing for this file type is not enabled yet.",
+              message: "Desktop editing for this file type is not enabled yet.",
               statusCode: 503 as const,
             },
           },
