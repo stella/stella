@@ -8,6 +8,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  isSafeIdValue,
   parseResourceRef,
   resourceRef,
   RESOURCE_TYPE,
@@ -1034,8 +1035,8 @@ const invalidChatMetadataError = () =>
 const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
+const isSafeIdInput = (value: unknown): value is string =>
+  typeof value === "string" && isSafeIdValue(value);
 
 const parseAnonRestorationsMetadata = (
   value: unknown,
@@ -1076,7 +1077,7 @@ const parseMentionsMetadata = (
     const id = mention["id"];
     const label = mention["label"];
     if (
-      !isNonEmptyString(id) ||
+      !isSafeIdInput(id) ||
       typeof label !== "string" ||
       (category !== "entity" && category !== "workspace")
     ) {
@@ -1107,7 +1108,7 @@ const parseMentionsMetadata = (
       continue;
     }
     const workspaceId = mention["workspaceId"];
-    if (workspaceId !== null && !isNonEmptyString(workspaceId)) {
+    if (workspaceId !== null && !isSafeIdInput(workspaceId)) {
       return null;
     }
     const resourceValue = mention["resource"];

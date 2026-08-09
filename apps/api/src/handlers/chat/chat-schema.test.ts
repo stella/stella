@@ -481,7 +481,7 @@ describe("validateMessage", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
-  test("rejects empty legacy mention identifiers as invalid metadata", async () => {
+  test("rejects unsafe legacy mention identifiers as invalid metadata", async () => {
     const invalidMentions = [
       {
         category: "workspace",
@@ -493,6 +493,23 @@ describe("validateMessage", () => {
         id: "entity_1",
         label: "Source memo",
         workspaceId: "",
+      },
+      {
+        category: "workspace",
+        id: "workspace_\uD800",
+        label: "Matter",
+      },
+      {
+        category: "entity",
+        id: "entity_\uD800",
+        label: "Source memo",
+        workspaceId: "workspace_1",
+      },
+      {
+        category: "entity",
+        id: "entity_1",
+        label: "Source memo",
+        workspaceId: "workspace_\uD800",
       },
     ] as const;
 
