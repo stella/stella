@@ -7,7 +7,7 @@ type DesktopEditFileTypeConfig = {
   mainPartContentType: string;
   mainPartPath: string;
   mainRootLocalName: string;
-  mainRootNamespace: string;
+  mainRootNamespaces: readonly [string, ...string[]];
   mimeType: string;
 };
 
@@ -18,8 +18,10 @@ export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
     mainPartPath: "word/document.xml",
     mainRootLocalName: "document",
-    mainRootNamespace:
+    mainRootNamespaces: [
       "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "http://purl.oclc.org/ooxml/wordprocessingml/main",
+    ],
     mimeType:
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   },
@@ -29,8 +31,10 @@ export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
     mainPartPath: "xl/workbook.xml",
     mainRootLocalName: "workbook",
-    mainRootNamespace:
+    mainRootNamespaces: [
       "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+      "http://purl.oclc.org/ooxml/spreadsheetml/main",
+    ],
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   },
@@ -40,8 +44,10 @@ export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
       "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
     mainPartPath: "ppt/presentation.xml",
     mainRootLocalName: "presentation",
-    mainRootNamespace:
+    mainRootNamespaces: [
       "http://schemas.openxmlformats.org/presentationml/2006/main",
+      "http://purl.oclc.org/ooxml/presentationml/main",
+    ],
     mimeType:
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   },

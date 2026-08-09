@@ -67,9 +67,13 @@ export const validateDesktopEditFileBuffer = async ({
       };
     }
 
+    const mainRoot = document.documentElement;
     if (
-      document.documentElement?.localName !== config.mainRootLocalName ||
-      document.documentElement.namespaceURI !== config.mainRootNamespace
+      !mainRoot ||
+      mainRoot.localName !== config.mainRootLocalName ||
+      !config.mainRootNamespaces.some(
+        (namespace) => namespace === mainRoot.namespaceURI,
+      )
     ) {
       return {
         valid: false,

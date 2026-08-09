@@ -31,19 +31,23 @@ const makePackage = async ({
   );
   zip.file(
     config.mainPartPath,
-    `<?xml version="1.0"?><x:${config.mainRootLocalName} xmlns:x="${mainRootNamespace ?? config.mainRootNamespace}"/>`,
+    `<?xml version="1.0"?><x:${config.mainRootLocalName} xmlns:x="${mainRootNamespace ?? config.mainRootNamespaces[0]}"/>`,
   );
   return await zip.generateAsync({ type: "arraybuffer" });
 };
 
 describe("desktop edit file validation", () => {
   for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
-    test(`accepts a structurally valid ${fileType} package`, async () => {
-      const buffer = await makePackage({ fileType });
+    test(`accepts every standard ${fileType} namespace`, async () => {
+      const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
 
-      expect(await validateDesktopEditFileBuffer({ buffer, fileType })).toEqual(
-        { valid: true },
-      );
+      for (const mainRootNamespace of config.mainRootNamespaces) {
+        const buffer = await makePackage({ fileType, mainRootNamespace });
+
+        expect(
+          await validateDesktopEditFileBuffer({ buffer, fileType }),
+        ).toEqual({ valid: true });
+      }
     });
 
     test(`rejects a ${fileType} package with the wrong main namespace`, async () => {
@@ -112,7 +116,7 @@ describe("desktop edit file validation", () => {
     );
     zip.file(
       config.mainPartPath,
-      `<x:workbook xmlns:x="${config.mainRootNamespace}">`,
+      `<x:workbook xmlns:x="${config.mainRootNamespaces[0]}">`,
     );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
