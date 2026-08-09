@@ -140,7 +140,7 @@ export const generateTanStackTextForRole = async (
 
 export const generateTanStackTextResultForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-) => {
+): Promise<TanStackTextGenerationResult> => {
   const model = resolveTanStackTextModel(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
