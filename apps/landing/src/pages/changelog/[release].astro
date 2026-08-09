@@ -1,12 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { getChangelogReleases } from "../../lib/changelog";
+import { getChangelogReleaseEntries } from "../../lib/changelog";
+import { CHANGELOG_ENTRIES_PER_PAGE } from "../../lib/changelog-release";
 
 export const getStaticPaths = () =>
-  getChangelogReleases().map((release, index) => ({
-    params: { release: release.slug },
-    props: { page: Math.floor(index / 5) + 1, release },
-  }));
+  getChangelogReleaseEntries().flatMap((entry, index) => {
+    const page = Math.floor(index / CHANGELOG_ENTRIES_PER_PAGE) + 1;
+    const releases =
+      entry.type === "maintenance" ? entry.releases : [entry.release];
+
+    return releases.map((release) => ({
+      params: { release: release.slug },
+      props: { page, release },
+    }));
+  });
 
 const { page, release } = Astro.props;
 const changelogHref =

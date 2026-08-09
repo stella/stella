@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import releaseDates from "../data/changelog-release-dates.json";
-import { getReleaseKind } from "./changelog-release";
+import { getReleaseKind, groupMaintenanceReleases } from "./changelog-release";
 
 export type ChangelogRelease = {
   description: string;
@@ -68,6 +68,12 @@ const readRelease = (tagName: string): ChangelogRelease => {
 
 export const getChangelogReleases = (): ChangelogRelease[] =>
   listReleaseTags().map(readRelease);
+
+export const getChangelogReleaseEntries = () =>
+  groupMaintenanceReleases(
+    getChangelogReleases(),
+    (release) => release.heading,
+  );
 
 export const getLatestFeatureRelease = (): ChangelogRelease | undefined => {
   const tagName = listReleaseTags().find(

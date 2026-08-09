@@ -1,19 +1,31 @@
 ---
 import Base from "../layouts/Base.astro";
-import { getChangelogReleases, type ChangelogRelease } from "../lib/changelog";
-import { getReleaseKind } from "../lib/changelog-release";
+import {
+  getChangelogReleaseEntries,
+  getChangelogReleases,
+  type ChangelogRelease,
+} from "../lib/changelog";
+import {
+  CHANGELOG_ENTRIES_PER_PAGE,
+  formatMaintenanceReleaseRange,
+  getReleaseKind,
+  getMaintenanceReleaseTitle,
+} from "../lib/changelog-release";
 import LandingFooter from "../components/LandingFooter.astro";
 
 const githubUrl = "https://github.com/stella/stella";
 const releasesUrl = `${githubUrl}/releases`;
 const releases = getChangelogReleases();
+const releaseEntries = getChangelogReleaseEntries();
 const previewReleaseSlugs = releases.map((release) => release.slug);
 
 // Server-rendered first page of the changelog: real content for crawlers and
 // the no-JS/pre-JS state. The client script below replaces it with the live
 // GitHub feed once fresh data arrives (same page size as the live feed).
-const STATIC_RELEASES_PER_PAGE = 12;
-const staticReleases = releases.slice(0, STATIC_RELEASES_PER_PAGE);
+const staticReleaseEntries = releaseEntries.slice(
+  0,
+  CHANGELOG_ENTRIES_PER_PAGE,
+);
 const releaseUrl = (release: ChangelogRelease) =>
   `${releasesUrl}/tag/${release.tagName}`;
 const formatReleaseDate = (publishedAt: string) =>
@@ -66,7 +78,90 @@ const formatReleaseDate = (publishedAt: string) =>
         <div class="mx-auto max-w-5xl">
           <div id="changelog-releases" class="space-y-5" aria-live="polite">
             {
-              staticReleases.map((release) => {
+              staticReleaseEntries.map((entry) => {
+                if (entry.type === "maintenance") {
+                  const newestRelease = entry.releases[0];
+                  return (
+                    <details
+                      class="changelog-entry changelog-patch-release rounded-lg"
+                      data-static-release
+                    >
+                      <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
+                        <span
+                          class="shrink-0 tabular-nums text-sm font-medium"
+                          style="color: var(--muted-foreground)"
+                        >
+                          {formatMaintenanceReleaseRange(
+                            entry.releases,
+                            (release) => release.tagName,
+                          )}
+                        </span>
+                        <h2
+                          class="min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg"
+                          style="color: var(--foreground)"
+                        >
+                          {getMaintenanceReleaseTitle(entry.releases.length)}
+                        </h2>
+                        {newestRelease.publishedAt && (
+                          <time
+                            datetime={newestRelease.publishedAt}
+                            class="shrink-0 text-sm tabular-nums"
+                            style="color: var(--muted-foreground)"
+                          >
+                            {formatReleaseDate(newestRelease.publishedAt)}
+                          </time>
+                        )}
+                        <span
+                          class="changelog-patch-marker inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none"
+                          aria-hidden="true"
+                          style="background: var(--muted); color: var(--foreground)"
+                        >
+                          +
+                        </span>
+                      </summary>
+                      <div
+                        class="changelog-maintenance-list px-5 pb-2 sm:px-6"
+                        style="border-top: 1px solid var(--border)"
+                      >
+                        {entry.releases.map((release) => (
+                          <details
+                            id={release.slug}
+                            class="changelog-maintenance-item py-3"
+                          >
+                            <summary class="flex cursor-pointer items-center justify-between gap-4 text-sm font-medium">
+                              <span class="tabular-nums">{release.tagName}</span>
+                              {release.publishedAt && (
+                                <time
+                                  datetime={release.publishedAt}
+                                  class="shrink-0 tabular-nums"
+                                  style="color: var(--muted-foreground)"
+                                >
+                                  {formatReleaseDate(release.publishedAt)}
+                                </time>
+                              )}
+                            </summary>
+                            <div class="changelog-body pb-2 pt-3">
+                              <p>{release.description}</p>
+                              <div class="mt-4 flex flex-wrap items-center gap-3">
+                                <a
+                                  href={releaseUrl(release)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                                  style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                                >
+                                  View release on GitHub
+                                </a>
+                              </div>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                }
+
+                const { release } = entry;
                 if (getReleaseKind(release.tagName) === "patch") {
                   return (
                     <details
@@ -287,6 +382,22 @@ const formatReleaseDate = (publishedAt: string) =>
       transform: rotate(45deg);
     }
 
+    :global(.changelog-maintenance-item) {
+      scroll-margin-top: 2rem;
+    }
+
+    :global(.changelog-maintenance-item + .changelog-maintenance-item) {
+      border-top: 1px solid var(--border);
+    }
+
+    :global(.changelog-maintenance-item > summary) {
+      color: var(--foreground);
+    }
+
+    :global(.changelog-maintenance-item > summary::marker) {
+      color: var(--muted-foreground);
+    }
+
     :global(.changelog-body h2),
     :global(.changelog-body h3) {
       color: var(--foreground);
@@ -362,7 +473,12 @@ const formatReleaseDate = (publishedAt: string) =>
 
   <script>
     import {
+      CHANGELOG_ENTRIES_PER_PAGE,
+      type ChangelogReleaseEntry,
+      formatMaintenanceReleaseRange,
       getReleaseKind,
+      getMaintenanceReleaseTitle,
+      groupMaintenanceReleases,
       isStellaReleaseTag,
     } from "../lib/changelog-release";
     import { parseChangelogMarkdown } from "../lib/changelog-markdown";
@@ -402,7 +518,6 @@ const formatReleaseDate = (publishedAt: string) =>
     const parseGitHubReleases = (value: unknown): GitHubRelease[] =>
       Array.isArray(value) ? value.filter(isGitHubRelease) : [];
 
-    const RELEASES_PER_PAGE = 12;
     const GITHUB_RELEASES_PER_PAGE = 100;
     const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
     const releasesEndpoint =
@@ -762,12 +877,115 @@ const formatReleaseDate = (publishedAt: string) =>
       return details;
     };
 
-    const renderRelease = (release: GitHubRelease) => {
-      if (getReleaseKind(release.tag_name) === "patch") {
-        return renderPatchRelease(release);
+    const renderMaintenanceItem = (release: GitHubRelease) => {
+      const details = document.createElement("details");
+      details.id = releaseAnchorId(release.tag_name);
+      details.className = "changelog-maintenance-item py-3";
+      details.open = decodeURIComponent(window.location.hash.slice(1)) === details.id;
+
+      const summary = document.createElement("summary");
+      summary.className =
+        "flex cursor-pointer items-center justify-between gap-4 text-sm font-medium";
+
+      const version = document.createElement("span");
+      version.className = "tabular-nums";
+      version.textContent = release.tag_name;
+
+      const date = document.createElement("span");
+      date.className = "shrink-0 tabular-nums";
+      date.style.color = "var(--muted-foreground)";
+      date.textContent = formatDate(release.published_at);
+      summary.append(version, date);
+
+      const body = document.createElement("div");
+      body.className = "changelog-body pb-2 pt-3";
+      body.append(
+        renderReleaseBody(
+          release.body
+            ? removeFirstMarkdownTitle(release.body)
+            : "No release notes published.",
+        ),
+      );
+
+      const releaseLink = createReleaseLink(release);
+      if (releaseLink) {
+        const footer = document.createElement("div");
+        footer.className = "mt-4 flex flex-wrap items-center gap-3";
+        footer.append(releaseLink);
+        body.append(footer);
       }
 
-      return renderFeatureRelease(release);
+      details.append(summary, body);
+      return details;
+    };
+
+    const renderMaintenanceReleases = (
+      releases: [GitHubRelease, ...GitHubRelease[]],
+    ) => {
+      const details = document.createElement("details");
+      details.className = "changelog-entry changelog-patch-release rounded-lg";
+      const currentHash = decodeURIComponent(window.location.hash.slice(1));
+      details.open = releases.some(
+        (release) => releaseAnchorId(release.tag_name) === currentHash,
+      );
+
+      const summary = document.createElement("summary");
+      summary.className =
+        "changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6";
+
+      const version = document.createElement("span");
+      version.className = "shrink-0 tabular-nums text-sm font-medium";
+      version.style.color = "var(--muted-foreground)";
+      version.textContent = formatMaintenanceReleaseRange(
+        releases,
+        (release) => release.tag_name,
+      );
+
+      const title = document.createElement("h2");
+      title.className =
+        "min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg";
+      title.style.color = "var(--foreground)";
+      title.textContent = getMaintenanceReleaseTitle(releases.length);
+
+      const newestRelease = releases[0];
+      const date = document.createElement("span");
+      date.className = "shrink-0 text-sm tabular-nums";
+      date.style.color = "var(--muted-foreground)";
+      date.textContent = formatDate(newestRelease.published_at);
+
+      const marker = document.createElement("span");
+      marker.className =
+        "changelog-patch-marker inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none";
+      marker.setAttribute("aria-hidden", "true");
+      marker.style.background = "var(--muted)";
+      marker.style.color = "var(--foreground)";
+      marker.textContent = "+";
+      summary.append(version, title, date, marker);
+
+      const body = document.createElement("div");
+      body.className = "changelog-maintenance-list px-5 pb-2 sm:px-6";
+      body.style.borderTop = "1px solid var(--border)";
+      body.append(...releases.map(renderMaintenanceItem));
+
+      details.append(summary, body);
+      return details;
+    };
+
+    const renderReleaseEntry = (
+      entry: ChangelogReleaseEntry<GitHubRelease>,
+    ) => {
+      switch (entry.type) {
+        case "maintenance":
+          return renderMaintenanceReleases(entry.releases);
+        case "release":
+          return getReleaseKind(entry.release.tag_name) === "patch"
+            ? renderPatchRelease(entry.release)
+            : renderFeatureRelease(entry.release);
+        default: {
+          const unreachable: never = entry;
+          return unreachable;
+        }
+      }
     };
 
     const renderMessage = (text: string) => {
@@ -851,13 +1069,17 @@ const formatReleaseDate = (publishedAt: string) =>
       page: number,
       signal: AbortSignal,
     ) => {
-      const stellaReleaseOffset = (page - 1) * RELEASES_PER_PAGE;
-      const stellaReleaseLimit = stellaReleaseOffset + RELEASES_PER_PAGE + 1;
+      const releaseEntryOffset = (page - 1) * CHANGELOG_ENTRIES_PER_PAGE;
+      // The extra entry is never rendered. It proves that the page's trailing
+      // maintenance group is complete and supplies an accurate next-page flag.
+      const releaseEntryLimit =
+        releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE + 1;
       const stellaReleases: GitHubRelease[] = [];
+      let releaseEntries: ChangelogReleaseEntry<GitHubRelease>[] = [];
       let githubPage = 1;
       let hasMoreGithubPages = true;
 
-      while (hasMoreGithubPages && stellaReleases.length < stellaReleaseLimit) {
+      while (hasMoreGithubPages && releaseEntries.length < releaseEntryLimit) {
         // eslint-disable-next-line no-await-in-loop -- GitHub pagination is sequential: the next page number and stop condition depend on this page's rel="next" link header, so pages cannot be fetched in parallel
         const response = await fetch(buildReleasesUrl(githubPage), {
           headers: { Accept: "application/vnd.github+json" },
@@ -877,17 +1099,22 @@ const formatReleaseDate = (publishedAt: string) =>
               isStellaReleaseTag(release.tag_name),
           ),
         );
+        releaseEntries = groupMaintenanceReleases(
+          stellaReleases,
+          getReleaseSummaryTitle,
+        );
         hasMoreGithubPages = responseHasNextPage(response);
         githubPage += 1;
       }
 
       return {
-        hasNextPage:
-          stellaReleases.length > stellaReleaseOffset + RELEASES_PER_PAGE,
-        releases: stellaReleases.slice(
-          stellaReleaseOffset,
-          stellaReleaseOffset + RELEASES_PER_PAGE,
+        entries: releaseEntries.slice(
+          releaseEntryOffset,
+          releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE,
         ),
+        hasNextPage:
+          releaseEntries.length >
+          releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE,
       };
     };
 
@@ -998,7 +1225,7 @@ const formatReleaseDate = (publishedAt: string) =>
         }
 
         hasNextPage = releasePage.hasNextPage;
-        if (releasePage.releases.length === 0) {
+        if (releasePage.entries.length === 0) {
           renderPagination();
           loadContainer.replaceChildren(
             renderMessage("No public releases are published yet. Check"),
@@ -1009,7 +1236,7 @@ const formatReleaseDate = (publishedAt: string) =>
         updatePageUrl();
         renderPagination();
         loadContainer.replaceChildren(
-          ...releasePage.releases.map(renderRelease),
+          ...releasePage.entries.map(renderReleaseEntry),
         );
         scrollToCurrentHash();
       } catch {
@@ -1075,6 +1302,9 @@ const formatReleaseDate = (publishedAt: string) =>
       previewReleaseSlugs = new Set(readPreviewReleaseSlugs());
       currentPage = readCurrentPage();
       hasNextPage = false;
+      // Expand a nested anchor in the server-rendered list immediately; the
+      // live GitHub feed may take a network round trip before replacing it.
+      scrollToCurrentHash();
       void loadReleases();
     };
 

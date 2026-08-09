@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getChangelogReleases } from "./changelog";
+import { getChangelogReleaseEntries, getChangelogReleases } from "./changelog";
 
 describe("changelog release dates", () => {
   // A release page without a date entry renders dateless silently; the entry
@@ -15,5 +15,16 @@ describe("changelog release dates", () => {
       .filter((release) => release.publishedAt === null)
       .map((release) => release.tagName);
     expect(undated).toEqual([]);
+  });
+
+  test("grouped entries preserve every release exactly once", () => {
+    const releases = getChangelogReleases();
+    const groupedReleases = getChangelogReleaseEntries().flatMap((entry) =>
+      entry.type === "maintenance" ? entry.releases : [entry.release],
+    );
+
+    expect(groupedReleases.map(({ tagName }) => tagName)).toEqual(
+      releases.map(({ tagName }) => tagName),
+    );
   });
 });
