@@ -1115,6 +1115,10 @@ const EMAIL_CITATION_BLOCK_SELECTOR = [
   ),
 ].join(", ");
 
+const isEmailCitationHidden = (element: Element): boolean =>
+  element.attribs.hidden !== undefined ||
+  element.attribs["aria-hidden"]?.trim().toLowerCase() === "true";
+
 const annotateEmailCitationBlocks = (
   $: CheerioApi,
   maxBlocks: number,
@@ -1125,8 +1129,11 @@ const annotateEmailCitationBlocks = (
       return;
     }
     if (
-      $(element).is("[hidden], [aria-hidden='true']") ||
-      $(element).parents("[hidden], [aria-hidden='true']").length > 0
+      isEmailCitationHidden(element) ||
+      $(element)
+        .parents()
+        .toArray()
+        .some((parent) => isTag(parent) && isEmailCitationHidden(parent))
     ) {
       return;
     }
@@ -1157,6 +1164,9 @@ const collectEmailCitationText = (element: Element): string => {
       continue;
     }
     if (!isTag(child)) {
+      continue;
+    }
+    if (isEmailCitationHidden(child)) {
       continue;
     }
     if (child.name === "br") {

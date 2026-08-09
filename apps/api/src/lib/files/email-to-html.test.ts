@@ -681,6 +681,23 @@ describe("renderEmailHtml", () => {
     });
   });
 
+  test("excludes hidden inline descendants from citation text", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<p>Visible<span hidden>secret</span><span aria-hidden="TRUE">also secret</span><span> shown</span></p>',
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Visible shown",
+    });
+    expect(preview.bodyHtml).toContain("secret");
+  });
+
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
     const nonstandardDelimiter = buildEmailPreview(
       htmlEmail({
