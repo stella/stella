@@ -10,8 +10,8 @@ import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
   loadEmailAttachment,
-} from "./email-attachment-loader";
-import { scanEmailAttachmentForSave } from "./email-attachment-save-scan";
+} from "../email-attachment-loader";
+import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
 
 const config = {
   permissions: { workspace: ["read"], entity: ["create"] },

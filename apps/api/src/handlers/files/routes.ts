@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
-import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
-import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment-save";
+import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -21,6 +20,7 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 
 const readFileEndpoint = createSafeHandler(
   {

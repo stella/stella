@@ -57,7 +57,7 @@ describe("resolveUploadMime", () => {
       ["photo.jpg", "image/jpeg"],
       ["photo.gif", "image/gif"],
       ["photo.webp", "image/webp"],
-    ]) {
+    ] as const) {
       expect(
         resolveUploadMime({
           declaredMime: "application/octet-stream",

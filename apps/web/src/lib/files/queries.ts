@@ -183,8 +183,7 @@ export const saveEmailAttachment = async ({
     .files({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
     ["email-attachment"]({
       fieldId: toSafeId<"field">(fieldId),
-      attachmentId,
-    })
+    })({ attachmentId })
     .save.post({
       destinationWorkspaceId: toSafeId<"workspace">(destinationWorkspaceId),
       parentId: parentId ? toSafeId<"entity">(parentId) : null,

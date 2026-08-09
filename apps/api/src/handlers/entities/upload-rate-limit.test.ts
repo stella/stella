@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
+import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 
 describe("document write rate limiting", () => {
   test("covers every endpoint that stores new document bytes", () => {

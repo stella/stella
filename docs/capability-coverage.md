@@ -157,6 +157,12 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `fields.update-cell-metadata` | write  | stella:matters_write   | —       | generic invoke → `stella capability fields update-cell-metadata` |
 | `fields.upsert-by-id`         | write  | stella:documents_write | —       | curated tool `set_field_value`                                   |
 
+## files
+
+| Capability                      | Access | Scope                | Feature | Reachable via                                                      |
+| ------------------------------- | ------ | -------------------- | ------- | ------------------------------------------------------------------ |
+| `files.email-attachment.create` | write  | stella:matters_write | —       | generic invoke → `stella capability files email-attachment-create` |
+
 ## flows
 
 | Capability         | Access             | Scope                | Feature | Reachable via                                         |

@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { expect, mock, test } from "bun:test";
 
-import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment-save";
 import { scanEmailAttachmentForSave } from "@/api/handlers/files/email-attachment-save-scan";
+import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
