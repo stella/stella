@@ -14,6 +14,7 @@ import {
   CHAT_UNRESOLVED_REF_HREF,
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
+import { CHAT_REF_TOKEN_PREFIX } from "@/api/lib/chat/ref-token";
 
 type HydratedEntityValue = {
   contactRef?: string;
@@ -162,6 +163,74 @@ describe("chat ref registry", () => {
       matterRef: registry.toMatterRef(workspaceId),
       propertyRef: registry.toPropertyRef(propertyId),
     });
+  });
+
+  test("round-trips persisted IDs shaped like this turn's refs", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 20 }), (collisionIndex) => {
+        const registry = createChatRefRegistry();
+        for (let index = 1; index <= collisionIndex; index += 1) {
+          const existingWorkspaceId = toSafeId<"workspace">(
+            `existing-workspace-${index}`,
+          );
+          registry.toMatterRef(existingWorkspaceId);
+          registry.toEntityRef({
+            entityId: toSafeId<"entity">(`existing-entity-${index}`),
+            workspaceId: existingWorkspaceId,
+          });
+          registry.toPropertyRef(
+            toSafeId<"property">(`existing-property-${index}`),
+          );
+          registry.toContactRef(
+            toSafeId<"contact">(`existing-contact-${index}`),
+          );
+        }
+
+        const workspaceId = toSafeId<"workspace">(
+          `${CHAT_REF_TOKEN_PREFIX.matter}_${collisionIndex}`,
+        );
+        const entityId = toSafeId<"entity">(
+          `${CHAT_REF_TOKEN_PREFIX.entity}_${collisionIndex}`,
+        );
+        const propertyId = toSafeId<"property">(
+          `${CHAT_REF_TOKEN_PREFIX.property}_${collisionIndex}`,
+        );
+        const contactId = toSafeId<"contact">(
+          `${CHAT_REF_TOKEN_PREFIX.contact}_${collisionIndex}`,
+        );
+
+        const hydrated = registry.hydrateAssistantValueRefs({
+          contactRef: contactId,
+          entityRef: entityId,
+          matterRef: workspaceId,
+          propertyRef: propertyId,
+        });
+        const matterRef = registry.toMatterRef(workspaceId);
+        const entityRef = registry.toEntityRef({ entityId, workspaceId });
+        const propertyRef = registry.toPropertyRef(propertyId);
+        const contactRef = registry.toContactRef(contactId);
+
+        expect(hydrated).toEqual({
+          contactRef,
+          entityRef,
+          matterRef,
+          propertyRef,
+        });
+        expect(registry.resolveMatterRefs([matterRef])).toEqual(
+          Result.ok([workspaceId]),
+        );
+        expect(registry.resolveEntityRefTargets([entityRef])).toEqual(
+          Result.ok([{ entityId, workspaceId }]),
+        );
+        expect(registry.resolvePropertyRefs([propertyRef])).toEqual(
+          Result.ok([propertyId]),
+        );
+        expect(registry.resolveContactRefs([contactRef])).toEqual(
+          Result.ok([contactId]),
+        );
+      }),
+      propertyConfig({ numRuns: 40 }),
+    );
   });
 
   test("rewrites citations with unknown refs to the unresolved sentinel", () => {

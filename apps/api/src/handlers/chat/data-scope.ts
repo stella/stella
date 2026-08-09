@@ -5,7 +5,6 @@ import {
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isChatRefToken } from "@/api/lib/chat/ref-token";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 // Walks a parsed user-message mention list for any workspace IDs the
@@ -108,13 +107,8 @@ const collectPartsWorkspaceIds = (
 // extend coverage when a new tool output shape ships.
 const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
 
-const isPersistedWorkspaceField = (
-  key: string,
-  value: unknown,
-): value is string =>
-  typeof value === "string" &&
-  value.length > 0 &&
-  (key !== "matterRef" || !isChatRefToken("matter", value));
+const isWorkspaceIdCandidate = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
 
 const collectStructuralWorkspaceIds = (
   value: unknown,
@@ -130,10 +124,7 @@ const collectStructuralWorkspaceIds = (
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (
-      WORKSPACE_KEY_FIELDS.has(key) &&
-      isPersistedWorkspaceField(key, child)
-    ) {
+    if (WORKSPACE_KEY_FIELDS.has(key) && isWorkspaceIdCandidate(child)) {
       ids.add(brandPersistedWorkspaceId(child));
       continue;
     }

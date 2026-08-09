@@ -1,3 +1,7 @@
+/**
+ * Model-facing spellings only. Persisted IDs may have the same text; the
+ * protocol stage, not a reserved string namespace, distinguishes them.
+ */
 export const CHAT_REF_TOKEN_PREFIX = {
   contact: "contact",
   entity: "ent",
@@ -6,18 +10,3 @@ export const CHAT_REF_TOKEN_PREFIX = {
 } as const;
 
 export type ChatRefTokenKind = keyof typeof CHAT_REF_TOKEN_PREFIX;
-
-const createChatRefTokenRegex = (prefix: string): RegExp =>
-  new RegExp(`^${prefix}_[1-9]\\d*$`, "u");
-
-const CHAT_REF_TOKEN_REGEX = {
-  contact: createChatRefTokenRegex(CHAT_REF_TOKEN_PREFIX.contact),
-  entity: createChatRefTokenRegex(CHAT_REF_TOKEN_PREFIX.entity),
-  matter: createChatRefTokenRegex(CHAT_REF_TOKEN_PREFIX.matter),
-  property: createChatRefTokenRegex(CHAT_REF_TOKEN_PREFIX.property),
-} as const satisfies Record<ChatRefTokenKind, RegExp>;
-
-export const isChatRefToken = (
-  kind: ChatRefTokenKind,
-  value: string,
-): boolean => CHAT_REF_TOKEN_REGEX[kind].test(value);

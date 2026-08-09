@@ -12,7 +12,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   CHAT_REF_TOKEN_PREFIX,
   type ChatRefTokenKind,
-  isChatRefToken,
 } from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -151,11 +150,8 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
 
-const isPersistedId = (
-  value: unknown,
-  kind: ChatRefTokenKind,
-): value is string =>
-  typeof value === "string" && value.length > 0 && !isChatRefToken(kind, value);
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
 
 /**
  * The four tenant-content id kinds this registry mediates. Every other id a
@@ -391,17 +387,17 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   const toHydratedMatterRef = (value: unknown) =>
-    isPersistedId(value, "matter")
+    isNonEmptyString(value)
       ? toMatterRef(brandPersistedWorkspaceId(value))
       : value;
 
   const toHydratedPropertyRef = (value: unknown) =>
-    isPersistedId(value, "property")
+    isNonEmptyString(value)
       ? toPropertyRef(brandPersistedPropertyId(value))
       : value;
 
   const toHydratedContactRef = (value: unknown) =>
-    isPersistedId(value, "contact")
+    isNonEmptyString(value)
       ? toContactRef(brandPersistedContactId(value))
       : value;
 
@@ -412,11 +408,11 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     entityId: unknown;
     workspaceId: unknown;
   }) => {
-    if (!isPersistedId(entityId, "entity")) {
+    if (!isNonEmptyString(entityId)) {
       return entityId;
     }
 
-    if (!isPersistedId(workspaceId, "matter")) {
+    if (!isNonEmptyString(workspaceId)) {
       const matchingRefs = [...entityState.refToTarget.entries()]
         .filter(([, target]) => target.entityId === entityId)
         .map(([ref]) => ref);
@@ -431,11 +427,11 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   };
 
   const getHydrationWorkspaceId = (value: Record<string, unknown>): unknown => {
-    if (isPersistedId(value["matterRef"], "matter")) {
+    if (isNonEmptyString(value["matterRef"])) {
       return value["matterRef"];
     }
 
-    if (isPersistedId(value["workspaceId"], "matter")) {
+    if (isNonEmptyString(value["workspaceId"])) {
       return value["workspaceId"];
     }
 

@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   resourceRef,
   RESOURCE_TYPE,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -343,21 +345,25 @@ describe("extractAssistantWorkspaceIds", () => {
     expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
   });
 
-  test("ephemeral matter refs are not mistaken for persisted IDs", () => {
-    // If a tool output ever lands with the in-memory shorthand
-    // (mat_1) instead of a persisted ID, the structural walker must not
-    // brand it as a workspace ID and must not crash.
-    const parts = [
-      {
-        type: "tool-call" as const,
-        id: "call_1",
-        name: "mcp__test__listMatters",
-        arguments: "{}",
-        state: "complete" as const,
-        output: { items: [{ matterRef: "mat_1" }] },
-      },
-    ];
-    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  test("accepts every nonempty opaque matterRef", () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1, maxLength: 64 }), (id) => {
+        const workspaceId = toSafeId<"workspace">(id);
+        const parts = [
+          {
+            type: "tool-call" as const,
+            id: "call_1",
+            name: "mcp__test__listMatters",
+            arguments: "{}",
+            state: "complete" as const,
+            output: { items: [{ matterRef: workspaceId }] },
+          },
+        ];
+
+        expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 
   test("source-document metadata with empty workspaceId contributes nothing", () => {
@@ -422,9 +428,12 @@ describe("extractIncomingMessageWorkspaceIds", () => {
       ],
     } satisfies ChatMessage;
 
+    // Token-shaped values stay candidates because the canonical ID contract
+    // also admits them; the send-message boundary intersects this set with
+    // the caller's accessible workspace IDs.
     expect(
       extractIncomingMessageWorkspaceIds({ message, mentions: [] }),
-    ).toEqual([wsA]);
+    ).toEqual([wsA, toSafeId<"workspace">("mat_1")]);
   });
 });
 
