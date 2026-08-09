@@ -1,10 +1,11 @@
 import * as v from "valibot";
 
-export const isSafeIdValue = (value: string): boolean => value.length > 0;
+export const isSafeIdValue = (value: string): boolean =>
+  value.length > 0 && value.isWellFormed();
 
 const safeIdSchema = v.pipe(
   v.string(),
-  v.check(isSafeIdValue, "Expected a non-empty identifier"),
+  v.check(isSafeIdValue, "Expected a non-empty, well-formed identifier"),
   v.brand("SafeId"),
 );
 

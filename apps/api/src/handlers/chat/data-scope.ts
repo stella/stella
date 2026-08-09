@@ -59,6 +59,21 @@ export const extractMessageWorkspaceIds = (
     for (const context of refContext.entities) {
       ids.add(brandPersistedWorkspaceId(context.workspace.id));
     }
+    for (const context of refContext.exactRefs) {
+      switch (context.kind) {
+        case "entity":
+          ids.add(brandPersistedWorkspaceId(context.workspace.id));
+          break;
+        case "matter":
+          ids.add(brandPersistedWorkspaceId(context.resource.id));
+          break;
+        case "contact":
+        case "property":
+          break;
+        default:
+          context satisfies never;
+      }
+    }
   }
   return Array.from(ids);
 };

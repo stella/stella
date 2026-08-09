@@ -17,6 +17,10 @@ import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
+  collectMessageExactRefContexts,
+  toChatRefTargets,
+} from "@/api/handlers/chat/chat-exact-ref-context";
+import {
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -171,6 +175,7 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
   type ChatEntityRefContext,
+  type ChatExactRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
@@ -2583,6 +2588,10 @@ const resolveAssistantMessageRefs = ({
       return message;
     }
     const entityContexts: ChatEntityRefContext[] = [];
+    const exactRefContexts = collectMessageExactRefContexts({
+      parts: message.parts,
+      refRegistry,
+    });
     const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
     const toolNamesByCallId = new Map<string, string>();
     for (const part of message.parts) {
@@ -2600,6 +2609,7 @@ const resolveAssistantMessageRefs = ({
         refContext: {
           version: 1,
           entities: entityContexts,
+          exactRefs: exactRefContexts,
           unresolvedInputs: unresolvedInputRefs,
         },
         refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
@@ -2624,6 +2634,7 @@ const hydrateAssistantMessageRefs = ({
   const hydrateToolCallPart = (
     part: ChatMessage["parts"][number],
     entityContexts: readonly ChatEntityRefContext[],
+    exactRefContexts: readonly ChatExactRefContext[],
     inputState: ChatRefInputState,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
@@ -2631,7 +2642,8 @@ const hydrateAssistantMessageRefs = ({
       return part;
     }
     const rawInput: unknown = "input" in part ? part.input : undefined;
-    const input =
+    const refTargets = toChatRefTargets(exactRefContexts);
+    const declaredInput =
       rawInput === undefined
         ? undefined
         : hydrateRegistryToolInputRefs({
@@ -2642,7 +2654,14 @@ const hydrateAssistantMessageRefs = ({
             toolName: part.name,
             unresolvedInputRefs,
           });
-    const output =
+    const input =
+      declaredInput === undefined
+        ? undefined
+        : refRegistry.hydrateRefTargets({
+            targets: refTargets,
+            value: declaredInput,
+          });
+    const declaredOutput =
       "output" in part
         ? hydrateRegistryToolOutputRefs({
             entityContexts,
@@ -2653,6 +2672,13 @@ const hydrateAssistantMessageRefs = ({
             toolName: part.name,
           })
         : undefined;
+    const output =
+      declaredOutput === undefined
+        ? undefined
+        : refRegistry.hydrateRefTargets({
+            targets: refTargets,
+            value: declaredOutput,
+          });
     return {
       ...part,
       ...(input === undefined
@@ -2665,6 +2691,7 @@ const hydrateAssistantMessageRefs = ({
   const hydratePart = (
     part: ChatMessage["parts"][number],
     entityContexts: readonly ChatEntityRefContext[],
+    exactRefContexts: readonly ChatExactRefContext[],
     inputState: ChatRefInputState,
     toolCallsById: ReadonlyMap<string, { input: unknown; name: string }>,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
@@ -2672,6 +2699,7 @@ const hydrateAssistantMessageRefs = ({
     let withDeclaredToolRefs = hydrateToolCallPart(
       part,
       entityContexts,
+      exactRefContexts,
       inputState,
       unresolvedInputRefs,
     );
@@ -2680,14 +2708,18 @@ const hydrateAssistantMessageRefs = ({
       const toolCall = toolCallsById.get(part.toolCallId);
       const parsed = Result.try((): unknown => JSON.parse(content));
       if (toolCall !== undefined && Result.isOk(parsed)) {
+        const declaredOutput = hydrateRegistryToolOutputRefs({
+          entityContexts,
+          input: toolCall.input,
+          inputState,
+          output: parsed.value,
+          refRegistry,
+          toolName: toolCall.name,
+        });
         const serialized = JSON.stringify(
-          hydrateRegistryToolOutputRefs({
-            entityContexts,
-            input: toolCall.input,
-            inputState,
-            output: parsed.value,
-            refRegistry,
-            toolName: toolCall.name,
+          refRegistry.hydrateRefTargets({
+            targets: toChatRefTargets(exactRefContexts),
+            value: declaredOutput,
           }),
         );
         if (typeof serialized === "string") {
@@ -2746,6 +2778,9 @@ const hydrateAssistantMessageRefs = ({
       const unresolvedInputRefs = isChatRefContext(refContext)
         ? refContext.unresolvedInputs
         : [];
+      const exactRefContexts = isChatRefContext(refContext)
+        ? refContext.exactRefs
+        : [];
       const toolCallsById = new Map<string, { input: unknown; name: string }>();
       for (const part of message.parts) {
         if (part.type === "tool-call") {
@@ -2783,9 +2818,16 @@ const hydrateAssistantMessageRefs = ({
               : unresolvedInputRefs.filter(
                   (context) => context.toolCallId === toolCallId,
                 );
+          const partExactRefContexts =
+            toolCallId === undefined
+              ? []
+              : exactRefContexts.filter(
+                  (context) => context.toolCallId === toolCallId,
+                );
           return hydratePart(
             part,
             partEntityContexts,
+            partExactRefContexts,
             inputState,
             toolCallsById,
             partUnresolvedInputRefs,

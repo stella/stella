@@ -185,6 +185,50 @@ describe("search recents", () => {
     expect(readRecentFiles(scope, storage)).toEqual(existing);
   });
 
+  test("drops ill-formed resource identities at the storage boundary", () => {
+    const storage = new MemoryStorage();
+    const illFormedId = "\uD800";
+    storage.setItem(
+      "stella-search-recent-files:org-1:user-1",
+      JSON.stringify([
+        {
+          entityId: illFormedId,
+          openedAt: new Date().toISOString(),
+          title: "Invalid entity.pdf",
+          workspaceId: "workspace-1",
+          workspaceName: "Matter A",
+        },
+        {
+          entityId: "entity-1",
+          openedAt: new Date().toISOString(),
+          title: "Invalid workspace.pdf",
+          workspaceId: illFormedId,
+          workspaceName: "Matter A",
+        },
+      ]),
+    );
+    expect(readRecentFiles(scope, storage)).toEqual([]);
+
+    const validFile = {
+      entityId: "entity-1",
+      title: "Existing.pdf",
+      workspaceId: "workspace-1",
+      workspaceName: "Matter A",
+    };
+    recordRecentFile(validFile, scope, storage);
+    const existing = readRecentFiles(scope, storage);
+    expect(
+      recordRecentFile({ ...validFile, entityId: illFormedId }, scope, storage),
+    ).toEqual(existing);
+    expect(
+      recordRecentFile(
+        { ...validFile, workspaceId: illFormedId },
+        scope,
+        storage,
+      ),
+    ).toEqual(existing);
+  });
+
   test("scopes recents by organization and user", () => {
     const storage = new MemoryStorage();
     const otherScope: SearchRecentsScope = {

@@ -41,6 +41,7 @@ describe("chat ref encoding validation", () => {
       isChatRefContext({
         version: 1,
         entities: [],
+        exactRefs: [],
         unresolvedInputs: [
           {
             kind: "matter",

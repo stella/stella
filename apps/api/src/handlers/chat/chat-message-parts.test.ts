@@ -268,6 +268,7 @@ describe("persisted chat message parts", () => {
           }),
         },
       ],
+      exactRefs: [],
       unresolvedInputs: [],
     };
     const message = chatMessageFromPersisted({

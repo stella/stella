@@ -527,6 +527,7 @@ describe("extractThreadDataWorkspaceIds", () => {
                 }),
               },
             ],
+            exactRefs: [],
             unresolvedInputs: [],
           },
         },
@@ -534,6 +535,71 @@ describe("extractThreadDataWorkspaceIds", () => {
     ] satisfies ChatMessage[];
 
     expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
+  });
+
+  test("retains exact output ref scope from persisted context", () => {
+    const entityId = toSafeId<"entity">("entity-output-only");
+    const messages = [
+      {
+        id: "assistant-matter-list",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-execute-typescript",
+            name: "execute_typescript",
+            arguments: JSON.stringify({
+              typescriptCode: "return await external_list_matters({});",
+            }),
+            state: "complete",
+            input: {
+              typescriptCode: "return await external_list_matters({});",
+            },
+            output: {
+              success: true,
+              result: {
+                documents: [{ id: "ent_1", name: "Document C" }],
+                matters: [{ id: "mat_1", name: "Matter B" }],
+              },
+            },
+          },
+        ],
+        metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+          refContext: {
+            version: 1,
+            entities: [],
+            exactRefs: [
+              {
+                kind: "matter",
+                ref: "mat_1",
+                resource: resourceRef({
+                  type: RESOURCE_TYPE.WORKSPACE,
+                  id: wsB,
+                }),
+                toolCallId: "tool-execute-typescript",
+              },
+              {
+                kind: "entity",
+                ref: "ent_1",
+                resource: resourceRef({
+                  type: RESOURCE_TYPE.ENTITY,
+                  id: entityId,
+                }),
+                toolCallId: "tool-execute-typescript",
+                workspace: resourceRef({
+                  type: RESOURCE_TYPE.WORKSPACE,
+                  id: wsC,
+                }),
+              },
+            ],
+            unresolvedInputs: [],
+          },
+        },
+      },
+    ] satisfies ChatMessage[];
+
+    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB, wsC]);
   });
 });
 

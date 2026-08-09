@@ -54,6 +54,30 @@ export type ChatEntityRefContext = {
   workspace: ResourceRef<"workspace">;
 };
 
+type ChatExactRefContextBase = {
+  ref: string;
+  toolCallId: string;
+};
+
+export type ChatExactRefContext =
+  | (ChatExactRefContextBase & {
+      kind: "contact";
+      resource: ResourceRef<"contact">;
+    })
+  | (ChatExactRefContextBase & {
+      kind: "entity";
+      resource: ResourceRef<"entity">;
+      workspace: ResourceRef<"workspace">;
+    })
+  | (ChatExactRefContextBase & {
+      kind: "matter";
+      resource: ResourceRef<"workspace">;
+    })
+  | (ChatExactRefContextBase & {
+      kind: "property";
+      resource: ResourceRef<"property">;
+    });
+
 export type ChatUnresolvedInputRefContext = {
   kind: ChatRefTokenKind;
   param: string;
@@ -64,6 +88,7 @@ export type ChatUnresolvedInputRefContext = {
 export type ChatRefContext = {
   version: 1;
   entities: ChatEntityRefContext[];
+  exactRefs: ChatExactRefContext[];
   unresolvedInputs: ChatUnresolvedInputRefContext[];
 };
 
@@ -80,6 +105,39 @@ const isChatEntityRefContext = (
   isResourceRef(value["workspace"]) &&
   value["workspace"].type === RESOURCE_TYPE.WORKSPACE;
 
+const isChatExactRefContext = (
+  value: unknown,
+): value is ChatExactRefContext => {
+  if (
+    !isRecord(value) ||
+    typeof value["ref"] !== "string" ||
+    value["ref"].length === 0 ||
+    typeof value["toolCallId"] !== "string"
+  ) {
+    return false;
+  }
+  const resource = value["resource"];
+  if (!isResourceRef(resource)) {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "contact":
+      return resource.type === RESOURCE_TYPE.CONTACT;
+    case "entity":
+      return (
+        resource.type === RESOURCE_TYPE.ENTITY &&
+        isResourceRef(value["workspace"]) &&
+        value["workspace"].type === RESOURCE_TYPE.WORKSPACE
+      );
+    case "matter":
+      return resource.type === RESOURCE_TYPE.WORKSPACE;
+    case "property":
+      return resource.type === RESOURCE_TYPE.PROPERTY;
+    default:
+      return false;
+  }
+};
+
 const isChatUnresolvedInputRefContext = (
   value: unknown,
 ): value is ChatUnresolvedInputRefContext =>
@@ -94,6 +152,8 @@ export const isChatRefContext = (value: unknown): value is ChatRefContext =>
   value["version"] === 1 &&
   Array.isArray(value["entities"]) &&
   value["entities"].every(isChatEntityRefContext) &&
+  Array.isArray(value["exactRefs"]) &&
+  value["exactRefs"].every(isChatExactRefContext) &&
   Array.isArray(value["unresolvedInputs"]) &&
   value["unresolvedInputs"].every(isChatUnresolvedInputRefContext);
 

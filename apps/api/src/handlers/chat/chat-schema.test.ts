@@ -89,6 +89,14 @@ const createDocumentTools = {
     ),
   },
 } satisfies ChatToolMap;
+const snapshotApprovalTools = {
+  mcp__external__create_document: {
+    name: "mcp__external__create_document",
+    description: "Create a document",
+    inputSchema: createDocumentTools["create-document"].inputSchema,
+    outputSchema: createDocumentTools["create-document"].outputSchema,
+  },
+} satisfies ChatToolMap;
 const askUserTools = {
   "ask-user": {
     name: "ask-user",
@@ -953,6 +961,65 @@ describe("validateMessage", () => {
       },
     });
     expect(Result.isError(rejectedMissingCall)).toBe(true);
+  });
+
+  test("accepts snapshot-visible arguments derived from canonical input", async () => {
+    const id = chatMessageId("msg_snapshot_approval_continuation");
+    const canonicalInput = {
+      name: "Agreement",
+      source: "workspace-opaque",
+    };
+    const canonicalCall = {
+      type: "tool-call",
+      approval: { id: "approval-snapshot", needsApproval: true },
+      id: "approval-snapshot",
+      name: "mcp__external__create_document",
+      arguments: JSON.stringify({ name: "Agreement", source: "mat_1" }),
+      input: canonicalInput,
+      state: "approval-requested",
+    } satisfies ChatParts[number];
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...canonicalCall,
+            approval: { ...canonicalCall.approval, approved: true },
+            arguments: JSON.stringify(canonicalInput),
+            state: "approval-responded",
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+      },
+      resume: [
+        {
+          interruptId: "approval-snapshot",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_snapshot_approval_continuation"),
+      tools: snapshotApprovalTools,
+      userId: userId("user_snapshot_approval_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.parts).toEqual([
+      {
+        ...canonicalCall,
+        approval: { ...canonicalCall.approval, approved: true },
+        arguments: JSON.stringify(canonicalInput),
+        state: "approval-responded",
+      },
+    ]);
   });
 
   test("accepts the canonical ask-user call completing with its answer", async () => {

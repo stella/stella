@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { isSafeIdValue } from "@stll/api-contract";
+
 import { getStorageKey } from "@/consts";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
@@ -41,8 +43,8 @@ const scopedKey = (key: string, scope: SearchRecentsScope): string =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
+const isResourceId = (value: unknown): value is string =>
+  typeof value === "string" && isSafeIdValue(value);
 
 const isRecentSearch = (value: unknown): value is RecentSearch =>
   isRecord(value) &&
@@ -51,14 +53,14 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
 
 const isRecentFile = (value: unknown): value is RecentFile =>
   isRecord(value) &&
-  isNonEmptyString(value["entityId"]) &&
+  isResourceId(value["entityId"]) &&
   (value["fileFieldId"] === undefined ||
     value["fileFieldId"] === null ||
     typeof value["fileFieldId"] === "string") &&
   (value["filePropertyId"] === undefined ||
     value["filePropertyId"] === null ||
     typeof value["filePropertyId"] === "string") &&
-  isNonEmptyString(value["workspaceId"]) &&
+  isResourceId(value["workspaceId"]) &&
   typeof value["workspaceName"] === "string" &&
   typeof value["title"] === "string" &&
   (value["mimeType"] === undefined ||
@@ -141,7 +143,11 @@ export const recordRecentFile = (
   storage: Storage | null = getStorage(),
 ): RecentFile[] => {
   const title = file.title.trim();
-  if (file.entityId.length === 0 || file.workspaceId.length === 0 || !title) {
+  if (
+    !isSafeIdValue(file.entityId) ||
+    !isSafeIdValue(file.workspaceId) ||
+    !title
+  ) {
     return readRecentFiles(scope, storage);
   }
 
