@@ -166,10 +166,7 @@ const batchUpdate = createSafeHandler(
                 and(
                   condition,
                   eq(timeEntries.billable, false),
-                  eq(
-                    timeEntries.currency,
-                    UNPRICED_TIME_ENTRY_CURRENCY,
-                  ),
+                  eq(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
                   ne(timeEntries.status, BILLING_STATUS.BILLED),
                   ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
                 ),
