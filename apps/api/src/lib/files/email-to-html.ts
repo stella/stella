@@ -42,7 +42,7 @@ const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-const GENERIC_ATTACHMENT_MIME_TYPES = {
+const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
   "": null,
   "application/octet-stream": null,
   "binary/octet-stream": null,
@@ -235,7 +235,7 @@ export const resolveEmailAttachmentMimeType = ({
   mimeType: string | null;
 }): string | null => {
   const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
-  if (!Object.hasOwn(GENERIC_ATTACHMENT_MIME_TYPES, normalized)) {
+  if (!Object.hasOwn(GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES, normalized)) {
     return normalized;
   }
   const dotIndex = fileName?.lastIndexOf(".") ?? -1;

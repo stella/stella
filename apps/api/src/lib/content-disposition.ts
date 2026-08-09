@@ -1,6 +1,20 @@
 const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/u;
-const HTTP_CONTROL_CHARACTER_RE = /[\u0000-\u001F\u007F-\u009F]/gu;
 const FALLBACK_FILENAME = "attachment";
+
+const stripHttpControlCharacters = (name: string): string => {
+  const characters: string[] = [];
+  for (const character of name) {
+    const codePoint = character.codePointAt(0);
+    if (
+      codePoint !== undefined &&
+      (codePoint <= 31 || (codePoint >= 127 && codePoint <= 159))
+    ) {
+      continue;
+    }
+    characters.push(character);
+  }
+  return characters.join("");
+};
 
 /**
  * Build a Content-Disposition header value per RFC 6266.
@@ -13,8 +27,7 @@ export const contentDisposition = (
   name: string,
   disposition: "attachment" | "inline" = "attachment",
 ): string => {
-  const headerSafeName =
-    name.replaceAll(HTTP_CONTROL_CHARACTER_RE, "") || FALLBACK_FILENAME;
+  const headerSafeName = stripHttpControlCharacters(name) || FALLBACK_FILENAME;
   const isSafeAscii =
     ASCII_FILENAME_RE.test(headerSafeName) &&
     !headerSafeName.includes('"') &&
