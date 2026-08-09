@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createWorkflowRunStateStore,
+  parseTransitionalWorkflowFinalizationManifest,
   parseWorkflowFinalizationManifest,
   requireWorkflowFinalizationManifest,
 } from "@/api/lib/workflow/run-state-store";
@@ -102,6 +103,105 @@ describe("workflow finalization manifest", () => {
   });
 });
 
+describe("transitional workflow finalization manifest", () => {
+  test("strictly converts the immediately previous release state", () => {
+    expect(
+      parseTransitionalWorkflowFinalizationManifest({
+        expectedRequestId: requestId,
+        planPropertyIdsRaw: JSON.stringify([propertyId]),
+        scopedRaw: null,
+        serviceTierRaw: "flex",
+      }),
+    ).toEqual({
+      status: "available",
+      manifest: {
+        ...validManifest,
+        serviceTier: "flex",
+      },
+    });
+    expect(
+      parseTransitionalWorkflowFinalizationManifest({
+        expectedRequestId: requestId,
+        planPropertyIdsRaw: JSON.stringify([propertyId]),
+        scopedRaw: "1",
+        serviceTierRaw: "standard",
+      }),
+    ).toEqual({
+      status: "available",
+      manifest: {
+        ...validManifest,
+        freshnessScope: "cells",
+      },
+    });
+  });
+
+  test("treats only a fully absent previous-release snapshot as missing", () => {
+    expect(
+      parseTransitionalWorkflowFinalizationManifest({
+        expectedRequestId: requestId,
+        planPropertyIdsRaw: null,
+        scopedRaw: null,
+        serviceTierRaw: null,
+      }),
+    ).toEqual({ status: "missing" });
+    expect(
+      parseTransitionalWorkflowFinalizationManifest({
+        expectedRequestId: requestId,
+        planPropertyIdsRaw: JSON.stringify([propertyId]),
+        scopedRaw: null,
+        serviceTierRaw: null,
+      }),
+    ).toEqual({ status: "corrupt", reason: "invalid-shape" });
+  });
+
+  test("rejects malformed or ambiguous previous-release values", () => {
+    const invalid = [
+      { planPropertyIdsRaw: "{", scopedRaw: null, serviceTierRaw: "standard" },
+      {
+        planPropertyIdsRaw: JSON.stringify([]),
+        scopedRaw: null,
+        serviceTierRaw: "standard",
+      },
+      {
+        planPropertyIdsRaw: JSON.stringify([propertyId, 42]),
+        scopedRaw: null,
+        serviceTierRaw: "standard",
+      },
+      {
+        planPropertyIdsRaw: JSON.stringify([propertyId, propertyId]),
+        scopedRaw: null,
+        serviceTierRaw: "standard",
+      },
+      {
+        planPropertyIdsRaw: JSON.stringify([propertyId]),
+        scopedRaw: "0",
+        serviceTierRaw: "standard",
+      },
+      {
+        planPropertyIdsRaw: JSON.stringify([propertyId]),
+        scopedRaw: null,
+        serviceTierRaw: "unknown",
+      },
+    ];
+    const expectedReasons = [
+      "invalid-json",
+      "invalid-shape",
+      "invalid-shape",
+      "duplicate-property-id",
+      "invalid-shape",
+      "invalid-shape",
+    ] as const;
+    expect(
+      invalid.map((state) =>
+        parseTransitionalWorkflowFinalizationManifest({
+          expectedRequestId: requestId,
+          ...state,
+        }),
+      ),
+    ).toEqual(expectedReasons.map((reason) => ({ status: "corrupt", reason })));
+  });
+});
+
 describe("workflow finalization state reads", () => {
   test("initializes one versioned manifest and the completion total", async () => {
     const commands: { command: string; args: string[] }[] = [];
@@ -158,6 +258,56 @@ describe("workflow finalization state reads", () => {
       throw new TypeError("Expected unavailable workflow state");
     }
     expect(result.error.cause).toBe(redisFailure);
+  });
+
+  test("reads and preserves the immediately previous release state", async () => {
+    const values = new Map<string, string>([
+      [`workflow:${workspaceId}:plan-properties`, JSON.stringify([propertyId])],
+      [`workflow:${workspaceId}:scoped`, "1"],
+      [`workflow:${workspaceId}:service-tier`, "batch"],
+    ]);
+    const store = createWorkflowRunStateStore({
+      send: async (command, args) =>
+        command === "GET" ? (values.get(args[0] ?? "") ?? null) : null,
+    });
+
+    const result = await store.readFinalizationState({
+      requestId,
+      workspaceId,
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (!Result.isError(result)) {
+      expect(result.value).toEqual({
+        status: "available",
+        manifest: {
+          ...validManifest,
+          freshnessScope: "cells",
+          serviceTier: "batch",
+        },
+      });
+    }
+  });
+
+  test("refreshes previous-release keys until transitional jobs age out", async () => {
+    const keys: string[] = [];
+    const store = createWorkflowRunStateStore({
+      send: async (command, args) => {
+        if (command === "EXPIRE") {
+          keys.push(args[0] ?? "");
+        }
+        return 1;
+      },
+    });
+
+    await store.refreshActiveLease({
+      runLockTtlSec: 600,
+      workspaceId,
+    });
+
+    expect(keys).toContain(`workflow:${workspaceId}:plan-properties`);
+    expect(keys).toContain(`workflow:${workspaceId}:scoped`);
+    expect(keys).toContain(`workflow:${workspaceId}:service-tier`);
   });
 
   test("returns stored missing and corrupt states without throwing", async () => {

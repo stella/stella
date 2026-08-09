@@ -29,12 +29,28 @@ end
 return 0
 `;
 
-const WORKFLOW_RUN_STATE_FIELDS = [
+const CURRENT_WORKFLOW_RUN_STATE_FIELDS = [
   "running",
   "total",
   "completed-entities",
   "finalization-v1",
   "request-id",
+] as const;
+
+// Transitional keys written by the immediately preceding release. BullMQ
+// jobs survive the API process shutdown's bounded drain, so a new worker can
+// finish a run that was started by that release even when replicas never
+// overlap. Keep these keys only until every pre-finalization-v1 job and TTL has
+// aged out; they are parsed strictly and never restore workspace-wide fallback.
+const TRANSITIONAL_FINALIZATION_FIELDS = [
+  "plan-properties",
+  "scoped",
+  "service-tier",
+] as const;
+
+const WORKFLOW_RUN_STATE_FIELDS = [
+  ...CURRENT_WORKFLOW_RUN_STATE_FIELDS,
+  ...TRANSITIONAL_FINALIZATION_FIELDS,
 ] as const;
 
 const workflowFinalizationManifestSchema = v.strictObject({
@@ -44,6 +60,12 @@ const workflowFinalizationManifestSchema = v.strictObject({
   propertyIds: v.pipe(v.array(v.pipe(v.string(), v.uuid())), v.nonEmpty()),
   serviceTier: v.picklist(USAGE_SERVICE_TIERS),
 });
+
+const transitionalPropertyIdsSchema = v.pipe(
+  v.array(v.pipe(v.string(), v.uuid())),
+  v.nonEmpty(),
+);
+const transitionalServiceTierSchema = v.picklist(USAGE_SERVICE_TIERS);
 
 export type WorkflowFinalizationManifest = {
   version: typeof FINALIZATION_MANIFEST_VERSION;
@@ -145,6 +167,66 @@ export const parseWorkflowFinalizationManifest = ({
   };
 };
 
+export const parseTransitionalWorkflowFinalizationManifest = ({
+  expectedRequestId,
+  planPropertyIdsRaw,
+  scopedRaw,
+  serviceTierRaw,
+}: {
+  expectedRequestId: string;
+  planPropertyIdsRaw: string | null;
+  scopedRaw: string | null;
+  serviceTierRaw: string | null;
+}): WorkflowFinalizationState => {
+  if (
+    planPropertyIdsRaw === null &&
+    scopedRaw === null &&
+    serviceTierRaw === null
+  ) {
+    return { status: "missing" };
+  }
+  if (
+    planPropertyIdsRaw === null ||
+    (scopedRaw !== null && scopedRaw !== "1") ||
+    serviceTierRaw === null
+  ) {
+    return { status: "corrupt", reason: "invalid-shape" };
+  }
+
+  const propertyIdsJson = Result.try({
+    try: (): unknown => JSON.parse(planPropertyIdsRaw),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(propertyIdsJson)) {
+    return { status: "corrupt", reason: "invalid-json" };
+  }
+  const propertyIds = v.safeParse(
+    transitionalPropertyIdsSchema,
+    propertyIdsJson.value,
+  );
+  const serviceTier = v.safeParse(
+    transitionalServiceTierSchema,
+    serviceTierRaw,
+  );
+  if (!propertyIds.success || !serviceTier.success) {
+    return { status: "corrupt", reason: "invalid-shape" };
+  }
+  if (new Set(propertyIds.output).size !== propertyIds.output.length) {
+    return { status: "corrupt", reason: "duplicate-property-id" };
+  }
+
+  return {
+    status: "available",
+    manifest: {
+      version: FINALIZATION_MANIFEST_VERSION,
+      requestId: expectedRequestId,
+      freshnessScope: scopedRaw === "1" ? "cells" : "workspace",
+      propertyIds: propertyIds.output.map(brandPersistedPropertyId),
+      serviceTier: serviceTier.output,
+    },
+  };
+};
+
 export const requireWorkflowFinalizationManifest = ({
   state,
   workspaceId,
@@ -195,10 +277,40 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
     if (Result.isError(raw)) {
       return Result.err(raw.error);
     }
+    if (raw.value !== null) {
+      return Result.ok(
+        parseWorkflowFinalizationManifest({
+          expectedRequestId: requestId,
+          raw: raw.value,
+        }),
+      );
+    }
+
+    const transitionalRaw = await Result.tryPromise({
+      try: async () =>
+        await Promise.all([
+          getOptionalString(workspaceId, "plan-properties"),
+          getOptionalString(workspaceId, "scoped"),
+          getOptionalString(workspaceId, "service-tier"),
+        ]),
+      catch: (cause) =>
+        new WorkflowRunStateUnavailableError({
+          message: "Transitional workflow finalization state is unavailable",
+          cause,
+          workspaceId,
+        }),
+    });
+    if (Result.isError(transitionalRaw)) {
+      return Result.err(transitionalRaw.error);
+    }
+    const [planPropertyIdsRaw, scopedRaw, serviceTierRaw] =
+      transitionalRaw.value;
     return Result.ok(
-      parseWorkflowFinalizationManifest({
+      parseTransitionalWorkflowFinalizationManifest({
         expectedRequestId: requestId,
-        raw: raw.value,
+        planPropertyIdsRaw,
+        scopedRaw,
+        serviceTierRaw,
       }),
     );
   };
