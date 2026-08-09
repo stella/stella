@@ -3405,7 +3405,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating",
+                  "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked",
                 required: false,
               },
               {
@@ -3500,7 +3500,7 @@ export const generatedRouteMap: RouteNode = {
                 timezone_id: {
                   type: "string",
                   description:
-                    "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating",
+                    "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked",
                   maxLength: 64,
                 },
                 duration_minutes: {

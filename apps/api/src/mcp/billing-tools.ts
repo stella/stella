@@ -363,7 +363,8 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
       "date_worked, timezone_id, duration_minutes, and narrative required; " +
       "entity_id is optional context). Pass time_entry_id to update: " +
-      "set date_worked, duration_minutes, narrative, invoice_narrative, " +
+      "set date_worked (with timezone_id), duration_minutes, narrative, " +
+      "invoice_narrative, " +
       "billable, no_charge, entity_id (move the entry), task_code, " +
       "and/or activity_code. The timekeeper's effective rate is resolved " +
       "server-side. Durations are whole minutes. Returns the time entry ID.",
@@ -385,7 +386,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
         timezone_id: stringProp(
           "IANA time zone the date_worked is interpreted in (e.g. " +
-            "Europe/Prague); required when creating",
+            "Europe/Prague); required when creating or changing date_worked",
           { maxLength: 64 },
         ),
         duration_minutes: intProp(
@@ -1116,7 +1117,12 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
         id: timeEntryId,
         ...(input.date_worked === undefined
           ? {}
-          : { dateWorked: input.date_worked }),
+          : {
+              dateWorked: input.date_worked,
+              ...(input.timezone_id === undefined
+                ? {}
+                : { timezoneId: input.timezone_id }),
+            }),
         ...(input.duration_minutes === undefined
           ? {}
           : { durationMinutes: input.duration_minutes }),

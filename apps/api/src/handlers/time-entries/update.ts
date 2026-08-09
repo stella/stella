@@ -14,7 +14,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  getTimeEntryDateValidationError,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,10 +25,12 @@ import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const updateTimeEntryBodySchema = t.Object({
   id: tSafeId("timeEntry"),
   dateWorked: t.Optional(t.String({ format: "date" })),
+  timezoneId: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
   narrative: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
@@ -132,6 +137,29 @@ export const updateTimeEntryHandler = async function* ({
         message: "Cannot edit a billed or written-off entry",
       }),
     );
+  }
+
+  if (body.dateWorked !== undefined) {
+    if (body.timezoneId === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Time zone is required when changing date worked",
+        }),
+      );
+    }
+    const today = yield* formatTodayInTimeZone({
+      timezoneId: body.timezoneId,
+    });
+    const dateValidationError = getTimeEntryDateValidationError({
+      dateWorked: body.dateWorked,
+      today,
+    });
+    if (dateValidationError) {
+      return Result.err(
+        new HandlerError({ status: 400, message: dateValidationError }),
+      );
+    }
   }
 
   const workItemId = body.workItemId;

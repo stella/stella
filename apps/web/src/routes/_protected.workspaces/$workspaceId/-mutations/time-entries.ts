@@ -47,6 +47,7 @@ type UpdateTimeEntryVars = {
   workspaceId: string;
   id: string;
   dateWorked?: string;
+  timezoneId?: string;
   durationMinutes?: number;
   narrative?: string;
   invoiceNarrative?: string | null;

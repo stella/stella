@@ -125,6 +125,7 @@ export const TimesheetDayView = ({
         id: editingId,
         workItemId: values.matterId,
         dateWorked: values.dateWorked,
+        timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
         durationMinutes: values.durationMinutes,
         narrative: values.narrative,
         invoiceNarrative: values.invoiceNarrative || null,

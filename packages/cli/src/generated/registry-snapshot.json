@@ -1965,7 +1965,7 @@
       "scope": "billing_write"
     },
     "name": "save_time_entry",
-    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked, duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
+    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1988,7 +1988,7 @@
         },
         "timezone_id": {
           "type": "string",
-          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating",
+          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked",
           "maxLength": 64
         },
         "duration_minutes": {

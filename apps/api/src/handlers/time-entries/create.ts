@@ -10,7 +10,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  getTimeEntryDateValidationError,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -90,25 +93,15 @@ export const createTimeEntryHandler = async function* ({
   const todayStr = yield* formatTodayInTimeZone({
     timezoneId: body.timezoneId,
   });
-  const dateWorked = new Date(`${body.dateWorked}T00:00:00`);
-  const today = new Date(`${todayStr}T00:00:00`);
-
-  if (dateWorked > today) {
+  const dateValidationError = getTimeEntryDateValidationError({
+    dateWorked: body.dateWorked,
+    today: todayStr,
+  });
+  if (dateValidationError) {
     return Result.err(
       new HandlerError({
         status: 400,
-        message: "Date worked cannot be in the future",
-      }),
-    );
-  }
-
-  const maxAgeCutoff = new Date(today);
-  maxAgeCutoff.setDate(maxAgeCutoff.getDate() - LIMITS.timeEntryMaxAgeDays);
-  if (dateWorked < maxAgeCutoff) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: `Date worked cannot be more than ${LIMITS.timeEntryMaxAgeDays} days ago`,
+        message: dateValidationError,
       }),
     );
   }

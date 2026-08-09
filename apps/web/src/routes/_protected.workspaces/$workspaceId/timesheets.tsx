@@ -54,6 +54,7 @@ export const Route = createFileRoute(
         timeEntriesInfiniteOptions(params.workspaceId, {
           dateFrom: today,
           dateTo: today,
+          userId: context.user.id,
         }),
       ),
       ensureRouteQueryData(
@@ -82,6 +83,9 @@ function TimesheetsPage() {
   const locale = useLocale();
   const workspaceId = Route.useParams({
     select: (params) => params.workspaceId,
+  });
+  const userId = Route.useRouteContext({
+    select: (context) => context.user.id,
   });
   const [date, setDate] = useState(() => new Date());
   const dateValue = toISODate(date);
@@ -137,6 +141,7 @@ function TimesheetsPage() {
           <PersonalTimesheetDay
             date={dateValue}
             key={dateValue}
+            userId={userId}
             workspaceId={workspaceId}
           />
         </Suspense>

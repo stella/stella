@@ -157,24 +157,53 @@ const batchUpdate = createSafeHandler(
       }
 
       case "mark_billable": {
-        const rows = yield* Result.await(
+        const result = yield* Result.await(
           safeDb(async (tx) => {
+            const unpriced = await tx
+              .select({ id: timeEntries.id })
+              .from(timeEntries)
+              .where(
+                and(
+                  condition,
+                  eq(timeEntries.billable, false),
+                  eq(
+                    timeEntries.currency,
+                    UNPRICED_TIME_ENTRY_CURRENCY,
+                  ),
+                  ne(timeEntries.status, BILLING_STATUS.BILLED),
+                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                ),
+              )
+              .limit(1);
+            if (unpriced.at(0)) {
+              return { type: "unpriced" as const, rows: [] };
+            }
+
             const updated = await tx
               .update(timeEntries)
               .set({ billable: true, updatedAt: new Date() })
               .where(
                 and(
                   condition,
+                  eq(timeEntries.billable, false),
                   ne(timeEntries.status, BILLING_STATUS.BILLED),
                   ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
                 ),
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
-            return updated;
+            return { type: "updated" as const, rows: updated };
           }),
         );
-        return Result.ok({ updated: rows.length });
+        if (result.type === "unpriced") {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Billable time entries need a rate before this change",
+            }),
+          );
+        }
+        return Result.ok({ updated: result.rows.length });
       }
 
       case "mark_non_billable": {
@@ -186,6 +215,7 @@ const batchUpdate = createSafeHandler(
               .where(
                 and(
                   condition,
+                  eq(timeEntries.billable, true),
                   ne(timeEntries.status, BILLING_STATUS.BILLED),
                   ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
                 ),
