@@ -203,7 +203,7 @@ export const envBaseInvariantViolation = ({
   isDev,
 }: EnvBaseInvariantInput): string | null => {
   if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
-    return "DATABASE_URL must enable TLS outside loopback.";
+    return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (
     !isDev &&

@@ -91,6 +91,18 @@ describe("resolveDatabaseUrl", () => {
     );
   });
 
+  test.each([
+    ["team%owner", "team%25owner"],
+    ["%73tella", "%2573tella"],
+  ])(
+    "treats component DB_USER as literal input: %s",
+    (databaseUser, encodedDatabaseUser) => {
+      expect(resolveDatabaseUrl({ ...components, DB_USER: databaseUser })).toBe(
+        `postgres://${encodedDatabaseUser}:pw@db.example:5432/appdb?sslmode=require`,
+      );
+    },
+  );
+
   test("percent-encodes the database name (path segment)", () => {
     expect(
       resolveDatabaseUrl({
@@ -179,6 +191,7 @@ describe("hasSecureDatabaseTransport", () => {
     "postgres://owner:password@localhost/stella?sslmode=disable",
     "postgres://owner:password@127.0.0.1/stella",
     "postgres://owner:password@[::1]/stella",
+    "postgres://owner:password@postgres.railway.internal/stella",
   ])("accepts encrypted or loopback database transport: %s", (databaseUrl) => {
     expect(hasSecureDatabaseTransport(databaseUrl)).toBe(true);
   });
@@ -190,6 +203,8 @@ describe("hasSecureDatabaseTransport", () => {
     "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=disable",
     "postgres://owner:password@db.example.com/stella?sslmode=disable&sslmode=require",
     "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=verify-full",
+    "postgres://owner:password@railway.internal/stella",
+    "postgres://owner:password@postgres.railway.internal.example.com/stella",
   ])("rejects remote database transport without TLS: %s", (databaseUrl) => {
     expect(hasSecureDatabaseTransport(databaseUrl)).toBe(false);
   });

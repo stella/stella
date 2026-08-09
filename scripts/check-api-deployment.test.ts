@@ -46,7 +46,7 @@ describe("API deployment health receipt", () => {
     expect(healthPermissions).toContain("deployments: read");
     expect(healthPermissions).not.toContain("write");
     expect(healthJob).toContain(
-      "STAGING_HEALTH_URL: https://api-staging.stll.app/health",
+      "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
     );
     expect(healthJob).toContain('readonly NOT_READY_STATUS="not_ready"');
     expect(healthJob).toContain('readonly READY_STATUS="ready"');

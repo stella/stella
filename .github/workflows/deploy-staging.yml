@@ -48,7 +48,7 @@ jobs:
       - name: Probe staging health
         id: probe
         env:
-          STAGING_HEALTH_URL: https://api-staging.stll.app/health
+          STAGING_HEALTH_URL: https://api-staging.stll.app/ready
         run: |
           set -euo pipefail
 

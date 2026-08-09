@@ -1,13 +1,27 @@
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
-import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
+import {
+  isRailwayPrivateHostname,
+  isTlsOrLoopbackUrl,
+} from "@/api/lib/secure-service-url";
 
 const isSecureOcrServiceUrl = (value: string) =>
   isTlsOrLoopbackUrl(value, {
     plaintextProtocol: "http:",
     tlsProtocol: "https:",
   });
+
+const isSecureRedisUrl = (value: string) => {
+  const url = new URL(value);
+  return (
+    isTlsOrLoopbackUrl(value, {
+      plaintextProtocol: "redis:",
+      tlsProtocol: "rediss:",
+    }) ||
+    (url.protocol === "redis:" && isRailwayPrivateHostname(url.hostname))
+  );
+};
 
 /**
  * Environment shared by the API process and document-processing worker.
@@ -49,14 +63,8 @@ export const documentProcessingEnvInvariantViolation = ({
   nodeEnv,
   redisUrl,
 }: DocumentProcessingEnvInvariantInput): string | null => {
-  if (
-    DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") &&
-    !isTlsOrLoopbackUrl(redisUrl, {
-      plaintextProtocol: "redis:",
-      tlsProtocol: "rediss:",
-    })
-  ) {
-    return "REDIS_URL must use rediss:// unless it targets a loopback address.";
+  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !isSecureRedisUrl(redisUrl)) {
+    return "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.";
   }
   if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !contentEncryptionKey) {
     return "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.";

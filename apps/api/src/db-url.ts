@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
 import { APPLICATION_RLS_ROLE_NAME } from "./db/role-names";
-import { isLoopbackHostname } from "./lib/secure-service-url";
+import {
+  isLoopbackHostname,
+  isRailwayPrivateHostname,
+} from "./lib/secure-service-url";
 
 /**
  * Resolve the Postgres connection URL.
@@ -29,7 +32,10 @@ const SUPPORTED_DATABASE_PROTOCOLS = ["postgres:", "postgresql:"] as const;
 
 export const hasSecureDatabaseTransport = (databaseUrl: string) => {
   const parsed = new URL(databaseUrl);
-  if (isLoopbackHostname(parsed.hostname)) {
+  if (
+    isLoopbackHostname(parsed.hostname) ||
+    isRailwayPrivateHostname(parsed.hostname)
+  ) {
     return true;
   }
   const sslmodes = parsed.searchParams.getAll("sslmode");
@@ -40,16 +46,18 @@ export const hasSecureDatabaseTransport = (databaseUrl: string) => {
 };
 
 const assertDatabaseLoginIsNotReserved = (username: string) => {
-  let decodedUsername: string;
-  try {
-    decodedUsername = decodeURIComponent(username);
-  } catch {
-    panic("Database login must use valid percent encoding");
-  }
-  if (decodedUsername.toLowerCase() === APPLICATION_RLS_ROLE_NAME) {
+  if (username.toLowerCase() === APPLICATION_RLS_ROLE_NAME) {
     panic(
       `Database login must not use the reserved ${APPLICATION_RLS_ROLE_NAME} RLS role`,
     );
+  }
+};
+
+const decodeDatabaseUrlUsername = (username: string) => {
+  try {
+    return decodeURIComponent(username);
+  } catch {
+    return panic("Database login must use valid percent encoding");
   }
 };
 
@@ -75,7 +83,9 @@ export const resolveDatabaseUrl = (
     ) {
       panic("DATABASE_URL must use the postgres:// or postgresql:// scheme");
     }
-    assertDatabaseLoginIsNotReserved(parsed.username);
+    assertDatabaseLoginIsNotReserved(
+      decodeDatabaseUrlUsername(parsed.username),
+    );
     return databaseUrl;
   }
 

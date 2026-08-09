@@ -105,6 +105,20 @@ describe("API environment", () => {
     );
   });
 
+  test("accepts Railway private-network service URLs in production", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+      DATABASE_URL:
+        "postgres://owner:password@postgres.railway.internal:5432/stella",
+      NODE_ENV: "production",
+      REDIS_URL: "redis://default:password@redis.railway.internal:6379",
+      USE_MOCK_AI: "false",
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
   test("rejects static credential placeholders for the env provider", () => {
     const result = bootApiEnvironment({
       ...baseEnv,
@@ -121,7 +135,8 @@ describe("API environment", () => {
 
   test.each([
     {
-      expected: "DATABASE_URL must enable TLS outside loopback.",
+      expected:
+        "DATABASE_URL must enable TLS outside loopback or Railway private networking.",
       overrides: {
         DATABASE_URL:
           "postgres://owner:password@db.example.com:5432/stella?sslmode=disable",
@@ -134,7 +149,7 @@ describe("API environment", () => {
     },
     {
       expected:
-        "REDIS_URL must use rediss:// unless it targets a loopback address.",
+        "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.",
       overrides: { REDIS_URL: "redis://cache.example.com:6379" },
     },
     {

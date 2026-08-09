@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
+import {
+  isRailwayPrivateHostname,
+  isTlsOrLoopbackUrl,
+} from "@/api/lib/secure-service-url";
 
 const HTTP_TRANSPORT = {
   plaintextProtocol: "http:",
@@ -23,4 +26,13 @@ describe("secure service URL", () => {
       expect(isTlsOrLoopbackUrl(url, HTTP_TRANSPORT)).toBe(false);
     },
   );
+
+  test.each([
+    ["postgres.railway.internal", true],
+    ["REDIS.RAILWAY.INTERNAL", true],
+    ["railway.internal", false],
+    ["postgres.railway.internal.example.com", false],
+  ])("classifies Railway private hostnames: %s", (hostname, expected) => {
+    expect(isRailwayPrivateHostname(hostname)).toBe(expected);
+  });
 });
