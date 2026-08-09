@@ -9,6 +9,23 @@ import {
 } from "@/api/lib/file-key";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+import {
+  DOCM_MIME_TYPE,
+  DOCX_MIME_TYPE,
+  DOC_MIME_TYPE,
+  EPUB_MIME_TYPE,
+  ODP_MIME_TYPE,
+  ODS_MIME_TYPE,
+  ODT_MIME_TYPE,
+  PDF_MIME_TYPE,
+  PPSX_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  PPT_MIME_TYPE,
+  RTF_MIME_TYPE,
+  XLSB_MIME_TYPE,
+  XLSX_MIME_TYPE,
+  XLS_MIME_TYPE,
+} from "@/api/mime-types";
 
 export {
   createFileKey,
@@ -29,16 +46,37 @@ const GENERIC_UPLOAD_MIME_TYPES = new Set([
 ]);
 
 /**
- * Extensions worth recovering from a generic MIME type. Outlook
- * `.msg` in particular is usually reported as octet-stream on
- * machines without Outlook; `.eml` occasionally too. Without this
- * the file would never get a PDF derivative for preview.
+ * Supported document extensions worth recovering from a generic MIME type.
+ * Without this, previews, derivatives, scanning, and extraction all make
+ * decisions from an unusable octet-stream declaration.
  */
 const EXTENSION_MIME_OVERRIDES: Record<string, string> = {
+  csv: "text/csv",
+  doc: DOC_MIME_TYPE,
+  docm: DOCM_MIME_TYPE,
+  docx: DOCX_MIME_TYPE,
   eml: "message/rfc822",
+  epub: EPUB_MIME_TYPE,
+  htm: "text/html",
+  html: "text/html",
+  ics: "text/calendar",
+  json: "application/json",
   markdown: "text/markdown",
   md: "text/markdown",
   msg: "application/vnd.ms-outlook",
+  odp: ODP_MIME_TYPE,
+  ods: ODS_MIME_TYPE,
+  odt: ODT_MIME_TYPE,
+  pdf: PDF_MIME_TYPE,
+  ppsx: PPSX_MIME_TYPE,
+  ppt: PPT_MIME_TYPE,
+  pptx: PPTX_MIME_TYPE,
+  rtf: RTF_MIME_TYPE,
+  text: "text/plain",
+  txt: "text/plain",
+  xls: XLS_MIME_TYPE,
+  xlsb: XLSB_MIME_TYPE,
+  xlsx: XLSX_MIME_TYPE,
 };
 
 type ResolveUploadMimeProps = {

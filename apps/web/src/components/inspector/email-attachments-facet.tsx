@@ -42,6 +42,7 @@ import {
   saveEmailAttachment,
   type EmailAttachmentDescriptor,
 } from "@/lib/files/queries";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type EmailAttachmentsFacetProps = {
@@ -64,9 +65,14 @@ export const EmailAttachmentsFacet = ({
   const saveMutation = useMutation({
     mutationFn: saveEmailAttachment,
     onSuccess: async ({ workspaceId: destinationWorkspaceId }) => {
-      await queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(destinationWorkspaceId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(destinationWorkspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(destinationWorkspaceId),
+        }),
+      ]);
       setSaveTargetId(null);
       setMatterTarget(null);
       stellaToast.add({

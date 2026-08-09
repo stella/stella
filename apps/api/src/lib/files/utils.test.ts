@@ -34,6 +34,23 @@ describe("resolveUploadMime", () => {
     ).toBe("text/markdown");
   });
 
+  test("recovers previewable documents reported as generic", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "contract.pdf",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "contract.docx",
+      }),
+    ).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  });
+
   test("leaves a well-typed MIME unchanged", () => {
     expect(
       resolveUploadMime({
