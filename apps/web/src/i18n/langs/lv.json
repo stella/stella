@@ -1231,7 +1231,7 @@
     "from": "Sūtītājs",
     "noSubject": "(Bez tēmas)",
     "to": "Saņēmēji",
-    "unnamedAttachment": "Nepārdēvēts pielikums"
+    "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
     "actionFailed": "Darbība neizdevās",
