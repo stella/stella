@@ -275,7 +275,7 @@ describe("extractAssistantWorkspaceIds", () => {
   });
 
   test("regression: tool output parts with matterRef widen the data scope", () => {
-    // Tool outputs persist UUIDs in `matterRef` / `workspaceId`
+    // Tool outputs persist IDs in `matterRef` / `workspaceId`
     // fields after `resolveAssistantValueRefs` rehydrates them
     // from the in-memory `mat_N` ref shorthand. Without scanning
     // these, a thread that only contains tool output (no
@@ -303,6 +303,27 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
+  test("structured fields preserve opaque workspace IDs", () => {
+    const matterRef = toSafeId<"workspace">("matter:eu");
+    const workspaceId = toSafeId<"workspace">("imported.matter");
+    const parts = [
+      {
+        type: "tool-call" as const,
+        id: "call_1",
+        name: "mcp__test__listMatters",
+        arguments: "{}",
+        state: "complete" as const,
+        output: {
+          items: [{ matterRef }, { workspaceId }],
+        },
+      },
+    ];
+
+    expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
+      new Set([matterRef, workspaceId]),
+    );
+  });
+
   test("regression: deeply nested workspaceId fields are picked up", () => {
     const parts = [
       {
@@ -322,9 +343,9 @@ describe("extractAssistantWorkspaceIds", () => {
     expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
   });
 
-  test("non-UUID matterRef values are ignored (e.g. unresolved ref shorthand)", () => {
+  test("ephemeral matter refs are not mistaken for persisted IDs", () => {
     // If a tool output ever lands with the in-memory shorthand
-    // (mat_1) instead of a UUID, the structural walker must not
+    // (mat_1) instead of a persisted ID, the structural walker must not
     // brand it as a workspace ID and must not crash.
     const parts = [
       {

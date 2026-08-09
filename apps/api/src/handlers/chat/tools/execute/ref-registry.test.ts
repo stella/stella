@@ -142,6 +142,28 @@ describe("chat ref registry", () => {
     });
   });
 
+  test("hydrates opaque persisted IDs in structured values", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("matter:eu");
+    const entityId = toSafeId<"entity">("document:42");
+    const propertyId = toSafeId<"property">("property:status");
+    const contactId = toSafeId<"contact">("contact:client");
+
+    expect(
+      registry.hydrateAssistantValueRefs({
+        contactRef: contactId,
+        entityRef: entityId,
+        matterRef: workspaceId,
+        propertyRef: propertyId,
+      }),
+    ).toEqual({
+      contactRef: registry.toContactRef(contactId),
+      entityRef: registry.toEntityRef({ entityId, workspaceId }),
+      matterRef: registry.toMatterRef(workspaceId),
+      propertyRef: registry.toPropertyRef(propertyId),
+    });
+  });
+
   test("rewrites citations with unknown refs to the unresolved sentinel", () => {
     const registry = createChatRefRegistry();
     const workspaceId = toSafeId<"workspace">(

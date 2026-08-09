@@ -5,6 +5,7 @@ import {
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isChatRefToken } from "@/api/lib/chat/ref-token";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 // Walks a parsed user-message mention list for any workspace IDs the
@@ -73,7 +74,7 @@ export const extractThreadDataWorkspaceIds = (
 // embedded by the model. Two complementary carriers are scanned:
 //
 //   1. **Structural fields** — any property at any depth named
-//      `workspaceId` or `matterRef` whose value is a UUID string.
+//      `workspaceId` or `matterRef` whose value is a persisted opaque ID.
 //      Covers tool output parts that include `matterRef` /
 //      `workspaceId` (search hits, file lookups, property/entity
 //      records), persisted source-document metadata, and any future
@@ -107,8 +108,13 @@ const collectPartsWorkspaceIds = (
 // extend coverage when a new tool output shape ships.
 const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const isPersistedWorkspaceField = (
+  key: string,
+  value: unknown,
+): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  (key !== "matterRef" || !isChatRefToken("matter", value));
 
 const collectStructuralWorkspaceIds = (
   value: unknown,
@@ -126,8 +132,7 @@ const collectStructuralWorkspaceIds = (
   for (const [key, child] of Object.entries(value)) {
     if (
       WORKSPACE_KEY_FIELDS.has(key) &&
-      typeof child === "string" &&
-      UUID_REGEX.test(child)
+      isPersistedWorkspaceField(key, child)
     ) {
       ids.add(brandPersistedWorkspaceId(child));
       continue;
