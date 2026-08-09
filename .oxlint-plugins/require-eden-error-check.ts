@@ -708,6 +708,40 @@ export default eslintCompatPlugin({
           return { states: current, unsafe, unsafeExit };
         };
 
+        const analyzeDeclarators = (
+          declarations: readonly unknown[],
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          let current = new Set(states);
+          let unsafe = false;
+          for (const declaration of declarations) {
+            if (
+              !isAstNode(declaration) ||
+              declaration.type !== "VariableDeclarator"
+            ) {
+              continue;
+            }
+            if (isBindingIdentifier(declaration.init, binding)) {
+              const properties = patternProperties(declaration.id);
+              if (properties.has("error")) {
+                current = handledStates(current);
+              } else {
+                unsafe ||= hasUnhandled(current);
+              }
+              continue;
+            }
+            const outcome = analyzeExpression(
+              declaration.init,
+              current,
+              binding,
+            );
+            current = outcome.states;
+            unsafe ||= outcome.unsafe;
+          }
+          return { states: current, unsafe };
+        };
+
         const analyzeStatement = (
           node: unknown,
           states: ReadonlySet<FlowState>,
@@ -730,36 +764,11 @@ export default eslintCompatPlugin({
           }
 
           if (node.type === "VariableDeclaration") {
-            let current = new Set(states);
-            let unsafe = false;
-            const declarations = Array.isArray(node.declarations)
-              ? node.declarations
-              : [];
-            for (const declaration of declarations) {
-              if (
-                !isAstNode(declaration) ||
-                declaration.type !== "VariableDeclarator"
-              ) {
-                continue;
-              }
-              if (isBindingIdentifier(declaration.init, binding)) {
-                const properties = patternProperties(declaration.id);
-                if (properties.has("error")) {
-                  current = handledStates(current);
-                } else {
-                  unsafe ||= hasUnhandled(current);
-                }
-                continue;
-              }
-              const outcome = analyzeExpression(
-                declaration.init,
-                current,
-                binding,
-              );
-              current = outcome.states;
-              unsafe ||= outcome.unsafe;
-            }
-            return { states: current, unsafe };
+            return analyzeDeclarators(
+              Array.isArray(node.declarations) ? node.declarations : [],
+              states,
+              binding,
+            );
           }
 
           if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
@@ -1010,14 +1019,17 @@ export default eslintCompatPlugin({
             isAstNode(current.parent) &&
             current.parent.type === "VariableDeclaration"
           ) {
-            const declaration = analyzeStatement(
-              current.parent,
+            const declarations = Array.isArray(current.parent.declarations)
+              ? current.parent.declarations
+              : [];
+            const index = declarations.indexOf(current);
+            const siblings = analyzeDeclarators(
+              index === -1 ? [] : declarations.slice(index + 1),
               states,
               binding,
             );
-            states = declaration.states;
-            unsafe = declaration.unsafe;
-            unsafeExit = declaration.unsafeExit;
+            states = siblings.states;
+            unsafe = siblings.unsafe;
             current = current.parent;
           }
 

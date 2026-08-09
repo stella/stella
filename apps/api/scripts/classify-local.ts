@@ -198,8 +198,8 @@ const readInput = async (args: Args): Promise<string> => {
 
   if (args.stdin) {
     const chunks: string[] = [];
-    const reader = Bun.stdin.stream().getReader();
     const decoder = new TextDecoder();
+    const reader = Bun.stdin.stream().getReader();
 
     try {
       while (true) {
