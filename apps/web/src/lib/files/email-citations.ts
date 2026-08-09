@@ -19,6 +19,16 @@ export type EmailCitationTarget = {
   fieldId: string;
 };
 
+export type EmailCitationSource = {
+  entityId: string;
+  entityName: string | null;
+  fieldId: string;
+  fileName: string;
+  mimeType: string;
+  pdfFileId: string | null;
+  propertyId: string;
+};
+
 export const parseEmailCitationHref = (
   href: string,
 ): EmailCitationTarget | null => {
@@ -94,14 +104,16 @@ export const isKnownEmailCitationTarget = (
 
 export const isVerifiedEmailCitationTarget = ({
   blockIds,
-  sourceFieldIds,
+  source,
   target,
 }: {
   blockIds: readonly string[];
-  sourceFieldIds: readonly string[];
+  source: Pick<EmailCitationSource, "entityId" | "fieldId">;
   target: EmailCitationTarget;
 }): boolean =>
-  sourceFieldIds.includes(target.fieldId) && blockIds.includes(target.blockId);
+  source.entityId === target.entityId &&
+  source.fieldId === target.fieldId &&
+  blockIds.includes(target.blockId);
 
 export const requestEmailCitationScroll = (
   target: EmailCitationTarget,

@@ -79,21 +79,34 @@ describe("email citation hrefs", () => {
     expect(
       isVerifiedEmailCitationTarget({
         blockIds: [target.blockId],
-        sourceFieldIds: [target.fieldId],
+        source: { entityId: target.entityId, fieldId: target.fieldId },
         target,
       }),
     ).toBe(true);
     expect(
       isVerifiedEmailCitationTarget({
         blockIds: ["body-9999"],
-        sourceFieldIds: [target.fieldId],
+        source: { entityId: target.entityId, fieldId: target.fieldId },
         target,
       }),
     ).toBe(false);
     expect(
       isVerifiedEmailCitationTarget({
         blockIds: [target.blockId],
-        sourceFieldIds: ["00000000-0000-4000-8000-000000000099"],
+        source: {
+          entityId: target.entityId,
+          fieldId: "00000000-0000-4000-8000-000000000099",
+        },
+        target,
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedEmailCitationTarget({
+        blockIds: [target.blockId],
+        source: {
+          entityId: "00000000-0000-4000-8000-000000000099",
+          fieldId: target.fieldId,
+        },
         target,
       }),
     ).toBe(false);

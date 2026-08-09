@@ -7,6 +7,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import type { EmailCitationSource } from "@/lib/files/email-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -182,41 +183,20 @@ export const openEntityInInspector = async (
 };
 
 export const openEmailCitationSource = ({
-  entity,
-  entityId,
-  fieldId,
+  source,
   workspaceId,
 }: {
-  entity: {
-    fields: {
-      content: WorkspaceFieldContent;
-      id: string;
-      propertyId?: string | undefined;
-    }[];
-    name: string | null;
-  };
-  entityId: string;
-  fieldId: string;
+  source: EmailCitationSource;
   workspaceId: string;
-}): boolean => {
-  const field = entity.fields.find(({ id }) => id === fieldId);
-  if (
-    !field ||
-    field.content.type !== "file" ||
-    !isFileDisplayable(field.content)
-  ) {
-    return false;
-  }
-
+}): void => {
   useInspectorTabsStore.getState().openFile({
-    id: field.id,
-    entityId,
-    label: entity.name ?? field.content.fileName,
-    fileName: field.content.fileName,
-    mimeType: field.content.mimeType,
-    pdfFileId: field.content.pdfFileId,
-    propertyId: field.propertyId,
+    id: source.fieldId,
+    entityId: source.entityId,
+    label: source.entityName ?? source.fileName,
+    fileName: source.fileName,
+    mimeType: source.mimeType,
+    pdfFileId: source.pdfFileId,
+    propertyId: source.propertyId,
     workspaceId,
   });
-  return true;
 };

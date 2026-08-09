@@ -628,16 +628,20 @@ const EmailCitationChip = ({
     if (!workspaceId) {
       return;
     }
-    if (
-      citation.type === "verified" &&
-      !openEmailCitationSource({
-        entity: citation.entity,
-        entityId: target.entityId,
-        fieldId: target.fieldId,
-        workspaceId,
-      })
-    ) {
-      return;
+    if (citation.type === "verified") {
+      openEmailCitationSource({ source: citation.source, workspaceId });
+    } else {
+      const inspector = useInspectorTabsStore.getState();
+      const mountedTab = inspector.tabs.find(
+        (tab) =>
+          tab.type === "pdf" &&
+          tab.id === target.fieldId &&
+          tab.entityId === target.entityId,
+      );
+      if (mountedTab) {
+        inspector.setActive(mountedTab.id);
+        inspector.setMinimized(false);
+      }
     }
     requestEmailCitationScroll(target);
   };
