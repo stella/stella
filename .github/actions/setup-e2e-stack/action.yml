@@ -11,6 +11,11 @@ inputs:
     required: false
     default: ""
 
+outputs:
+  status:
+    description: Whether the E2E stack is ready or Docker Hub rate-limited the pull
+    value: ${{ steps.stack.outputs.status }}
+
 runs:
   using: composite
   steps:
@@ -41,6 +46,7 @@ runs:
         password: ${{ inputs.dockerhub-token }}
 
     - name: Start docker stack
+      id: stack
       # `--wait` only on long-running services; `minio-setup` is a one-shot
       # bucket-creator container that exits 0, which `--wait` treats as
       # "not running" and fails the whole command. Run it separately in
@@ -52,11 +58,27 @@ runs:
       # stack does not poison the retry.
       shell: bash
       run: |
+        stack_log=$(mktemp)
+        trap 'rm -f "$stack_log"' EXIT
+
         for attempt in 1 2 3; do
-          if docker compose --profile dev up -d --wait postgres minio valkey \
-            && docker compose --profile dev run --rm --no-deps minio-setup; then
+          : > "$stack_log"
+          if docker compose --profile dev up -d --wait postgres minio valkey 2>&1 \
+            | tee "$stack_log" \
+            && docker compose --profile dev run --rm --no-deps minio-setup 2>&1 \
+              | tee -a "$stack_log"; then
+            echo "status=ready" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          if grep -Eqi 'toomanyrequests:.*pull rate limit' "$stack_log"; then
+            echo "::warning::Docker Hub rate-limited E2E infrastructure pulls; skipping browser execution for this job"
+            echo "Docker Hub rate-limited E2E infrastructure pulls; browser execution was skipped." >> "$GITHUB_STEP_SUMMARY"
+            docker compose --profile dev down --volumes --remove-orphans || true
+            echo "status=rate-limited" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
           docker compose --profile dev down --volumes --remove-orphans || true
           sleep "$((attempt * 20))"
@@ -71,6 +93,7 @@ runs:
       run: docker logout
 
     - name: Run database migrations
+      if: steps.stack.outputs.status == 'ready'
       # `db:migrate` (not `db:push`) so role bootstrap migrations such as
       # `20260516000000_case_law_ingestion_role` actually execute. `db:push`
       # only diffs the declarative schema, which references `stella_ingestion`
@@ -79,10 +102,12 @@ runs:
       run: bun --filter @stll/api db:migrate
 
     - name: Seed test user
+      if: steps.stack.outputs.status == 'ready'
       shell: bash
       run: bun --filter @stll/api db:seed-test-user
 
     - name: Start API server
+      if: steps.stack.outputs.status == 'ready'
       # `--watch` is for local dev; CI runs the server flat. Logs land in
       # /tmp/api.log so the "Upload server logs" step can publish them on
       # failure for debugging.
@@ -96,6 +121,7 @@ runs:
         echo $! > /tmp/api.pid
 
     - name: Wait for API
+      if: steps.stack.outputs.status == 'ready'
       shell: bash
       run: |
         for i in {1..60}; do

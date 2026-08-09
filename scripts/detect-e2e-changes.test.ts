@@ -40,7 +40,7 @@ const workflowJob = (jobId: string): string => {
     : workflow.slice(bodyStart, bodyStart + nextJob);
 };
 
-const workflowStepRun = (job: string, stepName: string): string => {
+const workflowStep = (job: string, stepName: string): string => {
   const marker = `\n      - name: ${stepName}\n`;
   const start = job.indexOf(marker);
   if (start === -1) {
@@ -52,6 +52,11 @@ const workflowStepRun = (job: string, stepName: string): string => {
     nextStep === -1
       ? job.slice(bodyStart)
       : job.slice(bodyStart, bodyStart + nextStep);
+  return step;
+};
+
+const workflowStepRun = (job: string, stepName: string): string => {
+  const step = workflowStep(job, stepName);
   const runMarker = "\n        run: ";
   const runStart = step.indexOf(runMarker);
   if (runStart === -1) {
@@ -187,9 +192,61 @@ describe("detect-e2e-changes", () => {
       .filter((line) => line.includes("docker compose --profile dev up"))
       .map((line) => line.trim());
     expect(composeStartLines).toEqual([
-      "if docker compose --profile dev up -d --wait postgres minio valkey \\",
+      "if docker compose --profile dev up -d --wait postgres minio valkey 2>&1 \\",
     ]);
     expect(e2eStackSetup).not.toContain("gotenberg");
+  });
+
+  test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
+    expect(e2eStackSetup).toContain(
+      `value: ${githubExpression("steps.stack.outputs.status")}`,
+    );
+    expect(e2eStackSetup).toContain(
+      "grep -Eqi 'toomanyrequests:.*pull rate limit'",
+    );
+    expect(e2eStackSetup).toContain(
+      'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
+    );
+    expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
+    expect(
+      e2eStackSetup.match(/if: steps\.stack\.outputs\.status == 'ready'/gu),
+    ).toHaveLength(4);
+
+    const guardedSteps = {
+      "e2e-production-shard": [
+        "Install Playwright browsers",
+        "Wait for production web build",
+        "Download production web build",
+        "Validate production web build",
+        "Start production web server",
+        "Wait for production web server",
+        "Run Playwright shard",
+        "Upload Playwright blob report",
+        "Upload server logs",
+      ],
+      "e2e-vite-canary": [
+        "Start web dev server",
+        "Wait for web dev server",
+        "Install Playwright browsers",
+        "Run Vite dependency canary",
+        "Guard against mid-test Vite re-optimize",
+        "Stop web dev server",
+        "Upload Playwright blob report",
+        "Upload server logs",
+      ],
+    } as const;
+
+    for (const [jobId, stepNames] of Object.entries(guardedSteps)) {
+      const job = workflowJob(jobId);
+      expect(workflowStep(job, "Start docker stack and API server")).toContain(
+        "id: e2e-stack",
+      );
+      for (const stepName of stepNames) {
+        expect(workflowStep(job, stepName)).toContain(
+          "steps.e2e-stack.outputs.status == 'ready'",
+        );
+      }
+    }
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
