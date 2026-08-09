@@ -5,16 +5,16 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { resolveRate } from "@/api/handlers/rates/resolve";
 import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/handlers/time-entries/authorization";
-import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { resolveRate } from "@/api/lib/billing-rates";
+import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -209,7 +209,7 @@ export const updateTimeEntryHandler = async function* ({
       "activityCode",
     ]),
     ...(body.durationMinutes !== undefined
-      ? { billedMinutes: roundToIncrement(body.durationMinutes) }
+      ? { billedMinutes: roundToBillingIncrement(body.durationMinutes) }
       : {}),
     ...(resolvedRateUpdate.type === "resolved"
       ? {

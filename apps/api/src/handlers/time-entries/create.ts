@@ -5,11 +5,12 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
-import { resolveRate } from "@/api/handlers/rates/resolve";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { resolveRate } from "@/api/lib/billing-rates";
+import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -155,7 +156,7 @@ export const createTimeEntryHandler = async function* ({
   const rateAtEntry = resolvedRate?.hourlyRate ?? 0;
   const currency = resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY;
 
-  const billedMinutes = roundToIncrement(body.durationMinutes);
+  const billedMinutes = roundToBillingIncrement(body.durationMinutes);
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
@@ -272,8 +273,3 @@ const createTimeEntry = createSafeHandler(
 );
 
 export default createTimeEntry;
-
-export const roundToIncrement = (minutes: number): number => {
-  const inc = LIMITS.billingIncrementMinutes;
-  return Math.ceil(minutes / inc) * inc;
-};

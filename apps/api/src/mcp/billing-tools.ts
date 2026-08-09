@@ -6,12 +6,12 @@ import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { resolveRate } from "@/api/handlers/rates/resolve";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,

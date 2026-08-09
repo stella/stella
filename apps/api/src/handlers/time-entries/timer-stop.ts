@@ -6,9 +6,9 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
-import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const timerStop = createSafeHandler(
@@ -48,7 +48,7 @@ const timerStop = createSafeHandler(
         const startedAt = activeEntry.timerStartedAt;
         const elapsedMs = now.getTime() - startedAt.getTime();
         const rawMinutes = Math.max(1, Math.round(elapsedMs / 60_000));
-        const billedMinutes = roundToIncrement(rawMinutes);
+        const billedMinutes = roundToBillingIncrement(rawMinutes);
 
         await tx
           .update(timeEntries)

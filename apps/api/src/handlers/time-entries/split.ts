@@ -3,11 +3,11 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { roundToBillingIncrement } from "@/api/lib/billing-time";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -164,7 +164,7 @@ const splitEntry = createSafeHandler(
           if (!split || durationMinutes === undefined) {
             continue;
           }
-          const billedMinutes = roundToIncrement(durationMinutes);
+          const billedMinutes = roundToBillingIncrement(durationMinutes);
 
           // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts create ordered successor rows for the split entry
           const [entry] = await tx
