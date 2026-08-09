@@ -29,8 +29,6 @@
   },
   "ai": {
     "analyzeWithAI": "Analizēt ar AI",
-    "chooseRewriteInstruction": "Izvēlēties pārrakstīšanas norādi",
-    "customRewriteInstruction": "Pielāgota norāde",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
       "cta": "Atvērt AI iestatījumus",

@@ -52,7 +52,9 @@ export const PersonalTimesheetDay = ({
   workspaceId,
   date,
 }: PersonalTimesheetDayProps) => {
-  const t = useTranslations();
+  const tBilling = useTranslations("billing");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const [dialog, setDialog] = useState<
     { type: "closed" } | { type: "create" } | { type: "edit"; id: string }
   >({ type: "closed" });
@@ -101,7 +103,7 @@ export const PersonalTimesheetDay = ({
       }
       setDialog({ type: "closed" });
     } catch {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
     }
   };
 
@@ -117,7 +119,7 @@ export const PersonalTimesheetDay = ({
         {canCreate && (
           <Button onClick={() => setDialog({ type: "create" })} size="sm">
             <PlusIcon className="size-4" />
-            {t("common.logTime")}
+            {tCommon("logTime")}
           </Button>
         )}
       </div>
@@ -135,7 +137,7 @@ export const PersonalTimesheetDay = ({
                 </BidiText>
                 {!entry.billable && (
                   <span className="text-muted-foreground text-xs">
-                    {t("billing.nonBillable")}
+                    {tBilling("nonBillable")}
                   </span>
                 )}
               </div>
@@ -144,7 +146,7 @@ export const PersonalTimesheetDay = ({
               </span>
               {entry.status === "draft" && canUpdate && (
                 <Button
-                  aria-label={t("common.edit")}
+                  aria-label={tCommon("edit")}
                   className="size-11"
                   onClick={() => setDialog({ type: "edit", id: entry.id })}
                   size="icon"
@@ -155,7 +157,7 @@ export const PersonalTimesheetDay = ({
               )}
               {entry.status === "draft" && canDelete && (
                 <Button
-                  aria-label={t("common.delete")}
+                  aria-label={tCommon("delete")}
                   className="text-destructive size-11"
                   disabled={deleteEntry.isPending}
                   onClick={() => setDeletingId(entry.id)}
@@ -175,19 +177,19 @@ export const PersonalTimesheetDay = ({
               }}
               variant="outline"
             >
-              {t("common.loadMore")}
+              {tCommon("loadMore")}
             </Button>
           )}
         </div>
       ) : (
         <div className="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-10 text-center text-sm">
-          <span>{t("billing.noEntries")}</span>
+          <span>{tBilling("noEntries")}</span>
           {canCreate && (
             <Button
               onClick={() => setDialog({ type: "create" })}
               variant="outline"
             >
-              {t("common.logTime")}
+              {tCommon("logTime")}
             </Button>
           )}
         </div>
@@ -205,8 +207,8 @@ export const PersonalTimesheetDay = ({
           <DialogPanel className="flex flex-col gap-4">
             <DialogTitle>
               {dialog.type === "edit"
-                ? t("billing.editEntry")
-                : t("common.logTime")}
+                ? tBilling("editEntry")
+                : tCommon("logTime")}
             </DialogTitle>
             <ManualTimeEntryForm
               defaultValues={{
@@ -234,16 +236,16 @@ export const PersonalTimesheetDay = ({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+            <AlertDialogTitle>{tCommon("delete")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("common.deleteConfirmDescription", {
+              {tCommon("deleteConfirmDescription", {
                 name: deletingEntry?.narrative ?? "",
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
+              {tCommon("cancel")}
             </AlertDialogClose>
             <Button
               disabled={!deletingId || deleteEntry.isPending}
@@ -257,7 +259,7 @@ export const PersonalTimesheetDay = ({
                     .then(() => setDeletingId(null))
                     .catch(() => {
                       stellaToast.add({
-                        title: t("errors.actionFailed"),
+                        title: tErrors("actionFailed"),
                         type: "error",
                       });
                     }),
@@ -266,7 +268,7 @@ export const PersonalTimesheetDay = ({
               }}
               variant="destructive"
             >
-              {t("common.delete")}
+              {tCommon("delete")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

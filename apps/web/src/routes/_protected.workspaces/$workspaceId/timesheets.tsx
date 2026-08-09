@@ -80,7 +80,8 @@ const TimesheetSkeleton = () => (
 );
 
 function TimesheetsPage() {
-  const t = useTranslations();
+  const tBilling = useTranslations("billing");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const workspaceId = Route.useParams({
     select: (params) => params.workspaceId,
@@ -99,17 +100,17 @@ function TimesheetsPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <h1 className="text-sm font-medium">{t("billing.timesheets")}</h1>
+        <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => setDate(new Date())}
             size="sm"
             variant="outline"
           >
-            {t("common.today")}
+            {tCommon("today")}
           </Button>
           <Button
-            aria-label={t("common.previous")}
+            aria-label={tCommon("previous")}
             className="size-11"
             onClick={() => moveDay(-1)}
             size="icon"
@@ -123,7 +124,7 @@ function TimesheetsPage() {
             })}
           </span>
           <Button
-            aria-label={t("common.next")}
+            aria-label={tCommon("next")}
             className="size-11"
             disabled={dateValue >= toISODate(new Date())}
             onClick={() => moveDay(1)}

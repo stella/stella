@@ -10,7 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { timeEntriesApi } from "@/lib/api";
+import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -32,7 +32,9 @@ export const TimeEntryNarrativeField = ({
   value,
   workspaceId,
 }: TimeEntryNarrativeFieldProps) => {
-  const t = useTranslations();
+  const tAi = useTranslations("ai");
+  const tBilling = useTranslations("billing");
+  const tCommon = useTranslations("common");
   const analytics = useAnalytics();
   const [isPolishing, setIsPolishing] = useState(false);
   const getLatestValue = useLatestCallback(() => value);
@@ -46,7 +48,7 @@ export const TimeEntryNarrativeField = ({
 
     setIsPolishing(true);
     const requestResult = await Result.tryPromise(async () => {
-      const response = await timeEntriesApi({
+      const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })["polish-narrative"].post({ narrative, instruction });
       return unwrapEden(response);
@@ -57,10 +59,10 @@ export const TimeEntryNarrativeField = ({
       analytics.captureError(requestResult.error);
       stellaToast.add({
         type: "error",
-        title: t("ai.editWithAI"),
+        title: tAi("editWithAI"),
         description: userErrorFromThrown(
           requestResult.error,
-          t("common.unexpectedError"),
+          tCommon("unexpectedError"),
         ),
       });
       return;
@@ -69,7 +71,7 @@ export const TimeEntryNarrativeField = ({
     if (getLatestValue() !== baseline) {
       stellaToast.add({
         type: "info",
-        title: t("ai.rewriteDraftChanged"),
+        title: tAi("rewriteDraftChanged"),
       });
       return;
     }
@@ -80,7 +82,7 @@ export const TimeEntryNarrativeField = ({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex min-h-8 items-center justify-between gap-2">
-        <Label htmlFor={id}>{t("common.description")}</Label>
+        <Label htmlFor={id}>{tCommon("description")}</Label>
         <AiRewriteControl
           disabled={value.trim().length === 0}
           isPending={isPolishing}
@@ -96,7 +98,7 @@ export const TimeEntryNarrativeField = ({
         id={id}
         maxLength={10_000}
         onChange={(event) => onChange(event.currentTarget.value)}
-        placeholder={t("billing.narrativePlaceholder")}
+        placeholder={tBilling("narrativePlaceholder")}
         required
         rows={rows}
         value={value}

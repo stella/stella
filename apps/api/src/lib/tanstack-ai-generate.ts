@@ -117,8 +117,15 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
+type TanStackTextFinishReason =
+  | "stop"
+  | "length"
+  | "content_filter"
+  | "tool_calls"
+  | null;
+
 export type TanStackTextGenerationResult = {
-  finishReason: "stop" | "length" | "content_filter" | "tool_calls" | null;
+  finishReason: TanStackTextFinishReason;
   text: string;
 };
 
@@ -133,14 +140,14 @@ export const generateTanStackTextForRole = async (
 
 export const generateTanStackTextResultForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-): Promise<TanStackTextGenerationResult> => {
+) => {
   const model = resolveTanStackTextModel(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
   let output = "";
-  let finishReason: TanStackTextGenerationResult["finishReason"] = null;
+  let finishReason: TanStackTextFinishReason = null;
 
   for await (const delta of streamTanStackTextDeltas({
     abortController,
@@ -205,9 +212,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
-  onFinishReason?:
-    | ((reason: TanStackTextGenerationResult["finishReason"]) => void)
-    | undefined;
+  onFinishReason?: ((reason: TanStackTextFinishReason) => void) | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
     model,

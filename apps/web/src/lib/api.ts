@@ -1,7 +1,7 @@
 import { posthog } from "posthog-js";
 
 import { createStellaEdenClient } from "@stll/api-client";
-import type { MemoriesAPI, TimeEntriesAPI, WebAPI } from "@stll/api/types";
+import type { MemoriesAPI, WebAPI } from "@stll/api/types";
 
 import { env } from "@/env";
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
@@ -45,11 +45,6 @@ const memoriesEden = createStellaEdenClient<MemoriesAPI>(
   env.VITE_API_URL,
   clientOptions,
 );
-const timeEntriesEden = createStellaEdenClient<TimeEntriesAPI>(
-  env.VITE_API_URL,
-  clientOptions,
-);
 
 export const api = eden.v1;
 export const memoriesApi = memoriesEden.v1.memories;
-export const timeEntriesApi = timeEntriesEden.v1["time-entries"];

@@ -29,8 +29,6 @@
   },
   "ai": {
     "analyzeWithAI": "التحليل باستخدام AI",
-    "chooseRewriteInstruction": "اختيار تعليمات إعادة الصياغة",
-    "customRewriteInstruction": "تعليمات مخصصة",
     "editWithAI": "التعديل باستخدام AI",
     "keyRequired": {
       "cta": "فتح إعدادات AI",

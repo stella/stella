@@ -13,41 +13,34 @@ import {
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { TranslationKey } from "@/i18n/types";
-
 const MAX_CUSTOM_INSTRUCTION_LENGTH = 2000;
 
 const AI_REWRITE_PRESETS = [
   {
     id: "polish",
+    labelKey: "rewritePresets.polish",
     instruction:
       "Polish the writing so it is clear and professional while preserving its meaning and language.",
   },
   {
     id: "concise",
+    labelKey: "rewritePresets.concise",
     instruction:
       "Make the writing more concise without removing material facts or changing its meaning.",
   },
   {
     id: "clarify",
+    labelKey: "rewritePresets.clarify",
     instruction:
       "Improve clarity and specificity without inventing facts or changing the meaning.",
   },
   {
     id: "formal",
+    labelKey: "rewritePresets.formal",
     instruction:
       "Use a more formal, professional tone while preserving the meaning and language.",
   },
 ] as const;
-
-type AiRewritePresetId = (typeof AI_REWRITE_PRESETS)[number]["id"];
-
-const PRESET_LABEL_KEYS = {
-  clarify: "ai.rewritePresets.clarify",
-  concise: "ai.rewritePresets.concise",
-  formal: "ai.rewritePresets.formal",
-  polish: "ai.rewritePresets.polish",
-} as const satisfies Record<AiRewritePresetId, TranslationKey>;
 
 type AiRewriteControlProps = {
   className?: string | undefined;
@@ -70,11 +63,11 @@ export const AiRewriteControl = ({
   label,
   onRewrite,
 }: AiRewriteControlProps) => {
-  const t = useTranslations();
+  const t = useTranslations("ai");
   const [open, setOpen] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
   const customInstructionId = useId();
-  const actionLabel = label ?? t("ai.editWithAI");
+  const actionLabel = label ?? t("editWithAI");
   const unavailable = disabled || isPending;
 
   const runRewrite = (instruction: string) => {
@@ -110,11 +103,11 @@ export const AiRewriteControl = ({
         <PopoverTrigger
           render={
             <Button
-              aria-label={t("ai.chooseRewriteInstruction")}
+              aria-label={t("editWithAI")}
               className="min-h-11 min-w-11 rounded-s-none border-s px-1"
               disabled={unavailable}
               size="icon-sm"
-              tooltip={t("ai.chooseRewriteInstruction")}
+              tooltip={t("editWithAI")}
               type="button"
               variant="ghost"
             />
@@ -133,7 +126,7 @@ export const AiRewriteControl = ({
                 type="button"
                 variant="ghost"
               >
-                {t(PRESET_LABEL_KEYS[preset.id])}
+                {t(preset.labelKey)}
               </Button>
             ))}
             <div className="bg-border my-1 h-px" />
@@ -141,7 +134,7 @@ export const AiRewriteControl = ({
               className="text-muted-foreground px-1 text-xs font-medium"
               htmlFor={customInstructionId}
             >
-              {t("ai.customRewriteInstruction")}
+              {t("refinePlaceholder")}
             </Label>
             <Textarea
               id={customInstructionId}
@@ -159,7 +152,7 @@ export const AiRewriteControl = ({
                   runRewrite(customInstruction.trim());
                 }
               }}
-              placeholder={t("ai.refinePlaceholder")}
+              placeholder={t("refinePlaceholder")}
               rows={3}
               value={customInstruction}
             />
@@ -171,7 +164,7 @@ export const AiRewriteControl = ({
               type="button"
             >
               <WandSparklesIcon aria-hidden className="size-3.5" />
-              {t("ai.editWithAI")}
+              {t("editWithAI")}
             </Button>
           </div>
         </PopoverPopup>

@@ -29,8 +29,6 @@
   },
   "ai": {
     "analyzeWithAI": "Mit KI analysieren",
-    "chooseRewriteInstruction": "Überarbeitungsanweisung auswählen",
-    "customRewriteInstruction": "Eigene Anweisung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
       "cta": "AI-Einstellungen öffnen",

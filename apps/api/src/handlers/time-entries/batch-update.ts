@@ -46,9 +46,10 @@ const buildBatchEvents = (
   >,
 ): AuditEvent[] => {
   const changes = batchChangesFor(action);
-  return rows.map((row) => {
+  const events: AuditEvent[] = [];
+  for (const row of rows) {
     const rateChange = rateChanges?.get(row.id);
-    return {
+    events.push({
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
       resourceId: row.id,
@@ -66,8 +67,9 @@ const buildBatchEvents = (
                 new: rateChange.newCurrency,
               },
             },
-    };
-  });
+    });
+  }
+  return events;
 };
 
 const batchChangesFor = (

@@ -29,8 +29,6 @@
   },
   "ai": {
     "analyzeWithAI": "Elemzés AI-val",
-    "chooseRewriteInstruction": "Átírási utasítás kiválasztása",
-    "customRewriteInstruction": "Egyéni utasítás",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
       "cta": "AI-beállítások megnyitása",

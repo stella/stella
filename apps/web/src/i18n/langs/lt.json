@@ -29,8 +29,6 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuoti su DI",
-    "chooseRewriteInstruction": "Pasirinkti perrašymo nurodymą",
-    "customRewriteInstruction": "Pasirinktinis nurodymas",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
       "cta": "Atidaryti AI nustatymus",

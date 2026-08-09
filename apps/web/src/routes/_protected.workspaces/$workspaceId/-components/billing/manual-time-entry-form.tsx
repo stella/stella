@@ -33,7 +33,8 @@ export const ManualTimeEntryForm = ({
   onCancel,
   onSubmit,
 }: ManualTimeEntryFormProps) => {
-  const t = useTranslations();
+  const tBilling = useTranslations("billing");
+  const tCommon = useTranslations("common");
   const [dateWorked, setDateWorked] = useState(defaultValues.dateWorked);
   const [durationMinutes, setDurationMinutes] = useState(
     defaultValues.durationMinutes,
@@ -69,7 +70,7 @@ export const ManualTimeEntryForm = ({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label id="time-entry-date-label" htmlFor="time-entry-date">
-            {t("common.date")}
+            {tCommon("date")}
           </Label>
           <DatePickerPopover
             id="time-entry-date"
@@ -79,7 +80,7 @@ export const ManualTimeEntryForm = ({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label id="time-entry-duration-label">{t("billing.duration")}</Label>
+          <Label id="time-entry-duration-label">{tBilling("duration")}</Label>
           <DurationInput
             id="time-entry-duration"
             labelledBy="time-entry-duration-label"
@@ -102,7 +103,7 @@ export const ManualTimeEntryForm = ({
           id="time-entry-billable"
           onCheckedChange={setBillable}
         />
-        <Label htmlFor="time-entry-billable">{t("billing.billable")}</Label>
+        <Label htmlFor="time-entry-billable">{tBilling("billable")}</Label>
       </div>
 
       <div className="flex justify-end gap-2">
@@ -112,10 +113,10 @@ export const ManualTimeEntryForm = ({
           type="button"
           variant="ghost"
         >
-          {t("common.cancel")}
+          {tCommon("cancel")}
         </Button>
         <Button disabled={!valid || pending} type="submit">
-          {t("common.save")}
+          {tCommon("save")}
         </Button>
       </div>
     </form>

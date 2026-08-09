@@ -33,7 +33,7 @@ export const DurationInput = ({
   autoFocus,
   disabled,
 }: DurationInputProps) => {
-  const t = useTranslations();
+  const t = useTranslations("billing");
   const { hours, minutes } = splitDurationMinutes(value);
 
   const updateHours = (rawHours: string) => {
@@ -60,7 +60,7 @@ export const DurationInput = ({
     >
       <InputGroup>
         <InputGroupInput
-          aria-label={t("billing.hours")}
+          aria-label={t("hours")}
           autoFocus={autoFocus}
           className="tabular-nums"
           disabled={disabled}
@@ -74,12 +74,12 @@ export const DurationInput = ({
           value={hours === 0 ? "" : hours}
         />
         <InputGroupAddon align="inline-end">
-          <InputGroupText>{t("billing.hours")}</InputGroupText>
+          <InputGroupText>{t("hours")}</InputGroupText>
         </InputGroupAddon>
       </InputGroup>
       <InputGroup>
         <InputGroupInput
-          aria-label={t("billing.minutes")}
+          aria-label={t("minutes")}
           className="tabular-nums"
           disabled={disabled}
           id={`${id}-minutes`}
@@ -93,7 +93,7 @@ export const DurationInput = ({
           value={minutes === 0 ? "" : minutes}
         />
         <InputGroupAddon align="inline-end">
-          <InputGroupText>{t("billing.minutes")}</InputGroupText>
+          <InputGroupText>{t("minutes")}</InputGroupText>
         </InputGroupAddon>
       </InputGroup>
     </div>

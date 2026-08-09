@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { timeEntriesApi } from "@/lib/api";
+import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -82,7 +82,7 @@ const listTimeEntries = async ({
   signal?: AbortSignal;
 }) => {
   const { workItemId, userId, ...restFilters } = filters;
-  const response = await timeEntriesApi({
+  const response = await api["time-entries"]({
     workspaceId: toSafeId<"workspace">(workspaceId),
   }).get({
     query: {
@@ -126,34 +126,6 @@ export const timeEntriesInfiniteOptions = (
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
-type GetTimeEntrySummaryOptions = {
-  workspaceId: string;
-  dateFrom: string;
-  dateTo: string;
-  scope?: "team";
-  signal: AbortSignal;
-};
-
-const getTimeEntrySummary = async ({
-  workspaceId,
-  dateFrom,
-  dateTo,
-  scope,
-  signal,
-}: GetTimeEntrySummaryOptions) => {
-  const response = await timeEntriesApi({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  }).summary.get({
-    query: {
-      dateFrom,
-      dateTo,
-      ...(scope !== undefined && { scope }),
-    },
-    fetch: { signal },
-  });
-  return unwrapEden(response);
-};
-
 export const timeEntrySummaryOptions = (
   workspaceId: string,
   dateFrom: string,
@@ -162,12 +134,13 @@ export const timeEntrySummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const summary = await getTimeEntrySummary({
-        workspaceId,
-        dateFrom,
-        dateTo,
-        signal,
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).summary.get({
+        query: { dateFrom, dateTo },
+        fetch: { signal },
       });
+      const summary = unwrapEden(response);
       if (summary.scope !== "personal") {
         return panic("Expected a personal time-entry summary");
       }
@@ -187,13 +160,13 @@ export const timeEntryTeamSummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const summary = await getTimeEntrySummary({
-        workspaceId,
-        dateFrom,
-        dateTo,
-        scope: "team",
-        signal,
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).summary.get({
+        query: { dateFrom, dateTo, scope: "team" },
+        fetch: { signal },
       });
+      const summary = unwrapEden(response);
       if (summary.scope !== "team") {
         return panic("Expected a team time-entry summary");
       }
@@ -209,7 +182,7 @@ export const activeTimerOptions = (workspaceId: string) =>
     staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await timeEntriesApi({
+      const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).get({
         query: {

@@ -3,7 +3,6 @@ import type Elysia from "elysia";
 import type { properties } from "@/api/db/schema";
 import type * as SchemaValidators from "@/api/db/schema-validators";
 import type { memoriesRoute } from "@/api/handlers/memories/routes";
-import type { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import type * as ViewSchemas from "@/api/lib/views-schema";
 import type api from "@/api/server.js";
 
@@ -16,10 +15,9 @@ type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
 type MemoriesRoutes = (typeof memoriesRoute)["~Routes"];
-type TimeEntriesRoutes = (typeof timeEntriesRoute)["~Routes"];
 type EmptyElysia = Elysia;
 type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
+  v1: Omit<ApiV1Routes, "entities" | "memories"> & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
       ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
         entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
@@ -28,9 +26,6 @@ type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
       };
     };
   };
-};
-type VersionedTimeEntriesRoutes = {
-  v1: TimeEntriesRoutes;
 };
 
 /**
@@ -51,14 +46,6 @@ export type MemoriesAPI = Elysia<
   EmptyElysia["~Definitions"],
   EmptyElysia["~Metadata"],
   MemoriesRoutes
->;
-
-export type TimeEntriesAPI = Elysia<
-  EmptyElysia["~Prefix"],
-  EmptyElysia["~Singleton"],
-  EmptyElysia["~Definitions"],
-  EmptyElysia["~Metadata"],
-  VersionedTimeEntriesRoutes
 >;
 
 export { toSafeId } from "@/api/lib/branded-types";
