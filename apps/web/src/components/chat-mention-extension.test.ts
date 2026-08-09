@@ -1,18 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  ChatMentionKind,
-  ChatMentionOption,
-} from "@/components/chat-mention-extension";
-import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
 
-// A real producer never emits the category as the kind: an entity row
-// carries an entity kind, and the other categories carry their own marker.
-const KIND_BY_CATEGORY = {
-  entity: "document",
-  workspace: "workspace",
-  decision: "decision",
-} as const satisfies Record<ChatMentionOption["category"], ChatMentionKind>;
+import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 
 const option = ({
   category = "entity",
@@ -22,15 +14,59 @@ const option = ({
   category?: ChatMentionOption["category"];
   id: string;
   label: string;
-}): ChatMentionOption => ({
-  id,
-  label,
-  category,
-  kind: KIND_BY_CATEGORY[category],
-  mimeType: null,
-});
+}): ChatMentionOption => {
+  switch (category) {
+    case "entity":
+      return {
+        resource: resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: toSafeId<"entity">(id),
+        }),
+        label,
+        category,
+        kind: "document",
+        mimeType: null,
+      };
+    case "workspace":
+      return {
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: toSafeId<"workspace">(id),
+        }),
+        label,
+        category,
+        kind: "workspace",
+        mimeType: null,
+      };
+    case "decision":
+      return {
+        resource: resourceRef({
+          type: RESOURCE_TYPE.CASE_LAW_DECISION,
+          id: toSafeId<"caseLawDecision">(id),
+        }),
+        label,
+        category,
+        kind: "decision",
+        mimeType: null,
+      };
+    default:
+      return category satisfies never;
+  }
+};
 
 describe("chat mention suggestions", () => {
+  test("maps every suggestion resource ID into TipTap node attributes", () => {
+    const mentions = [
+      option({ category: "entity", id: "entity-1", label: "Contract" }),
+      option({ category: "workspace", id: "workspace-1", label: "Matter" }),
+      option({ category: "decision", id: "decision-1", label: "Decision" }),
+    ];
+
+    for (const mention of mentions) {
+      expect(toChatMentionNodeAttrs(mention).id).toBe(mention.resource.id);
+    }
+  });
+
   test("keeps searched decision hits even when the case number does not match the query", () => {
     const result = selectChatSuggestionItems({
       localItems: [option({ id: "entity-1", label: "Contract" })],
@@ -44,7 +80,9 @@ describe("chat mention suggestions", () => {
       ],
     });
 
-    expect(result.map((item) => item.id)).toEqual(["decision-1"]);
+    expect(result.map((item) => String(item.resource.id))).toEqual([
+      "decision-1",
+    ]);
   });
 
   test("still filters local cached mentions by label", () => {
@@ -57,6 +95,8 @@ describe("chat mention suggestions", () => {
       searchedItems: [],
     });
 
-    expect(result.map((item) => item.id)).toEqual(["entity-1"]);
+    expect(result.map((item) => String(item.resource.id))).toEqual([
+      "entity-1",
+    ]);
   });
 });

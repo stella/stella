@@ -1,37 +1,65 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CHAT_UNRESOLVED_REF_HREF,
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
-
-type HydratedEntityValue = {
-  contactRef?: string;
-  contactRefs?: string[];
-  entityRef?: string;
-  entityRefs?: string[];
-  fields?: { dependsOnPropertyRef: string }[];
-  matterRef?: string;
-  matterRefs?: string[];
-  mention?: string;
-  parentRef?: string;
-};
+import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
 describe("chat ref registry", () => {
-  test("uses short refs for model-facing entity links and resolves them for persistence", () => {
+  test("never infers ref semantics from structured field names", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const propertyId = toSafeId<"property">("property-opaque");
+    const contactId = toSafeId<"contact">("contact-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const entityRef = registry.toEntityRef({ entityId, workspaceId });
+    const propertyRef = registry.toPropertyRef(propertyId);
+    const contactRef = registry.toContactRef(contactId);
+    const refs = [matterRef, entityRef, propertyRef, contactRef];
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...refs),
+        fc.constantFrom(
+          "cursor",
+          "decisionId",
+          "entityRef",
+          "entityId",
+          "id",
+          "matterRef",
+          "propertyRef",
+          "title",
+          "workspaceId",
+        ),
+        (ref, key) => {
+          const opaqueValue = { [key]: ref, nested: { [key]: ref } };
+          expect(registry.resolveAssistantValueRefs(opaqueValue)).toEqual(
+            opaqueValue,
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("uses short refs for model-facing links and resolves canonical hrefs", () => {
     const registry = createChatRefRegistry();
     const workspaceId = toSafeId<"workspace">(
       "0dc54d0c-10d7-501d-897e-e801dbd0998c",
     );
-    const secondWorkspaceId = toSafeId<"workspace">(
-      "4e919658-a448-5354-8e3a-e99911214d2c",
-    );
     const entityId = toSafeId<"entity">("c09ec856-d945-5ecc-82e3-bb5382165f34");
-    const secondEntityId = toSafeId<"entity">(
-      "e650e388-8d13-59ca-8adb-e81e1916deea",
-    );
     const propertyId = toSafeId<"property">(
       "37286c24-6145-572e-ad27-15a1d4454d59",
     );
@@ -78,59 +106,29 @@ describe("chat ref registry", () => {
         mention: `[Matter](#stella-workspace-ref=${matterRef}) [Doc](#stella-entity-ref=${entityRef})`,
       }),
     ).toEqual({
-      entityRef: entityId,
-      fields: [{ propertyRef: propertyId }],
-      matterRef: workspaceId,
-      contactRef: contactId,
-      mention:
-        "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
-        "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
-    });
-
-    const richHydratedInput: HydratedEntityValue = {
-      entityRef: entityId,
-      fields: [{ dependsOnPropertyRef: propertyId }],
-      matterRef: workspaceId,
-      contactRef: contactId,
-      mention:
-        "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
-        "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
-      parentRef: entityId,
-    };
-
-    expect(registry.hydrateAssistantValueRefs(richHydratedInput)).toEqual({
       entityRef,
-      fields: [{ dependsOnPropertyRef: propertyRef }],
+      fields: [{ propertyRef }],
       matterRef,
       contactRef,
-      mention: `[Matter](#stella-workspace-ref=${matterRef}) [Doc](#stella-entity-ref=${entityRef})`,
-      parentRef: entityRef,
+      mention:
+        "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
+        "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
     });
 
-    const secondMatterRef = registry.toMatterRef(secondWorkspaceId);
-    const secondEntityRef = registry.toEntityRef({
-      entityId: secondEntityId,
-      workspaceId: secondWorkspaceId,
-    });
-
-    const multiEntityInput: HydratedEntityValue = {
-      entityRefs: [entityId, secondEntityId],
-      matterRefs: [workspaceId, secondWorkspaceId],
+    const persistedValue = {
+      matterRef: workspaceId,
+      nested: {
+        mention:
+          "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
+          "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
+      },
     };
 
-    expect(registry.hydrateAssistantValueRefs(multiEntityInput)).toEqual({
-      entityRefs: [entityRef, secondEntityRef],
-      matterRefs: [matterRef, secondMatterRef],
-    });
-
-    const ambiguousEntityInput: HydratedEntityValue = {
-      entityRefs: [secondEntityId],
-      matterRefs: [workspaceId, secondWorkspaceId],
-    };
-
-    expect(registry.hydrateAssistantValueRefs(ambiguousEntityInput)).toEqual({
-      entityRefs: [secondEntityRef],
-      matterRefs: [matterRef, secondMatterRef],
+    expect(registry.hydrateAssistantValueRefs(persistedValue)).toEqual({
+      matterRef: workspaceId,
+      nested: {
+        mention: `[Matter](#stella-workspace-ref=${matterRef}) [Doc](#stella-entity-ref=${entityRef})`,
+      },
     });
   });
 
@@ -170,6 +168,102 @@ describe("chat ref registry", () => {
     ]);
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("does not brand ill-formed persisted ref IDs during hydration", () => {
+    const registry = createChatRefRegistry();
+    const illFormedId = "resource_\uD800";
+
+    for (const kind of ["matter", "property", "contact"] as const) {
+      expect(
+        registry.hydrateRefId({
+          inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+          kind,
+          value: illFormedId,
+        }),
+      ).toBe(illFormedId);
+    }
+    expect(
+      registry.hydrateRefId({
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        kind: "entity",
+        value: illFormedId,
+        workspaceId: illFormedId,
+      }),
+    ).toBe(illFormedId);
+    const entityId = "entity-safe";
+    expect(
+      registry.hydrateRefId({
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        kind: "entity",
+        value: entityId,
+        workspaceId: illFormedId,
+      }),
+    ).toBe(entityId);
+  });
+
+  test("hydrates canonical links with opaque IDs without replacing a UUID prefix", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("matter:eu-west-1");
+    const entityId = toSafeId<"entity">(
+      "0198c0de-0000-4000-8000-000000000000-supplement",
+    );
+    const workspaceRef = registry.toMatterRef(workspaceId);
+    const entityRef = registry.toEntityRef({ entityId, workspaceId });
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId }),
+    });
+    const entityHref = toChatResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      location: {
+        type: "workspace",
+        workspace: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: workspaceId,
+        }),
+      },
+    });
+
+    expect(
+      registry.hydrateAssistantTextRefs(
+        `[Matter](${workspaceHref}) [Supplement](${entityHref})`,
+      ),
+    ).toBe(
+      `[Matter](#stella-workspace-ref=${workspaceRef}) ` +
+        `[Supplement](#stella-entity-ref=${entityRef})`,
+    );
+    expect(registry.hydrateAssistantTextRefs(`See ${workspaceHref}.`)).toBe(
+      `See #stella-workspace-ref=${workspaceRef}.`,
+    );
+  });
+
+  test("mints distinct refs for arbitrary opaque entity identity tuples", () => {
+    const segment = fc.stringMatching(/^[a-z0-9]{1,12}$/u);
+
+    fc.assert(
+      fc.property(segment, segment, segment, (a, b, c) => {
+        const registry = createChatRefRegistry();
+        const firstTarget = {
+          entityId: toSafeId<"entity">(`${b}:${c}`),
+          workspaceId: toSafeId<"workspace">(a),
+        };
+        const secondTarget = {
+          entityId: toSafeId<"entity">(c),
+          workspaceId: toSafeId<"workspace">(`${a}:${b}`),
+        };
+
+        const firstRef = registry.toEntityRef(firstTarget);
+        const secondRef = registry.toEntityRef(secondTarget);
+
+        expect(firstRef).not.toBe(secondRef);
+        expect(registry.resolveEntityRefTargets([firstRef, secondRef])).toEqual(
+          Result.ok([firstTarget, secondTarget]),
+        );
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 });
 

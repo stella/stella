@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { isEntityKind } from "@stll/api-contract";
+import type { ResourceName, ResourceRef } from "@stll/api-contract";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
 import type { ContactType } from "@/api/db/schema";
@@ -190,7 +191,9 @@ export const parseGlobalSearchResultType = (
 };
 
 type GlobalSearchHitBase = {
+  /** Stable compatibility key for existing v1 search consumers. */
   id: string;
+  resourceName: ResourceName;
   type: GlobalSearchResultType;
   title: string;
   headline: string | null;
@@ -199,6 +202,7 @@ type GlobalSearchHitBase = {
 
 export type EntityGlobalSearchHit = GlobalSearchHitBase & {
   type: EntityKind;
+  resource: ResourceRef<"entity">;
   entityId: string;
   workspaceId: string;
   workspaceName: string;
@@ -211,6 +215,7 @@ export type EntityGlobalSearchHit = GlobalSearchHitBase & {
 
 export type MatterGlobalSearchHit = GlobalSearchHitBase & {
   type: "matter";
+  resource: ResourceRef<"workspace">;
   workspaceId: string;
   workspaceName: string;
   /** Stored workspace color token (e.g. "--option-blue"); null if unset. */
@@ -219,12 +224,14 @@ export type MatterGlobalSearchHit = GlobalSearchHitBase & {
 
 export type ContactGlobalSearchHit = GlobalSearchHitBase & {
   type: "contact";
+  resource: ResourceRef<"contact">;
   contactId: string;
   contactType: ContactType;
 };
 
 export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
+  resource: ResourceRef<"case_law_decision">;
   decisionId: string;
   caseNumber: string;
   court: string;
@@ -234,6 +241,7 @@ export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
 
 export type ChatGlobalSearchHit = GlobalSearchHitBase & {
   type: "chat";
+  resource: ResourceRef<"chat_thread">;
   threadId: string;
   /** Null for cross-workspace (global) threads. */
   workspaceId: string | null;

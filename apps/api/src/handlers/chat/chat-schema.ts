@@ -8,7 +8,12 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  isSafeIdValue,
+  parseResourceRef,
+  resourceRef,
+  RESOURCE_TYPE,
   type ChatRunMode,
+  toSafeId,
 } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -653,11 +658,19 @@ const applyValidatedContinuationTransitions = ({
       return part;
     }
     const incomingCall = incomingCalls.get(part.id);
-    if (incomingCall === undefined || deepEquals(incomingCall, part)) {
-      return part;
+    if (incomingCall === undefined) {
+      return normalizeContinuationToolArguments({
+        call: part,
+        canonicalCall: part,
+      });
     }
-    transitionedCallIds.add(part.id);
-    return incomingCall;
+    if (incomingCall.state !== part.state) {
+      transitionedCallIds.add(part.id);
+    }
+    return normalizeContinuationToolArguments({
+      call: incomingCall,
+      canonicalCall: part,
+    });
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>
@@ -839,6 +852,38 @@ const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
 ]);
 const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
 
+// Persisted tool input uses durable IDs while provider-facing `arguments`
+// retain model refs. A client snapshot rebuilds both fields from visible input;
+// derive that second accepted representation from the server-owned input.
+const toClientVisibleCanonicalToolCall = (
+  canonicalCall: ChatToolCallPart,
+): ChatToolCallPart => {
+  if (canonicalCall.input === undefined) {
+    return canonicalCall;
+  }
+  const argumentsText = JSON.stringify(canonicalCall.input);
+  return typeof argumentsText === "string"
+    ? { ...canonicalCall, arguments: argumentsText }
+    : canonicalCall;
+};
+
+const normalizeContinuationToolArguments = ({
+  call,
+  canonicalCall,
+}: {
+  call: ChatToolCallPart;
+  canonicalCall: ChatToolCallPart;
+}): ChatToolCallPart => {
+  const clientCanonicalCall = toClientVisibleCanonicalToolCall(canonicalCall);
+  if (clientCanonicalCall === canonicalCall) {
+    return call;
+  }
+  return {
+    ...call,
+    arguments: clientCanonicalCall.arguments,
+  };
+};
+
 const hasOnlyPermittedToolCallChanges = ({
   canonicalCall,
   incomingCall,
@@ -865,6 +910,14 @@ const isPermittedContinuationToolCallTransition = ({
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
 }): boolean => {
+  const clientCanonicalCall = toClientVisibleCanonicalToolCall(canonicalCall);
+  let comparableCanonicalCall = canonicalCall;
+  if (incomingCall.arguments !== canonicalCall.arguments) {
+    if (incomingCall.arguments !== clientCanonicalCall.arguments) {
+      return false;
+    }
+    comparableCanonicalCall = clientCanonicalCall;
+  }
   let stateTransitionAllowed = false;
   for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
     canonicalCall.state
@@ -877,14 +930,13 @@ const isPermittedContinuationToolCallTransition = ({
   if (
     !stateTransitionAllowed ||
     incomingCall.name !== canonicalCall.name ||
-    !deepEquals(incomingCall.arguments, canonicalCall.arguments) ||
     !deepEquals(incomingCall.input, canonicalCall.input)
   ) {
     return false;
   }
 
   if (incomingCall.state === canonicalCall.state) {
-    return deepEquals(incomingCall, canonicalCall);
+    return deepEquals(incomingCall, comparableCanonicalCall);
   }
   if (
     canonicalCall.state === "approval-requested" &&
@@ -895,7 +947,7 @@ const isPermittedContinuationToolCallTransition = ({
     }
     return (
       hasOnlyPermittedToolCallChanges({
-        canonicalCall,
+        canonicalCall: comparableCanonicalCall,
         incomingCall,
         mutableProperties: APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES,
       }) &&
@@ -912,7 +964,7 @@ const isPermittedContinuationToolCallTransition = ({
     (incomingCall.state === "complete" || incomingCall.state === "error")
   ) {
     return hasOnlyPermittedToolCallChanges({
-      canonicalCall,
+      canonicalCall: comparableCanonicalCall,
       incomingCall,
       mutableProperties: TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES,
     });
@@ -983,6 +1035,9 @@ const invalidChatMetadataError = () =>
 const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isSafeIdInput = (value: unknown): value is string =>
+  typeof value === "string" && isSafeIdValue(value);
+
 const parseAnonRestorationsMetadata = (
   value: unknown,
 ): ChatMessageMetadata["anonRestorations"] | null => {
@@ -1022,21 +1077,62 @@ const parseMentionsMetadata = (
     const id = mention["id"];
     const label = mention["label"];
     if (
-      typeof id !== "string" ||
+      !isSafeIdInput(id) ||
       typeof label !== "string" ||
       (category !== "entity" && category !== "workspace")
     ) {
       return null;
     }
     if (category === "workspace") {
-      mentions.push({ category, id, label });
+      const resourceValue = mention["resource"];
+      const parsedResource = parseResourceRef(resourceValue);
+      if (
+        (resourceValue !== undefined && parsedResource === null) ||
+        (parsedResource !== null &&
+          (parsedResource.type !== RESOURCE_TYPE.WORKSPACE ||
+            parsedResource.id !== id))
+      ) {
+        return null;
+      }
+      mentions.push({
+        category,
+        id,
+        label,
+        resource:
+          parsedResource ??
+          resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">(id),
+          }),
+      });
       continue;
     }
     const workspaceId = mention["workspaceId"];
-    if (typeof workspaceId !== "string" && workspaceId !== null) {
+    if (workspaceId !== null && !isSafeIdInput(workspaceId)) {
       return null;
     }
-    mentions.push({ category, id, label, workspaceId });
+    const resourceValue = mention["resource"];
+    const parsedResource = parseResourceRef(resourceValue);
+    if (
+      (resourceValue !== undefined && parsedResource === null) ||
+      (parsedResource !== null &&
+        (parsedResource.type !== RESOURCE_TYPE.ENTITY ||
+          parsedResource.id !== id))
+    ) {
+      return null;
+    }
+    mentions.push({
+      category,
+      id,
+      label,
+      resource:
+        parsedResource ??
+        resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: toSafeId<"entity">(id),
+        }),
+      workspaceId,
+    });
   }
 
   return { mentions };
@@ -1120,6 +1216,8 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&
+  metadata.refContext === undefined &&
+  metadata.refEncoding === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&

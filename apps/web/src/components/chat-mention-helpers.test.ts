@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import {
   buildEntityMentionOption,
   buildWorkspaceMentionOptions,
@@ -20,14 +22,20 @@ describe("buildWorkspaceMentionOptions", () => {
       }),
     ).toEqual([
       {
-        id: "ws_alpha",
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: toSafeId<"workspace">("ws_alpha"),
+        }),
         label: "Alpha Matter",
         category: "workspace",
         kind: "workspace",
         mimeType: null,
       },
       {
-        id: "ws_beta",
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: toSafeId<"workspace">("ws_beta"),
+        }),
         label: "Beta Matter",
         category: "workspace",
         kind: "workspace",
@@ -50,7 +58,10 @@ describe("buildWorkspaceMentionOptions", () => {
       }),
     ).toEqual([
       {
-        id: "ws_alpha",
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: toSafeId<"workspace">("ws_alpha"),
+        }),
         label: "Alpha Matter",
         category: "workspace",
         kind: "workspace",
@@ -128,7 +139,10 @@ describe("buildEntityMentionOption", () => {
         sourceWorkspaceId: "ws_other",
       }),
     ).toEqual({
-      id: "ent_1",
+      resource: resourceRef({
+        type: RESOURCE_TYPE.ENTITY,
+        id: toSafeId<"entity">("ent_1"),
+      }),
       label: "Closing Binder",
       category: "entity",
       kind: "document",

@@ -141,7 +141,7 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
+    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -241,7 +241,7 @@
       "windowedText": true
     },
     "name": "read_case_law_decision",
-    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "properties": {

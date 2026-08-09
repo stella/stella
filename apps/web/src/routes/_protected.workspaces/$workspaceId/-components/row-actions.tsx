@@ -49,6 +49,7 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
@@ -635,16 +636,9 @@ export const RowActions = ({
   };
 
   const handleChatAbout = () => {
-    const mentions = bulkTargets.map((e) => {
-      const f = getFirstFile(e);
-      return {
-        id: e.entityId,
-        label: getEntityName(e),
-        category: "entity" as const,
-        kind: e.kind,
-        mimeType: f?.mimeType ?? null,
-      };
-    });
+    const mentions = bulkTargets.map((target) =>
+      buildEntityMentionOption({ entity: target }),
+    );
     requestChatAbout(mentions);
   };
 

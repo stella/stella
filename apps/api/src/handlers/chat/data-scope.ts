@@ -1,6 +1,15 @@
+import {
+  findCanonicalChatResourceHrefs,
+  isSafeIdValue,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
+
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+const isWorkspaceIdCandidate = (value: unknown): value is string =>
+  typeof value === "string" && isSafeIdValue(value);
 
 // Walks a parsed user-message mention list for any workspace IDs the
 // message embeds — entity mentions carry a workspaceId; workspace
@@ -13,10 +22,13 @@ export const extractMentionWorkspaceIds = (
   const ids = new Set<SafeId<"workspace">>();
   for (const mention of mentions) {
     if (mention.category === "workspace") {
-      ids.add(brandPersistedWorkspaceId(mention.id));
+      ids.add(mention.resource.id);
       continue;
     }
-    if (mention.workspaceId !== null) {
+    if (
+      mention.workspaceId !== null &&
+      isWorkspaceIdCandidate(mention.workspaceId)
+    ) {
       ids.add(brandPersistedWorkspaceId(mention.workspaceId));
     }
   }
@@ -49,6 +61,15 @@ export const extractMessageWorkspaceIds = (
     ids.add(id);
   }
   collectStructuralWorkspaceIds(message.metadata?.sourceDocuments, ids);
+  const refContext = message.metadata?.refContext;
+  if (refContext !== undefined) {
+    for (const context of refContext.entities) {
+      ids.add(context.workspace.id);
+    }
+    for (const workspace of refContext.workspaceScope) {
+      ids.add(workspace.id);
+    }
+  }
   return Array.from(ids);
 };
 
@@ -68,7 +89,7 @@ export const extractThreadDataWorkspaceIds = (
 // embedded by the model. Two complementary carriers are scanned:
 //
 //   1. **Structural fields** — any property at any depth named
-//      `workspaceId` or `matterRef` whose value is a UUID string.
+//      `workspaceId` or `matterRef` whose value is a persisted opaque ID.
 //      Covers tool output parts that include `matterRef` /
 //      `workspaceId` (search hits, file lookups, property/entity
 //      records), persisted source-document metadata, and any future
@@ -102,9 +123,6 @@ const collectPartsWorkspaceIds = (
 // extend coverage when a new tool output shape ships.
 const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
 const collectStructuralWorkspaceIds = (
   value: unknown,
   ids: Set<SafeId<"workspace">>,
@@ -119,24 +137,13 @@ const collectStructuralWorkspaceIds = (
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (
-      WORKSPACE_KEY_FIELDS.has(key) &&
-      typeof child === "string" &&
-      UUID_REGEX.test(child)
-    ) {
+    if (WORKSPACE_KEY_FIELDS.has(key) && isWorkspaceIdCandidate(child)) {
       ids.add(brandPersistedWorkspaceId(child));
       continue;
     }
     collectStructuralWorkspaceIds(child, ids);
   }
 };
-
-// Captures the workspace UUID from `#stella-workspace=<uuid>` and
-// the leading workspace UUID from `#stella-entity=<workspace>:<entity>`.
-// The entity form's second segment (the entity UUID) is intentionally
-// not captured — only the workspace it belongs to gates RLS.
-const STELLA_TEXT_REF_WORKSPACE_REGEX =
-  /#stella-(?:workspace|entity)=(?<workspaceId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gu;
 
 const collectTextRefWorkspaceIds = (
   part: unknown,
@@ -151,10 +158,20 @@ const collectTextRefWorkspaceIds = (
   if (!("content" in part) || typeof part.content !== "string") {
     return;
   }
-  for (const match of part.content.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
-    const captured = match.groups?.["workspaceId"];
-    if (captured) {
-      ids.add(brandPersistedWorkspaceId(captured));
+  for (const { target } of findCanonicalChatResourceHrefs(part.content)) {
+    switch (target.type) {
+      case RESOURCE_TYPE.ENTITY:
+        if (target.location.type === "workspace") {
+          ids.add(target.location.workspace.id);
+        }
+        break;
+      case RESOURCE_TYPE.WORKSPACE:
+        ids.add(target.resource.id);
+        break;
+      case RESOURCE_TYPE.CASE_LAW_DECISION:
+        break;
+      default:
+        target satisfies never;
     }
   }
 };
@@ -213,5 +230,7 @@ export const computeAssistantTurnWorkspaceIds = ({
       (id) => !workspaceIdsBeforeStream.has(id),
     ),
   ];
-  return candidateIds.filter((id) => accessibleWorkspaceIds.has(id));
+  return [
+    ...new Set(candidateIds.filter((id) => accessibleWorkspaceIds.has(id))),
+  ];
 };

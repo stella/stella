@@ -16,6 +16,8 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
+import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import type {
   ChatAnonRestoration,
   ChatMessage,
@@ -56,7 +58,9 @@ import {
   toChatMessage,
   resolveAgentRunBoundaryError,
   shouldAttemptChatFallback,
+  transformClientVisibleStream,
   transformOutgoingStream,
+  transformPersistenceVisibleStream,
 } from "./stream-chat";
 
 const collectChunks = async (
@@ -1880,6 +1884,95 @@ describe("native continuation third-party boundary", () => {
 });
 
 describe("chat stream refs", () => {
+  test("keeps refs for persistence while resolving the client's copy", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(
+      "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+    );
+    const matterRef = registry.toMatterRef(workspaceId);
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    let persistedInput: unknown;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    const persistenceVisible = transformPersistenceVisibleStream({
+      boundary: { type: "raw" },
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "tool-1",
+          toolCallName: "list_matters",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "list_matters",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: JSON.stringify({ matter_id: matterRef }),
+          toolCallId: "tool-1",
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          input: { matter_id: matterRef },
+          toolCallId: "tool-1",
+          toolCallName: "list_matters",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "list_matters",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "tool_calls",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+    const processed = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: terminalMessage }) => {
+        const toolCall = terminalMessage.parts.find(
+          (part) => part.type === "tool-call" && part.id === "tool-1",
+        );
+        persistedInput =
+          toolCall?.type === "tool-call" && "input" in toolCall
+            ? toolCall.input
+            : undefined;
+      },
+      processor,
+      source: persistenceVisible,
+    });
+    const clientChunks = await collectChunks(
+      transformClientVisibleStream({
+        resolveAssistantToolInputRefs: ({ input, toolName }) =>
+          resolveRegistryToolInputRefs({
+            input,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+        source: processed,
+      }),
+    );
+
+    expect(persistedInput).toEqual({ matter_id: matterRef });
+    const toolCallEnd = clientChunks.find(
+      (chunk) => chunk.type === EventType.TOOL_CALL_END,
+    );
+    expect(toolCallEnd).toMatchObject({ input: { matter_id: workspaceId } });
+  });
+
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
     const chunks: StreamChunk[] = [
       {
@@ -2044,6 +2137,195 @@ describe("chat stream refs", () => {
           "[Mzuri_Umowa_Strona_1.docx](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
         success: true,
       }),
+    });
+  });
+
+  test("resolves streamed refs only at the registry tool's declared output paths", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const chunks: StreamChunk[] = [
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "tool_1",
+        toolCallName: "list_matters",
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+        toolName: "list_matters",
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        messageId: "message_1",
+        toolCallId: "tool_1",
+        content: JSON.stringify({
+          decisionId: matterRef,
+          matters: [{ decisionId: matterRef, id: matterRef }],
+        }),
+      },
+    ];
+
+    const resolvedChunks = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+          resolveRegistryToolOutputRefs({
+            output,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
+    );
+
+    expect(resolvedChunks.at(1)).toEqual({
+      type: EventType.TOOL_CALL_RESULT,
+      messageId: "message_1",
+      toolCallId: "tool_1",
+      content: JSON.stringify({
+        decisionId: matterRef,
+        matters: [{ decisionId: matterRef, id: workspaceId }],
+      }),
+    });
+  });
+
+  test("does not infer ref semantics for an undeclared tool payload", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const entityRef = registry.toEntityRef({ entityId, workspaceId });
+    const payload = { matterRef, nested: { entityRef } };
+    const resolvedChunks = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks([
+          {
+            type: EventType.TOOL_CALL_START,
+            toolCallId: "tool_1",
+            toolCallName: "mcp__external__opaque",
+            // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+            toolName: "mcp__external__opaque",
+          },
+          {
+            type: EventType.TOOL_CALL_RESULT,
+            messageId: "message_1",
+            toolCallId: "tool_1",
+            content: JSON.stringify(payload),
+          },
+        ]),
+        resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+          resolveRegistryToolOutputRefs({
+            output,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
+    );
+
+    expect(resolvedChunks.at(1)).toMatchObject({
+      content: JSON.stringify(payload),
+    });
+  });
+
+  test("restores declared snapshot inputs and outputs without inferring activity ref fields", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const [snapshot] = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks([
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "assistant-1",
+                role: "assistant",
+                toolCalls: [
+                  {
+                    id: "tool-1",
+                    type: "function",
+                    function: {
+                      arguments: JSON.stringify({ matter_id: matterRef }),
+                      name: "list_matters",
+                    },
+                  },
+                ],
+              },
+              {
+                id: "tool-result-1",
+                role: "tool",
+                toolCallId: "tool-1",
+                content: JSON.stringify({
+                  decisionId: matterRef,
+                  matters: [{ decisionId: matterRef, id: matterRef }],
+                }),
+              },
+              {
+                id: "activity-1",
+                role: "activity",
+                activityType: "review",
+                content: { matterRef },
+              },
+            ],
+          },
+        ]),
+        resolveAssistantToolInputRefs: ({ input, toolName }) =>
+          resolveRegistryToolInputRefs({
+            input,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+          resolveRegistryToolOutputRefs({
+            output,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
+    );
+
+    expect(snapshot).toEqual({
+      type: EventType.MESSAGES_SNAPSHOT,
+      messages: [
+        {
+          id: "assistant-1",
+          role: "assistant",
+          toolCalls: [
+            {
+              id: "tool-1",
+              type: "function",
+              function: {
+                arguments: JSON.stringify({ matter_id: workspaceId }),
+                name: "list_matters",
+              },
+            },
+          ],
+        },
+        {
+          id: "tool-result-1",
+          role: "tool",
+          toolCallId: "tool-1",
+          content: JSON.stringify({
+            decisionId: matterRef,
+            matters: [{ decisionId: matterRef, id: workspaceId }],
+          }),
+        },
+        {
+          id: "activity-1",
+          role: "activity",
+          activityType: "review",
+          content: { matterRef },
+        },
+      ],
     });
   });
 });

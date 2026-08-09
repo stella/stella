@@ -1,10 +1,12 @@
 import { LinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { getEntityLinkResource } from "@/components/workspaces/tasks/task-links.logic";
+import type { EntityLinkResourceInput } from "@/components/workspaces/tasks/task-links.logic";
+
 // -- Links section --
 
-type EntityRef = {
-  id: string;
+type EntityRef = EntityLinkResourceInput & {
   name: string | null;
   kind: string;
 };
@@ -30,14 +32,14 @@ export const LinksSection = ({ linkedFrom, linkedTo }: LinksSectionProps) => {
       <div className="space-y-1">
         {linkedFrom.map((link) => (
           <LinkedEntityRow
-            key={link.targetEntity.id}
+            key={getEntityLinkResource(link.targetEntity).id}
             kind={link.targetEntity.kind}
             name={link.targetEntity.name ?? tWorkspaces("defaultName")}
           />
         ))}
         {linkedTo.map((link) => (
           <LinkedEntityRow
-            key={link.sourceEntity.id}
+            key={getEntityLinkResource(link.sourceEntity).id}
             kind={link.sourceEntity.kind}
             name={link.sourceEntity.name ?? tWorkspaces("defaultName")}
           />

@@ -1,7 +1,21 @@
 import { Result } from "better-result";
 
+import {
+  isSafeIdValue,
+  replaceCanonicalChatResourceHrefs,
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  CHAT_REF_INPUT_STATE,
+  CHAT_REF_TOKEN_PREFIX,
+  type ChatRefInputState,
+  type ChatRefTokenKind,
+} from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
@@ -23,32 +37,35 @@ export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
  */
 export const CHAT_UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
 const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
-const UUID_PATTERN =
-  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+const escapeRegex = (value: string) =>
+  value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
 
 const createRefLinkRegex = (prefix: string) =>
-  new RegExp(
-    `${prefix.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}([^\\s)]+)`,
-    "gu",
-  );
+  new RegExp(`${escapeRegex(prefix)}([^\\s)]+)`, "gu");
 
 const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
-const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "iu");
-const PERSISTED_ENTITY_LINK_REGEX = new RegExp(
-  `#stella-entity=(${UUID_PATTERN}):(${UUID_PATTERN})`,
-  "giu",
-);
-const PERSISTED_WORKSPACE_LINK_REGEX = new RegExp(
-  `#stella-workspace=(${UUID_PATTERN})`,
-  "giu",
-);
 
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
 
 const createEntityRefKey = ({ entityId, workspaceId }: EntityTarget) =>
-  `${workspaceId}:${entityId}`;
+  JSON.stringify([workspaceId, entityId]);
+
+const toWorkspaceResource = (workspaceId: SafeId<"workspace">) =>
+  resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId });
+
+const toEntityResourceTarget = ({ entityId, workspaceId }: EntityTarget) => ({
+  type: RESOURCE_TYPE.ENTITY,
+  resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+  location: {
+    type: "workspace" as const,
+    workspace: toWorkspaceResource(workspaceId),
+  },
+});
 
 export type EntityTarget = {
   entityId: SafeId<"entity">;
@@ -135,11 +152,25 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null &&
   Object.getPrototypeOf(value) === Object.prototype;
 
-const isUnknownArray = (value: unknown): value is unknown[] =>
-  Array.isArray(value);
+const isPersistedIdForInput = (
+  value: unknown,
+  inputState: ChatRefInputState,
+): value is string => {
+  if (typeof value !== "string" || !isSafeIdValue(value)) {
+    return false;
+  }
 
-const isUuidString = (value: unknown): value is string =>
-  typeof value === "string" && UUID_REGEX.test(value);
+  switch (inputState) {
+    case CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1:
+    case CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2:
+      return true;
+    case CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS:
+      return UUID_REGEX.test(value);
+    default:
+      inputState satisfies never;
+      return false;
+  }
+};
 
 /**
  * The four tenant-content id kinds this registry mediates. Every other id a
@@ -150,18 +181,24 @@ const isUuidString = (value: unknown): value is string =>
  * `RegistryRefKind`; the vocabulary lives here because the registry is the
  * lowest module that has to know all four.
  */
-export type ChatRefKind = "matter" | "entity" | "contact" | "property";
+export type ChatRefKind = ChatRefTokenKind;
 
 /**
  * One id to turn back into a chat ref. `workspaceId` applies only to
  * `kind: "entity"`, whose ref key is the (workspace, entity) pair; when it is
- * absent or not a UUID the registry falls back to the unique ref it already
+ * absent or empty the registry falls back to the unique ref it already
  * minted for that entity id this turn, and otherwise leaves the value alone.
  */
 export type HydrateRefIdProps = {
+  inputState: ChatRefInputState;
   kind: ChatRefKind;
   value: unknown;
   workspaceId?: unknown;
+};
+
+export type ResolveRefIdProps = {
+  kind: ChatRefKind;
+  value: unknown;
 };
 
 export type ChatRefRegistry = {
@@ -179,14 +216,13 @@ export type ChatRefRegistry = {
   hydrateAssistantValueRefs: (value: unknown) => unknown;
   /**
    * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
-   * kind rather than by key name. `hydrateAssistantValueRefs` recognizes the
-   * *output* projection's key names (`matterRef`, `entityRef`, ...); a tool
-   * call's own input params are named per tool (`matter_id`, `task_id`), so
-   * their kinds come from the registry adapter's declared input-ref map and
-   * land here. A non-UUID value (already a ref, or not an id at all) is
-   * returned unchanged.
+   * kind rather than by key name. Tool input and output kinds come from the
+   * registry adapter's declared path policies. Empty and non-string values
+   * are returned unchanged.
    */
   hydrateRefId: (props: HydrateRefIdProps) => unknown;
+  /** Resolve one declared model-facing ref without guessing from its text. */
+  resolveRefId: (props: ResolveRefIdProps) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
   resolveAssistantValueRefs: (value: unknown) => unknown;
   resolveContactRefs: (
@@ -225,10 +261,18 @@ export type ChatRefRegistry = {
 };
 
 export const createChatRefRegistry = (): ChatRefRegistry => {
-  const contactState = createRefState<SafeId<"contact">>("contact");
-  const matterState = createRefState<SafeId<"workspace">>("mat");
-  const propertyState = createRefState<SafeId<"property">>("prop");
-  const entityState = createRefState<EntityTarget>("ent");
+  const contactState = createRefState<SafeId<"contact">>(
+    CHAT_REF_TOKEN_PREFIX.contact,
+  );
+  const matterState = createRefState<SafeId<"workspace">>(
+    CHAT_REF_TOKEN_PREFIX.matter,
+  );
+  const propertyState = createRefState<SafeId<"property">>(
+    CHAT_REF_TOKEN_PREFIX.property,
+  );
+  const entityState = createRefState<EntityTarget>(
+    CHAT_REF_TOKEN_PREFIX.entity,
+  );
 
   const toMatterRef = (workspaceId: SafeId<"workspace">) =>
     getOrCreateRef({
@@ -281,7 +325,10 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           reportUnknownAssistantRef("matter", ref);
           return CHAT_UNRESOLVED_REF_HREF;
         }
-        return `#stella-workspace=${workspaceId}`;
+        return toChatResourceHref({
+          type: RESOURCE_TYPE.WORKSPACE,
+          resource: toWorkspaceResource(workspaceId),
+        });
       },
       text,
     });
@@ -294,51 +341,57 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           reportUnknownAssistantRef("entity", ref);
           return CHAT_UNRESOLVED_REF_HREF;
         }
-        return `#stella-entity=${target.workspaceId}:${target.entityId}`;
+        return toChatResourceHref(toEntityResourceTarget(target));
       },
       text: withWorkspaceRefs,
     });
   };
 
-  const hydrateAssistantTextRefs = (text: string) => {
-    const withWorkspaceRefs = text.replaceAll(
-      PERSISTED_WORKSPACE_LINK_REGEX,
-      (_href, rawWorkspaceId: string) =>
-        `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(brandPersistedWorkspaceId(rawWorkspaceId))}`,
-    );
+  const hydrateAssistantTextRefs = (text: string) =>
+    replaceCanonicalChatResourceHrefs(text, ({ href, target }) => {
+      switch (target.type) {
+        case RESOURCE_TYPE.WORKSPACE:
+          return `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(
+            brandPersistedWorkspaceId(target.resource.id),
+          )}`;
+        case RESOURCE_TYPE.ENTITY:
+          if (target.location.type !== "workspace") {
+            return href;
+          }
+          return `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
+            entityId: brandPersistedEntityId(target.resource.id),
+            workspaceId: brandPersistedWorkspaceId(
+              target.location.workspace.id,
+            ),
+          })}`;
+        case RESOURCE_TYPE.CASE_LAW_DECISION:
+          return href;
+        default:
+          return target satisfies never;
+      }
+    });
 
-    return withWorkspaceRefs.replaceAll(
-      PERSISTED_ENTITY_LINK_REGEX,
-      (_href, rawWorkspaceId: string, rawEntityId: string) =>
-        `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
-          entityId: brandPersistedEntityId(rawEntityId),
-          workspaceId: brandPersistedWorkspaceId(rawWorkspaceId),
-        })}`,
-    );
+  const resolveRefId = ({ kind, value }: ResolveRefIdProps): unknown => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    switch (kind) {
+      case "matter":
+        return matterState.refToTarget.get(value) ?? value;
+      case "entity":
+        return entityState.refToTarget.get(value)?.entityId ?? value;
+      case "property":
+        return propertyState.refToTarget.get(value) ?? value;
+      case "contact":
+        return contactState.refToTarget.get(value) ?? value;
+      default:
+        return kind satisfies never;
+    }
   };
 
   const resolveAssistantValueRefs = (value: unknown): unknown => {
     if (typeof value === "string") {
-      const workspaceId = matterState.refToTarget.get(value);
-      if (workspaceId) {
-        return workspaceId;
-      }
-
-      const entity = entityState.refToTarget.get(value);
-      if (entity) {
-        return entity.entityId;
-      }
-
-      const propertyId = propertyState.refToTarget.get(value);
-      if (propertyId) {
-        return propertyId;
-      }
-
-      const contactId = contactState.refToTarget.get(value);
-      if (contactId) {
-        return contactId;
-      }
-
       return resolveAssistantTextRefs(value);
     }
 
@@ -350,36 +403,52 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       return value;
     }
 
-    const entries: [string, unknown][] = [];
-    for (const [key, child] of Object.entries(value)) {
-      entries.push([key, resolveAssistantValueRefs(child)]);
-    }
-    return Object.fromEntries(entries);
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        resolveAssistantValueRefs(child),
+      ]),
+    );
   };
 
-  const toHydratedMatterRef = (value: unknown) =>
-    isUuidString(value) ? toMatterRef(brandPersistedWorkspaceId(value)) : value;
+  const toHydratedMatterRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
+      ? toMatterRef(brandPersistedWorkspaceId(value))
+      : value;
 
-  const toHydratedPropertyRef = (value: unknown) =>
-    isUuidString(value)
+  const toHydratedPropertyRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
       ? toPropertyRef(brandPersistedPropertyId(value))
       : value;
 
-  const toHydratedContactRef = (value: unknown) =>
-    isUuidString(value) ? toContactRef(brandPersistedContactId(value)) : value;
+  const toHydratedContactRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
+      ? toContactRef(brandPersistedContactId(value))
+      : value;
 
   const toHydratedEntityRef = ({
     entityId,
+    inputState,
     workspaceId,
   }: {
     entityId: unknown;
+    inputState: ChatRefInputState;
     workspaceId: unknown;
   }) => {
-    if (!isUuidString(entityId)) {
+    if (!isPersistedIdForInput(entityId, inputState)) {
       return entityId;
     }
 
-    if (!isUuidString(workspaceId)) {
+    if (!isPersistedIdForInput(workspaceId, inputState)) {
       const matchingRefs = [...entityState.refToTarget.entries()]
         .filter(([, target]) => target.entityId === entityId)
         .map(([ref]) => ref);
@@ -393,26 +462,28 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     });
   };
 
-  const getHydrationWorkspaceId = (value: Record<string, unknown>): unknown => {
-    if (isUuidString(value["matterRef"])) {
-      return value["matterRef"];
+  const hydrateRefId = ({
+    inputState,
+    kind,
+    value,
+    workspaceId,
+  }: HydrateRefIdProps): unknown => {
+    switch (kind) {
+      case "matter":
+        return toHydratedMatterRef(value, inputState);
+      case "entity":
+        return toHydratedEntityRef({
+          entityId: value,
+          inputState,
+          workspaceId,
+        });
+      case "contact":
+        return toHydratedContactRef(value, inputState);
+      case "property":
+        return toHydratedPropertyRef(value, inputState);
+      default:
+        return kind satisfies never;
     }
-
-    if (isUuidString(value["workspaceId"])) {
-      return value["workspaceId"];
-    }
-
-    const matterRefs = value["matterRefs"];
-    if (isUnknownArray(matterRefs) && matterRefs.length === 1) {
-      return matterRefs[0];
-    }
-
-    return undefined;
-  };
-
-  const getHydrationWorkspaceIds = (value: Record<string, unknown>) => {
-    const matterRefs = value["matterRefs"];
-    return isUnknownArray(matterRefs) ? matterRefs : [];
   };
 
   const hydrateAssistantValueRefs = (value: unknown): unknown => {
@@ -428,98 +499,12 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       return value;
     }
 
-    const workspaceId = getHydrationWorkspaceId(value);
-    const workspaceIds = getHydrationWorkspaceIds(value);
-    const entries: [string, unknown][] = [];
-
-    for (const [key, child] of Object.entries(value)) {
-      if (key === "matterRef") {
-        entries.push([key, toHydratedMatterRef(child)]);
-        continue;
-      }
-
-      if (key === "matterRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedMatterRef)]);
-        continue;
-      }
-
-      if (key === "entityRef") {
-        entries.push([
-          key,
-          toHydratedEntityRef({ entityId: child, workspaceId }),
-        ]);
-        continue;
-      }
-
-      if (key === "parentRef") {
-        entries.push([
-          key,
-          child === null
-            ? null
-            : toHydratedEntityRef({ entityId: child, workspaceId }),
-        ]);
-        continue;
-      }
-
-      if (key === "entityRefs" && Array.isArray(child)) {
-        entries.push([
-          key,
-          child.map((entityId, index) =>
-            toHydratedEntityRef({
-              entityId,
-              workspaceId:
-                workspaceIds.length === child.length
-                  ? workspaceIds.at(index)
-                  : workspaceId,
-            }),
-          ),
-        ]);
-        continue;
-      }
-
-      if (key === "propertyRef" || key === "dependsOnPropertyRef") {
-        entries.push([key, toHydratedPropertyRef(child)]);
-        continue;
-      }
-
-      if (key === "propertyRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedPropertyRef)]);
-        continue;
-      }
-
-      if (key === "contactRef") {
-        entries.push([key, toHydratedContactRef(child)]);
-        continue;
-      }
-
-      if (key === "contactRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedContactRef)]);
-        continue;
-      }
-
-      entries.push([key, hydrateAssistantValueRefs(child)]);
-    }
-
-    return Object.fromEntries(entries);
-  };
-
-  const hydrateRefId = ({
-    kind,
-    value,
-    workspaceId,
-  }: HydrateRefIdProps): unknown => {
-    switch (kind) {
-      case "matter":
-        return toHydratedMatterRef(value);
-      case "entity":
-        return toHydratedEntityRef({ entityId: value, workspaceId });
-      case "contact":
-        return toHydratedContactRef(value);
-      case "property":
-        return toHydratedPropertyRef(value);
-      default:
-        return kind satisfies never;
-    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        hydrateAssistantValueRefs(child),
+      ]),
+    );
   };
 
   const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {
@@ -539,6 +524,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     hydrateRefId,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,
+    resolveRefId,
     resolveEntityRefs: (refs: string[]) => {
       const resolved = resolveRefs({
         kind: "entity",

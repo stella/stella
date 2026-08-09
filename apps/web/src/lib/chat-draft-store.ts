@@ -3,6 +3,7 @@ import { create } from "zustand";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
@@ -32,14 +33,7 @@ export const createEmptyChatDraftDoc = (): JSONContent => ({
 
 const createMentionNode = (mention: ChatMentionOption): JSONContent => ({
   type: "mention",
-  attrs: {
-    id: mention.id,
-    label: mention.label,
-    category: mention.category,
-    kind: mention.kind,
-    mimeType: mention.mimeType,
-    sourceWorkspaceId: mention.sourceWorkspaceId,
-  },
+  attrs: toChatMentionNodeAttrs(mention),
 });
 
 const createTextNode = (text: string): JSONContent => ({

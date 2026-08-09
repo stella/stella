@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
@@ -13,6 +15,12 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedChatThreadId,
+  brandPersistedContactId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
@@ -37,6 +45,7 @@ import {
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
+import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
   ChatGlobalSearchHit,
@@ -267,7 +276,12 @@ const headlineRegconfig = sql`
 
 const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
   const workspaceId = String(row["id"]);
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.WORKSPACE,
+    id: brandPersistedWorkspaceId(workspaceId),
+  });
   const hit: MatterGlobalSearchHit = {
+    ...globalSearchIdentity(resource),
     id: `matter:${workspaceId}`,
     type: "matter",
     workspaceId,
@@ -284,7 +298,12 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
 const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
   const contactId = String(row["id"]);
   const contactType = String(row["contact_type"]);
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CONTACT,
+    id: brandPersistedContactId(contactId),
+  });
   const hit: ContactGlobalSearchHit = {
+    ...globalSearchIdentity(resource),
     id: `contact:${contactId}`,
     type: "contact",
     contactId,
@@ -299,7 +318,12 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
 
 const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
   const decisionId = String(row["id"]);
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: brandPersistedCaseLawDecisionId(decisionId),
+  });
   const hit: GlobalSearchHit = {
+    ...globalSearchIdentity(resource),
     id: `case-law:${decisionId}`,
     type: "case-law",
     decisionId,
@@ -317,7 +341,12 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
 
 const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
   const threadId = String(row["id"]);
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CHAT_THREAD,
+    id: brandPersistedChatThreadId(threadId),
+  });
   const hit: ChatGlobalSearchHit = {
+    ...globalSearchIdentity(resource),
     id: `chat:${threadId}`,
     type: "chat",
     threadId,

@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
+import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -18,7 +19,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 
-export const CREATE_WORKSPACE_DOCUMENT_TOOL_NAME = "create_workspace_document";
+export { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 
 const createWorkspaceDocumentInputSchema = v.strictObject({
   // Not `v.trim()`: the OpenAI/Anthropic/... adapters' JSON Schema converter

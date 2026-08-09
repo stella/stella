@@ -1,3 +1,9 @@
+import {
+  CHAT_RESOURCE_HREF_PREFIX,
+  parseChatResourceHref,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
+import type { ChatMentionResourceLinkTarget } from "@stll/api-contract";
 import type {
   ChatMentionCategory,
   ChatMentionHrefPrefixMap,
@@ -6,8 +12,8 @@ import type {
 export type MentionCategory = ChatMentionCategory;
 
 const CHAT_MENTION_HREF_PREFIXES = {
-  entity: "#stella-entity=",
-  workspace: "#stella-workspace=",
+  entity: CHAT_RESOURCE_HREF_PREFIX.entity,
+  workspace: CHAT_RESOURCE_HREF_PREFIX.workspace,
 } as const satisfies ChatMentionHrefPrefixMap;
 
 const CHAT_MENTION_HREF_ENTRIES = [
@@ -27,17 +33,35 @@ export const isMentionCategory = (value: string): value is MentionCategory => {
 
 export const parseStellaMentionHref = (
   href: string,
-): { category: MentionCategory; id: string } | null => {
-  for (const [category, prefix] of CHAT_MENTION_HREF_ENTRIES) {
-    if (href.startsWith(prefix)) {
-      return {
-        category,
-        id: href.slice(prefix.length),
-      };
-    }
+): {
+  category: MentionCategory;
+  target: ChatMentionResourceLinkTarget;
+} | null => {
+  const target = parseChatResourceHref(href);
+  if (target?.type === RESOURCE_TYPE.ENTITY) {
+    return { category: "entity", target };
+  }
+  if (target?.type === RESOURCE_TYPE.WORKSPACE) {
+    return { category: "workspace", target };
   }
 
   return null;
+};
+
+export const resolveMentionWorkspaceId = (
+  target: ChatMentionResourceLinkTarget,
+  renderContextWorkspaceId?: string,
+): string | undefined => {
+  switch (target.type) {
+    case RESOURCE_TYPE.ENTITY:
+      return target.location.type === "workspace"
+        ? target.location.workspace.id
+        : renderContextWorkspaceId;
+    case RESOURCE_TYPE.WORKSPACE:
+      return renderContextWorkspaceId;
+    default:
+      return target satisfies never;
+  }
 };
 
 export const CHAT_MENTION_CATEGORY_PATTERN = CHAT_MENTION_HREF_ENTRIES.map(

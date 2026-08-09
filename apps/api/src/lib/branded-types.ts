@@ -1,6 +1,15 @@
 import * as v from "valibot";
 
-const safeIdSchema = v.pipe(v.string(), v.brand("SafeId"));
+import {
+  isSafeIdValue,
+  type SafeId as PortableSafeId,
+} from "@stll/api-contract";
+
+const safeIdSchema = v.pipe(
+  v.string(),
+  v.check(isSafeIdValue, "Expected a non-empty identifier"),
+  v.brand("SafeId"),
+);
 
 export type SafeIdType =
   | "accountDeletionRequest"
@@ -116,12 +125,7 @@ export type SafeIdType =
   | "workObligationEvent"
   | "entityLink";
 
-export type SafeId<T extends SafeIdType> = v.InferOutput<
-  typeof safeIdSchema
-> & {
-  /** Compile-time resource discriminator; boundary-specific schemas validate syntax. */
-  readonly __safeIdType?: T;
-};
+export type SafeId<T extends SafeIdType> = PortableSafeId<T>;
 
 export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
   v.parse(safeIdSchema, value);

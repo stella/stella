@@ -4,7 +4,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_TURN_INTENT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -23,6 +27,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { toSafeId } from "@/api/lib/branded-types";
 import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
@@ -82,6 +87,14 @@ const createDocumentTools = {
         fileName: v.string(),
       }),
     ),
+  },
+} satisfies ChatToolMap;
+const snapshotApprovalTools = {
+  mcp__external__create_document: {
+    name: "mcp__external__create_document",
+    description: "Create a document",
+    inputSchema: createDocumentTools["create-document"].inputSchema,
+    outputSchema: createDocumentTools["create-document"].outputSchema,
   },
 } satisfies ChatToolMap;
 const askUserTools = {
@@ -359,6 +372,10 @@ describe("validateMessage", () => {
             category: "entity",
             id: "entity_1",
             label: "Source memo",
+            resource: resourceRef({
+              type: RESOURCE_TYPE.ENTITY,
+              id: toSafeId<"entity">("entity_1"),
+            }),
             workspaceId: "workspace_1",
           },
         ],
@@ -390,6 +407,141 @@ describe("validateMessage", () => {
     }
 
     expect(result.value.message.metadata).toEqual(metadata);
+  });
+
+  test("upgrades legacy mention metadata to canonical resource identity", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_legacy_mention"),
+        role: "assistant",
+        metadata: {
+          mentions: {
+            mentions: [
+              {
+                category: "workspace",
+                id: "workspace_1",
+                label: "Matter",
+              },
+            ],
+          },
+        },
+        parts: [{ type: "text", content: "Done" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_legacy_mention"),
+      tools: noTools,
+      userId: userId("user_legacy_mention"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata?.mentions).toEqual({
+      mentions: [
+        {
+          category: "workspace",
+          id: "workspace_1",
+          label: "Matter",
+          resource: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">("workspace_1"),
+          }),
+        },
+      ],
+    });
+  });
+
+  test("rejects mention metadata whose legacy and canonical identities drift", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_drifted_mention"),
+        role: "assistant",
+        metadata: {
+          mentions: {
+            mentions: [
+              {
+                category: "entity",
+                id: "entity_1",
+                label: "Source memo",
+                resource: { type: "entity", id: "entity_2" },
+                workspaceId: "workspace_1",
+              },
+            ],
+          },
+        },
+        parts: [{ type: "text", content: "Done" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_drifted_mention"),
+      tools: noTools,
+      userId: userId("user_drifted_mention"),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects unsafe legacy mention identifiers as invalid metadata", async () => {
+    const invalidMentions = [
+      {
+        category: "workspace",
+        id: "",
+        label: "Matter",
+      },
+      {
+        category: "entity",
+        id: "entity_1",
+        label: "Source memo",
+        workspaceId: "",
+      },
+      {
+        category: "workspace",
+        id: "workspace_\uD800",
+        label: "Matter",
+      },
+      {
+        category: "entity",
+        id: "entity_\uD800",
+        label: "Source memo",
+        workspaceId: "workspace_1",
+      },
+      {
+        category: "entity",
+        id: "entity_1",
+        label: "Source memo",
+        workspaceId: "workspace_\uD800",
+      },
+    ] as const;
+
+    const results = await Promise.all(
+      invalidMentions.map(async (mention, index) =>
+        validateMessage({
+          message: {
+            id: chatMessageId(`msg_empty_legacy_mention_${index}`),
+            role: "assistant",
+            metadata: { mentions: { mentions: [mention] } },
+            parts: [{ type: "text", content: "Done" }],
+          },
+          safeDb: noDbReads,
+          threadId: chatThreadId(`thread_empty_legacy_mention_${index}`),
+          tools: noTools,
+          userId: userId(`user_empty_legacy_mention_${index}`),
+        }),
+      ),
+    );
+
+    for (const result of results) {
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isOk(result)) {
+        continue;
+      }
+      expect(result.error).toBeInstanceOf(HandlerError);
+      if (!(result.error instanceof HandlerError)) {
+        continue;
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toBe("Invalid chat message metadata");
+    }
   });
 
   test("restores server-owned rich parts on assistant continuations", async () => {
@@ -828,6 +980,65 @@ describe("validateMessage", () => {
     expect(Result.isError(rejectedMissingCall)).toBe(true);
   });
 
+  test("accepts snapshot-visible arguments derived from canonical input", async () => {
+    const id = chatMessageId("msg_snapshot_approval_continuation");
+    const canonicalInput = {
+      name: "Agreement",
+      source: "workspace-opaque",
+    };
+    const canonicalCall = {
+      type: "tool-call",
+      approval: { id: "approval-snapshot", needsApproval: true },
+      id: "approval-snapshot",
+      name: "mcp__external__create_document",
+      arguments: JSON.stringify({ name: "Agreement", source: "mat_1" }),
+      input: canonicalInput,
+      state: "approval-requested",
+    } satisfies ChatParts[number];
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...canonicalCall,
+            approval: { ...canonicalCall.approval, approved: true },
+            arguments: JSON.stringify(canonicalInput),
+            state: "approval-responded",
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+      },
+      resume: [
+        {
+          interruptId: "approval-snapshot",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_snapshot_approval_continuation"),
+      tools: snapshotApprovalTools,
+      userId: userId("user_snapshot_approval_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.parts).toEqual([
+      {
+        ...canonicalCall,
+        approval: { ...canonicalCall.approval, approved: true },
+        arguments: JSON.stringify(canonicalInput),
+        state: "approval-responded",
+      },
+    ]);
+  });
+
   test("accepts the canonical ask-user call completing with its answer", async () => {
     const id = chatMessageId("msg_ask_user_completion");
     const canonicalCall = {
@@ -900,12 +1111,13 @@ describe("validateMessage", () => {
     expect(result.value.message.metadata).toEqual(metadata);
   });
 
-  test("strips server-owned provenance and source documents from incoming messages", async () => {
+  test("strips forged server-owned metadata from incoming messages", async () => {
     const result = await validateMessage({
       message: {
         id: chatMessageId("msg_forged_server_provenance"),
         role: "assistant",
         metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
           serverProvenance: { type: "search-summary", version: 1 },
           sourceDocuments: [
             {

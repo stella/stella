@@ -7,35 +7,49 @@ import {
 } from "@tiptap/react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
-import type { EntityKind } from "@stll/api-contract";
+import type { EntityKind, ResourceRef } from "@stll/api-contract";
 
 import { ChatMentionList } from "@/components/chat-mention-list";
 import { ChatMentionNode } from "@/components/chat-mention-node";
-import type { MentionCategory } from "@/components/chat/chat-mention-href";
 
 export type { MentionCategory } from "@/components/chat/chat-mention-href";
 
-export type ChatReferenceCategory = MentionCategory | "decision";
-
-/** What a mention row points at: an entity kind when the category is
- *  "entity", otherwise the category's own marker. Typed as the closed set
- *  rather than `string` so an icon or label lookup cannot silently accept a
- *  value nothing produces. */
-export type ChatMentionKind = EntityKind | "workspace" | "decision";
-
-export type ChatMentionOption = {
-  id: string;
+type ChatMentionOptionBase = {
   label: string;
-  category: ChatReferenceCategory;
-  kind: ChatMentionKind;
   mimeType: string | null;
-  sourceViewId?: string;
-  /** Set when the entity comes from a different workspace
-   *  (e.g. drill-down). Serialized into the mention node so the
-   *  backend can recover workspace context while keeping model-facing
-   *  markdown clean. */
-  sourceWorkspaceId?: string;
 };
+
+export type ChatMentionOption =
+  | (ChatMentionOptionBase & {
+      category: "entity";
+      kind: EntityKind;
+      resource: ResourceRef<"entity">;
+      /** Set when the entity comes from a different workspace
+       *  (e.g. drill-down). Serialized into the mention node so the
+       *  backend can recover workspace context while keeping model-facing
+       *  markdown clean. */
+      sourceWorkspaceId?: string;
+    })
+  | (ChatMentionOptionBase & {
+      category: "workspace";
+      kind: "workspace";
+      resource: ResourceRef<"workspace">;
+      sourceViewId?: string;
+    })
+  | (ChatMentionOptionBase & {
+      category: "decision";
+      kind: "decision";
+      resource: ResourceRef<"case_law_decision">;
+    });
+
+export type ChatReferenceCategory = ChatMentionOption["category"];
+/** Derived from valid mention branches so category/kind cannot drift. */
+export type ChatMentionKind = ChatMentionOption["kind"];
+
+export type ChatWorkspaceMentionOption = Extract<
+  ChatMentionOption,
+  { category: "workspace" }
+>;
 
 export const ChatMention = MentionExtension.extend({
   addAttributes() {
@@ -128,7 +142,7 @@ export const createChatSuggestion = (
   getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>,
   searchItems: (query: string) => Promise<ChatMentionOption[]>,
   loadWorkspaceEntities: (
-    workspace: ChatMentionOption,
+    workspace: ChatWorkspaceMentionOption,
     query: string,
   ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
@@ -149,7 +163,7 @@ export const createChatSuggestion = (
   render: () => {
     let component: ReactRenderer<
       ReturnType<NonNullable<SuggestionOptions["render"]>>,
-      SuggestionProps<ChatMentionOption>
+      SuggestionProps<ChatMentionOption, MentionNodeAttrs>
     > | null = null;
 
     return {

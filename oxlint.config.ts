@@ -54,6 +54,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-api-url.fixture.ts", [
     "no-raw-api-url/no-raw-api-url",
   ]),
+  fixtureRuleOverride("no-raw-resource-uri.fixture.ts", [
+    "no-raw-resource-uri/no-raw-resource-uri",
+    "no-raw-resource-uri/require-rfc3986-resource-encoding",
+  ]),
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
@@ -509,6 +513,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
+    "./.oxlint-plugins/no-raw-resource-uri.ts",
     "./.oxlint-plugins/no-legacy-entity-route.ts",
     "./.oxlint-plugins/require-eden-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
@@ -1050,6 +1055,34 @@ export default defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
+    },
+    {
+      // Resource identity URIs have one encoding owner. Tests may pin their
+      // wire representation, while production callers use the serializers.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**/*.{ts,tsx}",
+        "packages/api-contract/src/resource-link.ts",
+        "packages/api-contract/src/resource-ref.ts",
+      ],
+      rules: {
+        "no-raw-resource-uri/no-raw-resource-uri": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/lib/markdown/chat-message.ts",
+        "packages/api-contract/src/resource-link.ts",
+        "packages/api-contract/src/resource-ref.ts",
+      ],
+      rules: {
+        "no-raw-resource-uri/require-rfc3986-resource-encoding": "error",
       },
     },
     {

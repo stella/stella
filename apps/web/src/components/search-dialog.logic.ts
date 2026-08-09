@@ -1,3 +1,9 @@
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toResourceName,
+  toSafeId,
+} from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import type { RecentFile } from "@/lib/search-recents";
@@ -118,8 +124,13 @@ export const createDialogCloseActionQueue = () => {
 export const getRecentFilePreviewHit = (
   file: RecentFile,
   resolvedFileFieldId?: string | null,
-) =>
-  ({
+) => {
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">(file.entityId),
+  });
+
+  return {
     entityId: file.entityId,
     fileFieldId: resolvedFileFieldId ?? file.fileFieldId ?? null,
     filePropertyId: file.filePropertyId ?? null,
@@ -128,12 +139,15 @@ export const getRecentFilePreviewHit = (
     lastEditedByImage: null,
     lastEditedByName: null,
     mimeType: file.mimeType ?? null,
+    resource,
+    resourceName: toResourceName(resource),
     title: file.title,
     type: "document",
     updatedAt: file.updatedAt ?? file.openedAt,
     workspaceId: file.workspaceId,
     workspaceName: file.workspaceName,
-  }) satisfies EntityGlobalSearchHit;
+  } satisfies EntityGlobalSearchHit;
+};
 
 export const getRecentFilePreviewDateVisibility = (
   file: RecentFile,

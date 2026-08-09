@@ -1,6 +1,8 @@
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -57,6 +59,18 @@ const emptySearchSummaryFilters = () => ({
 
 const noopAuditRecorder = mock(async () => {});
 
+const entitySearchIdentity = (entityId: string) => {
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">(entityId),
+  });
+  return {
+    id: `entity:${entityId}`,
+    resource,
+    resourceName: toResourceName(resource),
+  };
+};
+
 describe("search AI output schemas", () => {
   test("convert to JSON Schema for structured model output", async () => {
     const { refineSearchOutputSchema, searchSummaryOutputSchema } =
@@ -91,9 +105,9 @@ describe("search summary chat", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [
         {
+          ...entitySearchIdentity("entity_1"),
           entityId: "entity_1",
           headline: null,
-          id: "entity:entity_1",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",
@@ -174,9 +188,9 @@ describe("search summary chat", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [
         {
+          ...entitySearchIdentity("entity_1"),
           entityId: "entity_1",
           headline: null,
-          id: "entity:entity_1",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",
@@ -236,9 +250,9 @@ describe("search summary chat", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [
         {
+          ...entitySearchIdentity("entity_1"),
           entityId: "entity_1",
           headline: null,
-          id: "entity:entity_1",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",
@@ -311,9 +325,9 @@ describe("search summary chat", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [
         {
+          ...entitySearchIdentity("entity_1"),
           entityId: "entity_1",
           headline: null,
-          id: "entity:entity_1",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",
@@ -324,9 +338,9 @@ describe("search summary chat", () => {
           workspaceName: "First matter",
         },
         {
+          ...entitySearchIdentity("entity_2"),
           entityId: "entity_2",
           headline: null,
-          id: "entity:entity_2",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",
@@ -404,9 +418,9 @@ describe("search summary chat", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [
         {
+          ...entitySearchIdentity("entity_1"),
           entityId: "entity_1",
           headline: null,
-          id: "entity:entity_1",
           lastEditedByImage: null,
           lastEditedByName: null,
           mimeType: "application/pdf",

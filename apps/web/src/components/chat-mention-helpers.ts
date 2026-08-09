@@ -1,6 +1,9 @@
 import type { Editor } from "@tiptap/core";
 
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import {
   getEntityName,
   getFirstFile,
@@ -44,7 +47,10 @@ export const buildWorkspaceMentionOptions = ({
     }
 
     items.push({
-      id: workspace.id,
+      resource: resourceRef({
+        type: RESOURCE_TYPE.WORKSPACE,
+        id: toSafeId<"workspace">(workspace.id),
+      }),
       label: workspace.name,
       category: "workspace",
       kind: "workspace",
@@ -72,7 +78,10 @@ export const buildEntityMentionOption = ({
 }): ChatMentionOption => {
   const file = getFirstFile(entity);
   const option: ChatMentionOption = {
-    id: entity.entityId,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: entity.entityId,
+    }),
     label: getEntityName(entity),
     category: "entity",
     kind: entity.kind,
@@ -100,14 +109,7 @@ export const insertChatMention = (
     .focus()
     .insertContent({
       type: "mention",
-      attrs: {
-        id: mention.id,
-        label: mention.label,
-        category: mention.category,
-        kind: mention.kind,
-        mimeType: mention.mimeType,
-        sourceWorkspaceId: mention.sourceWorkspaceId,
-      },
+      attrs: toChatMentionNodeAttrs(mention),
     })
     .insertContent(" ")
     .run();

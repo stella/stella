@@ -7,7 +7,6 @@ export type {
   ChatInterruptResolution,
   ChatRunMode,
   ChatSendRequest,
-  SafeId,
 } from "./chat";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
@@ -58,12 +57,44 @@ export {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
 } from "./realtime-events";
+export { encodeRfc3986Component } from "./rfc3986";
+export { isSafeIdValue, toSafeId } from "./safe-id";
+export type { SafeId } from "./safe-id";
 export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
+export {
+  isResourceRef,
+  isResourceType,
+  parseResourceName,
+  parseResourceRef,
+  resourceRef,
+  RESOURCE_ID_TYPE,
+  RESOURCE_NAME_PREFIX,
+  RESOURCE_TYPE,
+  toResourceName,
+} from "./resource-ref";
+export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
+export {
+  CHAT_RESOURCE_HREF_PREFIX,
+  CHAT_RESOURCE_LINK_DISPOSITION,
+  findCanonicalChatResourceHrefs,
+  parseCanonicalChatResourceHref,
+  parseChatResourceHref,
+  replaceCanonicalChatResourceHrefs,
+  toChatMentionResourceHref,
+  toChatResourceHref,
+} from "./resource-link";
+export type {
+  CanonicalChatResourceHrefMatch,
+  ChatResourceHref,
+  ChatResourceLinkTarget,
+  ChatMentionResourceHref,
+  ChatMentionResourceLinkTarget,
+} from "./resource-link";
 
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;

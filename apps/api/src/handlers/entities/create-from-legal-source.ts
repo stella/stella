@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -77,7 +82,20 @@ export default createSafeHandler(
     // is what `MentionChip` resolves and routes through
     // `openEntityInInspector`, so the AI's follow-up text link
     // stays clickable.
-    const href = `#stella-entity=${workspaceId}:${created.entityId}`;
+    const href = toChatResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({
+        type: RESOURCE_TYPE.ENTITY,
+        id: created.entityId,
+      }),
+      location: {
+        type: "workspace",
+        workspace: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: workspaceId,
+        }),
+      },
+    });
     const mention = `[${created.fileName}](${href})`;
 
     return Result.ok({

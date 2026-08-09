@@ -2,7 +2,11 @@ import type { ToolCallState } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
+import {
+  CHAT_RICH_PART_LIMITS,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -24,6 +28,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -245,6 +250,43 @@ describe("persisted chat message parts", () => {
 
     expect(message.metadata).toEqual({
       serverProvenance: { type: "search-summary", version: 1 },
+    });
+  });
+
+  test("preserves server-owned ref metadata", () => {
+    const entityId = toSafeId<"entity">("entity-1");
+    const workspaceId = toSafeId<"workspace">("workspace-1");
+    const refContext = {
+      version: 1 as const,
+      entities: [
+        {
+          entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+          toolCallId: "tool-1",
+          workspace: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: workspaceId,
+          }),
+        },
+      ],
+      unresolvedInputs: [],
+      workspaceScope: [],
+    };
+    const message = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
+      role: "assistant",
+      content: toChatMessageContent({
+        version: 2,
+        data: [{ type: "text", content: "Summary" }],
+        metadata: {
+          refContext,
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+        },
+      }),
+    });
+
+    expect(message.metadata).toEqual({
+      refContext,
+      refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
     });
   });
 

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toResourceName,
+  toSafeId,
+} from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
@@ -19,6 +25,29 @@ import {
 import type { SearchPreviewChatMessage } from "@/lib/search.logic";
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
+
+const SEARCH_TEST_RESOURCES = {
+  caseLawDecision: resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: toSafeId<"caseLawDecision">("decision_1"),
+  }),
+  chatThread: resourceRef({
+    type: RESOURCE_TYPE.CHAT_THREAD,
+    id: toSafeId<"chatThread">("thread_1"),
+  }),
+  contact: resourceRef({
+    type: RESOURCE_TYPE.CONTACT,
+    id: toSafeId<"contact">("contact_1"),
+  }),
+  entity: resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">("entity_1"),
+  }),
+  workspace: resourceRef({
+    type: RESOURCE_TYPE.WORKSPACE,
+    id: toSafeId<"workspace">("ws_1"),
+  }),
+} as const;
 
 const {
   hasSearchQueryOrSelectiveFilter,
@@ -186,6 +215,8 @@ describe("search preview targets", () => {
   const previewHit = {
     headline: null,
     id: "document:entity_1",
+    resource: SEARCH_TEST_RESOURCES.entity,
+    resourceName: toResourceName(SEARCH_TEST_RESOURCES.entity),
     type: "document",
     title: "Result",
     updatedAt: "2026-07-29T12:00:00.000Z",
@@ -544,6 +575,8 @@ describe("search preview targets", () => {
       {
         ...base,
         id: "matter:ws_1",
+        resource: SEARCH_TEST_RESOURCES.workspace,
+        resourceName: toResourceName(SEARCH_TEST_RESOURCES.workspace),
         type: "matter",
         workspaceId: "ws_1",
         workspaceName: "Matter",
@@ -552,6 +585,8 @@ describe("search preview targets", () => {
       {
         ...base,
         id: "contact:contact_1",
+        resource: SEARCH_TEST_RESOURCES.contact,
+        resourceName: toResourceName(SEARCH_TEST_RESOURCES.contact),
         type: "contact",
         contactId: "contact_1",
         contactType: "person",
@@ -559,6 +594,8 @@ describe("search preview targets", () => {
       {
         ...base,
         id: "case-law:decision_1",
+        resource: SEARCH_TEST_RESOURCES.caseLawDecision,
+        resourceName: toResourceName(SEARCH_TEST_RESOURCES.caseLawDecision),
         type: "case-law",
         decisionId: "decision_1",
         caseNumber: "1 T 1/2026",
@@ -569,6 +606,8 @@ describe("search preview targets", () => {
       {
         ...base,
         id: "chat:thread_1",
+        resource: SEARCH_TEST_RESOURCES.chatThread,
+        resourceName: toResourceName(SEARCH_TEST_RESOURCES.chatThread),
         type: "chat",
         threadId: "thread_1",
         workspaceId: null,
@@ -577,6 +616,8 @@ describe("search preview targets", () => {
       {
         ...base,
         id: "document:entity_1",
+        resource: SEARCH_TEST_RESOURCES.entity,
+        resourceName: toResourceName(SEARCH_TEST_RESOURCES.entity),
         type: "document",
         entityId: "entity_1",
         workspaceId: "ws_1",
@@ -603,6 +644,8 @@ describe("search preview dates", () => {
   const base = {
     headline: null,
     id: "case-law:decision_1",
+    resource: SEARCH_TEST_RESOURCES.caseLawDecision,
+    resourceName: toResourceName(SEARCH_TEST_RESOURCES.caseLawDecision),
     type: "case-law",
     title: "1 T 1/2026 - Court",
     updatedAt: "2026-07-29T12:00:00.000Z",
@@ -637,6 +680,8 @@ describe("search preview dates", () => {
     const hit = {
       headline: null,
       id: "contact:contact_1",
+      resource: SEARCH_TEST_RESOURCES.contact,
+      resourceName: toResourceName(SEARCH_TEST_RESOURCES.contact),
       type: "contact",
       title: "Contact",
       updatedAt: "2026-07-29T12:00:00.000Z",

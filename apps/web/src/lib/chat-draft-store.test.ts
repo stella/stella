@@ -1,6 +1,8 @@
 import type { JSONContent } from "@tiptap/react";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import {
@@ -20,7 +22,10 @@ const docWithText = (text: string): JSONContent => ({
 });
 
 const mention: ChatMentionOption = {
-  id: "entity-1",
+  resource: resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">("entity-1"),
+  }),
   label: "Draft contract",
   category: "entity",
   kind: "document",

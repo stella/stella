@@ -1,10 +1,19 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import fc from "fast-check";
+
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -21,53 +30,63 @@ const wsB = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000b");
 const wsC = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000c");
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-0000000000aa");
 
+const workspaceMention = ({
+  id,
+  label,
+}: {
+  id: SafeId<"workspace">;
+  label: string;
+}): ChatMention => ({
+  category: "workspace",
+  id,
+  label,
+  resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id }),
+});
+
+const entityMention = ({
+  id,
+  label,
+  workspaceId,
+}: {
+  id: string;
+  label: string;
+  workspaceId: SafeId<"workspace"> | null;
+}): ChatMention => ({
+  category: "entity",
+  id,
+  label,
+  resource: resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">(id),
+  }),
+  workspaceId,
+});
+
 describe("extractMentionWorkspaceIds", () => {
   test("workspace mention contributes its own ID", () => {
-    const mentions: ChatMention[] = [
-      { id: wsA, label: "Matter A", category: "workspace" },
-    ];
+    const mentions = [workspaceMention({ id: wsA, label: "Matter A" })];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([wsA]);
   });
 
   test("entity mention contributes its workspace ID", () => {
-    const mentions: ChatMention[] = [
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: wsA,
-      },
+    const mentions = [
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: wsA }),
     ];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([wsA]);
   });
 
   test("entity mention without workspace contributes nothing", () => {
-    const mentions: ChatMention[] = [
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: null,
-      },
+    const mentions = [
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: null }),
     ];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([]);
   });
 
   test("multiple mentions across workspaces deduplicate", () => {
-    const mentions: ChatMention[] = [
-      { id: wsA, label: "Matter A", category: "workspace" },
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: wsA,
-      },
-      {
-        id: "entity_2",
-        label: "Doc 2",
-        category: "entity",
-        workspaceId: wsB,
-      },
+    const mentions = [
+      workspaceMention({ id: wsA, label: "Matter A" }),
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: wsA }),
+      entityMention({ id: "entity_2", label: "Doc 2", workspaceId: wsB }),
     ];
     expect(new Set(extractMentionWorkspaceIds(mentions))).toEqual(
       new Set([wsA, wsB]),
@@ -147,12 +166,67 @@ describe("extractAssistantWorkspaceIds", () => {
     const parts = [
       {
         type: "text" as const,
-        content: `See [matter](#stella-workspace=${wsA}) and the related document at #stella-entity=${wsB}:abc.`,
+        content: `See [matter](#stella-workspace=${wsA}) and the related document at #stella-entity=${wsB}:00000000-0000-0000-0000-000000000001.`,
       },
     ];
     expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
       new Set([wsA, wsB]),
     );
+  });
+
+  test("regression: canonical links widen scope for opaque workspace IDs", () => {
+    const workspaceId = toSafeId<"workspace">("imported:matter");
+    const entityId = toSafeId<"entity">("document:42");
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId }),
+    });
+    const entityHref = toChatResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      location: {
+        type: "workspace",
+        workspace: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: workspaceId,
+        }),
+      },
+    });
+    const parts = [
+      {
+        type: "text" as const,
+        content: `See [Matter](${workspaceHref}) and [Document](${entityHref}).`,
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
+  });
+
+  test("bare links stop before sentence punctuation", () => {
+    const workspaceHref = toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsA }),
+    });
+    const parts = [
+      {
+        type: "text" as const,
+        content: `See ${workspaceHref}.`,
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
+  });
+
+  test("does not partially accept malformed canonical links", () => {
+    const parts = [
+      {
+        type: "text" as const,
+        content:
+          "Ignore #stella-workspace=imported-matter%ZZ and #stella-entity=imported-matter:%ZZ.",
+      },
+    ];
+
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
   });
 
   test("text and source-document metadata are unioned", () => {
@@ -182,19 +256,29 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
-  test("malformed UUIDs in text refs are ignored", () => {
+  test("malformed encoded IDs in text refs are ignored", () => {
     const parts = [
       {
         type: "text" as const,
         content:
-          "garbage #stella-workspace=not-a-uuid and #stella-entity=zz:yy",
+          "garbage #stella-workspace=bad%encoding and #stella-entity=bad%encoding:entity-1",
+      },
+    ];
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+
+  test("relative entity links do not masquerade as workspace identities", () => {
+    const parts = [
+      {
+        type: "text" as const,
+        content: `relative #stella-entity=${wsA}`,
       },
     ];
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
   });
 
   test("regression: tool output parts with matterRef widen the data scope", () => {
-    // Tool outputs persist UUIDs in `matterRef` / `workspaceId`
+    // Tool outputs persist IDs in `matterRef` / `workspaceId`
     // fields after `resolveAssistantValueRefs` rehydrates them
     // from the in-memory `mat_N` ref shorthand. Without scanning
     // these, a thread that only contains tool output (no
@@ -222,6 +306,27 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
+  test("structured fields preserve opaque workspace IDs", () => {
+    const matterRef = toSafeId<"workspace">("matter:eu");
+    const workspaceId = toSafeId<"workspace">("imported.matter");
+    const parts = [
+      {
+        type: "tool-call" as const,
+        id: "call_1",
+        name: "mcp__test__listMatters",
+        arguments: "{}",
+        state: "complete" as const,
+        output: {
+          items: [{ matterRef }, { workspaceId }],
+        },
+      },
+    ];
+
+    expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
+      new Set([matterRef, workspaceId]),
+    );
+  });
+
   test("regression: deeply nested workspaceId fields are picked up", () => {
     const parts = [
       {
@@ -241,24 +346,28 @@ describe("extractAssistantWorkspaceIds", () => {
     expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
   });
 
-  test("non-UUID matterRef values are ignored (e.g. unresolved ref shorthand)", () => {
-    // If a tool output ever lands with the in-memory shorthand
-    // (mat_1) instead of a UUID, the structural walker must not
-    // brand it as a workspace ID and must not crash.
-    const parts = [
-      {
-        type: "tool-call" as const,
-        id: "call_1",
-        name: "mcp__test__listMatters",
-        arguments: "{}",
-        state: "complete" as const,
-        output: { items: [{ matterRef: "mat_1" }] },
-      },
-    ];
-    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  test("accepts every nonempty opaque matterRef", () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1, maxLength: 64 }), (id) => {
+        const workspaceId = toSafeId<"workspace">(id);
+        const parts = [
+          {
+            type: "tool-call" as const,
+            id: "call_1",
+            name: "mcp__test__listMatters",
+            arguments: "{}",
+            state: "complete" as const,
+            output: { items: [{ matterRef: workspaceId }] },
+          },
+        ];
+
+        expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 
-  test("source-document metadata with empty workspaceId contributes nothing", () => {
+  test("source-document metadata with unsafe workspaceId contributes nothing", () => {
     const message = {
       id: "assistant-1",
       role: "assistant",
@@ -278,6 +387,13 @@ describe("extractAssistantWorkspaceIds", () => {
             mimeType: "application/pdf",
             title: "B",
             workspaceId: null,
+          },
+          {
+            entityId: "entity-3",
+            kind: "document",
+            mimeType: "application/pdf",
+            title: "C",
+            workspaceId: "workspace_\uD800",
           },
         ],
       },
@@ -320,9 +436,12 @@ describe("extractIncomingMessageWorkspaceIds", () => {
       ],
     } satisfies ChatMessage;
 
+    // Token-shaped values stay candidates because the canonical ID contract
+    // also admits them; the send-message boundary intersects this set with
+    // the caller's accessible workspace IDs.
     expect(
       extractIncomingMessageWorkspaceIds({ message, mentions: [] }),
-    ).toEqual([wsA]);
+    ).toEqual([wsA, toSafeId<"workspace">("mat_1")]);
   });
 });
 
@@ -379,6 +498,92 @@ describe("extractThreadDataWorkspaceIds", () => {
     expect(
       extractThreadDataWorkspaceIds(messagesBeforeTruncation.slice(0, 1)),
     ).toEqual([wsA]);
+  });
+
+  test("retains entity-only tool scope from replay context", () => {
+    const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000001");
+    const messages = [
+      {
+        id: "assistant-entity-only",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-1",
+            name: "read_document",
+            arguments: JSON.stringify({ entity_id: entityId }),
+            state: "complete",
+            input: { entity_id: entityId },
+            output: { entityId, text: "retained content" },
+          },
+        ],
+        metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+          refContext: {
+            version: 1,
+            entities: [
+              {
+                entity: resourceRef({
+                  type: RESOURCE_TYPE.ENTITY,
+                  id: entityId,
+                }),
+                toolCallId: "tool-1",
+                workspace: resourceRef({
+                  type: RESOURCE_TYPE.WORKSPACE,
+                  id: wsB,
+                }),
+              },
+            ],
+            unresolvedInputs: [],
+            workspaceScope: [
+              resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsB }),
+            ],
+          },
+        },
+      },
+    ] satisfies ChatMessage[];
+
+    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
+  });
+
+  test("retains output-only matter scope from persisted context", () => {
+    const messages = [
+      {
+        id: "assistant-matter-list",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-execute-typescript",
+            name: "execute_typescript",
+            arguments: JSON.stringify({
+              typescriptCode: "return await external_list_matters({});",
+            }),
+            state: "complete",
+            input: {
+              typescriptCode: "return await external_list_matters({});",
+            },
+            output: {
+              success: true,
+              result: { matters: [{ id: "mat_1", name: "Matter B" }] },
+            },
+          },
+        ],
+        metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+          refContext: {
+            version: 1,
+            entities: [],
+            unresolvedInputs: [],
+            workspaceScope: [
+              resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: wsB }),
+            ],
+          },
+        },
+      },
+    ] satisfies ChatMessage[];
+
+    expect(extractThreadDataWorkspaceIds(messages)).toEqual([wsB]);
   });
 });
 
@@ -459,10 +664,11 @@ describe("computeAssistantTurnWorkspaceIds", () => {
         },
       ],
       workspaceIdsBeforeStream: new Set(),
-      registeredWorkspaceIdsAfterStream: [wsA],
+      registeredWorkspaceIdsAfterStream: [wsA, wsB],
       accessibleWorkspaceIds: new Set([wsA, wsB]),
     });
 
+    expect(ids).toHaveLength(2);
     expect(new Set(ids)).toEqual(new Set([wsA, wsB]));
   });
 });

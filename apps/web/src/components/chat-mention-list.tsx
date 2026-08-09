@@ -2,6 +2,7 @@ import { useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -11,17 +12,18 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { isEntityKind } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
-  ChatMentionKind,
   ChatMentionOption,
   ChatReferenceCategory,
+  ChatWorkspaceMentionOption,
 } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -75,7 +77,10 @@ export const ChatMentionList = ({
       }
       return await loadWorkspaceEntities(
         {
-          id: drillTarget.workspaceId,
+          resource: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">(drillTarget.workspaceId),
+          }),
           label: drillTarget.name,
           category: "workspace",
           kind: "workspace",
@@ -125,17 +130,17 @@ export const ChatMentionList = ({
   const selectItem = (index: number) => {
     const item = activeItems.at(index);
     if (item !== undefined) {
-      command(item);
+      command(toChatMentionNodeAttrs(item));
     }
   };
 
-  const handleDrillDown = (workspace: ChatMentionOption) => {
+  const handleDrillDown = (workspace: ChatWorkspaceMentionOption) => {
     if (!workspace.sourceViewId) {
       return;
     }
 
     setDrillTarget({
-      workspaceId: workspace.id,
+      workspaceId: workspace.resource.id,
       viewId: workspace.sourceViewId,
       name: workspace.label,
     });
@@ -312,7 +317,7 @@ export const ChatMentionList = ({
                       <div
                         className="flex min-w-0 items-center"
                         data-mention-index={flatIndex}
-                        key={item.id}
+                        key={item.resource.id}
                       >
                         <Button
                           className={cn(
@@ -320,17 +325,12 @@ export const ChatMentionList = ({
                             safeIndex === flatIndex &&
                               "bg-accent text-accent-foreground",
                           )}
-                          key={item.id}
+                          key={item.resource.id}
                           onClick={() => selectItem(flatIndex)}
                           size="sm"
                           variant="ghost"
                         >
-                          <MentionIcon
-                            category={item.category}
-                            id={item.id}
-                            kind={item.kind}
-                            mimeType={item.mimeType}
-                          />
+                          <MentionIcon mention={item} />
                           <span className="min-w-0 flex-1 truncate">
                             {item.label}
                           </span>
@@ -364,17 +364,12 @@ export const ChatMentionList = ({
                   safeIndex === i && "bg-accent text-accent-foreground",
                 )}
                 data-mention-index={i}
-                key={item.id}
+                key={item.resource.id}
                 onClick={() => selectItem(i)}
                 size="sm"
                 variant="ghost"
               >
-                <MentionIcon
-                  category={item.category}
-                  id={item.id}
-                  kind={item.kind}
-                  mimeType={item.mimeType}
-                />
+                <MentionIcon mention={item} />
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               </Button>
             ))}
@@ -409,35 +404,28 @@ const useCategoryLabel = () => {
 /** Resolves the category/kind-appropriate glyph for a mention row. Exported
  *  so the composer (+) menu's Context submenu can render byte-identical
  *  icons for the same options the "@" popover lists. */
-export const MentionIcon = ({
-  id,
-  category,
-  kind,
-  mimeType,
-}: {
-  id: string;
-  category: ChatReferenceCategory;
-  kind: ChatMentionKind;
-  mimeType: string | null;
-}) => {
-  if (category === "workspace") {
+export const MentionIcon = ({ mention }: { mention: ChatMentionOption }) => {
+  if (mention.category === "workspace") {
     return (
-      <MatterIcon className="size-3.5 shrink-0" matter={{ id, color: null }} />
+      <MatterIcon
+        className="size-3.5 shrink-0"
+        matter={{ id: mention.resource.id, color: null }}
+      />
     );
   }
 
-  if (category === "decision") {
+  if (mention.category === "decision") {
     return <LandmarkIcon className="text-muted-foreground size-3.5 shrink-0" />;
   }
 
   return (
     <EntityIcon
       className="text-muted-foreground size-3.5 shrink-0"
-      source={
-        isEntityKind(kind)
-          ? { type: "resolved", kind, mimeType }
-          : { type: "unknown" }
-      }
+      source={{
+        type: "resolved",
+        kind: mention.kind,
+        mimeType: mention.mimeType,
+      }}
     />
   );
 };
@@ -488,9 +476,12 @@ type ChatMentionListHandle = ReturnType<
   NonNullable<SuggestionOptions["render"]>
 >;
 
-type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
+type ChatMentionListProps = SuggestionProps<
+  ChatMentionOption,
+  MentionNodeAttrs
+> & {
   loadWorkspaceEntities: (
-    workspace: ChatMentionOption,
+    workspace: ChatWorkspaceMentionOption,
     query: string,
   ) => Promise<ChatMentionOption[]>;
   ref?: Ref<ChatMentionListHandle>;

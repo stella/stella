@@ -31,7 +31,10 @@ import {
   ChatMention,
   createChatSuggestion,
 } from "@/components/chat-mention-extension";
-import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import type {
+  ChatMentionOption,
+  ChatWorkspaceMentionOption,
+} from "@/components/chat-mention-extension";
 import {
   buildEntityMentionOption,
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
@@ -636,13 +639,13 @@ export const useChatEditor = ({
   }, [sentMessageHistoryHtml, threadKey]);
 
   const fetchWorkspaceEntities = useCallback(
-    async (workspace: ChatMentionOption, query: string) => {
+    async (workspace: ChatWorkspaceMentionOption, query: string) => {
       if (!workspace.sourceViewId) {
         return [];
       }
 
       const views = await queryClient.ensureQueryData(
-        viewsOptions(workspace.id),
+        viewsOptions(workspace.resource.id),
       );
       const activeView =
         views.find((view) => view.id === workspace.sourceViewId) ?? null;
@@ -654,7 +657,7 @@ export const useChatEditor = ({
       const { filters, sorts } = getMentionViewScope(activeView.layout);
       const search = query.trim();
       const options = entitiesOptions({
-        workspaceId: workspace.id,
+        workspaceId: workspace.resource.id,
         filters,
         sorts,
         ...(search && { search }),
@@ -666,9 +669,9 @@ export const useChatEditor = ({
       const data = await queryClient.fetchQuery(options);
       const sourceWorkspaceId =
         threadRef.scope === "workspace" &&
-        threadRef.workspaceId === workspace.id
+        threadRef.workspaceId === workspace.resource.id
           ? undefined
-          : workspace.id;
+          : workspace.resource.id;
 
       return data.entities.map((entity) =>
         buildEntityMentionOption({ entity, sourceWorkspaceId }),
@@ -684,7 +687,7 @@ export const useChatEditor = ({
     }: {
       query: string;
       resolve: (items: ChatMentionOption[]) => void;
-      workspace: ChatMentionOption;
+      workspace: ChatWorkspaceMentionOption;
     }) => {
       try {
         const items = await fetchWorkspaceEntities(workspace, query);
@@ -706,7 +709,7 @@ export const useChatEditor = ({
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
   const loadWorkspaceEntities = useCallback(
-    async (workspace: ChatMentionOption, query: string) => {
+    async (workspace: ChatWorkspaceMentionOption, query: string) => {
       const previous = pendingWorkspaceEntitySearchRef.current;
       if (previous) {
         debouncedFetchWorkspaceEntities.cancel();
@@ -724,7 +727,7 @@ export const useChatEditor = ({
       }
 
       const views = await queryClient.ensureQueryData(
-        viewsOptions(workspace.id),
+        viewsOptions(workspace.resource.id),
       );
       const activeView =
         views.find((view) => view.id === workspace.sourceViewId) ?? null;
@@ -736,7 +739,7 @@ export const useChatEditor = ({
       const { filters, sorts } = getMentionViewScope(activeView.layout);
       const search = query.trim();
       const options = entitiesOptions({
-        workspaceId: workspace.id,
+        workspaceId: workspace.resource.id,
         filters,
         sorts,
         ...(search && { search }),
@@ -748,9 +751,9 @@ export const useChatEditor = ({
       if (cachedData) {
         const sourceWorkspaceId =
           threadRef.scope === "workspace" &&
-          threadRef.workspaceId === workspace.id
+          threadRef.workspaceId === workspace.resource.id
             ? undefined
-            : workspace.id;
+            : workspace.resource.id;
 
         return cachedData.entities.map((entity) =>
           buildEntityMentionOption({ entity, sourceWorkspaceId }),

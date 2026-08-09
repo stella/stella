@@ -6,6 +6,7 @@ import * as v from "valibot";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -156,8 +157,8 @@ export const createWorkspaceTools = ({
   );
 
   return {
-    "update-entity-fields": toolDefinition({
-      name: "update-entity-fields",
+    [UPDATE_ENTITY_FIELDS_TOOL_NAME]: toolDefinition({
+      name: UPDATE_ENTITY_FIELDS_TOOL_NAME,
       description:
         "Update a metadata field on an entity (document, " +
         "task, file). The property type is looked up " +
