@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
+import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
 export const legalListKeys = {
@@ -109,7 +110,7 @@ export const legalListItemsOptions = (workspaceId: string, listId: string) =>
       }
       return response.data;
     },
-    initialPageParam: null as string | null,
+    initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor,
     enabled: listId.length > 0,
   });

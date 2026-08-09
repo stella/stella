@@ -8,7 +8,6 @@ import type { GroupNode } from "@stll/conditions";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { leafFromField } from "@/components/conditions/condition-builder-logic";
 import messages from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 
 import {
   ADVANCED_FILTER_POPUP_CLASS_NAME,
@@ -30,14 +29,7 @@ const FILTER = {
 
 const renderEditor = () =>
   renderToStaticMarkup(
-    <IntlProvider
-      locale="en"
-      // SAFETY: locale catalogs are structurally checked against the generated
-      // Messages schema; dynamic JSON widens only the string literal leaves.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      messages={messages as Messages}
-      timeZone="UTC"
-    >
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <AdvancedFilterEditor
         fields={[FIELD]}
         node={FILTER}

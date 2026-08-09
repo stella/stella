@@ -7,7 +7,6 @@ import { IntlProvider } from "use-intl";
 import type { AskUserInput, ChatPart } from "@/components/chat/chat-ui-tools";
 import { withParsedToolCallInputs } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
-import type Messages from "@/i18n/langs/messages.gen";
 
 type AskUserPart = Extract<ChatPart, { name: "ask-user" }>;
 
@@ -27,15 +26,7 @@ afterAll(() => {
 
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
-    <IntlProvider
-      locale="en"
-      // SAFETY: this mirrors the app provider boundary; locale
-      // files are checked separately, while use-intl preserves
-      // English literal values in the generated Messages type.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      messages={messages as Messages}
-      timeZone="UTC"
-    >
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       {children}
     </IntlProvider>,
   );

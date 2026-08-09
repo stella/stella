@@ -1,12 +1,7 @@
 {
   "as-casts": {
-    "count": 4,
-    "files": {
-      "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
-      "apps/api/src/lib/auth.ts": 1,
-      "apps/web/src/app-providers.tsx": 1,
-      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "super-linear-regexes": {
     "count": 0,
@@ -101,7 +96,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 596,
+    "count": 592,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -144,7 +139,6 @@
       "apps/api/src/handlers/chat/history-window.ts": 5,
       "apps/api/src/handlers/chat/send-message.ts": 1,
       "apps/api/src/handlers/chat/stream-chat.ts": 1,
-      "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/handlers/chat/tools/boe-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 4,
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 6,
@@ -207,12 +201,12 @@
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/lib/auth.ts": 4,
+      "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 10,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
-      "apps/api/src/lib/document-processing-provider.ts": 2,
+      "apps/api/src/lib/document-processing-provider.ts": 1,
       "apps/api/src/lib/document-processing-queue.ts": 1,
       "apps/api/src/lib/document-reference.ts": 2,
       "apps/api/src/lib/docx-stamp.ts": 2,
@@ -283,7 +277,6 @@
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,
       "apps/api/src/scripts/resolve-citations.ts": 8,
-      "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/client.tsx": 1,
       "apps/web/src/components/ai-config-providers-editor.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,

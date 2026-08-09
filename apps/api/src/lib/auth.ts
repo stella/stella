@@ -16,7 +16,7 @@ import {
   organization,
   twoFactor,
 } from "better-auth/plugins";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
@@ -337,16 +337,12 @@ export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
   typeof body.otp === "string" &&
   SIX_DIGIT_OTP_PATTERN.test(body.otp);
 
-/**
- * Structural shape `requireTwoFactorManageOtp` needs off the hook context.
- * Not `HookEndpointContext`: `createAuthMiddleware`'s single-argument
- * overload — used for this app's top-level `hooks.before` — infers its own
- * middleware context type, which is a structurally different (and
- * stricter-in-places) shape than the per-plugin `HookEndpointContext`. This
- * narrower type lets the function stay unit-testable with a minimal stub
- * instead of a fully constructed better-auth context of either shape.
- */
-type TwoFactorManageHookCtx = { path: string; body: unknown };
+type TwoFactorManageSession = Awaited<ReturnType<typeof getSessionFromCtx>>;
+
+type RequireTwoFactorManageOtpArgs = {
+  body: unknown;
+  session: TwoFactorManageSession;
+};
 
 /**
  * Requires a fresh, single-use email verification code before letting any
@@ -362,19 +358,10 @@ type TwoFactorManageHookCtx = { path: string; body: unknown };
  * (`/two-factor/enable` for a user without 2FA yet) is then left ungated as
  * a no-op for the plugin.
  */
-const requireTwoFactorManageOtp = async (
-  ctx: TwoFactorManageHookCtx,
-): Promise<void> => {
-  // `getSessionFromCtx` wants a `GenericEndpointContext`, which requires
-  // `request` to always be present. better-auth's own middleware context
-  // types `request` as optional to also cover programmatic `auth.api.*`
-  // calls made without an HTTP request, but this hook only ever runs from
-  // HTTP dispatch (see dispatch.mjs), where `request` is always set.
-  // `getSessionFromCtx` only reads headers/cookies off `ctx`, so the
-  // narrower structural shape here is sound at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see comment above; ctx always carries a real Request when this hook fires
-  const genericCtx = ctx as unknown as Parameters<typeof getSessionFromCtx>[0];
-  const session = await getSessionFromCtx(genericCtx);
+const requireTwoFactorManageOtp = async ({
+  body,
+  session,
+}: RequireTwoFactorManageOtpArgs): Promise<void> => {
   if (!session) {
     return;
   }
@@ -383,7 +370,7 @@ const requireTwoFactorManageOtp = async (
     return;
   }
 
-  if (!isSixDigitOtpBody(ctx.body)) {
+  if (!isSixDigitOtpBody(body)) {
     throw new APIError("BAD_REQUEST", {
       message:
         "Verification code required to change two-factor authentication settings",
@@ -393,7 +380,7 @@ const requireTwoFactorManageOtp = async (
   const verifyResult = await verifyConfirmationOtp({
     purpose: "two-factor-manage",
     email: session.user.email,
-    code: ctx.body.otp,
+    code: body.otp,
   });
 
   if (Result.isError(verifyResult)) {
@@ -1130,7 +1117,14 @@ const createAuth = () => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
         if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
-          await requireTwoFactorManageOtp(ctx);
+          if (ctx.request === undefined) {
+            panic("Two-factor management hook ran outside HTTP dispatch");
+          }
+          const session = await getSessionFromCtx({
+            ...ctx,
+            request: ctx.request,
+          });
+          await requireTwoFactorManageOtp({ body: ctx.body, session });
           return;
         }
 
