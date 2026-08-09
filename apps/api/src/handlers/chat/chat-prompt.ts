@@ -1125,6 +1125,9 @@ const buildActiveFilePrompt = ({
     .join("\n");
 };
 
+const MAX_EMAIL_CITATION_PROMPT_TEXT_LENGTH =
+  MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH * 2;
+
 const buildActiveEmailCitationPrompt = (
   activeFile: ActiveFilePromptContext,
 ): string => {
@@ -1138,7 +1141,7 @@ const buildActiveEmailCitationPrompt = (
   const blocks = snapshot.blocks.map(({ id, text }) => ({
     blockId: id,
     text: sanitizePromptBlock({
-      maxLength: MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+      maxLength: MAX_EMAIL_CITATION_PROMPT_TEXT_LENGTH,
       text,
     }),
   }));

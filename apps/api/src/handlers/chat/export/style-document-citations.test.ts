@@ -158,6 +158,22 @@ describe("styleDocumentCitations", () => {
     ).toEqual(["Unverified citation: message passage"]);
   });
 
+  test("malformed email citation hrefs export as plain text", () => {
+    const malformed = markdownToStellaDocument("[claim](#email:bogus)");
+    const result = styleDocumentCitationsWithCounts(
+      malformed,
+      "footnotes",
+      options,
+    );
+
+    expect(collectText(result.document.package.document.content)).toBe("claim");
+    expect(
+      collectHyperlinkTargets(result.document.package.document.content),
+    ).toEqual([]);
+    expect(result.document.package.footnotes).toEqual([]);
+    expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+  });
+
   test("marked search-summary links become verified citations", () => {
     const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(

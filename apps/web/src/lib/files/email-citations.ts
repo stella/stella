@@ -1,25 +1,22 @@
 import { useMemo, useSyncExternalStore } from "react";
 
-import { isEmailCitationBlockId } from "@stll/api-contract";
+import {
+  EMAIL_CITATION_HREF_PREFIX,
+  parseEmailCitationHref,
+  type EmailCitationHrefTarget,
+} from "@stll/api-contract";
 
-export const EMAIL_CITATION_HREF_PREFIX = "#email:";
+export { EMAIL_CITATION_HREF_PREFIX, parseEmailCitationHref };
 export const EMAIL_CITATION_SCROLL_EVENT = "email:scroll-to-citation";
 const EMAIL_CITATION_LOOKUP_EVENT = "email:lookup-citation";
 const EMAIL_CITATION_REGISTRATION_EVENT = "email:citation-registration";
-
-const EMAIL_CITATION_HREF_RE =
-  /^#email:(?<entityId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>[^:]+)$/iu;
 
 export type EmailCitationBlock = {
   id: string;
   text: string;
 };
 
-export type EmailCitationTarget = {
-  blockId: string;
-  entityId: string;
-  fieldId: string;
-};
+export type EmailCitationTarget = EmailCitationHrefTarget;
 
 export type EmailCitationSource = {
   entityId: string;
@@ -29,18 +26,6 @@ export type EmailCitationSource = {
   mimeType: string;
   pdfFileId: string | null;
   propertyId: string;
-};
-
-export const parseEmailCitationHref = (
-  href: string,
-): EmailCitationTarget | null => {
-  const match = EMAIL_CITATION_HREF_RE.exec(href);
-  const entityId = match?.groups?.["entityId"];
-  const fieldId = match?.groups?.["fieldId"];
-  const blockId = match?.groups?.["blockId"];
-  return entityId && fieldId && blockId && isEmailCitationBlockId(blockId)
-    ? { blockId, entityId, fieldId }
-    : null;
 };
 
 let pendingCitationTarget: EmailCitationTarget | null = null;
