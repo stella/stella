@@ -154,6 +154,7 @@ export const parseResourceRef = (input: unknown): ResourceRef | null => {
 };
 
 export const RESOURCE_NAME_PREFIX = "stella://resource/" as const;
+const RESOURCE_NAME_ID_SEGMENT_PREFIX = "id=" as const;
 
 const resourceNameSchema = v.pipe(v.string(), v.brand("ResourceName"));
 
@@ -163,7 +164,7 @@ export type ResourceName = v.InferOutput<typeof resourceNameSchema>;
 export const toResourceName = (resource: ResourceRef): ResourceName =>
   v.parse(
     resourceNameSchema,
-    `${RESOURCE_NAME_PREFIX}${resource.type}/${encodeRfc3986Component(resource.id)}`,
+    `${RESOURCE_NAME_PREFIX}${resource.type}/${RESOURCE_NAME_ID_SEGMENT_PREFIX}${encodeRfc3986Component(resource.id)}`,
   );
 
 /** Parse only complete canonical names; aliases and UI routes belong elsewhere. */
@@ -187,7 +188,15 @@ export const parseResourceName = (input: unknown): ResourceRef | null => {
     return null;
   }
 
-  const encodedId = path.slice(separatorIndex + 1);
+  const idSegment = path.slice(separatorIndex + 1);
+  if (!idSegment.startsWith(RESOURCE_NAME_ID_SEGMENT_PREFIX)) {
+    return null;
+  }
+
+  const encodedId = idSegment.slice(RESOURCE_NAME_ID_SEGMENT_PREFIX.length);
+  if (encodedId.length === 0) {
+    return null;
+  }
   try {
     const idResult = v.safeParse(safeIdSchema, decodeURIComponent(encodedId));
     if (!idResult.success) {

@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   isResourceType,
@@ -43,9 +46,44 @@ describe("canonical resource identity", () => {
 
     const name = toResourceName(resource);
     expect(String(name)).toBe(
-      `${RESOURCE_NAME_PREFIX}entity/opaque%2Fid%20with%20spaces%3Aand%3Fsymbols%29%21`,
+      `${RESOURCE_NAME_PREFIX}entity/id=opaque%2Fid%20with%20spaces%3Aand%3Fsymbols%29%21`,
     );
     expect(parseResourceName(name)).toEqual(resource);
+  });
+
+  test("protects dot-segment IDs from URL normalization", () => {
+    for (const id of [".", ".."]) {
+      const resource = parseResourceRef({ type: RESOURCE_TYPE.ENTITY, id });
+      expect(resource).not.toBeNull();
+      if (resource === null) {
+        continue;
+      }
+
+      const normalizedName = new URL(toResourceName(resource)).href;
+      expect(parseResourceName(normalizedName)).toEqual(resource);
+    }
+  });
+
+  test("URL-normalized names round-trip arbitrary opaque IDs", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
+        (id) => {
+          const resource = parseResourceRef({
+            type: RESOURCE_TYPE.ENTITY,
+            id,
+          });
+          expect(resource).not.toBeNull();
+          if (resource === null) {
+            return;
+          }
+
+          const normalizedName = new URL(toResourceName(resource)).href;
+          expect(parseResourceName(normalizedName)).toEqual(resource);
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
   });
 
   test("the constructor strips domain payload from identity", () => {
@@ -74,14 +112,19 @@ describe("canonical resource identity", () => {
     ).toBeNull();
 
     expect(parseResourceName("https://example.com/entity/id")).toBeNull();
-    expect(parseResourceName(`${RESOURCE_NAME_PREFIX}unknown/id`)).toBeNull();
+    expect(
+      parseResourceName(`${RESOURCE_NAME_PREFIX}unknown/id=value`),
+    ).toBeNull();
     expect(parseResourceName(`${RESOURCE_NAME_PREFIX}entity/`)).toBeNull();
     expect(
-      parseResourceName(`${RESOURCE_NAME_PREFIX}entity/id/extra`),
+      parseResourceName(`${RESOURCE_NAME_PREFIX}entity/id=value/extra`),
     ).toBeNull();
-    expect(parseResourceName(`${RESOURCE_NAME_PREFIX}entity/%69d`)).toBeNull();
     expect(
-      parseResourceName(`${RESOURCE_NAME_PREFIX}entity/%E0%A4%A`),
+      parseResourceName(`${RESOURCE_NAME_PREFIX}entity/id=%69d`),
     ).toBeNull();
+    expect(
+      parseResourceName(`${RESOURCE_NAME_PREFIX}entity/id=%E0%A4%A`),
+    ).toBeNull();
+    expect(parseResourceName(`${RESOURCE_NAME_PREFIX}entity/id`)).toBeNull();
   });
 });

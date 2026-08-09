@@ -12,8 +12,10 @@ folders, tasks, and legal-list items can all refer to the same underlying
 `entity` identity without becoming one domain model.
 
 `toResourceName` serializes a ref as a route-independent name such as
-`stella://resource/entity/<id>`. Resource names are durable identifiers, not UI
-URLs, access grants, or share capabilities.
+`stella://resource/entity/id=<id>`. The `id=` segment tag keeps every opaque ID,
+including `.` and `..`, stable through standard URL normalization. Resource
+names are durable identifiers, not UI URLs, access grants, or share
+capabilities.
 
 ## Separate concerns
 

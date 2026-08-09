@@ -43,7 +43,7 @@ describe("resource consumer policies", () => {
       type: "authorized_corpus_resource_name",
     });
     expect(String(serializeAuthorizedCorpusMcpResourceName(decision))).toBe(
-      "stella://resource/case_law_decision/decision-1",
+      "stella://resource/case_law_decision/id=decision-1",
     );
   });
 });
