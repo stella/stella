@@ -128,16 +128,31 @@ export type ChatMentionResourceHref =
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.entity}${string}`
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.workspace}${string}`;
 
+const encodeChatResourceId = (id: string) => encodeURIComponent(id);
+
+const decodeChatResourceId = (value: string): string | null => {
+  try {
+    const id = decodeURIComponent(value);
+    return id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
+};
+
 export const toChatMentionResourceHref = (
   target: ChatMentionResourceLinkTarget,
 ): ChatMentionResourceHref => {
   switch (target.type) {
-    case RESOURCE_TYPE.ENTITY:
-      return target.location.type === "workspace"
-        ? `${CHAT_RESOURCE_HREF_PREFIX.entity}${target.location.workspace.id}:${target.resource.id}`
-        : `${CHAT_RESOURCE_HREF_PREFIX.entity}${target.resource.id}`;
+    case RESOURCE_TYPE.ENTITY: {
+      const entityId = encodeChatResourceId(target.resource.id);
+      if (target.location.type === "render_context") {
+        return `${CHAT_RESOURCE_HREF_PREFIX.entity}${entityId}`;
+      }
+      const workspaceId = encodeChatResourceId(target.location.workspace.id);
+      return `${CHAT_RESOURCE_HREF_PREFIX.entity}${workspaceId}:${entityId}`;
+    }
     case RESOURCE_TYPE.WORKSPACE:
-      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${target.resource.id}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeChatResourceId(target.resource.id)}`;
     default:
       return target satisfies never;
   }
@@ -148,7 +163,7 @@ export const toChatResourceHref = (
 ): ChatResourceHref => {
   switch (target.type) {
     case RESOURCE_TYPE.CASE_LAW_DECISION:
-      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${target.resource.id}`;
+      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeChatResourceId(target.resource.id)}`;
     case RESOURCE_TYPE.ENTITY:
     case RESOURCE_TYPE.WORKSPACE:
       return toChatMentionResourceHref(target);
@@ -159,27 +174,30 @@ export const toChatResourceHref = (
 
 const parseEntityTarget = (value: string): ChatResourceLinkTarget | null => {
   const separatorIndex = value.indexOf(":");
-  if (
-    value.length === 0 ||
-    separatorIndex === 0 ||
-    separatorIndex === value.length - 1
-  ) {
+  if (value.length === 0) {
     return null;
   }
 
   if (separatorIndex === -1) {
+    const entityId = decodeChatResourceId(value);
+    if (entityId === null) {
+      return null;
+    }
     return {
       type: RESOURCE_TYPE.ENTITY,
       resource: resourceRef({
         type: RESOURCE_TYPE.ENTITY,
-        id: toSafeId<"entity">(value),
+        id: toSafeId<"entity">(entityId),
       }),
       location: { type: "render_context" },
     };
   }
 
-  const workspaceId = value.slice(0, separatorIndex);
-  const entityId = value.slice(separatorIndex + 1);
+  const workspaceId = decodeChatResourceId(value.slice(0, separatorIndex));
+  const entityId = decodeChatResourceId(value.slice(separatorIndex + 1));
+  if (workspaceId === null || entityId === null) {
+    return null;
+  }
   return {
     type: RESOURCE_TYPE.ENTITY,
     resource: resourceRef({
@@ -207,8 +225,10 @@ export const parseChatResourceHref = (
   }
 
   if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.workspace)) {
-    const id = href.slice(CHAT_RESOURCE_HREF_PREFIX.workspace.length);
-    return id.length > 0
+    const id = decodeChatResourceId(
+      href.slice(CHAT_RESOURCE_HREF_PREFIX.workspace.length),
+    );
+    return id !== null
       ? {
           type: RESOURCE_TYPE.WORKSPACE,
           resource: resourceRef({
@@ -220,8 +240,10 @@ export const parseChatResourceHref = (
   }
 
   if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision)) {
-    const id = href.slice(CHAT_RESOURCE_HREF_PREFIX.case_law_decision.length);
-    return id.length > 0
+    const id = decodeChatResourceId(
+      href.slice(CHAT_RESOURCE_HREF_PREFIX.case_law_decision.length),
+    );
+    return id !== null
       ? {
           type: RESOURCE_TYPE.CASE_LAW_DECISION,
           resource: resourceRef({
