@@ -42,7 +42,7 @@ import type {
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
-  resolveCurrentExtractionFileField,
+  resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
@@ -1312,7 +1312,7 @@ const loadCurrentVersionDocxMarkdown = async ({
   context,
   document,
 }: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
-  const fileField = resolveCurrentExtractionFileField({
+  const fileField = resolveCurrentFileSourceField({
     currentVersionId: document.currentVersion.id,
     extracted: document.extractedContent,
     fields: document.currentVersion.fields,

@@ -5,7 +5,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { resolveCurrentExtractionFileField } from "@/api/lib/document-content-provenance";
+import { resolveCurrentFileSourceField } from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -91,7 +91,7 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
-  const extractionFileField = resolveCurrentExtractionFileField({
+  const extractionFileField = resolveCurrentFileSourceField({
     currentVersionId: entity.currentVersion.id,
     extracted: entity.extractedContent,
     fields: entity.currentVersion.fields,

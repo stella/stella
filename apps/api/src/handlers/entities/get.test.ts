@@ -122,4 +122,49 @@ describe("readEntityByIdHandler", () => {
       );
     }
   });
+
+  test("returns one current file while persisted extraction is from an older version", async () => {
+    findFirstMock.mockResolvedValue({
+      kind: "document",
+      name: "Replacement Agreement",
+      extractedContent: {
+        sourceEntityVersionId: "entity_version_old",
+        sourceFieldId: "field_old",
+        sourceFileId: "file_old",
+        sourceSha256Hex: "a".repeat(64),
+      },
+      currentVersion: {
+        id: "entity_version_1",
+        fields: [
+          {
+            id: "field_current",
+            propertyId: "property_current",
+            content: {
+              type: "file",
+              id: "file_current",
+              sha256Hex: "b".repeat(64),
+            },
+          },
+        ],
+      },
+    });
+    const { safeDb } = createScopedDbMock({
+      query: { entities: { findFirst: findFirstMock } },
+    });
+
+    const result = await Result.gen(() =>
+      readEntityByIdHandler({
+        safeDb,
+        workspaceId: toSafeId("ws_1"),
+        entityId: toSafeId("entity_1"),
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.extractionFileFieldId).toBe(
+        toSafeId<"field">("field_current"),
+      );
+    }
+  });
 });

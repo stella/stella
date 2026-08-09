@@ -61,7 +61,6 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
-import { findExtractionFileField } from "@/api/lib/search/types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
 import { includes } from "@/api/lib/type-guards";
@@ -1176,6 +1175,7 @@ const loadVersionHistory = async ({
 type CurrentDocumentForState = {
   currentVersionCreatedAt: Date;
   currentVersionId: SafeId<"entityVersion">;
+  extractionFileFieldId: SafeId<"field"> | null;
   fields: {
     content: FieldContent;
     id: SafeId<"field">;
@@ -1278,12 +1278,18 @@ const loadDocumentProcessingStates = async ({
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }): Promise<DocumentProcessingStates> => {
-  const sourceFile = findExtractionFileField(current.fields);
-  const sourceFieldId =
-    sourceFile === null
+  const sourceField =
+    current.extractionFileFieldId === null
       ? null
-      : (current.fields.find(({ content }) => content === sourceFile)?.id ??
-        panic("Extraction source file is not backed by a current field"));
+      : (current.fields.find(
+          ({ id }) => id === current.extractionFileFieldId,
+        ) ?? panic("Extraction source field is not current"));
+  if (sourceField !== null && sourceField.content.type !== "file") {
+    panic("Extraction source field does not contain a file");
+  }
+  const sourceFile =
+    sourceField?.content.type === "file" ? sourceField.content : null;
+  const sourceFieldId = sourceField?.id ?? null;
   const [extracted, runs, searchDocument, settings, latestVersion] =
     await context.scopedDb(
       async (tx) =>

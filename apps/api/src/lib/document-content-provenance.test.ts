@@ -4,6 +4,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   resolveCurrentExtractionFileField,
+  resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
 } from "@/api/lib/document-content-provenance";
 
@@ -111,6 +112,49 @@ describe("selectCurrentExtractedContent", () => {
         fields: [sibling, selected],
       }),
     ).toBe(selectedProjection);
+  });
+
+  test("uses one unambiguous current file while extraction still names an older version", () => {
+    expect(
+      resolveCurrentFileSourceField({
+        currentVersionId,
+        extracted: {
+          ...projection,
+          sourceEntityVersionId: "version_old",
+          sourceFileId: "file_old",
+        },
+        fields,
+      }),
+    ).toBe(fields.at(0));
+
+    expect(
+      resolveCurrentFileSourceField({
+        currentVersionId,
+        extracted: {
+          ...projection,
+          sourceEntityVersionId: "version_old",
+          sourceFileId: "file_old",
+        },
+        fields: [
+          ...fields,
+          {
+            content: { ...file, id: "file_sibling" },
+            id: toSafeId<"field">("field_sibling"),
+            propertyId: toSafeId<"property">("property_sibling"),
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  test("does not guess after a same-version source identity mismatch", () => {
+    expect(
+      resolveCurrentFileSourceField({
+        currentVersionId,
+        extracted: { ...projection, sourceFileId: "file_wrong" },
+        fields,
+      }),
+    ).toBeNull();
   });
 
   test("accepts a legacy row only when it is not older than the current version", () => {

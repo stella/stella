@@ -1787,6 +1787,79 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(decryptContentMock).not.toHaveBeenCalled();
   });
 
+  test("read_content_across_matters reads one current DOCX while extraction still names the previous version", async () => {
+    const stale = createExtractedContentRow({
+      sourceEntityVersionId: "entity_version_old",
+      sourceFieldId: "field_old",
+      sourceFileId: "file_old",
+      sourceSha256Hex: "a".repeat(64),
+    });
+    const context = createContext({
+      scopedDb: createScopedDb([], stale, [
+        {
+          type: "file",
+          id: "file_current",
+          fileName: "replacement.docx",
+          mimeType: DOCX_MIME_TYPE,
+          sha256Hex: "b".repeat(64),
+        },
+      ]),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      text: expect.stringContaining("# Agreement"),
+    });
+    expect(decryptContentMock).not.toHaveBeenCalled();
+  });
+
+  test("read_content_across_matters does not guess between current files while extraction names the previous version", async () => {
+    const stale = createExtractedContentRow({
+      sourceEntityVersionId: "entity_version_old",
+      sourceFieldId: "field_old",
+      sourceFileId: "file_old",
+      sourceSha256Hex: "a".repeat(64),
+    });
+    const context = createContext({
+      scopedDb: createScopedDb([], stale, [
+        {
+          type: "file",
+          id: "file_primary",
+          fileName: "primary.pdf",
+          mimeType: "application/pdf",
+          sha256Hex: "b".repeat(64),
+        },
+        {
+          type: "file",
+          id: "file_auxiliary",
+          fileName: "auxiliary.docx",
+          mimeType: DOCX_MIME_TYPE,
+          sha256Hex: "c".repeat(64),
+        },
+      ]),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "conflict",
+      message: "Current document content is not ready",
+      hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
+      retryable: true,
+    });
+    expect(s3ArrayBufferMock).not.toHaveBeenCalled();
+    expect(decryptContentMock).not.toHaveBeenCalled();
+  });
+
   test("read_content_across_matters rejects legacy text after a version rollback", async () => {
     const context = createContext({
       scopedDb: createScopedDb(
@@ -2583,6 +2656,66 @@ describe("OpenAI-compatible MCP tools", () => {
               params: { workspaceId: "ws_1", entityId: "entity_1" },
               body: { fieldId: "field_1" },
             },
+          },
+        },
+      },
+    });
+  });
+
+  test("read_document derives state and remediation from the persisted non-first source", async () => {
+    const sourceSha256Hex = "b".repeat(64);
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: {
+        ...createContext({
+          scopedDb: createScopedDb(
+            [],
+            createExtractedContentRow({
+              charCount: 0,
+              sourceEntityVersionId: "entity_version_1",
+              sourceFieldId: "field_2",
+              sourceFileId: "file_source",
+              sourceSha256Hex,
+            }),
+            [
+              {
+                encrypted: false,
+                fileName: "sibling.docx",
+                id: "file_sibling",
+                mimeType: DOCX_MIME_TYPE,
+                pdfFileId: null,
+                sha256Hex: "a".repeat(64),
+                sizeBytes: 128,
+                type: "file",
+                version: 1,
+              },
+              {
+                encrypted: false,
+                fileName: "source.pdf",
+                id: "file_source",
+                mimeType: "application/pdf",
+                pdfFileId: null,
+                sha256Hex: sourceSha256Hex,
+                sizeBytes: 128,
+                type: "file",
+                version: 1,
+              },
+            ],
+          ),
+        }),
+        grantedScopes: ["stella:read", "stella:matters_write"],
+        request: new Request("https://example.test/mcp"),
+      },
+      toolName: "read_document",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      contentState: {
+        status: "requires_ocr",
+        remediation: {
+          type: "action",
+          arguments: {
+            input: { body: { fieldId: "field_2" } },
           },
         },
       },

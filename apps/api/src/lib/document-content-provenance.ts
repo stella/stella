@@ -20,6 +20,13 @@ type FileFieldRow = {
   propertyId?: SafeId<"property"> | undefined;
 };
 
+const findOnlyFileField = <T extends FileFieldRow>(
+  fields: readonly T[],
+): T | null => {
+  const fileFields = fields.filter(({ content }) => content.type === "file");
+  return fileFields.length === 1 ? (fileFields.at(0) ?? null) : null;
+};
+
 export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
   currentVersionId,
   extracted,
@@ -36,8 +43,7 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
       extracted.sourceFileId === null &&
       extracted.sourceSha256Hex === null);
   if (legacyOrMissingSource) {
-    const fileFields = fields.filter(({ content }) => content.type === "file");
-    return fileFields.length === 1 ? (fileFields.at(0) ?? null) : null;
+    return findOnlyFileField(fields);
   }
 
   const field = fields.find(
@@ -50,6 +56,38 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
     field.content.sha256Hex === extracted.sourceSha256Hex
     ? field
     : null;
+};
+
+/**
+ * Resolve the current file that live processing or direct reads may use.
+ * Exact current provenance wins, including a non-first file property. While a
+ * replacement version is awaiting extraction, its persisted provenance still
+ * names the previous version; only a single current file is then unambiguous.
+ * Same-version identity mismatches remain invalid instead of guessing.
+ */
+export const resolveCurrentFileSourceField = <T extends FileFieldRow>({
+  currentVersionId,
+  extracted,
+  fields,
+}: {
+  currentVersionId: SafeId<"entityVersion">;
+  extracted: ExtractedContentSourceProvenance | null | undefined;
+  fields: readonly T[];
+}): T | null => {
+  const exactOrLegacySource = resolveCurrentExtractionFileField({
+    currentVersionId,
+    extracted,
+    fields,
+  });
+  if (exactOrLegacySource) {
+    return exactOrLegacySource;
+  }
+
+  const persistedSourceIsFromAnotherVersion =
+    extracted?.sourceEntityVersionId !== null &&
+    extracted?.sourceEntityVersionId !== undefined &&
+    extracted.sourceEntityVersionId !== currentVersionId;
+  return persistedSourceIsFromAnotherVersion ? findOnlyFileField(fields) : null;
 };
 
 /**
