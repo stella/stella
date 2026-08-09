@@ -179,9 +179,6 @@
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
           },
           {
-            "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
@@ -228,6 +225,9 @@
           },
           {
             "location": "packages/ui/src/hooks/use-viewport-width.ts#1"
+          },
+          {
+            "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -581,6 +581,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
@@ -765,6 +768,9 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -1191,6 +1197,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
@@ -1622,6 +1631,9 @@
             "location": "packages/ui/src/components/table.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/textarea.tsx#3"
           },
           {
@@ -1945,6 +1957,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers.ts#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#7"
           },
           {
@@ -1961,6 +1976,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#6"
           }
         ]
       },
@@ -2005,6 +2023,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers.ts#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#7"
           },
           {
@@ -2021,6 +2042,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#6"
           }
         ]
       },
@@ -2097,7 +2121,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
           }
         ]
       },
@@ -2172,7 +2196,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
           }
         ]
       },
@@ -2463,7 +2487,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#16"
@@ -2505,7 +2529,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
@@ -3118,9 +3142,6 @@
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
           },
           {
-            "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
@@ -3167,6 +3188,9 @@
           },
           {
             "location": "packages/ui/src/hooks/use-viewport-width.ts#1"
+          },
+          {
+            "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -3520,6 +3544,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
@@ -3704,6 +3731,9 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -4130,6 +4160,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
@@ -4559,6 +4592,9 @@
           },
           {
             "location": "packages/ui/src/components/table.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/tabs.tsx#3"
           },
           {
             "location": "packages/ui/src/components/textarea.tsx#3"
@@ -5854,9 +5890,6 @@
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
           },
           {
-            "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
@@ -5903,6 +5936,9 @@
           },
           {
             "location": "packages/ui/src/hooks/use-viewport-width.ts#1"
+          },
+          {
+            "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -6256,6 +6292,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
@@ -6440,6 +6479,9 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -6866,6 +6908,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
@@ -7295,6 +7340,9 @@
           },
           {
             "location": "packages/ui/src/components/table.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/tabs.tsx#3"
           },
           {
             "location": "packages/ui/src/components/textarea.tsx#3"
@@ -7911,6 +7959,9 @@
             "location": "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts#4"
           },
           {
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/tanstack-ai-schema.ts#4"
           }
         ]
@@ -8331,7 +8382,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.16.3",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.16.4",
       "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
       "evidence": {
         "identity": [
@@ -8395,16 +8446,16 @@
           "value": "node_modules/@tanstack/ai-anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.16.3",
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.16.4",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.16.3"
+      "version": "0.16.4"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.1.4",
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.1.6",
       "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
@@ -8455,13 +8506,13 @@
           "value": "node_modules/@tanstack/ai-bedrock/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.1.4",
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.1.6",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.1.4"
+      "version": "0.1.6"
     },
     {
       "authors": [
@@ -8469,7 +8520,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-client@0.22.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.23.1",
       "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
       "evidence": {
         "identity": [
@@ -8491,7 +8542,7 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#17"
+            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#18"
           },
           {
             "location": "apps/api/src/handlers/chat/types.ts#2"
@@ -8509,10 +8560,10 @@
             "location": "apps/web/src/features/chat/lib/build-chat-request-message.ts#1"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#1"
+            "location": "apps/web/src/features/chat/queries.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#6"
+            "location": "apps/web/src/features/chat/queries.ts#10"
           },
           {
             "location": "apps/web/src/components/ai-elements/message.tsx#6"
@@ -8545,14 +8596,14 @@
           "value": "node_modules/@tanstack/ai-client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-client@0.22.1",
+      "purl": "pkg:npm/%40tanstack/ai-client@0.23.1",
       "scope": "required",
       "tags": [
         "ai",
         "framework"
       ],
       "type": "framework",
-      "version": "0.22.1"
+      "version": "0.23.1"
     },
     {
       "authors": [
@@ -8560,7 +8611,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.3.8",
+      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.3.10",
       "description": "Secure TypeScript Code Mode for TanStack AI agents to execute sandboxed tool orchestration programs.",
       "evidence": {
         "identity": [
@@ -8612,16 +8663,16 @@
           "value": "node_modules/@tanstack/ai-code-mode/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.3.8",
+      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.3.10",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.3.8"
+      "version": "0.3.10"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.2.2",
+      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.3.0",
       "description": "Codex harness adapter for TanStack AI — run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
       "evidence": {
         "identity": [
@@ -8666,13 +8717,13 @@
           "value": "node_modules/@tanstack/ai-codex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-codex@0.2.2",
+      "purl": "pkg:npm/%40tanstack/ai-codex@0.3.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.2.2"
+      "version": "0.3.0"
     },
     {
       "authors": [
@@ -8680,7 +8731,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.20.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.21.0",
       "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
       "evidence": {
         "identity": [
@@ -8735,13 +8786,13 @@
           "value": "node_modules/@tanstack/ai-gemini/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-gemini@0.20.1",
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.21.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.20.1"
+      "version": "0.21.0"
     },
     {
       "authors": [
@@ -8749,7 +8800,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.2.5",
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.2.7",
       "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
       "evidence": {
         "identity": [
@@ -8807,13 +8858,13 @@
           "value": "node_modules/@tanstack/ai-mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mcp@0.2.5",
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.2.7",
       "scope": "required",
       "type": "library",
-      "version": "0.2.5"
+      "version": "0.2.7"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.2.3",
+      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.2.4",
       "description": "Mistral adapter for TanStack AI",
       "evidence": {
         "identity": [
@@ -8861,10 +8912,10 @@
           "value": "node_modules/@tanstack/ai-mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mistral@0.2.3",
+      "purl": "pkg:npm/%40tanstack/ai-mistral@0.2.4",
       "scope": "required",
       "type": "library",
-      "version": "0.2.3"
+      "version": "0.2.4"
     },
     {
       "authors": [
@@ -8872,7 +8923,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.17.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.18.0",
       "description": "OpenAI adapter for TanStack AI chat, tools, images, video, speech, transcription, realtime, and structured outputs.",
       "evidence": {
         "identity": [
@@ -8927,13 +8978,13 @@
           "value": "node_modules/@tanstack/ai-openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openai@0.17.1",
+      "purl": "pkg:npm/%40tanstack/ai-openai@0.18.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.17.1"
+      "version": "0.18.0"
     },
     {
       "authors": [
@@ -8941,7 +8992,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.15.10",
+      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.15.11",
       "description": "TanStack AI adapter for OpenRouter chat, provider tools, structured outputs, and access to hundreds of LLMs.",
       "evidence": {
         "identity": [
@@ -8999,16 +9050,16 @@
           "value": "node_modules/@tanstack/ai-openrouter/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.15.10",
+      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.15.11",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.15.10"
+      "version": "0.15.11"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.2.3",
+      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.3.0",
       "description": "Provider-agnostic sandbox layer for TanStack AI — run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
       "evidence": {
         "identity": [
@@ -9062,13 +9113,13 @@
           "value": "node_modules/@tanstack/ai-sandbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.2.3",
+      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.3.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.2.3"
+      "version": "0.3.0"
     },
     {
       "authors": [
@@ -9076,7 +9127,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai@0.42.0",
+      "bom-ref": "pkg:npm/@tanstack/ai@0.43.1",
       "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
       "evidence": {
         "identity": [
@@ -9122,7 +9173,7 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/compaction.ts#1"
@@ -9134,7 +9185,7 @@
             "location": "apps/api/src/handlers/chat/stream-chat.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#1"
@@ -9143,7 +9194,10 @@
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#11"
+            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
@@ -9221,7 +9275,7 @@
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
           },
           {
-            "location": "apps/api/src/lib/chat/chat-tool-types.ts#7"
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#8"
           },
           {
             "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
@@ -9258,6 +9312,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/queries.ts#1"
           },
           {
             "location": "packages/agent-engine/scripts/e2e-cloud-run.ts#23"
@@ -9299,13 +9356,13 @@
           "value": "node_modules/@tanstack/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai@0.42.0",
+      "purl": "pkg:npm/%40tanstack/ai@0.43.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.42.0"
+      "version": "0.43.1"
     },
     {
       "authors": [
@@ -9722,10 +9779,10 @@
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#4"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#7"
+            "location": "apps/web/src/features/chat/queries.ts#11"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#8"
+            "location": "apps/web/src/features/chat/queries.ts#12"
           },
           {
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#3"
@@ -9872,6 +9929,9 @@
             "location": "apps/web/src/lib/workspaces/queries/legal-lists.ts#1"
           },
           {
+            "location": "apps/web/src/lib/workspaces/queries/my-tasks.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/workspaces/queries/properties.ts#1"
           },
           {
@@ -9989,6 +10049,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/view-templates.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/views.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/views.ts#1"
           },
           {
@@ -10100,7 +10163,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#14"
@@ -10436,6 +10499,9 @@
             "location": "apps/web/src/routes/_protected.settings/route.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#7"
           },
           {
@@ -10532,7 +10598,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#4"
@@ -11166,6 +11232,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/route.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#12"
@@ -12908,9 +12977,6 @@
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
           },
           {
-            "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
@@ -12957,6 +13023,9 @@
           },
           {
             "location": "packages/ui/src/hooks/use-viewport-width.ts#1"
+          },
+          {
+            "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -13310,6 +13379,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
@@ -13494,6 +13566,9 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -13920,6 +13995,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
@@ -14349,6 +14427,9 @@
           },
           {
             "location": "packages/ui/src/components/table.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/tabs.tsx#3"
           },
           {
             "location": "packages/ui/src/components/textarea.tsx#3"
@@ -15033,6 +15114,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
           },
           {
@@ -15075,10 +15159,13 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#6"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
@@ -15165,13 +15252,13 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#18"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#18"
+            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#19"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
@@ -16521,7 +16608,7 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
-            "location": "apps/api/src/lib/chat/chat-tool-types.ts#8"
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#9"
           },
           {
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
@@ -16875,6 +16962,9 @@
             "location": "apps/api/src/lib/workflow/run-logic.ts#1"
           },
           {
+            "location": "apps/api/src/lib/workflow/run-state-store.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#1"
           },
           {
@@ -16956,6 +17046,9 @@
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
+          },
+          {
             "location": "apps/collab/src/server.ts#3"
           },
           {
@@ -17019,7 +17112,7 @@
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#12"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#9"
+            "location": "apps/web/src/features/chat/queries.ts#13"
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
@@ -17690,6 +17783,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
           },
           {
@@ -17732,10 +17828,13 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#6"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
@@ -17822,13 +17921,13 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#18"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#18"
+            "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#19"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
@@ -19178,7 +19277,7 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
-            "location": "apps/api/src/lib/chat/chat-tool-types.ts#8"
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#9"
           },
           {
             "location": "apps/api/src/lib/chat/data-scope.ts#1"
@@ -19532,6 +19631,9 @@
             "location": "apps/api/src/lib/workflow/run-logic.ts#1"
           },
           {
+            "location": "apps/api/src/lib/workflow/run-state-store.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#1"
           },
           {
@@ -19613,6 +19715,9 @@
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
+          },
+          {
             "location": "apps/collab/src/server.ts#3"
           },
           {
@@ -19676,7 +19781,7 @@
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#12"
           },
           {
-            "location": "apps/web/src/features/chat/queries.ts#9"
+            "location": "apps/web/src/features/chat/queries.ts#13"
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
@@ -20273,7 +20378,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#38"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#43"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#13"
@@ -20491,10 +20596,10 @@
         ],
         "occurrences": [
           {
-            "location": "packages/ui/src/lib/utils.ts#1"
+            "location": "packages/ui/src/lib/utils.ts#3"
           },
           {
-            "location": "packages/ui/src/lib/utils.ts#2"
+            "location": "packages/ui/src/lib/utils.ts#4"
           }
         ]
       },
@@ -20888,7 +20993,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#39"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#44"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
@@ -21003,7 +21108,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#39"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#44"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
@@ -21334,6 +21439,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
           },
           {
@@ -21356,6 +21464,9 @@
           },
           {
             "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#10"
@@ -21409,7 +21520,7 @@
             "location": "apps/api/src/handlers/chat/send-message-thread.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/send-message.ts#2"
+            "location": "apps/api/src/handlers/chat/send-message.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
@@ -22027,6 +22138,9 @@
             "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/tasks/my-tasks.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/update.ts#2"
           },
           {
@@ -22361,6 +22475,9 @@
           },
           {
             "location": "apps/api/src/lib/document-processing-automatic-request.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-processing-manual-ocr-restore.ts#1"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#18"
@@ -22699,7 +22816,7 @@
             "location": "apps/api/src/lib/workflow/route-playbooks.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow-queue.ts#6"
+            "location": "apps/api/src/lib/workflow-queue.ts#5"
           },
           {
             "location": "apps/api/src/lib/workflow-target-queries.ts#2"
@@ -22714,7 +22831,7 @@
             "location": "apps/api/src/mcp/context.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/document-tools.ts#14"
+            "location": "apps/api/src/mcp/document-tools.ts#3"
           },
           {
             "location": "apps/api/src/mcp/gateway/external-tools.ts#3"
@@ -22766,6 +22883,9 @@
           },
           {
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
+          },
+          {
+            "location": "apps/api/src/scripts/replay-case-law-source.ts#2"
           },
           {
             "location": "apps/api/src/scripts/resolve-citations.ts#18"
@@ -23125,10 +23245,10 @@
             "location": "apps/api/src/handlers/catalogue/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#8"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#9"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/delete-thread.ts#4"
@@ -24016,6 +24136,9 @@
             "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/tasks/my-tasks.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/routes.ts#1"
           },
           {
@@ -24391,6 +24514,9 @@
             "location": "apps/api/src/lib/custom-schema.ts#3"
           },
           {
+            "location": "apps/api/src/lib/deployment-feature-route.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/entities/kanban-group-condition.ts#4"
           },
           {
@@ -24446,6 +24572,9 @@
           },
           {
             "location": "apps/api/src/mcp/document-file-upload.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
           },
           {
             "location": "apps/api/src/server.ts#2"
@@ -25037,7 +25166,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/scripts/record-eu-ecj-fixtures.ts#28"
+            "location": "apps/api/scripts/record-eu-ecj-fixtures.ts#31"
           },
           {
             "location": "apps/api/scripts/seed-templates.ts#20"
@@ -25321,7 +25450,7 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#2"
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#15"
@@ -25705,6 +25834,9 @@
             "location": "apps/web/src/routes/_protected.settings/route.tsx#18"
           },
           {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#17"
+          },
+          {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#23"
           },
           {
@@ -25855,7 +25987,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#10"
@@ -27353,9 +27485,6 @@
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
           },
           {
-            "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
@@ -27402,6 +27531,9 @@
           },
           {
             "location": "packages/ui/src/hooks/use-viewport-width.ts#1"
+          },
+          {
+            "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#1"
@@ -27755,6 +27887,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
@@ -27939,6 +28074,9 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -28365,6 +28503,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
@@ -28796,6 +28937,9 @@
             "location": "packages/ui/src/components/table.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/textarea.tsx#3"
           },
           {
@@ -29143,7 +29287,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/ui/src/lib/utils.ts#3"
+            "location": "packages/ui/src/lib/utils.ts#5"
           }
         ]
       },
@@ -29952,7 +30096,7 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#3"
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
@@ -30501,6 +30645,9 @@
             "location": "apps/web/src/routes/_protected.settings/route.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#18"
+          },
+          {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#24"
           },
           {
@@ -30651,6 +30798,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/advanced-filter-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx#6"
           },
           {
@@ -30669,7 +30819,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#11"
@@ -31284,6 +31434,9 @@
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
           },
           {
+            "location": "apps/api/src/lib/workflow/run-state-store.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#2"
           },
           {
@@ -31293,7 +31446,7 @@
             "location": "apps/api/src/mcp/billing-tools.ts#3"
           },
           {
-            "location": "apps/api/src/mcp/document-tools.ts#15"
+            "location": "apps/api/src/mcp/document-tools.ts#4"
           },
           {
             "location": "apps/api/src/mcp/feedback-tools.ts#2"
@@ -31320,7 +31473,7 @@
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
           },
           {
-            "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
+            "location": "apps/api/src/scripts/post-deploy-smoke.ts#27"
           },
           {
             "location": "apps/api/src/scripts/resolve-citations.ts#19"
@@ -31399,6 +31552,9 @@
           },
           {
             "location": "packages/api-contract/src/chat.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/realtime-events.ts#1"
           },
           {
             "location": "packages/catalogue/scripts/validate.ts#16"
