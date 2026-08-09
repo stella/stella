@@ -472,6 +472,52 @@ describe("validateMessage", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
+  test("rejects empty legacy mention identifiers as invalid metadata", async () => {
+    const invalidMentions = [
+      {
+        category: "workspace",
+        id: "",
+        label: "Matter",
+      },
+      {
+        category: "entity",
+        id: "entity_1",
+        label: "Source memo",
+        workspaceId: "",
+      },
+    ] as const;
+
+    const results = await Promise.all(
+      invalidMentions.map((mention, index) =>
+        validateMessage({
+          message: {
+            id: chatMessageId(`msg_empty_legacy_mention_${index}`),
+            role: "assistant",
+            metadata: { mentions: { mentions: [mention] } },
+            parts: [{ type: "text", content: "Done" }],
+          },
+          safeDb: noDbReads,
+          threadId: chatThreadId(`thread_empty_legacy_mention_${index}`),
+          tools: noTools,
+          userId: userId(`user_empty_legacy_mention_${index}`),
+        }),
+      ),
+    );
+
+    for (const result of results) {
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isOk(result)) {
+        continue;
+      }
+      expect(result.error).toBeInstanceOf(HandlerError);
+      if (!(result.error instanceof HandlerError)) {
+        continue;
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toBe("Invalid chat message metadata");
+    }
+  });
+
   test("restores server-owned rich parts on assistant continuations", async () => {
     const id = chatMessageId("msg_rich_continuation");
     const trustedAudio = richChatParts[0];

@@ -987,6 +987,9 @@ const invalidChatMetadataError = () =>
 const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
 const parseAnonRestorationsMetadata = (
   value: unknown,
 ): ChatMessageMetadata["anonRestorations"] | null => {
@@ -1026,7 +1029,7 @@ const parseMentionsMetadata = (
     const id = mention["id"];
     const label = mention["label"];
     if (
-      typeof id !== "string" ||
+      !isNonEmptyString(id) ||
       typeof label !== "string" ||
       (category !== "entity" && category !== "workspace")
     ) {
@@ -1057,7 +1060,7 @@ const parseMentionsMetadata = (
       continue;
     }
     const workspaceId = mention["workspaceId"];
-    if (typeof workspaceId !== "string" && workspaceId !== null) {
+    if (workspaceId !== null && !isNonEmptyString(workspaceId)) {
       return null;
     }
     const resourceValue = mention["resource"];
