@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
+import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import type { FolioAIEditOperation } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
@@ -90,6 +91,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type {
@@ -212,8 +214,7 @@ export const PlaybookFacet = ({
       entityId: reference.entityId,
       label: reference.name,
       fileName: reference.fileName,
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      mimeType: DOCX_MIME,
       pdfFileId: null,
       workspaceId,
       facet: "preview",
@@ -541,8 +542,6 @@ const Launcher = ({
   );
 };
 
-const REVIEW_REFERENCE_MAX = 3;
-
 type ReferenceFilePickerProps = {
   workspaceId: string;
   target: { entityId: string; fileFieldId: string };
@@ -574,7 +573,7 @@ const ReferenceFilePicker = ({
       source.fileFieldId !== target.fileFieldId &&
       !selectedIds.has(source.fileFieldId),
   );
-  const atLimit = references.length >= REVIEW_REFERENCE_MAX;
+  const atLimit = references.length >= DOCUMENT_REVIEW_LIMITS.referencesMax;
 
   const selectReference = (reference: ReferenceFile | null) => {
     if (reference === null || atLimit) {
@@ -594,7 +593,7 @@ const ReferenceFilePicker = ({
         <span className="text-muted-foreground text-[11px] tabular-nums">
           {t("inspector.review.referencesCount", {
             count: String(references.length),
-            max: String(REVIEW_REFERENCE_MAX),
+            max: String(DOCUMENT_REVIEW_LIMITS.referencesMax),
           })}
         </span>
       </div>
@@ -889,8 +888,8 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
           role="progressbar"
         >
           <div
-            className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
-            style={{ width: `${String(progress)}%` }}
+            className="bg-primary h-full w-full rounded-full transition-transform duration-500 ease-out"
+            style={{ transform: `scaleX(${String(progress / 100)})` }}
           />
         </div>
         <p className="text-muted-foreground text-[11px]">

@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { compareReferenceDocuments } from "@/api/handlers/document-reviews/reference-compare";
 import { buildReferenceReviewAuditEvent } from "@/api/handlers/document-reviews/reference-review-audit";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
+import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { compareReferencesBodySchema } from "@/api/handlers/document-reviews/schemas";
 import {
   assertUsageAvailableForHandler,
@@ -36,6 +37,10 @@ const compareReferences = createSafeHandler(
     user,
   }) {
     const organizationId = session.activeOrganizationId;
+    const validTopics = validateReviewTopics(body.topics, "comparison");
+    if (Result.isError(validTopics)) {
+      return Result.err(validTopics.error);
+    }
 
     yield* requireTanStackAIAvailableForRole({
       orgConfig: orgAIConfig,

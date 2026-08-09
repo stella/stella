@@ -1,6 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { mergeProposedReviewTopics } from "@/api/handlers/document-reviews/review-topics";
+import {
+  mergeProposedReviewTopics,
+  validateReviewTopics,
+} from "@/api/handlers/document-reviews/review-topics";
 
 const seededTopic = {
   type: "playbook" as const,
@@ -28,5 +32,34 @@ describe("reference review topic proposal", () => {
       "Notice mechanics",
     ]);
     expect(merged.at(1)?.type).toBe("reference");
+  });
+
+  test("rejects duplicate topic identities before a model run", () => {
+    const duplicateTopicId = validateReviewTopics(
+      [seededTopic, { ...seededTopic }],
+      "proposal",
+    );
+    const duplicatePositionId = validateReviewTopics(
+      [
+        seededTopic,
+        {
+          ...seededTopic,
+          topicId: "22222222-2222-4222-8222-222222222222",
+        },
+      ],
+      "proposal",
+    );
+
+    expect(Result.isError(duplicateTopicId)).toBe(true);
+    expect(Result.isError(duplicatePositionId)).toBe(true);
+  });
+
+  test("accepts excluded suggestions only before topic confirmation", () => {
+    const excluded = [{ ...seededTopic, included: false }];
+
+    expect(Result.isOk(validateReviewTopics(excluded, "proposal"))).toBe(true);
+    expect(Result.isError(validateReviewTopics(excluded, "comparison"))).toBe(
+      true,
+    );
   });
 });

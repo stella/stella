@@ -1,4 +1,7 @@
-import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
+import {
+  CHAT_RICH_PART_LIMITS,
+  DOCUMENT_REVIEW_LIMITS,
+} from "@stll/api-contract";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
@@ -74,12 +77,12 @@ export const LIMITS = {
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
   /** Maximum precedent documents compared with one target document. */
-  documentReviewReferencesMax: 3,
+  documentReviewReferencesMax: DOCUMENT_REVIEW_LIMITS.referencesMax,
   /** Bounded reference-document picker page size. */
   documentReviewSourcesPageSizeDefault: 20,
   documentReviewSourcesPageSizeMax: 50,
-  /** Maximum comparison findings accepted from one structured model run. */
-  documentReviewFindingsMax: 50,
+  /** Maximum confirmed topics accepted by one review, aligned with playbooks. */
+  documentReviewTopicsMax: DOCUMENT_REVIEW_LIMITS.topicsMax,
   /** Per-org cap on saved flow (Workflows) definitions. Per-definition size
    *  is bounded by MAX_FLOW_STEPS in flow-types.ts. */
   flowDefinitionsCount: 100,

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { proposeReferenceTopics } from "@/api/handlers/document-reviews/reference-topics";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
+import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { proposeReviewTopicsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import {
   assertUsageAvailableForHandler,
@@ -34,6 +35,10 @@ const proposeTopics = createSafeHandler(
     user,
   }) {
     const organizationId = session.activeOrganizationId;
+    const validTopics = validateReviewTopics(body.seededTopics, "proposal");
+    if (Result.isError(validTopics)) {
+      return Result.err(validTopics.error);
+    }
     yield* requireTanStackAIAvailableForRole({
       orgConfig: orgAIConfig,
       role: "pdf",

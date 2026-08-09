@@ -149,6 +149,32 @@ describe("reference review normalization", () => {
     expect(findings.at(0)?.fix).toBeNull();
   });
 
+  test("does not trust a comparison or edit without reference evidence", () => {
+    const findings = normalizeReferenceReview({
+      target,
+      references: [reference],
+      topics,
+      rawFindings: [
+        {
+          topicId,
+          assessment: "different",
+          consensus: "single",
+          rationale: "Purported difference without precedent support.",
+          targetCitations: [{ sourceKey: "F0", blockId: "target-1" }],
+          referenceCitations: [],
+          proposedText: "Unsupported replacement wording.",
+        },
+      ],
+    });
+
+    expect(findings.at(0)).toMatchObject({
+      assessment: "not-comparable",
+      fix: null,
+      rationale:
+        "The supplied documents do not provide grounded evidence for this topic.",
+    });
+  });
+
   test("anchors a missing-clause suggestion only after the target's last block", () => {
     const findings = normalizeReferenceReview({
       target,

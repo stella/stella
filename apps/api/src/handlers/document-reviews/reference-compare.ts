@@ -122,16 +122,18 @@ const collectVerifiedCitations = (
 const buildReferenceFix = ({
   assessment,
   proposedText,
+  hasReferenceCitation,
   targetCitations,
   targetLastBlockId,
 }: {
   assessment: ReferenceAssessment;
   proposedText: string | null;
+  hasReferenceCitation: boolean;
   targetCitations: readonly ReferenceCitation[];
   targetLastBlockId: string | null;
 }): ReferenceReviewFix | null => {
   const text = proposedText?.trim();
-  if (!text) {
+  if (!text || !hasReferenceCitation) {
     return null;
   }
   if (assessment === "different") {
@@ -144,6 +146,32 @@ const buildReferenceFix = ({
     return { kind: "insertAfterBlock", blockId: targetLastBlockId, text };
   }
   return null;
+};
+
+const hasEvidenceForAssessment = ({
+  assessment,
+  hasTargetCitation,
+  hasReferenceCitation,
+}: {
+  assessment: ReferenceAssessment;
+  hasTargetCitation: boolean;
+  hasReferenceCitation: boolean;
+}): boolean => {
+  switch (assessment) {
+    case "aligned":
+    case "different":
+      return hasTargetCitation && hasReferenceCitation;
+    case "missing-from-target":
+      return hasReferenceCitation;
+    case "additional-in-target":
+    case "deal-specific":
+      return hasTargetCitation;
+    case "not-comparable":
+      return false;
+    default:
+      assessment satisfies never;
+      return false;
+  }
 };
 
 export const normalizeReferenceReview = ({
@@ -225,14 +253,20 @@ export const normalizeReferenceReview = ({
         : [];
     });
 
-    const hasGroundedEvidence =
-      targetCitations.length > 0 || referenceCitations.length > 0;
+    const hasTargetCitation = targetCitations.length > 0;
+    const hasReferenceCitation = referenceCitations.length > 0;
+    const hasGroundedEvidence = hasEvidenceForAssessment({
+      assessment: raw.assessment,
+      hasTargetCitation,
+      hasReferenceCitation,
+    });
+    const assessment = hasGroundedEvidence ? raw.assessment : "not-comparable";
 
     findings.push({
       findingId: `reference-${topic.topicId}`,
       topicId: topic.topicId,
       issue: topic.title,
-      assessment: hasGroundedEvidence ? raw.assessment : "not-comparable",
+      assessment,
       consensus: references.length === 1 ? "single" : raw.consensus,
       rationale: hasGroundedEvidence
         ? raw.rationale.trim()
@@ -241,8 +275,9 @@ export const normalizeReferenceReview = ({
       referenceCitations,
       fix: hasGroundedEvidence
         ? buildReferenceFix({
-            assessment: raw.assessment,
+            assessment,
             proposedText: raw.proposedText,
+            hasReferenceCitation,
             targetCitations,
             targetLastBlockId,
           })

@@ -43,12 +43,11 @@ import type {
 import { isUuid } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
-import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import {
-  ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT,
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,

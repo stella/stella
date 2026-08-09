@@ -47,7 +47,7 @@ const reviewDocumentsSchema = {
 export const proposeReviewTopicsBodySchema = t.Object({
   ...reviewDocumentsSchema,
   seededTopics: t.Array(documentReviewTopicSchema, {
-    maxItems: LIMITS.documentReviewFindingsMax,
+    maxItems: LIMITS.documentReviewTopicsMax,
   }),
 });
 
@@ -55,6 +55,6 @@ export const compareReferencesBodySchema = t.Object({
   ...reviewDocumentsSchema,
   topics: t.Array(documentReviewTopicSchema, {
     minItems: 1,
-    maxItems: LIMITS.documentReviewFindingsMax,
+    maxItems: LIMITS.documentReviewTopicsMax,
   }),
 });
