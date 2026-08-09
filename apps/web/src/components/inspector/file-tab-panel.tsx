@@ -25,6 +25,7 @@ import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.lo
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
+import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
 import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import {
   EMAIL_CHAT_MODE,
@@ -456,6 +457,7 @@ export const FileTabPanel = ({
           entityId={tab.entityId}
           facet={tab.facet ?? "metadata"}
           fieldId={tab.id}
+          fileName={tab.fileName}
           mimeType={tab.mimeType}
           onChange={(next) => {
             setFileFacet(tab.id, next);
@@ -508,6 +510,12 @@ export const FileTabPanel = ({
                 workspaceId={tab.workspaceId}
               />
             </Suspense>
+          )}
+          {tab.facet === "attachments" && isEmailDisplay && (
+            <EmailAttachmentsFacet
+              fieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
           )}
           {tab.facet === "versions" && (
             <VersionsFacet
@@ -952,6 +960,7 @@ export const FileTabPanel = ({
       entityId={tab.entityId}
       facet={sidepeekFacet}
       fieldId={tab.id}
+      fileName={tab.fileName}
       mimeType={tab.mimeType}
       onChange={(next) => {
         setFileFacet(tab.id, next);
@@ -1018,6 +1027,12 @@ export const FileTabPanel = ({
                 workspaceId={tab.workspaceId}
               />
             </Suspense>
+          )}
+          {sidepeekFacet === "attachments" && isEmailDisplay && (
+            <EmailAttachmentsFacet
+              fieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
           )}
           {sidepeekFacet === "versions" && (
             <VersionsFacet

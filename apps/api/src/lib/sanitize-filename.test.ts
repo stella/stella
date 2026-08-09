@@ -35,6 +35,29 @@ describe("sanitizeFilename", () => {
     expect(typeof _branded).toBe("string");
   });
 
+  test("truncates at Unicode code-point boundaries", () => {
+    const result = sanitizeFilename(`${"a".repeat(253)}😀z`);
+
+    expect(result).toHaveLength(255);
+    expect(result.endsWith("😀")).toBe(true);
+    expect(() => encodeURIComponent(result)).not.toThrow();
+  });
+
+  test("bounds astral filenames by UTF-16 length", () => {
+    const result = sanitizeFilename("😀".repeat(255));
+
+    expect(result).toHaveLength(254);
+    expect(Array.from(result)).toHaveLength(127);
+    expect(() => encodeURIComponent(result)).not.toThrow();
+  });
+
+  test("replaces an existing unpaired surrogate", () => {
+    const result = sanitizeFilename(`${"a".repeat(254)}\uD83Dx`);
+
+    expect(result.endsWith("�")).toBe(true);
+    expect(() => encodeURIComponent(result)).not.toThrow();
+  });
+
   test("preserves the DOCX extension when truncating a long name", () => {
     const fileName = sanitizeFilenamePreservingExtension(
       `${"a".repeat(256)}.docx`,

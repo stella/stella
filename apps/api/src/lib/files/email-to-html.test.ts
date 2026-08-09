@@ -10,7 +10,9 @@ import {
   type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
+  resolveEmailAttachmentMimeType,
   resolveEmailMimeType,
+  isEmailAttachmentPreviewable,
 } from "./email-to-html";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
@@ -59,6 +61,39 @@ describe("resolveEmailMimeType", () => {
         mimeType: "application/octet-stream",
       }),
     ).toBeNull();
+  });
+});
+
+describe("email attachment preview policy", () => {
+  test("allows passive image and PDF types but not active or unknown content", () => {
+    expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
+    expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
+    expect(isEmailAttachmentPreviewable("image/bmp")).toBe(false);
+    expect(isEmailAttachmentPreviewable("image/tiff")).toBe(false);
+    expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
+    expect(isEmailAttachmentPreviewable("text/html")).toBe(false);
+    expect(isEmailAttachmentPreviewable(null)).toBe(false);
+  });
+
+  test("recovers passive preview types from generic MIME declarations", () => {
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "EVIDENCE.PDF",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "scan.PNG",
+        mimeType: null,
+      }),
+    ).toBe("image/png");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "payload.SVG",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("application/octet-stream");
   });
 });
 
@@ -335,16 +370,20 @@ describe("renderEmailHtml", () => {
       bcc: ["عائشة <aisha@example.ae>"],
       attachments: [
         {
+          id: "attachment-0",
           fileName: "evidence.pdf",
           mimeType: "application/pdf",
           sizeBytes: 3,
+          previewable: true,
         },
       ],
     });
     expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
+      "id",
       "fileName",
       "mimeType",
       "sizeBytes",
+      "previewable",
     ]);
     expect(preview.bodyHtml).toStartWith("<!DOCTYPE html>");
     expect(preview.bodyHtml).toContain(
@@ -391,14 +430,62 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        id: "attachment-0",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: 3,
+        previewable: true,
       },
     ]);
     expect(preview.bodyHtml).toContain("Visible body");
     expect(preview.bodyHtml).not.toContain("cid:evidence");
     expect(preview.bodyHtml).not.toContain("<form");
+  });
+
+  test("caps descriptors after removing referenced inline parts", () => {
+    const inlineAttachments = Array.from({ length: 100 }, (_, index) => ({
+      contentId: `inline-${String(index)}`,
+      fileName: `inline-${String(index)}.png`,
+      mimeType: "image/png",
+      bytes: new Uint8Array([index]),
+    }));
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: inlineAttachments
+            .map(
+              ({ contentId }) =>
+                `<img src="cid:${contentId}" alt="inline image">`,
+            )
+            .join(""),
+        },
+        inlineImages: inlineAttachments.map(({ contentId }) => ({
+          cid: contentId,
+          mimeType: "image/png",
+          dataBase64: PNG_BASE64,
+        })),
+        attachments: [
+          ...inlineAttachments,
+          {
+            contentId: null,
+            fileName: "evidence.pdf",
+            mimeType: "application/pdf",
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+        ],
+      }),
+    );
+
+    expect(preview.attachments).toEqual([
+      {
+        id: "attachment-100",
+        fileName: "evidence.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 3,
+        previewable: true,
+      },
+    ]);
   });
 
   test("folds trailing HTML history and signatures without removing content", () => {
@@ -724,14 +811,18 @@ describe("emailToHtml (.eml)", () => {
 
     expect(result.value.attachments).toEqual([
       {
+        id: "attachment-1",
         fileName: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 16,
+        previewable: false,
       },
       {
+        id: "attachment-2",
         fileName: "evidence.png",
         mimeType: "image/png",
         sizeBytes: Buffer.from(PNG_BASE64, "base64").byteLength,
+        previewable: true,
       },
     ]);
   });

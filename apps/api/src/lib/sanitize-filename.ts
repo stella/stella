@@ -24,6 +24,19 @@ const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
 const PATH_TRAVERSAL_RE = /\.\./gu;
 const MAX_FILENAME_LENGTH = 255;
 
+const truncateUnicode = (value: string, maxLength: number): string => {
+  const characters: string[] = [];
+  let length = 0;
+  for (const character of value) {
+    if (length + character.length > maxLength) {
+      break;
+    }
+    characters.push(character);
+    length += character.length;
+  }
+  return characters.join("");
+};
+
 const stripLeadingAndTrailingDots = (name: string): string => {
   let start = 0;
   let end = name.length;
@@ -42,13 +55,14 @@ const stripLeadingAndTrailingDots = (name: string): string => {
 
 export const sanitizeFilename = (name: string): SanitizedFileName => {
   const sanitized = name
+    .toWellFormed()
     .replace(UNSAFE_CHARS_RE, "_")
     .replace(PATH_TRAVERSAL_RE, "__");
   const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
 
   return v.parse(
     sanitizedFileNameSchema,
-    sanitizedWithoutEdgeDots.slice(0, 255) || "file",
+    truncateUnicode(sanitizedWithoutEdgeDots, MAX_FILENAME_LENGTH) || "file",
   );
 };
 
@@ -59,20 +73,23 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
 export const sanitizeFilenamePreservingExtension = (
   name: string,
 ): SanitizedFileName => {
-  const lastDot = name.lastIndexOf(".");
+  const wellFormedName = name.toWellFormed();
+  const lastDot = wellFormedName.lastIndexOf(".");
   if (lastDot === -1) {
-    return sanitizeFilename(name);
+    return sanitizeFilename(wellFormedName);
   }
 
-  const extension = name.slice(lastDot);
-  const sanitizedBase = sanitizeFilename(name.slice(0, lastDot));
+  const extension = wellFormedName.slice(lastDot);
+  const sanitizedBase = sanitizeFilename(wellFormedName.slice(0, lastDot));
   const maxBaseLength = MAX_FILENAME_LENGTH - extension.length;
 
   if (maxBaseLength <= 0) {
-    return sanitizeFilename(name);
+    return sanitizeFilename(wellFormedName);
   }
 
-  return sanitizeFilename(sanitizedBase.slice(0, maxBaseLength) + extension);
+  return sanitizeFilename(
+    truncateUnicode(sanitizedBase, maxBaseLength) + extension,
+  );
 };
 
 /** Matches a trailing `.docx` extension (case-insensitive). */

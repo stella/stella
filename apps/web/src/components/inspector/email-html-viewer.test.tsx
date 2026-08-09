@@ -170,8 +170,10 @@ describe("email viewer", () => {
     queryClient.setQueryData(options.queryKey, {
       attachments: [
         {
+          id: "attachment-1",
           fileName: "contract.pdf",
           mimeType: "application/pdf",
+          previewable: true,
           sizeBytes: 2048,
         },
       ],

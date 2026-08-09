@@ -1,0 +1,133 @@
+import { Result } from "better-result";
+import { t } from "elysia";
+
+import { env } from "@/api/env";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { contentDisposition } from "@/api/lib/content-disposition";
+import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  isEmailAttachmentPreviewable,
+  resolveEmailAttachmentMimeType,
+} from "@/api/lib/files/email-to-html";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+
+import {
+  EMAIL_ATTACHMENT_LOAD_STATUS,
+  loadEmailAttachment,
+} from "./email-attachment-loader";
+
+const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "internal", reason: "document_processing" },
+  query: t.Object({
+    disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
+  }),
+  params: t.Object({
+    workspaceId: tSafeId("workspace"),
+    fieldId: tSafeId("field"),
+    attachmentId: t.String(),
+  }),
+} satisfies HandlerConfig;
+
+const attachmentNotFound = () => new Response(null, { status: 404 });
+const attachmentNotPreviewable = () => new Response(null, { status: 415 });
+const attachmentSourceTooLarge = () =>
+  Response.json(
+    { message: "Email exceeds the preview size limit" },
+    { status: 413 },
+  );
+const attachmentUnreadable = () =>
+  Response.json(
+    { message: "Failed to parse email attachment" },
+    { status: 422 },
+  );
+
+export default createSafeHandler(
+  config,
+  async function* ({
+    params: { attachmentId, fieldId },
+    query: { disposition },
+    recordAuditEvent,
+    scopedDb,
+    session,
+    workspaceId,
+  }): SafeHandlerGenerator<Response> {
+    const attachment = yield* loadEmailAttachment({
+      attachmentId,
+      fieldId,
+      organizationId: session.activeOrganizationId,
+      scopedDb,
+      secret: env.BETTER_AUTH_SECRET,
+      workspaceId,
+    });
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.notFound) {
+      return Result.ok(attachmentNotFound());
+    }
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.tooLarge) {
+      return Result.ok(attachmentSourceTooLarge());
+    }
+    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.unreadable) {
+      return Result.ok(attachmentUnreadable());
+    }
+    const attachmentMimeType = resolveEmailAttachmentMimeType({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+    });
+    if (
+      disposition === "inline" &&
+      !isEmailAttachmentPreviewable(attachmentMimeType)
+    ) {
+      return Result.ok(attachmentNotPreviewable());
+    }
+
+    const mimeType =
+      disposition === "inline"
+        ? (attachmentMimeType ?? "application/octet-stream")
+        : "application/octet-stream";
+    const fileName = sanitizeFilename(attachment.fileName);
+    const safeDisposition = contentDisposition(
+      fileName,
+      disposition === "download" ? "attachment" : "inline",
+    );
+    if (disposition === "download") {
+      yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await scopedDb(
+              async (tx) =>
+                await recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.DOWNLOAD,
+                  resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                  resourceId: attachment.sourceEntityId,
+                  metadata: {
+                    attachmentId,
+                    fieldId,
+                    mimeType: attachmentMimeType ?? "application/octet-stream",
+                    sizeBytes: attachment.bytes.byteLength,
+                  },
+                }),
+            ),
+        ),
+      );
+    }
+    return Result.ok(
+      new Response(new Uint8Array(attachment.bytes), {
+        headers: {
+          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
+          "Cache-Control": "private, no-store",
+          "Content-Disposition": safeDisposition,
+          "Content-Length": String(attachment.bytes.byteLength),
+          "Content-Type": mimeType,
+        },
+      }),
+    );
+  },
+);

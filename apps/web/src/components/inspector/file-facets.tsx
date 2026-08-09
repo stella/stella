@@ -8,13 +8,16 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
-import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import type {
+  FileFacet,
+  FileTab,
+} from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, isEmailFile } from "@/lib/consts";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
-export type Facet = NonNullable<FileTab["facet"]>;
+export type Facet = FileFacet;
 
 /**
  * Mounted only inside the fullscreen branch. If the user enters Full
@@ -70,6 +73,7 @@ type TabFacetBarProps = {
   workspaceId: string;
   entityId: string;
   fieldId: string;
+  fileName: string;
   mimeType: string | undefined;
   /**
    * Base list before this component drops/disables the suggestions
@@ -86,6 +90,7 @@ export const TabFacetBar = ({
   workspaceId,
   entityId,
   fieldId,
+  fileName,
   mimeType,
   baseFacets,
 }: TabFacetBarProps) => {
@@ -97,6 +102,7 @@ export const TabFacetBar = ({
     (state) => state.sessions[entityId]?.length ?? 0,
   );
   const isDocx = mimeType === DOCX_MIME;
+  const isEmail = isEmailFile({ fileName, mimeType });
   const playbooksEnabled = usePlaybooksPreviewEnabled();
 
   const { facets, disabledFacets } = useMemo(() => {
@@ -114,21 +120,30 @@ export const TabFacetBar = ({
     // chat queues a proposal.
     if (!isDocx) {
       return {
-        facets: gated.filter((f) => f !== "suggestions" && f !== "playbook"),
+        facets: gated.filter(
+          (f) =>
+            f !== "suggestions" &&
+            f !== "playbook" &&
+            (isEmail || f !== "attachments"),
+        ),
         disabledFacets: undefined,
       };
     }
     if (suggestionCount === 0) {
       return {
-        facets: gated,
+        facets: gated.filter((f) => isEmail || f !== "attachments"),
         disabledFacets: new Set<Facet>(["suggestions"]),
       };
     }
-    return { facets: gated, disabledFacets: undefined };
-  }, [baseFacets, isDocx, suggestionCount, playbooksEnabled]);
+    return {
+      facets: gated.filter((f) => isEmail || f !== "attachments"),
+      disabledFacets: undefined,
+    };
+  }, [baseFacets, isDocx, isEmail, suggestionCount, playbooksEnabled]);
 
   const labels: Record<Facet, string> = {
     preview: t("common.preview"),
+    attachments: t("emailViewer.attachments"),
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),

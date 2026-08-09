@@ -13,6 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   emailToPreview,
   resolveEmailMimeType,
@@ -53,6 +54,7 @@ const fileFieldQuery = async (
       .select({
         content: fields.content,
         entityId: entities.id,
+        entityVersionId: entityVersions.id,
         versionStamp: entityVersions.stamp,
         verificationCode: entityVersions.verificationCode,
       })
@@ -254,7 +256,15 @@ export const readEmailHtmlPreviewHandler = async ({
     mimeType: content.mimeType,
   });
   const fileBuffer = await readS3ArrayBuffer(fileKey);
-  const previewResult = await emailToPreview(fileBuffer, emailMimeType);
+  const previewResult = await emailToPreview(fileBuffer, emailMimeType, {
+    createAttachmentId: (attachmentIndex) =>
+      createEmailAttachmentDescriptor({
+        attachmentIndex,
+        secret: env.BETTER_AUTH_SECRET,
+        sourceFileId: content.id,
+        sourceVersionId: row.entityVersionId,
+      }),
+  });
 
   if (Result.isError(previewResult)) {
     captureError(previewResult.error, {
@@ -295,7 +305,7 @@ const pdfFileName = (fileName: string): string => {
 };
 
 const inlineContentDisposition = (fileName: string): string =>
-  contentDisposition(fileName).replace(/^attachment;/u, "inline;");
+  contentDisposition(fileName, "inline");
 
 const fetchStoredFileResponse = async (
   key: string,

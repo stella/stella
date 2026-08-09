@@ -17,6 +17,7 @@ import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 
 export const EML_MIME_TYPE = "message/rfc822";
@@ -31,6 +32,21 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
   eml: EML_MIME_TYPE,
   msg: MSG_MIME_TYPE,
 };
+
+const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  pdf: "application/pdf",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
+  "": null,
+  "application/octet-stream": null,
+  "binary/octet-stream": null,
+} as const satisfies Record<string, null>;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
@@ -75,6 +91,14 @@ export type EmailAttachment = {
   bytes: Uint8Array;
 };
 
+export type EmailAttachmentDescriptor = {
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number;
+  previewable: boolean;
+};
+
 type EmailBody =
   | { type: "html"; html: string }
   | { type: "text"; text: string };
@@ -97,18 +121,14 @@ export type ParsedEmail = {
  * returns attachment bytes or links. Safe inline CID image bytes may be
  * embedded in bodyHtml so the sandbox can render the message faithfully.
  */
-type EmailPreview = {
+export type EmailPreview = {
   subject: string | null;
   from: string | null;
   to: string[];
   cc: string[];
   bcc: string[];
   date: string | null;
-  attachments: {
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-  }[];
+  attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
@@ -138,9 +158,11 @@ export const emailToHtml = async (
 export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
+  options: { createAttachmentId?: (attachmentIndex: number) => string } = {},
 ): Promise<Result<EmailPreview, EmailParseError>> =>
   await Result.tryPromise({
-    try: async () => buildEmailPreview(await parseEmail(fileBuffer, mimeType)),
+    try: async () =>
+      buildEmailPreview(await parseEmail(fileBuffer, mimeType), options),
     catch: (cause) =>
       new EmailParseError({
         message: "Failed to parse email preview",
@@ -149,7 +171,13 @@ export const emailToPreview = async (
       }),
   });
 
-export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
+export const buildEmailPreview = (
+  parsed: ParsedEmail,
+  {
+    createAttachmentId = (attachmentIndex) =>
+      `attachment-${String(attachmentIndex)}`,
+  }: { createAttachmentId?: (attachmentIndex: number) => string } = {},
+): EmailPreview => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
@@ -163,20 +191,59 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
     bcc: parsed.bcc,
     date: parsed.date,
     attachments: parsed.attachments
+      .map((attachment, attachmentIndex) => ({ attachment, attachmentIndex }))
       .filter(
-        ({ contentId }) =>
+        ({ attachment: { contentId } }) =>
           !contentId ||
           !inlineContentIds.has(contentId.toLowerCase()) ||
           !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
-      .map(({ fileName, mimeType, bytes }) => ({
-        fileName,
-        mimeType,
-        sizeBytes: bytes.byteLength,
-      })),
+      .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
+      .map(({ attachment, attachmentIndex }) => {
+        const mimeType = resolveEmailAttachmentMimeType({
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+        });
+        return {
+          id: createAttachmentId(attachmentIndex),
+          fileName: attachment.fileName,
+          mimeType,
+          sizeBytes: attachment.bytes.byteLength,
+          previewable: isEmailAttachmentPreviewable(mimeType),
+        };
+      }),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
   };
+};
+
+export const isEmailAttachmentPreviewable = (
+  mimeType: string | null,
+): boolean => {
+  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
+  return (
+    normalized === "application/pdf" ||
+    /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
+  );
+};
+
+export const resolveEmailAttachmentMimeType = ({
+  fileName,
+  mimeType,
+}: {
+  fileName: string | null;
+  mimeType: string | null;
+}): string | null => {
+  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
+  if (!Object.hasOwn(GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES, normalized)) {
+    return normalized;
+  }
+  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
+  if (!fileName || dotIndex === -1) {
+    return mimeType;
+  }
+  const extension = fileName.slice(dotIndex + 1).toLowerCase();
+  return EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES[extension] ?? mimeType;
 };
 
 export const parseEmail = async (

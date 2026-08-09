@@ -1,7 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { apiUrl } from "@/lib/api-url";
+import { APIError, unwrapEden } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   fileContentQueryKey,
@@ -30,9 +32,11 @@ type EmailHtmlPreviewData = {
   bcc: string[];
   date: string | null;
   attachments: {
+    id: string;
     fileName: string | null;
     mimeType: string | null;
     sizeBytes: number;
+    previewable: boolean;
   }[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
@@ -117,6 +121,45 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         bodyFolds: data.bodyFolds,
         bodyHtml: data.bodyHtml,
       } satisfies EmailHtmlPreviewData;
+    },
+  });
+
+export const emailAttachmentPreviewUrl = ({
+  attachmentId,
+  fieldId,
+  workspaceId,
+}: FileOptionsProps & { attachmentId: string }): string =>
+  apiUrl(
+    `/files/${encodeURIComponent(workspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}?disposition=inline`,
+  );
+
+export const emailAttachmentPreviewOptions = ({
+  attachmentId,
+  fieldId,
+  workspaceId,
+}: FileOptionsProps & { attachmentId: string }) =>
+  queryOptions({
+    enabled: attachmentId.length > 0,
+    gcTime: 0,
+    retry: false,
+    staleTime: 0,
+    queryKey: [
+      ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
+      "attachment-preview",
+      attachmentId,
+    ],
+    queryFn: async ({ signal }) => {
+      const response = await fetchWithTimeout(
+        emailAttachmentPreviewUrl({ attachmentId, fieldId, workspaceId }),
+        { credentials: "include", signal, timeoutMs: 60_000 },
+      );
+      if (!response.ok) {
+        throw new APIError({
+          status: response.status,
+          message: "Failed to preview email attachment",
+        });
+      }
+      return await response.arrayBuffer();
     },
   });
 

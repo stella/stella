@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { isFileFacet } from "@/components/inspector/inspector-broadcast";
 import {
   buildSkillResourceTabId,
   closeInspectorTabsForEntities,
@@ -410,6 +411,36 @@ describe("replaceFileFieldId", () => {
     expect(useInspectorTabsStore.getState().activeId).toBe("field-v2");
   });
 
+  test("resets the attachments facet when the reused tab stops showing an email", () => {
+    useInspectorTabsStore.getState().openFile({
+      id: "field-email",
+      entityId: "entity-1",
+      label: "Message",
+      fileName: "message.eml",
+      mimeType: "message/rfc822",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorTabsStore.getState().setFileFacet("field-email", "attachments");
+
+    useInspectorTabsStore.getState().openFile({
+      id: "field-pdf",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    const tab = useInspectorTabsStore
+      .getState()
+      .tabs.find((item) => item.id === "field-pdf");
+    expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-shared",
@@ -510,6 +541,32 @@ describe("replaceFileFieldId", () => {
     expect(tab.mimeType).toBe("application/pdf");
     expect(tab.pdfFileId).toBe("pdf-1");
     expect(tab.propertyId).toBe("property-2");
+  });
+
+  test("resets attachments when a version replacement stops being an email", () => {
+    useInspectorTabsStore.getState().openFile({
+      id: "field-old",
+      entityId: "entity-1",
+      label: "Message",
+      fileName: "message.eml",
+      mimeType: "message/rfc822",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorTabsStore.getState().setFileFacet("field-old", "attachments");
+
+    useInspectorTabsStore.getState().replaceFileFieldId("field-old", {
+      id: "field-new",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+    });
+
+    expect(
+      useInspectorTabsStore
+        .getState()
+        .tabs.find(({ id }) => id === "field-new"),
+    ).toMatchObject({ facet: "preview", type: "pdf" });
   });
 });
 
@@ -805,6 +862,11 @@ describe("closeTabsForEntities", () => {
 });
 
 describe("Inspector tab broadcast", () => {
+  test("preserves the email attachments facet in the broadcast domain", () => {
+    expect(isFileFacet("attachments")).toBe(true);
+    expect(isFileFacet("unknown")).toBe(false);
+  });
+
   test("publishes tab set metadata without sharing local active state", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };

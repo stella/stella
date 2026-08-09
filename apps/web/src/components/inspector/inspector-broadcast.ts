@@ -4,11 +4,12 @@ import type { StoreApi } from "zustand";
 import { isTaskStatus } from "@stll/api-contract";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import type {
-  ChatTab,
-  FileTab,
-  InspectorTab,
-  InspectorTabsStore,
+import {
+  FILE_FACETS,
+  type ChatTab,
+  type FileTab,
+  type InspectorTab,
+  type InspectorTabsStore,
 } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
@@ -159,16 +160,11 @@ const isOptionalString = (value: unknown): value is string | undefined =>
 const isOptionalNumber = (value: unknown): value is number | undefined =>
   value === undefined || typeof value === "number";
 
-const isPdfFacet = (
+export const isFileFacet = (
   value: unknown,
 ): value is NonNullable<FileTab["facet"]> | undefined =>
   value === undefined ||
-  value === "preview" ||
-  value === "metadata" ||
-  value === "versions" ||
-  value === "suggestions" ||
-  value === "playbook" ||
-  value === "anonymization";
+  (typeof value === "string" && FILE_FACETS.some((facet) => facet === value));
 
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
@@ -268,7 +264,7 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
       isOptionalString(value["justificationFieldId"]) &&
       isOptionalString(value["propertyId"]) &&
       isMetadataLane(value["metadataLane"]) &&
-      isPdfFacet(value["facet"]) &&
+      isFileFacet(value["facet"]) &&
       isOptionalNumber(value["facetPulseSeq"])
     );
   }

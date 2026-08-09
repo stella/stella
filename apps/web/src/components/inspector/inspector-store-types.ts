@@ -7,6 +7,19 @@ import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 export type ExternalTabId = `external:${string}`;
 
+/** Canonical file-inspector facet domain shared by state, UI, and broadcast validation. */
+export const FILE_FACETS = [
+  "preview",
+  "attachments",
+  "metadata",
+  "versions",
+  "suggestions",
+  "playbook",
+  "anonymization",
+] as const;
+
+export type FileFacet = (typeof FILE_FACETS)[number];
+
 export type FileTab = {
   type: "pdf";
   id: string;
@@ -20,14 +33,7 @@ export type FileTab = {
   justificationFieldId?: string | undefined;
   propertyId?: string | undefined;
   metadataLane?: "closed" | "expanded" | undefined;
-  facet?:
-    | "preview"
-    | "metadata"
-    | "versions"
-    | "suggestions"
-    | "playbook"
-    | "anonymization"
-    | undefined;
+  facet?: FileFacet | undefined;
   facetPulseSeq?: number | undefined;
 };
 

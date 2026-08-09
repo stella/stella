@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -198,3 +199,15 @@ export const filesRoute = new Elysia({
     query: ocrExportEndpoint.config.query,
     response: ocrExportEndpoint.config.response,
   });
+
+// This raw-response endpoint intentionally stays outside the exported Eden
+// contract. Elysia still registers it with the same guards and macros above.
+filesRoute.get(
+  "/email-attachment/:fieldId/:attachmentId",
+  emailAttachmentEndpoint.handler,
+  {
+    params: emailAttachmentEndpoint.config.params,
+    permissions: emailAttachmentEndpoint.config.permissions,
+    query: emailAttachmentEndpoint.config.query,
+  },
+);
