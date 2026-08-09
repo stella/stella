@@ -34,6 +34,18 @@ void directTx.update(entityTable).set(currentVersionPatch);
 const locallyAliasedVersionTable = relativeSchema.entityVersions;
 // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: relative namespace imports and local table aliases must not evade the guard
 void directTx.insert(locallyAliasedVersionTable);
+
+const {
+  entities: destructuredEntityTable,
+  entityVersions: destructuredVersionTable,
+} = relativeSchema;
+// oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: destructured schema table aliases must not evade direct version-row detection
+void directTx.insert(destructuredVersionTable);
+// oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: destructured schema table aliases must not evade current-version detection
+void directTx
+  .update(destructuredEntityTable)
+  .set({ currentVersionId: "version-id" });
+
 // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: relative namespace imports must not evade current-version detection
 void directTx
   .update(relativeSchema.entities)

@@ -292,14 +292,61 @@ export default eslintCompatPlugin({
             }
           },
           VariableDeclarator(node) {
-            if (!isIdentifier(node.id)) {
+            if (isIdentifier(node.id)) {
+              const initializer = unwrapExpression(node.init);
+              if (
+                isIdentifier(initializer) &&
+                entityBindings.namespaces.has(initializer.name)
+              ) {
+                entityBindings.namespaces.add(node.id.name);
+              }
+              if (isTableReference(node.init, entityBindings)) {
+                entityBindings.direct.add(node.id.name);
+              }
+              if (isTableReference(node.init, versionBindings)) {
+                versionBindings.direct.add(node.id.name);
+              }
               return;
             }
-            if (isTableReference(node.init, entityBindings)) {
-              entityBindings.direct.add(node.id.name);
+
+            const initializer = unwrapExpression(node.init);
+            if (
+              !isAstNode(node.id) ||
+              node.id.type !== "ObjectPattern" ||
+              !Array.isArray(node.id.properties) ||
+              !isIdentifier(initializer) ||
+              !entityBindings.namespaces.has(initializer.name)
+            ) {
+              return;
             }
-            if (isTableReference(node.init, versionBindings)) {
-              versionBindings.direct.add(node.id.name);
+
+            for (const property of node.id.properties) {
+              if (!isAstNode(property)) {
+                continue;
+              }
+              if (property.type === "RestElement") {
+                if (isIdentifier(property.argument)) {
+                  entityBindings.namespaces.add(property.argument.name);
+                }
+                continue;
+              }
+              if (property.type !== "Property") {
+                continue;
+              }
+              const tableName = getPropertyName(property.key);
+              const value = unwrapExpression(property.value);
+              const local =
+                value?.type === "AssignmentPattern"
+                  ? unwrapExpression(value.left)
+                  : value;
+              if (!isIdentifier(local)) {
+                continue;
+              }
+              if (tableName === "entities") {
+                entityBindings.direct.add(local.name);
+              } else if (tableName === "entityVersions") {
+                versionBindings.direct.add(local.name);
+              }
             }
           },
           CallExpression(node) {
