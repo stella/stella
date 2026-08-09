@@ -372,7 +372,8 @@ describe("environment doctor output", () => {
       },
     },
     {
-      expected: "DATABASE_URL must enable TLS outside loopback.",
+      expected:
+        "DATABASE_URL must enable TLS outside loopback or Railway private networking.",
       overrides: {
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         DATABASE_URL:
@@ -391,7 +392,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "REDIS_URL must use rediss:// unless it targets a loopback address.",
+        "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.",
       overrides: {
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         NODE_ENV: "production",
