@@ -112,7 +112,7 @@ const listTimeEntries = async ({
   filters: TimeEntriesFilters;
   cursor?: string;
   signal?: AbortSignal;
-}) => 
+}) =>
   fetchTimeEntries({
     workspaceId,
     query: {
@@ -120,8 +120,7 @@ const listTimeEntries = async ({
       ...(cursor !== undefined && { cursor }),
     },
     signal,
-  })
-;
+  });
 
 type ListPersonalTimeEntriesOptions = {
   cursor: string | undefined;
