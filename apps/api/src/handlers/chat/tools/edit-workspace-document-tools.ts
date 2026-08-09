@@ -673,20 +673,38 @@ export const createEditWorkspaceDocumentTools = ({
     }
     const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
 
-    const written = await createEntityVersionFromBuffer({
-      safeDb,
-      organizationId,
-      workspaceId,
-      entityId,
-      expectedCurrentVersionId: baseVersionId,
-      userId,
-      recordAuditEvent,
-      buffer: applied.buffer,
-      fileName: loaded.value.fileName,
-      filePropertyId: loaded.value.filePropertyId,
-      replacedFileFieldId: fileFieldId,
-      scanWarnings,
+    const writeAttempt = await Result.tryPromise({
+      try: async () =>
+        await createEntityVersionFromBuffer({
+          safeDb,
+          organizationId,
+          workspaceId,
+          entityId,
+          userId,
+          recordAuditEvent,
+          buffer: applied.buffer,
+          fileName: loaded.value.fileName,
+          mimeType: DOCX_MIME_TYPE,
+          source: null,
+          writePolicy: {
+            type: "automatic-docx-edit",
+            expectedCurrentVersionId: baseVersionId,
+            filePropertyId: loaded.value.filePropertyId,
+            replacedFileFieldId: fileFieldId,
+          },
+          scanWarnings,
+        }),
+      catch: (cause) =>
+        new ChatToolError({
+          kind: "server-defect",
+          message: "The edited document could not be persisted",
+          cause,
+        }),
     });
+    if (Result.isError(writeAttempt)) {
+      throw writeAttempt.error;
+    }
+    const written = writeAttempt.value;
     if (Result.isError(written)) {
       throw new ChatToolError({
         kind: "server-defect",

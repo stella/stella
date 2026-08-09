@@ -89,6 +89,7 @@ const writeTestFile = async (entityId: SafeId<"entity">) =>
     async (tx) =>
       await writeFileVersion({
         tx,
+        organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         entityId,
         userId: ids.userA1,
@@ -103,6 +104,7 @@ const writeTestFile = async (entityId: SafeId<"entity">) =>
         sha256Hex:
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         source: null,
+        writePolicy: { type: "replace-current-file" },
       }),
   );
 

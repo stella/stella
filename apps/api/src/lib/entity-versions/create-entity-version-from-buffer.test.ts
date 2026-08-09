@@ -66,7 +66,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 }));
 
 const { createEntityVersionFromBuffer } =
-  await import("@/api/handlers/entities/create-version-from-buffer");
+  await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
 
 const createTestTransaction = (): Transaction =>
   asTestRaw<Transaction>({
@@ -131,6 +131,7 @@ const baseInput = {
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   source: null,
+  writePolicy: { type: "replace-current-file" as const },
 };
 
 describe("createEntityVersionFromBuffer", () => {
@@ -228,6 +229,7 @@ describe("createEntityVersionFromBuffer", () => {
         status: "ok" as const,
         entityVersionId: input.entityVersionId,
         fieldId: input.fieldId,
+        filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
       await input.afterWrite(result);
@@ -256,7 +258,9 @@ describe("createEntityVersionFromBuffer", () => {
       }),
     );
     expect(s3DeleteMock).not.toHaveBeenCalled();
-    expect(processExtractionMock).toHaveBeenCalledWith("entity_1");
+    expect(processExtractionMock).toHaveBeenCalledWith("entity_1", {
+      filePropertyId: "property_1",
+    });
     expect(broadcastMock).toHaveBeenCalledWith("ws_1", {
       type: "invalidate-query",
       data: ["entities", "ws_1"],
@@ -305,6 +309,7 @@ describe("createEntityVersionFromBuffer", () => {
         status: "ok" as const,
         entityVersionId: input.entityVersionId,
         fieldId: input.fieldId,
+        filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
       await input.afterWrite(result);
@@ -343,6 +348,7 @@ describe("createEntityVersionFromBuffer", () => {
         status: "ok" as const,
         entityVersionId: input.entityVersionId,
         fieldId: input.fieldId,
+        filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
       await input.afterWrite(result);

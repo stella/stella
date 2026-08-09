@@ -1,535 +1,364 @@
-/**
- * Write a new entity version from an already-built DOCX buffer -- the
- * write-back half of `loadEntityVersionDocxBuffer`. Mirrors
- * `upload-version.ts`'s S3-write -> locked-transaction -> fire-and-forget
- * pattern, generalized for a caller that already has bytes in hand (an
- * AI-transformed buffer) rather than an uploaded `File`.
- *
- * Used today only by `edit_workspace_document` (`edit-workspace-document-
- * tools.ts`). `upload-version.ts`, `folio-collab`'s finalize handler, and
- * `finalize-desktop-edit-session.ts` implement the same new-version pattern
- * inline; they are NOT refactored onto this helper in this change.
- * TODO: fold those three call sites onto this helper once it has a second
- * caller confirming the abstraction holds.
- */
-
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import {
-  cellMetadata,
-  desktopEditSessions,
-  entities,
-  entityVersions,
-  fileChatThreads,
-  fields,
-  folioCollabSessions,
-  workspaces,
-} from "@/api/db/schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
-import { detached } from "@/api/lib/detached";
-import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
-import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
-  buildVersionStamp,
-  cloneFieldsForRevision,
-  nextEntityVersionNumber,
-} from "@/api/lib/entity-versions/version-utils";
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
+  abandonBufferIntent,
+  reserveBufferIntent,
+  startBufferIntentHeartbeat,
+} from "@/api/lib/buffer-intent-reconciliation";
+import type { DocumentSource } from "@/api/lib/document-source";
+import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
+import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
+import type {
+  FileVersionWritePolicy,
+  WriteFileVersionResult,
+} from "@/api/lib/entity-versions/write-file-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/lib/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
-import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
-import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { withTimeout } from "@/api/lib/with-timeout";
 
-type CreateEntityVersionFromBufferOptions = {
+class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
+  code:
+    | "current-version-not-found"
+    | "current-version-changed"
+    | "document-too-large"
+    | "edit-session-open"
+    | "entity-not-found"
+    | "entity-read-only"
+    | "missing-file-field"
+    | "target-file-not-found"
+    | "workspace-not-active";
+  message: string;
+}> {}
+
+type EntityVersionTargetErrorCode = EntityVersionTargetError["code"];
+
+type CreateEntityVersionFromBufferInput = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
-  expectedCurrentVersionId: SafeId<"entityVersion">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  /** The already-transformed DOCX bytes to write as the new version. */
-  buffer: ArrayBuffer;
-  /** Preserved verbatim from the version being replaced. */
+  buffer: Uint8Array | ArrayBuffer;
   fileName: string;
-  /** The file property to replace; every other field is cloned as-is. */
-  filePropertyId: SafeId<"property">;
-  /** The current file field whose chat mapping must follow the replacement. */
-  replacedFileFieldId: SafeId<"field">;
-  /** Warning-level findings from the security scan of the transformed bytes. */
+  mimeType: string;
+  source: DocumentSource | null;
+  writePolicy: FileVersionWritePolicy;
   scanWarnings?: string[] | undefined;
+  afterWrite?:
+    | ((
+        tx: Transaction,
+        result: Extract<WriteFileVersionResult, { status: "ok" }>,
+      ) => Promise<void>)
+    | undefined;
 };
 
-export type CreateEntityVersionFromBufferSuccess = {
-  entityVersionId: SafeId<"entityVersion">;
-  versionNumber: number;
-  fieldId: SafeId<"field">;
-};
+export type CreateEntityVersionFromBufferResult = Result<
+  {
+    entityId: SafeId<"entity">;
+    entityVersionId: SafeId<"entityVersion">;
+    fieldId: SafeId<"field">;
+    fileName: string;
+    versionNumber: number;
+  },
+  EntityVersionTargetError
+>;
 
-type CreateEntityVersionFromBufferFailureReason =
-  | "documentTooLarge"
-  | "entityNotFound"
-  | "entityReadOnly"
-  | "editSessionOpen"
-  | "currentVersionChanged"
-  | "currentVersionNotFound"
-  | "workspaceNotActive";
-
-const FAILURE_REASON_MESSAGES: Record<
-  CreateEntityVersionFromBufferFailureReason,
-  string
-> = {
-  documentTooLarge: `Edited document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
-  entityNotFound: "Document not found",
-  entityReadOnly: "Document is read-only",
-  editSessionOpen:
-    "The document has an active edit session; use manual review or close the session before automatic edits",
-  currentVersionChanged:
+const ENTITY_VERSION_TARGET_MESSAGES = {
+  "entity-not-found": "Entity not found",
+  "entity-read-only": "Entity is read-only",
+  "current-version-not-found": "Current version not found",
+  "current-version-changed":
     "The document changed while edits were being applied; retry against the current version",
-  currentVersionNotFound: "Current document version not found",
-  workspaceNotActive: "The document's matter is archived or unavailable",
+  "document-too-large": `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
+  "edit-session-open":
+    "The document has an active edit session; close it before automatic edits",
+  "missing-file-field": "Entity has no file field",
+  "target-file-not-found": "The document file changed while edits were applied",
+  "workspace-not-active": "The document's matter is archived or unavailable",
+} satisfies Record<EntityVersionTargetErrorCode, string>;
+
+const messageForStatus = (status: EntityVersionTargetErrorCode): string =>
+  ENTITY_VERSION_TARGET_MESSAGES[status];
+
+const VERSION_BUFFER_INTENT_TELEMETRY = {
+  abandon: "buffer-version-intent-abandon",
+  heartbeat: "buffer-version-intent-heartbeat",
+  heartbeatUnhandled: "buffer-version-intent-heartbeat-unhandled",
 };
 
-export class CreateEntityVersionFromBufferError extends TaggedError(
-  "CreateEntityVersionFromBufferError",
-)<{
-  message: string;
-  reason: CreateEntityVersionFromBufferFailureReason;
-}> {}
-
-class EntityVersionBufferCleanupError extends TaggedError(
-  "EntityVersionBufferCleanupError",
-)<{
-  message: string;
-  cause: unknown;
-}> {}
-
-type WriteTxResult =
-  | { status: "ok"; versionNumber: number }
-  | { status: CreateEntityVersionFromBufferFailureReason };
-
-/**
- * Write `buffer` as a new version of `entityId`, replacing the file field
- * at `filePropertyId` and carrying every other field forward
- * (`cloneFieldsForRevision`). Validates the entity isn't read-only under a
- * `FOR UPDATE` lock (same TOCTOU guard `upload-version.ts` applies), and
- * cleans up the just-written S3 object on any failure path so a rejected
- * write never orphans bytes.
- *
- * Extraction, PDF/thumbnail derivatives, and diff-stat computation run
- * detached (fire-and-forget, captured via `detached()`) after the
- * transaction commits, matching `upload-version.ts`.
- */
+/** Persist trusted server-generated bytes through the durable version boundary. */
 export const createEntityVersionFromBuffer = async ({
   safeDb,
   organizationId,
   workspaceId,
   entityId,
-  expectedCurrentVersionId,
   userId,
   recordAuditEvent,
   buffer,
-  fileName,
-  filePropertyId,
-  replacedFileFieldId,
+  fileName: rawFileName,
+  mimeType,
+  source,
+  writePolicy,
   scanWarnings,
-}: CreateEntityVersionFromBufferOptions): Promise<
-  Result<
-    CreateEntityVersionFromBufferSuccess,
-    CreateEntityVersionFromBufferError | SafeDbError
-  >
-> => {
-  if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
-    const reason = "documentTooLarge";
+  afterWrite,
+}: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return Result.err(
-      new CreateEntityVersionFromBufferError({
-        message: FAILURE_REASON_MESSAGES[reason],
-        reason,
+      new EntityVersionTargetError({
+        code: "document-too-large",
+        message: messageForStatus("document-too-large"),
       }),
     );
   }
 
-  const bytes = new Uint8Array(buffer);
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();
-  const s3Key = createFileKey({
+  const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
+  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const objectKey = createFileKey({
     organizationId,
     workspaceId,
     fileId,
-    mimeType: DOCX_MIME_TYPE,
+    mimeType,
   });
-  const nextVersionId = createSafeId<"entityVersion">();
-  const fileFieldId = createSafeId<"field">();
 
-  await getS3().write(s3Key, bytes);
-
-  const writeResult = await safeDb(async (tx): Promise<WriteTxResult> => {
-    await lockDocxEditTarget({
+  // Durably reserve this exact file id before publishing. A hard death after
+  // the S3 write can therefore be distinguished from a committed version and
+  // cleaned by the bounded scheduler without adding a repair query to every
+  // request.
+  const intent = await reserveBufferIntent({
+    safeDb,
+    organizationId,
+    workspaceId,
+    userId,
+    purpose: "entity_version",
+    purposeData: {
+      type: "entity_version",
       entityId,
-      propertyId: filePropertyId,
-      tx,
-      workspaceId,
-    });
+      reservedFileId: fileId,
+    },
+    fileName,
+    mimeType,
+    sizeBytes: bytes.byteLength,
+    sha256Hex,
+  });
 
-    const now = new Date();
-    const liveDesktopSessions = await tx
-      .select({ id: desktopEditSessions.id })
-      .from(desktopEditSessions)
-      .where(
-        and(
-          eq(desktopEditSessions.entityId, entityId),
-          eq(desktopEditSessions.propertyId, filePropertyId),
-          eq(desktopEditSessions.workspaceId, workspaceId),
-          ...liveDesktopEditSessionPredicates(now),
-        ),
-      )
-      .limit(1);
-    if (liveDesktopSessions.at(0)) {
-      return { status: "editSessionOpen" };
-    }
-
-    const openCollabSessions = await tx
-      .select({
-        createdAt: folioCollabSessions.createdAt,
-        id: folioCollabSessions.id,
-      })
-      .from(folioCollabSessions)
-      .where(
-        and(
-          eq(folioCollabSessions.entityId, entityId),
-          eq(folioCollabSessions.propertyId, filePropertyId),
-          eq(folioCollabSessions.status, "open"),
-          eq(folioCollabSessions.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1);
-    const openCollabSession = openCollabSessions.at(0);
-    if (
-      openCollabSession &&
-      !isFolioCollabSessionExpired(openCollabSession.createdAt, now)
-    ) {
-      return { status: "editSessionOpen" };
-    }
-
-    const entityRows = await tx
-      .select({
-        currentVersionId: entities.currentVersionId,
-        docSequence: entities.docSequence,
-        readOnly: entities.readOnly,
-      })
-      .from(entities)
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      )
-      .limit(1)
-      .for("update");
-    const lockedEntity = entityRows.at(0);
-
-    if (!lockedEntity?.currentVersionId) {
-      return { status: "entityNotFound" };
-    }
-    if (lockedEntity.readOnly) {
-      return { status: "entityReadOnly" };
-    }
-    if (lockedEntity.currentVersionId !== expectedCurrentVersionId) {
-      return { status: "currentVersionChanged" };
-    }
-
-    const freshCurrentVersionId = expectedCurrentVersionId;
-    const freshCurrentVersion = await tx.query.entityVersions.findFirst({
-      where: {
-        id: { eq: freshCurrentVersionId },
-        entityId: { eq: entityId },
-        workspaceId: { eq: workspaceId },
-        deletedAt: { isNull: true },
-      },
-      columns: { id: true },
-      with: {
-        fields: {
-          columns: { content: true, propertyId: true },
-          limit: LIMITS.propertiesCount,
-        },
-      },
-    });
-    if (!freshCurrentVersion) {
-      return { status: "currentVersionNotFound" };
-    }
-
-    const workspace = await tx.query.workspaces.findFirst({
-      where: { id: { eq: workspaceId } },
-      columns: { reference: true, status: true },
-    });
-    if (workspace?.status !== "active") {
-      return { status: "workspaceNotActive" };
-    }
-
-    // MAX over all versions (incl. tombstoned) under the entity lock, not
-    // currentVersion + 1 -- see nextEntityVersionNumber's own doc comment.
-    const nextVersionNumber = await nextEntityVersionNumber(tx, {
-      entityId,
-      workspaceId,
-    });
-    const nextVersionStamp = buildVersionStamp({
-      docSequence: lockedEntity.docSequence,
-      versionNumber: nextVersionNumber,
-      workspaceReference: workspace.reference,
-    });
-
-    await tx.insert(entityVersions).values({
-      createdBy: userId,
-      entityId,
-      id: nextVersionId,
-      stamp: nextVersionStamp.stamp,
-      verificationCode: nextVersionStamp.verificationCode,
-      versionNumber: nextVersionNumber,
-      workspaceId,
-    });
-
-    await tx.insert(fields).values(
-      cloneFieldsForRevision({
-        currentFields: freshCurrentVersion.fields,
-        entityVersionId: nextVersionId,
-        propertyId: filePropertyId,
-        replacementFieldId: fileFieldId,
-        replacementContent: fileContentWithMintedObject({
-          encrypted: false,
-          fileName,
-          id: fileId,
-          mimeType: DOCX_MIME_TYPE,
-          pdfFileId: null,
-          sha256Hex,
-          sizeBytes: bytes.byteLength,
-          type: "file",
-          version: 1,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: false,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-          thumbnailFileId: null,
-          thumbnailDerivative: thumbnailDerivativeStateForFile({
-            encrypted: false,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-          ...(scanWarnings !== undefined && { scanWarnings }),
-        }),
-        workspaceId,
-      }),
-    );
-
-    const currentCellMetadataRows = await tx
-      .select({
-        createdAt: cellMetadata.createdAt,
-        createdBy: cellMetadata.createdBy,
-        metadata: cellMetadata.metadata,
-        propertyId: cellMetadata.propertyId,
-        updatedAt: cellMetadata.updatedAt,
-        updatedBy: cellMetadata.updatedBy,
-      })
-      .from(cellMetadata)
-      .where(
-        and(
-          eq(cellMetadata.workspaceId, workspaceId),
-          eq(cellMetadata.entityVersionId, freshCurrentVersionId),
-        ),
-      )
-      .for("update");
-
-    const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
-      (row) => row.propertyId !== filePropertyId,
-    );
-    if (cellMetadataRowsToCopy.length > 0) {
-      await tx.insert(cellMetadata).values(
-        cellMetadataRowsToCopy.map((row) => ({
-          workspaceId,
-          entityVersionId: nextVersionId,
-          propertyId: row.propertyId,
-          metadata: row.metadata,
-          createdBy: row.createdBy,
-          updatedBy: row.updatedBy,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-        })),
-      );
-    }
-
-    await tx
-      .update(entities)
-      .set({
-        currentVersionId: nextVersionId,
-        lastEditedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      );
-
-    // File-chat identity follows the logical document across version writes.
-    // A version replacement mints a new field id; keeping the mapping on the
-    // replaced id would make the refreshed viewer resolve a brand-new empty
-    // thread. Move every user's mapping for this exact file field atomically
-    // with the version write so the existing conversation follows the new id.
-    await tx
-      .update(fileChatThreads)
-      .set({ fieldId: fileFieldId })
-      .where(
-        and(
-          eq(fileChatThreads.organizationId, organizationId),
-          eq(fileChatThreads.workspaceId, workspaceId),
-          eq(fileChatThreads.entityId, entityId),
-          eq(fileChatThreads.fieldId, replacedFileFieldId),
-        ),
-      );
-
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-
-    await recordAuditEvent(tx, [
-      {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-        resourceId: nextVersionId,
-        workspaceId,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              entityId,
-              versionNumber: nextVersionNumber,
-              fileName,
-              mimeType: DOCX_MIME_TYPE,
-              sizeBytes: bytes.byteLength,
-              sha256Hex,
+  const stopIntentHeartbeat = startBufferIntentHeartbeat({
+    safeDb,
+    intent,
+    telemetry: VERSION_BUFFER_INTENT_TELEMETRY,
+  });
+  let written: Extract<WriteFileVersionResult, { status: "ok" }>;
+  try {
+    const cleanupObject = async (): Promise<boolean> => {
+      const cleanup = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
+            {
+              label: "buffer-version-writer-cleanup.delete",
+              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
             },
-          },
-        },
-        metadata: {
-          fileName,
-          mimeType: DOCX_MIME_TYPE,
-          sizeBytes: bytes.byteLength,
-          sha256Hex,
-        },
-      },
-      {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: entityId,
-        workspaceId,
-        changes: {
-          currentVersionId: {
-            old: freshCurrentVersionId,
-            new: nextVersionId,
-          },
-        },
-      },
-    ]);
+          ),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(cleanup)) {
+        captureError(cleanup.error, { entityId, objectKey });
+        return false;
+      }
+      return true;
+    };
 
-    return { status: "ok", versionNumber: nextVersionNumber };
-  });
-
-  const cleanupUploadedObject = async (): Promise<void> => {
-    const cleanupResult = await Result.tryPromise({
-      try: async () => await getS3().delete(s3Key),
-      catch: (cause) =>
-        new EntityVersionBufferCleanupError({
-          message: "Failed to clean up rejected document-version bytes",
-          cause,
-        }),
-    });
-    if (Result.isError(cleanupResult)) {
-      captureError(cleanupResult.error, { entityId, workspaceId });
+    try {
+      await withTimeout(
+        async (signal) =>
+          await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
+        {
+          label: "buffer-version-writer-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    } catch (error) {
+      // A timeout or connection failure can be ambiguous: object storage may
+      // publish after the immediate delete completes. Keep the intent
+      // recoverable so later sweeps remove any late publication; the
+      // heartbeat stops in finally below.
+      await cleanupObject();
+      throw error;
     }
-  };
 
-  if (Result.isError(writeResult)) {
-    await cleanupUploadedObject();
-    return Result.err(writeResult.error);
-  }
-  if (writeResult.value.status !== "ok") {
-    const reason = writeResult.value.status;
-    await cleanupUploadedObject();
-    return Result.err(
-      new CreateEntityVersionFromBufferError({
-        message: FAILURE_REASON_MESSAGES[reason],
-        reason,
-      }),
-    );
-  }
-
-  const versionNumber = writeResult.value.versionNumber;
-
-  detached(
-    processExtraction(entityId, { filePropertyId }),
-    "edit-workspace-document.process-extraction",
-  );
-  detached(
-    enqueuePdfDerivativeOrMarkFailed({
-      encrypted: false,
-      entityId,
-      fieldId: fileFieldId,
-      mimeType: DOCX_MIME_TYPE,
-      organizationId,
-      userId,
-      workspaceId,
-    }),
-    "edit-workspace-document.pdf-derivative",
-  );
-  detached(
-    enqueueImageThumbnailOrMarkFailed({
-      encrypted: false,
-      entityId,
-      fieldId: fileFieldId,
-      mimeType: DOCX_MIME_TYPE,
-      organizationId,
-      userId,
-      workspaceId,
-    }),
-    "edit-workspace-document.thumbnail-derivative",
-  );
-  detached(
-    computeVersionDiffStats({
-      versionId: nextVersionId,
-      entityId,
-      scopedDb: createRootScopedDb({
+    // `safeDb` cannot distinguish a callback failure (which necessarily rolls
+    // back) from a lost COMMIT acknowledgement (which may already be durable).
+    // The intent is finalized atomically with the version. Track whether that
+    // durable reference was prepared so ambiguous acknowledgements preserve the
+    // object; a rolled-back intent remains recoverable by the bounded janitor.
+    const transactionState = { durableReferencePrepared: false };
+    const writeResult = await safeDb(async (tx) => {
+      const versionWriteResult = await writeFileVersion({
+        tx,
         organizationId,
+        workspaceId,
+        entityId,
         userId,
-        workspaceIds: [workspaceId],
-      }),
-      workspaceId,
-      organizationId,
-    }),
-    "edit-workspace-document.diff-stats",
-  );
+        recordAuditEvent,
+        entityVersionId,
+        fieldId,
+        fileId,
+        fileName,
+        mimeType,
+        sizeBytes: bytes.byteLength,
+        sha256Hex,
+        source,
+        writePolicy,
+        scanWarnings,
+        afterWrite: async (result) => {
+          const finalizedResult = {
+            type: "entity_version" as const,
+            entityId,
+            entityVersionId,
+            versionNumber: result.versionNumber,
+            fileId,
+            fileName,
+          };
+          // audit: skip — intent bookkeeping is atomic with the audited entity
+          // and version mutations performed by writeFileVersion.
+          const rows = await tx
+            .update(pendingUploads)
+            .set({
+              status: "finalized",
+              finalizedResult,
+              finalizedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(pendingUploads.id, intent.id),
+                eq(pendingUploads.status, "scanning"),
+                eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+              ),
+            )
+            .returning({ id: pendingUploads.id });
+          if (!rows.at(0)) {
+            panic("Buffer version intent finalize returned no row");
+          }
+          if (afterWrite !== undefined) {
+            await afterWrite(tx, result);
+          }
+        },
+      });
+      transactionState.durableReferencePrepared =
+        versionWriteResult.status === "ok";
+      return versionWriteResult;
+    });
+    if (Result.isError(writeResult)) {
+      if (
+        !transactionState.durableReferencePrepared &&
+        (await cleanupObject())
+      ) {
+        await abandonBufferIntent({
+          safeDb,
+          intent,
+          reason: "Server-generated version transaction failed",
+          telemetry: VERSION_BUFFER_INTENT_TELEMETRY,
+        });
+      }
+      throw writeResult.error;
+    }
+    const writeOutcome = writeResult.value;
 
+    if (writeOutcome.status !== "ok") {
+      if (await cleanupObject()) {
+        await abandonBufferIntent({
+          safeDb,
+          intent,
+          reason: `Server-generated version rejected: ${writeOutcome.status}`,
+          telemetry: VERSION_BUFFER_INTENT_TELEMETRY,
+        });
+      }
+      return Result.err(
+        new EntityVersionTargetError({
+          code: writeOutcome.status,
+          message: messageForStatus(writeOutcome.status),
+        }),
+      );
+    }
+    written = writeOutcome;
+  } finally {
+    await stopIntentHeartbeat();
+  }
+
+  processExtraction(entityId, {
+    filePropertyId: written.filePropertyId,
+  }).catch((error: unknown) => {
+    captureError(error, { entityId });
+  });
+  enqueuePdfDerivativeOrMarkFailed({
+    encrypted: false,
+    entityId,
+    fieldId,
+    mimeType,
+    organizationId,
+    userId,
+    workspaceId,
+  }).catch((error: unknown) => {
+    captureError(error, { entityId, fieldId, mimeType });
+  });
+  enqueueImageThumbnailOrMarkFailed({
+    encrypted: false,
+    entityId,
+    fieldId,
+    mimeType,
+    organizationId,
+    userId,
+    workspaceId,
+  }).catch((error: unknown) => {
+    captureError(error, { entityId, fieldId, mimeType });
+  });
+  computeVersionDiffStats({
+    versionId: entityVersionId,
+    entityId,
+    scopedDb: createRootScopedDb({
+      organizationId,
+      userId,
+      workspaceIds: [workspaceId],
+    }),
+    workspaceId,
+    organizationId,
+  }).catch((error: unknown) => {
+    captureError(error, { versionId: entityVersionId });
+  });
   broadcast(workspaceId, {
     type: "invalidate-query",
     data: ["entities", workspaceId],
   });
 
   return Result.ok({
-    entityVersionId: nextVersionId,
-    versionNumber,
-    fieldId: fileFieldId,
+    entityId,
+    entityVersionId,
+    fieldId,
+    fileName,
+    versionNumber: written.versionNumber,
   });
 };

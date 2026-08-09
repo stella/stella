@@ -1387,6 +1387,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
         fileName,
         mimeType: DOCX_MIME_TYPE,
         source: null,
+        writePolicy: { type: "replace-current-file" },
         afterWrite: async (tx, persisted) => {
           result = {
             action: "create_version",
