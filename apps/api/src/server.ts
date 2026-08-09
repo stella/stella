@@ -91,7 +91,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
-import { getAuth } from "@/api/lib/auth";
+import { getAuth, resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
 import {
   resolveClientIp,
   resolveSignupRateLimitClientIp,
@@ -638,7 +638,7 @@ const startServer = async (): Promise<void> => {
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before
   // `api.listen()` starts accepting requests.
-  startSse();
+  startSse(resolveWorkspaceRealtimeAudience);
 
   // Schema-drift fail-fast. If the runtime expects migrations
   // the database has not received, exit before serving any

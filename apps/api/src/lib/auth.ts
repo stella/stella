@@ -1346,6 +1346,7 @@ type MemberAuthorization = {
 };
 
 const ADMIN_BYPASS_ROLES = ["owner", "admin"];
+const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -1417,6 +1418,62 @@ export const resolveMemberAuthorization = async (
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
   };
+};
+
+type WorkspaceRealtimeAudienceLookup = {
+  userIds: readonly SafeId<"user">[];
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Resolve the current audience for one workspace event in a single bounded
+ * authorization query. This deliberately reads through the owner connection:
+ * event delivery is a system boundary that must evaluate every connected user,
+ * including users whose membership was just removed and can no longer open an
+ * RLS-scoped request of their own.
+ */
+export const resolveWorkspaceRealtimeAudience = async (
+  { userIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
+  db: MemberAuthorizationDb = rootDb,
+) => {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) {
+    return new Set<SafeId<"user">>();
+  }
+
+  const membershipExists = exists(
+    db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaces.id),
+          eq(workspaceMembers.userId, member.userId),
+        ),
+      ),
+  );
+  const rows = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, member.organizationId),
+        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        or(
+          membershipExists,
+          and(
+            inArray(member.role, ADMIN_BYPASS_ROLES),
+            isNotNull(workspaces.clientId),
+          ),
+        ),
+      ),
+    )
+    .where(inArray(member.userId, uniqueUserIds))
+    .limit(LIMITS.organizationMembersCount);
+
+  return new Set(rows.map((row) => brandPersistedUserId(row.userId)));
 };
 
 /**

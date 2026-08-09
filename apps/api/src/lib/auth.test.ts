@@ -21,6 +21,7 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveWorkspaceRealtimeAudience,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
@@ -247,6 +248,30 @@ describe("resolveMemberAuthorization", () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+describe("resolveWorkspaceRealtimeAudience", () => {
+  test("returns only users with current access to the target workspace", async () => {
+    const candidates = [
+      ownerInFull,
+      memberInFull,
+      loneMemberInFull,
+      ownerInEmpty,
+      strangerUser,
+    ];
+
+    const clientMatterAudience = await resolveWorkspaceRealtimeAudience(
+      { userIds: candidates, workspaceId: clientWorkspaceId },
+      testDb,
+    );
+    const personalMatterAudience = await resolveWorkspaceRealtimeAudience(
+      { userIds: candidates, workspaceId: memberPersonalWorkspaceId },
+      testDb,
+    );
+
+    expect(clientMatterAudience).toEqual(new Set([ownerInFull]));
+    expect(personalMatterAudience).toEqual(new Set([memberInFull]));
   });
 });
 

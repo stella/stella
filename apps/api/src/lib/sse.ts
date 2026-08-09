@@ -33,8 +33,19 @@ type SSEConnection = {
   userId: SafeId<"user">;
 };
 
+type WorkspaceConnectionAuthorizationLookup = {
+  userIds: readonly SafeId<"user">[];
+  workspaceId: SafeId<"workspace">;
+};
+
+export type WorkspaceConnectionAuthorizer = (
+  lookup: WorkspaceConnectionAuthorizationLookup,
+) => Promise<ReadonlySet<SafeId<"user">>>;
+
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
+const workspaceDeliveryTails = new Map<SafeId<"workspace">, Promise<void>>();
+let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 
 const encoder = new TextEncoder();
 
@@ -137,19 +148,68 @@ const closeLocalWorkspaceUserConnections = (
 
 // ── Local delivery ──────────────────────────────────────
 
-/** Push an SSE event to local connections for a workspace. */
-const broadcastLocal = (
+const closeConnection = (
+  set: Set<SSEConnection>,
+  conn: SSEConnection,
+): void => {
+  set.delete(conn);
+  try {
+    conn.controller.close();
+  } catch {
+    // Already closed.
+  }
+};
+
+/** Reauthorize current access before pushing an event to local connections. */
+const broadcastLocal = async (
   workspaceId: SafeId<"workspace">,
   event: WorkspaceRealtimeEvent,
-): void => {
+): Promise<void> => {
   const set = connections.get(workspaceId);
   if (!set) {
     return;
   }
 
+  const targets = [...set];
+  const authorizer = authorizeWorkspaceConnections;
+  if (!authorizer) {
+    for (const conn of targets) {
+      closeConnection(set, conn);
+    }
+    if (set.size === 0 && connections.get(workspaceId) === set) {
+      connections.delete(workspaceId);
+    }
+    logger.error("sse.workspace_authorizer_missing");
+    return;
+  }
+
+  const userIds = [...new Set(targets.map((connection) => connection.userId))];
+  let authorizedUserIds: ReadonlySet<SafeId<"user">>;
+  try {
+    authorizedUserIds = await authorizer({ userIds, workspaceId });
+  } catch (error: unknown) {
+    for (const conn of targets) {
+      closeConnection(set, conn);
+    }
+    if (set.size === 0 && connections.get(workspaceId) === set) {
+      connections.delete(workspaceId);
+    }
+    logger.error("sse.workspace_reauthorization_failed", {
+      "error.type": errorTag(error),
+    });
+    return;
+  }
+
   const chunk = formatSSE(event);
 
-  for (const conn of set) {
+  for (const conn of targets) {
+    if (!set.has(conn)) {
+      continue;
+    }
+    if (!authorizedUserIds.has(conn.userId)) {
+      closeConnection(set, conn);
+      continue;
+    }
     try {
       conn.controller.enqueue(chunk);
     } catch {
@@ -160,6 +220,39 @@ const broadcastLocal = (
   if (set.size === 0 && connections.get(workspaceId) === set) {
     connections.delete(workspaceId);
   }
+};
+
+type WorkspaceDeliveryOperation = () => Promise<void> | void;
+
+/** Preserve Redis and inline event order without blocking unrelated workspaces. */
+const queueWorkspaceDelivery = (
+  workspaceId: SafeId<"workspace">,
+  operation: WorkspaceDeliveryOperation,
+): void => {
+  const previous = workspaceDeliveryTails.get(workspaceId) ?? Promise.resolve();
+  const current = previous.then(async () => {
+    try {
+      await operation();
+    } catch (error: unknown) {
+      logger.error("sse.workspace_delivery_failed", {
+        "error.type": errorTag(error),
+      });
+    }
+    return undefined;
+  });
+  workspaceDeliveryTails.set(workspaceId, current);
+  current
+    .then(() => {
+      if (workspaceDeliveryTails.get(workspaceId) === current) {
+        workspaceDeliveryTails.delete(workspaceId);
+      }
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.workspace_queue_cleanup_failed", {
+        "error.type": errorTag(error),
+      });
+    });
 };
 
 /** Push an SSE event to local connections for an entire organization. */
@@ -208,24 +301,30 @@ const isOwnInlineDelivery = (payload: {
 }): boolean =>
   payload.deliveredInline === true && payload.originInstanceId === INSTANCE_ID;
 
-const handleMessage = (message: string) => {
+const handleMessage = (message: string): void => {
   try {
     const parsed = parseRedisPayload(message);
     if (!parsed) {
       return;
     }
     if (parsed.scope === "workspace-access-revoked") {
-      closeLocalWorkspaceUserConnections(
-        brandPersistedWorkspaceId(parsed.id),
-        brandPersistedUserId(parsed.userId),
-      );
+      const workspaceId = brandPersistedWorkspaceId(parsed.id);
+      queueWorkspaceDelivery(workspaceId, () => {
+        closeLocalWorkspaceUserConnections(
+          workspaceId,
+          brandPersistedUserId(parsed.userId),
+        );
+      });
       return;
     }
     if (parsed.scope === "workspace") {
       if (isOwnInlineDelivery(parsed)) {
         return;
       }
-      broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
+      const workspaceId = brandPersistedWorkspaceId(parsed.id);
+      queueWorkspaceDelivery(workspaceId, async () =>
+        broadcastLocal(workspaceId, parsed.event),
+      );
     } else if (parsed.scope === "organization") {
       if (isOwnInlineDelivery(parsed)) {
         return;
@@ -286,7 +385,9 @@ export const broadcast = (
   // origin metadata below lets handleMessage drop that duplicate loopback copy.
   const deliveredLocally = !hasAttachedSubscriber();
   if (deliveredLocally) {
-    broadcastLocal(workspaceId, event);
+    queueWorkspaceDelivery(workspaceId, async () =>
+      broadcastLocal(workspaceId, event),
+    );
   }
 
   publishWorkspaceEvent(workspaceId, event, {
@@ -300,7 +401,9 @@ export const broadcast = (
     // single-instance deployments still get SSE invalidation. Skip it
     // when we already delivered inline above to avoid double delivery.
     if (!deliveredLocally) {
-      broadcastLocal(workspaceId, event);
+      queueWorkspaceDelivery(workspaceId, async () =>
+        broadcastLocal(workspaceId, event),
+      );
     }
   });
 };
@@ -657,7 +760,8 @@ const scheduleAttachAttempt = (
  * window closed in practice, matching the timing the previous
  * import-time `void initRedis()` had.
  */
-export const startSse = (): void => {
+export const startSse = (authorizer: WorkspaceConnectionAuthorizer): void => {
+  authorizeWorkspaceConnections = authorizer;
   if (activeLifecycle) {
     return;
   }

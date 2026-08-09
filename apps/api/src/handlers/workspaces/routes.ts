@@ -245,11 +245,11 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           permissions: updateActiveWorkspace.config.permissions,
         })
         .delete("/", deleteWorkspace.handler, {
-          resourceSetUpdated: workspaceRealtimeUpdates,
+          resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
           permissions: deleteWorkspace.config.permissions,
         })
         .post("/archive", archiveWorkspace.handler, {
-          resourceSetUpdated: workspaceRealtimeUpdates,
+          resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
           permissions: archiveWorkspace.config.permissions,
         })
         // Unarchive is mounted below, outside the active-only group.
@@ -334,7 +334,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         }),
   )
   .post("/:workspaceId/unarchive", unarchiveWorkspace.handler, {
-    resourceSetUpdated: workspaceRealtimeUpdates,
+    resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
     permissions: unarchiveWorkspace.config.permissions,
     validateWorkspaceAccessIncludingArchived: true,
   });

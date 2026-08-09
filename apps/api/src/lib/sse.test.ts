@@ -7,7 +7,7 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
 type MessageHandler = (message: string) => void;
 
@@ -136,6 +136,14 @@ const flushMicrotasks = async (): Promise<void> => {
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const authorizeAllWorkspaceConnections = async ({
+  userIds,
+}: {
+  userIds: readonly SafeId<"user">[];
+}) => new Set(userIds);
+const startTestSse = (): void => {
+  startSse(authorizeAllWorkspaceConnections);
+};
 const subscribeToWorkspace = (
   signal: AbortSignal,
   subscribingUserId = userId,
@@ -183,7 +191,7 @@ describe("startSse / stopSse lifecycle", () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
-    startSse();
+    startTestSse();
 
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
@@ -200,9 +208,9 @@ describe("startSse / stopSse lifecycle", () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
-    startSse();
-    startSse();
-    startSse();
+    startTestSse();
+    startTestSse();
+    startTestSse();
 
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
@@ -218,7 +226,7 @@ describe("startSse / stopSse lifecycle", () => {
     clearIntervalSpy.mockClear();
     createdClients.length = 0;
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
 
     const client = createdClients[0];
@@ -239,7 +247,7 @@ describe("startSse / stopSse lifecycle", () => {
   test("stopSse is safe when called more than once", async () => {
     createdClients.length = 0;
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
 
     stopSse();
@@ -252,7 +260,7 @@ describe("startSse / stopSse lifecycle", () => {
     subscribeBehavior = "reject";
     createdClients.length = 0;
 
-    expect(() => startSse()).not.toThrow();
+    expect(() => startTestSse()).not.toThrow();
 
     await flushMicrotasks();
 
@@ -268,7 +276,7 @@ describe("startSse / stopSse lifecycle", () => {
   test("stopping before the in-flight Redis connection resolves closes it instead of leaking it", async () => {
     createdClients.length = 0;
 
-    startSse();
+    startTestSse();
     // stopSse runs before the mocked subscribe() promise has settled.
     stopSse();
 
@@ -280,11 +288,11 @@ describe("startSse / stopSse lifecycle", () => {
   test("a stop+restart during connect does not attach the old subscriber to the new lifecycle", async () => {
     createdClients.length = 0;
 
-    startSse();
+    startTestSse();
     stopSse();
     // The first connection attempt is still in flight (its subscribe()
     // promise has not settled) when a new lifecycle starts.
-    startSse();
+    startTestSse();
 
     await flushMicrotasks();
 
@@ -331,8 +339,9 @@ describe("subscribe: already-aborted signal", () => {
 
 describe("broadcast: local delivery without an attached subscriber", () => {
   test("broadcast delivers locally when no Redis subscriber is attached", async () => {
-    // No startSse: this instance has no attached subscriber, so a
-    // published event never loops back. Local clients must still get it.
+    // With no attached subscriber, a published event never loops back.
+    // Local clients must still get it.
+    startTestSse();
     stopSse();
     await flushMicrotasks();
 
@@ -351,6 +360,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
   });
 
   test("preserves the resource carried by a semantic event", async () => {
+    startTestSse();
     stopSse();
     await flushMicrotasks();
 
@@ -375,6 +385,40 @@ describe("broadcast: local delivery without an attached subscriber", () => {
 });
 
 describe("workspace access revocation", () => {
+  test("reauthorizes current access when a revocation message was missed", async () => {
+    const retainedUserId = toSafeId<"user">("user_2");
+    startSse(
+      async ({ userIds }) =>
+        new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+    );
+    stopSse();
+    await flushMicrotasks();
+
+    const removedController = new AbortController();
+    const retainedController = new AbortController();
+    const removedReader = subscribeToWorkspace(
+      removedController.signal,
+    ).getReader();
+    const retainedReader = subscribeToWorkspace(
+      retainedController.signal,
+      retainedUserId,
+    ).getReader();
+
+    broadcast(workspaceId, testEvent("after-missed-revocation"));
+
+    expect((await removedReader.read()).done).toBe(true);
+    const retainedEvent = new TextDecoder().decode(
+      (await retainedReader.read()).value,
+    );
+    expect(retainedEvent).toContain("after-missed-revocation");
+
+    removedController.abort();
+    retainedController.abort();
+    startTestSse();
+    stopSse();
+    await flushMicrotasks();
+  });
+
   test("closes only the removed member's streams before later events", async () => {
     stopSse();
     await flushMicrotasks();
@@ -406,7 +450,7 @@ describe("workspace access revocation", () => {
 
   test("a revocation from another API replica closes the local stream", async () => {
     createdClients.length = 0;
-    startSse();
+    startTestSse();
     await flushMicrotasks();
 
     const controller = new AbortController();
@@ -437,7 +481,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
 
     const controller = new AbortController();
@@ -459,12 +503,45 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     await flushMicrotasks();
   });
 
+  test("preserves event order while workspace authorization is pending", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+    const firstAuthorization = Promise.withResolvers<undefined>();
+    let authorizationCalls = 0;
+    startSse(async ({ userIds }) => {
+      authorizationCalls += 1;
+      if (authorizationCalls === 1) {
+        await firstAuthorization.promise;
+      }
+      return new Set(userIds);
+    });
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const reader = subscribeToWorkspace(controller.signal).getReader();
+
+    broadcast(workspaceId, testEvent("ordered-a"));
+    broadcast(workspaceId, testEvent("ordered-b"));
+    await flushMicrotasks();
+    expect(authorizationCalls).toBe(1);
+
+    firstAuthorization.resolve(undefined);
+    expect(decode((await reader.read()).value)).toContain("ordered-a");
+    expect(decode((await reader.read()).value)).toContain("ordered-b");
+
+    controller.abort();
+    startTestSse();
+    stopSse();
+    await flushMicrotasks();
+  });
+
   test("a transient drop+reconnect re-subscribes via a fresh client and resumes exactly-once loopback delivery", async () => {
     createdClients.length = 0;
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
@@ -511,7 +588,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
@@ -544,7 +621,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
@@ -586,7 +663,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
     const original = createdClients.at(-1);
 
@@ -625,7 +702,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
     closeFailuresRemaining = 0;
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
     const original = createdClients.at(-1);
     expect(original?.subscribedLive).toBe(true);
@@ -678,7 +755,7 @@ describe("startSse: subscriber attach retry", () => {
     // First attach attempt fails; the bounded backoff retry must attach.
     subscribeFailuresRemaining = 1;
 
-    startSse();
+    startTestSse();
     await flushMicrotasks();
 
     // The first attempt created a client, failed, and closed it.
@@ -726,7 +803,7 @@ describe("startSse: subscriber attach retry", () => {
       immediateSetTimeout,
     );
 
-    startSse();
+    startTestSse();
 
     // Drain macrotasks until the subscriber attaches; bounded recursion (not a
     // loop) so no await sits inside a loop and a stuck run cannot hang forever.
@@ -773,7 +850,7 @@ describe("startSse: subscriber attach retry", () => {
       immediateSetTimeout,
     );
 
-    startSse();
+    startTestSse();
 
     const drainUntilAttached = async (remaining: number): Promise<void> => {
       if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {

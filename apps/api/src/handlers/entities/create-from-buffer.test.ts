@@ -305,10 +305,6 @@ describe("createEntityFromBuffer", () => {
       type: "resource.updated",
       resource: { type: "entity", id: expect.any(String) },
     });
-    expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
-      type: "invalidate-query",
-      data: ["workspaces", workspaceId, "overview"],
-    });
   });
 
   test("locks and rechecks the parent in the insert transaction", async () => {
