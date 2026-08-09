@@ -13,7 +13,7 @@ import {
   isImmutableApplicationImage,
   materializeSelfhostTemplateForValidation,
   renderSelfhostEnvExample,
-  workflowHealthContractIssues,
+  workflowContractIssues,
 } from "./selfhost-tool";
 
 const repositoryCompose = async () =>
@@ -161,7 +161,7 @@ describe("self-host workflow contract", () => {
   test("rejects readiness aliases used as local API bootstrap probes", () => {
     const workflowPath = ".github/actions/setup-e2e-stack/action.yml";
     expect(
-      workflowHealthContractIssues([
+      workflowContractIssues([
         {
           content: "curl -sf http://localhost:3001/health",
           path: workflowPath,
@@ -171,9 +171,44 @@ describe("self-host workflow contract", () => {
       `${workflowPath} must use /live when waiting for a local API process to boot.`,
     ]);
     expect(
-      workflowHealthContractIssues([
+      workflowContractIssues([
         {
           content: "curl -sf http://localhost:3001/live",
+          path: workflowPath,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  test.each([
+    "POSTGRES_USER: stella",
+    "DATABASE_URL: postgres://stella:password@postgres:5432/stella",
+    "run: pg_isready -h postgres -U stella -d stella",
+    "run: psql -h postgres -U stella -d stella",
+  ])("rejects the reserved RLS workflow login: %s", (content) => {
+    const workflowPath = ".github/workflows/database.yml";
+    expect(
+      workflowContractIssues([
+        {
+          content,
+          path: workflowPath,
+        },
+      ]),
+    ).toEqual([
+      `${workflowPath} must not use the reserved stella RLS role as a database login.`,
+    ]);
+  });
+
+  test("accepts a distinct workflow database owner login", () => {
+    const workflowPath = ".github/workflows/database.yml";
+    expect(
+      workflowContractIssues([
+        {
+          content: [
+            "POSTGRES_USER: stella_owner",
+            "DATABASE_URL: postgres://stella_owner:password@postgres:5432/stella",
+            "run: psql -h postgres -U stella_owner -d stella",
+          ].join("\n"),
           path: workflowPath,
         },
       ]),

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { APPLICATION_RLS_ROLE_NAME } from "../apps/api/src/db/role-names";
 import {
   type ApiEnvironmentName,
   ENV_CATALOG,
@@ -36,6 +37,10 @@ const RELEASE_MANIFEST_SCRIPT_PATH = "scripts/create-release-manifest.sh";
 const IMAGE_DIGEST_PATTERN = /@sha256:[a-f0-9]{64}$/u;
 const LOCAL_API_READINESS_ALIAS_PATTERN =
   /(?:localhost|127\.0\.0\.1):3001\/health/u;
+const RESERVED_DATABASE_LOGIN_PATTERN = new RegExp(
+  String.raw`(?:\bPOSTGRES_USER:\s*["']?${APPLICATION_RLS_ROLE_NAME}["']?(?:\s|$)|postgres(?:ql)?:\/\/${APPLICATION_RLS_ROLE_NAME}(?=[:@])|\b(?:pg_isready|psql)\b[^\n]*\s-U\s+${APPLICATION_RLS_ROLE_NAME}(?=\s|$))`,
+  "imu",
+);
 
 const SELFHOST_ACTIVE_API_ENV_NAMES = [
   "BETTER_AUTH_SECRET",
@@ -288,14 +293,17 @@ type WorkflowSource = {
   path: string;
 };
 
-export const workflowHealthContractIssues = (
-  workflows: Iterable<WorkflowSource>,
-) => {
+export const workflowContractIssues = (workflows: Iterable<WorkflowSource>) => {
   const issues: string[] = [];
   for (const workflow of workflows) {
     if (LOCAL_API_READINESS_ALIAS_PATTERN.test(workflow.content)) {
       issues.push(
         `${workflow.path} must use /live when waiting for a local API process to boot.`,
+      );
+    }
+    if (RESERVED_DATABASE_LOGIN_PATTERN.test(workflow.content)) {
+      issues.push(
+        `${workflow.path} must not use the reserved ${APPLICATION_RLS_ROLE_NAME} RLS role as a database login.`,
       );
     }
   }
@@ -340,7 +348,7 @@ const check = () => {
     ),
     ...templateContractIssues(renderSelfhostEnvExample()),
     ...releaseContractIssues(),
-    ...workflowHealthContractIssues(repositoryWorkflowSources()),
+    ...workflowContractIssues(repositoryWorkflowSources()),
   );
   if (issues.length === 0) {
     console.log("Self-host production contract is valid.");
