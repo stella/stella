@@ -31,7 +31,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
@@ -189,7 +189,10 @@ const ExportReportDialogBody = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports.templates.get({ fetch: { signal } });
-      return unwrapEden(response);
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: response.data };
     },
   });
 
@@ -262,15 +265,24 @@ const ExportReportDialogBody = ({
       stellaToast.add({
         type: "error",
         title: t("workspaces.views.reportExport.failed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+    if (result.value.status === "error") {
+      analytics.captureError(toAPIError(result.value.error));
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.views.reportExport.failed"),
         description: userErrorMessage(
-          result.error,
+          result.value.error,
           t("common.unexpectedError"),
         ),
       });
       return;
     }
 
-    onStarted(result.value.exportId, mode);
+    onStarted(result.value.data.exportId, mode);
   };
 
   // "Customize" is offered only for a built-in: cloning it into the org's
@@ -288,7 +300,10 @@ const ExportReportDialogBody = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey });
-      return unwrapEden(response);
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const };
     });
     setCustomizing(false);
 
@@ -296,7 +311,18 @@ const ExportReportDialogBody = ({
       analytics.captureError(result.error);
       stellaToast.add({
         type: "error",
-        title: userErrorMessage(result.error, t("common.unexpectedError")),
+        title: t("common.unexpectedError"),
+      });
+      return;
+    }
+    if (result.value.status === "error") {
+      analytics.captureError(toAPIError(result.value.error));
+      stellaToast.add({
+        type: "error",
+        title: userErrorMessage(
+          result.value.error,
+          t("common.unexpectedError"),
+        ),
       });
       return;
     }

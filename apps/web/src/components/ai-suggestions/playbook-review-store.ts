@@ -178,23 +178,26 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       },
     }));
 
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .playbooks({
-            playbookId: toSafeId<"playbookDefinition">(playbookId),
-          })
-          .review.post(
-            {
-              entityId: toSafeId<"entity">(entityId),
-              fileFieldId: toSafeId<"field">(fileFieldId),
-            },
-            {
-              fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) },
-            },
-          ),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .playbooks({
+          playbookId: toSafeId<"playbookDefinition">(playbookId),
+        })
+        .review.post(
+          {
+            entityId: toSafeId<"entity">(entityId),
+            fileFieldId: toSafeId<"field">(fileFieldId),
+          },
+          {
+            fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) },
+          },
+        );
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: response.data };
+    });
 
     // The request threw (client timeout / dropped connection) instead of
     // returning an Eden response — move to the error state so the facet is not
@@ -219,10 +222,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       return { ok: false, message: unexpectedErrorMessage, error: null };
     }
 
-    const response = result.value;
-
-    if (response.error) {
-      const message = userErrorMessage(response.error, unexpectedErrorMessage);
+    if (result.value.status === "error") {
+      const message = userErrorMessage(
+        result.value.error,
+        unexpectedErrorMessage,
+      );
       set((state) => {
         const current = state.sessions[key] ?? EMPTY_SESSION;
         return {
@@ -239,7 +243,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           },
         };
       });
-      return { ok: false, message, error: response.error };
+      return { ok: false, message, error: result.value.error };
     }
 
     set((state) => ({
@@ -248,7 +252,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         [key]: {
           status: "idle",
           playbookId,
-          findings: response.data,
+          findings: result.value.data,
           // A fresh run supersedes prior fixes — old revision ids
           // belong to a stale set of findings.
           fixState: {},

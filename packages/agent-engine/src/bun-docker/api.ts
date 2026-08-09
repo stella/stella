@@ -137,7 +137,6 @@ const readId = (value: unknown): string => {
 export async function* demuxExecStream(
   body: ReadableStream<Uint8Array>,
 ): AsyncGenerator<ExecFrame> {
-  const reader = body.getReader();
   let buffer = new Uint8Array(0);
 
   const append = (chunk: Uint8Array): void => {
@@ -147,6 +146,7 @@ export async function* demuxExecStream(
     buffer = next;
   };
 
+  const reader = body.getReader();
   try {
     for (;;) {
       // Streaming reads are inherently sequential — each frame arrives after the

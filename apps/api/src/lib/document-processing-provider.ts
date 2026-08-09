@@ -98,10 +98,10 @@ export const readBoundedOcrJson = async (
     });
   }
 
-  const reader = response.body.getReader();
   const bytes = new Uint8Array(maxBytes);
   let chunkCount = 0;
   let totalBytes = 0;
+  const reader = response.body.getReader();
   try {
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- a response stream must be pulled sequentially; chunk and byte caps bound the loop

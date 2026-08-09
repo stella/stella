@@ -152,10 +152,10 @@ const consumeStream = async (
   body: ReadableStream<Uint8Array>,
   handlers: StreamHandlers,
 ): Promise<void> => {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let done = false;
+  const reader = body.getReader();
   try {
     while (!done) {
       // oxlint-disable-next-line no-await-in-loop -- streaming reader: each read advances the same ReadableStream and must complete before the next, so reads are inherently sequential

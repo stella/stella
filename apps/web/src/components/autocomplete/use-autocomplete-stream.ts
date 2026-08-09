@@ -94,9 +94,9 @@ const consumeAutocompleteStream = async (
   body: ReadableStream<Uint8Array>,
   cb: StreamCallbacks,
 ): Promise<void> => {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  const reader = body.getReader();
   try {
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next

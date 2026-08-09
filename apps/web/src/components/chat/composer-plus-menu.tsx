@@ -75,9 +75,9 @@ import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
