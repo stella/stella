@@ -488,7 +488,7 @@ describe("validateMessage", () => {
     ] as const;
 
     const results = await Promise.all(
-      invalidMentions.map((mention, index) =>
+      invalidMentions.map(async (mention, index) =>
         validateMessage({
           message: {
             id: chatMessageId(`msg_empty_legacy_mention_${index}`),

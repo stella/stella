@@ -80,9 +80,9 @@ describe("chat resource links", () => {
     );
     expect(parseChatResourceHref(href)).toEqual(target);
 
-    const renderedHref = Bun.markdown
-      .html(`[Document](${href})`)
-      .match(/href="(?<href>[^"]+)"/)?.groups?.["href"];
+    const renderedHref = /href="(?<href>[^"]+)"/u.exec(
+      Bun.markdown.html(`[Document](${href})`),
+    )?.groups?.["href"];
     expect(renderedHref).toBe(href);
     expect(parseChatResourceHref(renderedHref ?? "")).toEqual(target);
 
