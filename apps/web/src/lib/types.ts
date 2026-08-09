@@ -1,8 +1,5 @@
-import type {
-  EntityPriority,
-  ListItemType,
-  TaskStatus,
-} from "@stll/api-contract";
+import type { EntityPriority, TaskStatus } from "@stll/api-contract";
+import type { ListItemType } from "@stll/api-contract/entity-options";
 import type {
   BoundingBox,
   AgendaItemKind,

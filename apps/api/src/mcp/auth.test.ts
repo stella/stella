@@ -188,6 +188,14 @@ describe("isMcpSession", () => {
         }),
       ).toBe(true);
     }
+
+    expect(
+      isMcpSession({
+        organizationId: "org_1",
+        scopes: ["read"],
+        userId: "user_1",
+      }),
+    ).toBe(true);
   });
 
   test("rejects malformed nested session fields", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { validateDocxSuggestionOperations } from "@/api/handlers/docx-suggestions/create";
+import { validateDocxSuggestionOperations } from "@/api/handlers/docx-suggestions/operation-validation";
 
 describe("DOCX suggestion operation validation", () => {
   test("returns folio's validated operation output, not the untrusted input object", () => {

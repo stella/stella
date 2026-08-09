@@ -49,16 +49,24 @@ const isBoeStatus = (value: unknown): value is BoeStatus =>
   hasOptionalString(value, "code") &&
   hasOptionalString(value, "text");
 
+const isBoeSearchMetadata = (
+  value: unknown,
+): value is { codigo?: string; texto?: string } =>
+  isRecord(value) &&
+  hasOptionalString(value, "codigo") &&
+  hasOptionalString(value, "texto");
+
 const isBoeSearchHit = (value: unknown): value is BoeSearchHit =>
   isRecord(value) &&
   typeof value["identificador"] === "string" &&
   hasOptionalString(value, "titulo") &&
   hasOptionalString(value, "fecha_publicacion") &&
   hasOptionalString(value, "fecha_disposicion") &&
-  (value["departamento"] === undefined || isBoeStatus(value["departamento"])) &&
-  (value["rango"] === undefined || isBoeStatus(value["rango"])) &&
+  (value["departamento"] === undefined ||
+    isBoeSearchMetadata(value["departamento"])) &&
+  (value["rango"] === undefined || isBoeSearchMetadata(value["rango"])) &&
   (value["estado_consolidacion"] === undefined ||
-    isBoeStatus(value["estado_consolidacion"])) &&
+    isBoeSearchMetadata(value["estado_consolidacion"])) &&
   hasOptionalString(value, "url_eli") &&
   hasOptionalString(value, "url_html_consolidada");
 

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
@@ -14,14 +15,14 @@ import {
   type OutlineNode,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import { templateValueSourcePatch } from "@/routes/_protected.knowledge/-components/template-wizard";
-import type {
-  EditableLookupFormat,
-  EditablePart,
-  FieldSource,
-  FieldValidation,
-  TemplateEditableField,
-} from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  type EditableLookupFormat,
+  type EditablePart,
+  type FieldSource,
+  type FieldValidation,
+  type TemplateEditableField,
+  templateValueSourcePatch,
+} from "@/routes/_protected.knowledge/-components/template-value-source";
 // ── Manifest <-> state ───────────────────────────────────
 
 const INPUT_TYPE_VALUES = [
@@ -377,8 +378,10 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     case "input":
       break;
     default: {
-      const exhaustive: never = f.valueSource;
-      return exhaustive;
+      const unsupported: never = f.valueSource;
+      return panic(
+        `Unsupported template value source: ${JSON.stringify(unsupported)}`,
+      );
     }
   }
   if (f.aiPrompt) {

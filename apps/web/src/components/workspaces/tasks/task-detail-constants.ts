@@ -11,17 +11,19 @@ import {
 
 import {
   ENTITY_PRIORITIES as TASK_PRIORITIES,
-  isListItemType,
   isEntityPriority as isTaskPriority,
-  LIST_ITEM_TYPES,
   isTaskStatus,
   TASK_STATUSES,
 } from "@stll/api-contract";
 import type {
   EntityPriority as TaskPriority,
-  ListItemType,
   TaskStatus,
 } from "@stll/api-contract";
+import {
+  isListItemType,
+  LIST_ITEM_TYPES,
+} from "@stll/api-contract/entity-options";
+import type { ListItemType } from "@stll/api-contract/entity-options";
 
 import type { TranslationKey } from "@/i18n/types";
 

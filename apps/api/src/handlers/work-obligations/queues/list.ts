@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { WorkObligationStatus } from "@stll/api-contract";
+import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 
 import {
   entities,

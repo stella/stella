@@ -99,6 +99,10 @@ const collectArgNames = (
       case TYPE.literal:
       case TYPE.pound:
         break;
+      default: {
+        const unsupported: never = element;
+        return unsupported;
+      }
     }
   }
 };

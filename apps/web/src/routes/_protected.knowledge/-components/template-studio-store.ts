@@ -5,9 +5,9 @@ import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import {
-  templateValueSourcePatch,
+  templateValueSourceTransition,
   type TemplateEditableField,
-} from "@/routes/_protected.knowledge/-components/template-wizard";
+} from "@/routes/_protected.knowledge/-components/template-value-source";
 
 // The Studio's editable manifest data + live document selection. Lives in a
 // module-level store (not the inspector tab payload, which must be
@@ -277,27 +277,38 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   upsertField: (path, patch) =>
     set((state) => {
       const exists = state.fields.some((f) => f.path === path);
-      const fields = exists
-        ? state.fields.map((f) => {
-            if (f.path !== path) {
-              return f;
-            }
-            const next = { ...f, ...patch };
-            return {
+      if (!exists) {
+        const field = defaultStudioField(path);
+        const next = { ...field, ...patch };
+        return {
+          fields: [
+            ...state.fields,
+            {
               ...next,
-              ...templateValueSourcePatch(next, { preserveDraft: true }),
-            };
-          })
-        : (() => {
-            const next = { ...defaultStudioField(path), ...patch };
-            return [
-              ...state.fields,
-              {
-                ...next,
-                ...templateValueSourcePatch(next, { preserveDraft: true }),
-              },
-            ];
-          })();
+              ...templateValueSourceTransition({
+                field,
+                patch,
+                preserveDraft: true,
+              }),
+            },
+          ],
+          isDirty: true,
+        };
+      }
+      const fields = state.fields.map((field) => {
+        if (field.path !== path) {
+          return field;
+        }
+        const next = { ...field, ...patch };
+        return {
+          ...next,
+          ...templateValueSourceTransition({
+            field,
+            patch,
+            preserveDraft: true,
+          }),
+        };
+      });
       return { fields, isDirty: true };
     }),
   removeField: (path) =>

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { atCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
@@ -31,7 +33,13 @@ const adapterKeyFromString = (key: string): AdapterKey | undefined =>
 /** Look up an adapter by its key. */
 export const getAdapter = (key: string): SourceAdapter | undefined => {
   const adapterKey = adapterKeyFromString(key);
-  return adapterKey === undefined ? undefined : ADAPTER_REGISTRY[adapterKey];
+  if (adapterKey === undefined) {
+    return undefined;
+  }
+  const adapter = ADAPTER_REGISTRY[adapterKey];
+  return adapter.key === adapterKey
+    ? adapter
+    : panic(`Adapter registry key mismatch for ${adapterKey}`);
 };
 
 /** List all registered adapters. */

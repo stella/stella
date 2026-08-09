@@ -133,6 +133,25 @@ describe("BOE client", () => {
     });
   });
 
+  test("rejects malformed nested search metadata", async () => {
+    installFetch(() =>
+      jsonResponse({
+        data: [
+          {
+            identificador: "BOE-A-1889-4763",
+            departamento: { codigo: 123, texto: "Justicia" },
+          },
+        ],
+        status: { code: "200", text: "ok" },
+      }),
+    );
+
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+      name: "BoeAPIError",
+      message: "BOE returned an unexpected JSON payload shape",
+    });
+  });
+
   test("surfaces malformed JSON as a structured BOE error", async () => {
     installFetch(
       () =>

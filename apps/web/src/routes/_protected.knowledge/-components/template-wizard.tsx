@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { ConditionNode } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -66,6 +65,18 @@ import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import {
+  templateValueSourcePatch,
+  templateValueSourceTransition,
+} from "@/routes/_protected.knowledge/-components/template-value-source";
+import type {
+  EditableField,
+  EditableLookup,
+  EditableLookupFormat,
+  EditablePart,
+  FieldSource,
+  TemplateEditableField,
+} from "@/routes/_protected.knowledge/-components/template-value-source";
 
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 const REQUIRED_MARKER = "*";
@@ -103,29 +114,6 @@ const PART_INPUT_TYPES = ["text", "select"] as const;
 
 type PartInputType = (typeof PART_INPUT_TYPES)[number];
 
-/** A field's value source: resolved server-side from a matter record at fill
- *  time (the matter's client, a party in a given role, the matter itself, an
- *  attorney by ref, or the firm). A derived value source, mutually exclusive
- *  with the input sources (lookup/formula/parts/aiPrompt/condition). Mirrors
- *  the backend `FieldSource` (apps/api/src/lib/template-binding/binding-sources.ts);
- *  the `role`/`ref`/`field` keys are validated against the binding catalog
- *  server-side, so they are plain strings here. */
-export type FieldSource =
-  | { kind: "contact"; field: string }
-  | { kind: "party"; role: string; field: string }
-  | { kind: "matter"; field: string }
-  | { kind: "attorney"; ref: string; field: string }
-  | { kind: "firm"; field: string };
-
-/** One output format for a lookup field: the author enters the registry
- *  number once and addresses this rendering of the resolved hit by a marker.
- *  The first format is the default (`{{path}}`); the rest are keyed
- *  (`{{path.key}}`). */
-export type EditableLookupFormat = {
-  key: string;
-  template: string;
-};
-
 /** Default key seeded for the first format of a freshly switched Company ID
  *  field; the author can rename it. */
 const LOOKUP_DEFAULT_FORMAT_KEY = "output_1";
@@ -142,224 +130,6 @@ const LOOKUP_FORMAT_KEY_DISALLOWED_RE = /[^\p{L}\p{N}_-]/gu;
  *  `LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH`. */
 const LOOKUP_FORMATS_MAX = 10;
 const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
-
-export type EditableLookup = {
-  registry: LookupRegistry;
-  /** Output formats for the resolved hit. The first is the default for the
-   *  bare `{{path}}` marker; the rest are addressed by `{{path.key}}`. Always
-   *  non-empty once the field is a Company ID. */
-  formats: EditableLookupFormat[];
-};
-
-export type EditablePart = {
-  key: string;
-  inputType: PartInputType;
-  options: string[];
-  label?: string | undefined;
-  /** Round-tripped from the manifest; not editable in this UI. */
-  pattern?: string | undefined;
-};
-
-/** Exactly one value source is active for a field. The legacy manifest uses
- * optional sibling properties, so this discriminator is kept in editor state
- * as the authoritative choice and prevents serializers from re-emitting an
- * invalid combination when old or hand-authored data contains rivals. */
-export type TemplateValueSource =
-  | { type: "input" }
-  | { type: "composite"; parts: EditablePart[]; format: string }
-  /** Editor-only state while the author is still entering a part key/format. */
-  | { type: "composite-draft"; parts: EditablePart[]; format: string }
-  | { type: "lookup"; lookup: EditableLookup }
-  | { type: "formula"; formula: string }
-  | { type: "binding"; source: FieldSource }
-  | { type: "condition"; condition: string; conditionAst?: never }
-  | { type: "condition"; condition?: never; conditionAst: ConditionNode };
-
-export type TemplateEditableField = {
-  path: string;
-  kind: string;
-  label: string;
-  /** Short guidance for the person filling (shown as the input's
-   *  placeholder in the fill form); empty/absent = none. */
-  hint?: string | undefined;
-  inputType: InputType;
-  required: boolean;
-  options: string[];
-  valueSource: TemplateValueSource;
-  /** Composite field: one value entered as several parts joined by `format`.
-   *  Present iff `format` is present; `inputType` is then ignored for input
-   *  rendering. */
-  parts?: EditablePart[] | undefined;
-  format?: string | undefined;
-  /** Dependent select: path of the field whose entered values supply this
-   *  select's options in the fill form; static options act as fallback. */
-  optionsFrom?: string | undefined;
-  /** Registry lookup: the person filling enters only the registry number;
-   *  the server resolves the company at fill time. Text fields only. */
-  lookup?: EditableLookup | undefined;
-  /** Formula: the value is derived from other fields via an arithmetic
-   *  expression at fill time; the fill form renders no input for it.
-   *  Mutually exclusive with parts and lookup. */
-  formula?: string | undefined;
-  /** Binding source: the value is resolved server-side from a matter record
-   *  (its client, a party, the matter itself, an attorney, or the firm) at
-   *  fill time, so the fill form renders no input for it. A derived value
-   *  source, mutually exclusive with lookup/formula/parts/aiPrompt/condition
-   *  (backend-validated). */
-  source?: FieldSource | undefined;
-  /** Condition rule (a `@stll/template-conditions` expression): a boolean
-   *  field whose yes/no value is DERIVED by this rule rather than asked. Only
-   *  meaningful on `inputType === "boolean"`; mutually exclusive with
-   *  formula/lookup/parts/aiPrompt/aiAdapt (backend-validated). A boolean
-   *  field with `condition` set is a "condition-field". */
-  condition?: string | undefined;
-  /** Condition rule persisted as the canonical AST instead of the `condition`
-   *  string. Authoritative when set; required when the rule contains a formula
-   *  operand (which has no `{{#if}}` string form). Mutually exclusive with the
-   *  other value sources, same as `condition`. */
-  conditionAst?: ConditionNode | undefined;
-  /** Locale-aware rendering of a "date" field's submitted ISO value at fill
-   *  time; absent = the ISO value is substituted as typed. */
-  dateFormat?: TemplateDateFormat | undefined;
-  /** Field-level validation. For an `{{#each}}` loop, `minItems`/`maxItems`
-   *  are the repeat bounds and live on the FieldMeta whose path equals the
-   *  loop's array (container) path. */
-  validation?: FieldValidation | undefined;
-};
-
-/** Derive the single active source from an untrusted/legacy field shape. The
- * precedence matches manifest validation: composite, formula, condition,
- * binding, lookup, then ordinary input. */
-export const templateValueSourceOf = (
-  field: Pick<
-    TemplateEditableField,
-    | "parts"
-    | "format"
-    | "lookup"
-    | "formula"
-    | "source"
-    | "condition"
-    | "conditionAst"
-    | "inputType"
-  >,
-  options: { preserveDraft?: boolean } = {},
-): TemplateValueSource => {
-  if (field.parts !== undefined && field.parts.length > 0) {
-    const format = field.format?.trim() || defaultCompositeFormat(field.parts);
-    if (format !== undefined && format !== "") {
-      return { type: "composite", parts: field.parts, format };
-    }
-    if (options.preserveDraft === true) {
-      return {
-        type: "composite-draft",
-        parts: field.parts,
-        format: field.format ?? "",
-      };
-    }
-  }
-  if (field.parts !== undefined && options.preserveDraft === true) {
-    return {
-      type: "composite-draft",
-      parts: field.parts,
-      format: field.format ?? "",
-    };
-  }
-  if (field.formula !== undefined) {
-    const formula = field.formula.trim();
-    if (formula !== "" || options.preserveDraft === true) {
-      return { type: "formula", formula };
-    }
-  }
-  if (field.inputType === "boolean" && field.conditionAst !== undefined) {
-    return { type: "condition", conditionAst: field.conditionAst };
-  }
-  if (field.inputType === "boolean" && field.condition?.trim()) {
-    return { type: "condition", condition: field.condition.trim() };
-  }
-  if (field.source !== undefined) {
-    return { type: "binding", source: field.source };
-  }
-  if (field.lookup !== undefined) {
-    return { type: "lookup", lookup: field.lookup };
-  }
-  return { type: "input" };
-};
-
-/** Clear stale sibling properties when a field changes source. Keeping this
- * transition beside the discriminator means every editor (wizard and Studio)
- * constructs one valid state instead of relying on each control to remember
- * every rival property. */
-export const templateValueSourcePatch = (
-  field: Pick<
-    TemplateEditableField,
-    | "parts"
-    | "format"
-    | "lookup"
-    | "formula"
-    | "source"
-    | "condition"
-    | "conditionAst"
-    | "inputType"
-  >,
-  options: { preserveDraft?: boolean } = {},
-): Pick<
-  TemplateEditableField,
-  | "valueSource"
-  | "parts"
-  | "format"
-  | "lookup"
-  | "formula"
-  | "source"
-  | "condition"
-  | "conditionAst"
-> => {
-  const valueSource = templateValueSourceOf(field, options);
-  const isComposite =
-    valueSource.type === "composite" || valueSource.type === "composite-draft";
-  return {
-    valueSource,
-    parts: isComposite ? valueSource.parts : undefined,
-    format: isComposite ? valueSource.format : undefined,
-    lookup: valueSource.type === "lookup" ? valueSource.lookup : undefined,
-    formula: valueSource.type === "formula" ? valueSource.formula : undefined,
-    source: valueSource.type === "binding" ? valueSource.source : undefined,
-    condition:
-      valueSource.type === "condition" ? valueSource.condition : undefined,
-    conditionAst:
-      valueSource.type === "condition" ? valueSource.conditionAst : undefined,
-  };
-};
-
-/**
- * The field shape the value-source controls (binding, formula) edit. A superset
- * of {@link TemplateEditableField} that also carries the AI-draft fields the
- * Studio field adds, so enabling one value mode can clear every rival — the
- * AI-draft modes included — without the wizard depending on the Studio's field
- * type. Both the wizard's plain field and the Studio's `StudioField` assign to
- * it (the AI fields are optional here, required on the Studio field).
- */
-export type EditableField = TemplateEditableField & {
-  aiPrompt?: string | undefined;
-  aiAdapt?: boolean | undefined;
-  aiSeesDocument?: boolean | undefined;
-};
-
-/** Field-level validation. The studio's UI surfaces only the `{{#each}}`
- *  repeat bounds (`minItems`/`maxItems`) today; the scalar rules
- *  (`required`/`minLength`/`maxLength`/`min`/`max`/`pattern`) are carried
- *  verbatim so manifest validation authored elsewhere (prepare/suggest/import)
- *  round-trips through a Studio save instead of being dropped. Mirrors the
- *  backend `FieldValidation` (apps/api/src/lib/docx/types.ts). */
-export type FieldValidation = {
-  required?: boolean | undefined;
-  minLength?: number | undefined;
-  maxLength?: number | undefined;
-  min?: number | undefined;
-  max?: number | undefined;
-  pattern?: string | undefined;
-  minItems?: number | undefined;
-  maxItems?: number | undefined;
-};
 
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
@@ -606,7 +376,11 @@ export const ConfigureStep = ({
         const next = { ...f, ...patch };
         return {
           ...next,
-          ...templateValueSourcePatch(next, { preserveDraft: true }),
+          ...templateValueSourceTransition({
+            field: f,
+            patch,
+            preserveDraft: true,
+          }),
         };
       }),
     );

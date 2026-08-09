@@ -1,4 +1,8 @@
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalNumber,
+  hasOptionalString,
+  isRecord,
+} from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
@@ -31,16 +35,6 @@ const MAX_SEARCH_LIMIT = 100;
 // parenthesised `or` filters, so active search issues one request per
 // status code and combines the rows locally.
 const ACTIVE_STATUS_CODES = ["01", "02"] as const;
-
-const hasOptionalString = (
-  record: Record<string, unknown>,
-  key: string,
-): boolean => record[key] === undefined || typeof record[key] === "string";
-
-const hasOptionalNumber = (
-  record: Record<string, unknown>,
-  key: string,
-): boolean => record[key] === undefined || typeof record[key] === "number";
 
 /** Validate only the fields consumed by `parseCompany` and `parseSearchEntry`. */
 const isGcisRawCompany = (value: unknown): value is GcisResponse[number] =>

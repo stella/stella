@@ -51,7 +51,7 @@ import type { OperatorWordKey } from "@/routes/_protected.knowledge/-components/
 import { humanizeConditionExpr } from "@/routes/_protected.knowledge/-components/template-studio-outline";
 import type { StudioField } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import type { FieldValidation } from "@/routes/_protected.knowledge/-components/template-wizard";
+import type { FieldValidation } from "@/routes/_protected.knowledge/-components/template-value-source";
 
 const ScopeHeader = ({
   title,

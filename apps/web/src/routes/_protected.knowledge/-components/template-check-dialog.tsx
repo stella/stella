@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { panic } from "better-result";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -144,6 +143,11 @@ const FINDING_MESSAGE_KEY = {
   invalidMarker: "templates.checkFindingInvalidMarker",
 } as const satisfies Record<CheckFinding["code"], TranslationKey>;
 
+const isKnownFindingCode = (
+  code: string,
+): code is keyof typeof FINDING_MESSAGE_KEY =>
+  Object.hasOwn(FINDING_MESSAGE_KEY, code);
+
 /** Stable list key: code + subject + (reference, where one exists) — a
  *  formula/condition can produce several findings for the same subject. */
 const findingKey = (finding: CheckFinding): string => {
@@ -163,6 +167,7 @@ const findingKey = (finding: CheckFinding): string => {
 
 /** The marker/field/slot name a finding is about, shown as code. */
 const findingSubject = (finding: CheckFinding): string => {
+  const wireCode: string = finding.code;
   switch (finding.code) {
     case "structureError":
       return finding.directive;
@@ -181,7 +186,9 @@ const findingSubject = (finding: CheckFinding): string => {
     case "formulaUnknownPath":
       return finding.path;
     default:
-      return panic("Unsupported template check finding");
+      // The response comes from an independently deployed API. Preserve new
+      // finding codes as diagnostics instead of crashing the whole dialog.
+      return wireCode;
   }
 };
 
@@ -276,9 +283,12 @@ type FindingRowProps = {
 
 const FindingRow = ({ finding, severity }: FindingRowProps) => {
   const t = useTranslations();
+  const wireCode: string = finding.code;
 
   let message: string;
-  if (finding.code === "structureError") {
+  if (!isKnownFindingCode(wireCode)) {
+    message = wireCode;
+  } else if (finding.code === "structureError") {
     message = t(FINDING_MESSAGE_KEY[finding.code], {
       paragraph: finding.paragraphIndex + 1,
     });

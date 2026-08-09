@@ -1006,6 +1006,12 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "openai_compatible":
       hasher.update(providerRegion(config) ?? "global");
       break;
+    default: {
+      const unsupported: never = config;
+      return panic(
+        `Unsupported BYOK provider configuration: ${JSON.stringify(unsupported)}`,
+      );
+    }
   }
   const hash = hasher.digest("hex").slice(0, 16);
   return `${config.provider}:${hash}`;

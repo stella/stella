@@ -6,11 +6,8 @@ import {
   queryOptions,
 } from "@tanstack/react-query";
 
-import {
-  isEntityPriority,
-  isListItemType,
-  isTaskStatus,
-} from "@stll/api-contract";
+import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
+import { isListItemType } from "@stll/api-contract/entity-options";
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";

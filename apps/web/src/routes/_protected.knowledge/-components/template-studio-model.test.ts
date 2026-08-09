@@ -3,8 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { buildManifest, parseFields } from "./template-studio-model";
 import {
   templateValueSourcePatch,
+  templateValueSourceTransition,
   type TemplateEditableField,
-} from "./template-wizard";
+} from "./template-value-source";
 
 describe("template value-source state", () => {
   test("drops rival persisted sources and round-trips the selected source", () => {
@@ -15,7 +16,7 @@ describe("template value-source state", () => {
           path: "company",
           inputType: "text",
           lookup: {
-            registry: "companies_house",
+            registry: "companies-house",
             formats: [{ key: "output_1", template: "{{name}}" }],
           },
           formula: "1 + 1",
@@ -57,7 +58,7 @@ describe("template value-source state", () => {
           inputType: "number",
           formula: "base * 2",
           lookup: {
-            registry: "companies_house",
+            registry: "companies-house",
             formats: [{ key: "output_1", template: "{{name}}" }],
           },
         },
@@ -148,5 +149,77 @@ describe("template value-source state", () => {
         },
       ]).fields,
     ).toEqual([{ path: "amount", label: "Amount", inputType: "number" }]);
+  });
+
+  test("keeps derived composite formats synchronized with part edits", () => {
+    const field = {
+      path: "name",
+      kind: "string",
+      label: "Name",
+      inputType: "text",
+      required: false,
+      options: [],
+      parts: [{ key: "first", inputType: "text", options: [] }],
+      valueSource: { type: "input" },
+    } satisfies TemplateEditableField;
+    const initialSource = templateValueSourcePatch(field, {
+      preserveDraft: true,
+    });
+    const nextParts = [
+      ...field.parts,
+      { key: "last", inputType: "text" as const, options: [] },
+    ];
+    const nextSource = templateValueSourceTransition({
+      field: { ...field, ...initialSource },
+      patch: { parts: nextParts },
+      preserveDraft: true,
+    });
+
+    expect(initialSource).toMatchObject({
+      valueSource: { type: "composite", format: "{{first}}" },
+      format: undefined,
+    });
+    expect(nextSource).toMatchObject({
+      valueSource: {
+        type: "composite",
+        format: "{{first}} {{last}}",
+      },
+      format: undefined,
+    });
+  });
+
+  test("constructs an explicit formula transition from a composite", () => {
+    const field = {
+      path: "amount",
+      kind: "number",
+      label: "Amount",
+      inputType: "number",
+      required: false,
+      options: [],
+      parts: [{ key: "value", inputType: "text", options: [] }],
+      format: "{{value}}",
+      valueSource: {
+        type: "composite",
+        parts: [{ key: "value", inputType: "text", options: [] }],
+        format: "{{value}}",
+      },
+    } satisfies TemplateEditableField;
+
+    expect(
+      templateValueSourceTransition({
+        field,
+        patch: { formula: "" },
+        preserveDraft: true,
+      }),
+    ).toEqual({
+      valueSource: { type: "formula", formula: "" },
+      parts: undefined,
+      format: undefined,
+      lookup: undefined,
+      formula: "",
+      source: undefined,
+      condition: undefined,
+      conditionAst: undefined,
+    });
   });
 });

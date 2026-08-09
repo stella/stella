@@ -28,17 +28,17 @@ import {
 } from "./utils.ts";
 
 const isProductionBoundaryFile = (filename: string): boolean => {
-  if (filename.includes("/.oxlint-plugins/__fixtures__/")) {
+  if (/(?:^|\/)\.oxlint-plugins\/__fixtures__\//u.test(filename)) {
     return true;
   }
-  if (!filename.includes("/apps/") && !filename.includes("/packages/")) {
+  if (!/(?:^|\/)(?:apps|packages)\//u.test(filename)) {
     return false;
   }
   return !(
-    filename.includes("/e2e/") ||
-    filename.includes("/tests/") ||
-    filename.includes("/scripts/") ||
-    filename.includes("/packages/scripts/") ||
+    /(?:^|\/)e2e\//u.test(filename) ||
+    /(?:^|\/)tests\//u.test(filename) ||
+    /(?:^|\/)scripts\//u.test(filename) ||
+    /(?:^|\/)packages\/scripts\//u.test(filename) ||
     /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filename)
   );
 };
@@ -92,7 +92,9 @@ const isResponseJsonCall = (node: unknown): boolean => {
   const callee = peelRuntimeExpression(current.callee);
   return (
     callee?.type === "MemberExpression" &&
-    getPropertyName(callee.property) === "json"
+    getPropertyName(callee.property) === "json" &&
+    Array.isArray(current.arguments) &&
+    current.arguments.length === 0
   );
 };
 
@@ -114,11 +116,22 @@ const isRawJsonType = (node: unknown): boolean => {
   if (typeNode?.type === "TSUnknownKeyword") {
     return true;
   }
-  return (
-    typeNode?.type === "TSTypeReference" &&
-    (isIdentifier(typeNode.typeName, "JsonValue") ||
-      isIdentifier(typeNode.typeName, "ReadonlyJsonValue"))
-  );
+  if (typeNode?.type !== "TSTypeReference") {
+    return false;
+  }
+  if (
+    isIdentifier(typeNode.typeName, "JsonValue") ||
+    isIdentifier(typeNode.typeName, "ReadonlyJsonValue")
+  ) {
+    return true;
+  }
+  if (!isIdentifier(typeNode.typeName, "Promise")) {
+    return false;
+  }
+  const typeArguments = isAstNode(typeNode.typeArguments)
+    ? typeNode.typeArguments.params
+    : undefined;
+  return Array.isArray(typeArguments) && isRawJsonType(typeArguments.at(0));
 };
 
 export default eslintCompatPlugin({
@@ -149,6 +162,48 @@ export default eslintCompatPlugin({
           }
         };
 
+        const containsRawJsonReturn = (node: unknown): boolean => {
+          if (Array.isArray(node)) {
+            return node.some(containsRawJsonReturn);
+          }
+          if (!isAstNode(node)) {
+            return false;
+          }
+          if (
+            node.type === "ArrowFunctionExpression" ||
+            node.type === "FunctionDeclaration" ||
+            node.type === "FunctionExpression"
+          ) {
+            return false;
+          }
+          if (node.type === "ReturnStatement") {
+            return isRawJsonBoundary(node.argument);
+          }
+          return Object.entries(node).some(
+            ([key, child]) =>
+              key !== "parent" &&
+              key !== "loc" &&
+              key !== "range" &&
+              containsRawJsonReturn(child),
+          );
+        };
+
+        const checkFunctionReturn = (node: unknown) => {
+          if (
+            !isAstNode(node) ||
+            !node.returnType ||
+            isRawJsonType(node.returnType)
+          ) {
+            return;
+          }
+          const body = node.body;
+          const returnsRawJson =
+            isRawJsonBoundary(body) || containsRawJsonReturn(body);
+          if (returnsRawJson) {
+            context.report({ node, messageId: "unvalidatedDomain" });
+          }
+        };
+
         return {
           before() {
             jsonParseAliases.clear();
@@ -164,6 +219,9 @@ export default eslintCompatPlugin({
               context.report({ node, messageId: "unvalidatedDomain" });
             }
           },
+          ArrowFunctionExpression: checkFunctionReturn,
+          FunctionDeclaration: checkFunctionReturn,
+          FunctionExpression: checkFunctionReturn,
           VariableDeclarator(node) {
             if (node.id.type === "Identifier" && isJsonParseMember(node.init)) {
               jsonParseAliases.add(node.id.name);

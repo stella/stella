@@ -1,10 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { folioDocumentOperationBatchSchema } from "@stll/folio-agents";
-import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
-import { FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION } from "@stll/folio-core/server";
-
 import { chatThreads, docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -12,23 +8,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 
+import { validateDocxSuggestionOperations } from "./operation-validation";
 import { tCreateDocxSuggestionsBody } from "./schemas";
 
 type CreatedSuggestion = { ref: string; id: SafeId<"docxSuggestion"> };
-
-/** Parse suggestion operations once at the API boundary and return folio's
- * canonical output, rather than retaining the untrusted input objects. */
-export const validateDocxSuggestionOperations = (
-  operations: readonly unknown[],
-): FolioAIEditOperation[] | undefined => {
-  const validation = folioDocumentOperationBatchSchema["~standard"].validate({
-    version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
-    operations,
-  });
-  return validation.issues === undefined
-    ? validation.value.operations
-    : undefined;
-};
 
 /**
  * Batch-persist AI DOCX suggestions the client just queued for review.

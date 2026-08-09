@@ -5,6 +5,13 @@
 type RegistryCompany = { id: string };
 type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue };
+type ReadonlyJsonValue =
+  | boolean
+  | number
+  | string
+  | null
+  | readonly ReadonlyJsonValue[]
+  | { readonly [key: string]: ReadonlyJsonValue };
 
 declare const response: { json: () => Promise<never> };
 declare const genericResponse: { json: <T>() => Promise<T> };
@@ -38,6 +45,10 @@ export const assertedGlobalParse = () =>
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast, typescript/no-unsafe-type-assertion
   globalThis.JSON.parse(raw) as RegistryCompany;
 
+export const angleBracketAssertedParse = () =>
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast, typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  <RegistryCompany>JSON.parse(raw);
+
 const parseJson = JSON.parse;
 export const assertedAliasedParse = () =>
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast, typescript/no-unsafe-type-assertion
@@ -48,6 +59,13 @@ export const annotatedParse = () => {
   const parsed: RegistryCompany = JSON.parse(raw);
   return parsed;
 };
+
+// oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+export const annotatedFunctionReturn = (): RegistryCompany => JSON.parse(raw);
+
+export const annotatedAsyncFunctionReturn =
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  async (): Promise<RegistryCompany> => await response.json();
 
 // Raw passthrough is intentionally open to additive upstream fields.
 export const unknownResponse = async () => {
@@ -60,6 +78,19 @@ export const rawJsonValue = () => {
   const value: JsonValue = JSON.parse(raw);
   return value;
 };
+
+export const readonlyRawJsonValue = () => {
+  const value: ReadonlyJsonValue = JSON.parse(raw);
+  return value;
+};
+
+export const rawJsonFunctionReturn = (): JsonValue => JSON.parse(raw);
+export const rawJsonAsyncFunctionReturn = async (): Promise<unknown> =>
+  await response.json();
+
+declare const responseBuilder: { json: (payload: unknown) => RegistryCompany };
+export const responseBuilderCall = () =>
+  responseBuilder.json({ id: "company" });
 
 // Closed and open schemas both validate before producing a domain value.
 export const parsedResponse = async () =>

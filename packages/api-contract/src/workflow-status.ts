@@ -10,13 +10,25 @@ export const WORK_OBLIGATION_STATUS = {
 export type WorkObligationStatus =
   (typeof WORK_OBLIGATION_STATUS)[keyof typeof WORK_OBLIGATION_STATUS];
 
-export const WORK_OBLIGATION_STATUSES = Object.freeze([
+const defineWorkObligationStatuses = <
+  const TStatuses extends readonly [
+    WorkObligationStatus,
+    ...WorkObligationStatus[],
+  ],
+>(
+  statuses: Exclude<WorkObligationStatus, TStatuses[number]> extends never
+    ? TStatuses
+    : never,
+) => Object.freeze(statuses);
+
+/** Non-empty ordered values for Drizzle, with total union coverage enforced. */
+export const WORK_OBLIGATION_STATUSES = defineWorkObligationStatuses([
   WORK_OBLIGATION_STATUS.UNASSIGNED,
   WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
   WORK_OBLIGATION_STATUS.ACTIVE,
   WORK_OBLIGATION_STATUS.COMPLETED,
   WORK_OBLIGATION_STATUS.CANCELLED,
-] as const satisfies readonly WorkObligationStatus[]);
+]);
 
 export const isWorkObligationStatus = (
   value: unknown,

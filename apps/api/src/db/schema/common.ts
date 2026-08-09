@@ -322,8 +322,8 @@ export type PropertyRole = (typeof PROPERTY_ROLES)[number];
  *  it. */
 export { ENTITY_KINDS } from "@stll/api-contract";
 
-export { LIST_ITEM_TYPES } from "@stll/api-contract";
-export type { ListItemType } from "@stll/api-contract";
+export { LIST_ITEM_TYPES } from "@stll/api-contract/entity-options";
+export type { ListItemType } from "@stll/api-contract/entity-options";
 
 export const TASK_ASSIGNEE_ROLES = ["assignee", "reviewer"] as const;
 

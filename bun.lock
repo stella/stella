@@ -529,6 +529,7 @@
       "name": "@stll/conditions",
       "version": "0.1.1",
       "dependencies": {
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {

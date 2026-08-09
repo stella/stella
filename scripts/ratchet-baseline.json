@@ -101,7 +101,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 599,
+    "count": 596,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,

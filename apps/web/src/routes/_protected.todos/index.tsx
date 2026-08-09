@@ -23,12 +23,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isEntityPriority, type EntityPriority } from "@stll/api-contract";
 import {
-  isEntityPriority,
   isWorkObligationStatus,
-  type EntityPriority,
   type WorkObligationStatus,
-} from "@stll/api-contract";
+} from "@stll/api-contract/workflow-status";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
