@@ -11,6 +11,7 @@ import {
   evaluateToolsList,
   evaluateUnauthenticated,
   runAuthenticatedStreamProbe,
+  runNamedProbe,
   summarize,
 } from "./mcp-canary";
 
@@ -290,4 +291,53 @@ describe("skip reporting", () => {
 
     expect(summary).toEqual({ failed: 1, skipped: 1 });
   });
+});
+
+describe("probe failure reporting", () => {
+  test("attributes a timeout to its probe without printing exception details", async () => {
+    const result = await runNamedProbe("GET /mcp", async () => {
+      throw new DOMException(
+        "request URL and credentials must not reach diagnostics",
+        "TimeoutError",
+      );
+    });
+
+    expect(result).toEqual({
+      detail: "request timed out after 20000 ms",
+      name: "GET /mcp",
+      status: "failed",
+    });
+  });
+
+  test.each([
+    [
+      "an abort",
+      new DOMException("credentials must not reach diagnostics", "AbortError"),
+      "request was aborted",
+    ],
+    [
+      "a network failure",
+      new TypeError("credentials must not reach diagnostics"),
+      "network request failed",
+    ],
+    [
+      "an unknown thrown value",
+      "credentials must not reach diagnostics",
+      "probe threw an unknown error",
+    ],
+  ] as const)(
+    "attributes %s to its probe without printing exception details",
+    async (_classification, error, detail) => {
+      const result = await runNamedProbe("GET /mcp", async () => {
+        // eslint-disable-next-line typescript/only-throw-error -- exercises the unknown rejection branch
+        throw error;
+      });
+
+      expect(result).toEqual({
+        detail,
+        name: "GET /mcp",
+        status: "failed",
+      });
+    },
+  );
 });

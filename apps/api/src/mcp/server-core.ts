@@ -17,6 +17,7 @@ import { panic } from "better-result";
 import { detached } from "@/api/lib/detached";
 import type { McpSession } from "@/api/mcp/auth";
 import {
+  MCP_NOTIFICATION_KEEP_ALIVE_MS,
   MCP_STATELESS_ALLOW_HEADER,
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
@@ -515,6 +516,7 @@ export const createMcpHttpRequestHandler = ({
     const server = await createMcpServer({ clientIp, mode, request, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
+      keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
     });
     const reportTransportError = (error: unknown, operation: string) => {
       captureError(error, {

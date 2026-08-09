@@ -80,6 +80,13 @@ export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
  */
 export const MCP_STATELESS_ALLOW_HEADER = "OPTIONS, GET, POST";
 
+/**
+ * The first frame on an otherwise idle notification stream. Keep this well
+ * below edge/request deadlines: the canary derives its fetch timeout from the
+ * same value, so transport and observer cannot silently drift apart.
+ */
+export const MCP_NOTIFICATION_KEEP_ALIVE_MS = 5000;
+
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 

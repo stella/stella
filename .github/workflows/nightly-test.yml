@@ -271,10 +271,11 @@ jobs:
 
   # Postgres-backed API suites that gate on STELLA_RUN_POSTGRES_TESTS=true and a
   # real DATABASE_URL. The plain `bun run test` above skips them (they no-op in
-  # the skip branch), so they only ever execute here against a service Postgres
-  # with migrations applied. Failures are real regressions (pool isolation,
-  # JSONB persistence), so this job is kept separate from the network smoke
-  # canary below whose failures mean "upstream changed", not "we broke something".
+  # the skip branch); the shared runner executes them here and in required PR
+  # CI against a service Postgres with migrations applied. Failures are real
+  # regressions (pool isolation, JSONB persistence), so this job is kept
+  # separate from the network smoke canary below whose failures mean "upstream
+  # changed", not "we broke something".
   postgres-suites:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -326,20 +327,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
-          STELLA_RUN_POSTGRES_TESTS: "true"
-        # setup-env.ts supplies the remaining test env via `??=`; the explicit
-        # DATABASE_URL above wins. These files never call `mock.module`, so a
-        # shared process is fine.
-        run: >-
-          bun test --preload ./src/tests/setup-env.ts
-          src/db/root.test.ts
-          src/handlers/case-law/decisions/get-document-state.db.test.ts
-          src/handlers/case-law/ingestion/pipeline.db.test.ts
-          src/handlers/case-law/ingestion/pipeline-identity.db.test.ts
-          src/handlers/case-law/ingestion/pipeline-refresh.db.test.ts
-          src/handlers/case-law/ingestion/sk-document-backfill.db.test.ts
-          src/handlers/case-law/ingestion/sk-document-backfill-corpus.db.test.ts
-          src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.db.test.ts
+        # The runner discovers every suite that declares the Postgres gate, so
+        # adding a gated test cannot silently omit it from this workflow.
+        run: bun run test:postgres
 
   # Upstream-API drift canary for the CJEU adapter. Hits live Cellar SPARQL +
   # EUR-Lex endpoints, so a failure most often means an upstream schema/endpoint

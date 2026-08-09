@@ -27,9 +27,13 @@ import {
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "@/api/mcp/constants";
+import {
+  MCP_DISCOVERY_PATH,
+  MCP_HTTP_PATH,
+  MCP_NOTIFICATION_KEEP_ALIVE_MS,
+} from "@/api/mcp/constants";
 
-const PROBE_TIMEOUT_MS = 20_000;
+const PROBE_TIMEOUT_MS = MCP_NOTIFICATION_KEEP_ALIVE_MS * 4;
 const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
@@ -61,6 +65,34 @@ const failed = (name: string, detail: string): ProbeResult => ({
   status: PROBE_STATUS.failed,
   detail,
 });
+
+const describeProbeFailure = (error: unknown): string => {
+  if (error instanceof DOMException) {
+    if (error.name === "TimeoutError") {
+      return `request timed out after ${String(PROBE_TIMEOUT_MS)} ms`;
+    }
+    if (error.name === "AbortError") {
+      return "request was aborted";
+    }
+    return "request failed (DOMException)";
+  }
+  if (error instanceof TypeError) {
+    return "network request failed";
+  }
+  return `probe threw ${error instanceof Error ? error.constructor.name : "an unknown error"}`;
+};
+
+/** Convert every transport exception into a named, credential-safe result. */
+export const runNamedProbe = async (
+  name: string,
+  operation: () => Promise<ProbeResult>,
+): Promise<ProbeResult> => {
+  try {
+    return await operation();
+  } catch (error) {
+    return failed(name, describeProbeFailure(error));
+  }
+};
 
 const skipped = (name: string, detail: string): ProbeResult => ({
   name,
@@ -291,31 +323,39 @@ const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
     }),
   );
 
-const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> => {
-  const discovery = await readProbeResponse(
-    await fetchWithTimeout(new URL(MCP_DISCOVERY_PATH, baseUrl), {
-      headers: { accept: "application/json" },
-      method: "GET",
-      timeoutMs: PROBE_TIMEOUT_MS,
-    }),
-  );
-  const unauthenticated = await readProbeResponse(
-    await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
-      body: JSON.stringify({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
-      headers: {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-      },
-      method: "POST",
-      timeoutMs: PROBE_TIMEOUT_MS,
-    }),
-  );
-
-  return [
-    evaluateDiscovery(discovery),
-    evaluateUnauthenticated(unauthenticated),
-  ];
-};
+const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
+  await Promise.all([
+    runNamedProbe(PROBE_NAMES.discovery, async () =>
+      evaluateDiscovery(
+        await readProbeResponse(
+          await fetchWithTimeout(new URL(MCP_DISCOVERY_PATH, baseUrl), {
+            headers: { accept: "application/json" },
+            method: "GET",
+            timeoutMs: PROBE_TIMEOUT_MS,
+          }),
+        ),
+      ),
+    ),
+    runNamedProbe(PROBE_NAMES.unauthenticated, async () =>
+      evaluateUnauthenticated(
+        await readProbeResponse(
+          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
+            body: JSON.stringify({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/list",
+            }),
+            headers: {
+              accept: "application/json, text/event-stream",
+              "content-type": "application/json",
+            },
+            method: "POST",
+            timeoutMs: PROBE_TIMEOUT_MS,
+          }),
+        ),
+      ),
+    ),
+  ]);
 
 export type CanaryTarget = { baseUrl: string; token: string };
 export type CanaryFetcher = typeof fetchWithTimeout;
@@ -458,7 +498,10 @@ const runAuthenticatedProbes = async (
   target: CanaryTarget,
 ): Promise<ProbeResult[]> =>
   await Promise.all(
-    AUTHENTICATED_PROBES.map(async ({ run }) => await run(target)),
+    AUTHENTICATED_PROBES.map(
+      async ({ name, run }) =>
+        await runNamedProbe(name, async () => await run(target)),
+    ),
   );
 
 export const summarize = (results: readonly ProbeResult[]) => ({
