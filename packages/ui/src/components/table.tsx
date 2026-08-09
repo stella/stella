@@ -4,101 +4,90 @@ import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
-  return (
-    <div
-      className="relative w-full overflow-x-auto"
-      data-slot="table-container"
-    >
-      <table
-        className={cn(
-          "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
-          className,
-        )}
-        data-slot="table"
-        {...props}
-      />
-    </div>
-  );
-}
-
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return (
-    <thead
+const Table = ({ className, ...props }: React.ComponentProps<"table">) => (
+  <div className="relative w-full overflow-x-auto" data-slot="table-container">
+    <table
       className={cn(
-        "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+        "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
         className,
       )}
-      data-slot="table-header"
+      data-slot="table"
       {...props}
     />
-  );
-}
+  </div>
+);
 
-function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return (
-    <tbody
-      className={cn(
-        "in-data-[slot=frame]:*:[tr]:*:[td]:bg-background in-data-[slot=frame]:*:[tr]:data-[state=selected]:*:[td]:bg-muted/72 relative before:pointer-events-none before:absolute before:inset-px before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] not-in-data-[slot=frame]:before:hidden in-data-[slot=frame]:rounded-xl in-data-[slot=frame]:shadow-xs/5 dark:before:shadow-[0_-1px_--theme(--color-white/8%)] [&_tr:last-child]:border-0 in-data-[slot=frame]:*:[tr]:border-0 in-data-[slot=frame]:*:[tr]:*:[td]:border-b in-data-[slot=frame]:*:[tr]:*:[td]:bg-clip-padding in-data-[slot=frame]:*:[tr]:first:*:[td]:first:rounded-ss-xl in-data-[slot=frame]:*:[tr]:*:[td]:first:border-s in-data-[slot=frame]:*:[tr]:first:*:[td]:border-t in-data-[slot=frame]:*:[tr]:last:*:[td]:last:rounded-ee-xl in-data-[slot=frame]:*:[tr]:*:[td]:last:border-e in-data-[slot=frame]:*:[tr]:first:*:[td]:last:rounded-se-xl in-data-[slot=frame]:*:[tr]:last:*:[td]:first:rounded-es-xl in-data-[slot=frame]:*:[tr]:hover:*:[td]:bg-transparent",
-        className,
-      )}
-      data-slot="table-body"
-      {...props}
-    />
-  );
-}
+const TableHeader = ({
+  className,
+  ...props
+}: React.ComponentProps<"thead">) => (
+  <thead
+    className={cn(
+      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+      className,
+    )}
+    data-slot="table-header"
+    {...props}
+  />
+);
 
-function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
-  return (
-    <tfoot
-      className={cn(
-        "bg-muted/72 border-t font-medium in-data-[slot=frame]:border-none in-data-[slot=frame]:bg-transparent in-data-[slot=frame]:*:[tr]:hover:bg-transparent [&>tr]:last:border-b-0",
-        className,
-      )}
-      data-slot="table-footer"
-      {...props}
-    />
-  );
-}
+const TableBody = ({ className, ...props }: React.ComponentProps<"tbody">) => (
+  <tbody
+    className={cn(
+      "in-data-[slot=frame]:*:[tr]:*:[td]:bg-background in-data-[slot=frame]:*:[tr]:data-[state=selected]:*:[td]:bg-muted/72 relative before:pointer-events-none before:absolute before:inset-px before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] not-in-data-[slot=frame]:before:hidden in-data-[slot=frame]:rounded-xl in-data-[slot=frame]:shadow-xs/5 dark:before:shadow-[0_-1px_--theme(--color-white/8%)] [&_tr:last-child]:border-0 in-data-[slot=frame]:*:[tr]:border-0 in-data-[slot=frame]:*:[tr]:*:[td]:border-b in-data-[slot=frame]:*:[tr]:*:[td]:bg-clip-padding in-data-[slot=frame]:*:[tr]:first:*:[td]:first:rounded-ss-xl in-data-[slot=frame]:*:[tr]:*:[td]:first:border-s in-data-[slot=frame]:*:[tr]:first:*:[td]:border-t in-data-[slot=frame]:*:[tr]:last:*:[td]:last:rounded-ee-xl in-data-[slot=frame]:*:[tr]:*:[td]:last:border-e in-data-[slot=frame]:*:[tr]:first:*:[td]:last:rounded-se-xl in-data-[slot=frame]:*:[tr]:last:*:[td]:first:rounded-es-xl in-data-[slot=frame]:*:[tr]:hover:*:[td]:bg-transparent",
+      className,
+    )}
+    data-slot="table-body"
+    {...props}
+  />
+);
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
-  return (
-    <tr
-      className={cn(
-        "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b transition-colors in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
-        className,
-      )}
-      data-slot="table-row"
-      {...props}
-    />
-  );
-}
+const TableFooter = ({
+  className,
+  ...props
+}: React.ComponentProps<"tfoot">) => (
+  <tfoot
+    className={cn(
+      "bg-muted/72 border-t font-medium in-data-[slot=frame]:border-none in-data-[slot=frame]:bg-transparent in-data-[slot=frame]:*:[tr]:hover:bg-transparent [&>tr]:last:border-b-0",
+      className,
+    )}
+    data-slot="table-footer"
+    {...props}
+  />
+);
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
-  return (
-    <th
-      className={cn(
-        "text-muted-foreground h-10 px-2.5 text-start align-middle leading-none font-medium whitespace-nowrap has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
-        className,
-      )}
-      data-slot="table-head"
-      {...props}
-    />
-  );
-}
+const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
+  <tr
+    className={cn(
+      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b transition-colors in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
+      className,
+    )}
+    data-slot="table-row"
+    {...props}
+  />
+);
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
-  return (
-    <td
-      className={cn(
-        "p-2.5 align-middle leading-none whitespace-nowrap in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)] has-[[role=checkbox]]:pe-0",
-        className,
-      )}
-      data-slot="table-cell"
-      {...props}
-    />
-  );
-}
+const TableHead = ({ className, ...props }: React.ComponentProps<"th">) => (
+  <th
+    className={cn(
+      "text-muted-foreground h-10 px-2.5 text-start align-middle leading-none font-medium whitespace-nowrap has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
+      className,
+    )}
+    data-slot="table-head"
+    {...props}
+  />
+);
+
+const TableCell = ({ className, ...props }: React.ComponentProps<"td">) => (
+  <td
+    className={cn(
+      "p-2.5 align-middle leading-none whitespace-nowrap in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)] has-[[role=checkbox]]:pe-0",
+      className,
+    )}
+    data-slot="table-cell"
+    {...props}
+  />
+);
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -109,14 +98,14 @@ type SortableHeadProps = Omit<React.ComponentProps<"th">, "onClick"> & {
   trailing?: React.ReactNode;
 };
 
-function SortableHead({
+const SortableHead = ({
   children,
   sortDirection = null,
   onSort,
   trailing,
   className,
   ...props
-}: SortableHeadProps) {
+}: SortableHeadProps) => {
   let ariaSort: "ascending" | "descending" | "none" = "none";
   if (sortDirection === "asc") {
     ariaSort = "ascending";
@@ -146,23 +135,21 @@ function SortableHead({
       </span>
     </TableHead>
   );
-}
+};
 
-function TableCaption({
+const TableCaption = ({
   className,
   ...props
-}: React.ComponentProps<"caption">) {
-  return (
-    <caption
-      className={cn(
-        "text-muted-foreground mt-4 text-sm in-data-[slot=frame]:my-4",
-        className,
-      )}
-      data-slot="table-caption"
-      {...props}
-    />
-  );
-}
+}: React.ComponentProps<"caption">) => (
+  <caption
+    className={cn(
+      "text-muted-foreground mt-4 text-sm in-data-[slot=frame]:my-4",
+      className,
+    )}
+    data-slot="table-caption"
+    {...props}
+  />
+);
 
 export {
   Table,

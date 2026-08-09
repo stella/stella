@@ -93,7 +93,7 @@ const isPublicPrimaryNavRoute = (to: string): boolean =>
  * sign-in round-trip, and the authenticated-user context; each surface
  * supplies its own breadcrumb `topBar`.
  */
-export function PublicWorkspaceShell({ topBar }: { topBar: ReactNode }) {
+export const PublicWorkspaceShell = ({ topBar }: { topBar: ReactNode }) => {
   const authStatus = useClientAuthStatus();
   const createMatterDialogOpen = useCreateMatterStore(
     (state) => state.dialog.status === "open",
@@ -153,15 +153,15 @@ export function PublicWorkspaceShell({ topBar }: { topBar: ReactNode }) {
   }
 
   return shell;
-}
+};
 
-function PublicSidebar({
+const PublicSidebar = ({
   authStatus,
   requestAuth,
 }: {
   authStatus: ReturnType<typeof useClientAuthStatus>;
   requestAuth: (redirectTo: string) => void;
-}) {
+}) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const currentHref = useRouterState({
@@ -336,7 +336,7 @@ function PublicSidebar({
       )}
     </Sidebar>
   );
-}
+};
 
 type RailButtonOptions = {
   icon: ReactNode;
@@ -346,11 +346,11 @@ type RailButtonOptions = {
 
 /** Anonymous twin of the inspector side rail: same geometry and chrome
  * as the authenticated rail, with every affordance routed to sign-in. */
-function PublicInspectorRail({
+const PublicInspectorRail = ({
   requestAuth,
 }: {
   requestAuth: (redirectTo: string) => void;
-}) {
+}) => {
   const t = useTranslations();
   const currentHref = useRouterState({
     select: (state) => state.location.href,
@@ -416,4 +416,4 @@ function PublicInspectorRail({
       </div>
     </div>
   );
-}
+};

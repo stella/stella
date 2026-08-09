@@ -11,31 +11,27 @@ const RESPONSIVE_ACTION_TOOLBAR_SLOT_CLASS = {
   action: "order-3 shrink-0 sm:order-none",
 } as const satisfies Record<ResponsiveActionToolbarSlot, string>;
 
-export function ResponsiveActionToolbar({
+export const ResponsiveActionToolbar = ({
   className,
   ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn("flex flex-wrap items-center gap-2", className)}
-      {...props}
-    />
-  );
-}
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn("flex flex-wrap items-center gap-2", className)}
+    {...props}
+  />
+);
 
 type ResponsiveActionToolbarItemProps = React.PropsWithChildren<{
   slot: ResponsiveActionToolbarSlot;
   className?: string | undefined;
 }>;
 
-export function ResponsiveActionToolbarItem({
+export const ResponsiveActionToolbarItem = ({
   slot,
   className,
   children,
-}: ResponsiveActionToolbarItemProps) {
-  return (
-    <div className={cn(RESPONSIVE_ACTION_TOOLBAR_SLOT_CLASS[slot], className)}>
-      {children}
-    </div>
-  );
-}
+}: ResponsiveActionToolbarItemProps) => (
+  <div className={cn(RESPONSIVE_ACTION_TOOLBAR_SLOT_CLASS[slot], className)}>
+    {children}
+  </div>
+);

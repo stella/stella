@@ -27,40 +27,38 @@ type AuthenticatedCaseLawWorkspaceProps = {
 const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 const INSPECTOR_RAIL_WIDTH = 48;
 
-export function AuthenticatedCaseLawWorkspace({
+export const AuthenticatedCaseLawWorkspace = ({
   decision,
   decisionId,
   initialSearchQuery,
   user,
-}: AuthenticatedCaseLawWorkspaceProps) {
-  return (
-    <AuthenticatedUserProvider user={user}>
-      <ChatMentionProviders>
-        <AIAvailabilityProvider>
-          <ChatEditorProvider>
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <AuthenticatedDecisionWorkspace
-                decision={decision}
-                decisionId={decisionId}
-                initialSearchQuery={initialSearchQuery}
-              />
-            </div>
-            <CaseLawInspector decisionId={decisionId} />
-          </ChatEditorProvider>
-        </AIAvailabilityProvider>
-      </ChatMentionProviders>
-    </AuthenticatedUserProvider>
-  );
-}
+}: AuthenticatedCaseLawWorkspaceProps) => (
+  <AuthenticatedUserProvider user={user}>
+    <ChatMentionProviders>
+      <AIAvailabilityProvider>
+        <ChatEditorProvider>
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <AuthenticatedDecisionWorkspace
+              decision={decision}
+              decisionId={decisionId}
+              initialSearchQuery={initialSearchQuery}
+            />
+          </div>
+          <CaseLawInspector decisionId={decisionId} />
+        </ChatEditorProvider>
+      </AIAvailabilityProvider>
+    </ChatMentionProviders>
+  </AuthenticatedUserProvider>
+);
 
-function AuthenticatedDecisionWorkspace({
+const AuthenticatedDecisionWorkspace = ({
   decision,
   decisionId,
   initialSearchQuery,
 }: Pick<
   AuthenticatedCaseLawWorkspaceProps,
   "decision" | "decisionId" | "initialSearchQuery"
->) {
+>) => {
   const { ensureAIAvailable } = useAIKeyGate();
 
   return (
@@ -72,13 +70,13 @@ function AuthenticatedDecisionWorkspace({
       initialSearchQuery={initialSearchQuery}
     />
   );
-}
+};
 
-function CaseLawInspector({
+const CaseLawInspector = ({
   decisionId,
 }: {
   decisionId: SafeId<"caseLawDecision">;
-}) {
+}) => {
   const tabs = useInspectorTabsStore((s) => s.tabs);
   const minimized = useInspectorTabsStore((s) => s.minimized);
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
@@ -144,7 +142,7 @@ function CaseLawInspector({
       </div>
     </>
   );
-}
+};
 
 const AutoOpenDecisionChat = ({
   decisionId,

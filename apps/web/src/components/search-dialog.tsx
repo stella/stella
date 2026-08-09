@@ -325,7 +325,6 @@ const initialSearchFilters = (
   workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
 });
 
-// eslint-disable-next-line react/react-compiler -- useVirtualizer returns functions that cannot be safely memoized, so React Compiler intentionally skips this component
 export const SearchDialog = ({
   open,
   onOpenChange,

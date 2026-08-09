@@ -61,7 +61,7 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
 );
 const AIUnavailableContext = createContext(false);
 
-export function AIAvailabilityProvider({ children }: PropsWithChildren) {
+export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -124,7 +124,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
       </AIUnavailableContext>
     </AIAvailabilityContext>
   );
-}
+};
 
 export const useAIKeyGate = () => {
   const context = use(AIAvailabilityContext);
@@ -175,7 +175,9 @@ export function useAIAvailable(): boolean {
 // Explicit ReactNode: returning bare `children` infers a type containing
 // React 19's Promise<AwaitedReactNode> member, which promise-function-async
 // would otherwise flag on this intentionally sync component.
-export function RequireAIKey({ children }: PropsWithChildren): React.ReactNode {
+export const RequireAIKey = ({
+  children,
+}: PropsWithChildren): React.ReactNode => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data, isFetching, isPending, isError } = useChromeQuery(
@@ -215,7 +217,7 @@ export function RequireAIKey({ children }: PropsWithChildren): React.ReactNode {
       </div>
     </div>
   );
-}
+};
 
 type AIKeyRequiredDialogProps = {
   onOpenChange: (open: boolean) => void;
@@ -228,10 +230,10 @@ const DEFAULT_PROVIDER_DRAFTS: ProviderCredentialDraft[] = [
   createProviderCredentialDraft(),
 ];
 
-export function AIKeyRequiredDialog({
+export const AIKeyRequiredDialog = ({
   onOpenChange,
   open,
-}: AIKeyRequiredDialogProps) {
+}: AIKeyRequiredDialogProps) => {
   const t = useTranslations();
   const tCommon = useTranslations("common");
   const tOrganization = useTranslations("organization");
@@ -418,4 +420,4 @@ export function AIKeyRequiredDialog({
       </DialogPopup>
     </Dialog>
   );
-}
+};

@@ -2,90 +2,82 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { primaryCapabilities } from "../../data/capabilities";
 
-const illustrations = [
-  ReviewIllustration,
-  DraftIllustration,
-  ResearchIllustration,
-];
+const ProductShowcase = () => (
+  <div className="w-full">
+    <div className="showcase-grid flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:items-start md:overflow-visible md:pb-0">
+      {primaryCapabilities.map((item, index) => {
+        const Illustration = illustrations[index];
 
-export default function ProductShowcase() {
-  return (
-    <div className="w-full">
-      <div className="showcase-grid flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:items-start md:overflow-visible md:pb-0">
-        {primaryCapabilities.map((item, index) => {
-          const Illustration = illustrations[index];
-
-          return (
-            <article
-              data-reveal
-              className="showcase-tile min-w-[82%] snap-center self-start transition-[opacity,transform] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-w-[20rem] md:min-w-0"
-              key={item.title}
+        return (
+          <article
+            data-reveal
+            className="showcase-tile min-w-[82%] snap-center self-start transition-[opacity,transform] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-w-[20rem] md:min-w-0"
+            key={item.title}
+          >
+            <div
+              className={cn(
+                "group border-border/45 relative flex aspect-square min-h-[15rem] items-center justify-center overflow-hidden rounded-[1.45rem] border backdrop-blur-md transition-[border-color,box-shadow,transform] duration-300 ease-out sm:min-h-[18rem]",
+              )}
+              data-showcase-shell
+              style={{
+                background: "color-mix(in srgb, var(--card) 78%, transparent)",
+                boxShadow:
+                  "inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)",
+              }}
             >
+              {/* Glass light catch — brighter at top edge, fades down. */}
               <div
-                className={cn(
-                  "group border-border/45 relative flex aspect-square min-h-[15rem] items-center justify-center overflow-hidden rounded-[1.45rem] border backdrop-blur-md transition-[border-color,box-shadow,transform] duration-300 ease-out sm:min-h-[18rem]",
-                )}
-                data-showcase-shell
+                className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    "color-mix(in srgb, var(--card) 78%, transparent)",
-                  boxShadow:
-                    "inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)",
+                    "linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)",
                 }}
-              >
-                {/* Glass light catch — brighter at top edge, fades down. */}
-                <div
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)",
-                  }}
-                  aria-hidden="true"
-                />
-                {/* Subtle bottom darkening — adds depth, like glass thickness. */}
-                <div
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, transparent 65%, color-mix(in srgb, black 14%, transparent) 100%)",
-                  }}
-                  aria-hidden="true"
-                />
-                <Illustration />
-                <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
-                <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                  <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.36),rgba(255,255,255,0))] blur-2xl dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0))]" />
-                  <div className="absolute inset-0 rounded-[inherit] ring-1 ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_56%,white_44%)] dark:ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_52%,white_16%)]" />
-                </div>
+                aria-hidden="true"
+              />
+              {/* Subtle bottom darkening — adds depth, like glass thickness. */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(180deg, transparent 65%, color-mix(in srgb, black 14%, transparent) 100%)",
+                }}
+                aria-hidden="true"
+              />
+              <Illustration />
+              <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
+              <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.36),rgba(255,255,255,0))] blur-2xl dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0))]" />
+                <div className="absolute inset-0 rounded-[inherit] ring-1 ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_56%,white_44%)] dark:ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_52%,white_16%)]" />
               </div>
+            </div>
 
-              <div className="px-1 pt-5">
-                <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight transition-colors duration-300 sm:text-2xl">
-                  <span
-                    className="tabular-nums"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span
-                    className="mx-2"
-                    style={{ color: "var(--muted-foreground)" }}
-                    aria-hidden="true"
-                  >
-                    —
-                  </span>
-                  {item.title}
-                </h3>
-                <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7] transition-colors duration-300">
-                  {item.description}
-                </p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+            <div className="px-1 pt-5">
+              <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight transition-colors duration-300 sm:text-2xl">
+                <span
+                  className="tabular-nums"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span
+                  className="mx-2"
+                  style={{ color: "var(--muted-foreground)" }}
+                  aria-hidden="true"
+                >
+                  —
+                </span>
+                {item.title}
+              </h3>
+              <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7] transition-colors duration-300">
+                {item.description}
+              </p>
+            </div>
+          </article>
+        );
+      })}
+    </div>
 
-      <style>{`
+    <style>{`
         /* Stagger the per-tile reveal — set as CSS vars rather than
            inline style so the React type checker stays out of CSS
            variable territory. */
@@ -134,9 +126,10 @@ export default function ProductShowcase() {
           filter: drop-shadow(0 0 7px rgba(84, 156, 209, 0.55));
         }
       `}</style>
-    </div>
-  );
-}
+  </div>
+);
+
+export default ProductShowcase;
 
 /**
  * Line-art glyphs. Pure strokes, no fills, no fake UI.
@@ -144,7 +137,7 @@ export default function ProductShowcase() {
  */
 
 /** Tabular review: lines light up to white as the scan passes; all fade together at cycle end. */
-function ReviewIllustration() {
+const ReviewIllustration = () => {
   const lines = Array.from({ length: 6 }, (_, i) => 80 + i * 28);
   return (
     <svg
@@ -180,7 +173,7 @@ function ReviewIllustration() {
       />
     </svg>
   );
-}
+};
 
 const lineSpec: { y: number; words: number[] }[] = [
   { y: 100, words: [20, 14, 28, 12, 22, 16] },
@@ -190,7 +183,7 @@ const lineSpec: { y: number; words: number[] }[] = [
 ];
 
 /** Drafting: short dashes grouped as "words" appear one at a time, building paragraphs. */
-function DraftIllustration() {
+const DraftIllustration = () => {
   const startX = 60;
   const gap = 8;
 
@@ -230,10 +223,10 @@ function DraftIllustration() {
       ))}
     </svg>
   );
-}
+};
 
 /** Grounded research: sunburst with varied ray lengths; spotlight sweep brightens each ray to blue. */
-function ResearchIllustration() {
+const ResearchIllustration = () => {
   const rayCount = 16;
   const cx = 160;
   const cy = 140;
@@ -271,4 +264,10 @@ function ResearchIllustration() {
       })}
     </svg>
   );
-}
+};
+
+const illustrations = [
+  ReviewIllustration,
+  DraftIllustration,
+  ResearchIllustration,
+];

@@ -43,28 +43,26 @@ const literalArb: fc.Arbitrary<Operand> = fc
 const operandArb: fc.Arbitrary<Operand> = fc.oneof(refOperandArb, literalArb);
 
 const leafArb: fc.Arbitrary<ConditionNode> = fc.oneof(
-  fc.tuple(operandArb, fc.constantFrom(...COMPARE_OPS), operandArb).map(
-    ([left, op, right]): ConditionNode => ({
+  fc
+    .tuple(operandArb, fc.constantFrom(...COMPARE_OPS), operandArb)
+    .map(([left, op, right]): ConditionNode => ({
       type: "compare",
       left,
       op,
       right,
-    }),
-  ),
+    })),
   fc
     .tuple(
       operandArb,
       fc.constantFrom(...PREDICATE_OPS),
       fc.oneof(fc.string(), fc.array(fc.string())),
     )
-    .map(
-      ([operand, op, value]): ConditionNode => ({
-        type: "predicate",
-        operand,
-        op,
-        value,
-      }),
-    ),
+    .map(([operand, op, value]): ConditionNode => ({
+      type: "predicate",
+      operand,
+      op,
+      value,
+    })),
 );
 
 const { node: nodeArb } = fc.letrec<{ node: ConditionNode }>((tie) => ({
@@ -78,14 +76,12 @@ const { node: nodeArb } = fc.letrec<{ node: ConditionNode }>((tie) => ({
           fc.boolean(),
           fc.array(tie("node"), { maxLength: 3 }),
         )
-        .map(
-          ([combinator, negated, children]): ConditionNode => ({
-            type: "group",
-            combinator,
-            negated,
-            children,
-          }),
-        ),
+        .map(([combinator, negated, children]): ConditionNode => ({
+          type: "group",
+          combinator,
+          negated,
+          children,
+        })),
     },
   ),
 }));

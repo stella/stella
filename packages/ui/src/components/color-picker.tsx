@@ -111,7 +111,7 @@ const looksLikeHex = (v: string) => /^[0-9A-Fa-f]{6}$/u.test(v);
 // ColorSwatch (internal)
 // ---------------------------------------------------------------------------
 
-function ColorSwatch({
+const ColorSwatch = ({
   cssColor,
   selected,
   label,
@@ -123,47 +123,45 @@ function ColorSwatch({
   label: string;
   isLight: boolean;
   onClick: () => void;
-}) {
-  return (
-    <PopoverPrimitive.Close
-      render={
-        <button
-          aria-label={label}
-          className={cn(
-            "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-[transform,border-color] hover:scale-115 sm:size-5",
-            selected
-              ? "border-foreground ring-ring/24 ring-1"
-              : "border-border/40",
-            isLight && !selected && "border-border",
-          )}
-          onClick={onClick}
-          style={{ backgroundColor: cssColor }}
-          type="button"
-        />
-      }
-    >
-      {selected && (
-        <CheckIcon
-          className="pointer-events-none size-3 sm:size-2.5"
-          style={{ color: isLight ? "#000" : "#fff" }}
-        />
-      )}
-    </PopoverPrimitive.Close>
-  );
-}
+}) => (
+  <PopoverPrimitive.Close
+    render={
+      <button
+        aria-label={label}
+        className={cn(
+          "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-[transform,border-color] hover:scale-115 sm:size-5",
+          selected
+            ? "border-foreground ring-ring/24 ring-1"
+            : "border-border/40",
+          isLight && !selected && "border-border",
+        )}
+        onClick={onClick}
+        style={{ backgroundColor: cssColor }}
+        type="button"
+      />
+    }
+  >
+    {selected && (
+      <CheckIcon
+        className="pointer-events-none size-3 sm:size-2.5"
+        style={{ color: isLight ? "#000" : "#fff" }}
+      />
+    )}
+  </PopoverPrimitive.Close>
+);
 
 // ---------------------------------------------------------------------------
 // ColorPickerContent (public — for embedding without popover)
 // ---------------------------------------------------------------------------
 
-function ColorPickerContent({
+const ColorPickerContent = ({
   value,
   onSelect,
   onClear,
   presets,
   columns,
   defaultExpanded,
-}: ColorPickerContentProps) {
+}: ColorPickerContentProps) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   // pickerHex: last valid 6-char hex from the visual picker (drives the picker's color prop)
   // inputHex: raw text in the hex input (may be partial, e.g. "FF")
@@ -287,13 +285,13 @@ function ColorPickerContent({
       )}
     </div>
   );
-}
+};
 
 // ---------------------------------------------------------------------------
 // ColorPicker (public)
 // ---------------------------------------------------------------------------
 
-function ColorPicker({
+const ColorPicker = ({
   value,
   onSelect,
   onClear,
@@ -304,44 +302,42 @@ function ColorPicker({
   side = "bottom",
   align = "start",
   className,
-}: ColorPickerProps) {
-  return (
-    <PopoverPrimitive.Root>
-      <PopoverPrimitive.Trigger
-        data-slot="color-picker-trigger"
-        nativeButton={false}
-        render={<div className="inline-flex" />}
+}: ColorPickerProps) => (
+  <PopoverPrimitive.Root>
+    <PopoverPrimitive.Trigger
+      data-slot="color-picker-trigger"
+      nativeButton={false}
+      render={<div className="inline-flex" />}
+    >
+      {children}
+    </PopoverPrimitive.Trigger>
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Positioner
+        align={align}
+        className="z-50"
+        side={side}
+        sideOffset={4}
       >
-        {children}
-      </PopoverPrimitive.Trigger>
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Positioner
-          align={align}
-          className="z-50"
-          side={side}
-          sideOffset={4}
+        <PopoverPrimitive.Popup
+          className={cn(
+            "bg-popover text-popover-foreground origin-(--transform-origin) rounded-lg border p-2 shadow-lg/5 transition-[scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            className,
+          )}
+          data-slot="color-picker-popup"
         >
-          <PopoverPrimitive.Popup
-            className={cn(
-              "bg-popover text-popover-foreground origin-(--transform-origin) rounded-lg border p-2 shadow-lg/5 transition-[scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-              className,
-            )}
-            data-slot="color-picker-popup"
-          >
-            <ColorPickerContent
-              columns={columns}
-              defaultExpanded={defaultExpanded}
-              onClear={onClear}
-              onSelect={onSelect}
-              presets={presets}
-              value={value}
-            />
-          </PopoverPrimitive.Popup>
-        </PopoverPrimitive.Positioner>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
-  );
-}
+          <ColorPickerContent
+            columns={columns}
+            defaultExpanded={defaultExpanded}
+            onClear={onClear}
+            onSelect={onSelect}
+            presets={presets}
+            value={value}
+          />
+        </PopoverPrimitive.Popup>
+      </PopoverPrimitive.Positioner>
+    </PopoverPrimitive.Portal>
+  </PopoverPrimitive.Root>
+);
 
 export {
   ColorPicker,

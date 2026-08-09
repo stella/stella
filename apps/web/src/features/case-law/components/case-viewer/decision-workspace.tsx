@@ -63,7 +63,7 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
-export function DecisionWorkspace(props: DecisionWorkspaceProps) {
+export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialSearchQuery } = props;
   const t = useTranslations();
   const aiEnabled = props.aiMode === "enabled";
@@ -373,9 +373,9 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
       </div>
     </div>
   );
-}
+};
 
-function AnalysisLoader() {
+const AnalysisLoader = () => {
   const t = useTranslations();
 
   return (
@@ -409,4 +409,4 @@ function AnalysisLoader() {
       ))}
     </div>
   );
-}
+};

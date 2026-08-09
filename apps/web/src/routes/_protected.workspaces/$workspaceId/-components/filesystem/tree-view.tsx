@@ -296,7 +296,6 @@ const collectFolderIds = (
   return ids;
 };
 
-// eslint-disable-next-line react/react-compiler -- react-compiler skips this component: an API it uses returns functions that cannot be memoized, so the compiler bails out of the whole component (Compilation Skipped: incompatible library)
 export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));

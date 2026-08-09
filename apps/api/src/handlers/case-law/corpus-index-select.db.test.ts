@@ -42,7 +42,7 @@ const scopedDb: Parameters<
 >[0] = async (callback) =>
   // SAFETY: pglite stands in for the transaction the adapter expects; the
   // adapter only issues reads here.
-  // eslint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 beforeAll(

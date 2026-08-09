@@ -11,10 +11,8 @@ const LazyMarkdownFolioEditor = lazy(async () => {
   return { default: m.MarkdownFolioEditor };
 });
 
-export function MarkdownFolioEditor(props: MarkdownFolioEditorProps) {
-  return (
-    <Suspense fallback={null}>
-      <LazyMarkdownFolioEditor {...props} />
-    </Suspense>
-  );
-}
+export const MarkdownFolioEditor = (props: MarkdownFolioEditorProps) => (
+  <Suspense fallback={null}>
+    <LazyMarkdownFolioEditor {...props} />
+  </Suspense>
+);

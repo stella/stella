@@ -157,20 +157,18 @@ const stellaToast: ToastApi = Object.assign(
   },
 );
 
-function ToastProvider({
+const ToastProvider = ({
   children,
   position = "bottom-right",
   ...props
-}: ToastProviderProps) {
-  return (
-    <Toast.Provider toastManager={toastManager} {...props}>
-      {children}
-      <Toasts position={position} />
-    </Toast.Provider>
-  );
-}
+}: ToastProviderProps) => (
+  <Toast.Provider toastManager={toastManager} {...props}>
+    {children}
+    <Toasts position={position} />
+  </Toast.Provider>
+);
 
-function Toasts({ position }: { position: ToastPosition }) {
+const Toasts = ({ position }: { position: ToastPosition }) => {
   const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
 
@@ -303,18 +301,19 @@ function Toasts({ position }: { position: ToastPosition }) {
       </Toast.Viewport>
     </Toast.Portal>
   );
-}
+};
 
-function AnchoredToastProvider({ children, ...props }: Toast.Provider.Props) {
-  return (
-    <Toast.Provider toastManager={anchoredToastManager} {...props}>
-      {children}
-      <AnchoredToasts />
-    </Toast.Provider>
-  );
-}
+const AnchoredToastProvider = ({
+  children,
+  ...props
+}: Toast.Provider.Props) => (
+  <Toast.Provider toastManager={anchoredToastManager} {...props}>
+    {children}
+    <AnchoredToasts />
+  </Toast.Provider>
+);
 
-function AnchoredToasts() {
+const AnchoredToasts = () => {
   const { toasts } = Toast.useToastManager<{ tooltipStyle?: boolean }>();
 
   return (
@@ -397,7 +396,7 @@ function AnchoredToasts() {
       </Toast.Viewport>
     </Toast.Portal>
   );
-}
+};
 
 function addToast(
   title: React.ReactNode,

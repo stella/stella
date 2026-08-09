@@ -62,12 +62,12 @@ export type MarkdownFolioEditorProps = {
  * in the host, which transforms `markdown` on the way in and persists on the way
  * out.
  */
-export function MarkdownFolioEditor({
+export const MarkdownFolioEditor = ({
   markdown,
   onMarkdownChange,
   readOnly = false,
   className,
-}: MarkdownFolioEditorProps) {
+}: MarkdownFolioEditorProps) => {
   const t = useTranslations();
   // Latest content across both modes — the bridge when toggling raw ⇄ WYSIWYG.
   const currentRef = useRef(markdown);
@@ -192,7 +192,7 @@ export function MarkdownFolioEditor({
       />
     </div>
   );
-}
+};
 
 type ModeControlProps = {
   icon: React.ReactNode;

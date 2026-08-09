@@ -29,7 +29,7 @@ declare const infiniteOptions: {
   getNextPageParam: () => null;
 };
 
-function PendingComponent() {
+const PendingComponent = () => {
   // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
   useQuery(options);
 
@@ -40,7 +40,7 @@ function PendingComponent() {
   queryClient.getQueryData(options.queryKey);
 
   return null;
-}
+};
 
 export const Route = createFileRoute("/__fixture")({
   pendingComponent: PendingComponent,

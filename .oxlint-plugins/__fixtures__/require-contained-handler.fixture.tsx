@@ -10,7 +10,7 @@ import type { RefObject, SyntheticEvent } from "react";
 
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
-const noop = (_event?: SyntheticEvent) => void 0;
+const noop = (_event?: SyntheticEvent) => undefined;
 
 const buttonRef: RefObject<HTMLButtonElement | null> = { current: null };
 const inputRef: RefObject<HTMLInputElement | null> = { current: null };

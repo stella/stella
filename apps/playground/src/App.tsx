@@ -84,7 +84,7 @@ function readInitialFixture(): {
   return { document: createEmptyDocument(), fileName: "Untitled.docx" };
 }
 
-export function App() {
+export const App = () => {
   const editorRef = useRef<DocxEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [initialFixture] = useState(readInitialFixture);
@@ -293,13 +293,21 @@ export function App() {
           id="file-input"
           type="file"
           accept=".docx"
-          onChange={(e) => void handleFileSelect(e)}
+          onChange={(event) => {
+            handleFileSelect(event).catch(() => undefined);
+          }}
           className="hidden"
         />
         <Button variant="ghost" size="sm" onClick={handleNewDocument}>
           New
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => void handleSave()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            handleSave().catch(() => undefined);
+          }}
+        >
           Save
         </Button>
 
@@ -348,4 +356,4 @@ export function App() {
       </div>
     </div>
   );
-}
+};

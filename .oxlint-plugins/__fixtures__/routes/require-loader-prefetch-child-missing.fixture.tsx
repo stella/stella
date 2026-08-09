@@ -16,6 +16,4 @@ export const Route = createFileRoute("/__fixture/child-missing-loader")({
   component: ChildMissingLoaderComponent,
 });
 
-function ChildMissingLoaderComponent() {
-  return <ChildComponent />;
-}
+const ChildMissingLoaderComponent = () => <ChildComponent />;

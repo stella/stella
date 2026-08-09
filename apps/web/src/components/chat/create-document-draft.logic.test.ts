@@ -564,7 +564,6 @@ describe("create-document drafts", () => {
     );
     expect(fileName.length).toBeLessThanOrEqual(255);
     expect(fileName.endsWith(".docx")).toBe(true);
-    // eslint-disable-next-line no-control-regex -- verifies that download names cannot retain null/control characters
     expect(fileName).not.toMatch(/["/\\<>\r\n\0|*?:]/u);
     expect(fileName).not.toContain("..");
   });

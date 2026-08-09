@@ -69,7 +69,7 @@ class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
   cause: unknown;
 }> {}
 
-export function OTPPanel({
+export const OTPPanel = ({
   className,
   email,
   initialOtp,
@@ -77,7 +77,7 @@ export function OTPPanel({
   surface = "frame",
   onUseDifferentEmail,
   onVerified,
-}: OTPPanelProps) {
+}: OTPPanelProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
@@ -250,9 +250,9 @@ export function OTPPanel({
   }
 
   return <Frame className={cn("w-full max-w-md", className)}>{panel}</Frame>;
-}
+};
 
-function OTPPanelContent({
+const OTPPanelContent = ({
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -276,7 +276,7 @@ function OTPPanelContent({
   onResend: () => void;
   onSubmit: (otp?: string) => void;
   onUseDifferentEmail: () => void;
-}) {
+}) => {
   const t = useTranslations();
 
   const header = (
@@ -370,4 +370,4 @@ function OTPPanelContent({
       <FramePanel>{body}</FramePanel>
     </>
   );
-}
+};

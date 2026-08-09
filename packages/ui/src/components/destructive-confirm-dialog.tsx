@@ -31,7 +31,7 @@ type DestructiveConfirmDialogProps = {
   title: React.ReactNode;
 };
 
-function DestructiveConfirmDialog({
+const DestructiveConfirmDialog = ({
   cancelLabel,
   confirmLabel,
   confirmation,
@@ -42,7 +42,7 @@ function DestructiveConfirmDialog({
   onOpenChange,
   open,
   title,
-}: DestructiveConfirmDialogProps) {
+}: DestructiveConfirmDialogProps) => {
   const typedConfirmation = useDestructiveActionConfirmation(confirmation);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -63,6 +63,10 @@ function DestructiveConfirmDialog({
     } catch {
       // Callers surface mutation errors; keep the dialog open for retry.
     }
+  };
+
+  const handleConfirmClick = () => {
+    handleConfirm().catch(() => undefined);
   };
 
   return (
@@ -88,7 +92,7 @@ function DestructiveConfirmDialog({
           <Button
             disabled={!typedConfirmation.confirmed}
             loading={loading}
-            onClick={() => void handleConfirm()}
+            onClick={handleConfirmClick}
             variant="destructive"
           >
             {confirmLabel}
@@ -97,7 +101,7 @@ function DestructiveConfirmDialog({
       </AlertDialogPopup>
     </AlertDialog>
   );
-}
+};
 
 export { DestructiveConfirmDialog };
 export type { DestructiveConfirmDialogProps };

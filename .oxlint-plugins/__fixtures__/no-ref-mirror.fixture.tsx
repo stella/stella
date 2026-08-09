@@ -2,7 +2,7 @@
 
 import React, { useRef } from "react";
 
-export function RefMirrorFixture({ value }: { value: string }) {
+export const RefMirrorFixture = ({ value }: { value: string }) => {
   const valueRef = useRef(value);
   // oxlint-disable-next-line no-ref-mirror/no-ref-mirror
   valueRef.current = value;
@@ -26,4 +26,4 @@ export function RefMirrorFixture({ value }: { value: string }) {
   };
 
   return <div ref={domRef}>{updateLater.name}</div>;
-}
+};

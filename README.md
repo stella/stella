@@ -153,8 +153,6 @@ more information and our policy on AI-generated contributions.
 PRs must pass the linting and testing pipeline. You will be prompted
 to sign the Contributor License Agreement (CLA) by CI.
 
-This project is tested with BrowserStack.
-
 ## Contact
 
 1. Open an issue for questions, feedback or suggestions.

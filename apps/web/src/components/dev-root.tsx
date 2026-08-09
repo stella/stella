@@ -10,7 +10,7 @@ const TanStackDevtoolsRoot = lazy(
   async () => await import("@/components/tanstack-devtools-root"),
 );
 
-export default function DevRoot() {
+const DevRoot = () => {
   useMountEffect(() => installDevPerfBudget());
   const [tanstackDevtools, sourceInspector] = useDevStore(
     useShallow((s) => [s.tanstackDevtools, s.sourceInspector]),
@@ -21,4 +21,6 @@ export default function DevRoot() {
       <TanStackDevtoolsRoot sourceInspector={sourceInspector} />
     </Suspense>
   ) : null;
-}
+};
+
+export default DevRoot;

@@ -7,7 +7,6 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 // Mirror of the unsafe-character class the sanitizer strips. Independent of the
 // implementation's regex so the assertion tests the contract, not the code.
-// eslint-disable-next-line no-control-regex -- intentional: the null byte is one of the unsafe characters.
 const UNSAFE_CHAR = /["/\\<>\r\n\0|*?:]/u;
 
 describe("sanitizeFilename (properties)", () => {

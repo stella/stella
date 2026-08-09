@@ -136,7 +136,6 @@ const createSafeDb = (
     },
   };
   return async (callback) =>
-    // oxlint-disable-next-line node/callback-return -- result must be wrapped in Result.ok, not returned raw
     Result.ok(await callback(asTestRaw<Transaction>(tx)));
 };
 

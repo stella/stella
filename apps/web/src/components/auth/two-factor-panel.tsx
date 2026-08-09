@@ -36,7 +36,7 @@ type TwoFactorPanelProps = {
 
 const TOTP_LENGTH = 6;
 
-export function TwoFactorPanel({ className }: TwoFactorPanelProps) {
+export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
@@ -208,4 +208,4 @@ export function TwoFactorPanel({ className }: TwoFactorPanelProps) {
       </FramePanel>
     </Frame>
   );
-}
+};

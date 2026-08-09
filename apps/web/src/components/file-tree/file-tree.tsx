@@ -151,7 +151,7 @@ export type FileTreeProps = {
  * The workspace Files view keeps its own virtualized, drag-enabled grid but
  * shares the row presentation ({@link FileTreeNameCell}, {@link TreeGuideLines}).
  */
-export function FileTree({
+export const FileTree = ({
   nodes,
   expandedIds,
   selectedId,
@@ -161,7 +161,7 @@ export function FileTree({
   renderName,
   renderActions,
   className,
-}: FileTreeProps) {
+}: FileTreeProps) => {
   const rows = flatten(nodes, expandedIds);
   return (
     <div className={cn("flex flex-col", className)}>
@@ -222,4 +222,4 @@ export function FileTree({
       })}
     </div>
   );
-}
+};

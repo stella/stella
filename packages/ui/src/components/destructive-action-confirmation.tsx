@@ -20,7 +20,7 @@ type DestructiveActionConfirmationProps = Omit<
   value: string;
 };
 
-function DestructiveActionConfirmation({
+const DestructiveActionConfirmation = ({
   className,
   confirmation,
   description,
@@ -30,7 +30,7 @@ function DestructiveActionConfirmation({
   onValueChange,
   value,
   ...props
-}: DestructiveActionConfirmationProps) {
+}: DestructiveActionConfirmationProps) => {
   const confirmed = isDestructiveActionConfirmed({ confirmation, value });
   const invalid = value.length >= confirmation.length && !confirmed;
 
@@ -65,7 +65,7 @@ function DestructiveActionConfirmation({
       />
     </Field>
   );
-}
+};
 
 function useDestructiveActionConfirmation(confirmation: string) {
   const [value, setValue] = React.useState("");

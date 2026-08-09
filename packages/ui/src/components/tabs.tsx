@@ -14,20 +14,18 @@ type TabsVariant = "default" | "underline";
 const useIsoLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
-  return (
-    <TabsPrimitive.Root
-      className={cn(
-        "flex flex-col gap-2 data-[orientation=vertical]:flex-row",
-        className,
-      )}
-      data-slot="tabs"
-      {...props}
-    />
-  );
-}
+const Tabs = ({ className, ...props }: TabsPrimitive.Root.Props) => (
+  <TabsPrimitive.Root
+    className={cn(
+      "flex flex-col gap-2 data-[orientation=vertical]:flex-row",
+      className,
+    )}
+    data-slot="tabs"
+    {...props}
+  />
+);
 
-function TabsList({
+const TabsList = ({
   variant = "default",
   className,
   children,
@@ -35,7 +33,7 @@ function TabsList({
   ...props
 }: TabsPrimitive.List.Props & {
   variant?: TabsVariant;
-}) {
+}) => {
   const listRef = useRef<HTMLDivElement | null>(null);
   const tabOrderRef = useRef<readonly Element[]>([]);
   const [, setRemeasureToken] = useState(0);
@@ -79,30 +77,26 @@ function TabsList({
       />
     </TabsPrimitive.List>
   );
-}
+};
 
-function TabsTab({ className, ...props }: TabsPrimitive.Tab.Props) {
-  return (
-    <TabsPrimitive.Tab
-      className={cn(
-        "hover:text-foreground focus-visible:ring-ring data-active:text-foreground relative flex h-9 shrink-0 grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-[calc(--spacing(2.5)-1px)] text-base font-medium whitespace-nowrap transition-[color,background-color,box-shadow] outline-none focus-visible:ring-2 data-disabled:pointer-events-none data-disabled:opacity-64 data-[orientation=vertical]:w-full data-[orientation=vertical]:justify-start sm:h-8 sm:text-sm [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      data-slot="tabs-tab"
-      {...props}
-    />
-  );
-}
+const TabsTab = ({ className, ...props }: TabsPrimitive.Tab.Props) => (
+  <TabsPrimitive.Tab
+    className={cn(
+      "hover:text-foreground focus-visible:ring-ring data-active:text-foreground relative flex h-9 shrink-0 grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-[calc(--spacing(2.5)-1px)] text-base font-medium whitespace-nowrap transition-[color,background-color,box-shadow] outline-none focus-visible:ring-2 data-disabled:pointer-events-none data-disabled:opacity-64 data-[orientation=vertical]:w-full data-[orientation=vertical]:justify-start sm:h-8 sm:text-sm [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      className,
+    )}
+    data-slot="tabs-tab"
+    {...props}
+  />
+);
 
-function TabsPanel({ className, ...props }: TabsPrimitive.Panel.Props) {
-  return (
-    <TabsPrimitive.Panel
-      className={cn("flex-1 outline-none", className)}
-      data-slot="tabs-content"
-      {...props}
-    />
-  );
-}
+const TabsPanel = ({ className, ...props }: TabsPrimitive.Panel.Props) => (
+  <TabsPrimitive.Panel
+    className={cn("flex-1 outline-none", className)}
+    data-slot="tabs-content"
+    {...props}
+  />
+);
 
 export {
   Tabs,

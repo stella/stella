@@ -80,7 +80,6 @@ if (!databaseUrl || !runPostgresTests) {
     relations: { ...relations, ...authRelationsPart },
   });
   const scopedDb: ScopedDb = async (callback) =>
-    // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
     await db.transaction(async (tx) => await callback(tx));
 
   describe("ingestion refresh — stored document", () => {

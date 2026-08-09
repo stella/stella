@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 
 import { useAppColors } from "@/theme";
 
-export default function TabLayout() {
+const TabLayout = () => {
   const colors = useAppColors();
 
   return (
@@ -23,4 +23,6 @@ export default function TabLayout() {
       <Tabs.Screen name="matters" options={{ title: "Matters" }} />
     </Tabs>
   );
-}
+};
+
+export default TabLayout;

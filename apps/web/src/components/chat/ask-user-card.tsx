@@ -69,10 +69,11 @@ const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
   [],
 );
 
-const createAnalysisAnchor = (workspaceId: string | undefined) =>
-  function AnalysisAnchor(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
-    return <EntityLink {...props} workspaceId={workspaceId} />;
-  };
+const createAnalysisAnchor =
+  (workspaceId: string | undefined) =>
+  (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <EntityLink {...props} workspaceId={workspaceId} />
+  );
 
 const renderAnalysisAnonymizedSpan = (
   props: ComponentProps<"button"> & { ph?: string },

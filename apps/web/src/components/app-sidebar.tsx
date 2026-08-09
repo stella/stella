@@ -144,7 +144,7 @@ const GuideHelpDrawer = lazy(async () => {
   return { default: module.GuideHelpDrawer };
 });
 
-export function AppSidebar(props: AppSidebarProps) {
+export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
@@ -484,19 +484,17 @@ export function AppSidebar(props: AppSidebarProps) {
 
   const navTargets: NavTarget[] = [
     ...fixedNavTargets,
-    ...pinned.slice(0, 3).map(
-      (ws): NavTarget => ({
-        action: () => {
-          detached(
-            navigate({
-              to: "/workspaces/$workspaceId",
-              params: { workspaceId: ws.id },
-            }),
-            "action",
-          );
-        },
-      }),
-    ),
+    ...pinned.slice(0, 3).map((ws): NavTarget => ({
+      action: () => {
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId: ws.id },
+          }),
+          "action",
+        );
+      },
+    })),
   ];
 
   const runNavTarget = useLatestCallback((index: number): boolean => {
@@ -745,7 +743,7 @@ export function AppSidebar(props: AppSidebarProps) {
       )}
     </Sidebar>
   );
-}
+};
 
 const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;

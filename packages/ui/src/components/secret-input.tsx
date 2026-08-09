@@ -14,14 +14,14 @@ type SecretInputProps = Omit<InputProps, "type"> & {
   showValueLabel: string;
 };
 
-function SecretInput({
+const SecretInput = ({
   className,
   dir,
   disabled,
   hideValueLabel,
   showValueLabel,
   ...props
-}: SecretInputProps) {
+}: SecretInputProps) => {
   const [visibility, setVisibility] = useState<"concealed" | "revealed">(
     "concealed",
   );
@@ -60,6 +60,6 @@ function SecretInput({
       </Button>
     </span>
   );
-}
+};
 
 export { SecretInput, type SecretInputProps };

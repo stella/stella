@@ -243,7 +243,6 @@ describe("chat attachment hydration", () => {
     // `delete().where()` in this regression test.
     const testTx = asTestRaw<Transaction>(tx);
     const safeDb: SafeDb = async (callback) =>
-      // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
       await Result.tryPromise(async () => await callback(testTx));
     const message = toPersistableChatMessage({
       id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),

@@ -470,11 +470,11 @@ type DocumentIconProps = {
   className?: string | undefined;
 };
 
-export function DocumentIcon({
+export const DocumentIcon = ({
   mimeType,
   fileName,
   className,
-}: DocumentIconProps) {
+}: DocumentIconProps) => {
   const iconKind = getDocumentIconKind(mimeType, fileName);
 
   if (iconKind === "pdf") {
@@ -522,4 +522,4 @@ export function DocumentIcon({
   }
 
   return <File className={className} />;
-}
+};

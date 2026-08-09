@@ -13,19 +13,17 @@ const LazyCatalogueBrowser = lazy(async () => {
   return { default: module.CatalogueBrowserWithRouteData };
 });
 
-export function StaticCatalogueRouteImportFixture({
+export const StaticCatalogueRouteImportFixture = ({
   kind,
 }: {
   kind: CatalogueBrowserFilterKind;
-}) {
-  return (
-    <>
-      <LazyCatalogueBrowser initialKind={kind} organizationId="org_fixture" />
-      <CatalogueBrowser
-        canManageCustomTools={false}
-        initialKind={kind}
-        organizationId="org_fixture"
-      />
-    </>
-  );
-}
+}) => (
+  <>
+    <LazyCatalogueBrowser initialKind={kind} organizationId="org_fixture" />
+    <CatalogueBrowser
+      canManageCustomTools={false}
+      initialKind={kind}
+      organizationId="org_fixture"
+    />
+  </>
+);

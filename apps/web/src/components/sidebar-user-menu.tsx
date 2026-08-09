@@ -68,7 +68,7 @@ type SidebarUserMenuProps = {
 /** Sidebar footer block with the user avatar and account menu. Shared
  * between the workspace sidebar and the public law shell so the chrome
  * stays identical on both surfaces. */
-export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
+export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const signOut = useSignOut();
@@ -266,7 +266,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
       </Menu>
     </SidebarMenuItem>
   );
-}
+};
 
 type OrganizationMenuSectionProps = {
   activeOrganizationId: string;
@@ -279,10 +279,10 @@ type OrganizationMenuSectionProps = {
  * Owns the organization list query rather than taking it as a prop so the
  * sidebar reads the active organization and the switchable ones from one cache
  * entry, and therefore one `organization/list` request per route. */
-function OrganizationMenuSection({
+const OrganizationMenuSection = ({
   activeOrganizationId,
   role,
-}: OrganizationMenuSectionProps) {
+}: OrganizationMenuSectionProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
@@ -375,10 +375,10 @@ function OrganizationMenuSection({
       <MenuSeparator />
     </>
   );
-}
+};
 
 /** The signed-in user's role in the active organization. */
-function OrganizationRoleBadge({ role }: { role: Role | undefined }) {
+const OrganizationRoleBadge = ({ role }: { role: Role | undefined }) => {
   const t = useTranslations();
 
   if (!role) {
@@ -390,4 +390,4 @@ function OrganizationRoleBadge({ role }: { role: Role | undefined }) {
       {t(`organization.roles.${role}`)}
     </span>
   );
-}
+};
