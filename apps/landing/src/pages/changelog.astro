@@ -128,8 +128,17 @@ const formatReleaseDate = (publishedAt: string) =>
                             id={release.slug}
                             class="changelog-maintenance-item py-3"
                           >
-                            <summary class="cursor-pointer text-sm font-medium tabular-nums">
-                              {release.tagName}
+                            <summary class="flex cursor-pointer items-center justify-between gap-4 text-sm font-medium">
+                              <span class="tabular-nums">{release.tagName}</span>
+                              {release.publishedAt && (
+                                <time
+                                  datetime={release.publishedAt}
+                                  class="shrink-0 tabular-nums"
+                                  style="color: var(--muted-foreground)"
+                                >
+                                  {formatReleaseDate(release.publishedAt)}
+                                </time>
+                              )}
                             </summary>
                             <div class="changelog-body pb-2 pt-3">
                               <p>{release.description}</p>
@@ -1061,6 +1070,8 @@ const formatReleaseDate = (publishedAt: string) =>
       signal: AbortSignal,
     ) => {
       const releaseEntryOffset = (page - 1) * CHANGELOG_ENTRIES_PER_PAGE;
+      // The extra entry is never rendered. It proves that the page's trailing
+      // maintenance group is complete and supplies an accurate next-page flag.
       const releaseEntryLimit =
         releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE + 1;
       const stellaReleases: GitHubRelease[] = [];
@@ -1291,6 +1302,9 @@ const formatReleaseDate = (publishedAt: string) =>
       previewReleaseSlugs = new Set(readPreviewReleaseSlugs());
       currentPage = readCurrentPage();
       hasNextPage = false;
+      // Expand a nested anchor in the server-rendered list immediately; the
+      // live GitHub feed may take a network round trip before replacing it.
+      scrollToCurrentHash();
       void loadReleases();
     };
 

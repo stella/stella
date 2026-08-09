@@ -50,6 +50,13 @@ describe("Stella changelog releases", () => {
         ({ tagName }) => tagName,
       ),
     ).toBe("0.6.1 – 0.6.3");
+    expect(
+      formatMaintenanceReleaseRange(
+        [{ tagName: "v0.6.3", title: "Maintenance release" }],
+        ({ tagName }) => tagName,
+      ),
+    ).toBe("0.6.3");
+    expect(getMaintenanceReleaseTitle(1)).toBe("Maintenance release");
     expect(getMaintenanceReleaseTitle(3)).toBe("Maintenance releases");
   });
 
