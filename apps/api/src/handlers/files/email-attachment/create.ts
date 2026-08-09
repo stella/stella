@@ -20,7 +20,7 @@ const config = {
   description:
     "Save one attachment from an email into an accessible matter as a document. Returns the created entity and file field identifiers.",
   permissions: { workspace: ["read"], entity: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
     fieldId: tSafeId("field"),
     attachmentId: t.String({ minLength: 1, maxLength: 64 }),

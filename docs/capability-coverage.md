@@ -157,12 +157,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `fields.update-cell-metadata` | write  | stella:matters_write   | —       | generic invoke → `stella capability fields update-cell-metadata` |
 | `fields.upsert-by-id`         | write  | stella:documents_write | —       | curated tool `set_field_value`                                   |
 
-## files
-
-| Capability                      | Access | Scope                | Feature | Reachable via                                                      |
-| ------------------------------- | ------ | -------------------- | ------- | ------------------------------------------------------------------ |
-| `files.email-attachment.create` | write  | stella:matters_write | —       | generic invoke → `stella capability files email-attachment-create` |
-
 ## flows
 
 | Capability         | Access             | Scope                | Feature | Reachable via                                         |
@@ -502,7 +496,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 1     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 10    |
+| document_processing    | 11    |
 | health_infra           | 1     |
 | hosted_billing         | 3     |
 | mcp_transport          | 11    |
@@ -515,4 +509,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 5     |
 | url_preview            | 2     |
 
-Total: 109
+Total: 110

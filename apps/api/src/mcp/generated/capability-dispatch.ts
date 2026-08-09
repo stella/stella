@@ -304,10 +304,6 @@ export const CAPABILITY_DISPATCH = {
   "fields.upsert-by-id": {
     load: async () => await import("@/api/handlers/fields/upsert-by-id"),
   },
-  "files.email-attachment.create": {
-    load: async () =>
-      await import("@/api/handlers/files/email-attachment/create"),
-  },
   "flows.create": {
     load: async () => await import("@/api/handlers/flows/create"),
   },

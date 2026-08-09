@@ -179,7 +179,6 @@ const DOMAIN_SCOPE: Record<string, string> = {
   entities: "stella:matters_write",
   expenses: "stella:billing_write",
   fields: "stella:matters_write",
-  files: "stella:matters_write",
   // Workflow (flow) definition CRUD plus run start/cancel/review: org-scoped
   // automations that read and write workspace matter content, so they reuse the
   // workspace write bucket rather than a dedicated read scope.
