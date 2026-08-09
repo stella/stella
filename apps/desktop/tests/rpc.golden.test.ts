@@ -344,10 +344,7 @@ describe("desktop bridge RPC golden fixtures", () => {
       expect(
         isAppSnapshot({
           ...appSnapshot,
-          sessions: appSnapshot.sessions.map((session) => ({
-            ...session,
-            fileType,
-          })),
+          sessions: [{ ...appSnapshot.sessions[0], fileType }],
         }),
       ).toBe(true);
     }
