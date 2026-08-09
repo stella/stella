@@ -81,12 +81,12 @@ export const reassignedBeforeInspection = async () => {
 export const assignedInsideTryWithoutCheck = async () => {
   let response: Awaited<ReturnType<typeof api.tasks.get>>;
   try {
-    // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a nested assignment cannot hide an unchecked outer binding
     response = await api.tasks.get();
   } catch {
     return null;
   }
   consume(typeof response);
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a nested assignment cannot hide an unchecked outer binding at scope exit
   return undefined;
 };
 
