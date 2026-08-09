@@ -314,11 +314,13 @@ export const dynamicComputedResponseKey = async () => {
 // data can be consumed.
 export const checkedInDoWhileBody = async () => {
   const response = await api.tasks.get();
+  let repeat = condition;
   do {
     if (response.error) {
       return null;
     }
-  } while (condition);
+    repeat = false;
+  } while (repeat);
   return response.data;
 };
 
@@ -344,6 +346,7 @@ export const checkedInFinallyBeforeReturn = async () => {
     return null;
   } finally {
     if (response.error) {
+      // oxlint-disable-next-line eslint/no-unsafe-finally -- fixture: finally-before-return error propagation is the control-flow shape under test
       throw toAPIError(response.error);
     }
   }

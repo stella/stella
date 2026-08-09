@@ -371,10 +371,10 @@ export const shadowedReadableStream = (
 
 // MUST flag: qualified browser globals have the same ReadableStream ownership
 // semantics as the bare constructor.
-export const leakedQualifiedGlobalReader = () => {
+export const leakedQualifiedGlobalReader = async () => {
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: qualified global stream reader is never released
   const reader = new globalThis.ReadableStream<Uint8Array>().getReader();
-  return reader.read();
+  return await reader.read();
 };
 
 // MUST flag: a rejecting cancel skips the following releaseLock call.

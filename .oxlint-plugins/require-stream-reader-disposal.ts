@@ -521,6 +521,24 @@ export default eslintCompatPlugin({
           );
         };
 
+        const containsReaderMethod = (
+          node: unknown,
+          method: string,
+          binding: ScopeVariable,
+        ): boolean => {
+          const root = unwrapValue(node);
+          if (root === null) {
+            return false;
+          }
+          let found = false;
+          visitNodes(root, root, (candidate) => {
+            if (readerMethodCall(candidate, method, binding)) {
+              found = true;
+            }
+          });
+          return found;
+        };
+
         const acquisitionOwner = (
           node: AstNode,
         ): { binding: ScopeVariable | null; stable: boolean } => {
@@ -1038,8 +1056,8 @@ export default eslintCompatPlugin({
               if (node.type === "AwaitExpression") {
                 const awaited = unwrapValue(node.argument);
                 if (
-                  !readerMethodCall(awaited, "read", binding) &&
-                  !readerMethodCall(awaited, "cancel", binding)
+                  !containsReaderMethod(awaited, "read", binding) &&
+                  !containsReaderMethod(awaited, "cancel", binding)
                 ) {
                   unsafeExit =
                     !handlerCancels && !hasPriorCancel(node, binding);
