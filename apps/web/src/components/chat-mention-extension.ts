@@ -163,7 +163,7 @@ export const createChatSuggestion = (
   render: () => {
     let component: ReactRenderer<
       ReturnType<NonNullable<SuggestionOptions["render"]>>,
-      SuggestionProps<ChatMentionOption>
+      SuggestionProps<ChatMentionOption, MentionNodeAttrs>
     > | null = null;
 
     return {

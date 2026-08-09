@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/core";
 import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import {
   getEntityName,
   getFirstFile,
@@ -108,15 +109,7 @@ export const insertChatMention = (
     .focus()
     .insertContent({
       type: "mention",
-      attrs: {
-        id: mention.resource.id,
-        label: mention.label,
-        category: mention.category,
-        kind: mention.kind,
-        mimeType: mention.mimeType,
-        sourceWorkspaceId:
-          mention.category === "entity" ? mention.sourceWorkspaceId : undefined,
-      },
+      attrs: toChatMentionNodeAttrs(mention),
     })
     .insertContent(" ")
     .run();

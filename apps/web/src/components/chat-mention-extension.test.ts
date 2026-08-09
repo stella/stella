@@ -4,6 +4,7 @@ import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 
 const option = ({
   category = "entity",
@@ -54,6 +55,18 @@ const option = ({
 };
 
 describe("chat mention suggestions", () => {
+  test("maps every suggestion resource ID into TipTap node attributes", () => {
+    const mentions = [
+      option({ category: "entity", id: "entity-1", label: "Contract" }),
+      option({ category: "workspace", id: "workspace-1", label: "Matter" }),
+      option({ category: "decision", id: "decision-1", label: "Decision" }),
+    ];
+
+    for (const mention of mentions) {
+      expect(toChatMentionNodeAttrs(mention).id).toBe(mention.resource.id);
+    }
+  });
+
   test("keeps searched decision hits even when the case number does not match the query", () => {
     const result = selectChatSuggestionItems({
       localItems: [option({ id: "entity-1", label: "Contract" })],

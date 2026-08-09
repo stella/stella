@@ -2,6 +2,7 @@ import { useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -22,6 +23,7 @@ import type {
   ChatReferenceCategory,
   ChatWorkspaceMentionOption,
 } from "@/components/chat-mention-extension";
+import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -128,7 +130,7 @@ export const ChatMentionList = ({
   const selectItem = (index: number) => {
     const item = activeItems.at(index);
     if (item !== undefined) {
-      command(item);
+      command(toChatMentionNodeAttrs(item));
     }
   };
 
@@ -474,7 +476,10 @@ type ChatMentionListHandle = ReturnType<
   NonNullable<SuggestionOptions["render"]>
 >;
 
-type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
+type ChatMentionListProps = SuggestionProps<
+  ChatMentionOption,
+  MentionNodeAttrs
+> & {
   loadWorkspaceEntities: (
     workspace: ChatWorkspaceMentionOption,
     query: string,
