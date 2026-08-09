@@ -203,6 +203,32 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     expect(ownerDefinition?.name).toBe("resolve_rate");
     expect(memberDefinition).toBeUndefined();
   });
+
+  test("hides time-entry lists from external roles", async () => {
+    const ownerDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "owner"),
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    const externalDefinitions = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined, "external"),
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    const guessedDefinition = await getGatewayMcpToolDefinition({
+      context: contextWith(undefined, "external"),
+      mode: "default",
+      toolName: "list_time_entries",
+    });
+
+    expect(
+      ownerDefinitions.some(({ name }) => name === "list_time_entries"),
+    ).toBe(true);
+    expect(
+      externalDefinitions.some(({ name }) => name === "list_time_entries"),
+    ).toBe(false);
+    expect(guessedDefinition).toBeUndefined();
+  });
 });
 
 describe("toMcpTools input schema conversion", () => {

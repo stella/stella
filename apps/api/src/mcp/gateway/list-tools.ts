@@ -64,14 +64,21 @@ const externalMcpToolAccess = (
 ): McpToolAccess => (readOnlyHint === true ? "read" : "write");
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
-const RESOLVE_RATE_TOOL_NAME = "resolve_rate";
 
 const isStaticToolVisibleToRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
-): boolean =>
-  definition.name !== RESOLVE_RATE_TOOL_NAME ||
-  roles[context.memberRole].authorize({ rate: ["read"] }).success;
+): boolean => {
+  switch (definition.name) {
+    case "list_time_entries":
+      return roles[context.memberRole].authorize({ timeEntry: ["read"] })
+        .success;
+    case "resolve_rate":
+      return roles[context.memberRole].authorize({ rate: ["read"] }).success;
+    default:
+      return true;
+  }
+};
 
 /**
  * Narrow the `lookup_business_registry` tool's `registry` enum to the

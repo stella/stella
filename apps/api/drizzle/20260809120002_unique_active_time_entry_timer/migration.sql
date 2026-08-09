@@ -19,6 +19,7 @@ WITH ranked_active_timers AS (
   FROM "time_entries"
   WHERE "timer_started_at" IS NOT NULL
     AND "timer_stopped_at" IS NULL
+    AND "user_id" IS NOT NULL
 )
 UPDATE "time_entries" AS "entry"
 SET

@@ -63,6 +63,7 @@ export const Route = createFileRoute(
       ),
     ]);
   },
+  remountDeps: ({ params }) => params.workspaceId,
   component: TimesheetsPage,
 });
 
