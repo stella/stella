@@ -37,16 +37,11 @@ export const createTestWorkspace = async (
   await createTestWorkspaceWithOperations(
     {
       create: async ({ id, name }) => {
-        await apiPut(
-          request,
-          "/workspaces",
-          {
-            id,
-            name,
-            filePropertyName: "Documents",
-          },
-          { invalidates: true },
-        );
+        await apiPut(request, "/workspaces", {
+          id,
+          name,
+          filePropertyName: "Documents",
+        });
       },
       delete: async (workspaceId) => {
         await deleteTestWorkspace(request, workspaceId);
@@ -117,5 +112,5 @@ export const deleteTestWorkspace = async (
   request: APIRequestContext,
   workspaceId: string,
 ): Promise<void> => {
-  await apiDelete(request, `/workspaces/${workspaceId}`, { invalidates: true });
+  await apiDelete(request, `/workspaces/${workspaceId}`);
 };

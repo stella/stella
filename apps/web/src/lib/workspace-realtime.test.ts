@@ -14,24 +14,6 @@ const parseEvent = (value: unknown) =>
   parseWorkspaceRealtimeMessage(JSON.stringify(value));
 
 describe("workspace realtime policy", () => {
-  test("preserves legacy query-key invalidations during migration", () => {
-    const event = parseEvent({
-      type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-      data: ["entities", WORKSPACE_ID],
-    });
-
-    expect(event).not.toBeNull();
-    if (!event) {
-      return;
-    }
-    expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([
-      {
-        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-        queryKey: ["entities", WORKSPACE_ID],
-      },
-    ]);
-  });
-
   test("maps entity updates and deletions without producer-owned query keys", () => {
     const updated = parseEvent({
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
@@ -285,15 +267,9 @@ describe("workspace realtime policy", () => {
     }
   });
 
-  test("rejects malformed JSON, unknown events, query keys, and resources", () => {
+  test("rejects malformed JSON, unknown events, and malformed resources", () => {
     expect(parseWorkspaceRealtimeMessage("not-json")).toBeNull();
     expect(parseEvent({ type: "unknown", data: null })).toBeNull();
-    expect(
-      parseEvent({
-        type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-        data: ["entities", 42],
-      }),
-    ).toBeNull();
     expect(
       parseEvent({
         type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,

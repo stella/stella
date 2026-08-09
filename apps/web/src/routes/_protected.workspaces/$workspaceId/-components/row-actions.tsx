@@ -590,7 +590,7 @@ export const RowActions = ({
 
       // After 30 seconds, close the waiting toast and force-release.
       // If the lock holder responds before the timeout, the SSE
-      // invalidate-query broadcast refetches the entity list and
+      // resource update refetches the entity list and
       // the "Release lock" option disappears; the loading toast
       // becomes stale but harmless (force-release on an already-
       // released lock is a no-op on the API side).

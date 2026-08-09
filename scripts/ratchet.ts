@@ -326,7 +326,7 @@ const countMatches = (content: string, pattern: RegExp): number =>
   (content.match(pattern) ?? []).length;
 
 const LEGACY_REALTIME_INVALIDATION_PRODUCER =
-  /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcastQueryInvalidationTo(?:Organization|TargetWorkspace)\s*\()/gu;
+  /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcast(?:QueryInvalidationTo(?:Organization|TargetWorkspace)|Invalidation)\s*\()/gu;
 
 const countLegacyRealtimeInvalidationProducers = (content: string): number =>
   countMatches(stripComments(content), LEGACY_REALTIME_INVALIDATION_PRODUCER);
@@ -1145,7 +1145,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "legacy-realtime-invalidation-producers",
     description:
-      "legacy invalidate-query event producers and route activations in API source; migrate to semantic resource events",
+      "legacy invalidate-query event producers and route activations in API source; at 0 — keep it there",
     include: ["apps/api/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countLegacyRealtimeInvalidationProducers,
@@ -1726,11 +1726,12 @@ const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
   "const organizationRoute = { invalidateOrganizationQuery: true };",
   "broadcastQueryInvalidationToOrganization(organizationId, key);",
   "broadcastQueryInvalidationToTargetWorkspace(workspaceId, key);",
+  'broadcastInvalidation(workspaceId, ["entities", workspaceId]);',
   "const disabled = { invalidateQuery: false };",
   "// const ignored = { invalidateQuery: true };",
 ];
 const SELF_TEST_LEGACY_REALTIME_INVALIDATIONS = `${LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 6;
+const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 7;
 
 const ENTITY_GLYPH_FIXTURE_LINES = [
   'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',

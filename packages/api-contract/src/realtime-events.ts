@@ -11,7 +11,6 @@ import {
 export const REALTIME_EVENT_TYPE = {
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
-  INVALIDATE_QUERY: "invalidate-query",
   RESOURCE_DELETED: "resource.deleted",
   RESOURCE_SET_UPDATED: "resource-set.updated",
   RESOURCE_UPDATED: "resource.updated",
@@ -30,11 +29,6 @@ export const RESOURCE_CHANGE_TYPE = {
 export const MAX_RESOURCE_CHANGES_PER_EVENT = 100;
 
 const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
-
-const invalidateQueryEventSchema = v.object({
-  type: v.literal(REALTIME_EVENT_TYPE.INVALIDATE_QUERY),
-  data: v.pipe(v.array(nonEmptyStringSchema), v.minLength(1)),
-});
 
 const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
 
@@ -107,7 +101,6 @@ const flowRunUpdateEventSchema = v.object({
 });
 
 const workspaceRealtimeEventSchema = v.variant("type", [
-  invalidateQueryEventSchema,
   resourceUpdatedEventSchema,
   resourceDeletedEventSchema,
   resourcesChangedEventSchema,
@@ -116,10 +109,7 @@ const workspaceRealtimeEventSchema = v.variant("type", [
   flowRunUpdateEventSchema,
 ]);
 
-const organizationRealtimeEventSchema = v.variant("type", [
-  invalidateQueryEventSchema,
-  resourceSetUpdatedEventSchema,
-]);
+const organizationRealtimeEventSchema = resourceSetUpdatedEventSchema;
 
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
 

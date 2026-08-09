@@ -9,7 +9,7 @@ import { broadcast } from "@/api/lib/sse";
  * Distinct SSE event type for flow run progress, keyed by workspace on the
  * existing workspace SSE channel (same mechanism the extraction engine uses,
  * but its own event type so the frontend can switch on it without colliding
- * with `invalidate-query` / `workflow-extraction-preview`).
+ * with semantic resource events or `workflow-extraction-preview`).
  */
 export const FLOW_RUN_UPDATE_EVENT_TYPE = "flow-run-update";
 

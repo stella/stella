@@ -4,9 +4,7 @@
  * build a typed partial update object without the
  * `Record<string, unknown>` escape hatch.
  *
- * This also prevents leaking extra body fields (e.g. `queryKey`
- * injected by the `invalidateQuery` macro) into Drizzle's
- * `.set()` clause.
+ * This also prevents leaking unrelated body fields into Drizzle's `.set()` clause.
  */
 export const pickDefined = <
   T extends Record<string, unknown>,

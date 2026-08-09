@@ -44,27 +44,13 @@ export const apiStatus = async (
   return status;
 };
 
-// Mutations behind the `invalidateQuery` macro require a non-empty
-// `queryKey` array; the frontend's Eden client wires this automatically
-// (apps/api/src/lib/invalidate-query-macro.ts:8). Tests don't care which
-// cache key gets invalidated, so we send a stable sentinel.
-const E2E_QUERY_KEY = ["e2e"];
-
 export const apiPut = async <T = unknown>(
   request: APIRequestContext,
   path: string,
   body: Json,
-  { invalidates = false }: { invalidates?: boolean } = {},
 ): Promise<T> => {
-  const data =
-    invalidates &&
-    body !== null &&
-    typeof body === "object" &&
-    !Array.isArray(body)
-      ? { ...body, queryKey: E2E_QUERY_KEY }
-      : body;
   const response = await request.put(url(path), {
-    data,
+    data: body,
     timeout: API_REQUEST_TIMEOUT_MS,
   });
   if (!response.ok()) {
@@ -78,10 +64,8 @@ export const apiPut = async <T = unknown>(
 export const apiDelete = async (
   request: APIRequestContext,
   path: string,
-  { invalidates = false }: { invalidates?: boolean } = {},
 ): Promise<void> => {
   const response = await request.delete(url(path), {
-    ...(invalidates ? { data: { queryKey: E2E_QUERY_KEY } } : {}),
     timeout: API_REQUEST_TIMEOUT_MS,
   });
   if (!response.ok() && response.status() !== 404) {
@@ -107,8 +91,6 @@ export const apiUploadDocx = async (
       },
       name: file.name,
       propertyId,
-      // /entities/:workspaceId/upload is wrapped by invalidateQuery.
-      queryKey: JSON.stringify(E2E_QUERY_KEY),
     },
   });
   if (!response.ok()) {

@@ -333,10 +333,9 @@ const sendKeepAlive = () => {
 
 // ── Lifecycle ────────────────────────────────────────────
 //
-// Importing this module must have no side effects: it is pulled in
-// transitively by ~24 modules (via invalidate-query-macro.ts, which most
-// routes.ts files use), so an eager Redis connection or timer here would
-// fire for every process that imports the route tree, including the
+// Importing this module must have no side effects: route-level realtime
+// producers pull it into many processes, so an eager Redis connection or timer
+// would fire for every process that imports the route tree, including the
 // exact-mirror schema guard and the test runner. `startSse`/`stopSse` make
 // the keep-alive timer and the cross-instance Redis subscriber an explicit
 // lifecycle that only the server's boot/shutdown path drives, mirroring the

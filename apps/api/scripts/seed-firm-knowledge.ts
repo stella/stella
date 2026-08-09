@@ -46,13 +46,6 @@ const FILE_PROPERTY_NAME = "Documents";
 /** Better-auth names the session cookie `<prefix>.session_token`. */
 const SESSION_COOKIE_SUFFIX = ".session_token";
 
-/** The `invalidateQuery` macro requires a `queryKey` in the body. */
-const WORKSPACES_QUERY_KEY = ["workspaces"];
-const entitiesQueryKey = (workspaceId: string): string[] => [
-  "entities",
-  workspaceId,
-];
-
 /** Extensions the corpus actually contains, mapped to what the browser sends. */
 const MIME_TYPES: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -433,7 +426,6 @@ const main = async () => {
         filePropertyName: FILE_PROPERTY_NAME,
         id: workspaceId,
         name: matterName(manifest.reference),
-        queryKey: WORKSPACES_QUERY_KEY,
       },
       method: "PUT",
     });
@@ -458,7 +450,6 @@ const main = async () => {
           directories: manifest.directories,
           files: manifest.files.map(({ absolutePath: _drop, ...file }) => file),
           propertyId: fileProperty.id,
-          queryKey: entitiesQueryKey(workspaceId),
         },
         method: "POST",
       },
@@ -488,7 +479,6 @@ const main = async () => {
 
       // oxlint-disable-next-line no-await-in-loop -- finalize follows its own PUT
       await api.request(`/uploads/${workspaceId}/${uploadId}/finalize`, {
-        body: { queryKey: entitiesQueryKey(workspaceId) },
         method: "POST",
       });
       seededFiles += 1;

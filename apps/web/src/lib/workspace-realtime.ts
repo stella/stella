@@ -320,13 +320,6 @@ export const getWorkspaceRealtimeQueryActions = (
   workspaceId: string,
 ): WorkspaceRealtimeQueryAction[] => {
   switch (event.type) {
-    case REALTIME_EVENT_TYPE.INVALIDATE_QUERY:
-      return [
-        {
-          type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-          queryKey: event.data,
-        },
-      ];
     case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
       return getResourceChangeQueryActions(
         {

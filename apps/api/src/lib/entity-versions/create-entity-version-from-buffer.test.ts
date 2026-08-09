@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
@@ -58,7 +60,10 @@ void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
 void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootScopedDb: () => mock(),
 }));
-void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+void mock.module("@/api/lib/sse", () => ({
+  broadcast: broadcastMock,
+  broadcastToOrganization: mock(),
+}));
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: mock(),
   captureRequestError: mock(),
@@ -262,8 +267,8 @@ describe("createEntityVersionFromBuffer", () => {
       filePropertyId: "property_1",
     });
     expect(broadcastMock).toHaveBeenCalledWith("ws_1", {
-      type: "invalidate-query",
-      data: ["entities", "ws_1"],
+      type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+      resource: { type: RESOURCE_TYPE.ENTITY, id: "entity_1" },
     });
   });
 

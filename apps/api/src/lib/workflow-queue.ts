@@ -1192,7 +1192,10 @@ const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
       ),
   );
 
-  broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
+  broadcastWorkspaceResourceSetUpdated(
+    branded.workspaceId,
+    RESOURCE_TYPE.ENTITY,
+  );
 };
 
 const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
@@ -1283,8 +1286,10 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   // owns the finalization.
   signal.throwIfAborted();
 
-  // Broadcast entity invalidation so frontend refetches
-  broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
+  broadcastWorkspaceResourceSetUpdated(
+    branded.workspaceId,
+    RESOURCE_TYPE.ENTITY,
+  );
 
   await onEntityCompleted({
     workspaceId: branded.workspaceId,
@@ -1490,8 +1495,8 @@ const processOneBatch = async ({
       scopedDb,
     });
 
-    // Broadcast so frontend shows pending state
-    broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+    // Broadcast so the frontend shows pending state.
+    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
 
     const [orgAIConfig, promptCachingEnabled] = await Promise.all([
       loadOrgAIConfig(organizationId),
@@ -1757,8 +1762,8 @@ const processOneBatch = async ({
       }
     });
 
-    // Broadcast so frontend shows updated fields
-    broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+    // Broadcast so the frontend shows updated fields.
+    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
   } finally {
     previewPublisher.clear();
   }
@@ -1921,7 +1926,7 @@ const finishWorkflow = async (
       .catch((error: unknown) => captureError(error, { workspaceId }));
     await runStateStore.clear(workspaceId);
     broadcastWorkflowStatus(workspaceId);
-    broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.PROPERTY);
     return;
   }
 
@@ -1963,7 +1968,7 @@ const finishWorkflow = async (
 
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId);
-  broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+  broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.PROPERTY);
 
   // Classification-driven routing. If this workflow (re)computed the Document
   // Type classifier, materialize + run any `onClassified` org playbooks now that

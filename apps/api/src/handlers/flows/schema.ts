@@ -111,8 +111,7 @@ export const startFlowRunBodySchema = t.Object({
 
 export const reviewFlowRunBodySchema = t.Object({
   // Required enum fields use t.UnionEnum (matches invoices/transition.ts):
-  // the mapped-literal t.Union form collapses to `never` on the Eden client
-  // once the invalidateQuery macro's body schema is merged into this route.
+  // the mapped-literal t.Union form collapses to `never` on the Eden client.
   // The optional-UnionEnum coercion gotcha does not apply to required fields.
   decision: t.UnionEnum([...FLOW_REVIEW_DECISIONS]),
   note: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),

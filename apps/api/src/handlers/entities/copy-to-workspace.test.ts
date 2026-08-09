@@ -54,13 +54,6 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   isLocalPostHogDebugEnabled: () => false,
 }));
 
-const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => undefined);
-void mock.module("@/api/lib/invalidate-query-macro", () => ({
-  broadcastQueryInvalidationToOrganization: mock(() => undefined),
-  broadcastQueryInvalidationToTargetWorkspace:
-    broadcastQueryInvalidationToTargetWorkspaceMock,
-}));
-
 const syncWorkspaceSearchActivityMock = mock(async () => {});
 void mock.module("@/api/lib/search/index-global", () => ({
   rebuildSupplementalSearchIndex: mock(async () => undefined),
@@ -191,7 +184,6 @@ beforeEach(() => {
   captureErrorMock.mockClear();
   processExtractionMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
-  broadcastQueryInvalidationToTargetWorkspaceMock.mockClear();
   enqueueImageThumbnailMock.mockClear();
   enqueueImageThumbnailOrMarkFailedMock.mockClear();
   enqueuePdfDerivativeMock.mockClear();

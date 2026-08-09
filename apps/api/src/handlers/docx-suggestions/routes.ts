@@ -11,11 +11,10 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
  * server-validated workspace. Thin: structure + macro wiring only; each
  * handler owns its schema, permissions, and business logic.
  *
- * No `invalidateQuery`: the client review store is the source of truth
- * during a session (it updates optimistically and reconciles server ids),
- * and the suggestion list query only runs on document open to hydrate. A
- * server-driven cache invalidation would just trigger a redundant refetch
- * that the store already reflects.
+ * No realtime event: the client review store is the source of truth during a
+ * session (it updates optimistically and reconciles server ids), and the
+ * suggestion list query only runs on document open to hydrate. A server-driven
+ * cache invalidation would trigger a redundant refetch that the store reflects.
  */
 export const docxSuggestionsRoute = new Elysia({
   prefix: "/docx-suggestions/:workspaceId",

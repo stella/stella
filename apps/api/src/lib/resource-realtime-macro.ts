@@ -3,6 +3,7 @@ import Elysia, { ElysiaCustomStatusResponse } from "elysia";
 import type { ResourceType } from "@stll/api-contract";
 
 import { authMacro } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   broadcastOrganizationResourceSetUpdated,
   broadcastWorkspaceResourceSetUpdated,
@@ -27,8 +28,22 @@ export const organizationResourceSetUpdates = (resourceTypes: ResourceTypes) =>
 export const workspaceResourceSetUpdates = (resourceTypes: ResourceTypes) =>
   ({ scope: "workspace", resourceTypes }) as const;
 
-const didAuthResolve = (ctx: { session?: unknown }): boolean =>
-  ctx.session !== undefined && ctx.session !== null;
+type ResolvedAuthContext = {
+  session: { activeOrganizationId: SafeId<"organization"> };
+};
+
+const didAuthResolve = (ctx: unknown): ctx is ResolvedAuthContext => {
+  if (!(typeof ctx === "object" && ctx !== null && "session" in ctx)) {
+    return false;
+  }
+  const { session } = ctx;
+  return (
+    typeof session === "object" &&
+    session !== null &&
+    "activeOrganizationId" in session &&
+    typeof session.activeOrganizationId === "string"
+  );
+};
 
 const didMutationSucceed = (response: unknown): boolean => {
   if (response instanceof ElysiaCustomStatusResponse) {

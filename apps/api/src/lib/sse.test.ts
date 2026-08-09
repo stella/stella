@@ -1,7 +1,6 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
-  REALTIME_EVENT_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
   RESOURCE_TYPE,
@@ -136,10 +135,13 @@ const flushMicrotasks = async (): Promise<void> => {
 
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
-const testEvent = (marker: string): WorkspaceRealtimeEvent => ({
-  type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-  data: ["sse-test", marker],
-});
+const testEvent = (marker: string): WorkspaceRealtimeEvent =>
+  resourceUpdatedRealtimeEvent(
+    resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: toSafeId<"entity">(`sse-test-${marker}`),
+    }),
+  );
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {

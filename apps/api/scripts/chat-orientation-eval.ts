@@ -80,8 +80,6 @@ const API_VERSION_PREFIX = "/v1";
 
 /** Matches DEFAULT_FILE_PROPERTY_NAME in apps/web/src/lib/workspaces/mutations.ts. */
 const FILE_PROPERTY_NAME = "Documents";
-/** invalidateQuery-macro routes require a non-empty queryKey in the body. */
-const INVALIDATE_QUERY_KEY = ["chat-orientation-eval"];
 /** Web default send mode fallback (resolveChatRequestSendMode); raw keeps
  * fixture names intact so text scoring is not confounded by anonymization. */
 const SEND_MODE = "rawOverride";
@@ -670,7 +668,7 @@ const createEntity = async (
   const payload = await client.requestJson({
     method: "PUT",
     path: `${API_VERSION_PREFIX}/entities/${matterId}`,
-    body: { queryKey: INVALIDATE_QUERY_KEY, kind, name },
+    body: { kind, name },
   });
   const entityId = isRecord(payload)
     ? getString(payload, "entityId")
@@ -694,7 +692,6 @@ const createTextProperty = async (
     method: "PUT",
     path: `${API_VERSION_PREFIX}/properties/${matterId}`,
     body: {
-      queryKey: INVALIDATE_QUERY_KEY,
       name,
       contentType: "text",
       toolType: "manual-input",
@@ -726,7 +723,6 @@ const setTextField = async ({
     method: "POST",
     path: `${API_VERSION_PREFIX}/fields/${matterId}`,
     body: {
-      queryKey: INVALIDATE_QUERY_KEY,
       propertyId,
       entityId,
       content: { version: 1, type: "text", value },
@@ -743,7 +739,6 @@ const createFixture = async (client: ApiClient): Promise<Fixture> => {
     method: "PUT",
     path: `${API_VERSION_PREFIX}/workspaces`,
     body: {
-      queryKey: INVALIDATE_QUERY_KEY,
       id: matterId,
       name: matterName,
       filePropertyName: FILE_PROPERTY_NAME,
@@ -818,7 +813,6 @@ const deleteFixture = async (
   await client.requestJson({
     method: "DELETE",
     path: `${API_VERSION_PREFIX}/workspaces/${fixture.matterId}`,
-    body: { queryKey: INVALIDATE_QUERY_KEY },
   });
 };
 

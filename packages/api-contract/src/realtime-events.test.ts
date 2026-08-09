@@ -11,16 +11,10 @@ import {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
-  type OrganizationRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
 import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
 import { toSafeId } from "./safe-id";
-
-const INVALIDATE_QUERY_EVENT = {
-  type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-  data: ["entities", "workspace-1"],
-} satisfies OrganizationRealtimeEvent;
 
 const ENTITY_RESOURCE = resourceRef({
   type: RESOURCE_TYPE.ENTITY,
@@ -48,7 +42,6 @@ const WORKFLOW_EXTRACTION_PREVIEW_EVENT = {
 } satisfies WorkspaceRealtimeEvent;
 
 const WORKSPACE_EVENT_FIXTURES = [
-  INVALIDATE_QUERY_EVENT,
   RESOURCE_UPDATED_EVENT,
   RESOURCE_DELETED_EVENT,
   RESOURCES_CHANGED_EVENT,
@@ -80,12 +73,6 @@ describe("realtime event contracts", () => {
     ).toBeNull();
     expect(
       parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-        data: [],
-      }),
-    ).toBeNull();
-    expect(
-      parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
         changes: [],
       }),
@@ -103,12 +90,6 @@ describe("realtime event contracts", () => {
       parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
         resourceType: "unknown",
-      }),
-    ).toBeNull();
-    expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-        data: ["entities", 42],
       }),
     ).toBeNull();
     expect(
@@ -132,9 +113,6 @@ describe("realtime event contracts", () => {
   });
 
   test("limits organization events to organization-safe kinds", () => {
-    expect(parseOrganizationRealtimeEvent(INVALIDATE_QUERY_EVENT)).toEqual(
-      INVALIDATE_QUERY_EVENT,
-    );
     expect(parseOrganizationRealtimeEvent(RESOURCE_UPDATED_EVENT)).toBeNull();
     expect(parseOrganizationRealtimeEvent(RESOURCE_DELETED_EVENT)).toBeNull();
     expect(parseOrganizationRealtimeEvent(RESOURCES_CHANGED_EVENT)).toBeNull();

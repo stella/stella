@@ -174,7 +174,6 @@ function RouteComponent() {
 
   const handleWorkspaceSSEEvent = (event: WorkspaceRealtimeEvent) => {
     switch (event.type) {
-      case REALTIME_EVENT_TYPE.INVALIDATE_QUERY:
       case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
       case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
       case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:

@@ -28,8 +28,8 @@ describe("SSE Redis payload parsing", () => {
     expect(
       parseRedisPayload(
         redisPayload("organization", {
-          type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-          data: ["organizations"],
+          type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+          resourceType: RESOURCE_TYPE.ORGANIZATION,
         }),
       )?.scope,
     ).toBe("organization");
@@ -58,8 +58,8 @@ describe("SSE Redis payload parsing", () => {
     expect(
       parseRedisPayload(
         redisPayload("workspace", {
-          type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
-          data: ["entities", 42],
+          type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+          resourceType: "unknown",
         }),
       ),
     ).toBeNull();
