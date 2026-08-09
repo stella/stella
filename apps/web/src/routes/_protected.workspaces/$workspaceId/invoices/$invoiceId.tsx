@@ -420,9 +420,7 @@ const InvoiceDetail = ({
               <tbody>
                 {invoice.timeEntries.map((entry) => (
                   <tr className="border-b last:border-0" key={entry.id}>
-                    <td className="px-4 py-2">
-                      {entry.workItem?.name ?? "—"}
-                    </td>
+                    <td className="px-4 py-2">{entry.workItem?.name ?? "—"}</td>
                     <td className="px-4 py-2 tabular-nums">
                       {entry.dateWorked}
                     </td>

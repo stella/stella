@@ -108,8 +108,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
-  const timeBillingEnabled =
-    isTimeBillingRouteEnabled() && canReadTimeEntries;
+  const timeBillingEnabled = isTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const navigate = useNavigate();
