@@ -800,7 +800,7 @@
     "active": "Aktiivne",
     "add": "Lisa",
     "all": "Kõik",
-    "and": "And",
+    "and": "Ja",
     "anonymizationLabels": {
       "address": "Aadress",
       "bankAccountNumber": "Pangakonto number",
@@ -959,12 +959,12 @@
     "next": "Edasi",
     "noResults": "Tulemused puuduvad",
     "noVersions": "Versiooniajalogu pole",
-    "none": "None",
+    "none": "Puudub",
     "notes": "Märkused",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
     "options": "Valikud",
-    "or": "Or",
+    "or": "Või",
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
@@ -1020,7 +1020,7 @@
     "type": "Tüüp",
     "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "uncategorized": "Kategoriseerimata",
-    "undo": "Undo",
+    "undo": "Võta tagasi",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
@@ -1409,47 +1409,47 @@
     "descriptionPlaceholder": "Mida see töövoog teeb",
     "disableFlow": "Keela töövoog",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Määrake sammud üks kord ja käivitage seejärel töövoog mis tahes toimikust. Käitamine peatub heakskiitmiseks ülevaatuse kontrollpunktides."
     },
     "empty": "Töövoogusid veel pole",
     "emptyDescription": "Loo töövoog, et muuta dokumendid ja eesmärk valmis tulemuseks.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Alusta tühjalt lehelt",
+      "description": "Käivitage see toimiku vahekaardilt „Töövood“, ajakava järgi või failide üleslaadimisel. Töövoog peatub kontrollpunktides, et inimene saaks tulemuse enne lõplikuks muutmist heaks kiita, ning tulemuse saab salvestada toimikusse dokumendina.",
+      "examplesTitle": "Alusta näitest",
+      "title": "Töövoog on salvestatud tehisintellekti- ja ülevaatussammude jada, mida teie meeskond käitab toimiku dokumentidel korduvalt, et saada ühtlane tulemus."
     },
     "enableFlow": "Luba töövoog",
     "enabledDescription": "Keelatud töövoogusid ei saa käivitada ega vallandada.",
     "enabledLabel": "Lubatud",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Koosta kokkuvõte",
+        "description": "Tee toimiku dokumentidest kokkuvõte kolleegile, kes pole neid lugenud.",
+        "documentTitle": "Dokumentide kokkuvõte",
+        "name": "Toimiku dokumentide kokkuvõte",
+        "summaryStepName": "Tee dokumentidest kokkuvõte",
+        "summaryStepPrompt": "Tee igast sisenddokumendist kokkuvõte: pooled, ese, olulised kuupäevad, kohustused ja lahtised küsimused. Kirjuta kolleegile, kes pole dokumenti lugenud."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Koosta aruanne",
+        "description": "Tuvasta andmeruumis kontrolli muutumise, loovutamise ja vastutusega seotud riskid.",
+        "documentTitle": "Ohukohtade aruanne",
+        "name": "Õigusliku auditi ohukohad",
+        "reviewGateInstructions": "Kontrolli ohukohti enne aruande koostamist.",
+        "reviewGateStepName": "Kontrolli ohukohti",
+        "reviewStepName": "Leia ohukohad",
+        "reviewStepPrompt": "Loe sisenddokumente ja koosta ohukohtade aruanne, mis käsitleb kontrolli muutumist, loovutamispiiranguid, lõpetamisõigusi, ainuõigust ja vastutuse ülempiire. Tsiteeri asjakohast sõnastust."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Koosta memo",
+        "description": "Märgi konfidentsiaalsuslepingus ebatavalised klauslid enne, kui teie meeskond sellele tugineb.",
+        "documentTitle": "Konfidentsiaalsuslepingu ülevaatuse memo",
+        "name": "Konfidentsiaalsuslepingu esmane ülevaatus",
+        "reviewGateInstructions": "Kontrolli märgitud klausleid enne memo koostamist.",
+        "reviewGateStepName": "Kontrolli märgitud klausleid",
+        "reviewStepName": "Vaata konfidentsiaalsusleping üle",
+        "reviewStepPrompt": "Vaata lisatud konfidentsiaalsusleping üle tavapäraste turustandardite alusel: kehtivusaeg, konfidentsiaalsuskohustuse ulatus, erandid ja kohaldatav õigus. Märgi ebatavalised klauslid koos raskusastmega ja tsiteeri klauslit."
       }
     },
     "fileUpload": {
@@ -1519,9 +1519,9 @@
     "steps": {
       "add": "Lisa samm:",
       "ai": "AI samm",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Koostab teie juhiste järgi teksti ja saab lugeda valitud sisenddokumente.",
       "createDocument": "Loo dokument",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "Salvestab uusima tehisintellekti väljundi dokumendina toimikusse, millest käitamine alustati.",
       "documentTitle": "Dokumendi pealkiri",
       "documentTitlePlaceholder": "nt Kokkuvõtte memo",
       "documentTitleRequired": "Sisesta dokumendi pealkiri.",
@@ -1536,7 +1536,7 @@
       "promptRequired": "Sisesta AI sammu jaoks viip.",
       "required": "Lisa vähemalt üks samm.",
       "reviewGate": "Ülevaatuse värav",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Peatab käitamise, kuni inimene selle heaks kiidab või tagasi lükkab.",
       "title": "Sammud"
     },
     "trigger": {
@@ -1888,7 +1888,7 @@
       "builtInSection": "Sisseehitatud oskused",
       "chooseFile": "Vali fail või lohista see siia",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Avalda oskus"
       },
       "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
       "deleteFile": "Kustuta fail",
@@ -1929,7 +1929,7 @@
       "generateSkill": "Genereeri AI-ga",
       "generateTitle": "Genereeri oskus AI-ga",
       "generating": "Genereerimine…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
       "importFailureLimit": "Oskuste limiit on täis.",
@@ -1951,7 +1951,7 @@
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik meeskonnas",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Valige loendist fail, et avada see paremal asuval redigeerimispaanil.",
       "selectedFile": "Valitud: {name}",
       "selectionLimit": "Vali korraga kuni {count} oskust.",
       "sourceUpload": "Üles laaditud",
@@ -2011,12 +2011,12 @@
       "addRule": "Reegel",
       "advanced": "Täpsem",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Kiida heaks",
+        "approveFailed": "Playbooki heakskiitmine nurjus",
+        "approvedOn": "Heaks kiidetud {date}",
+        "approvedToast": "Playbook heaks kiidetud",
+        "statusApproved": "Heaks kiidetud",
+        "statusDraft": "Mustand"
       },
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
@@ -2079,18 +2079,18 @@
       "issuePlaceholder": "nt Vastutuse piiramine",
       "loadFailed": "Playbookide laadimine ebaõnnestus",
       "loading": "Playbookide laadimine…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Halda liike…",
       "namePlaceholder": "nt NDA ülevaatus",
       "nameRequired": "Lisage nimi.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Lisa jutupunkt",
+        "escalationLabel": "Eskaleerimine",
+        "escalationPlaceholder": "Millal ja kellele eskaleerida (valikuline)",
+        "rationaleLabel": "Põhjendus",
+        "rationalePlaceholder": "Miks me seda soovime (valikuline)",
+        "talkingPointPlaceholder": "Mida öelda",
+        "talkingPointsLabel": "Jutupunktid",
+        "title": "Läbirääkimised"
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "optionPlaceholder": "Valiku väärtus",
@@ -2127,17 +2127,17 @@
       },
       "risk": {
         "complianceLabel": "Vastavus",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "{flagged} positsiooni {total}-st on märgitud",
         "notApplicableExcluded": "({count} ei kohaldu, välja jäetud)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kriitiline",
+          "high": "Kõrge",
+          "low": "Madal",
+          "medium": "Keskmine",
+          "none": "Risk puudub"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Riskide kokkuvõte",
+        "topIssuesTitle": "Olulisemad küsimused"
       },
       "ruleNumber": "Reegel {index}",
       "rulePlaceholder": "Tavakeelne reegel",
@@ -2150,11 +2150,11 @@
       },
       "severityLabel": "Raskusaste",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Playbook lisatud",
+        "browseButton": "Sirvi valmis playbooke",
+        "positionCount": "{count, plural, one {# positsioon} other {# positsiooni}}",
+        "subtitle": "Valmis playbookid, mille saate lisada ja seejärel oma standarditele kohandada.",
+        "title": "Valmis playbookid"
       },
       "switchToAuto": "Tagasi automaatsele",
       "switchToManual": "Lülitu käsitsile",
@@ -2173,10 +2173,10 @@
         "notApplicable": "Ei kohaldu"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Teie praegune mustand asendatakse selle versiooni sisuga.",
+        "restoreFailed": "Versiooni taastamine nurjus",
+        "restoredToast": "Versioon taastatud",
+        "versionHistory": "Versiooniajalugu"
       }
     },
     "sections": {
@@ -2213,29 +2213,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Vasta küsimusele usaldusväärsete allikate põhjal.",
+            "inside": "allikate hierarhia · uurimispäring",
+            "title": "Vasta allikate põhjal"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Vaata dokument üle ja märgi koos viidetega, mis nõuetele ei vasta.",
+            "inside": "viited õigusruumide kaupa · kontroll-loend · ülevaatuspäring",
+            "title": "Kontrolli nõuete alusel"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Küsi asjaolusid ja koosta seejärel dokumendi mustand.",
+            "inside": "intervjuu · näidisdokumendid · koostamispäring",
+            "title": "Andmete kogumisest mustandini"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Sisaldab",
+        "startBlank": "Alusta tühjalt lehelt",
+        "startBlankHint": "Tühi oskus juhuks, kui teate täpselt, mida vajate.",
+        "subtitle": "Valige lähtekuju. Seadistame kaustad ja juhendame teid nende täitmisel.",
+        "title": "Kuidas peaks teie oskus töötama?"
       },
       "commandConflict": "Selle / käsuga oskus on juba olemas",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "Selle oskuse käivitamiseks sisestage käsk vestlusse.",
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
       "createTitle": "Uus oskus",
@@ -2267,9 +2267,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Markdowni lähtekood",
+    "showFormatted": "Vormindatud",
+    "showRaw": "Kuva lähtekood"
   },
   "memory": {
     "addPlaceholder": "Lisage märkus, mille assistent peaks meelde jätma…",
@@ -2912,12 +2912,12 @@
         "updated": "Dokumenditeksti tuvastamise seadistus uuendatud"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Lisa dokumendiliik (nt tööleping)",
+        "deleteFailed": "Dokumendiliigi kustutamine nurjus",
+        "description": "Määrake dokumendiliigid, mida teie organisatsioon üle vaatab. Playbookid rakenduvad neile ning tehisintellekti klassifikaator liigitab dokumendid nende alusel.",
+        "labelAria": "Dokumendiliigi nimi",
+        "reorder": "Muuda dokumendiliigi järjestust",
+        "title": "Dokumendiliigid"
       },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
@@ -3187,7 +3187,7 @@
     "conditionAnd": "Ja",
     "conditionCount": "{count, plural, one {# tingimus} other {# tingimust}}",
     "conditionField": "Väli",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Sisesta valem…",
     "conditionMatch": "Vastavus",
     "conditionNamePlaceholder": "Tingimuse nimi (nt NPF)",
     "conditionOpAfter": "pärast",
@@ -3206,8 +3206,8 @@
     "conditionOpOnOrBefore": "kuupäeval või enne",
     "conditionOperator": "Operaator",
     "conditionOr": "Või",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Kasuta selle asemel välja",
+    "conditionUseFormula": "ƒ Arvutatud väärtus…",
     "conditionValue": "Väärtus",
     "conditionWhen": "Kui",
     "conditionsTitle": "Tingimused",
@@ -3359,7 +3359,7 @@
       "conditionOrBuildNew": "või loo uus",
       "conditionReuse": "Kasuta olemasolevat tingimust",
       "conditionReusePick": "Vali olemasolev tingimus…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Arvutatud tingimus",
       "conditionSource": "Kuidas otsustatakse",
       "conditionSourceAi": "Otsustab tehisintellekt",
       "conditionSourceAsked": "Küsitud",
@@ -3385,7 +3385,7 @@
       "gettingStartedTitle": "Alustamine",
       "insert": "Lisa",
       "insertAtCaret": "Sisesta kursori kohale",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Lisa tingimus",
       "insertFormatDefault": "Vaikimisi",
       "insertIntoTemplate": "Lisa malli",
       "insertItemNumber": "Üksuse number",
@@ -3528,9 +3528,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "Kasutusel on platvormi jagatud võti. Oma teenusepakkuja konto ja kvoodi kasutamiseks lisage isiklik võti.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Veebiotsingu võtmed"
     }
   },
   "workspaces": {
@@ -3699,8 +3699,8 @@
       "team": {
         "filterAsLead": "Määra vastutaja filtriks",
         "hasLead": "On mõni Lead",
-        "lead": "Lead",
-        "leadActive": "Lead",
+        "lead": "Vastutav",
+        "leadActive": "Vastutav",
         "leadInactive": "Määra vastutaja",
         "noLead": "Vastutajat pole",
         "searchMembers": "Otsi liikmeid…"
@@ -3960,7 +3960,7 @@
     },
     "possibleDuplicates": "Võimalikud duplikaadid",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Lisa tingimus",
       "addInputProperty": "Lisage vähemalt üks sisestusomadus, kasutades \"@\"",
       "addOption": "Lisa valik",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",
@@ -4000,7 +4000,7 @@
       "editColumn": "Muuda veergu",
       "editConditions": "Muuda tingimusi",
       "editConditionsDescription": "Määrake tingimused, millal seda omadust genereeritakse.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Käivita eraldamine ainult siis, kui …",
       "enterAValue": "Sisestage väärtus",
       "extractEntityType": "Ekstrakti olemi tüüp",
       "extractEntityTypeDescription": "Looge AI täidetav tabeliveerg.",
@@ -4028,7 +4028,7 @@
       "newColumn": "Uus veerg",
       "newColumnDescription": "Valige, kuidas seda tabeli veergu täidetakse.",
       "newColumnName": "Veeru nimi",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Filtreerimiseks sobivaid välju pole.",
       "noFirstDocument": "Eelvaateks pole veel dokumente.",
       "noPropertiesFound": "Omadusi ei leitud",
       "optionsHelp": "Määra väärtused, mille hulgast AI võib valida.",
@@ -4051,7 +4051,7 @@
       "scopeMatterDescription": "Kasutage kõiki failiveerge ja käivitage toimik.",
       "searchOrAddOptions": "Otsi või lisa valikuid",
       "selectColor": "Valige värv",
-      "selectField": "Select field",
+      "selectField": "Vali väli",
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
@@ -4145,7 +4145,7 @@
       "filterByPlaceholder": "Filtreeri välja järgi…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filtrit}}",
       "groupBy": "Rühmita:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# üksus} other {# üksust}}",
       "hideColumn": "Peida veerg",
       "layouts": {
         "calendar": "Kalender",

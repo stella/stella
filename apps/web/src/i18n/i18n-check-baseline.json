@@ -403,19 +403,6 @@
     "common.actions": [
       "fr"
     ],
-    "common.and": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "common.anonymizationLabels.date": [
       "fr"
     ],
@@ -455,38 +442,11 @@
     "common.name": [
       "de"
     ],
-    "common.none": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "common.notes": [
       "fr"
     ],
     "common.options": [
       "fr"
-    ],
-    "common.or": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "common.playbooks": [
       "de",
@@ -513,20 +473,6 @@
     ],
     "common.type": [
       "fr"
-    ],
-    "common.undo": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "common.urlIdentifier": [
       "cs",
@@ -627,407 +573,10 @@
       "pl",
       "pt-BR"
     ],
-    "flows.editor.newFlowIntro": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.emptyState.blankAction": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.emptyState.description": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.emptyState.examplesTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.emptyState.title": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.createStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.description": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.documentTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.name": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.summaryStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.documentSummary.summaryStepPrompt": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.createStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.description": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.documentTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.name": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.reviewGateInstructions": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.reviewGateStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.reviewStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.dueDiligence.reviewStepPrompt": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.createStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.description": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.documentTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.name": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.reviewGateInstructions": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.reviewGateStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.reviewStepName": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.examples.ndaIntake.reviewStepPrompt": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.steps.aiHelp": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.steps.createDocumentHelp": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.steps.instructions": [
-      "fr"
-    ],
     "flows.steps.prompt": [
       "cs",
       "de",
-      "es",
-      "fr",
-      "hu",
       "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "flows.steps.reviewGateHelp": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
       "sk"
     ],
     "flows.trigger.manual": [
@@ -1043,37 +592,11 @@
       "fr",
       "pt-BR"
     ],
-    "knowledge.agentSkills.coaching.publish": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "knowledge.agentSkills.formDescription": [
       "fr"
     ],
     "knowledge.agentSkills.formName": [
       "de"
-    ],
-    "knowledge.agentSkills.howItRuns": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "knowledge.agentSkills.newFileFilenamePlaceholder": [
       "ar",
@@ -1095,19 +618,6 @@
       "hu",
       "lv",
       "pl",
-      "sk"
-    ],
-    "knowledge.agentSkills.selectFileHint": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
       "sk"
     ],
     "knowledge.agentSkills.urlPlaceholder": [
@@ -1152,90 +662,6 @@
       "pt-BR",
       "sk"
     ],
-    "knowledge.playbooks.approval.approve": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.approval.approvedOn": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.approval.approvedToast": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.approval.approveFailed": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.approval.statusApproved": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.approval.statusDraft": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "knowledge.playbooks.askQuestionLabel": [
       "fr"
     ],
@@ -1248,132 +674,6 @@
     "knowledge.playbooks.extractionManual": [
       "es",
       "pt-BR"
-    ],
-    "knowledge.playbooks.manageTypes": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.addTalkingPoint": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.escalationLabel": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.escalationPlaceholder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.rationaleLabel": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.rationalePlaceholder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.talkingPointPlaceholder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.talkingPointsLabel": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.negotiation.title": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "knowledge.playbooks.optionsLabel": [
       "fr"
@@ -1389,246 +689,8 @@
       "pt-BR",
       "sk"
     ],
-    "knowledge.playbooks.risk.flaggedCount": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.riskLevel.critical": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.riskLevel.high": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.riskLevel.low": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.riskLevel.medium": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.riskLevel.none": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.summaryTitle": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.risk.topIssuesTitle": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.starters.addedToast": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.starters.browseButton": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.starters.positionCount": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.starters.subtitle": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.starters.title": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "knowledge.playbooks.tier.acceptable": [
       "fr"
-    ],
-    "knowledge.playbooks.versions.confirmRestore": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.versions.restoredToast": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.versions.restoreFailed": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.playbooks.versions.versionHistory": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "knowledge.sections.prompts.title": [
       "de"
@@ -1636,230 +698,11 @@
     "knowledge.sections.tools.title": [
       "de"
     ],
-    "knowledge.skills.blueprintGallery.cards.answerFromSources.blurb": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.answerFromSources.inside": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.answerFromSources.title": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.blurb": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.inside": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.title": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.intakeToDraft.blurb": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.intakeToDraft.inside": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.cards.intakeToDraft.title": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.insideLabel": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.startBlank": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.startBlankHint": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.subtitle": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.blueprintGallery.title": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.skills.commandHelp": [
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "knowledge.skills.form.description": [
       "fr"
     ],
     "knowledge.skills.form.name": [
       "de"
-    ],
-    "markdownEditor.rawLabel": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "markdownEditor.showFormatted": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "markdownEditor.showRaw": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "memory.kinds.instruction": [
       "fr"
@@ -2003,90 +846,6 @@
     "settings.organization.auditLogsAction": [
       "fr"
     ],
-    "settings.organization.documentTypes.addPlaceholder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.documentTypes.deleteFailed": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.documentTypes.description": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.documentTypes.labelAria": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.documentTypes.reorder": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.documentTypes.title": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "styleSets.stellaStyle": [
       "ar",
       "cs",
@@ -2112,19 +871,6 @@
     "templates.conditionCount": [
       "fr"
     ],
-    "templates.conditionFormulaPlaceholder": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.conditionOperator": [
       "de",
       "pl"
@@ -2132,69 +878,17 @@
     "templates.conditionsTitle": [
       "fr"
     ],
-    "templates.conditionUseFieldInstead": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "templates.conditionUseFormula": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.fieldFormulaExpression": [
       "fr"
     ],
     "templates.fieldOptions": [
       "fr"
     ],
-    "templates.studio.conditionRuleFallbackLabel": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.studio.expressionPlaceholder": [
       "fr"
     ],
     "templates.studio.filledByPerson": [
       "de"
-    ],
-    "templates.studio.insertConditionIntoTemplate": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "templates.studio.questions": [
       "fr"
@@ -2243,34 +937,6 @@
       "pt-BR",
       "sk"
     ],
-    "webSearch.settings.platformFallback": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "webSearch.settings.title": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.files.defaultPropertyName": [
       "fr"
     ],
@@ -2286,14 +952,10 @@
       "fr"
     ],
     "workspaces.filters.team.lead": [
-      "de",
-      "et",
-      "lv"
+      "de"
     ],
     "workspaces.filters.team.leadActive": [
-      "de",
-      "et",
-      "lv"
+      "de"
     ],
     "workspaces.infosoud.spisZn": [
       "cs",
@@ -2341,19 +1003,6 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
-    "workspaces.properties.addCondition": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -2362,56 +1011,14 @@
       "de",
       "sk"
     ],
-    "workspaces.properties.clip": [
-      "pl"
-    ],
     "workspaces.properties.conditions": [
       "fr"
     ],
     "workspaces.properties.documentsLabel": [
       "fr"
     ],
-    "workspaces.properties.editConditionsWhen": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.properties.noConditionFields": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "workspaces.properties.optionsLabel": [
       "fr"
-    ],
-    "workspaces.properties.selectField": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "workspaces.properties.text": [
       "cs",
@@ -2435,20 +1042,6 @@
     ],
     "workspaces.views.calendar.additionalDates": [
       "fr"
-    ],
-    "workspaces.views.groupItemCount": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
     ],
     "workspaces.views.layouts.kanban": [
       "cs",

@@ -800,7 +800,7 @@
     "active": "Aktivní",
     "add": "Přidat",
     "all": "Vše",
-    "and": "And",
+    "and": "A",
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankovního účtu",
@@ -959,12 +959,12 @@
     "next": "Pokračovat",
     "noResults": "Žádné výsledky",
     "noVersions": "Žádná historie verzí",
-    "none": "None",
+    "none": "Žádné",
     "notes": "Poznámky",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
     "options": "Možnosti",
-    "or": "Or",
+    "or": "Nebo",
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
@@ -1020,7 +1020,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
     "uncategorized": "Nekategorizováno",
-    "undo": "Undo",
+    "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
@@ -1888,7 +1888,7 @@
       "builtInSection": "Vestavěné dovednosti",
       "chooseFile": "Vyberte soubor nebo ho sem přetáhněte",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Publikovat dovednost"
       },
       "deleteConfirmDescription": "Dovednost „{name}“ bude z tohoto pracovního prostoru odebrána.",
       "deleteFile": "Smazat soubor",
@@ -1929,7 +1929,7 @@
       "generateSkill": "Vygenerovat pomocí AI",
       "generateTitle": "Vygenerovat dovednost pomocí AI",
       "generating": "Generuji…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
       "importFailureIntegrity": "Zdroj dovednosti se po nalezení změnil. Zkontrolujte ho znovu.",
       "importFailureLimit": "Byl dosažen limit dovedností.",
@@ -1951,7 +1951,7 @@
       "resources": "{count, plural, one {# zdroj} few {# zdroje} other {# zdrojů}}",
       "scopePrivate": "Jen já",
       "scopeTeam": "Všichni v týmu",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Výběrem souboru v seznamu jej otevřete v panelu editoru vpravo.",
       "selectedFile": "Vybráno: {name}",
       "selectionLimit": "Najednou můžete vybrat nejvýše {count} dovedností.",
       "sourceUpload": "Nahráno",
@@ -2011,12 +2011,12 @@
       "addRule": "Pravidlo",
       "advanced": "Pokročilé",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Schválit",
+        "approveFailed": "Playbook se nepodařilo schválit",
+        "approvedOn": "Schváleno {date}",
+        "approvedToast": "Playbook schválen",
+        "statusApproved": "Schváleno",
+        "statusDraft": "Koncept"
       },
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
@@ -2079,18 +2079,18 @@
       "issuePlaceholder": "např. Omezení odpovědnosti",
       "loadFailed": "Playbooky se nepodařilo načíst",
       "loading": "Načítám playbooky…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Spravovat typy…",
       "namePlaceholder": "např. revize NDA",
       "nameRequired": "Zadejte název.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Přidat argument",
+        "escalationLabel": "Eskalace",
+        "escalationPlaceholder": "Kdy a komu eskalovat (volitelné)",
+        "rationaleLabel": "Odůvodnění",
+        "rationalePlaceholder": "Proč tuto pozici požadujeme (volitelné)",
+        "talkingPointPlaceholder": "Co říct",
+        "talkingPointsLabel": "Argumenty",
+        "title": "Vyjednávání"
       },
       "noPositions": "Zatím žádné pozice. Přidejte první.",
       "optionPlaceholder": "Hodnota možnosti",
@@ -2127,17 +2127,17 @@
       },
       "risk": {
         "complianceLabel": "Soulad",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "Označeno {flagged} z {total} pozic",
         "notApplicableExcluded": "({count} nerelevantní, vyloučeno)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kritické",
+          "high": "Vysoké",
+          "low": "Nízké",
+          "medium": "Střední",
+          "none": "Bez rizika"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Souhrn rizik",
+        "topIssuesTitle": "Hlavní problémy"
       },
       "ruleNumber": "Pravidlo {index}",
       "rulePlaceholder": "Pravidlo v prostém jazyce",
@@ -2150,11 +2150,11 @@
       },
       "severityLabel": "Závažnost",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Playbook přidán",
+        "browseButton": "Procházet úvodní playbooky",
+        "positionCount": "{count, plural, one {# pozice} few {# pozice} other {# pozic}}",
+        "subtitle": "Hotové playbooky, které můžete přidat a upravit podle svých standardů.",
+        "title": "Úvodní playbooky"
       },
       "switchToAuto": "Zpět na automatický režim",
       "switchToManual": "Přepnout na ruční zadání",
@@ -2173,10 +2173,10 @@
         "notApplicable": "Nerelevantní"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Obsah aktuálního konceptu bude nahrazen obsahem této verze.",
+        "restoreFailed": "Verzi se nepodařilo obnovit",
+        "restoredToast": "Verze obnovena",
+        "versionHistory": "Historie verzí"
       }
     },
     "sections": {
@@ -2267,9 +2267,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Zdroj Markdownu",
+    "showFormatted": "Formátovaný text",
+    "showRaw": "Zobrazit zdroj"
   },
   "memory": {
     "addPlaceholder": "Přidejte poznámku, kterou si má asistent zapamatovat…",
@@ -2912,12 +2912,12 @@
         "updated": "Nastavení rozpoznávání textu aktualizováno"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Přidat typ dokumentu (např. pracovní smlouva)",
+        "deleteFailed": "Typ dokumentu se nepodařilo smazat",
+        "description": "Určete typy dokumentů, které vaše organizace kontroluje. Playbooky se vztahují k těmto typům a klasifikátor AI do nich dokumenty zařazuje.",
+        "labelAria": "Název typu dokumentu",
+        "reorder": "Změnit pořadí typu dokumentu",
+        "title": "Typy dokumentů"
       },
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
@@ -3528,9 +3528,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "Používá se sdílený klíč platformy. Přidejte vlastní klíč, chcete-li používat svůj účet a kvótu u poskytovatele.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Klíče pro webové vyhledávání"
     }
   },
   "workspaces": {
@@ -3960,7 +3960,7 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Přidat podmínku",
       "addInputProperty": "Přidejte alespoň jednu vstupní vlastnost pomocí \"@\"",
       "addOption": "Přidat možnost",
       "addPromptForBetterResults": "Přidejte prompt pro lepší výsledky",
@@ -4000,7 +4000,7 @@
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Spouštět extrakci pouze tehdy, když…",
       "enterAValue": "Zadejte hodnotu",
       "extractEntityType": "Vytěžit informaci",
       "extractEntityTypeDescription": "Sloupec doplňovaný AI.",
@@ -4028,7 +4028,7 @@
       "newColumn": "Nový sloupec",
       "newColumnDescription": "Vyberte, jak se má tento sloupec tabulky vyplňovat.",
       "newColumnName": "Název sloupce",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Nejsou k dispozici žádná pole, podle kterých lze filtrovat.",
       "noFirstDocument": "Zatím žádné dokumenty pro náhled.",
       "noPropertiesFound": "Nebyly nalezeny žádné vlastnosti",
       "optionsHelp": "Zadej hodnoty, ze kterých může AI vybírat.",
@@ -4051,7 +4051,7 @@
       "scopeMatterDescription": "Použít všechny sloupce souborů a spustit celý spis.",
       "searchOrAddOptions": "Hledat nebo přidat možnosti",
       "selectColor": "Vyberte barvu",
-      "selectField": "Select field",
+      "selectField": "Vybrat pole",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
       "singleSelect": "Jednoduchý výběr",
@@ -4145,7 +4145,7 @@
       "filterByPlaceholder": "Filtrovat podle…",
       "filtersWithCount": "{count, plural, one {# filtr} few {# filtry} other {# filtrů}}",
       "groupBy": "Seskupit podle:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
       "hideColumn": "Skrýt sloupec",
       "layouts": {
         "calendar": "Kalendář",

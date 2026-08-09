@@ -800,7 +800,7 @@
     "active": "Aktīvs",
     "add": "Pievienot",
     "all": "Visi",
-    "and": "And",
+    "and": "Un",
     "anonymizationLabels": {
       "address": "Adrese",
       "bankAccountNumber": "Bankas konta numurs",
@@ -959,12 +959,12 @@
     "next": "Tālāk",
     "noResults": "Nav rezultātu",
     "noVersions": "Nav versiju vēstures",
-    "none": "None",
+    "none": "Nav",
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
     "options": "Iespējas",
-    "or": "Or",
+    "or": "Vai",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
@@ -1020,7 +1020,7 @@
     "type": "Tips",
     "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
     "uncategorized": "Nekategorizēts",
-    "undo": "Undo",
+    "undo": "Atsaukt",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
@@ -1409,47 +1409,47 @@
     "descriptionPlaceholder": "Ko šī darbplūsma dara",
     "disableFlow": "Atspējot darbplūsmu",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Definējiet soļus vienreiz un pēc tam palaidiet šo darbplūsmu no jebkuras lietas. Izpilde tiek apturēta pārbaudes kontrolpunktos, lai saņemtu apstiprinājumu."
     },
     "empty": "Vēl nav darbplūsmu",
     "emptyDescription": "Izveidojiet darbplūsmu, lai no dokumentiem un mērķa iegūtu pabeigtu rezultātu.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Sākt ar tukšu darbplūsmu",
+      "description": "Palaidiet to lietas cilnē Darbplūsmas, pēc grafika vai failu augšupielādes laikā. Kontrolpunktos izpilde tiek apturēta, lai persona to apstiprinātu pirms rezultāta pabeigšanas; rezultātu var saglabāt kā dokumentu lietā.",
+      "examplesTitle": "Sākt ar piemēru",
+      "title": "Darbplūsma ir saglabāta MI un pārbaudes soļu secība, ko komanda atkārtoti izpilda lietas dokumentiem, lai vienmēr iegūtu konsekventu rezultātu."
     },
     "enableFlow": "Iespējot darbplūsmu",
     "enabledDescription": "Atspējotas darbplūsmas nevar palaist vai aktivizēt.",
     "enabledLabel": "Iespējota",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Izveidot kopsavilkumu",
+        "description": "Apkopojiet lietas dokumentus kolēģim, kurš tos nav lasījis.",
+        "documentTitle": "Dokumentu kopsavilkums",
+        "name": "Lietas dokumentu kopsavilkums",
+        "summaryStepName": "Apkopot dokumentus",
+        "summaryStepPrompt": "Apkopojiet katru ievades dokumentu: puses, priekšmetu, galvenos datumus, saistības un neatrisinātos jautājumus. Rakstiet kolēģim, kurš dokumentu nav lasījis."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Izveidot ziņojumu",
+        "description": "Atklājiet kontroles maiņas, tiesību nodošanas un atbildības riskus visā datu telpā.",
+        "documentTitle": "Būtisko risku ziņojums",
+        "name": "Padziļinātās izpētes būtiskie riski",
+        "reviewGateInstructions": "Pirms ziņojuma izveides pārbaudiet būtiskos riskus.",
+        "reviewGateStepName": "Pārbaudīt būtiskos riskus",
+        "reviewStepName": "Atrast būtiskos riskus",
+        "reviewStepPrompt": "Izlasiet ievades dokumentus un sagatavojiet būtisko risku ziņojumu: kontroles maiņa, tiesību nodošanas ierobežojumi, izbeigšanas tiesības, ekskluzivitāte un atbildības ierobežojumi. Citējiet attiecīgo formulējumu."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Izveidot memorandu",
+        "description": "Atzīmējiet neparastus konfidencialitātes līguma noteikumus, pirms komanda uz to paļaujas.",
+        "documentTitle": "Konfidencialitātes līguma pārbaudes memorands",
+        "name": "Saņemtā konfidencialitātes līguma pārbaude",
+        "reviewGateInstructions": "Pirms memoranda izveides pārbaudiet atzīmētos noteikumus.",
+        "reviewGateStepName": "Pārbaudīt atzīmētos noteikumus",
+        "reviewStepName": "Pārbaudīt konfidencialitātes līgumu",
+        "reviewStepPrompt": "Pārbaudiet pievienoto konfidencialitātes līgumu atbilstoši ierastajiem tirgus standartiem: termiņu, konfidencialitātes tvērumu, izņēmumus un piemērojamos tiesību aktus. Atzīmējiet neparastus noteikumus, norādiet to nopietnību un citējiet attiecīgo noteikumu."
       }
     },
     "fileUpload": {
@@ -1519,9 +1519,9 @@
     "steps": {
       "add": "Pievienot soli:",
       "ai": "AI solis",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Raksta tekstu atbilstoši jūsu norādījumiem un var lasīt atlasītos ievades dokumentus.",
       "createDocument": "Izveidot dokumentu",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "Saglabā jaunāko MI rezultātu kā dokumentu lietā, kurā tika sākta izpilde.",
       "documentTitle": "Dokumenta nosaukums",
       "documentTitlePlaceholder": "piem., Kopsavilkuma memorands",
       "documentTitleRequired": "Ievadiet dokumenta nosaukumu.",
@@ -1536,7 +1536,7 @@
       "promptRequired": "Ievadiet uzvedni AI solim.",
       "required": "Pievienojiet vismaz vienu soli.",
       "reviewGate": "Pārbaudes kontrolpunkts",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Aptur izpildi, līdz persona to apstiprina vai noraida.",
       "title": "Soļi"
     },
     "trigger": {
@@ -1888,7 +1888,7 @@
       "builtInSection": "Iebūvētās prasmes",
       "chooseFile": "Izvēlieties failu vai ievelciet to šeit",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Publicēt prasmi"
       },
       "deleteConfirmDescription": "„{name}“ tiks noņemta no šīs darbvietas.",
       "deleteFile": "Dzēst failu",
@@ -1929,7 +1929,7 @@
       "generateSkill": "Ģenerēt ar AI",
       "generateTitle": "Ģenerēt prasmi ar AI",
       "generating": "Ģenerē…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
       "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",
       "importFailureLimit": "Ir sasniegts prasmju ierobežojums.",
@@ -1951,7 +1951,7 @@
       "resources": "{count, plural, zero {# resursu} one {# resurss} other {# resursi}}",
       "scopePrivate": "Tikai es",
       "scopeTeam": "Visi komandā",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Atlasiet sarakstā failu, lai to atvērtu redaktora panelī pa labi.",
       "selectedFile": "Atlasīts: {name}",
       "selectionLimit": "Vienlaikus atlasiet ne vairāk kā {count} prasmes.",
       "sourceUpload": "Augšupielādēts",
@@ -2011,12 +2011,12 @@
       "addRule": "Noteikums",
       "advanced": "Papildu",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Apstiprināt",
+        "approveFailed": "Neizdevās apstiprināt pārbaudes ceļvedi",
+        "approvedOn": "Apstiprināts {date}",
+        "approvedToast": "Pārbaudes ceļvedis apstiprināts",
+        "statusApproved": "Apstiprināts",
+        "statusDraft": "Melnraksts"
       },
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
@@ -2079,18 +2079,18 @@
       "issuePlaceholder": "piem., Atbildības ierobežojums",
       "loadFailed": "Neizdevās ielādēt pārbaudes ceļvežus",
       "loading": "Ielādē pārbaudes ceļvežus…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Pārvaldīt tipus…",
       "namePlaceholder": "piem., NDA pārbaude",
       "nameRequired": "Pievienojiet nosaukumu.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Pievienot sarunu argumentu",
+        "escalationLabel": "Eskalācija",
+        "escalationPlaceholder": "Kad un kam nodot izskatīšanai (neobligāti)",
+        "rationaleLabel": "Pamatojums",
+        "rationalePlaceholder": "Kāpēc mēs to vēlamies (neobligāti)",
+        "talkingPointPlaceholder": "Ko teikt",
+        "talkingPointsLabel": "Sarunu argumenti",
+        "title": "Sarunas"
       },
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
       "optionPlaceholder": "Iespējas vērtība",
@@ -2127,17 +2127,17 @@
       },
       "risk": {
         "complianceLabel": "Atbilstība",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "Atzīmētas {flagged} no {total} pozīcijām",
         "notApplicableExcluded": "({count} nav piemērojams, izslēgts)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kritisks",
+          "high": "Augsts",
+          "low": "Zems",
+          "medium": "Vidējs",
+          "none": "Nav riska"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Risku kopsavilkums",
+        "topIssuesTitle": "Būtiskākās problēmas"
       },
       "ruleNumber": "Noteikums {index}",
       "rulePlaceholder": "Vienkāršā valodā formulēts noteikums",
@@ -2150,11 +2150,11 @@
       },
       "severityLabel": "Nopietnība",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Pārbaudes ceļvedis pievienots",
+        "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",
+        "positionCount": "{count, plural, zero {# pozīciju} one {# pozīcija} other {# pozīcijas}}",
+        "subtitle": "Gatavi pārbaudes ceļveži, ko varat pievienot un pēc tam pielāgot saviem standartiem.",
+        "title": "Sākuma pārbaudes ceļveži"
       },
       "switchToAuto": "Atpakaļ uz automātisko režīmu",
       "switchToManual": "Pārslēgt uz manuālo režīmu",
@@ -2173,10 +2173,10 @@
         "notApplicable": "Nav piemērojams"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Pašreizējais melnraksts tiks aizstāts ar šīs versijas saturu.",
+        "restoreFailed": "Neizdevās atjaunot versiju",
+        "restoredToast": "Versija atjaunota",
+        "versionHistory": "Versiju vēsture"
       }
     },
     "sections": {
@@ -2213,29 +2213,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Atbildiet uz jautājumu, balstoties uz autoritatīviem avotiem.",
+            "inside": "avotu hierarhija · izpētes uzvedne",
+            "title": "Atbildēt, izmantojot avotus"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Pārbaudiet dokumentu un ar atsaucēm atzīmējiet neatbilstības.",
+            "inside": "atsauces pēc jurisdikcijas · kontrolsaraksts · pārbaudes uzvedne",
+            "title": "Pārbaudīt atbilstību noteikumiem"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Apkopojiet faktus un pēc tam sagatavojiet dokumenta projektu.",
+            "inside": "intervija · paraugdokumenti · projekta uzvedne",
+            "title": "No faktu apkopošanas līdz projektam"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Saturs",
+        "startBlank": "Sākt no jauna",
+        "startBlankHint": "Tukša prasme gadījumiem, kad precīzi zināt, ko vēlaties.",
+        "subtitle": "Izvēlieties sākuma struktūru. Mēs izveidosim mapes un soli pa solim palīdzēsim tās aizpildīt.",
+        "title": "Kā jādarbojas jūsu prasmei?"
       },
       "commandConflict": "Prasme ar šo / komandu jau pastāv",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "Ierakstiet to tērzēšanā, lai palaistu šo prasmi.",
       "commandLabel": "Slīpsvītras komanda (nav obligāta)",
       "commandPlaceholder": "piem. apkopot",
       "createTitle": "Jauna prasme",
@@ -2267,9 +2267,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Markdown avotteksts",
+    "showFormatted": "Formatēts",
+    "showRaw": "Rādīt avottekstu"
   },
   "memory": {
     "addPlaceholder": "Pievienojiet piezīmi, kas asistentam jāatceras…",
@@ -2912,12 +2912,12 @@
         "updated": "Dokumentu teksta atpazīšanas iestatījums atjaunināts"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Pievienojiet dokumenta tipu (piem., darba līgums)",
+        "deleteFailed": "Neizdevās izdzēst dokumenta tipu",
+        "description": "Definējiet dokumentu tipus, ko jūsu organizācija pārbauda. Pārbaudes ceļveži attiecas uz šiem tipiem, un MI klasifikators sašķiro dokumentus atbilstoši tiem.",
+        "labelAria": "Dokumenta tipa nosaukums",
+        "reorder": "Pārkārtot dokumenta tipu",
+        "title": "Dokumentu tipi"
       },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
@@ -3187,7 +3187,7 @@
     "conditionAnd": "Un",
     "conditionCount": "{count, plural, zero {# nosacījumu} one {# nosacījums} other {# nosacījumi}}",
     "conditionField": "Lauks",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Ievadiet formulu…",
     "conditionMatch": "Atbilstība",
     "conditionNamePlaceholder": "Nosacījuma nosaukums (piem., NPF)",
     "conditionOpAfter": "pēc",
@@ -3206,8 +3206,8 @@
     "conditionOpOnOrBefore": "datumā vai pirms",
     "conditionOperator": "Operators",
     "conditionOr": "Vai",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Tā vietā izmantot lauku",
+    "conditionUseFormula": "ƒ Aprēķināta vērtība…",
     "conditionValue": "Vērtība",
     "conditionWhen": "Kad",
     "conditionsTitle": "Nosacījumi",
@@ -3359,7 +3359,7 @@
       "conditionOrBuildNew": "vai izveidojiet jaunu",
       "conditionReuse": "Atkārtoti izmantot nosacījumu",
       "conditionReusePick": "Izvēlieties esošu nosacījumu…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Aprēķināts nosacījums",
       "conditionSource": "Kā tas tiek noteikts",
       "conditionSourceAi": "Izlemj MI",
       "conditionSourceAsked": "Jautāts",
@@ -3385,7 +3385,7 @@
       "gettingStartedTitle": "Darba sākšana",
       "insert": "Ievietot",
       "insertAtCaret": "Ievietot pie kursora",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Ievietot nosacījumu",
       "insertFormatDefault": "Noklusējuma",
       "insertIntoTemplate": "Ievietot veidnē",
       "insertItemNumber": "Vienuma numurs",
@@ -3528,9 +3528,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "Tiek izmantota platformas koplietotā atslēga. Pievienojiet savu atslēgu, lai izmantotu savu pakalpojumu sniedzēja kontu un kvotu.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Meklēšanas tīmeklī atslēgas"
     }
   },
   "workspaces": {
@@ -3699,8 +3699,8 @@
       "team": {
         "filterAsLead": "Iestatīt kā vadītāja filtru",
         "hasLead": "Ir vadītājs",
-        "lead": "Lead",
-        "leadActive": "Lead",
+        "lead": "Atbildīgais",
+        "leadActive": "Atbildīgais",
         "leadInactive": "Iestatīt vadītāju",
         "noLead": "Nav atbildīgā",
         "searchMembers": "Meklēt dalībniekus…"
@@ -3960,7 +3960,7 @@
     },
     "possibleDuplicates": "Iespējamie dublikāti",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Pievienot nosacījumu",
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",
       "addOption": "Pievienot opciju",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",
@@ -4000,7 +4000,7 @@
       "editColumn": "Rediģēt kolonnu",
       "editConditions": "Rediģēt nosacījumus",
       "editConditionsDescription": "Iestatiet nosacījumus, kad šis rekvizīts tiks ģenerēts.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Veikt izvilkšanu tikai tad, ja…",
       "enterAValue": "Ievadiet vērtību",
       "extractEntityType": "Izvilkt entītijas tipu",
       "extractEntityTypeDescription": "Izveidojiet AI aizpildītu tabulas kolonnu.",
@@ -4028,7 +4028,7 @@
       "newColumn": "Jauna kolonna",
       "newColumnDescription": "Izvēlieties, kā šī tabulas kolonna jāaizpilda.",
       "newColumnName": "Kolonnas nosaukums",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Nav lauku, pēc kuriem filtrēt.",
       "noFirstDocument": "Vēl nav dokumentu priekšskatījumam.",
       "noPropertiesFound": "Rekvizīti nav atrasti",
       "optionsHelp": "Definē vērtības, no kurām AI var izvēlēties.",
@@ -4051,7 +4051,7 @@
       "scopeMatterDescription": "Izmantojiet visas failu kolonnas un palaidiet lietu.",
       "searchOrAddOptions": "Meklēt vai pievienot opcijas",
       "selectColor": "Izvēlieties krāsu",
-      "selectField": "Select field",
+      "selectField": "Atlasiet lauku",
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
@@ -4145,7 +4145,7 @@
       "filterByPlaceholder": "Filtrēt pēc…",
       "filtersWithCount": "{count, plural, zero {nav filtru} one {# filtrs} other {# filtri}}",
       "groupBy": "Grupēt pēc:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
       "hideColumn": "Paslēpt kolonnu",
       "layouts": {
         "calendar": "Kalendārs",

@@ -800,7 +800,7 @@
     "active": "Aktyvus",
     "add": "Pridėti",
     "all": "Visi",
-    "and": "And",
+    "and": "Ir",
     "anonymizationLabels": {
       "address": "Adresas",
       "bankAccountNumber": "Banko sąskaitos numeris",
@@ -959,12 +959,12 @@
     "next": "Toliau",
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
-    "none": "None",
+    "none": "Nėra",
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
     "options": "Parinktys",
-    "or": "Or",
+    "or": "Arba",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
@@ -1020,7 +1020,7 @@
     "type": "Tipas",
     "typeNameToConfirm": "Įveskite pavadinimą, kad patvirtintumėte",
     "uncategorized": "Nekategorizuota",
-    "undo": "Undo",
+    "undo": "Anuliuoti",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
@@ -1409,47 +1409,47 @@
     "descriptionPlaceholder": "Ką atlieka ši darbo eiga",
     "disableFlow": "Išjungti darbo eigą",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Vieną kartą nustatykite veiksmus, tada vykdykite šią darbo eigą iš bet kurios bylos. Vykdymas sustabdomas peržiūros kontroliniuose taškuose, kad būtų patvirtintas."
     },
     "empty": "Darbo eigų dar nėra",
     "emptyDescription": "Sukurkite darbo eigą, kad iš dokumentų ir tikslo gautumėte baigtą rezultatą.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Pradėti nuo tuščio lapo",
+      "description": "Paleiskite ją bylos skirtuke „Darbo eigos“, pagal tvarkaraštį arba įkėlus failus. Kontroliniuose taškuose darbo eiga sustabdoma, kad žmogus galėtų ją patvirtinti prieš galutinį rezultatą; rezultatą galima išsaugoti byloje kaip dokumentą.",
+      "examplesTitle": "Pradėti nuo pavyzdžio",
+      "title": "Darbo eiga yra išsaugota DI ir peržiūros veiksmų seka, kurią jūsų komanda pakartotinai vykdo su bylos dokumentais, kad gautų nuoseklų rezultatą."
     },
     "enableFlow": "Įjungti darbo eigą",
     "enabledDescription": "Išjungtų darbo eigų negalima paleisti ar suaktyvinti.",
     "enabledLabel": "Įjungta",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Sukurti santrauką",
+        "description": "Apibendrinkite bylos dokumentus kolegai, kuris jų dar neskaitė.",
+        "documentTitle": "Dokumentų santrauka",
+        "name": "Bylos dokumentų santrauka",
+        "summaryStepName": "Apibendrinti dokumentus",
+        "summaryStepPrompt": "Apibendrinkite kiekvieną įvesties dokumentą: šalis, dalyką, svarbias datas, įsipareigojimus ir neišspręstus klausimus. Rašykite kolegai, kuris dokumento dar neskaitė."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Sukurti ataskaitą",
+        "description": "Duomenų kambaryje nustatykite riziką, susijusią su kontrolės pasikeitimu, teisių perleidimu ir atsakomybe.",
+        "documentTitle": "Rizikos signalų ataskaita",
+        "name": "Išsamaus teisinio patikrinimo rizikos signalai",
+        "reviewGateInstructions": "Prieš kurdami ataskaitą patikrinkite rizikos signalus.",
+        "reviewGateStepName": "Patikrinti rizikos signalus",
+        "reviewStepName": "Rasti rizikos signalus",
+        "reviewStepPrompt": "Perskaitykite įvesties dokumentus ir parenkite rizikos signalų ataskaitą apie kontrolės pasikeitimą, teisių perleidimo apribojimus, nutraukimo teises, išimtinumą ir atsakomybės ribas. Pacituokite atitinkamą formuluotę."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Sukurti pažymą",
+        "description": "Pažymėkite neįprastas konfidencialumo susitarimo sąlygas prieš jūsų komandai pradedant juo remtis.",
+        "documentTitle": "Konfidencialumo susitarimo peržiūros pažyma",
+        "name": "Pirminė konfidencialumo susitarimo peržiūra",
+        "reviewGateInstructions": "Prieš kurdami pažymą patikrinkite pažymėtas sąlygas.",
+        "reviewGateStepName": "Patikrinti pažymėtas sąlygas",
+        "reviewStepName": "Peržiūrėti konfidencialumo susitarimą",
+        "reviewStepPrompt": "Peržiūrėkite pridėtą konfidencialumo susitarimą pagal įprastus rinkos standartus: trukmę, konfidencialumo apimtį, išimtis ir taikytiną teisę. Pažymėkite neįprastas sąlygas, nurodykite jų reikšmingumo lygį ir pacituokite sąlygą."
       }
     },
     "fileUpload": {
@@ -1519,9 +1519,9 @@
     "steps": {
       "add": "Pridėti žingsnį:",
       "ai": "DI žingsnis",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Rašo tekstą pagal jūsų nurodymus ir gali skaityti pasirinktus įvesties dokumentus.",
       "createDocument": "Sukurti dokumentą",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "Išsaugo naujausią DI išvestį kaip dokumentą byloje, kurioje pradėtas vykdymas.",
       "documentTitle": "Dokumento pavadinimas",
       "documentTitlePlaceholder": "pvz., Santraukos memorandumas",
       "documentTitleRequired": "Įveskite dokumento pavadinimą.",
@@ -1536,7 +1536,7 @@
       "promptRequired": "Įveskite DI žingsnio užklausą.",
       "required": "Pridėkite bent vieną žingsnį.",
       "reviewGate": "Peržiūros kontrolė",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Sustabdo vykdymą, kol žmogus jį patvirtina arba atmeta.",
       "title": "Žingsniai"
     },
     "trigger": {
@@ -1888,7 +1888,7 @@
       "builtInSection": "Integruoti įgūdžiai",
       "chooseFile": "Pasirinkite failą arba vilkite jį čia",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Paskelbti įgūdį"
       },
       "deleteConfirmDescription": "„{name}“ bus pašalintas iš šios darbo srities.",
       "deleteFile": "Ištrinti failą",
@@ -1929,7 +1929,7 @@
       "generateSkill": "Generuoti su DI",
       "generateTitle": "Generuoti įgūdį su DI",
       "generating": "Generuojama…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
       "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",
       "importFailureLimit": "Pasiektas įgūdžių limitas.",
@@ -1951,7 +1951,7 @@
       "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
       "scopePrivate": "Tik man",
       "scopeTeam": "Visiems komandoje",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Pasirinkite failą iš sąrašo, kad atidarytumėte jį dešinėje esančiame redagavimo skydelyje.",
       "selectedFile": "Pasirinkta: {name}",
       "selectionLimit": "Vienu metu pasirinkite iki {count} įgūdžių.",
       "sourceUpload": "Įkelta",
@@ -2011,12 +2011,12 @@
       "addRule": "Taisyklė",
       "advanced": "Išplėstinis",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Patvirtinti",
+        "approveFailed": "Nepavyko patvirtinti peržiūros vadovo",
+        "approvedOn": "Patvirtinta {date}",
+        "approvedToast": "Peržiūros vadovas patvirtintas",
+        "statusApproved": "Patvirtinta",
+        "statusDraft": "Juodraštis"
       },
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
@@ -2079,18 +2079,18 @@
       "issuePlaceholder": "pvz., Atsakomybės ribojimas",
       "loadFailed": "Nepavyko įkelti peržiūros vadovų",
       "loading": "Įkeliami peržiūros vadovai…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Tvarkyti tipus…",
       "namePlaceholder": "pvz., NDA peržiūra",
       "nameRequired": "Pridėkite pavadinimą.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Pridėti derybų punktą",
+        "escalationLabel": "Eskalavimas",
+        "escalationPlaceholder": "Kada ir kam eskaluoti (pasirinktinai)",
+        "rationaleLabel": "Pagrindimas",
+        "rationalePlaceholder": "Kodėl to siekiame (pasirinktinai)",
+        "talkingPointPlaceholder": "Ką sakyti",
+        "talkingPointsLabel": "Derybų punktai",
+        "title": "Derybos"
       },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
       "optionPlaceholder": "Parinkties reikšmė",
@@ -2127,17 +2127,17 @@
       },
       "risk": {
         "complianceLabel": "Atitiktis",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "Pažymėta {flagged} iš {total} pozicijų",
         "notApplicableExcluded": "({count} netaikoma, neįtraukta)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kritinė",
+          "high": "Didelė",
+          "low": "Maža",
+          "medium": "Vidutinė",
+          "none": "Rizikos nėra"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Rizikos santrauka",
+        "topIssuesTitle": "Svarbiausi klausimai"
       },
       "ruleNumber": "Taisyklė {index}",
       "rulePlaceholder": "Paprasta kalba suformuluota taisyklė",
@@ -2150,11 +2150,11 @@
       },
       "severityLabel": "Svarba",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Peržiūros vadovas pridėtas",
+        "browseButton": "Naršyti parengtus peržiūros vadovus",
+        "positionCount": "{count, plural, one {# pozicija} few {# pozicijos} many {# pozicijos} other {# pozicijų}}",
+        "subtitle": "Parengti peržiūros vadovai, kuriuos galite pridėti ir pritaikyti savo standartams.",
+        "title": "Parengti peržiūros vadovai"
       },
       "switchToAuto": "Grįžti į automatinį režimą",
       "switchToManual": "Perjungti į rankinį režimą",
@@ -2173,10 +2173,10 @@
         "notApplicable": "Netaikoma"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Dabartinį juodraštį pakeis šios versijos turinys.",
+        "restoreFailed": "Nepavyko atkurti versijos",
+        "restoredToast": "Versija atkurta",
+        "versionHistory": "Versijų istorija"
       }
     },
     "sections": {
@@ -2213,29 +2213,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Atsakykite į klausimą remdamiesi patikimais šaltiniais.",
+            "inside": "šaltinių hierarchija · tyrimo užklausa",
+            "title": "Atsakyti pagal šaltinius"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Peržiūrėkite dokumentą ir su nuorodomis pažymėkite, kas neatitinka reikalavimų.",
+            "inside": "šaltiniai pagal jurisdikciją · kontrolinis sąrašas · peržiūros užklausa",
+            "title": "Patikrinti pagal taisykles"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Surinkite faktus, tada parenkite dokumento juodraštį.",
+            "inside": "apklausa · dokumentų pavyzdžiai · rengimo užklausa",
+            "title": "Nuo duomenų surinkimo iki juodraščio"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Sudėtis",
+        "startBlank": "Pradėti nuo tuščio lapo",
+        "startBlankHint": "Tuščias įgūdis, kai tiksliai žinote, ko reikia.",
+        "subtitle": "Pasirinkite pradinę struktūrą. Parengsime aplankus ir padėsime juos užpildyti.",
+        "title": "Kaip turėtų veikti jūsų įgūdis?"
       },
       "commandConflict": "Įgūdis su šia / komanda jau yra",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "Įveskite komandą pokalbyje, kad paleistumėte šį įgūdį.",
       "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
       "commandPlaceholder": "pvz. apibendrinti",
       "createTitle": "Naujas įgūdis",
@@ -2267,9 +2267,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Markdown pirminis tekstas",
+    "showFormatted": "Suformatuota",
+    "showRaw": "Rodyti pirminį tekstą"
   },
   "memory": {
     "addPlaceholder": "Pridėkite pastabą, kurią asistentas turėtų įsiminti…",
@@ -2912,12 +2912,12 @@
         "updated": "Dokumentų teksto atpažinimo nustatymas atnaujintas"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Pridėti dokumento tipą (pvz., darbo sutartį)",
+        "deleteFailed": "Nepavyko ištrinti dokumento tipo",
+        "description": "Nustatykite dokumentų tipus, kuriuos peržiūri jūsų organizacija. Peržiūros vadovai taikomi šiems tipams, o DI klasifikatorius pagal juos suskirsto dokumentus.",
+        "labelAria": "Dokumento tipo pavadinimas",
+        "reorder": "Keisti dokumento tipo eilės tvarką",
+        "title": "Dokumentų tipai"
       },
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
@@ -3187,7 +3187,7 @@
     "conditionAnd": "Ir",
     "conditionCount": "{count, plural, one {# sąlyga} few {# sąlygos} other {# sąlygų}}",
     "conditionField": "Laukas",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Įveskite formulę…",
     "conditionMatch": "Atitiktis",
     "conditionNamePlaceholder": "Sąlygos pavadinimas (pvz., NPF)",
     "conditionOpAfter": "po",
@@ -3206,8 +3206,8 @@
     "conditionOpOnOrBefore": "dieną arba prieš",
     "conditionOperator": "Operatorius",
     "conditionOr": "Arba",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Vietoje to naudoti lauką",
+    "conditionUseFormula": "ƒ Apskaičiuota reikšmė…",
     "conditionValue": "Reikšmė",
     "conditionWhen": "Kai",
     "conditionsTitle": "Sąlygos",
@@ -3359,7 +3359,7 @@
       "conditionOrBuildNew": "arba sukurkite naują",
       "conditionReuse": "Pakartotinai naudoti sąlygą",
       "conditionReusePick": "Pasirinkite esamą sąlygą…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Apskaičiuota sąlyga",
       "conditionSource": "Kaip nustatoma",
       "conditionSourceAi": "Sprendžia DI",
       "conditionSourceAsked": "Klausiama",
@@ -3385,7 +3385,7 @@
       "gettingStartedTitle": "Pradžia",
       "insert": "Įterpti",
       "insertAtCaret": "Įterpti ties žymekliu",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Įterpti sąlygą",
       "insertFormatDefault": "Numatytasis",
       "insertIntoTemplate": "Įterpti į šabloną",
       "insertItemNumber": "Elemento numeris",
@@ -3528,9 +3528,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "Naudojamas bendras platformos raktas. Pridėkite savo raktą, kad naudotumėte savo teikėjo paskyrą ir kvotą.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Žiniatinklio paieškos raktai"
     }
   },
   "workspaces": {
@@ -3960,7 +3960,7 @@
     },
     "possibleDuplicates": "Galimi dublikatai",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Pridėti sąlygą",
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",
       "addOption": "Pridėti parinktį",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",
@@ -4000,7 +4000,7 @@
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",
       "editConditionsDescription": "Nustatykite sąlygas, kada ši savybė turi būti generuojama.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Gavybą vykdyti tik tada, kai …",
       "enterAValue": "Įveskite reikšmę",
       "extractEntityType": "Ištraukti subjekto tipą",
       "extractEntityTypeDescription": "Sukurkite AI pildomą lentelės stulpelį.",
@@ -4028,7 +4028,7 @@
       "newColumn": "Naujas stulpelis",
       "newColumnDescription": "Pasirinkite, kaip šis lentelės stulpelis turi būti pildomas.",
       "newColumnName": "Stulpelio pavadinimas",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Nėra laukų, pagal kuriuos galima filtruoti.",
       "noFirstDocument": "Dar nėra dokumentų peržiūrai.",
       "noPropertiesFound": "Savybių nerasta",
       "optionsHelp": "Apibrėžk reikšmes, iš kurių AI gali rinktis.",
@@ -4051,7 +4051,7 @@
       "scopeMatterDescription": "Naudokite visus failų stulpelius ir paleiskite bylą.",
       "searchOrAddOptions": "Ieškoti arba pridėti parinktis",
       "selectColor": "Pasirinkite spalvą",
-      "selectField": "Select field",
+      "selectField": "Pasirinkti lauką",
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
@@ -4145,7 +4145,7 @@
       "filterByPlaceholder": "Filtruoti pagal…",
       "filtersWithCount": "{count, plural, one {# filtras} few {# filtrai} other {# filtrų}}",
       "groupBy": "Grupuoti pagal:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
         "calendar": "Kalendorius",
