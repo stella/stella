@@ -47160,6 +47160,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "currentPrompt",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--instruction",
+                    prop: "instruction",
+                    required: true,
+                    part: "body",
+                    partPath: "instruction",
+                  },
                 ],
                 inputOnly: ["body.contentType", "body.options"],
                 paginated: false,
@@ -47171,7 +47180,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["name", "contentType"],
+                      required: ["name", "contentType", "instruction"],
                       properties: {
                         name: {
                           minLength: 1,
@@ -47217,6 +47226,11 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         currentPrompt: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        instruction: {
+                          minLength: 1,
                           maxLength: 2000,
                           type: "string",
                         },
@@ -62132,7 +62146,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "summary-get"],
                 capabilityId: "time-entries.summary.get",
                 description:
-                  "Summarize the signed-in user's time in the current matter for a bounded date range.",
+                  "Summarize time in the current matter for a bounded date range; team scope requires time-entry approval access.",
                 access: "read",
                 flags: [
                   {
@@ -62162,6 +62176,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "query",
                     partPath: "dateTo",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Include a bounded per-member daily summary; requires time-entry approval access",
+                    flag: "--scope",
+                    prop: "scope",
+                    required: false,
+                    part: "query",
+                    partPath: "scope",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -62190,6 +62215,12 @@ export const generatedRouteMap: RouteNode = {
                         },
                         dateTo: {
                           format: "date",
+                          type: "string",
+                        },
+                        scope: {
+                          description:
+                            "Include a bounded per-member daily summary; requires time-entry approval access",
+                          const: "team",
                           type: "string",
                         },
                       },
