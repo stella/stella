@@ -41,13 +41,15 @@ describe("desktop edit file validation", () => {
     test(`accepts every standard ${fileType} namespace`, async () => {
       const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
 
-      for (const mainRootNamespace of config.mainRootNamespaces) {
-        const buffer = await makePackage({ fileType, mainRootNamespace });
+      await Promise.all(
+        config.mainRootNamespaces.map(async (mainRootNamespace) => {
+          const buffer = await makePackage({ fileType, mainRootNamespace });
 
-        expect(
-          await validateDesktopEditFileBuffer({ buffer, fileType }),
-        ).toEqual({ valid: true });
-      }
+          expect(
+            await validateDesktopEditFileBuffer({ buffer, fileType }),
+          ).toEqual({ valid: true });
+        }),
+      );
     });
 
     test(`rejects a ${fileType} package with the wrong main namespace`, async () => {
