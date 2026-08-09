@@ -319,7 +319,7 @@ type AiSettingsDisposition = "all" | "adapt-only" | "none";
 const AI_SETTINGS_DISPOSITION = {
   input: "all",
   "composite-draft": "all",
-  composite: "adapt-only",
+  composite: "all",
   lookup: "adapt-only",
   formula: "none",
   condition: "none",
@@ -358,13 +358,17 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   // The value-source union owns which AI settings are compatible. Keeping
   // this map total forces every new source kind to make that decision.
   const aiSettingsDisposition = AI_SETTINGS_DISPOSITION[f.valueSource.type];
-  if (f.aiPrompt && (aiSettingsDisposition === "all" || f.aiAdapt)) {
+  if (
+    f.aiPrompt &&
+    (aiSettingsDisposition === "all" ||
+      (aiSettingsDisposition === "adapt-only" && f.aiAdapt))
+  ) {
     field.aiPrompt = f.aiPrompt;
   }
   if (f.aiAdapt && aiSettingsDisposition !== "none") {
     field.aiAdapt = true;
   }
-  // Only an AI-drafted input reads the document; adaptation runs on the
+  // Only an AI-drafted field reads the document; adaptation runs on the
   // source's rendered value and never needs the original document.
   if (f.aiSeesDocument && f.aiPrompt && aiSettingsDisposition === "all") {
     field.aiSeesDocument = true;

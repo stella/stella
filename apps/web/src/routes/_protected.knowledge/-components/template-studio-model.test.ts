@@ -142,6 +142,42 @@ describe("template value-source state", () => {
     ]);
   });
 
+  test("preserves AI drafting for a composite field", () => {
+    const [field] = parseFields({
+      fields: [
+        {
+          path: "company",
+          inputType: "text",
+          aiPrompt: "Draft the company name.",
+          aiSeesDocument: true,
+          parts: [{ key: "name", inputType: "text" }],
+          format: "{{name}}",
+        },
+      ],
+    });
+
+    expect(
+      buildManifest({}, field === undefined ? [] : [field]).fields,
+    ).toEqual([
+      {
+        path: "company",
+        inputType: "text",
+        aiPrompt: "Draft the company name.",
+        aiSeesDocument: true,
+        parts: [
+          {
+            key: "name",
+            inputType: "text",
+            options: [],
+            label: undefined,
+            pattern: undefined,
+          },
+        ],
+        format: "{{name}}",
+      },
+    ]);
+  });
+
   test("does not serialize a stale legacy sibling against the discriminator", () => {
     const [field] = parseFields({
       fields: [{ path: "amount", inputType: "number" }],
@@ -154,6 +190,25 @@ describe("template value-source state", () => {
     expect(buildManifest({}, [stale]).fields).toEqual([
       { path: "amount", inputType: "number" },
     ]);
+  });
+
+  test("drops AI settings that are incompatible with the selected source", () => {
+    const [field] = parseFields({
+      fields: [
+        {
+          path: "amount",
+          inputType: "number",
+          formula: "base * 2",
+          aiPrompt: "Legacy prompt",
+          aiAdapt: true,
+          aiSeesDocument: true,
+        },
+      ],
+    });
+
+    expect(
+      buildManifest({}, field === undefined ? [] : [field]).fields,
+    ).toEqual([{ path: "amount", inputType: "number", formula: "base * 2" }]);
   });
 
   test("preserves an incomplete composite while editing, then normalizes it on save", () => {

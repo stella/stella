@@ -95,6 +95,25 @@ export const logicallyAnnotatedParse = () => {
   return parsed;
 };
 
+export const annotatedObjectLiteralParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const payload: { company: RegistryCompany } = {
+    company: JSON.parse(raw),
+  };
+  return payload;
+};
+
+export const annotatedArrayLiteralParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const companies: RegistryCompany[] = [JSON.parse(raw)];
+  return companies;
+};
+
+export const annotatedOpenObjectLiteralParse = () => {
+  const payload: { raw: unknown } = { raw: JSON.parse(raw) };
+  return payload;
+};
+
 export const satisfiesParse = () =>
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   JSON.parse(raw) satisfies RegistryCompany;
