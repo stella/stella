@@ -208,7 +208,20 @@ const callWithinExpressionStatement = (
       expression.type === "SequenceExpression" &&
       Array.isArray(expression.expressions)
     ) {
-      return expression.expressions.some(containsUnconditionalCall);
+      for (const item of expression.expressions) {
+        if (containsUnconditionalCall(item)) {
+          return true;
+        }
+        const preceding = unwrapValue(item);
+        if (
+          preceding === null ||
+          (preceding.type !== "Identifier" &&
+            preceding.type !== "Literal" &&
+            preceding.type !== "ThisExpression")
+        ) {
+          return false;
+        }
+      }
     }
     return false;
   };

@@ -8,6 +8,7 @@
 declare const stopEarly: boolean;
 declare const streamFailure: Error;
 declare const processChunk: (value: Uint8Array) => void;
+declare const mightThrow: () => void;
 
 // MUST flag: a locally owned reader keeps its stream locked when it is neither
 // transferred nor released in a finally block.
@@ -520,4 +521,18 @@ export const leakedDestructuredFetchBodyReader = async (url: string) => {
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: destructured fetch body reader is never released
   const reader = body.getReader();
   return await reader.read();
+};
+
+// MUST flag: an earlier sequence operand can throw before releaseLock runs.
+export const throwingSequenceBeforeRelease = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: throwing sequence operand can skip lock release
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+  } finally {
+    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: sequence ordering is the unsafe cleanup shape under test
+    (mightThrow(), reader.releaseLock());
+  }
 };

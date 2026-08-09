@@ -302,6 +302,14 @@ export const checkedDeferredAwait = async () => {
   return response.data;
 };
 
+// MUST flag: returning the deferred promise lets the unchecked Eden response
+// escape without ever inspecting its error channel.
+export const escapedDeferredPromise = () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: un-awaited Eden promise escapes unchecked
+  const pending = api.tasks.get();
+  return pending;
+};
+
 // MUST flag: a dynamic computed key can select data at runtime and therefore
 // cannot prove the error channel was inspected.
 export const dynamicComputedResponseKey = async () => {

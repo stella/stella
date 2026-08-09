@@ -8,14 +8,16 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { filesKeys } from "@/lib/files/queries";
@@ -87,14 +89,29 @@ const releaseEditSession = async ({
   entityId,
   propertyId,
 }: EditSessionReleaseContext) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["desktop-edit-sessions"].release.post({
-      entityId: toSafeId<"entity">(entityId),
-      propertyId: toSafeId<"property">(propertyId),
-      queryKey: entitiesKeys.all(workspaceId),
-    });
-  return unwrapEden(response);
+  const result = await Result.tryPromise(async () => {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      ["desktop-edit-sessions"].release.post({
+        entityId: toSafeId<"entity">(entityId),
+        propertyId: toSafeId<"property">(propertyId),
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+    if (response.error) {
+      return { status: "error" as const, error: toAPIError(response.error) };
+    }
+    return { status: "released" as const };
+  });
+
+  if (Result.isError(result)) {
+    getAnalytics().captureError(result.error);
+    return false;
+  }
+  if (result.value.status === "error") {
+    getAnalytics().captureError(result.value.error);
+    return false;
+  }
+  return true;
 };
 
 const getEditSessionErrorReason = (error: {

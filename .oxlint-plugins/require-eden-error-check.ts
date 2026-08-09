@@ -176,7 +176,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const apiLocalNames = new Set<string>();
-        const pendingEdenBindings = new Set<Variable>();
+        const pendingEdenBindings = new Map<Variable, Ranged>();
         const assignedResults: {
           binding: Variable;
           canBeAbsent: boolean;
@@ -1117,7 +1117,7 @@ export default eslintCompatPlugin({
             ) {
               const binding = resolveVariable(node.id);
               if (binding !== null) {
-                pendingEdenBindings.add(binding);
+                pendingEdenBindings.set(binding, node);
               }
               return;
             }
@@ -1163,6 +1163,14 @@ export default eslintCompatPlugin({
           AwaitExpression(node) {
             if (awaitedTerminalEdenCall(node) === null) {
               return;
+            }
+
+            const operand = unwrapExpression(node.argument);
+            if (isIdentifier(operand)) {
+              const pendingBinding = resolveVariable(operand);
+              if (pendingBinding !== null) {
+                pendingEdenBindings.delete(pendingBinding);
+              }
             }
 
             let expression = unwrapExpression(node);
@@ -1297,6 +1305,9 @@ export default eslintCompatPlugin({
           },
 
           "Program:exit"() {
+            for (const pendingNode of pendingEdenBindings.values()) {
+              reportAssignedResult(pendingNode);
+            }
             for (const result of assignedResults) {
               const outcome = analyzeContinuation(
                 result.node,
