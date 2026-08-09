@@ -173,7 +173,7 @@ export default eslintCompatPlugin({
             variable?.defs.some(
               (definition) =>
                 isAstNode(definition.name) &&
-                definition.name.typeAnnotation !== undefined &&
+                definition.name.typeAnnotation &&
                 !isRawJsonType(definition.name.typeAnnotation),
             ) ?? false
           );

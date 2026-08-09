@@ -109,6 +109,14 @@ export const rawJsonAssignment = () => {
   return value;
 };
 
+export const inferredUnknownAssignment = (input: unknown) => {
+  let value = input;
+  if (raw !== "") {
+    value = JSON.parse(raw);
+  }
+  return value;
+};
+
 declare const responseBuilder: { json: (payload: unknown) => RegistryCompany };
 export const responseBuilderCall = () =>
   responseBuilder.json({ id: "company" });
