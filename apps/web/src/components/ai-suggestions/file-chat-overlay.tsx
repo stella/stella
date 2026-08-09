@@ -2303,7 +2303,7 @@ const FileChatOverlayInner = ({
                 startNewThread();
                 editorController.setContent("");
               },
-              "rename-chat": () => {
+              "rename-chat": (args) => {
                 editorController.setContent("");
                 if (!hasMessages) {
                   stellaToast.add({
@@ -2314,11 +2314,14 @@ const FileChatOverlayInner = ({
                 }
                 // The floating card's title slot owns the rename editor; open
                 // the card (it may be collapsed) and hand the command over
-                // through the store.
+                // through the store. `/rename-chat <title>` commits that
+                // title directly; the bare form opens the editor with a
+                // suggestion.
                 setPanelOpen(true);
-                useChatRenameCommandStore
-                  .getState()
-                  .requestRename(threadRef.threadId);
+                useChatRenameCommandStore.getState().requestRename({
+                  threadId: threadRef.threadId,
+                  title: args.length > 0 ? args : null,
+                });
               },
             });
             if (handledReserved) {
@@ -2415,6 +2418,7 @@ const FileChatTitleSlot = ({
       <ChatTitleRename
         hasMessages={hasMessages}
         inputClassName="w-44 text-xs"
+        ownsRenameCommand
         threadRef={threadRef}
         title={title}
       />

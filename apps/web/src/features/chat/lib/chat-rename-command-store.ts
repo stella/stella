@@ -1,5 +1,14 @@
 import { create } from "zustand";
 
+export type ChatRenameRequest = {
+  threadId: string;
+  /**
+   * Title to commit directly (`/rename-chat <title>`); null means open the
+   * rename editor with a suggestion instead.
+   */
+  title: string | null;
+};
+
 /**
  * Carries the `/rename-chat` command from a composer to the surface that
  * owns the thread's rename editor (breadcrumb on the chat route, title
@@ -8,15 +17,15 @@ import { create } from "zustand";
  * mounted consumer for that thread acknowledges it.
  */
 type ChatRenameCommandStore = {
-  pendingRenameThreadId: string | null;
-  requestRename: (threadId: string) => void;
+  pendingRename: ChatRenameRequest | null;
+  requestRename: (request: ChatRenameRequest) => void;
   clearRenameRequest: () => void;
 };
 
 export const useChatRenameCommandStore = create<ChatRenameCommandStore>()(
   (set) => ({
-    pendingRenameThreadId: null,
-    requestRename: (threadId) => set({ pendingRenameThreadId: threadId }),
-    clearRenameRequest: () => set({ pendingRenameThreadId: null }),
+    pendingRename: null,
+    requestRename: (request) => set({ pendingRename: request }),
+    clearRenameRequest: () => set({ pendingRename: null }),
   }),
 );

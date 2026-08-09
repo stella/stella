@@ -24,9 +24,11 @@ type ChatTitleSuggestButtonProps = {
   hasMessages: boolean;
   isPending: boolean;
   /**
-   * Fires on `onMouseDown` with `preventDefault()` so the button also works
-   * inside `InlineEdit`'s `action` slot, where a plain click's focus steal
-   * would blur-commit the editor before the suggestion could land.
+   * Fires on `click`, so keyboard activation works too. `onMouseDown` calls
+   * `preventDefault()` (without triggering) so the button also works inside
+   * `InlineEdit`'s `action` slot, where a pointer press's focus steal would
+   * otherwise blur-commit the editor before the suggestion could land; the
+   * prevented press still emits the `click`.
    */
   onTrigger: () => void;
   className?: string | undefined;
@@ -68,9 +70,9 @@ export const ChatTitleSuggestButton = ({
             className,
           )}
           disabled={anonymized || !hasMessages || isPending}
+          onClick={onTrigger}
           onMouseDown={(event) => {
             event.preventDefault();
-            onTrigger();
           }}
           size="icon-xs"
           type="button"
@@ -108,6 +110,14 @@ type ChatTitleRenameProps = {
   /** Whether the thread has at least one persisted message; gates the wand. */
   hasMessages: boolean;
   /**
+   * Whether this instance consumes `/rename-chat` requests from the command
+   * store. Exactly one mounted instance per thread may own the command (the
+   * breadcrumb on the chat route, the title slot on the file-chat overlay);
+   * list rows and other secondary mounts must pass false so they cannot
+   * race the owner for the same request.
+   */
+  ownsRenameCommand: boolean;
+  /**
    * Surface-specific view-mode content. Defaults to the click-to-edit title
    * button the breadcrumb established. The threads sheet substitutes its
    * navigation row and triggers editing from its own wand.
@@ -132,6 +142,7 @@ export const ChatTitleRename = ({
   threadRef,
   title,
   hasMessages,
+  ownsRenameCommand,
   renderView,
   inputClassName,
   editClassName,
@@ -184,19 +195,38 @@ export const ChatTitleRename = ({
 
   const startEditingWithSuggestion = useLatestCallback(() => {
     startEditing();
+    // The wand's disabled states, re-checked here because this trigger is
+    // also reachable through `/rename-chat`: an anonymized thread refuses
+    // suggestions (server-enforced with a 403), and a message-less thread
+    // has nothing to summarize. Open the plain editor instead of firing a
+    // doomed request; the disabled wand inside it explains why.
+    if (anonymized || !hasMessages) {
+      return;
+    }
     detached(suggestIntoDraft(), "ChatTitleRename");
   });
 
-  // `/rename-chat` handoff: a composer records the target thread id in the
-  // command store; the mounted rename owner for that thread consumes it.
+  // `/rename-chat` handoff: a composer records the request in the command
+  // store; the mounted rename owner for that thread consumes it. A request
+  // carrying a title (`/rename-chat <title>`) commits directly through the
+  // rename mutation; a bare one opens the editor with a suggestion.
   const consumeRenameRequest = useLatestCallback(() => {
     const store = useChatRenameCommandStore.getState();
-    if (store.pendingRenameThreadId === threadRef.threadId) {
-      store.clearRenameRequest();
-      startEditingWithSuggestion();
+    const pending = store.pendingRename;
+    if (pending?.threadId !== threadRef.threadId) {
+      return;
     }
+    store.clearRenameRequest();
+    if (pending.title !== null) {
+      rename.mutate(pending.title);
+      return;
+    }
+    startEditingWithSuggestion();
   });
   useMountEffect(() => {
+    if (!ownsRenameCommand) {
+      return undefined;
+    }
     consumeRenameRequest();
     return useChatRenameCommandStore.subscribe(consumeRenameRequest);
   });

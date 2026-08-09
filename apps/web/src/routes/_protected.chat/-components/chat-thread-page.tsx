@@ -487,7 +487,7 @@ export const ChatThreadPage = ({
           );
         }
       },
-      "rename-chat": () => {
+      "rename-chat": (args) => {
         controller.setContent("");
         if (messages.length === 0) {
           stellaToast.add({
@@ -497,8 +497,12 @@ export const ChatThreadPage = ({
           return;
         }
         // The breadcrumb owns this route's rename editor; hand the command
-        // over through the store and let it open with a suggestion.
-        useChatRenameCommandStore.getState().requestRename(threadRef.threadId);
+        // over through the store. `/rename-chat <title>` commits that title
+        // directly; the bare form opens the editor with a suggestion.
+        useChatRenameCommandStore.getState().requestRename({
+          threadId: threadRef.threadId,
+          title: args.length > 0 ? args : null,
+        });
       },
     });
     if (handledReserved) {

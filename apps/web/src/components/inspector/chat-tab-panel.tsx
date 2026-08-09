@@ -382,13 +382,27 @@ export const ChatTabPanel = ({
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
   const hasThreadMessages = messages.length > 0;
+  // The optimistic label write needs its own rollback: the mutation's
+  // onError restores the query caches but cannot reach this local tabs
+  // store, and a failed PATCH must not leave the tab showing a title the
+  // server rejected.
+  const renameThreadWithLabel = (value: string) => {
+    const previousLabel = tab.label;
+    updateLabel(tab.id, value);
+    renameThread.mutate(value, {
+      onError: () => {
+        updateLabel(tab.id, previousLabel);
+      },
+    });
+  };
   const labelRename = useInlineRename({
     initial: tab.label,
     onCommit: (value) => {
-      updateLabel(tab.id, value);
       if (hasThreadMessages) {
-        renameThread.mutate(value);
+        renameThreadWithLabel(value);
+        return;
       }
+      updateLabel(tab.id, value);
     },
   });
 
@@ -423,6 +437,12 @@ export const ChatTabPanel = ({
   };
   const startLabelEditingWithSuggestion = () => {
     startLabelEditing();
+    // Same disabled-wand states re-checked for the `/rename-chat` path: an
+    // anonymized thread refuses suggestions (server-enforced 403), so open
+    // the plain editor instead of firing a doomed request.
+    if (anonymized || !hasThreadMessages) {
+      return;
+    }
     detached(suggestTitleIntoLabel(), "ChatTabPanel");
   };
 
@@ -611,13 +631,19 @@ export const ChatTabPanel = ({
                   resetChatTabId(tab.id, createChatThreadId());
                   editorController.setContent("");
                 },
-                "rename-chat": () => {
+                "rename-chat": (args) => {
                   editorController.setContent("");
                   if (!hasThreadMessages) {
                     stellaToast.add({
                       title: t("chat.renameUnavailableEmptyThread"),
                       type: "info",
                     });
+                    return;
+                  }
+                  // `/rename-chat <title>` commits directly; the bare form
+                  // opens the editor with a suggestion.
+                  if (args.length > 0) {
+                    renameThreadWithLabel(args);
                     return;
                   }
                   startLabelEditingWithSuggestion();

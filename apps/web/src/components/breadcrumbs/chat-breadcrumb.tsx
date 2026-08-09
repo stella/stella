@@ -95,6 +95,7 @@ export const ChatBreadcrumb = ({
       <ChatTitleRename
         hasMessages={hasMessages}
         inputClassName="w-48 text-xs"
+        ownsRenameCommand
         threadRef={threadRef}
         title={currentTitle}
       />

@@ -42,7 +42,7 @@ type RenameState = {
   /**
    * Optional action rendered between the input and Done (e.g. the chat
    * tab's title-suggest wand). See `InlineEdit`'s `action` slot for the
-   * required `onMouseDown` trigger semantics.
+   * required press/click trigger semantics.
    */
   action?: ReactNode;
 };

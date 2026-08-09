@@ -13,9 +13,10 @@ type InlineEditProps = {
   suffix?: React.ReactNode;
   /**
    * Action button(s) between the input and Done (e.g. a suggest wand).
-   * Buttons placed here must trigger on `onMouseDown` + `preventDefault()`:
-   * the input commits on blur, so a plain `onClick` would close the editor
-   * before the action's result could land in the draft.
+   * Buttons placed here must call `preventDefault()` in `onMouseDown` and
+   * trigger on `onClick`: the input commits on blur, so an unprevented
+   * press's focus steal would close the editor before the action's result
+   * could land in the draft, while the prevented press still emits `click`.
    */
   action?: React.ReactNode | undefined;
   className?: string | undefined;

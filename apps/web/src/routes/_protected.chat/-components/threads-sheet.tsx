@@ -403,6 +403,7 @@ const ThreadRow = ({
         editClassName="min-w-0 flex-1 px-3 py-1.5"
         hasMessages
         inputClassName="min-w-0 flex-1 text-sm"
+        ownsRenameCommand={false}
         renderView={({
           displayTitle,
           isSuggesting,
@@ -442,7 +443,7 @@ const ThreadRow = ({
             </Link>
             <ChatTitleSuggestButton
               anonymized={anonymized}
-              className="opacity-0 group-hover:opacity-100"
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               hasMessages
               isPending={isSuggesting}
               onTrigger={startEditingWithSuggestion}

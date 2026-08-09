@@ -98,6 +98,10 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
       }
       if (context?.previousTitle !== undefined) {
         queryClient.setQueryData(titleKey, context.previousTitle);
+      } else {
+        // The optimistic set created this cache entry; a rollback must
+        // remove it, not leave the rejected title behind.
+        queryClient.removeQueries({ queryKey: titleKey, exact: true });
       }
       getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
