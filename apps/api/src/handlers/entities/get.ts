@@ -132,20 +132,22 @@ const readEntityById = createSafeHandler(
       workspaceId,
       entityId: params.entityId,
     });
-    if (Result.isError(entityResult)) {
-      return entityResult;
+    switch (entityResult.status) {
+      case "error":
+        return entityResult;
+      case "ok": {
+        const entity = entityResult.value;
+        return Result.ok({
+          entityId: entity.entityId,
+          kind: entity.kind,
+          name: entity.name,
+          currentVersionId: entity.currentVersionId,
+          currentVersionCreatedAt: entity.currentVersionCreatedAt,
+          extractionFileFieldId: entity.extractionFileFieldId,
+          fields: entity.fields,
+        });
+      }
     }
-
-    const entity = entityResult.value;
-    return Result.ok({
-      entityId: entity.entityId,
-      kind: entity.kind,
-      name: entity.name,
-      currentVersionId: entity.currentVersionId,
-      currentVersionCreatedAt: entity.currentVersionCreatedAt,
-      extractionFileFieldId: entity.extractionFileFieldId,
-      fields: entity.fields,
-    });
   },
 );
 
