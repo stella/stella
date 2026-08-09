@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
+import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -36,6 +37,10 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
+const RIS_DOCUMENT_HOST_POLICY = {
+  type: "https-host-suffix" as const,
+  suffixes: ["ris.bka.gv.at"],
+};
 /** RIS API enforces a maximum page size of 20. */
 const PAGE_SIZE = 20;
 
@@ -301,8 +306,16 @@ const fetchFulltext = async (
   htmlUrl: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
+  const target = restrictOutboundUrl({
+    rawUrl: htmlUrl,
+    hostPolicy: RIS_DOCUMENT_HOST_POLICY,
+  });
+  if (target === null) {
+    return undefined;
+  }
+
   try {
-    const response = await fetchWithTimeout(htmlUrl, {
+    const response = await fetchWithTimeout(target, {
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     });
@@ -311,7 +324,7 @@ const fetchFulltext = async (
       logger.warn("case_law.ingestion.fulltext_fetch_failed", {
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         httpStatus: response.status,
-        url: htmlUrl,
+        url: target.toString(),
       });
       return undefined;
     }
@@ -363,8 +376,16 @@ const parseRisItem = async (
     return null;
   }
 
-  const htmlUrl = findHtmlUrl(doc);
-  const fulltext = htmlUrl ? await fetchFulltext(htmlUrl, signal) : undefined;
+  const rawHtmlUrl = findHtmlUrl(doc);
+  const htmlUrl = rawHtmlUrl
+    ? restrictOutboundUrl({
+        rawUrl: rawHtmlUrl,
+        hostPolicy: RIS_DOCUMENT_HOST_POLICY,
+      })
+    : null;
+  const fulltext = htmlUrl
+    ? await fetchFulltext(htmlUrl.toString(), signal)
+    : undefined;
 
   const raw_ = JSON.stringify(doc.Data?.Metadaten);
 
@@ -378,7 +399,7 @@ const parseRisItem = async (
     decisionType: toOptionalValue(jud?.Dokumenttyp),
     fulltext,
     sourceUrl: toOptionalValue(meta?.Allgemein?.DokumentUrl),
-    documentUrl: htmlUrl,
+    documentUrl: htmlUrl?.toString(),
     metadata: {
       risId: toOptionalValue(meta?.Technisch?.ID),
       applikation: toOptionalValue(meta?.Technisch?.Applikation),

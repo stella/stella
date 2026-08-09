@@ -19,6 +19,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -276,7 +277,10 @@ const parseItemWithDetail = async (
     sourceUrl: item.guid
       ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
       : undefined,
-    documentUrl: sanitizeUrl(toOptionalValue(detail?.dokument?.url) ?? ""),
+    documentUrl:
+      restrictSkCourtDocumentUrl(
+        toOptionalValue(detail?.dokument?.url) ?? "",
+      )?.toString() ?? undefined,
     metadata: {
       caseNumber,
       ecli,

@@ -68,6 +68,7 @@ import {
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
+import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -94,7 +95,16 @@ export const fetchPdfBytes = async (
   documentUrl: string,
   signal: AbortSignal,
 ): Promise<Uint8Array | undefined> => {
-  const response = await fetchWithTimeout(documentUrl, {
+  const target = restrictSkCourtDocumentUrl(documentUrl);
+  if (target === null) {
+    throw new AdapterFetchError({
+      message: "Document URL is outside the Slovak court boundary",
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      cursor: null,
+    });
+  }
+
+  const response = await fetchWithTimeout(target, {
     signal,
     timeoutMs: PDF_TIMEOUT_MS,
   });

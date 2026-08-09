@@ -36,7 +36,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -56,6 +56,18 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
+const CZ_REGIONAL_ORIGIN = "https://rozhodnuti.justice.cz";
+const CZ_REGIONAL_FINALDOC_PATH = "/api/finaldoc/";
+
+const restrictCzRegionalFinaldocUrl = (rawUrl: string): URL | null =>
+  restrictOutboundUrl({
+    rawUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: [CZ_REGIONAL_ORIGIN],
+    },
+    pathPrefixes: [CZ_REGIONAL_FINALDOC_PATH],
+  });
 
 /**
  * Concurrent finaldoc fetches per page. The court server
@@ -269,9 +281,21 @@ const fetchFinaldoc = async (
     richMetadata: {},
   };
 
+  const target = restrictOutboundUrl({
+    rawUrl: docUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: [CZ_REGIONAL_ORIGIN],
+    },
+    pathPrefixes: [CZ_REGIONAL_FINALDOC_PATH],
+  });
+  if (target === null) {
+    return empty;
+  }
+
   try {
     const response = await fetchWithRetry(
-      docUrl,
+      target.toString(),
       { headers: { Accept: "application/json" } },
       {
         maxRetries: 1,
@@ -296,7 +320,7 @@ const fetchFinaldoc = async (
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           cursor: null,
         }),
-        { docUrl, caseNumber: item.caseNumber },
+        { docUrl: target.toString(), caseNumber: item.caseNumber },
       );
 
       return {
@@ -408,6 +432,9 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   const raw = JSON.stringify(item);
   // This source publishes the docket with the sheet number appended.
   const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const documentUrl = restrictCzRegionalFinaldocUrl(
+    toOptionalValue(item.odkaz) ?? "",
+  );
 
   return {
     caseNumber,
@@ -418,8 +445,8 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
     sourceDocumentId: documentIdFromLink(toOptionalValue(item.odkaz)),
-    sourceUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
-    documentUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
+    sourceUrl: documentUrl?.toString(),
+    documentUrl: documentUrl?.toString(),
     metadata: {
       caseNumber,
       sheetNumber,
@@ -569,6 +596,9 @@ const fetchListPage = async ({
           throw new DOMException("Cycle aborted", "AbortError");
         }
 
+        // SAFETY: this private helper's only caller supplies buildDayUrl(),
+        // which fixes the origin to BASE_URL.
+        // eslint-disable-next-line require-safe-outbound-target/require-safe-outbound-target
         const response = await fetchWithTimeout(url, {
           signal: attemptSignal,
           headers: {

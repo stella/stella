@@ -100,6 +100,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/require-safe-route-handlers",
   ]),
+  fixtureRuleOverride("require-safe-outbound-target.fixture.ts", [
+    "require-safe-outbound-target/require-safe-outbound-target",
+  ]),
   fixtureRuleOverride("security-guards.fixture.tsx", [
     "security-guards/no-raw-filename-write",
     "security-guards/no-unsanitized-href",
@@ -552,6 +555,7 @@ export default defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
+    "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
@@ -1930,6 +1934,42 @@ export default defineConfig({
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
+        "require-safe-outbound-target/require-safe-outbound-target": [
+          "error",
+          {
+            allowedFiles: [
+              // Explicit trust-boundary clients whose runtime origins come
+              // from validated operator configuration, an exact issuer
+              // allowlist, or Stella-owned presigned/reservation producers.
+              // Arbitrary internet URLs belong behind safeOutboundFetch*.
+              "apps/api/src/agent-auth/id-jag.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+              "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+              "apps/api/src/lib/deepl/client.ts",
+              "apps/api/src/lib/document-processing-provider.ts",
+              "apps/api/src/lib/files/gotenberg.ts",
+              "apps/api/src/lib/hosted-usage-provider/client.ts",
+              "apps/api/src/lib/legal-search/corpus-index-client.ts",
+              "apps/api/src/lib/s3.ts",
+              "apps/api/src/mcp/document-file-upload.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/scripts/**/*.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/mcp/apps/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "require-safe-outbound-target/require-safe-outbound-target": "off",
       },
     },
     {
