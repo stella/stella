@@ -166,7 +166,10 @@ export const selectRunningLockReservation = ({
     return { status: "reserve", expectedRunningValue: recoveryLockValue };
   }
 
-  if (runningValue === transitionalRunningLockValue) {
+  if (
+    expectedRequestId !== null &&
+    runningValue === transitionalRunningLockValue
+  ) {
     return {
       status: "reserve",
       expectedRunningValue: transitionalRunningLockValue,

@@ -241,4 +241,16 @@ describe("selectRunningLockReservation", () => {
       expectedRunningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
     });
   });
+
+  test("does not reserve a transitional lock without a request binding", () => {
+    expect(
+      selectRunningLockReservation({
+        expectedRequestId: null,
+        recoveryLockValue: RECOVERY_LOCK_VALUE,
+        requestId: null,
+        runningValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
+      }),
+    ).toEqual({ status: "skip" });
+  });
 });
