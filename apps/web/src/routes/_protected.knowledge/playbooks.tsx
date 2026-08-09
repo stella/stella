@@ -116,15 +116,13 @@ function RouteComponent() {
     // Result.tryPromise instead of try/finally: the try/finally form trips the
     // React Compiler bailout guard, and the request can throw on abort.
 
-    const result = await Result.tryPromise(
-      async () => {
-        const { data, error } = await api.playbooks.get({
-          query: { cursor, limit: 50 },
-          fetch: { signal: controller.signal },
-        });
-        return { data, error };
-      },
-    );
+    const result = await Result.tryPromise(async () => {
+      const { data, error } = await api.playbooks.get({
+        query: { cursor, limit: 50 },
+        fetch: { signal: controller.signal },
+      });
+      return { data, error };
+    });
 
     // A superseding load aborted this one; leave the loading state to that call.
     if (controller.signal.aborted) {

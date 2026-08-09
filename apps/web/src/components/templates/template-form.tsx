@@ -2038,10 +2038,12 @@ export const TemplateForm = ({
 
       const fillResponse = async () => {
         if (templateId) {
-          return api.templates({ templateId }).fill.post(
-            { values: valuesJson, clauseOverrides },
-            { query: { format } },
-          );
+          return api
+            .templates({ templateId })
+            .fill.post(
+              { values: valuesJson, clauseOverrides },
+              { query: { format } },
+            );
         }
         if (!file) {
           panic(
