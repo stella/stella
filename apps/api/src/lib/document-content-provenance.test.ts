@@ -22,7 +22,8 @@ const file = {
   type: "file",
   version: 1,
 } satisfies FieldContent;
-const fields = [{ content: file, id: fieldId, propertyId }];
+const currentField = { content: file, id: fieldId, propertyId };
+const fields = [currentField];
 const currentVersionCreatedAt = new Date("2026-01-02T00:00:00.000Z");
 
 const projection = {
@@ -125,7 +126,7 @@ describe("selectCurrentExtractedContent", () => {
         },
         fields,
       }),
-    ).toBe(fields.at(0));
+    ).toBe(currentField);
 
     expect(
       resolveCurrentFileSourceField({
