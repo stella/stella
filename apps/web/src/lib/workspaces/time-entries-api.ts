@@ -10,7 +10,13 @@ import {
   parseTimerStartResponse,
   parseTimerStopResponse,
 } from "@stll/api-contract";
-import type { TimeEntryListPage, TimeEntrySummary } from "@stll/api-contract";
+import type {
+  TimeEntry,
+  TimeEntryListPage,
+  TimeEntrySummary,
+} from "@stll/api-contract";
+import { cents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 
 import {
   getApiRequestHeaders,
@@ -85,18 +91,33 @@ type FetchTimeEntriesOptions = {
   workspaceId: string;
 };
 
-export const fetchTimeEntries = ({
+type BrowserTimeEntry = Omit<TimeEntry, "rateAtEntry"> & {
+  rateAtEntry: CentsAmount;
+};
+
+type BrowserTimeEntryListPage = Omit<TimeEntryListPage, "items"> & {
+  items: BrowserTimeEntry[];
+};
+
+export const fetchTimeEntries = async ({
   query,
   signal,
   workspaceId,
-}: FetchTimeEntriesOptions): Promise<TimeEntryListPage> =>
-  requestTimeEntries({
+}: FetchTimeEntriesOptions): Promise<BrowserTimeEntryListPage> => {
+  const page = await requestTimeEntries({
     parse: parseTimeEntryListPage,
     path: "/",
     query,
     signal,
     workspaceId,
   });
+  return {
+    ...page,
+    items: page.items.map((entry) =>
+      Object.assign(entry, { rateAtEntry: cents(entry.rateAtEntry) }),
+    ),
+  };
+};
 
 export const fetchTimeEntrySummary = ({
   query,
