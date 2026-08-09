@@ -11,6 +11,7 @@ import {
 } from "./selfhost-contract";
 import {
   isImmutableApplicationImage,
+  isSecureSelfhostGotenbergUrl,
   materializeSelfhostTemplateForValidation,
   releaseManifestIssues,
   renderSelfhostEnvExample,
@@ -107,6 +108,22 @@ describe("self-host production environment", () => {
     "registry.example.com/legal/stella:v1.2.3",
   ])("rejects mutable or unverifiable application image %s", (image) => {
     expect(isImmutableApplicationImage(image)).toBe(false);
+  });
+
+  test.each([
+    "https://converter.example.com",
+    "http://localhost:3003",
+    "http://gotenberg:3000",
+  ])("accepts secure or generated Gotenberg URL %s", (url) => {
+    expect(isSecureSelfhostGotenbergUrl(url)).toBe(true);
+  });
+
+  test.each([
+    "http://converter.example.com",
+    "http://10.0.0.20:3000",
+    "http://gotenberg:3001",
+  ])("rejects arbitrary remote plaintext Gotenberg URL %s", (url) => {
+    expect(isSecureSelfhostGotenbergUrl(url)).toBe(false);
   });
 
   test("materializes through the real Docker Compose parser", () => {
