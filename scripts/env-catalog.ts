@@ -280,7 +280,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   GOTENBERG_PASSWORD:
     "Password for the Gotenberg sidecar's HTTP basic authentication.",
   GOTENBERG_URL:
-    "Gotenberg document-conversion service URL. Remote deployments must use HTTPS.",
+    "Gotenberg document-conversion URL. Use HTTPS across untrusted networks; private Compose uses authenticated HTTP.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
   MICROSOFT_AUTH_CLIENT_ID:
@@ -306,7 +306,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   REDIS_URL:
     "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
-    "S3 access-key ID. Omit with the secret to use the SDK credential chain.",
+    'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",
   S3_CREDENTIALS_PROVIDER:
     'Credential source: "auto", "env", "aws-runtime", or "none".',
@@ -315,7 +315,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   S3_SCOPED_SIGNING_ROLE_ARN:
     "IAM role used to issue presigned URLs scoped to an organization or workspace prefix.",
   S3_SECRET_ACCESS_KEY:
-    "S3 secret access key. Omit with the access-key ID to use the SDK credential chain.",
+    'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
@@ -339,7 +339,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   TRANSACTIONAL_EMAIL_FROM:
     "Verified sender address used for every transactional email.",
   USE_MOCK_AI:
-    "Return canned AI responses instead of calling an upstream provider.",
+    "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
   VITE_AUTH_GOOGLE:
     "Show Google login only when the API has matching OAuth credentials.",
@@ -377,6 +377,8 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CORPUS_INDEX_ENDPOINT: "LEGAL_SEARCH_PROVIDER is corpus-index",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
+  S3_SECRET_ACCESS_KEY: 'S3_CREDENTIALS_PROVIDER is "env"',
   SES_REGION: "EMAIL_PROVIDER is ses",
   SMTP_HOST: "EMAIL_PROVIDER is smtp",
   SMTP_PORT: "EMAIL_PROVIDER is smtp",
@@ -561,6 +563,8 @@ export const API_ENV_SCHEMA = {
   ...envApiServerSchema,
 };
 
+export type ApiEnvironmentName = Exclude<keyof typeof API_ENV_SCHEMA, "isDev">;
+
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
@@ -630,9 +634,6 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "STELLA_PG_HOST_PORT",
   "STELLA_QUICKWIT_GRPC_PORT",
   "STELLA_QUICKWIT_REST_PORT",
-  "STELLA_SCHEDULER_CPUS",
-  "STELLA_SCHEDULER_MEM_LIMIT",
-  "STELLA_SCHEDULER_PIDS_LIMIT",
   "STELLA_VALKEY_HOST_PORT",
   "TARGETARCH",
   "TARGETPLATFORM",

@@ -6,12 +6,23 @@ Stella-specific deploy details.
 
 ## Public Release Contract
 
-Each release tag (`vX.Y.Z` or `vX.Y.Z-rc.N`) publishes:
+<!-- BEGIN GENERATED RELEASE ARTIFACT CONTRACT -->
 
-- a multi-architecture API image in the [GitHub Container Registry (GHCR)](https://docs.github.com/packages/working-with-a-github-packages-registry/working-with-the-container-registry),
-- immutable image references by tag, git SHA, and digest,
-- a `release-manifest.json` file containing the source commit, image digest,
-  and migration file inventory,
+Each release publishes two container artifacts:
+
+- The API image is portable and is the image used by the self-host
+  Compose contract.
+- The Web image is built for the release workflow's selected hosted
+  target environment; self-hosted operators must build the web image with
+  their own public URLs.
+- `release-manifest.json` records both `image` and `webImage` with
+  digest-qualified references.
+
+<!-- END GENERATED RELEASE ARTIFACT CONTRACT -->
+
+Each release tag (`vX.Y.Z` or `vX.Y.Z-rc.N`) also publishes:
+
+- image references by release tag, git SHA, and immutable digest,
 - GitHub release notes generated from merged changes, optionally prefixed with
   a manual description from `docs/changelog/<tag>.md`,
 - a public changelog entry on `https://stll.app/changelog`, sourced from GitHub

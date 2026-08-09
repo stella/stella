@@ -3,6 +3,7 @@ import { Result, TaggedError } from "better-result";
 import { env } from "@/api/env";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
+import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 
 export {
   isConvertibleMimeType,
@@ -46,12 +47,8 @@ class GotenbergError extends TaggedError("GotenbergError")<{
   cause?: unknown;
 }> {}
 
-const gotenbergAuth = (): string => {
-  const credentials = Buffer.from(
-    `${env.GOTENBERG_USERNAME}:${env.GOTENBERG_PASSWORD}`,
-  ).toString("base64");
-  return `Basic ${credentials}`;
-};
+const gotenbergAuth = (): string =>
+  basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
 
 const GOTENBERG_RETRY = {
   times: 2,

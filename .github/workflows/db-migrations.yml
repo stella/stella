@@ -212,7 +212,7 @@ jobs:
           trap cleanup EXIT
 
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:3001/live >/dev/null; then
               exit 0
             fi
             if ! kill -0 "$api_pid" >/dev/null 2>&1; then

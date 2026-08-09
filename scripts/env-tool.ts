@@ -61,7 +61,7 @@ const quoteEnvValue = (value: string) =>
 const schemaDefault = (schema: v.GenericSchema): unknown =>
   v.getDefault(schema);
 
-const defaultExample = (entry: EnvCatalogEntry) => {
+export const exampleValueForCatalogEntry = (entry: EnvCatalogEntry) => {
   if (entry.example !== undefined) {
     return entry.example;
   }
@@ -112,22 +112,34 @@ const wrapComment = (text: string, width = 76) => {
   return lines;
 };
 
-const renderEntries = (entries: EnvCatalogEntry[]) => {
+type RenderEnvironmentEntriesOptions = {
+  header?: string;
+  isActive?: (entry: EnvCatalogEntry) => boolean;
+  valueFor?: (entry: EnvCatalogEntry) => string;
+};
+
+export const renderEnvironmentEntries = (
+  entries: EnvCatalogEntry[],
+  {
+    header = GENERATED_HEADER,
+    isActive = ({ name }) => isActiveExampleEntry(name),
+    valueFor = exampleValueForCatalogEntry,
+  }: RenderEnvironmentEntriesOptions = {},
+) => {
   const sections = Map.groupBy(entries, ({ section }) => section);
-  const lines: string[] = [GENERATED_HEADER];
+  const lines: string[] = [header];
   for (const [section, sectionEntries] of sections) {
     lines.push(
       `# --- ${section} ${"-".repeat(Math.max(1, 66 - section.length))}`,
     );
     for (const entry of sectionEntries) {
-      const active =
-        entry.requirement === "required" || isActiveExampleEntry(entry.name);
+      const active = entry.requirement === "required" || isActive(entry);
       const prefix = active ? "" : "# ";
       lines.push(
         ...wrapComment(
           `[${entry.exposure}] ${requirementLabel(entry)}. ${entry.description}`,
         ),
-        `${prefix}${entry.name}=${quoteEnvValue(defaultExample(entry))}`,
+        `${prefix}${entry.name}=${quoteEnvValue(valueFor(entry))}`,
         "",
       );
     }
@@ -136,7 +148,7 @@ const renderEntries = (entries: EnvCatalogEntry[]) => {
 };
 
 export const renderApiEnvExample = () =>
-  renderEntries(
+  renderEnvironmentEntries(
     ENV_CATALOG.filter(
       ({ documented, owner }) =>
         documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
@@ -144,14 +156,14 @@ export const renderApiEnvExample = () =>
   );
 
 export const renderWebEnvExample = () =>
-  renderEntries(
+  renderEnvironmentEntries(
     ENV_CATALOG.filter(
       ({ documented, owner }) => documented && owner === ENV_OWNER.web,
     ),
   );
 
 export const renderCollabEnvExample = () =>
-  renderEntries(
+  renderEnvironmentEntries(
     ENV_CATALOG.filter(
       ({ documented, owner }) => documented && owner === ENV_OWNER.collab,
     ),

@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 
 const featureFlagSchema = v.optional(
@@ -433,6 +434,7 @@ type EnvApiInvariantInput = {
   SMTP_HOST?: string | undefined;
   SMTP_PORT?: number | undefined;
   TRANSACTIONAL_EMAIL_FROM?: string | undefined;
+  USE_MOCK_AI: boolean;
   nodeEnv?: string | undefined;
 };
 
@@ -446,10 +448,14 @@ export const envApiInvariantViolation = ({
   SMTP_HOST,
   SMTP_PORT,
   TRANSACTIONAL_EMAIL_FROM,
+  USE_MOCK_AI,
   nodeEnv,
 }: EnvApiInvariantInput): string | null => {
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
     return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
+  }
+  if (USE_MOCK_AI && DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
+    return "USE_MOCK_AI is only supported in local development and tests.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&

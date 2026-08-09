@@ -53,6 +53,19 @@ const readSelfhostLocalPasswordAuth = (
   return result.stdout.toString().trim();
 };
 
+const bootApiEnvironment = (env: Record<string, string | undefined>) =>
+  Bun.spawnSync({
+    cmd: [
+      process.execPath,
+      "-e",
+      `await import(${JSON.stringify(envModuleUrl)});`,
+    ],
+    cwd: repoRoot,
+    env,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+
 describe("API environment", () => {
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
@@ -76,5 +89,19 @@ describe("API environment", () => {
         SELFHOST_LOCAL_PASSWORD_AUTH: "true",
       }),
     ).toBe("true");
+  });
+
+  test("rejects mock AI in a production-shaped runtime", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+      NODE_ENV: "production",
+      USE_MOCK_AI: "true",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "USE_MOCK_AI is only supported in local development and tests.",
+    );
   });
 });

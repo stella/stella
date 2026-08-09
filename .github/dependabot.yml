@@ -39,6 +39,22 @@ updates:
     reviewers:
       - "jan-kubica"
 
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Prague"
+    cooldown:
+      default-days: 5
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:

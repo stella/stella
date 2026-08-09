@@ -64,13 +64,6 @@ RUN bun build \
     --target bun \
     --outfile /app/document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts
-# Durable scheduler process. Deploy the same image with command override
-# ["bun", "/app/scheduler.js"] so scheduled work survives API restarts and
-# runs independently from request handling.
-RUN bun build \
-    --target bun \
-    --outfile /app/scheduler.js \
-    apps/api/src/scheduler/scheduler.ts
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Keep the output at the same directory depth as the
 # source so its `import.meta.dir`-relative migrationsFolder lookup resolves to
@@ -128,7 +121,6 @@ RUN groupadd --system --gid 1001 stella && \
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
-COPY --chown=stella:stella --from=builder /app/scheduler.js /app/scheduler.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
 #   ["bun", "/app/apps/api/src/db/migrate.js"]

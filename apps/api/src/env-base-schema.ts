@@ -177,6 +177,9 @@ type EnvBaseInvariantInput = {
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
+  S3_ACCESS_KEY_ID?: string | undefined;
+  S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
+  S3_SECRET_ACCESS_KEY?: string | undefined;
   isDev: boolean;
 };
 
@@ -187,8 +190,19 @@ export const envBaseInvariantViolation = ({
   CORPUS_STORAGE_MODE,
   LEGAL_CORPUS_S3_BUCKET,
   LEGAL_SEARCH_PROVIDER,
+  S3_ACCESS_KEY_ID,
+  S3_CREDENTIALS_PROVIDER,
+  S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
+  const hasAccessKey = S3_ACCESS_KEY_ID !== undefined;
+  const hasSecretKey = S3_SECRET_ACCESS_KEY !== undefined;
+  if (hasAccessKey !== hasSecretKey) {
+    return "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together.";
+  }
+  if (S3_CREDENTIALS_PROVIDER === "env" && !(hasAccessKey && hasSecretKey)) {
+    return 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.';
+  }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_ENDPOINT === undefined

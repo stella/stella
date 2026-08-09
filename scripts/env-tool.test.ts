@@ -347,6 +347,22 @@ describe("environment doctor output", () => {
         "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
       overrides: { NODE_ENV: "production" },
     },
+    {
+      expected: "USE_MOCK_AI is only supported in local development and tests.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        USE_MOCK_AI: "true",
+      },
+    },
+    {
+      expected: 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+      overrides: {
+        S3_ACCESS_KEY_ID: "",
+        S3_CREDENTIALS_PROVIDER: "env",
+        S3_SECRET_ACCESS_KEY: "",
+      },
+    },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {
     const result = validateDoctorEnvironment({
       app: "api",
