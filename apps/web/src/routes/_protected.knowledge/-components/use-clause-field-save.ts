@@ -8,9 +8,10 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 
 // Eden response shape the persist call returns; only the error branch is read
 // here, so the success payload stays `unknown`.
-type ClausePersistResponse =
-  | { data: unknown; error: null }
-  | { data: null; error: ToAPIErrorProps };
+type ClausePersistResponse = {
+  data: unknown;
+  error: ToAPIErrorProps | null;
+};
 
 type UseClauseFieldSaveOptions = {
   /** Current persisted value; a save that matches it is skipped. */

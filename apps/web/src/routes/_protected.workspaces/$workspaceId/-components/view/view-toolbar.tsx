@@ -640,6 +640,14 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
       });
       return;
     }
+    if (!response.data) {
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
 
     setOpen(false);
     await queryClient.invalidateQueries({
@@ -684,6 +692,14 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           response.error,
           t("common.unexpectedError"),
         ),
+      });
+      return;
+    }
+    if (!response.data) {
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
       });
       return;
     }
