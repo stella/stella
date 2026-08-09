@@ -100,7 +100,7 @@ export default createSafeHandler(
       if (Result.isError(encryptedResult)) {
         captureError(encryptedResult.error, {
           mimeType: PDF_MIME_TYPE,
-          sizeBytes: attachment.bytes.byteLength,
+          sizeBytes: String(attachment.bytes.byteLength),
         });
         return Result.err(
           new HandlerError({
