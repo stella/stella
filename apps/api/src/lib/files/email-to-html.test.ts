@@ -727,6 +727,31 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Template content");
   });
 
+  test("excludes replaced-element fallback text from citations", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>Visible <progress>progress fallback</progress></p>",
+            "<canvas><p>canvas fallback</p></canvas>",
+            "<audio>audio fallback</audio>",
+          ].join(""),
+        },
+      }),
+    );
+    const citationText = preview.citationBlocks
+      .map(({ text }) => text)
+      .join(" ");
+
+    expect(citationText).toContain("Visible");
+    expect(citationText).not.toContain("progress fallback");
+    expect(citationText).not.toContain("canvas fallback");
+    expect(citationText).not.toContain("audio fallback");
+    expect(preview.bodyHtml).toContain("progress fallback");
+    expect(preview.bodyHtml).toContain("canvas fallback");
+  });
+
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
     const nonstandardDelimiter = buildEmailPreview(
       htmlEmail({

@@ -1119,9 +1119,18 @@ const isEmailCitationHidden = (element: Element): boolean =>
   element.attribs["hidden"] !== undefined ||
   element.attribs["aria-hidden"]?.trim().toLowerCase() === "true";
 
+const EMAIL_CITATION_REPLACED_ELEMENT_TAGS = new Set([
+  "audio",
+  "canvas",
+  "meter",
+  "progress",
+  "video",
+]);
+
 const isEmailCitationInert = (element: Element): boolean =>
   element.name === "template" ||
-  (element.name === "dialog" && element.attribs["open"] === undefined);
+  (element.name === "dialog" && element.attribs["open"] === undefined) ||
+  EMAIL_CITATION_REPLACED_ELEMENT_TAGS.has(element.name);
 
 const isEmailCitationExcluded = (element: Element): boolean =>
   isEmailCitationHidden(element) || isEmailCitationInert(element);
