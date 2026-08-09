@@ -1,19 +1,33 @@
 import * as v from "valibot";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
-import { isResourceRef, type ResourceRef } from "./resource-ref";
+import {
+  isResourceRef,
+  isResourceType,
+  type ResourceRef,
+  type ResourceType,
+} from "./resource-ref";
 
 export const REALTIME_EVENT_TYPE = {
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
   INVALIDATE_QUERY: "invalidate-query",
   RESOURCE_DELETED: "resource.deleted",
+  RESOURCE_SET_UPDATED: "resource-set.updated",
   RESOURCE_UPDATED: "resource.updated",
+  RESOURCES_CHANGED: "resources.changed",
   SESSION_CLOSED: "session-closed",
   SESSION_TAKEN_OVER: "session-taken-over",
   TAKEOVER_REQUESTED: "takeover-requested",
   WORKFLOW_EXTRACTION_PREVIEW: "workflow-extraction-preview",
 } as const;
+
+export const RESOURCE_CHANGE_TYPE = {
+  DELETED: "deleted",
+  UPDATED: "updated",
+} as const;
+
+export const MAX_RESOURCE_CHANGES_PER_EVENT = 100;
 
 const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
 
@@ -34,9 +48,36 @@ const resourceDeletedEventSchema = v.object({
   resource: resourceRefSchema,
 });
 
+const resourceChangeSchema = v.variant("change", [
+  v.object({
+    change: v.literal(RESOURCE_CHANGE_TYPE.UPDATED),
+    resource: resourceRefSchema,
+  }),
+  v.object({
+    change: v.literal(RESOURCE_CHANGE_TYPE.DELETED),
+    resource: resourceRefSchema,
+  }),
+]);
+
+const resourcesChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.RESOURCES_CHANGED),
+  changes: v.pipe(
+    v.array(resourceChangeSchema),
+    v.minLength(1),
+    v.maxLength(MAX_RESOURCE_CHANGES_PER_EVENT),
+  ),
+});
+
+const resourceSetUpdatedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
+  resourceType: v.custom<ResourceType>(isResourceType),
+});
+
 const resourceRealtimeEventSchema = v.variant("type", [
   resourceUpdatedEventSchema,
   resourceDeletedEventSchema,
+  resourcesChangedEventSchema,
+  resourceSetUpdatedEventSchema,
 ]);
 
 const workflowExtractionPreviewEventSchema = v.object({
@@ -69,11 +110,18 @@ const workspaceRealtimeEventSchema = v.variant("type", [
   invalidateQueryEventSchema,
   resourceUpdatedEventSchema,
   resourceDeletedEventSchema,
+  resourcesChangedEventSchema,
+  resourceSetUpdatedEventSchema,
   workflowExtractionPreviewEventSchema,
   flowRunUpdateEventSchema,
 ]);
 
-const organizationRealtimeEventSchema = invalidateQueryEventSchema;
+const organizationRealtimeEventSchema = v.variant("type", [
+  invalidateQueryEventSchema,
+  resourceSetUpdatedEventSchema,
+]);
+
+export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
 
 export type ResourceRealtimeEvent = v.InferOutput<
   typeof resourceRealtimeEventSchema
@@ -96,6 +144,32 @@ export const resourceDeletedRealtimeEvent = (resource: ResourceRef) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
     resource,
+  }) as const satisfies ResourceRealtimeEvent;
+
+export const resourceUpdatedChange = (resource: ResourceRef) =>
+  ({
+    change: RESOURCE_CHANGE_TYPE.UPDATED,
+    resource,
+  }) as const satisfies ResourceChange;
+
+export const resourceDeletedChange = (resource: ResourceRef) =>
+  ({
+    change: RESOURCE_CHANGE_TYPE.DELETED,
+    resource,
+  }) as const satisfies ResourceChange;
+
+export const resourcesChangedRealtimeEvent = (
+  changes: readonly ResourceChange[],
+): ResourceRealtimeEvent =>
+  v.parse(resourcesChangedEventSchema, {
+    type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+    changes: [...changes],
+  });
+
+export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
+  ({
+    type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+    resourceType,
   }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({

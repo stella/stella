@@ -4,6 +4,8 @@ import type { Job } from "bullmq";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -37,6 +39,7 @@ import {
   createBullMqConnection,
   isRecoverableRedisPollError,
 } from "@/api/lib/redis-client";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedExtractionRunId,
@@ -558,7 +561,7 @@ export const startWorkflow = async ({
     }
 
     // Broadcast running status
-    broadcastWorkflowStatus(workspaceId, true);
+    broadcastWorkflowStatus(workspaceId);
 
     // Select once for the whole workflow. The same queue instance owns every
     // chunk and any partial-enqueue cleanup, so one request cannot straddle
@@ -605,7 +608,7 @@ export const startWorkflow = async ({
         .catch((runError: unknown) => captureError(runError, { workspaceId }));
     }
     await runStateStore.clear(workspaceId);
-    broadcastWorkflowStatus(workspaceId, false);
+    broadcastWorkflowStatus(workspaceId);
     captureError(error, { workspaceId });
     return { status: "failed" };
   }
@@ -808,7 +811,7 @@ const recoverOrphanedWorkflow = async ({
   });
 
   // Push the cleared status + errored cells to any connected client.
-  broadcastWorkflowStatus(workspaceId, false);
+  broadcastWorkflowStatus(workspaceId);
 };
 
 type ReconcileOrphanedWorkflowsOptions = {
@@ -1917,7 +1920,7 @@ const finishWorkflow = async (
       })
       .catch((error: unknown) => captureError(error, { workspaceId }));
     await runStateStore.clear(workspaceId);
-    broadcastWorkflowStatus(workspaceId, false);
+    broadcastWorkflowStatus(workspaceId);
     broadcastInvalidation(workspaceId, ["properties", workspaceId]);
     return;
   }
@@ -1959,7 +1962,7 @@ const finishWorkflow = async (
   await runStateStore.clear(workspaceId);
 
   // Broadcast completion
-  broadcastWorkflowStatus(workspaceId, false);
+  broadcastWorkflowStatus(workspaceId);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
 
   // Classification-driven routing. If this workflow (re)computed the Document
@@ -2087,26 +2090,6 @@ const setFieldsStatus = async ({
   });
 };
 
-const broadcastWorkflowStatus = (
-  workspaceId: SafeId<"workspace">,
-  running: boolean,
-) => {
-  broadcastInvalidation(workspaceId, ["workspaces", workspaceId, "workflow"]);
-  if (!running) {
-    broadcastInvalidation(workspaceId, ["entities", workspaceId]);
-    // Extraction writes new justifications alongside the field values;
-    // without this the provenance hover stays stale until a reload.
-    broadcastInvalidation(workspaceId, [
-      "workspaces",
-      workspaceId,
-      "justifications",
-    ]);
-  }
-};
-
-const broadcastInvalidation = (
-  workspaceId: SafeId<"workspace">,
-  queryKey: string[],
-) => {
-  broadcast(workspaceId, { type: "invalidate-query", data: queryKey });
+const broadcastWorkflowStatus = (workspaceId: SafeId<"workspace">) => {
+  broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.FLOW_RUN);
 };

@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  MAX_RESOURCE_CHANGES_PER_EVENT,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   resourceDeletedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
+  resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
+  resourcesChangedRealtimeEvent,
   type OrganizationRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
@@ -25,6 +29,12 @@ const ENTITY_RESOURCE = resourceRef({
 
 const RESOURCE_UPDATED_EVENT = resourceUpdatedRealtimeEvent(ENTITY_RESOURCE);
 const RESOURCE_DELETED_EVENT = resourceDeletedRealtimeEvent(ENTITY_RESOURCE);
+const RESOURCES_CHANGED_EVENT = resourcesChangedRealtimeEvent([
+  resourceUpdatedChange(ENTITY_RESOURCE),
+]);
+const RESOURCE_SET_UPDATED_EVENT = resourceSetUpdatedRealtimeEvent(
+  RESOURCE_TYPE.ENTITY,
+);
 
 const WORKFLOW_EXTRACTION_PREVIEW_EVENT = {
   type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
@@ -41,6 +51,8 @@ const WORKSPACE_EVENT_FIXTURES = [
   INVALIDATE_QUERY_EVENT,
   RESOURCE_UPDATED_EVENT,
   RESOURCE_DELETED_EVENT,
+  RESOURCES_CHANGED_EVENT,
+  RESOURCE_SET_UPDATED_EVENT,
   WORKFLOW_EXTRACTION_PREVIEW_EVENT,
   {
     type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
@@ -70,6 +82,27 @@ describe("realtime event contracts", () => {
       parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
         data: [],
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+        changes: [],
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+        changes: Array.from(
+          { length: MAX_RESOURCE_CHANGES_PER_EVENT + 1 },
+          () => resourceUpdatedChange(ENTITY_RESOURCE),
+        ),
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+        resourceType: "unknown",
       }),
     ).toBeNull();
     expect(
@@ -104,6 +137,10 @@ describe("realtime event contracts", () => {
     );
     expect(parseOrganizationRealtimeEvent(RESOURCE_UPDATED_EVENT)).toBeNull();
     expect(parseOrganizationRealtimeEvent(RESOURCE_DELETED_EVENT)).toBeNull();
+    expect(parseOrganizationRealtimeEvent(RESOURCES_CHANGED_EVENT)).toBeNull();
+    expect(parseOrganizationRealtimeEvent(RESOURCE_SET_UPDATED_EVENT)).toEqual(
+      RESOURCE_SET_UPDATED_EVENT,
+    );
     expect(
       parseOrganizationRealtimeEvent(WORKFLOW_EXTRACTION_PREVIEW_EVENT),
     ).toBeNull();

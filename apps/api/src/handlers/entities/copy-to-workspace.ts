@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import {
@@ -33,9 +35,9 @@ import {
   type FieldFileRef,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
-import { broadcastQueryInvalidationToTargetWorkspace } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
@@ -569,12 +571,9 @@ const copyToWorkspaceHandler = async function* ({
     syncWorkspaceSearchActivity(sourceWorkspaceId).catch(captureError);
   }
 
-  // Broadcast invalidation to target workspace so other clients viewing it
-  // receive SSE updates. The macro handles the source workspace via ctx.workspaceId.
-  broadcastQueryInvalidationToTargetWorkspace(targetWorkspaceId, [
-    "entities",
-    targetWorkspaceId,
-  ]);
+  // The source workspace event is emitted by the route macro. This explicit
+  // event reaches clients connected to the distinct target workspace.
+  broadcastWorkspaceResourceSetUpdated(targetWorkspaceId, RESOURCE_TYPE.ENTITY);
 
   return Result.ok({
     entityId: txResult.entityId,

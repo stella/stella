@@ -1,11 +1,15 @@
 import {
   resourceDeletedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
   resourceUpdatedRealtimeEvent,
+  resourcesChangedRealtimeEvent,
+  type ResourceChange,
   type ResourceRef,
+  type ResourceType,
 } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { broadcast } from "@/api/lib/sse";
+import { broadcast, broadcastToOrganization } from "@/api/lib/sse";
 
 /**
  * Broadcast a resource fact within an already-authorized workspace scope.
@@ -24,4 +28,29 @@ export const broadcastWorkspaceResourceDeleted = (
   resource: ResourceRef,
 ): void => {
   broadcast(workspaceId, resourceDeletedRealtimeEvent(resource));
+};
+
+export const broadcastWorkspaceResourceChanges = (
+  workspaceId: SafeId<"workspace">,
+  changes: readonly ResourceChange[],
+): void => {
+  broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
+};
+
+export const broadcastWorkspaceResourceSetUpdated = (
+  workspaceId: SafeId<"workspace">,
+  resourceType: ResourceType,
+): void => {
+  broadcast(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
+};
+
+/** Organization fan-out carries a public resource type, never a resource ID. */
+export const broadcastOrganizationResourceSetUpdated = (
+  organizationId: SafeId<"organization">,
+  resourceType: ResourceType,
+): void => {
+  broadcastToOrganization(
+    organizationId,
+    resourceSetUpdatedRealtimeEvent(resourceType),
+  );
 };

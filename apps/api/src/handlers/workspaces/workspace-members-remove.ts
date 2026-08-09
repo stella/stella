@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
@@ -24,8 +26,8 @@ import {
 } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -280,10 +282,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   }
 
   if (txResult.closedSessionIds.length > 0) {
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
   }
 
   return Result.ok({ id: txResult.id });

@@ -137,6 +137,84 @@ describe("workspace realtime policy", () => {
     ]);
   });
 
+  test("deduplicates cache actions from bounded resource batches", () => {
+    const event = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+      changes: [
+        {
+          change: "updated",
+          resource: { type: RESOURCE_TYPE.ENTITY, id: "entity-1" },
+        },
+        {
+          change: "updated",
+          resource: { type: RESOURCE_TYPE.ENTITY, id: "entity-2" },
+        },
+        {
+          change: "updated",
+          resource: { type: RESOURCE_TYPE.FIELD, id: "field-1" },
+        },
+      ],
+    });
+
+    expect(event).not.toBeNull();
+    if (!event) {
+      return;
+    }
+
+    expect(getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["files", WORKSPACE_ID, "field-1"],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["files", "metadata", WORKSPACE_ID, "field-1"],
+      },
+    ]);
+  });
+
+  test("maps whole-resource-set changes without synthetic resource ids", () => {
+    const entitySet = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+      resourceType: RESOURCE_TYPE.ENTITY,
+    });
+    const flowRunSet = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+      resourceType: RESOURCE_TYPE.FLOW_RUN,
+    });
+
+    expect(entitySet).not.toBeNull();
+    expect(flowRunSet).not.toBeNull();
+    if (!(entitySet && flowRunSet)) {
+      return;
+    }
+
+    expect(getWorkspaceRealtimeQueryActions(entitySet, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["entities", WORKSPACE_ID],
+      },
+    ]);
+    expect(getWorkspaceRealtimeQueryActions(flowRunSet, WORKSPACE_ID)).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "workflow"],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["workspaces", WORKSPACE_ID, "justifications"],
+      },
+    ]);
+  });
+
   test("rejects malformed JSON, unknown events, query keys, and resources", () => {
     expect(parseWorkspaceRealtimeMessage("not-json")).toBeNull();
     expect(parseEvent({ type: "unknown", data: null })).toBeNull();

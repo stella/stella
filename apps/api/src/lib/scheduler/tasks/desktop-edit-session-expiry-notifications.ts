@@ -2,6 +2,10 @@ import type {
   DesktopEditSessionRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import {
+  RESOURCE_TYPE,
+  resourceSetUpdatedRealtimeEvent,
+} from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -48,10 +52,10 @@ export const publishDesktopEditSessionExpiryNotifications = async ({
   const workspaceNotifications: Promise<void>[] = [];
   for (const workspaceId of workspaceIds) {
     workspaceNotifications.push(
-      publisher.publishWorkspaceEvent(workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", workspaceId],
-      }),
+      publisher.publishWorkspaceEvent(
+        workspaceId,
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY),
+      ),
     );
   }
 

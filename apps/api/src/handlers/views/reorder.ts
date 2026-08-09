@@ -2,6 +2,12 @@ import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  resourceUpdatedChange,
+} from "@stll/api-contract";
+
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -9,13 +15,17 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { broadcast } from "@/api/lib/sse";
+import { LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 
 const config = {
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: t.Object({
-    viewIds: t.Array(tSafeId("workspaceView"), { minItems: 1 }),
+    viewIds: t.Array(tSafeId("workspaceView"), {
+      minItems: 1,
+      maxItems: LIMITS.viewsCount,
+    }),
   }),
 } satisfies HandlerConfig;
 
@@ -104,12 +114,14 @@ const reorderViews = createSafeHandler(
       }),
     );
 
-    // Reordering updates multiple views. Keep the collection invalidation until
-    // the semantic contract has an honest bounded-batch event.
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["views", workspaceId],
-    });
+    broadcastWorkspaceResourceChanges(
+      workspaceId,
+      viewIds.map((id) =>
+        resourceUpdatedChange(
+          resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id }),
+        ),
+      ),
+    );
 
     return Result.ok({});
   },

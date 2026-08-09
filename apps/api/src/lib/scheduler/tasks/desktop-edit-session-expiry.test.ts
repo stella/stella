@@ -95,7 +95,7 @@ const notificationSession = (
 });
 
 describe("publishDesktopEditSessionExpiryNotifications", () => {
-  test("publishes session close events and one invalidation per workspace", async () => {
+  test("publishes session close events and one entity-set update per workspace", async () => {
     const published: PublishedEvent[] = [];
 
     await publishDesktopEditSessionExpiryNotifications({
@@ -138,8 +138,8 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
         scope: "workspace",
         id: "workspace-1",
         event: {
-          type: "invalidate-query",
-          data: ["entities", "workspace-1"],
+          type: "resource-set.updated",
+          resourceType: "entity",
         },
       },
     ]);

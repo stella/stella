@@ -21,9 +21,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import {
+  broadcastWorkspaceResourceSetUpdated,
+  broadcastWorkspaceResourceUpdated,
+} from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -372,10 +374,7 @@ export const deleteEntityVersionHandler = async function* ({
     workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
   );
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["files"],
-  });
+  broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.USER_FILE);
 
   return Result.ok({ deleted: true });
 };

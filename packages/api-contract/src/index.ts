@@ -62,12 +62,18 @@ export type {
 export { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 export type { FlowRunStatus, FlowRunStepStatus } from "./flow-status";
 export {
+  MAX_RESOURCE_CHANGES_PER_EVENT,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
+  RESOURCE_CHANGE_TYPE,
+  resourceDeletedChange,
   resourceDeletedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
+  resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
+  resourcesChangedRealtimeEvent,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export { isSafeIdValue, toSafeId } from "./safe-id";
@@ -76,6 +82,7 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  ResourceChange,
   ResourceRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
