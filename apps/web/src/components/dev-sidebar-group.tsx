@@ -62,6 +62,59 @@ const sleep = async (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+type SeedJobStatus =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "succeeded" }
+  | { status: "failed"; message: string };
+
+type PollSeedJobOptions = {
+  /**
+   * Reads the job's current status, or null when there is nothing to act on:
+   * a failed request, or the raw Response the endpoint answers an
+   * unauthenticated caller with. Callers inspect Eden's error channel here so
+   * this helper never handles a half-checked response.
+   */
+  poll: () => Promise<SeedJobStatus | null>;
+  onSucceeded: () => void;
+  onFailed: (message: string | undefined) => void;
+  /** Still running when the poll budget ran out. */
+  onPending: () => void;
+};
+
+/**
+ * Drive one start-then-poll seed job to a terminal state.
+ *
+ * Shared by both seeds: the loop is the only place that awaits in sequence, so
+ * the `no-await-in-loop` exceptions live here once instead of per job.
+ */
+const pollSeedJob = async ({
+  poll,
+  onSucceeded,
+  onFailed,
+  onPending,
+}: PollSeedJobOptions) => {
+  for (let attempt = 0; attempt < SEED_STATUS_MAX_POLLS; attempt++) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
+    const status = await poll();
+    if (status === null) {
+      onFailed(undefined);
+      return;
+    }
+    if (status.status === "failed") {
+      onFailed(status.message);
+      return;
+    }
+    if (status.status === "succeeded") {
+      onSucceeded();
+      return;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between status probes
+    await sleep(SEED_STATUS_POLL_INTERVAL_MS);
+  }
+  onPending();
+};
+
 export const DevSidebarGroup = () => {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
@@ -94,44 +147,28 @@ export const DevSidebarGroup = () => {
       return;
     }
 
-    for (let i = 0; i < SEED_STATUS_MAX_POLLS; i++) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
-      const status = await api.dev.seed.get();
-      if (status.error) {
-        setSeeding(false);
-        stellaToast.add({ title: "Seed status failed", type: "error" });
-        return;
-      }
-
-      if (status.data.status === "failed") {
+    await pollSeedJob({
+      poll: async () => {
+        const { data, error } = await api.dev.seed.get();
+        return error === null ? data : null;
+      },
+      onFailed: (message) => {
         setSeeding(false);
         stellaToast.add({
           title: "Seed failed",
-          description: status.data.message,
+          ...(message === undefined ? {} : { description: message }),
           type: "error",
         });
-        return;
-      }
-
-      if (status.data.status === "succeeded") {
+      },
+      onSucceeded: () => {
         setSeeding(false);
-        // oxlint-disable-next-line no-await-in-loop -- terminal poll branch: returns right after, runs at most once
-        await queryClient.invalidateQueries();
-        stellaToast.add({
-          title: "Dev data seeded",
-          type: "success",
-        });
-        return;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between seed status probes
-      await sleep(SEED_STATUS_POLL_INTERVAL_MS);
-    }
-
-    setSeeding(false);
-    stellaToast.add({
-      title: "Seed still running",
-      type: "info",
+        detached(queryClient.invalidateQueries(), "DevSidebarGroup");
+        stellaToast.add({ title: "Dev data seeded", type: "success" });
+      },
+      onPending: () => {
+        setSeeding(false);
+        stellaToast.add({ title: "Seed still running", type: "info" });
+      },
     });
   };
 
@@ -146,43 +183,33 @@ export const DevSidebarGroup = () => {
       return;
     }
 
-    for (let i = 0; i < SEED_STATUS_MAX_POLLS; i++) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
-      const status = await api.dev["seed-firm-knowledge"].get();
-      if (status.error) {
-        setSeedingFirmKnowledge(false);
-        stellaToast.add({ title: "Seed status failed", type: "error" });
-        return;
-      }
-
-      if (status.data.status === "failed") {
+    await pollSeedJob({
+      poll: async () => {
+        const { data, error } = await api.dev["seed-firm-knowledge"].get();
+        return error === null ? data : null;
+      },
+      onFailed: (message) => {
         setSeedingFirmKnowledge(false);
         stellaToast.add({
           title: "Firm-knowledge seed failed",
-          description: status.data.message,
+          ...(message === undefined ? {} : { description: message }),
           type: "error",
         });
-        return;
-      }
-
-      if (status.data.status === "succeeded") {
+      },
+      onSucceeded: () => {
         setSeedingFirmKnowledge(false);
-        // oxlint-disable-next-line no-await-in-loop -- terminal poll branch: returns right after, runs at most once
-        await queryClient.invalidateQueries();
+        detached(queryClient.invalidateQueries(), "DevSidebarGroup");
         stellaToast.add({
           title: "Firm knowledge seeded",
           description: "Text extraction continues in the background.",
           type: "success",
         });
-        return;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between seed status probes
-      await sleep(SEED_STATUS_POLL_INTERVAL_MS);
-    }
-
-    setSeedingFirmKnowledge(false);
-    stellaToast.add({ title: "Seed still running", type: "info" });
+      },
+      onPending: () => {
+        setSeedingFirmKnowledge(false);
+        stellaToast.add({ title: "Seed still running", type: "info" });
+      },
+    });
   };
 
   const handleClearCache = async () => {

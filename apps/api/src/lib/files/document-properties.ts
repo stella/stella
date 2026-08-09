@@ -654,38 +654,47 @@ export const writeDocumentProperties = async ({
 
   // Driven by the contract's key list rather than the caller's object keys, so
   // an unknown key cannot reach the archive and no cast is needed to narrow it.
-  const byPart = new Map<
-    "core" | "app",
-    { element: string; value: string }[]
-  >();
-  for (const key of AUTHORED_DOCUMENT_PROPERTY_KEYS) {
+  const edits = AUTHORED_DOCUMENT_PROPERTY_KEYS.flatMap((key) => {
     const value = values[key];
-    if (value === undefined) {
-      continue;
-    }
-    const target = OOXML_AUTHORED_ELEMENT[key];
-    const edits = byPart.get(target.part) ?? [];
-    edits.push({ element: target.element, value });
-    byPart.set(target.part, edits);
-  }
-  if (byPart.size === 0) {
+    return value === undefined
+      ? []
+      : [{ ...OOXML_AUTHORED_ELEMENT[key], value }];
+  });
+  if (edits.length === 0) {
     return { status: "written", bytes: new Uint8Array(bytes) };
   }
 
+  const parts = (["core", "app"] as const).filter((part) =>
+    edits.some((edit) => edit.part === part),
+  );
+
   try {
     const archive = await loadDocxArchive(bytes);
-    for (const [part, edits] of byPart) {
-      const path = OOXML_PART_PATH[part];
-      // oxlint-disable-next-line no-await-in-loop -- at most two parts, and each write must see the prior read
-      const xml = await archive.readEntryString(path);
+    // Read every part first, then write, matching the scrubber: the reads are
+    // independent, and writing into the archive while another read is in flight
+    // would race the same zip.
+    const read = await Promise.all(
+      parts.map(async (part) => ({
+        part,
+        xml: await archive.readEntryString(OOXML_PART_PATH[part]),
+      })),
+    );
+    for (const { part, xml } of read) {
       if (xml === null) {
         continue;
       }
       let updated = xml;
-      for (const { element, value } of edits) {
-        updated = setElement(updated, element, value, OOXML_PART_ROOT[part]);
+      for (const edit of edits) {
+        if (edit.part === part) {
+          updated = setElement(
+            updated,
+            edit.element,
+            edit.value,
+            OOXML_PART_ROOT[part],
+          );
+        }
       }
-      archive.zip.file(path, updated);
+      archive.zip.file(OOXML_PART_PATH[part], updated);
     }
     return {
       status: "written",
