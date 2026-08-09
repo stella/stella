@@ -2482,12 +2482,13 @@ const readActiveFileFallbackForModel = async ({
       if (extracted === null) {
         return Result.ok(null);
       }
-      return Result.ok({
+      const fallback: ActiveFileFallbackForModel = {
         type: "extracted-text",
         content: extracted.slice(0, LIMITS.chatContextFileMaxChars),
         fileName: source.fileName,
         truncated: extracted.length > LIMITS.chatContextFileMaxChars,
-      });
+      };
+      return Result.ok(fallback);
     }
 
     const bytes = new Uint8Array(buffer);
@@ -2500,11 +2501,12 @@ const readActiveFileFallbackForModel = async ({
       );
     }
 
-    return Result.ok({
+    const fallback: ActiveFileFallbackForModel = {
       type: "pdf",
       bytes,
       fileName: source.fileName,
-    });
+    };
+    return Result.ok(fallback);
   });
 
 type ResolveAssistantMessageRefsProps = {

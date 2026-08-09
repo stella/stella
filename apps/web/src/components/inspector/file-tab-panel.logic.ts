@@ -19,11 +19,7 @@ export const FULLVIEW_FACETS: readonly Facet[] = FILE_FACETS.filter(
   (facet) => facet !== "preview",
 );
 
-export type FileTabNativePreviewKind =
-  | "email"
-  | "markdown"
-  | "office"
-  | "pdf";
+export type FileTabNativePreviewKind = "email" | "markdown" | "office" | "pdf";
 
 export const getFileTabNativePreviewKind = ({
   fileName,

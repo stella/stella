@@ -45,8 +45,7 @@
   color: var(--muted-foreground) !important;
 }
 
-.stella-office-spreadsheet[data-color-scheme="dark"]
-  .xlsx-tab-nav:hover {
+.stella-office-spreadsheet[data-color-scheme="dark"] .xlsx-tab-nav:hover {
   background: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
 }
 

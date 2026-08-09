@@ -24,8 +24,7 @@ const excelMimeTypes = Object.freeze({
 
 const powerpointMimeTypes = Object.freeze({
   "application/vnd.ms-powerpoint": true,
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-    true,
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
 });
 
 const openDocumentSheetMimeTypes = Object.freeze({
