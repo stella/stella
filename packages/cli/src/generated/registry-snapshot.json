@@ -1965,7 +1965,7 @@
       "scope": "billing_write"
     },
     "name": "save_time_entry",
-    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, entity_id, date_worked, timezone_id, duration_minutes, rate_at_entry, currency, and narrative all required). Pass time_entry_id to update: set date_worked, duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, activity_code, rate_at_entry, currency, and/or status (draft or approved). Rates and amounts are integer minor currency units (e.g. cents); durations are whole minutes. Returns the time entry ID.",
+    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked, duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1978,8 +1978,8 @@
           "description": "Matter/workspace ID to create the entry in; required when creating"
         },
         "entity_id": {
-          "type": "string",
-          "description": "Entity the time is logged against (document, folder, or task). Required when creating; when updating, moves the entry to a different entity in the same matter."
+          "type": ["string", "null"],
+          "description": "Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear."
         },
         "date_worked": {
           "type": "string",
@@ -1995,16 +1995,6 @@
           "type": "integer",
           "description": "Minutes worked (whole minutes); required when creating",
           "minimum": 1
-        },
-        "rate_at_entry": {
-          "type": "integer",
-          "description": "Hourly rate in integer minor currency units (e.g. cents); required when creating",
-          "minimum": 0
-        },
-        "currency": {
-          "type": "string",
-          "description": "3-letter ISO currency code; required when creating",
-          "maxLength": 3
         },
         "narrative": {
           "type": "string",
@@ -2033,11 +2023,6 @@
           "type": ["string", "null"],
           "description": "UTBMS/LEDES activity code; pass null to clear",
           "maxLength": 20
-        },
-        "status": {
-          "type": "string",
-          "enum": ["draft", "approved"],
-          "description": "Set the entry's status. Only valid when updating."
         }
       }
     },

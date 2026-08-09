@@ -3384,10 +3384,10 @@ export const generatedRouteMap: RouteNode = {
               {
                 flag: "--entity-id",
                 prop: "entity_id",
-                kind: "string",
+                kind: "nullable-string",
                 repeatable: false,
                 description:
-                  "Entity the time is logged against (document, folder, or task). Required when creating; when updating, moves the entry to a different entity in the same matter.",
+                  "Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear.",
                 required: false,
               },
               {
@@ -3416,25 +3416,6 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Minutes worked (whole minutes); required when creating",
-                required: false,
-              },
-              {
-                flag: "--rate-at-entry",
-                prop: "rate_at_entry",
-                kind: "int",
-                min: 0,
-                repeatable: false,
-                description:
-                  "Hourly rate in integer minor currency units (e.g. cents); required when creating",
-                required: false,
-              },
-              {
-                flag: "--currency",
-                prop: "currency",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "3-letter ISO currency code; required when creating",
                 required: false,
               },
               {
@@ -3487,16 +3468,6 @@ export const generatedRouteMap: RouteNode = {
                 description: "UTBMS/LEDES activity code; pass null to clear",
                 required: false,
               },
-              {
-                flag: "--status",
-                prop: "status",
-                kind: "enum",
-                enum: ["draft", "approved"],
-                repeatable: false,
-                description:
-                  "Set the entry's status. Only valid when updating.",
-                required: false,
-              },
             ],
             inputOnly: [],
             paginated: false,
@@ -3516,9 +3487,9 @@ export const generatedRouteMap: RouteNode = {
                     "Matter/workspace ID to create the entry in; required when creating",
                 },
                 entity_id: {
-                  type: "string",
+                  type: ["string", "null"],
                   description:
-                    "Entity the time is logged against (document, folder, or task). Required when creating; when updating, moves the entry to a different entity in the same matter.",
+                    "Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear.",
                 },
                 date_worked: {
                   type: "string",
@@ -3537,18 +3508,6 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Minutes worked (whole minutes); required when creating",
                   minimum: 1,
-                },
-                rate_at_entry: {
-                  type: "integer",
-                  description:
-                    "Hourly rate in integer minor currency units (e.g. cents); required when creating",
-                  minimum: 0,
-                },
-                currency: {
-                  type: "string",
-                  description:
-                    "3-letter ISO currency code; required when creating",
-                  maxLength: 3,
                 },
                 narrative: {
                   type: "string",
@@ -3580,12 +3539,6 @@ export const generatedRouteMap: RouteNode = {
                   type: ["string", "null"],
                   description: "UTBMS/LEDES activity code; pass null to clear",
                   maxLength: 20,
-                },
-                status: {
-                  type: "string",
-                  enum: ["draft", "approved"],
-                  description:
-                    "Set the entry's status. Only valid when updating.",
                 },
               },
             },
@@ -61361,7 +61314,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "create"],
                 capabilityId: "time-entries.create",
                 description:
-                  "Create a time entry (matterId, dateWorked, timezoneId, durationMinutes, rateAtEntry, currency, and narrative all required). Rates and amounts are integer minor currency units (e.g. cents); durations are whole minutes. Returns the time entry ID.",
+                  "Create a time entry in the current matter. dateWorked, timezoneId, durationMinutes, and narrative are required; workItemId is optional. The timekeeper's effective matter rate is resolved server-side. durations are whole minutes. Returns the time entry ID.",
                 access: "write",
                 flags: [
                   {
@@ -61372,17 +61325,6 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     part: "params",
                     partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description:
-                      "Entity the time is logged against (document, folder, or task).",
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "body",
-                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -61408,16 +61350,6 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    description: "3-letter ISO currency code",
-                    flag: "--currency",
-                    prop: "currency",
-                    required: true,
-                    part: "body",
-                    partPath: "currency",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     description: "Description of the work",
                     flag: "--narrative",
                     prop: "narrative",
@@ -61437,8 +61369,8 @@ export const generatedRouteMap: RouteNode = {
                   },
                 ],
                 inputOnly: [
+                  "body.workItemId",
                   "body.durationMinutes",
-                  "body.rateAtEntry",
                   "body.taskCode",
                   "body.activityCode",
                 ],
@@ -61452,23 +61384,28 @@ export const generatedRouteMap: RouteNode = {
                     body: {
                       type: "object",
                       required: [
-                        "matterId",
                         "dateWorked",
                         "timezoneId",
                         "durationMinutes",
-                        "rateAtEntry",
-                        "currency",
                         "narrative",
                       ],
                       properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                          description:
-                            "Entity the time is logged against (document, folder, or task).",
+                        workItemId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                              description:
+                                "Optional document, folder, or task that provides context for the work",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         dateWorked: {
                           format: "date",
@@ -61498,30 +61435,6 @@ export const generatedRouteMap: RouteNode = {
                               type: "integer",
                             },
                           ],
-                        },
-                        rateAtEntry: {
-                          minimum: 0,
-                          description:
-                            "Hourly rate in integer minor currency units (e.g. cents)",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              description:
-                                "Hourly rate in integer minor currency units (e.g. cents)",
-                              type: "integer",
-                            },
-                          ],
-                        },
-                        currency: {
-                          minLength: 3,
-                          maxLength: 3,
-                          description: "3-letter ISO currency code",
-                          type: "string",
                         },
                         narrative: {
                           minLength: 1,
@@ -61690,11 +61603,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
+                    flag: "--work-item-id",
+                    prop: "workItemId",
                     required: false,
                     part: "query",
-                    partPath: "matterId",
+                    partPath: "workItemId",
                   },
                 ],
                 inputOnly: [],
@@ -61730,7 +61643,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                           enum: ["draft", "approved", "billed", "written_off"],
                         },
-                        matterId: {
+                        workItemId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -61791,11 +61704,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
+                    flag: "--work-item-id",
+                    prop: "workItemId",
                     required: false,
                     part: "query",
-                    partPath: "matterId",
+                    partPath: "workItemId",
                   },
                 ],
                 inputOnly: [],
@@ -61831,7 +61744,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                           enum: ["draft", "approved", "billed", "written_off"],
                         },
-                        matterId: {
+                        workItemId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -61910,7 +61823,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "list"],
                 capabilityId: "time-entries.list",
                 description:
-                  "List time entries in a matter, optionally filtered by matterId (the item the time was logged against), userId, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+                  "List time entries in a matter, optionally filtered by workItemId (the document, folder, or task providing context), userId, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
                 access: "read",
                 flags: [
                   {
@@ -61936,12 +61849,12 @@ export const generatedRouteMap: RouteNode = {
                     kind: "string",
                     repeatable: false,
                     description:
-                      "List only entries logged against this entity (document, folder, or task the time is billed to)",
-                    flag: "--matter-id",
-                    prop: "matterId",
+                      "List only entries carrying this optional document, folder, or task context",
+                    flag: "--work-item-id",
+                    prop: "workItemId",
                     required: false,
                     part: "query",
-                    partPath: "matterId",
+                    partPath: "workItemId",
                   },
                   {
                     kind: "string",
@@ -62038,14 +61951,14 @@ export const generatedRouteMap: RouteNode = {
                           description:
                             "List only entries recorded by this user",
                         },
-                        matterId: {
+                        workItemId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                           description:
-                            "List only entries logged against this entity (document, folder, or task the time is billed to)",
+                            "List only entries carrying this optional document, folder, or task context",
                         },
                         dateFrom: {
                           format: "date",
@@ -62152,9 +62065,9 @@ export const generatedRouteMap: RouteNode = {
                           type: "array",
                           items: {
                             type: "object",
-                            required: ["matterId", "percentage"],
+                            required: ["workItemId", "percentage"],
                             properties: {
-                              matterId: {
+                              workItemId: {
                                 minLength: 36,
                                 maxLength: 36,
                                 pattern:
@@ -62196,6 +62109,79 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
+            "summary-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "summary-get"],
+                capabilityId: "time-entries.summary.get",
+                description:
+                  "Summarize the signed-in user's time in the current matter for a bounded date range.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--date-from",
+                    prop: "dateFrom",
+                    required: true,
+                    part: "query",
+                    partPath: "dateFrom",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--date-to",
+                    prop: "dateTo",
+                    required: true,
+                    part: "query",
+                    partPath: "dateTo",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                    query: {
+                      type: "object",
+                      required: ["dateFrom", "dateTo"],
+                      properties: {
+                        dateFrom: {
+                          format: "date",
+                          type: "string",
+                        },
+                        dateTo: {
+                          format: "date",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
             "timer-start": {
               kind: "capability-leaf",
               spec: {
@@ -62215,29 +62201,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "body",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--timezone-id",
                     prop: "timezoneId",
                     required: true,
                     part: "body",
                     partPath: "timezoneId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--currency",
-                    prop: "currency",
-                    required: true,
-                    part: "body",
-                    partPath: "currency",
                   },
                   {
                     kind: "string",
@@ -62249,7 +62217,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "narrative",
                   },
                 ],
-                inputOnly: ["body.rateAtEntry"],
+                inputOnly: ["body.workItemId"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -62259,42 +62227,26 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: [
-                        "matterId",
-                        "timezoneId",
-                        "rateAtEntry",
-                        "currency",
-                      ],
+                      required: ["timezoneId"],
                       properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
+                        workItemId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         timezoneId: {
                           minLength: 1,
                           maxLength: 64,
-                          type: "string",
-                        },
-                        rateAtEntry: {
-                          minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
-                        },
-                        currency: {
-                          minLength: 3,
-                          maxLength: 3,
                           type: "string",
                         },
                         narrative: {
@@ -62417,32 +62369,13 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "noCharge",
                   },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: false,
-                    part: "body",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--currency",
-                    prop: "currency",
-                    required: false,
-                    part: "body",
-                    partPath: "currency",
-                  },
                 ],
                 inputOnly: [
                   "body.durationMinutes",
                   "body.invoiceNarrative",
+                  "body.workItemId",
                   "body.taskCode",
                   "body.activityCode",
-                  "body.status",
-                  "body.rateAtEntry",
                 ],
                 paginated: false,
                 destructive: false,
@@ -62503,12 +62436,20 @@ export const generatedRouteMap: RouteNode = {
                         noCharge: {
                           type: "boolean",
                         },
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
+                        workItemId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         taskCode: {
                           nullable: true,
@@ -62533,37 +62474,6 @@ export const generatedRouteMap: RouteNode = {
                               type: "null",
                             },
                           ],
-                        },
-                        status: {
-                          anyOf: [
-                            {
-                              const: "draft",
-                              type: "string",
-                            },
-                            {
-                              const: "approved",
-                              type: "string",
-                            },
-                          ],
-                        },
-                        rateAtEntry: {
-                          minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
-                        },
-                        currency: {
-                          minLength: 3,
-                          maxLength: 3,
-                          type: "string",
                         },
                       },
                     },
