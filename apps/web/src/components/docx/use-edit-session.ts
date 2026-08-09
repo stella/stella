@@ -13,7 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { getAnalytics } from "@/lib/analytics";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
