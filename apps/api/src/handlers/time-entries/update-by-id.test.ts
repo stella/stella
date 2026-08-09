@@ -34,7 +34,7 @@ const createContext = ({
     recordAuditEvent,
   });
 
-describe("updateTimeEntryById (audit diff privacy)", () => {
+describe("updateTimeEntryById", () => {
   test("excludes narrative and invoiceNarrative from the recorded audit diff", async () => {
     const recordedEvents: AuditEvent[] = [];
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -100,5 +100,63 @@ describe("updateTimeEntryById (audit diff privacy)", () => {
       old: 30,
       new: 45,
     });
+  });
+
+  test("preserves the snapshotted rate on an unrelated billable edit", async () => {
+    let appliedUpdates: Record<string, unknown> | undefined;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        timeEntries: {
+          findFirst: async () => ({
+            status: BILLING_STATUS.DRAFT,
+            dateWorked: "2026-06-14",
+            durationMinutes: 30,
+            billedMinutes: 30,
+            narrative: "Original narrative",
+            invoiceNarrative: null,
+            billable: true,
+            noCharge: false,
+            workItemId: null,
+            userId: toSafeId<"user">("user_test"),
+            taskCode: null,
+            activityCode: null,
+            rateAtEntry: 10_000,
+            currency: "USD",
+          }),
+        },
+      },
+      update: () => ({
+        set: (updates: Record<string, unknown>) => {
+          appliedUpdates = updates;
+          return {
+            where: () => ({
+              returning: async () => [
+                { id: toSafeId<"timeEntry">("time_entry_test") },
+              ],
+            }),
+          };
+        },
+      }),
+    });
+
+    const result = await updateTimeEntryById.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          id: toSafeId<"timeEntry">("time_entry_test"),
+          dateWorked: "2026-06-14",
+          billable: true,
+          narrative: "Updated narrative",
+        },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+
+    expect(result).toEqual({
+      id: toSafeId<"timeEntry">("time_entry_test"),
+    });
+    expect(appliedUpdates).not.toHaveProperty("rateAtEntry");
+    expect(appliedUpdates).not.toHaveProperty("currency");
   });
 });

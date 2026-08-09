@@ -139,7 +139,9 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
-  if (body.dateWorked !== undefined) {
+  const dateChanged =
+    body.dateWorked !== undefined && body.dateWorked !== existing.dateWorked;
+  if (dateChanged) {
     if (body.timezoneId === undefined) {
       return Result.err(
         new HandlerError({
@@ -187,11 +189,12 @@ export const updateTimeEntryHandler = async function* ({
   }
 
   const willBeBillable = body.billable ?? existing.billable;
+  const becomingBillable = body.billable === true && !existing.billable;
   const shouldResolveRate =
     willBeBillable &&
     (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
-      body.dateWorked !== undefined ||
-      body.billable === true);
+      dateChanged ||
+      becomingBillable);
   let resolvedRateUpdate: ResolvedRateUpdate = { type: "unchanged" };
   if (shouldResolveRate) {
     if (!existing.userId) {

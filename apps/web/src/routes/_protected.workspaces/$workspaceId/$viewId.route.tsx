@@ -10,6 +10,8 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import {
   getWeekStart,
   isWorkspaceDocumentRoutePath,
@@ -98,6 +100,15 @@ export const Route = createFileRoute(
       await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
 
       if (!isTimeBillingRouteEnabled()) {
+        return;
+      }
+
+      const role = await ensureRouteQueryData(queryClient, roleOptions);
+      const canReadTimeEntries = authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["read"] },
+      });
+      if (!canReadTimeEntries) {
         return;
       }
 

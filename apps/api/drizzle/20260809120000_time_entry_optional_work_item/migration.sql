@@ -43,27 +43,71 @@ DROP POLICY "workspace_delete" ON "time_entries";
 CREATE POLICY "time_entries_workspace_select" ON "time_entries"
   AS PERMISSIVE FOR SELECT TO "stella"
   USING (
-    "workspace_id" = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+    (
+      "workspace_id" = ANY(
+        COALESCE(
+          NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR "workspace_id" IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    )
     AND "organization_id" = (SELECT current_setting('app.organization_id', true))
   );
 --> statement-breakpoint
 CREATE POLICY "time_entries_workspace_insert" ON "time_entries"
   AS PERMISSIVE FOR INSERT TO "stella"
   WITH CHECK (
-    "workspace_id" = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+    (
+      "workspace_id" = ANY(
+        COALESCE(
+          NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR "workspace_id" IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    )
     AND "organization_id" = (SELECT current_setting('app.organization_id', true))
   );
 --> statement-breakpoint
 CREATE POLICY "time_entries_workspace_update" ON "time_entries"
   AS PERMISSIVE FOR UPDATE TO "stella"
   USING (
-    "workspace_id" = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+    (
+      "workspace_id" = ANY(
+        COALESCE(
+          NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR "workspace_id" IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    )
     AND "organization_id" = (SELECT current_setting('app.organization_id', true))
   );
 --> statement-breakpoint
 CREATE POLICY "time_entries_workspace_delete" ON "time_entries"
   AS PERMISSIVE FOR DELETE TO "stella"
   USING (
-    "workspace_id" = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+    (
+      "workspace_id" = ANY(
+        COALESCE(
+          NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR "workspace_id" IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    )
     AND "organization_id" = (SELECT current_setting('app.organization_id', true))
   );
