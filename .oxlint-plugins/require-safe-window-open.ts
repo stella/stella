@@ -11,10 +11,11 @@
 //   window["open"](url)
 //   globalThis.open(url)
 //   globalThis.window.open(url)
+//   self.open(url)
 //   const popupHost = window; popupHost.open(url)
 //
 // This rule is scoped to browser surfaces in oxlint.config.ts. Locally bound
-// values named `open`, `window`, or `globalThis` are unrelated bindings and
+// values named `open`, `window`, `globalThis`, or `self` are unrelated bindings and
 // stay allowed. Only immutable aliases with a statically proven initializer
 // retain browser-global identity; mutable or dynamic values stay unreported.
 
@@ -193,7 +194,7 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
   return binding === null || !bindingHasDefinitions(binding);
 };
 
-type BrowserGlobalKind = "globalThis" | "window";
+type BrowserGlobalKind = "globalThis" | "self" | "window";
 
 const stableAliasInitializer = (
   context: unknown,
@@ -240,7 +241,9 @@ const browserGlobalKind = (
 
   if (isIdentifier(expression)) {
     if (
-      (expression.name === "window" || expression.name === "globalThis") &&
+      (expression.name === "window" ||
+        expression.name === "globalThis" ||
+        expression.name === "self") &&
       isGlobalReference(context, expression)
     ) {
       return expression.name;
@@ -264,9 +267,9 @@ const browserGlobalKind = (
   ) {
     return null;
   }
-  return browserGlobalKind(context, expression.object, visited) === "globalThis"
-    ? "window"
-    : null;
+  return browserGlobalKind(context, expression.object, visited) === null
+    ? null
+    : "window";
 };
 
 const isBrowserOpenCallee = (context: unknown, callee: unknown): boolean => {

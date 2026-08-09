@@ -100,6 +100,20 @@ export const conditionalTimerCleanup = () => {
   setTimeout(cleanup, 1000);
 };
 
+// MUST flag: each iteration overwrites the shared binding before an earlier
+// timer callback necessarily runs, so every callback can observe only the
+// latest URL.
+export const sharedLoopBindingTimerCleanup = () => {
+  let url: string;
+  for (const currentBlob of blobs) {
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: deferred cleanup closes over a shared binding overwritten by the loop
+    url = URL.createObjectURL(currentBlob);
+    // oxlint-disable-next-line eslint/no-loop-func -- fixture: unsafe shared capture is the rule behavior under test
+    const cleanup = () => URL.revokeObjectURL(url);
+    setTimeout(cleanup, 1000);
+  }
+};
+
 // MUST flag: a `finally` block must revoke on every path through the block.
 export const conditionalFinallyCleanup = () => {
   // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: finally cleanup is conditional
@@ -215,6 +229,28 @@ export const scheduledCleanup = () => {
   const url = URL.createObjectURL(blob);
   const cleanup = () => URL.revokeObjectURL(url);
   setTimeout(cleanup, 1000);
+};
+
+// Allowed: a const declared in the loop body is a fresh binding for every
+// iteration, so each timer captures the URL created by that iteration.
+export const scheduledPerIterationCleanup = () => {
+  for (const currentBlob of blobs) {
+    const url = URL.createObjectURL(currentBlob);
+    const cleanup = () => URL.revokeObjectURL(url);
+    setTimeout(cleanup, 1000);
+  }
+};
+
+// Allowed: an immutable per-iteration alias snapshots an outer ownership
+// binding before the next iteration overwrites it.
+export const scheduledPerIterationAliasCleanup = () => {
+  let url: string;
+  for (const currentBlob of blobs) {
+    url = URL.createObjectURL(currentBlob);
+    const capturedUrl = url;
+    const cleanup = () => URL.revokeObjectURL(capturedUrl);
+    setTimeout(cleanup, 1000);
+  }
 };
 
 // Allowed: nested-loop break/continue inside a returned cleanup callback do

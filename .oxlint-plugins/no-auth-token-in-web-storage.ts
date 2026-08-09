@@ -174,6 +174,52 @@ export default eslintCompatPlugin({
             : getPropertyName(member.property);
         };
 
+        const isBrowserGlobalHost = (
+          node: unknown,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (expression === null) {
+            return false;
+          }
+          if (
+            isIdentifier(expression) &&
+            GLOBAL_HOST_NAMES.has(expression.name)
+          ) {
+            return isGlobalReference(expression, expression.name);
+          }
+          if (expression.type === "MemberExpression") {
+            const memberName = resolveMemberName(expression);
+            return (
+              memberName !== null &&
+              GLOBAL_HOST_NAMES.has(memberName) &&
+              isBrowserGlobalHost(expression.object, visited)
+            );
+          }
+          if (!isIdentifier(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              continue;
+            }
+            return isBrowserGlobalHost(definition.node.init, visited);
+          }
+          return false;
+        };
+
         const isWebStorage = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
@@ -213,12 +259,7 @@ export default eslintCompatPlugin({
           if (storageName === null || !STORAGE_NAMES.has(storageName)) {
             return false;
           }
-          const host = unwrapExpression(expression.object);
-          return (
-            isIdentifier(host) &&
-            GLOBAL_HOST_NAMES.has(host.name) &&
-            isGlobalReference(host, host.name)
-          );
+          return isBrowserGlobalHost(expression.object);
         };
 
         const reportCredentialKeyValue = (

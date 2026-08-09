@@ -66,6 +66,7 @@ type Creation = {
 
 type Revocation = {
   aliasPositions: number[];
+  argumentBinding: ScopeVariable | null;
   binding: ScopeVariable | null;
   node: Ranged;
   position: number;
@@ -366,6 +367,29 @@ const isRevokedByEnclosingFinally = (
   return false;
 };
 
+const isImmutablePerIterationBinding = (
+  binding: ScopeVariable | null,
+  repeatingLoop: AstNode,
+  creationFunction: AstNode | null,
+): boolean => {
+  if (!isAstNode(repeatingLoop.body)) {
+    return false;
+  }
+  return (
+    binding?.defs.some(
+      (definition) =>
+        definition.type === "Variable" &&
+        isAstNode(definition.node) &&
+        definition.node.type === "VariableDeclarator" &&
+        isAstNode(definition.parent) &&
+        definition.parent.type === "VariableDeclaration" &&
+        definition.parent.kind === "const" &&
+        nearestFunction(definition.node) === creationFunction &&
+        isDescendantOf(definition.node, repeatingLoop.body),
+    ) === true
+  );
+};
+
 const revocationCoversCreation = (
   creation: Creation,
   revocation: Revocation,
@@ -378,6 +402,23 @@ const revocationCoversCreation = (
     creationFunction,
   );
   const repeatingLoop = repeatingLoopForNode(creation.node);
+  const isReturnedCleanup =
+    usesReturnedCleanup &&
+    revocationFunction !== null &&
+    isReturnedCleanupFunction(revocationFunction, creationFunction);
+  if (
+    repeatingLoop !== null &&
+    usesReturnedCleanup &&
+    !isReturnedCleanup &&
+    callbackRegistrationSites.length > 0 &&
+    !isImmutablePerIterationBinding(
+      revocation.argumentBinding,
+      repeatingLoop,
+      creationFunction,
+    )
+  ) {
+    return false;
+  }
   if (
     isRevokedByEnclosingFinally(creation, revocation) &&
     (repeatingLoop === null || isDescendantOf(revocation.node, repeatingLoop))
@@ -392,8 +433,7 @@ const revocationCoversCreation = (
     return false;
   }
   const coverageNodes = usesReturnedCleanup
-    ? revocationFunction !== null &&
-      isReturnedCleanupFunction(revocationFunction, creationFunction)
+    ? isReturnedCleanup
       ? [revocationFunction]
       : callbackRegistrationSites
     : [revocation.node];
@@ -722,6 +762,9 @@ export default eslintCompatPlugin({
             const bindingInfo = canonicalBindingInfo(argument);
             revocations.push({
               aliasPositions: bindingInfo?.aliasPositions ?? [],
+              argumentBinding: isIdentifier(unwrapExpression(argument))
+                ? resolveVariable(unwrapExpression(argument))
+                : null,
               binding: bindingInfo?.binding ?? null,
               node,
               position: nodePosition(node),

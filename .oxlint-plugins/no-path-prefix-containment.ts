@@ -28,7 +28,6 @@ import type { AstNode } from "./utils.ts";
 
 const PATH_MODULES = new Set(["node:path", "path"]);
 const PATH_VALUE_APIS = new Set(["dirname", "join", "normalize", "resolve"]);
-const ROOTED_PATH_VALUE_APIS = new Set(["join", "resolve"]);
 const PATH_PLATFORMS = new Set(["posix", "win32"]);
 const PATH_SEPARATORS = new Set(["/", "\\"]);
 
@@ -307,6 +306,28 @@ export default eslintCompatPlugin({
               expression.value.endsWith(separator),
             );
           }
+          if (expression?.type === "ConditionalExpression") {
+            if (
+              hasPathSeparatorSuffix(expression.consequent) &&
+              hasPathSeparatorSuffix(expression.alternate)
+            ) {
+              return true;
+            }
+            const test = unwrapExpression(expression.test);
+            if (
+              test?.type !== "CallExpression" ||
+              !isAstNode(test.callee) ||
+              test.callee.type !== "MemberExpression" ||
+              getPropertyName(test.callee.property) !== "endsWith" ||
+              !Array.isArray(test.arguments) ||
+              test.arguments.length !== 1 ||
+              !isPathSeparator(test.arguments.at(0)) ||
+              !sameStableExpression(test.callee.object, expression.consequent)
+            ) {
+              return false;
+            }
+            return hasPathSeparatorSuffix(expression.alternate);
+          }
           if (
             expression?.type === "BinaryExpression" &&
             expression.operator === "+"
@@ -374,25 +395,6 @@ export default eslintCompatPlugin({
             }
             const candidateCall = getPathValueCall(node.callee.object);
             if (candidateCall === null) {
-              return;
-            }
-
-            // `resolve(root, child).startsWith(root)` is unsafe even when the
-            // root itself is a raw parameter. Otherwise require both sides to
-            // have explicit Node path provenance to avoid generic string hits.
-            const candidateApi = nodePathApiParts(candidateCall.callee)?.at(-1);
-            const firstCandidateArgument = Array.isArray(
-              candidateCall.arguments,
-            )
-              ? candidateCall.arguments.at(0)
-              : undefined;
-            const resolvesFromPrefix =
-              candidateApi !== undefined &&
-              ROOTED_PATH_VALUE_APIS.has(candidateApi) &&
-              Array.isArray(candidateCall.arguments) &&
-              candidateCall.arguments.length >= 2 &&
-              sameStableExpression(firstCandidateArgument, prefix);
-            if (!resolvesFromPrefix && getPathValueCall(prefix) === null) {
               return;
             }
 

@@ -19,6 +19,31 @@ const CONCATENATED_TOKEN_KEY = "access" + TOKEN_SUFFIX;
 let mutableTokenKey = "access_token";
 let mutableSuffix = "Token";
 
+// MUST flag: an immutable alias preserves the browser-global host identity.
+const windowHost = window;
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: a const host alias cannot bypass the storage boundary
+windowHost.localStorage.setItem("accessToken", credential);
+
+// MUST flag: browser-host provenance survives immutable alias chains.
+const globalHost = globalThis;
+const chainedGlobalHost = globalHost;
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: a chained globalThis alias remains the browser global
+chainedGlobalHost.sessionStorage.setItem("refreshToken", credential);
+
+// MUST flag: static host members preserve a proven global root, both before
+// and after aliasing the member result.
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: an aliased root's window member remains a browser-global host
+globalHost.window.localStorage.setItem("accessToken", credential);
+const windowMemberHost = globalThis.window;
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: a const alias of globalThis.window remains a browser-global host
+windowMemberHost.sessionStorage.setItem("refreshToken", credential);
+
+// MUST flag: self is also a browser-global host when reached through a stable
+// alias, including property assignment sinks.
+const workerHost = self;
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: a self alias cannot bypass storage assignment detection
+workerHost.localStorage.authToken = credential;
+
 // MUST flag: direct localStorage.setItem with a credential-like literal key.
 // oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage -- fixture: browser-readable access token
 localStorage.setItem("accessToken", credential);
@@ -120,6 +145,31 @@ export const writeInjectedStorage = (localStorage: {
 export const writeInjectedWindow = (window: {
   localStorage: { setItem: (key: string, value: string) => void };
 }) => window.localStorage.setItem("jwt", credential);
+
+// Allowed: an alias of a locally shadowed host is still locally owned.
+export const writeAliasedInjectedWindow = (window: {
+  localStorage: { setItem: (key: string, value: string) => void };
+}) => {
+  const host = window;
+  host.localStorage.setItem("jwt", credential);
+};
+
+// Allowed: mutable and runtime-derived hosts do not have stable browser-global
+// provenance.
+export const writeMutableHost = (
+  replacementHost: typeof window,
+  replace: boolean,
+) => {
+  let host = window;
+  if (replace) {
+    host = replacementHost;
+  }
+  host.localStorage.setItem("accessToken", credential);
+};
+
+declare const getBrowserHost: () => typeof window;
+const runtimeHost = getBrowserHost();
+runtimeHost.sessionStorage.setItem("refreshToken", credential);
 
 // Allowed: an unrelated storage-shaped domain object.
 declare const settingsStore: {

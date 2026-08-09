@@ -32,6 +32,10 @@ export const bracketWindow = window["open"](externalDocumentUrl);
 // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: globalThis.open is the browser open primitive
 export const globalOpen = globalThis.open(externalDocumentUrl);
 
+// MUST flag: self exposes the browser's open primitive too.
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: self.open is the browser open primitive
+export const selfOpen = self.open(externalDocumentUrl);
+
 // MUST flag: the explicit globalThis.window chain is also raw navigation.
 // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: explicit globalThis.window still reaches the browser primitive
 export const explicitGlobalWindow = globalThis.window.open(externalDocumentUrl);
@@ -52,6 +56,21 @@ export const aliasedWindow = () => {
 export const aliasedGlobalThis = () => {
   const popupHost = globalThis;
   // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: a globalThis alias retains browser-global identity
+  return popupHost.open(externalDocumentUrl);
+};
+
+// MUST flag: an immutable self alias retains browser-global provenance.
+export const aliasedSelf = () => {
+  const popupHost = self;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: a self alias cannot bypass the navigation boundary
+  return popupHost.open(externalDocumentUrl);
+};
+
+// MUST flag: a self alias can expose the browser window through a stable chain.
+export const aliasedSelfWindow = () => {
+  const browserGlobal = self;
+  const popupHost = browserGlobal.window;
+  // oxlint-disable-next-line require-safe-window-open/require-safe-window-open -- fixture: self.window retains browser-global identity
   return popupHost.open(externalDocumentUrl);
 };
 
@@ -97,6 +116,14 @@ export const useInjectedWindowAlias = (window: {
   return popupHost.open(externalDocumentUrl);
 };
 
+// Allowed: a locally bound self and its aliases are unrelated objects.
+export const useInjectedSelfAlias = (self: {
+  open: (url: string) => unknown;
+}) => {
+  const popupHost = self;
+  return [self.open(externalDocumentUrl), popupHost.open(externalDocumentUrl)];
+};
+
 // Allowed: a mutable alias may be replaced before the call.
 export const useMutableWindowAlias = (
   replaceHost: boolean,
@@ -115,6 +142,15 @@ export const useDynamicWindowAlias = (
   replacement: { open: (url: string) => unknown },
 ) => {
   const popupHost = useBrowserWindow ? window : replacement;
+  return popupHost.open(externalDocumentUrl);
+};
+
+// Allowed: a conditionally selected self host has unproven provenance.
+export const useDynamicSelfAlias = (
+  useBrowserSelf: boolean,
+  replacement: { open: (url: string) => unknown },
+) => {
+  const popupHost = useBrowserSelf ? self : replacement;
   return popupHost.open(externalDocumentUrl);
 };
 

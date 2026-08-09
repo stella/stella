@@ -8,6 +8,7 @@
 
 // oxlint-disable-next-line unicorn/import-style -- fixture verifies named Node path import provenance
 import path, {
+  dirname as dirnamePath,
   normalize as normalizePath,
   resolve as resolvePath,
   win32,
@@ -25,6 +26,23 @@ const _directResolve = path.resolve(root, candidate).startsWith(root);
 // `join` also normalizes `..`, so a sibling can pass the same prefix check.
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves path.join retains rooted path provenance
 const _directJoin = path.join(root, candidate).startsWith(root);
+
+// Any Node-path-derived candidate needs a boundary-aware prefix, even when
+// resolve or join did not receive the prefix as its first argument.
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves single-argument resolve retains path provenance
+const _rawResolve = path.resolve(candidate).startsWith(root);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves single-argument join retains path provenance
+const _rawJoin = path.join(candidate).startsWith(root);
+
+// Normalization and dirname return filesystem paths whose bare prefix checks
+// have the same sibling-boundary flaw.
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves named normalize needs a boundary-aware raw root
+const _rawNamedNormalize = normalizePath(candidate).startsWith(root);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves named dirname retains Node path provenance
+const _rawNamedDirname = dirnamePath(candidate).startsWith(root);
+const normalizedCandidate = path.normalize(candidate);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves const aliases retain normalized path provenance
+const _rawAliasedNormalize = normalizedCandidate.startsWith(root);
 
 const resolvedRoot = path.resolve("/safe/root");
 const resolvedCandidate = path.resolve(resolvedRoot, "../root-backup");
@@ -51,6 +69,8 @@ const windowsRoot = "C:\\safe\\root";
 const _windows = win32
   .resolve(windowsRoot, "..\\root-backup")
   .startsWith(windowsRoot);
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment -- fixture proves platform dirname needs the same Windows boundary
+const _rawWindowsDirname = win32.dirname(candidate).startsWith(windowsRoot);
 
 // Computed static member access cannot bypass the rule.
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, typescript/dot-notation -- fixture proves computed startsWith access is covered
@@ -64,6 +84,9 @@ const rootWithSeparator = resolvedRoot.endsWith(path.sep)
 const _separatorBoundary = resolvedCandidate.startsWith(rootWithSeparator);
 const _inlineSeparatorBoundary = resolvedCandidate.startsWith(
   `${resolvedRoot}${path.sep}`,
+);
+const _rawNormalizeSeparatorBoundary = normalizePath(candidate).startsWith(
+  `${root}${path.sep}`,
 );
 const _windowsSeparatorBoundary = win32
   .resolve(windowsRoot, candidate)
@@ -119,6 +142,13 @@ export const noPathPrefixContainmentFixture = {
   _negativeZeroPosition,
   _nonzeroPosition,
   _normalized,
+  _rawAliasedNormalize,
+  _rawJoin,
+  _rawNamedDirname,
+  _rawNamedNormalize,
+  _rawNormalizeSeparatorBoundary,
+  _rawResolve,
+  _rawWindowsDirname,
   _relativeBoundary,
   _separatorBoundary,
   _urlPrefix,
