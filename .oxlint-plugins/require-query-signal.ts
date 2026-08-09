@@ -54,7 +54,7 @@
 // race (e.g. a one-shot dev-only probe) or the signal already reaches the
 // call through an opaque context identifier instead of a destructure.
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree, type Ranged } from "@oxlint/plugins";
 
 import {
   getImportedName,
@@ -93,6 +93,8 @@ type NetworkCall = {
   node: Ranged;
   owner: AstNode;
 };
+
+type IdentifierNode = ESTree.IdentifierReference;
 
 type NetworkKind = "eden" | "fetch";
 
@@ -288,7 +290,7 @@ const getObjectPropertyValue = (node, name) => {
 type CallThreadsSignalParams = {
   bindingName: string;
   kind: NetworkKind;
-  node: AstNode;
+  node: unknown;
 };
 
 const callThreadsSignal = ({
@@ -296,13 +298,17 @@ const callThreadsSignal = ({
   kind,
   node,
 }: CallThreadsSignalParams) => {
+  const call =
+    isAstNode(node) && node.type === "CallExpression" ? node : null;
+  const argumentsList =
+    call !== null && Array.isArray(call.arguments) ? call.arguments : [];
   if (kind === "fetch") {
     return containsSignalIdentifier(
-      getObjectPropertyValue(node.arguments.at(1), "signal"),
+      getObjectPropertyValue(argumentsList.at(1), "signal"),
       bindingName,
     );
   }
-  return node.arguments.some((argument) =>
+  return argumentsList.some((argument) =>
     containsSignalIdentifier(
       getObjectPropertyValue(
         getObjectPropertyValue(argument, "fetch"),
@@ -330,12 +336,13 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const networkCalls = new Array<NetworkCall>();
-        const queryFnReferences = new Array<
-          AstNode & { type: "Identifier"; name: string }
-        >();
+        const queryFnReferences = new Array<IdentifierNode>();
+
+        const isEstreeIdentifier = (node: unknown): node is IdentifierNode =>
+          isIdentifier(node) && Array.isArray(node.range);
 
         const resolveVariable = (
-          identifier: AstNode & { type: "Identifier"; name: string },
+          identifier: IdentifierNode,
         ): ScopeVariable | null => {
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope !== null) {
@@ -349,7 +356,7 @@ export default eslintCompatPlugin({
         };
 
         const isGlobalReference = (node: unknown, name: string): boolean => {
-          if (!isIdentifier(node, name)) {
+          if (!isEstreeIdentifier(node) || node.name !== name) {
             return false;
           }
           const variable = resolveVariable(node);
@@ -357,7 +364,7 @@ export default eslintCompatPlugin({
         };
 
         const isEdenApiRoot = (node: unknown): boolean => {
-          if (!isIdentifier(node)) {
+          if (!isEstreeIdentifier(node)) {
             return false;
           }
           const variable = resolveVariable(node);
@@ -390,7 +397,7 @@ export default eslintCompatPlugin({
           );
 
         const resolveLocalQueryFunction = (
-          identifier: AstNode & { type: "Identifier"; name: string },
+          identifier: IdentifierNode,
           visited = new Set<ScopeVariable>(),
         ): AstNode | null => {
           const variable = resolveVariable(identifier);
@@ -428,7 +435,7 @@ export default eslintCompatPlugin({
           if (isFunctionNode(initializer)) {
             return initializer;
           }
-          return isIdentifier(initializer)
+          return isEstreeIdentifier(initializer)
             ? resolveLocalQueryFunction(initializer, visited)
             : null;
         };
@@ -443,7 +450,7 @@ export default eslintCompatPlugin({
               return;
             }
             const value = unwrapTS(node.value);
-            if (isIdentifier(value)) {
+            if (isEstreeIdentifier(value)) {
               queryFnReferences.push(value);
             }
           },

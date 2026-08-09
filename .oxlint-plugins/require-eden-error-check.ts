@@ -1027,7 +1027,7 @@ export default eslintCompatPlugin({
                 // An assignment may sit in a nested branch or try block;
                 // keep climbing until the assigned binding's own lexical
                 // scope so its outer continuation is not hidden.
-                if (parent === binding.scope.block) {
+                if (Object.is(parent, binding.scope.block)) {
                   return { states, unsafe, unsafeExit };
                 }
               }
@@ -1165,7 +1165,10 @@ export default eslintCompatPlugin({
               return;
             }
 
-            let expression: AstNode = node;
+            let expression = unwrapExpression(node);
+            if (!isAstNode(expression)) {
+              return;
+            }
             let parent = isAstNode(expression.parent)
               ? expression.parent
               : null;

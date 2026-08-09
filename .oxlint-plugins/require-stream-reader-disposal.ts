@@ -9,7 +9,7 @@
 // arbitrary object that happens to expose getReader() is outside the rule.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { Ranged } from "@oxlint/plugins";
+import type { ESTree, Ranged } from "@oxlint/plugins";
 
 import {
   getPropertyName,
@@ -48,7 +48,7 @@ type ScopeVariable = {
   }[];
 };
 
-type IdentifierNode = AstNode & { name: string };
+type IdentifierNode = ESTree.IdentifierReference;
 
 type Acquisition = {
   binding: ScopeVariable | null;
@@ -299,6 +299,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const acquisitions: Acquisition[] = [];
 
+        const isEstreeIdentifier = (node: unknown): node is IdentifierNode =>
+          isIdentifier(node) && Array.isArray(node.range);
+
         const resolveVariable = (
           identifier: IdentifierNode,
         ): ScopeVariable | null => {
@@ -314,7 +317,7 @@ export default eslintCompatPlugin({
         };
 
         const isGlobalReference = (node: unknown, name: string): boolean => {
-          if (!isIdentifier(node, name)) {
+          if (!isEstreeIdentifier(node) || node.name !== name) {
             return false;
           }
           const variable = resolveVariable(node);
@@ -430,7 +433,7 @@ export default eslintCompatPlugin({
                 target = unwrapValue(target.left);
               }
               if (
-                isIdentifier(target) &&
+                isEstreeIdentifier(target) &&
                 resolveVariable(target) === variable
               ) {
                 return definition.node.init;
@@ -494,7 +497,7 @@ export default eslintCompatPlugin({
           if (isGlobalConstructor(expression, "Response")) {
             return true;
           }
-          if (!isIdentifier(expression)) {
+          if (!isEstreeIdentifier(expression)) {
             return false;
           }
           const variable = resolveVariable(expression);
@@ -528,7 +531,7 @@ export default eslintCompatPlugin({
               isResponseExpression(expression.object)
             );
           }
-          if (!isIdentifier(expression)) {
+          if (!isEstreeIdentifier(expression)) {
             return false;
           }
           const variable = resolveVariable(expression);
@@ -558,7 +561,7 @@ export default eslintCompatPlugin({
           visited = new Set<ScopeVariable>(),
         ): ScopeVariable | null => {
           const expression = unwrapValue(node);
-          if (!isIdentifier(expression)) {
+          if (!isEstreeIdentifier(expression)) {
             return null;
           }
           const variable = resolveVariable(expression);
@@ -618,7 +621,7 @@ export default eslintCompatPlugin({
           if (
             parent?.type === "VariableDeclarator" &&
             parent.init === current &&
-            isIdentifier(parent.id)
+            isEstreeIdentifier(parent.id)
           ) {
             const declaration = isAstNode(parent.parent) ? parent.parent : null;
             return {
@@ -631,7 +634,7 @@ export default eslintCompatPlugin({
           if (
             parent?.type === "AssignmentExpression" &&
             parent.right === current &&
-            isIdentifier(parent.left)
+            isEstreeIdentifier(parent.left)
           ) {
             return { binding: resolveVariable(parent.left), stable: false };
           }
@@ -911,7 +914,7 @@ export default eslintCompatPlugin({
         };
 
         const readResultKind = (
-          identifier: AstNode,
+          identifier: IdentifierNode,
           binding: ScopeVariable,
         ): "done" | "result" | null => {
           const variable = resolveVariable(identifier);
@@ -959,17 +962,17 @@ export default eslintCompatPlugin({
           binding: ScopeVariable,
         ): boolean => {
           const expression = unwrapValue(node);
-          if (isIdentifier(expression)) {
+          if (isEstreeIdentifier(expression)) {
             return readResultKind(expression, binding) === "done";
           }
           if (
             expression?.type === "MemberExpression" &&
             staticMemberName(expression) === "done" &&
-            isIdentifier(unwrapValue(expression.object))
+            isEstreeIdentifier(unwrapValue(expression.object))
           ) {
             const object = unwrapValue(expression.object);
             return (
-              isIdentifier(object) &&
+              isEstreeIdentifier(object) &&
               readResultKind(object, binding) === "result"
             );
           }
@@ -1049,18 +1052,20 @@ export default eslintCompatPlugin({
           ) {
             return false;
           }
+          const block = tryNode.block;
+          const body = tryNode.block.body;
           const readStatementIndexes: number[] = [];
           let hasNestedRead = false;
-          visitNodes(tryNode.block, tryNode.block, (node) => {
+          visitNodes(block, block, (node) => {
             if (!readerMethodCall(node, "read", binding)) {
               return;
             }
             const site = statementSite(node);
-            if (site === null || site.block !== tryNode.block) {
+            if (site === null || site.block !== block) {
               hasNestedRead = true;
               return;
             }
-            const index = tryNode.block.body.indexOf(site.statement);
+            const index = body.indexOf(site.statement);
             if (index !== -1) {
               readStatementIndexes.push(index);
             }
@@ -1069,7 +1074,7 @@ export default eslintCompatPlugin({
             return false;
           }
           const lastReadIndex = Math.max(...readStatementIndexes);
-          return methodStatementIndexes(tryNode.block, "cancel", binding).some(
+          return methodStatementIndexes(block, "cancel", binding).some(
             (index) => index === lastReadIndex + 1,
           );
         };
@@ -1078,8 +1083,12 @@ export default eslintCompatPlugin({
           tryNode: AstNode,
           binding: ScopeVariable,
         ): boolean => {
+          const block = isAstNode(tryNode.block) ? tryNode.block : null;
+          if (block === null) {
+            return true;
+          }
           const readCalls: AstNode[] = [];
-          visitNodes(tryNode.block, tryNode.block, (node) => {
+          visitNodes(block, block, (node) => {
             if (readerMethodCall(node, "read", binding)) {
               readCalls.push(node);
             }
@@ -1096,7 +1105,7 @@ export default eslintCompatPlugin({
           const handlerCancels = catchCancels(tryNode, binding);
           const readLoops = new Set<AstNode>();
           for (const readCall of readCalls) {
-            const loop = nearestLoopWithin(readCall, tryNode.block);
+            const loop = nearestLoopWithin(readCall, block);
             if (loop === null || !isInfiniteLoop(loop)) {
               return true;
             }
