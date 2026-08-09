@@ -1,5 +1,7 @@
 import type { Draft } from "immer";
 
+import type { TaskStatus } from "@stll/api-contract";
+
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -34,7 +36,7 @@ export type TaskTab = {
   id: string;
   label: string;
   isNew: boolean;
-  status?: string | null;
+  status?: TaskStatus | null;
   workspaceId: string;
 };
 
@@ -254,7 +256,7 @@ export type InspectorTabsActions = {
     options?: { pulse?: boolean },
   ) => void;
   updateLabel: (tabId: string, label: string) => void;
-  updateTaskStatus: (taskId: string, status: string | null) => void;
+  updateTaskStatus: (taskId: string, status: TaskStatus | null) => void;
   flashTab: (tabId: string) => void;
   setMinimized: (minimized: boolean) => void;
   toggleMinimized: () => void;

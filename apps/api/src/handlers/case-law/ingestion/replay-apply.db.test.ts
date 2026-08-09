@@ -21,6 +21,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 // A writing replay, through the same `processDecision` a crawl feeds.
 //
@@ -94,7 +95,7 @@ afterAll(async () => {
 const stubAdapter = (
   reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>,
 ): SourceAdapter => ({
-  key: "replay-apply-stub",
+  key: ADAPTER_KEYS.EU_ECJ,
   name: "replay apply stub",
   country: "EU",
   language: "en",
@@ -250,7 +251,7 @@ const RESTRUCTURED_TEXT = "Alpha. Beta.";
 const astWithBlocks = (blocks: DocumentAst["blocks"]): DocumentAst => ({
   version: 1,
   source: {
-    system: "replay-apply-stub",
+    system: ADAPTER_KEYS.EU_ECJ,
     documentId: "restructure",
     webUrl: "https://example.test/web",
     printUrl: "",

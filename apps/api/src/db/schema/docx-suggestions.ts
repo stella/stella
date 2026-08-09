@@ -54,13 +54,11 @@ export type DocxSuggestionApplyMode =
  * Persisted AI DOCX review suggestions, so a review session survives a
  * reload and leaves an audit trail of who resolved what, when.
  *
- * `opPayload` is stored opaquely (the client-prepared `FolioAIEditOperation`):
- * the server never introspects it, only persists and returns it. The web
- * client re-derives block id, summary, and the inline preview from it against
- * the live document snapshot on hydration, so no denormalized render fields
- * are stored. Re-applying a hydrated suggestion in folio "suggested" mode is
- * deferred (needs the folio release); today hydrated rows render in the
- * panel/bar and accept through the existing operation-apply path.
+ * `opPayload` stays opaque at the database boundary. Writes validate it as a
+ * `FolioAIEditOperation`; reads validate it again because existing rows and
+ * direct database writes are not covered by TypeScript. The web client then
+ * re-derives block id, summary, and the inline preview from it against the live
+ * document snapshot, so no denormalized render fields are stored.
  */
 export const docxSuggestions = p.pgTable(
   "docx_suggestions",
@@ -79,7 +77,7 @@ export const docxSuggestions = p.pgTable(
       (): AnyPgColumn => chatThreads.id,
       { onDelete: "set null" },
     ),
-    /** The client-prepared editor operation; opaque to the server. */
+    /** Opaque durable JSON; validate at every read and write boundary. */
     opPayload: jsonb("op_payload").notNull(),
     /** AI rationale / reviewer note, when the model supplied one. */
     comment: p.text("comment"),

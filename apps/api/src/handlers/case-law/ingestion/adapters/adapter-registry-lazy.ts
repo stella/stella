@@ -6,50 +6,58 @@
  * imports to avoid pulling in the full app dependency graph.
  */
 
+import { panic } from "better-result";
+
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
-import { isRecord } from "@/api/lib/type-guards";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@/api/lib/legal-search/ingestion-constants";
+
+type AdapterLoader = () => Promise<SourceAdapter>;
 
 /**
  * Map of adapter keys to lazy-import functions.
  * Each entry returns the adapter's module without
  * eagerly resolving posthog, env, or other heavy deps.
  */
-export const ADAPTER_MODULES: Record<string, () => Promise<unknown>> = {
-  "cz-ns": async () => await import("./cz-ns"),
-  "cz-nss": async () => await import("./cz-nss"),
-  "cz-us": async () => await import("./cz-us"),
-  "cz-regional": async () => await import("./cz-regional"),
-  "sk-courts": async () => await import("./sk-courts"),
-  "pl-courts": async () => await import("./pl-courts"),
-  "at-courts": async () => await import("./at-courts"),
-  "eu-ecj": async () => await import("./eu-ecj"),
-};
+export const ADAPTER_MODULES = {
+  [ADAPTER_KEYS.CZ_NS]: async () => (await import("./cz-ns")).czNsAdapter,
+  [ADAPTER_KEYS.CZ_NSS]: async () => (await import("./cz-nss")).czNssAdapter,
+  [ADAPTER_KEYS.CZ_US]: async () => (await import("./cz-us")).czUsAdapter,
+  [ADAPTER_KEYS.CZ_REGIONAL]: async () =>
+    (await import("./cz-regional")).czRegionalAdapter,
+  [ADAPTER_KEYS.SK_COURTS]: async () =>
+    (await import("./sk-courts")).skCourtsAdapter,
+  [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,
+  [ADAPTER_KEYS.PL_COURTS]: async () =>
+    (await import("./pl-courts")).plCourtsAdapter,
+  [ADAPTER_KEYS.AT_COURTS]: async () =>
+    (await import("./at-courts")).atCourtsAdapter,
+  [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
+} as const satisfies Record<AdapterKey, AdapterLoader>;
+
+const adapterKeyFromString = (key: string): AdapterKey | undefined =>
+  Object.values(ADAPTER_KEYS).find((candidate) => candidate === key);
 
 /**
- * Load a single adapter by key. Returns undefined if the
- * key is not registered or the module fails to import.
+ * Load a single adapter by key. Returns undefined if the key is not
+ * registered. Import failures propagate to the caller.
  */
 export const loadAdapterByKey = async (
   key: string,
 ): Promise<SourceAdapter | undefined> => {
-  if (!(key in ADAPTER_MODULES)) {
+  const adapterKey = adapterKeyFromString(key);
+  if (adapterKey === undefined) {
     return undefined;
   }
-  const loader = ADAPTER_MODULES[key];
-  if (!loader) {
-    return undefined;
+  const adapter = await ADAPTER_MODULES[adapterKey]();
+  if (adapter.key !== adapterKey) {
+    return panic(`Adapter registry key mismatch for ${adapterKey}`);
   }
-  const mod = await loader();
-  if (!isRecord(mod)) {
-    return undefined;
-  }
-  return Object.values(mod).find(
-    (v): v is SourceAdapter =>
-      isRecord(v) &&
-      typeof v["key"] === "string" &&
-      typeof v["fetchPage"] === "function",
-  );
+  return adapter;
 };
 
 /** List all registered adapter keys. */
-export const listAdapterKeys = (): string[] => Object.keys(ADAPTER_MODULES);
+export const listAdapterKeys = (): readonly AdapterKey[] =>
+  Object.values(ADAPTER_KEYS);

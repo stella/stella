@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -580,8 +581,10 @@ const compilePropertyPredicate = (
       // expands to a row constructor `ANY(($1, $2))`, which Postgres rejects.
       return same((v) => sql`${v} = ANY(${typedPgArray(values, "text")})`);
     }
-    default:
+    case "is_truthy":
       return null;
+    default:
+      return panic("Unsupported property predicate operator");
   }
 };
 
@@ -602,8 +605,15 @@ const compileBuiltinPredicate = (
       return sql`(${col} IS NULL OR ${col} = '')`;
     case "is_not_empty":
       return sql`(${col} IS NOT NULL AND ${col} <> '')`;
-    default:
+    case "is_truthy":
+    case "contains":
+    case "not_contains":
+    case "starts_with":
+    case "ends_with":
+    case "contains_all":
       return null;
+    default:
+      return panic("Unsupported built-in predicate operator");
   }
 };
 
@@ -626,8 +636,12 @@ const compilePredicate = (node: PredicateNode): SQL | null => {
       return compilePropertyPredicate(node.operand.propertyId, node);
     case "builtin":
       return compileBuiltinPredicate(node.operand.field, node);
-    default:
+    case "path":
+    case "formula":
+    case "literal":
       return null;
+    default:
+      return panic("Unsupported predicate operand type");
   }
 };
 

@@ -96,8 +96,13 @@ const collectArgNames = (
         names.add(`<${element.value}>`);
         collectArgNames(element.children, names);
         break;
-      default:
+      case TYPE.literal:
+      case TYPE.pound:
         break;
+      default: {
+        const unsupported: never = element;
+        return unsupported;
+      }
     }
   }
 };

@@ -71,46 +71,53 @@ export type NeedsApprovalPolicyKind = {
     : never;
 }[ChatToolPolicyKind];
 
-const chatToolPolicies = new WeakMap<ChatTool, ChatToolPolicy>();
+const MISSING_CHAT_TOOL_POLICY = Symbol("missing-chat-tool-policy");
+const chatToolPolicies = new WeakMap<
+  ChatTool,
+  ChatToolPolicy | typeof MISSING_CHAT_TOOL_POLICY
+>();
 
-// Tool names already reported for a policy-map miss this process, so a hot
-// loop (e.g. a tool re-checked on every turn) can't spam telemetry.
-const reportedPolicyMissToolNames = new Set<string>();
-
-/**
- * A miss means `toolDefinition` reached this call without ever passing
- * through `applyChatToolPolicy` (or `copyChatToolPolicy` from a tool that
- * did). Falling back to `internal` is a deliberate fail-open: org-configured
- * external MCP tools must never brick chat over a policy-registration bug.
- * Tighten this to fail-closed once telemetry confirms misses don't happen.
- */
-export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy => {
-  const policy = chatToolPolicies.get(toolDefinition);
-  if (policy) {
-    return policy;
-  }
-
-  if (!reportedPolicyMissToolNames.has(toolDefinition.name)) {
-    reportedPolicyMissToolNames.add(toolDefinition.name);
+const missingChatToolPolicy = (toolDefinition: ChatTool): never => {
+  /**
+   * A miss means `toolDefinition` reached this call without ever passing
+   * through `applyChatToolPolicy` (or `copyChatToolPolicy` from a tool that
+   * did). This is a policy-registration invariant, not a safe default: an
+   * internal fallback could de-anonymize input before an external call or
+   * bypass approval for a mutation.
+   */
+  if (chatToolPolicies.get(toolDefinition) !== MISSING_CHAT_TOOL_POLICY) {
+    // The WeakMap marker deduplicates repeated failures per tool instance
+    // without retaining short-lived tool objects forever.
+    chatToolPolicies.set(toolDefinition, MISSING_CHAT_TOOL_POLICY);
     captureError(
       new TelemetryError({
-        message:
-          "Chat tool policy lookup missed; falling back to internal policy",
+        message: "Chat tool policy lookup missed; refusing to execute tool",
       }),
       { source: "chat-tool-policy", toolName: toolDefinition.name },
     );
   }
 
-  return CHAT_TOOL_POLICIES.internal;
+  throw new TelemetryError({
+    message: `Chat tool policy is missing for "${toolDefinition.name}"`,
+  });
+};
+
+/** Return the policy registered for a tool, failing closed if it is absent. */
+export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy => {
+  const policy = chatToolPolicies.get(toolDefinition);
+  if (policy !== undefined && policy !== MISSING_CHAT_TOOL_POLICY) {
+    return policy;
+  }
+
+  return missingChatToolPolicy(toolDefinition);
 };
 
 /**
  * Copy `from`'s recorded policy onto `to`. The policy WeakMap is keyed by tool
  * object identity, so a cloned tool (e.g. the subagent projection spreads a
  * tool to strip its approval gate) is unknown to it and `getChatToolPolicy`
- * would fall back to `internal`. That is unsafe under anonymization: a public
- * tool wrongly treated as internal has its inputs de-anonymized before execute,
- * leaking real values to an external provider. Preserve the original policy.
+ * would fail closed. Preserve the original policy so the safe clone remains
+ * usable without weakening the registration invariant.
  */
 export const copyChatToolPolicy = (from: ChatTool, to: ChatTool): void => {
   chatToolPolicies.set(to, getChatToolPolicy(from));
@@ -128,11 +135,19 @@ export const applyChatToolPolicy = <TTool extends ChatTool>(
   });
 };
 
-type ApplyChatToolPoliciesOptions<TTools extends ChatToolMap> = {
-  defaultPolicyKind?: ChatToolPolicyKind | undefined;
-  policyKinds?: Partial<Record<keyof TTools & string, ChatToolPolicyKind>>;
-  tools: TTools;
-};
+type ApplyChatToolPoliciesOptions<TTools extends ChatToolMap> =
+  | {
+      /** A default makes sparse per-name overrides safe by construction. */
+      defaultPolicyKind: ChatToolPolicyKind;
+      policyKinds?: Partial<Record<keyof TTools & string, ChatToolPolicyKind>>;
+      tools: TTools;
+    }
+  | {
+      /** Without a default, every tool key must carry an explicit policy. */
+      defaultPolicyKind?: never;
+      policyKinds: Record<keyof TTools & string, ChatToolPolicyKind>;
+      tools: TTools;
+    };
 
 export const applyChatToolPolicies = <TTools extends ChatToolMap>({
   defaultPolicyKind,
@@ -145,7 +160,11 @@ export const applyChatToolPolicies = <TTools extends ChatToolMap>({
     }
 
     const policyKind = policyKinds[name] ?? defaultPolicyKind;
-    if (!policyKind) {
+    if (policyKind === undefined) {
+      // Dynamic tools can arrive pre-classified before this total built-in
+      // pass. Preserve that registration; an unregistered tool still fails
+      // closed through the same lookup.
+      getChatToolPolicy(toolDefinition);
       continue;
     }
 

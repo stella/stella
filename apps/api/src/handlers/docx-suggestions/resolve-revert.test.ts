@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
+
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
@@ -176,7 +178,13 @@ const insertSuggestion = async (
     id: suggestionId,
     workspaceId: ids.wsA1,
     entityId: ids.entityA1,
-    opPayload: {},
+    opPayload: {
+      id: "resolve-revert",
+      type: "replaceInBlock",
+      blockId: "block-1",
+      find: "before",
+      replace: "after",
+    } satisfies FolioAIEditOperation,
     severity: "medium",
     area: "body",
     status: "pending",

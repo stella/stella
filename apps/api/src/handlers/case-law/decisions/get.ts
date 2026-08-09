@@ -19,6 +19,7 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -366,14 +367,14 @@ const resolveAst = async ({
   decisionId,
 }: ResolveAstInput): Promise<DocumentAst | EmptyAst | null> => {
   if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
-    return pgAst;
+    return parsePersistedCorpusAst(pgAst);
   }
   return await readCorpusPayloadOrFallback({
     documentId: decisionId,
     key: astS3Key,
     step: "readDecision.corpusAst",
     read: async () => await readCorpusAst(astS3Key),
-    fallback: () => pgAst,
+    fallback: () => parsePersistedCorpusAst(pgAst),
   });
 };
 

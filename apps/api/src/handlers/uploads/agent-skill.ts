@@ -166,8 +166,16 @@ export const finalizeAgentSkill = async function* ({
         case 422:
         case 500:
           return error.status;
-        default:
+        case 401:
+        case 402:
+        case 403:
+        case 413:
+        case 429:
+        case 502:
+        case 503:
           return 500 as const;
+        default:
+          return panic("Unsupported skill upload error status");
       }
     })();
     return finalizeErr({

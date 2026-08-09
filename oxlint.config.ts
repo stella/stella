@@ -287,6 +287,7 @@ export default defineConfig({
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
     "no-prompt-boundary-casts/no-prompt-boundary-casts": "error",
+    "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-public-law-browser-globals/no-public-law-browser-globals": "off",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
@@ -334,15 +335,13 @@ export default defineConfig({
     // is the intended behaviour.
     "default-case": "off",
 
-    // A `default:` clause is treated as exhaustive. Switches without a
-    // default still require every union member to be cased — that's the
-    // safety net for discriminated unions (PM content kinds, action
-    // types). Switches with an explicit default opt out of the check,
-    // which is the right behaviour for catch-all parsers over wide
-    // string enums like OOXML w:numFmt.
+    // A `default:` clause must not hide an unhandled member of a closed union.
+    // Catch-all parsers over genuinely open upstream strings should narrow the
+    // known domain first or carry a scoped suppression explaining that the
+    // default represents an explicit unknown-upstream disposition.
     "typescript/switch-exhaustiveness-check": [
       "error",
-      { considerDefaultExhaustiveForUnions: true },
+      { considerDefaultExhaustiveForUnions: false },
     ],
 
     "unicorn/switch-case-braces": "off",
@@ -523,6 +522,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
     "./.oxlint-plugins/no-prompt-boundary-casts.ts",
+    "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
     "./.oxlint-plugins/no-public-law-browser-globals.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
     "./.oxlint-plugins/public-case-law-db-boundary.ts",

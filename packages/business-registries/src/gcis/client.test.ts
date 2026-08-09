@@ -256,6 +256,42 @@ describe("searchByName (fixture)", () => {
     ]);
   });
 
+  test("isolates malformed rows while retaining valid rows", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              Business_Accounting_NO: "54900838",
+              Company_Name: "台積電機有限公司",
+              Company_Status: "01",
+              Upstream_Additive_Field: "allowed",
+            },
+            { Company_Name: "missing the required tax id" },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+
+    const results = await searchByName("台積", { activeOnly: false });
+    expect(results.map((result) => result.taxId)).toEqual(["54900838"]);
+  });
+
+  test("rejects a page containing no usable rows", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response(JSON.stringify([{ Company_Name: "missing tax id" }]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+
+    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+      name: "GcisAPIError",
+      message: "GCIS returned no rows with the fields required by stella",
+    });
+  });
+
   test("escapes quotes inside OData string literals", async () => {
     const captured: string[] = [];
     restore = installFetchStub(async (input) => {

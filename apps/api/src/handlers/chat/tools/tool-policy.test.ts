@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const captureErrorMock = mock();
 
@@ -11,6 +11,7 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 
 const {
   applyChatToolPolicy,
+  applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
   copyChatToolPolicy,
   getChatToolPolicy,
@@ -33,22 +34,16 @@ afterAll(() => {
 });
 
 describe("getChatToolPolicy", () => {
-  test("falls back to internal and reports telemetry once per tool name on a WeakMap miss", () => {
-    const unregisteredA = tool("policy-miss-tool");
-    const unregisteredB = tool("policy-miss-tool");
+  test("fails closed and reports telemetry on a WeakMap miss", () => {
+    const unregistered = tool("policy-miss-tool");
 
-    const policyA = getChatToolPolicy(unregisteredA);
-    const policyB = getChatToolPolicy(unregisteredB);
+    expect(() => getChatToolPolicy(unregistered)).toThrow(
+      'Chat tool policy is missing for "policy-miss-tool"',
+    );
+    expect(() => getChatToolPolicy(unregistered)).toThrow(
+      'Chat tool policy is missing for "policy-miss-tool"',
+    );
 
-    expect(policyA).toEqual({
-      kind: CHAT_TOOL_POLICY_KIND.internal,
-      needsApproval: false,
-      requiresAnonymization: false,
-    });
-    expect(policyB.kind).toBe(CHAT_TOOL_POLICY_KIND.internal);
-
-    // Deduped per process by tool name: the second miss for the same name
-    // must not capture again.
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
     expect(captureErrorMock).toHaveBeenCalledWith(
       expect.any(Error),
@@ -83,11 +78,13 @@ describe("getChatToolPolicy", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
-  test("copyChatToolPolicy from an unregistered tool still reports the source miss", () => {
+  test("copyChatToolPolicy from an unregistered tool fails closed", () => {
     const from = tool("policy-copy-missing-source");
     const to = tool("policy-copy-missing-target");
 
-    copyChatToolPolicy(from, to);
+    expect(() => copyChatToolPolicy(from, to)).toThrow(
+      'Chat tool policy is missing for "policy-copy-missing-source"',
+    );
 
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
     expect(captureErrorMock).toHaveBeenCalledWith(
@@ -97,8 +94,29 @@ describe("getChatToolPolicy", () => {
         toolName: "policy-copy-missing-source",
       }),
     );
-    // The copy itself lands the fallback internal policy on `to` without a
-    // second report for `to`'s own (never-queried) name.
-    expect(getChatToolPolicy(to).kind).toBe(CHAT_TOOL_POLICY_KIND.internal);
+    expect(() => getChatToolPolicy(to)).toThrow(
+      'Chat tool policy is missing for "policy-copy-missing-target"',
+    );
+  });
+});
+
+describe("applyChatToolPolicies", () => {
+  test("preserves a policy assigned before a dynamic tool joins the built-in map", () => {
+    const dynamic = tool("dynamic-connector");
+    applyChatToolPolicy(dynamic, CHAT_TOOL_POLICY_KIND.external);
+    const tools: ChatToolMap = { dynamic };
+
+    expect(applyChatToolPolicies({ policyKinds: {}, tools })).toBe(tools);
+    expect(getChatToolPolicy(dynamic).kind).toBe(
+      CHAT_TOOL_POLICY_KIND.external,
+    );
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects a tool whose policy is omitted instead of silently skipping it", () => {
+    expect(() =>
+      // @ts-expect-error Deliberately exercises the runtime defense for JS callers.
+      applyChatToolPolicies({ tools: { unclassified: tool("unclassified") } }),
+    ).toThrow('Chat tool policy is missing for "unclassified"');
   });
 });

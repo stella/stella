@@ -47,6 +47,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

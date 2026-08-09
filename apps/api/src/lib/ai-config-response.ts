@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { normalizeProviderRegion } from "@/api/lib/ai-config";
 import type { DataRegion, OrgAIProviderConfig } from "@/api/lib/ai-config";
 
 export type ProviderResponseExtras = {
@@ -12,8 +15,19 @@ export const providerResponseRegion = (
     case "azure_foundry":
     case "huggingface":
       return "global";
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
+      return normalizeProviderRegion(
+        providerConfig.provider,
+        providerConfig.region,
+      );
     default:
-      return providerConfig.region ?? "global";
+      return panic("Unsupported AI provider configuration");
   }
 };
 
@@ -30,7 +44,15 @@ export const providerResponseExtras = (
       };
     case "huggingface":
       return { endpoint: providerConfig.baseURL };
-    default:
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
       return {};
+    default:
+      return panic("Unsupported AI provider configuration");
   }
 };

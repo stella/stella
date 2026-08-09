@@ -48,7 +48,10 @@ const sink = () => createSubagentProposalBuffer().sink;
 describe("projectToolMapForSubagent", () => {
   test("drops client-executed tools (no server execute) so a nested loop cannot hang", () => {
     const tools: ChatToolMap = {
-      list_matters: serverTool("list_matters"),
+      list_matters: withPolicy(
+        serverTool("list_matters"),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
       "create-document": clientTool("create-document"),
       "ask-user": clientTool("ask-user"),
       "apply-active-docx-edits": clientTool("apply-active-docx-edits"),
@@ -154,7 +157,10 @@ describe("projectToolMapForSubagent", () => {
   test("never lets a subagent re-spawn subagents", () => {
     const tools: ChatToolMap = {
       [SPAWN_SUBAGENTS_TOOL_NAME]: serverTool(SPAWN_SUBAGENTS_TOOL_NAME),
-      list_matters: serverTool("list_matters"),
+      list_matters: withPolicy(
+        serverTool("list_matters"),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
     };
 
     const projected = projectToolMapForSubagent(tools, sink());
@@ -178,7 +184,10 @@ describe("projectToolMapForSubagent", () => {
 
   test("skips undefined entries", () => {
     const tools: ChatToolMap = {
-      list_matters: serverTool("list_matters"),
+      list_matters: withPolicy(
+        serverTool("list_matters"),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
       absent: undefined,
     };
 
@@ -213,7 +222,10 @@ describe("projectToolMapForSubagent", () => {
     const mcpTool = serverTool("mcp__slack__send");
     const tools: ChatToolMap = {
       mcp__slack__send: mcpTool,
-      list_matters: serverTool("list_matters"),
+      list_matters: withPolicy(
+        serverTool("list_matters"),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
     };
 
     const projected = projectToolMapForSubagent(tools, sink());

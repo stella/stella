@@ -118,4 +118,52 @@ describe("BOE client", () => {
       metadata,
     });
   });
+
+  test("rejects a successful response with an unexpected JSON shape", async () => {
+    installFetch(() =>
+      jsonResponse({
+        data: [{ titulo: "missing the required identifier" }],
+        status: { code: "200", text: "ok" },
+      }),
+    );
+
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+      name: "BoeAPIError",
+      message: "BOE returned an unexpected JSON payload shape",
+    });
+  });
+
+  test("rejects malformed nested search metadata", async () => {
+    installFetch(() =>
+      jsonResponse({
+        data: [
+          {
+            identificador: "BOE-A-1889-4763",
+            departamento: { codigo: 123, texto: "Justicia" },
+          },
+        ],
+        status: { code: "200", text: "ok" },
+      }),
+    );
+
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+      name: "BoeAPIError",
+      message: "BOE returned an unexpected JSON payload shape",
+    });
+  });
+
+  test("surfaces malformed JSON as a structured BOE error", async () => {
+    installFetch(
+      () =>
+        new Response("{", {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        }),
+    );
+
+    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+      name: "BoeAPIError",
+      message: "BOE returned malformed JSON",
+    });
+  });
 });

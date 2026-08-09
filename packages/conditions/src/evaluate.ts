@@ -5,6 +5,8 @@
  * boolean combination, negation) lives here so semantics never
  * drift between view filters, extraction gating, and templates.
  */
+import { panic } from "better-result";
+
 import type {
   CompareNode,
   CompareOp,
@@ -23,6 +25,9 @@ export type ConditionValue =
   | undefined;
 
 export type OperandResolver = (operand: RefOperand) => ConditionValue;
+
+const assertNever = (value: never): never =>
+  panic(`Unsupported condition variant: ${String(value)}`);
 
 export const evaluateCondition = (
   node: ConditionNode,
@@ -44,7 +49,7 @@ export const evaluateCondition = (
     case "predicate":
       return evaluatePredicate(node, resolve);
     default:
-      return false;
+      return assertNever(node);
   }
 };
 
@@ -113,16 +118,18 @@ const compareValues = (
     if (ln === undefined) {
       return false;
     }
-    if (op === "gt") {
-      return ln > rn;
+    switch (op) {
+      case "gt":
+        return ln > rn;
+      case "lt":
+        return ln < rn;
+      case "gte":
+        return ln >= rn;
+      case "lte":
+        return ln <= rn;
+      default:
+        return assertNever(op);
     }
-    if (op === "lt") {
-      return ln < rn;
-    }
-    if (op === "gte") {
-      return ln >= rn;
-    }
-    return ln <= rn;
   }
 
   const ls = normScalar(left);
@@ -133,16 +140,18 @@ const compareValues = (
   if (ls === "") {
     return false;
   }
-  if (op === "gt") {
-    return ls > rs;
+  switch (op) {
+    case "gt":
+      return ls > rs;
+    case "lt":
+      return ls < rs;
+    case "gte":
+      return ls >= rs;
+    case "lte":
+      return ls <= rs;
+    default:
+      return assertNever(op);
   }
-  if (op === "lt") {
-    return ls < rs;
-  }
-  if (op === "gte") {
-    return ls >= rs;
-  }
-  return ls <= rs;
 };
 
 // ── Predicates ────────────────────────────────────────────
@@ -205,7 +214,7 @@ const evaluatePredicate = (
     case "in":
       return asArray(node.value).includes(normScalar(actual));
     default:
-      return false;
+      return assertNever(node.op);
   }
 };
 

@@ -43,7 +43,7 @@ import {
   useTemplateStudioStore,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import type { TemplateEditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
+import type { TemplateEditableField } from "@/routes/_protected.knowledge/-components/template-value-source";
 
 type SelectionGesturePopoverProps = {
   gesture: SelectionGesture;

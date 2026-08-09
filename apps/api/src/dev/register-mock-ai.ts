@@ -448,6 +448,8 @@ const synthesizeJsonSchemaValue = (node: unknown): unknown => {
       return false;
     case "null":
       return null;
+    case undefined:
+      return synthesisFailure(node);
     default:
       return synthesisFailure(node);
   }

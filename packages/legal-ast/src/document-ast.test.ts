@@ -5,6 +5,7 @@ import {
   hasUsableAst,
   isDocumentAst,
   parseDocumentAst,
+  parseUsableDocumentAst,
 } from "./document-ast";
 import type { DocumentAst } from "./document-ast";
 
@@ -51,31 +52,38 @@ describe("isDocumentAst", () => {
     expect(isDocumentAst(documentAst)).toBe(true);
   });
 
-  test("accepts a minimal AST with empty blocks", () => {
-    expect(isDocumentAst({ version: 1, blocks: [] })).toBe(true);
+  test("rejects an AST missing required source and metadata", () => {
+    expect(isDocumentAst({ version: 1, blocks: [] })).toBe(false);
   });
 
   test("accepts extra unknown top-level fields (guard does not reject extras)", () => {
     expect(isDocumentAst({ ...documentAst, somethingElse: true })).toBe(true);
   });
 
-  // The guard is intentionally shallow: it validates only `version` and `blocks`,
-  // not the shape of `source`, `metadata`, or block contents. These assertions
-  // pin that real (lenient) behaviour so a future tightening is a deliberate change.
-  test("accepts an AST missing source and metadata", () => {
-    expect(isDocumentAst({ version: 1, blocks: [] })).toBe(true);
-  });
-
-  test("accepts an AST whose blocks contain malformed elements", () => {
+  test("rejects an AST whose blocks contain malformed elements", () => {
     expect(
       isDocumentAst({ version: 1, blocks: [{ junk: true }, 42, null] }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  test("accepts non-object metadata since metadata is not validated", () => {
+  test("rejects malformed nested inline content", () => {
+    expect(
+      isDocumentAst({
+        ...documentAst,
+        blocks: [
+          {
+            ...documentAst.blocks[0],
+            inlines: [{ type: "bold", children: [{ junk: true }] }],
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects non-object metadata", () => {
     expect(
       isDocumentAst({ version: 1, blocks: [], metadata: "not-an-object" }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("rejects a missing version", () => {
@@ -134,7 +142,7 @@ describe("isDocumentAst", () => {
     }
   });
 
-  test("invariant: rejects every primitive and accepts a record only with version 1 + array blocks", () => {
+  test("invariant: rejects every primitive input", () => {
     const primitives: unknown[] = [
       "",
       "x",
@@ -161,6 +169,23 @@ describe("parseDocumentAst", () => {
 
   test("passes through an already-parsed AST object", () => {
     expect(parseDocumentAst(documentAst)).toEqual(documentAst);
+  });
+
+  test("normalizes sparse historical v1 ASTs", () => {
+    expect(parseDocumentAst({ version: 1, blocks: [] })).toEqual({
+      version: 1,
+      source: { system: "", documentId: "", webUrl: "", printUrl: "" },
+      metadata: {
+        caseNumber: null,
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [],
+    });
   });
 
   test("returns null for null and undefined", () => {
@@ -211,7 +236,7 @@ describe("getDocumentAstMetadata", () => {
     expect(getDocumentAstMetadata({ version: 2 })).toBe(null);
   });
 
-  test("returns null when a valid AST has no metadata field (unvalidated, may be absent)", () => {
+  test("returns null when an AST has no metadata field", () => {
     expect(getDocumentAstMetadata({ version: 1, blocks: [] })).toBe(null);
   });
 });
@@ -221,7 +246,7 @@ describe("hasUsableAst", () => {
     expect(hasUsableAst(documentAst)).toBe(true);
   });
 
-  test("rejects a valid AST with empty blocks", () => {
+  test("rejects an AST with empty blocks", () => {
     expect(hasUsableAst({ version: 1, blocks: [] })).toBe(false);
   });
 
@@ -229,5 +254,19 @@ describe("hasUsableAst", () => {
     expect(hasUsableAst(null)).toBe(false);
     expect(hasUsableAst({ version: 2, blocks: [{ a: 1 }] })).toBe(false);
     expect(hasUsableAst("string")).toBe(false);
+  });
+});
+
+describe("parseUsableDocumentAst", () => {
+  test("normalizes persisted ASTs and requires at least one valid block", () => {
+    const sparseAst = { version: 1, blocks: documentAst.blocks };
+    const parsed = parseUsableDocumentAst(sparseAst);
+
+    expect(parsed?.blocks).toEqual(documentAst.blocks);
+    expect(parsed === null ? false : isDocumentAst(parsed)).toBe(true);
+    expect(parseUsableDocumentAst({ version: 1, blocks: [] })).toBe(null);
+    expect(
+      parseUsableDocumentAst({ version: 1, blocks: [{ junk: true }] }),
+    ).toBe(null);
   });
 });

@@ -1,6 +1,8 @@
 import { eq, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
+import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { stella, stellaIngestion } from "@/api/db/rls";
 import {
@@ -427,14 +429,20 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     .set({ currentVersionId: ids.entityVersionB1 })
     .where(eq(entities.id, ids.entityB1));
 
-  // Persisted DOCX review suggestions (opPayload stored opaquely). One per
-  // tenant so the cross-tenant read matrix can assert workspace isolation.
+  // Persisted DOCX review suggestions (opPayload is a validated operation).
+  // One per tenant lets the cross-tenant matrix assert workspace isolation.
   await db.insert(docxSuggestions).values([
     {
       id: ids.docxSuggestionA1,
       workspaceId: ids.wsA1,
       entityId: ids.entityA1,
-      opPayload: {},
+      opPayload: {
+        id: "rls-a1",
+        type: "replaceInBlock",
+        blockId: "block-a1",
+        find: "before",
+        replace: "after",
+      } satisfies FolioAIEditOperation,
       severity: "medium" as const,
       area: "body",
       status: "pending" as const,
@@ -443,7 +451,13 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.docxSuggestionB1,
       workspaceId: ids.wsB1,
       entityId: ids.entityB1,
-      opPayload: {},
+      opPayload: {
+        id: "rls-b1",
+        type: "replaceInBlock",
+        blockId: "block-b1",
+        find: "before",
+        replace: "after",
+      } satisfies FolioAIEditOperation,
       severity: "medium" as const,
       area: "body",
       status: "pending" as const,

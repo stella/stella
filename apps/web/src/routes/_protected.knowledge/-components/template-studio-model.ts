@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
@@ -6,10 +7,7 @@ import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { DATE_FORMAT_STYLES } from "@/components/templates/template-date-format";
-import {
-  defaultCompositeFormat,
-  isLookupRegistry,
-} from "@/components/templates/template-field-manifest";
+import { isLookupRegistry } from "@/components/templates/template-field-manifest";
 import { optionalArray } from "@/lib/arrays";
 import { includesValue } from "@/lib/utils";
 import {
@@ -17,13 +15,15 @@ import {
   type OutlineNode,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import type {
-  EditableLookupFormat,
-  EditablePart,
-  FieldSource,
-  FieldValidation,
-  TemplateEditableField,
-} from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  type EditableLookupFormat,
+  type EditablePart,
+  type FieldSource,
+  type FieldValidation,
+  type TemplateEditableField,
+  type TemplateValueSource,
+  templateValueSourcePatch,
+} from "@/routes/_protected.knowledge/-components/template-value-source";
 // ── Manifest <-> state ───────────────────────────────────
 
 const INPUT_TYPE_VALUES = [
@@ -167,6 +167,7 @@ const parseField = (raw: Record<string, unknown>): StudioField => {
     options: Array.isArray(raw["options"])
       ? raw["options"].filter((o): o is string => typeof o === "string")
       : [],
+    valueSource: { type: "input" },
     aiPrompt: typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
     aiAdapt: raw["aiAdapt"] === true,
     aiSeesDocument: raw["aiSeesDocument"] === true,
@@ -223,7 +224,7 @@ const parseField = (raw: Record<string, unknown>): StudioField => {
   if (validation !== undefined) {
     field.validation = validation;
   }
-  return field;
+  return { ...field, ...templateValueSourcePatch(field) };
 };
 
 export const parseFields = (manifest: unknown): StudioField[] => {
@@ -313,6 +314,18 @@ type ManifestField = {
   validation?: FieldValidation;
 };
 
+type AiSettingsDisposition = "all" | "adapt-only" | "none";
+
+const AI_SETTINGS_DISPOSITION = {
+  input: "all",
+  "composite-draft": "all",
+  composite: "all",
+  lookup: "adapt-only",
+  formula: "none",
+  condition: "none",
+  binding: "none",
+} as const satisfies Record<TemplateValueSource["type"], AiSettingsDisposition>;
+
 /** One session field as it is persisted: only the settings that are
  *  actually set, in the manifest's `FieldMeta` shape. Shared by the
  *  template manifest build and recipe snapshots. */
@@ -342,61 +355,68 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   if (f.validation !== undefined && Object.keys(f.validation).length > 0) {
     field.validation = f.validation;
   }
-  // A formula is one of the mutually exclusive value sources; the manifest
-  // validator rejects it next to aiPrompt/aiAdapt/lookup/parts, and a
-  // composite configuration takes precedence (mirrors the wizard's emit).
-  const formula = f.parts === undefined ? (f.formula?.trim() ?? "") : "";
-  if (formula !== "") {
-    field.formula = formula;
-    return field;
-  }
-  // A boolean condition-field DERIVED by rule. The AST is authoritative (the
-  // only form for a rule containing a formula operand); otherwise the
-  // `condition` expression. Both are mutually exclusive with the other value
-  // sources (backend-validated).
-  if (f.inputType === "boolean" && f.conditionAst !== undefined) {
-    field.conditionAst = f.conditionAst;
-    return field;
-  }
-  const condition =
-    f.inputType === "boolean" ? (f.condition?.trim() ?? "") : "";
-  if (condition !== "") {
-    field.condition = condition;
-    return field;
-  }
-  // A data-bound field's value is resolved from a matter record at fill time,
-  // never user-entered; like formula/condition it is a derived value source the
-  // backend rejects next to aiPrompt/lookup/parts, so emit it alone.
-  if (f.source !== undefined) {
-    field.source = f.source;
-    return field;
-  }
-  if (f.aiPrompt) {
+  // The value-source union owns which AI settings are compatible. Keeping
+  // this map total forces every new source kind to make that decision.
+  const aiSettingsDisposition = AI_SETTINGS_DISPOSITION[f.valueSource.type];
+  if (
+    f.aiPrompt &&
+    (aiSettingsDisposition === "all" ||
+      (aiSettingsDisposition === "adapt-only" && f.aiAdapt))
+  ) {
     field.aiPrompt = f.aiPrompt;
   }
-  if (f.aiAdapt) {
+  if (f.aiAdapt && aiSettingsDisposition !== "none") {
     field.aiAdapt = true;
   }
-  // Only an AI-drafted field (aiPrompt) reads the document; the flag is
-  // meaningless without one, so do not persist a stale opt-in.
-  if (f.aiSeesDocument && f.aiPrompt) {
+  // Only an AI-drafted field reads the document; adaptation runs on the
+  // source's rendered value and never needs the original document.
+  if (f.aiSeesDocument && f.aiPrompt && aiSettingsDisposition === "all") {
     field.aiSeesDocument = true;
+  }
+  // Emit exactly one value source. The discriminator is recomputed by the
+  // parser/store at every boundary, so stale optional siblings from a legacy
+  // manifest cannot leak into the persisted union.
+  switch (f.valueSource.type) {
+    case "formula": {
+      const formula = f.valueSource.formula.trim();
+      if (formula !== "") {
+        field.formula = formula;
+        return field;
+      }
+      break;
+    }
+    case "condition":
+      if (f.valueSource.conditionAst !== undefined) {
+        field.conditionAst = f.valueSource.conditionAst;
+      } else {
+        field.condition = f.valueSource.condition;
+      }
+      return field;
+    case "binding":
+      field.source = f.valueSource.source;
+      return field;
+    case "lookup":
+      field.lookup = f.valueSource.lookup;
+      return field;
+    case "composite":
+      field.parts = f.valueSource.parts;
+      field.format = f.valueSource.format;
+      return field;
+    case "composite-draft":
+      // Drafts are valid editor state but not valid manifest state. Omit the
+      // incomplete source and continue with ordinary field metadata.
+      break;
+    case "input":
+      break;
+    default: {
+      const unsupported: never = f.valueSource;
+      return panic(
+        `Unsupported template value source: ${JSON.stringify(unsupported)}`,
+      );
+    }
   }
   if (f.optionsFrom !== undefined && f.inputType === "select") {
     field.optionsFrom = f.optionsFrom;
-  }
-  if (f.lookup !== undefined) {
-    field.lookup = f.lookup;
-  }
-  if (f.parts !== undefined && f.parts.length > 0) {
-    // Mirror the wizard: an untyped format defaults to the part keys joined
-    // by spaces, so a composite configured in the face never silently saves
-    // as a plain field.
-    const format = f.format?.trim() || defaultCompositeFormat(f.parts);
-    if (format !== undefined && format !== "") {
-      field.parts = f.parts;
-      field.format = format;
-    }
   }
   return field;
 };

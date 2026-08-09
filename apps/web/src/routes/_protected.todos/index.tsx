@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isEntityPriority, type EntityPriority } from "@stll/api-contract";
+import {
+  isWorkObligationStatus,
+  type WorkObligationStatus,
+} from "@stll/api-contract/workflow-status";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -89,29 +94,29 @@ export const Route = createFileRoute("/_protected/todos/")({
   component: TodosPage,
 });
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS = {
   unassigned: "bg-muted-foreground",
   awaiting_acknowledgement: "bg-warning",
   active: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
   completed: "bg-success dark:bg-success",
   cancelled: "bg-destructive dark:bg-destructive",
-};
+} as const satisfies Record<WorkObligationStatus, string>;
 
-const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
+const PRIORITY_ICONS = {
   none: MinusIcon,
   urgent: AlertCircleIcon,
   high: ArrowUpIcon,
   medium: MinusIcon,
   low: ArrowDownIcon,
-};
+} as const satisfies Record<EntityPriority, typeof MinusIcon>;
 
-const PRIORITY_COLORS: Record<string, string> = {
+const PRIORITY_COLORS = {
   none: "text-muted-foreground",
   urgent: "text-destructive",
   high: "text-warning",
   medium: "text-warning",
   low: "text-foreground-muted dark:text-foreground",
-};
+} as const satisfies Record<EntityPriority, string>;
 
 const SKELETON_GROUP_KEYS = ["alpha", "beta", "gamma"];
 const SKELETON_ROW_KEYS = ["one", "two", "three"];
@@ -333,15 +338,13 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
 );
 
 const TaskRow = ({ task }: { task: MyWorkItem }) => {
-  const statusColor =
-    STATUS_COLORS[task.workflowStatus] ?? "bg-muted-foreground";
+  const statusColor = isWorkObligationStatus(task.workflowStatus)
+    ? STATUS_COLORS[task.workflowStatus]
+    : "bg-muted-foreground";
 
-  const PriorityIcon = task.priority
-    ? (PRIORITY_ICONS[task.priority] ?? MinusIcon)
-    : null;
-  const priorityColor = task.priority
-    ? (PRIORITY_COLORS[task.priority] ?? "text-muted-foreground")
-    : null;
+  const priority = isEntityPriority(task.priority) ? task.priority : null;
+  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
+  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
 
   const displayedDate = getDisplayedWorkDate(task);
   const isDue =

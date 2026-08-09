@@ -15,7 +15,7 @@ import type {
 import { panic } from "better-result";
 
 import { detached } from "@/api/lib/detached";
-import type { McpSession } from "@/api/mcp/auth";
+import { isMcpSession, type McpSession } from "@/api/mcp/auth";
 import {
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
   MCP_STATELESS_ALLOW_HEADER,
@@ -259,18 +259,8 @@ const isMcpFactoryState = (value: unknown): value is McpFactoryState => {
     return false;
   }
   const { clientIp, session }: Record<string, unknown> = { ...value };
-  if (typeof session !== "object" || session === null) {
-    return false;
-  }
-
-  const { organizationId, scopes, userId }: Record<string, unknown> = {
-    ...session,
-  };
   return (
-    (clientIp === null || typeof clientIp === "string") &&
-    typeof organizationId === "string" &&
-    Array.isArray(scopes) &&
-    typeof userId === "string"
+    (clientIp === null || typeof clientIp === "string") && isMcpSession(session)
   );
 };
 

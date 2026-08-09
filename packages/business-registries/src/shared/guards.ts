@@ -9,3 +9,13 @@
  */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const hasOptionalString = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === undefined || typeof record[key] === "string";
+
+export const hasOptionalNumber = (
+  record: Record<string, unknown>,
+  key: string,
+): boolean => record[key] === undefined || typeof record[key] === "number";

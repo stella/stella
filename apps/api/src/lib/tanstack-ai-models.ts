@@ -710,8 +710,16 @@ const providerRegion = (
     case "azure_foundry":
     case "huggingface":
       return undefined;
-    default:
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
       return normalizeProviderRegion(config.provider, config.region);
+    default:
+      return panic("Unsupported AI provider configuration");
   }
 };
 
@@ -989,9 +997,21 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "huggingface":
       hasher.update(config.baseURL);
       break;
-    default:
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
       hasher.update(providerRegion(config) ?? "global");
       break;
+    default: {
+      const unsupported: never = config;
+      return panic(
+        `Unsupported BYOK provider configuration: ${JSON.stringify(unsupported)}`,
+      );
+    }
   }
   const hash = hasher.digest("hex").slice(0, 16);
   return `${config.provider}:${hash}`;
@@ -1004,8 +1024,16 @@ const factoryExtras = (
     case "azure_foundry":
     case "huggingface":
       return {};
-    default:
+    case "google":
+    case "openrouter":
+    case "openai":
+    case "anthropic":
+    case "bedrock":
+    case "mistral":
+    case "openai_compatible":
       return { region: providerRegion(config) };
+    default:
+      return panic("Unsupported AI provider configuration");
   }
 };
 

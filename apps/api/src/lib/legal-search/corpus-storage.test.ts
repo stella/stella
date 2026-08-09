@@ -10,6 +10,8 @@ import {
   corpusContentHash,
   corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
+  parsePersistedCorpusAst,
+  parsePersistedCorpusSections,
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -75,6 +77,35 @@ describe("readCorpusText bounded corpus read", () => {
     });
 
     expect(text).toBe("hello corpus");
+  });
+});
+
+describe("persisted corpus JSON validation", () => {
+  test("preserves compatibility with additive section fields", () => {
+    expect(
+      parsePersistedCorpusSections([
+        {
+          index: 0,
+          type: "header",
+          title: null,
+          text: "Rozsudok",
+          upstreamAddition: true,
+        },
+      ]),
+    ).toEqual([{ index: 0, type: "header", title: null, text: "Rozsudok" }]);
+  });
+
+  test("rejects malformed section and AST claims", () => {
+    expect(() =>
+      parsePersistedCorpusSections([
+        { index: "0", type: "header", title: null, text: "Rozsudok" },
+      ]),
+    ).toThrow();
+    expect(() =>
+      parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
+    ).toThrow();
+    expect(() => parsePersistedCorpusAst([])).toThrow();
+    expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow();
   });
 });
 

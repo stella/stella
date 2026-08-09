@@ -2,11 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ENTITY_PRIORITIES,
+  isListItemType,
   isEntityPriority,
   isTaskStatus,
+  LIST_ITEM_TYPES,
   TASK_STATUSES,
 } from "./entity-options";
-import type { EntityPriority, TaskStatus } from "./entity-options";
+import type {
+  EntityPriority,
+  ListItemType,
+  TaskStatus,
+} from "./entity-options";
 
 const EXPECTED_TASK_STATUSES = [
   "open",
@@ -23,6 +29,14 @@ const EXPECTED_ENTITY_PRIORITIES = [
   "medium",
   "low",
 ] as const satisfies readonly EntityPriority[];
+
+const EXPECTED_LIST_ITEM_TYPES = [
+  "task",
+  "fact",
+  "issue",
+  "requirement",
+  "event",
+] as const satisfies readonly ListItemType[];
 
 describe("isTaskStatus", () => {
   test("accepts every declared status", () => {
@@ -76,4 +90,21 @@ describe("isEntityPriority", () => {
   ])("rejects %p", (value) => {
     expect(isEntityPriority(value)).toBe(false);
   });
+});
+
+describe("isListItemType", () => {
+  test("accepts every declared list item type", () => {
+    expect(LIST_ITEM_TYPES).toEqual(EXPECTED_LIST_ITEM_TYPES);
+    expect(Object.isFrozen(LIST_ITEM_TYPES)).toBe(true);
+    expect(LIST_ITEM_TYPES.filter(isListItemType)).toEqual([
+      ...LIST_ITEM_TYPES,
+    ]);
+  });
+
+  test.each([["taskx"], [""], [null], [undefined], [0], [[]]])(
+    "rejects %p",
+    (value) => {
+      expect(isListItemType(value)).toBe(false);
+    },
+  );
 });
