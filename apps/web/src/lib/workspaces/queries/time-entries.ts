@@ -126,6 +126,34 @@ export const timeEntriesInfiniteOptions = (
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
 
+type GetTimeEntrySummaryOptions = {
+  workspaceId: string;
+  dateFrom: string;
+  dateTo: string;
+  scope?: "team";
+  signal: AbortSignal;
+};
+
+const getTimeEntrySummary = async ({
+  workspaceId,
+  dateFrom,
+  dateTo,
+  scope,
+  signal,
+}: GetTimeEntrySummaryOptions) => {
+  const response = await api["time-entries"]({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  }).summary.get({
+    query: {
+      dateFrom,
+      dateTo,
+      ...(scope !== undefined && { scope }),
+    },
+    fetch: { signal },
+  });
+  return unwrapEden(response);
+};
+
 export const timeEntrySummaryOptions = (
   workspaceId: string,
   dateFrom: string,
@@ -134,13 +162,12 @@ export const timeEntrySummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).summary.get({
-        query: { dateFrom, dateTo },
-        fetch: { signal },
+      const summary = await getTimeEntrySummary({
+        workspaceId,
+        dateFrom,
+        dateTo,
+        signal,
       });
-      const summary = unwrapEden(response);
       if (summary.scope !== "personal") {
         return panic("Expected a personal time-entry summary");
       }
@@ -160,13 +187,13 @@ export const timeEntryTeamSummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).summary.get({
-        query: { dateFrom, dateTo, scope: "team" },
-        fetch: { signal },
+      const summary = await getTimeEntrySummary({
+        workspaceId,
+        dateFrom,
+        dateTo,
+        scope: "team",
+        signal,
       });
-      const summary = unwrapEden(response);
       if (summary.scope !== "team") {
         return panic("Expected a team time-entry summary");
       }
