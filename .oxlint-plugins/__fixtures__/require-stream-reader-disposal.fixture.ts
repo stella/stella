@@ -274,6 +274,20 @@ export const transferAliasedReader = (
   return transferredReader;
 };
 
+// MUST flag: transferring on only one branch leaves the other exit owning the
+// reader without releasing its lock.
+export const conditionalReaderTransfer = (
+  stream: ReadableStream<Uint8Array>,
+  transfer: boolean,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: not every exit transfers ownership
+  const reader = stream.getReader();
+  if (transfer) {
+    return reader;
+  }
+  return null;
+};
+
 // Allowed: consumer cancellation of an async generator reaches finally, where
 // cancel runs before releaseLock.
 export async function* cancellableGenerator(

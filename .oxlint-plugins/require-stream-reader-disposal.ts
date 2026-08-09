@@ -628,14 +628,31 @@ export default eslintCompatPlugin({
           acquisition: Acquisition,
           binding: ScopeVariable,
         ): boolean => {
-          let transferred = false;
+          const body = acquisition.root.body;
+          if (
+            !isAstNode(body) ||
+            body.type !== "BlockStatement" ||
+            !Array.isArray(body.body)
+          ) {
+            return false;
+          }
+          const finalStatement = body.body.at(-1);
+          if (
+            !isAstNode(finalStatement) ||
+            finalStatement.type !== "ReturnStatement" ||
+            canonicalBinding(finalStatement.argument) !== binding
+          ) {
+            return false;
+          }
+
           let used = false;
+          let hasCompetingExit = false;
           visitNodes(acquisition.root, acquisition.root, (node) => {
             if (
-              node.type === "ReturnStatement" &&
-              canonicalBinding(node.argument) === binding
+              (node.type === "ReturnStatement" && node !== finalStatement) ||
+              node.type === "ThrowStatement"
             ) {
-              transferred = true;
+              hasCompetingExit = true;
             }
             if (
               node.type === "CallExpression" &&
@@ -646,7 +663,7 @@ export default eslintCompatPlugin({
               used = true;
             }
           });
-          return transferred && !used;
+          return !hasCompetingExit && !used;
         };
 
         const readResultKind = (

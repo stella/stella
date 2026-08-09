@@ -147,42 +147,50 @@ export async function* demuxExecStream(
     buffer = next;
   };
 
-  for (;;) {
-    // Streaming reads are inherently sequential — each frame arrives after the
-    // previous chunk is consumed; there is nothing to parallelize.
-    // eslint-disable-next-line no-await-in-loop
-    const { done, value } = await reader.read();
-    if (value) {
-      append(value);
-      // Emit every whole frame currently buffered.
-      for (;;) {
-        if (buffer.length < 8) {
-          break;
+  try {
+    for (;;) {
+      // Streaming reads are inherently sequential — each frame arrives after the
+      // previous chunk is consumed; there is nothing to parallelize.
+      // eslint-disable-next-line no-await-in-loop
+      const { done, value } = await reader.read();
+      if (value) {
+        append(value);
+        // Emit every whole frame currently buffered.
+        for (;;) {
+          if (buffer.length < 8) {
+            break;
+          }
+          const header = new DataView(buffer.buffer, buffer.byteOffset, 8);
+          const size = header.getUint32(4, false);
+          if (buffer.length < 8 + size) {
+            break;
+          }
+          const streamType = buffer[0];
+          if (streamType !== 1 && streamType !== 2) {
+            throw new DockerApiError({
+              message: `Docker exec stream returned invalid stream type ${streamType}`,
+            });
+          }
+          const payload = buffer.slice(8, 8 + size);
+          buffer = buffer.slice(8 + size);
+          yield {
+            stream: streamType === 2 ? "stderr" : "stdout",
+            data: payload,
+          };
         }
-        const header = new DataView(buffer.buffer, buffer.byteOffset, 8);
-        const size = header.getUint32(4, false);
-        if (buffer.length < 8 + size) {
-          break;
-        }
-        const streamType = buffer[0];
-        if (streamType !== 1 && streamType !== 2) {
-          throw new DockerApiError({
-            message: `Docker exec stream returned invalid stream type ${streamType}`,
-          });
-        }
-        const payload = buffer.slice(8, 8 + size);
-        buffer = buffer.slice(8 + size);
-        yield { stream: streamType === 2 ? "stderr" : "stdout", data: payload };
+      }
+      if (done) {
+        break;
       }
     }
-    if (done) {
-      break;
+    if (buffer.length > 0) {
+      throw new DockerApiError({
+        message: `Docker exec stream ended with ${buffer.length} incomplete frame bytes`,
+      });
     }
-  }
-  if (buffer.length > 0) {
-    throw new DockerApiError({
-      message: `Docker exec stream ended with ${buffer.length} incomplete frame bytes`,
-    });
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 }
 

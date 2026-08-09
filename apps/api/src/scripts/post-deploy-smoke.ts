@@ -552,6 +552,7 @@ export const readStreamPrefix = async (
     }
   } finally {
     await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
   return buffered;
 };

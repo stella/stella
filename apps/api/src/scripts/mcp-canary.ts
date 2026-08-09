@@ -393,13 +393,17 @@ const inspectNotificationStream = async (
       : readObservation;
   };
 
-  const observation = await observeUntilDeadline();
   try {
-    await reader.cancel();
-  } catch {
-    return "cancel_failed";
+    const observation = await observeUntilDeadline();
+    try {
+      await reader.cancel();
+    } catch {
+      return "cancel_failed";
+    }
+    return observation;
+  } finally {
+    reader.releaseLock();
   }
-  return observation;
 };
 
 export const runAuthenticatedStreamProbe = async (
