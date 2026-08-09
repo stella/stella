@@ -44,6 +44,8 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "time_entries_one_active_timer_pe
   ON "time_entries" ("user_id")
   WHERE "timer_started_at" IS NOT NULL;
 --> statement-breakpoint
+REINDEX INDEX CONCURRENTLY "time_entries_one_active_timer_per_user_idx";
+--> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint
 SET lock_timeout = '1s';
