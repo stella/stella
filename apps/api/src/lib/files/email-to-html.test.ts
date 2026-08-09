@@ -665,6 +665,24 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Line 199");
   });
 
+  test("bounds citation text without splitting Unicode code points", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: `<p>${"a".repeat(499)}😀trailing</p>`,
+        },
+      }),
+    );
+    const text = preview.citationBlocks.find(
+      ({ id }) => id === "body-0001",
+    )?.text;
+
+    expect(text).toEndWith("😀");
+    expect(text ? [...text] : []).toHaveLength(500);
+    expect(text).not.toContain("trailing");
+  });
+
   test("preserves punctuation and CJK spacing across inline markup", () => {
     const preview = buildEmailPreview(
       htmlEmail({

@@ -21,6 +21,11 @@ export type VerifiedEmailCitationTarget =
       type: "verified";
       source: EmailCitationSource;
       target: EmailCitationTarget;
+    }
+  | {
+      type: "unverified";
+      target: EmailCitationTarget;
+      verify: () => Promise<EmailCitationSource | null>;
     };
 
 export const useVerifiedEmailCitationTarget = (
@@ -29,13 +34,12 @@ export const useVerifiedEmailCitationTarget = (
 ): VerifiedEmailCitationTarget | null => {
   const target = parseEmailCitationHref(href);
   const knownTarget = useKnownEmailCitationTarget(href);
-  const shouldVerify = Boolean(target && workspaceId && !knownTarget);
   const previewQuery = useQuery({
     ...emailHtmlPreviewOptions({
       fieldId: target?.fieldId ?? "",
       workspaceId: workspaceId ?? "",
     }),
-    enabled: shouldVerify,
+    enabled: false,
     staleTime: Number.POSITIVE_INFINITY,
   });
 
@@ -45,6 +49,9 @@ export const useVerifiedEmailCitationTarget = (
   if (!target) {
     return null;
   }
+  if (!workspaceId) {
+    return null;
+  }
   if (previewQuery.isError && !previewQuery.data) {
     if (!shouldRetryAPIRequest(0, previewQuery.error)) {
       return null;
@@ -52,7 +59,24 @@ export const useVerifiedEmailCitationTarget = (
     return { retry: previewQuery.refetch, target, type: "error" };
   }
   if (!previewQuery.data) {
-    return null;
+    return {
+      target,
+      type: "unverified",
+      verify: async () => {
+        const result = await previewQuery.refetch();
+        if (
+          !result.data ||
+          !isVerifiedEmailCitationTarget({
+            blockIds: result.data.citationBlocks.map(({ id }) => id),
+            source: result.data.source,
+            target,
+          })
+        ) {
+          return null;
+        }
+        return result.data.source;
+      },
+    };
   }
 
   if (

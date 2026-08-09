@@ -634,6 +634,20 @@ const EmailCitationChip = ({
     if (!workspaceId) {
       return;
     }
+    if (citation.type === "unverified") {
+      detached(
+        (async () => {
+          const source = await citation.verify();
+          if (!source) {
+            return;
+          }
+          openEmailCitationSource({ source, workspaceId });
+          requestEmailCitationScroll(target);
+        })(),
+        "email-citation.verify",
+      );
+      return;
+    }
     if (citation.type === "verified") {
       openEmailCitationSource({ source: citation.source, workspaceId });
     } else {

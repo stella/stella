@@ -18,6 +18,16 @@ const CitationState = () => {
 };
 
 describe("useVerifiedEmailCitationTarget", () => {
+  test("defers preview verification until citation activation", () => {
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <CitationState />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('data-citation-state="unverified"');
+  });
+
   test("surfaces preview failures as a retryable citation state", async () => {
     const queryClient = new QueryClient({
       defaultOptions: {

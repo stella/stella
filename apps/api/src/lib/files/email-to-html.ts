@@ -1261,10 +1261,20 @@ const collectEmailCitationText = (element: Element): string => {
 };
 
 const normalizeEmailCitationText = (text: string): string =>
-  text
-    .replace(/\s+/gu, " ")
-    .trim()
-    .slice(0, MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH);
+  truncateEmailCitationText(text.replace(/\s+/gu, " ").trim());
+
+const truncateEmailCitationText = (text: string): string => {
+  let truncated = "";
+  let codePointCount = 0;
+  for (const codePoint of text) {
+    if (codePointCount >= MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH) {
+      break;
+    }
+    truncated += codePoint;
+    codePointCount += 1;
+  }
+  return truncated;
+};
 
 const splitPlainTextBody = (text: string): PlainTextSection[] => {
   const lines = text.split("\n");
