@@ -2232,7 +2232,7 @@ describe("chat stream refs", () => {
     });
   });
 
-  test("restores declared outputs without inferring activity ref fields", async () => {
+  test("restores declared snapshot inputs and outputs without inferring activity ref fields", async () => {
     const registry = createChatRefRegistry();
     const workspaceId = toSafeId<"workspace">("workspace-opaque");
     const matterRef = registry.toMatterRef(workspaceId);
@@ -2252,7 +2252,10 @@ describe("chat stream refs", () => {
                   {
                     id: "tool-1",
                     type: "function",
-                    function: { arguments: "{}", name: "list_matters" },
+                    function: {
+                      arguments: JSON.stringify({ matter_id: matterRef }),
+                      name: "list_matters",
+                    },
                   },
                 ],
               },
@@ -2274,6 +2277,12 @@ describe("chat stream refs", () => {
             ],
           },
         ]),
+        resolveAssistantToolInputRefs: ({ input, toolName }) =>
+          resolveRegistryToolInputRefs({
+            input,
+            refRegistry: registry,
+            toolName,
+          }),
         resolveAssistantToolOutputRefs: ({ output, toolName }) =>
           resolveRegistryToolOutputRefs({
             output,
@@ -2294,7 +2303,10 @@ describe("chat stream refs", () => {
             {
               id: "tool-1",
               type: "function",
-              function: { arguments: "{}", name: "list_matters" },
+              function: {
+                arguments: JSON.stringify({ matter_id: workspaceId }),
+                name: "list_matters",
+              },
             },
           ],
         },

@@ -134,7 +134,7 @@ export type ChatMentionResourceHref =
 // punctuation terminates a bare link instead of becoming part of its ID.
 const CANONICAL_COMPONENT = "(?:[A-Za-z0-9_~-]|%[0-9A-Fa-f]{2})+";
 const CANONICAL_HREF_BOUNDARY =
-  "(?=$|[\\s)!\"',.;?`*>\\]}]|(?=(?![\\x00-\\x7F])\\p{P}))";
+  "(?=$|[\\s()!\"',.;?`*>\\[\\]{}]|(?=(?![\\x00-\\x7F])\\p{P}))";
 const CHAT_RESOURCE_HREF_CANDIDATE_REGEX = new RegExp(
   `(?:${CHAT_RESOURCE_HREF_PREFIX.entity}${CANONICAL_COMPONENT}(?::${CANONICAL_COMPONENT})?|${CHAT_RESOURCE_HREF_PREFIX.workspace}${CANONICAL_COMPONENT}|${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
   "gu",

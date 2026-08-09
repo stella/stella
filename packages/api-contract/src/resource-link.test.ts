@@ -179,6 +179,34 @@ describe("chat resource links", () => {
     );
   });
 
+  test("treats opening citation delimiters as bare-link boundaries", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
+        fc.constantFrom("[", "{", "("),
+        (id, delimiter) => {
+          const target = {
+            type: RESOURCE_TYPE.WORKSPACE,
+            resource: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: toSafeId<"workspace">(id),
+            }),
+          } as const;
+          const href = toChatResourceHref(target);
+          const text = `See ${href}${delimiter}1`;
+
+          expect(findCanonicalChatResourceHrefs(text)).toEqual([
+            { href, index: 4, target },
+          ]);
+          expect(
+            replaceCanonicalChatResourceHrefs(text, () => "matter_ref"),
+          ).toBe(`See matter_ref${delimiter}1`);
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
+
   test("does not partially accept an unencoded opaque ID", () => {
     for (const text of [
       "Ignore #stella-workspace=workspace-1/child.",

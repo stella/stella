@@ -2614,6 +2614,37 @@ const restoreMetadataValuesInPlace = (
   }
 };
 
+const restoreSnapshotToolArguments = ({
+  argumentsText,
+  options,
+  restoreString,
+  toolName,
+}: {
+  argumentsText: string;
+  options: RestoreVisibleStringOptions;
+  restoreString: (text: string) => string;
+  toolName: string;
+}): string => {
+  const visibleArguments = restoreString(argumentsText);
+  if (options.resolveAssistantToolInputRefs === undefined) {
+    return visibleArguments;
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(visibleArguments));
+  if (Result.isError(parsed)) {
+    return visibleArguments;
+  }
+  const declared = options.resolveAssistantToolInputRefs({
+    input: parsed.value,
+    toolName,
+  });
+  const resolved = options.resolveAssistantValueRefs?.(declared) ?? declared;
+  const serialized = Result.try(() => JSON.stringify(resolved));
+  return Result.isOk(serialized) && typeof serialized.value === "string"
+    ? serialized.value
+    : visibleArguments;
+};
+
 /**
  * Restore only user/application-bearing fields in AG-UI messages. Protocol
  * identifiers and discriminators stay byte-for-byte stable, while arbitrary
@@ -2697,7 +2728,19 @@ const restoreSnapshotMessages = <T extends object>(
         if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
           continue;
         }
-        restoreRecordProperty(toolCall["function"], "arguments", restoreValue);
+        const toolFunction = toolCall["function"];
+        const argumentsText = toolFunction["arguments"];
+        const toolName = toolFunction["name"];
+        if (typeof argumentsText === "string" && typeof toolName === "string") {
+          toolFunction["arguments"] = restoreSnapshotToolArguments({
+            argumentsText,
+            options,
+            restoreString,
+            toolName,
+          });
+        } else {
+          restoreRecordProperty(toolFunction, "arguments", restoreValue);
+        }
       }
     }
   }
