@@ -7,6 +7,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
+import * as http from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getS3 } from "@/api/lib/s3";
@@ -104,6 +105,13 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable local aliases of global fetch remain network sinks
   await globalRequest(inputUrl, { signal });
 
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: namespace-imported wrappers remain network sinks
+  await http.fetchWithTimeout(inputUrl, { timeoutMs: 1000 });
+
+  const namespaceRequest = http.fetchWithTimeout;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable aliases of namespace-imported wrappers remain network sinks
+  await namespaceRequest(inputUrl, { timeoutMs: 1000 });
+
   const mutableOrigins = ["https://provider.example"];
   mutableOrigins.push(new URL(inputUrl).origin);
   const widenedPolicy = restrictOutboundUrl({
@@ -113,6 +121,21 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   if (widenedPolicy !== null) {
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a const policy array invalidates its static trust proof
     await fetchWithTimeout(widenedPolicy, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const aliasedOrigins = ["https://provider.example"];
+  const originsAlias = aliasedOrigins;
+  originsAlias.push(new URL(inputUrl).origin);
+  const aliasWidenedPolicy = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: { type: "exact-origin", origins: aliasedOrigins },
+  });
+  if (aliasWidenedPolicy !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a policy array through an alias invalidates its proof
+    await fetchWithTimeout(aliasWidenedPolicy, {
       redirect: "error",
       timeoutMs: 1000,
     });

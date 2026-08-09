@@ -351,13 +351,21 @@ export default eslintCompatPlugin({
           });
         };
 
-        const variableHasDeepMutation = (variable: ScopeVariable): boolean =>
-          variable.references.some((reference) => {
+        const variableHasDeepMutation = (
+          variable: ScopeVariable,
+          visited = new Set<ScopeVariable>(),
+        ): boolean => {
+          if (visited.has(variable)) {
+            return false;
+          }
+          const nextVisited = new Set(visited);
+          nextVisited.add(variable);
+          return variable.references.some((reference) => {
             const identifier = reference.identifier;
             if (!isAstNode(identifier)) {
               return false;
             }
-            let current: AstNode = identifier;
+            let current = outerTransparentExpression(identifier);
             while (true) {
               const member = current.parent;
               if (
@@ -400,8 +408,20 @@ export default eslintCompatPlugin({
                 }
               }
             }
-            return false;
+            const alias = aliasVariableForReference(current);
+            if (alias !== null && variableHasDeepMutation(alias, nextVisited)) {
+              return true;
+            }
+            const parent = current.parent;
+            return (
+              isAstNode(parent) &&
+              (parent.type === "CallExpression" ||
+                parent.type === "NewExpression") &&
+              Array.isArray(parent.arguments) &&
+              parent.arguments.includes(current)
+            );
           });
+        };
 
         const isMutableUrlValue = (
           node: unknown,
@@ -803,31 +823,78 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const namespaceImportSource = (
+          variable: ScopeVariable | null,
+        ): string | null => {
+          if (variable === null) {
+            return null;
+          }
+          for (const definition of variable.defs) {
+            if (
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportNamespaceSpecifier" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isStringLiteral(definition.parent.source)
+            ) {
+              return definition.parent.source.value;
+            }
+          }
+          return null;
+        };
+
+        const normalizeFetchModuleSource = (importSource: string): string => {
+          let source = importSource.replace(/\.[cm]?[jt]sx?$/u, "");
+          if (source.startsWith("@/api/")) {
+            return `apps/api/src/${source.slice("@/api/".length)}`;
+          }
+          if (!source.startsWith(".")) {
+            return source;
+          }
+          source = normalizePath(path.resolve(path.dirname(filename), source));
+          const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
+          return apiSourceIndex >= 0
+            ? source.slice(apiSourceIndex + 1)
+            : source;
+        };
+
         const isImportedFetchSink = (
           callee: unknown,
           visited = new Set<ScopeVariable>(),
         ): boolean => {
           const expression = unwrapExpression(callee);
+          if (
+            expression?.type === "MemberExpression" &&
+            isEstreeIdentifier(expression.object)
+          ) {
+            const importedName =
+              expression.computed === false
+                ? getPropertyName(expression.property)
+                : isStringLiteral(expression.property)
+                  ? expression.property.value
+                  : null;
+            const source = namespaceImportSource(
+              resolveVariable(expression.object),
+            );
+            return (
+              importedName !== null &&
+              source !== null &&
+              FETCH_MODULES.get(normalizeFetchModuleSource(source))?.has(
+                importedName,
+              ) === true
+            );
+          }
           if (!isEstreeIdentifier(expression)) {
             return false;
           }
           const variable = resolveVariable(expression);
           const imported = importInfo(variable);
           if (imported !== null) {
-            let source = imported.source.replace(/\.[cm]?[jt]sx?$/u, "");
-            if (source.startsWith("@/api/")) {
-              source = `apps/api/src/${source.slice("@/api/".length)}`;
-            } else if (source.startsWith(".")) {
-              source = normalizePath(
-                path.resolve(path.dirname(filename), source),
-              );
-              const apiSourceIndex = source.lastIndexOf("/apps/api/src/");
-              if (apiSourceIndex >= 0) {
-                source = source.slice(apiSourceIndex + 1);
-              }
-            }
             if (
-              FETCH_MODULES.get(source)?.has(imported.importedName) === true
+              FETCH_MODULES.get(
+                normalizeFetchModuleSource(imported.source),
+              )?.has(imported.importedName) === true
             ) {
               return true;
             }

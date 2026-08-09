@@ -1955,6 +1955,9 @@ export default defineConfig({
               "apps/api/src/lib/legal-search/corpus-index-client.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/mcp/document-file-upload.ts",
+              "apps/api/src/scripts/citation-probe.ts",
+              "apps/api/src/scripts/mcp-canary.ts",
+              "apps/api/src/scripts/post-deploy-smoke.ts",
             ],
           },
         ],
@@ -1964,7 +1967,6 @@ export default defineConfig({
       files: [
         "apps/api/src/**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
-        "apps/api/src/scripts/**/*.ts",
         "apps/api/src/**/test-utils.ts",
         "apps/api/src/mcp/apps/**/*.{ts,tsx}",
       ],

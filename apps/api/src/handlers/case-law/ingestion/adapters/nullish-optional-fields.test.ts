@@ -233,6 +233,7 @@ describe("case-law adapter nullish optionals", () => {
     expect(
       decisions.every(({ documentUrl }) => documentUrl === undefined),
     ).toBe(true);
+    expect(decisions.at(2)?.sourceDocumentId).toBe("legacy");
   });
 
   test("PL Courts accepts null optional detail fields and maps local decision type", async () => {

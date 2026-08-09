@@ -7,7 +7,10 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  isPersistableSourceDocumentId,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -409,7 +412,8 @@ const documentIdFromLink = (link: string | undefined): string | undefined => {
   if (link === undefined) {
     return undefined;
   }
-  return /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
+  const id = /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
+  return id !== undefined && isPersistableSourceDocumentId(id) ? id : undefined;
 };
 
 const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
@@ -439,7 +443,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     country: "CZE",
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
-    sourceDocumentId: documentIdFromLink(documentUrl?.toString()),
+    sourceDocumentId: documentIdFromLink(publishedDocumentUrl),
     sourceUrl: documentUrl?.toString(),
     documentUrl: documentUrl?.toString(),
     metadata: {
