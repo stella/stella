@@ -12,7 +12,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { ChevronRightIcon, Sparkles } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -226,6 +226,8 @@ const EntityMetadataContent = ({
   const entityFieldPropertyIdsKey = [...entityFieldPropertyIds]
     .toSorted()
     .join(",");
+
+  const [fileFacetsOpen, setFileFacetsOpen] = useState(false);
 
   // Prune optimistic placeholders whose real fields have now arrived. Adjusting
   // state during render (instead of in an effect) drops the placeholder in the
@@ -473,15 +475,25 @@ const EntityMetadataContent = ({
           />
         </div>
 
+        {/* Collapsed until asked for, and the body is unmounted rather than
+            hidden, so the read cannot fire on mount. This panel is the default
+            facet of every open document, and reading a file's own properties
+            means fetching the whole stored object to parse a few kilobytes of
+            XML at the end of its archive. */}
         {fileFieldId !== null && (
           <>
-            <SectionHeading>
+            <CollapsibleSectionHeading
+              expanded={fileFacetsOpen}
+              onToggle={() => setFileFacetsOpen((open) => !open)}
+            >
               {t("inspector.metadata.documentProperties.heading")}
-            </SectionHeading>
-            <DocumentPropertiesSection
-              fileFieldId={fileFieldId}
-              workspaceId={workspaceId}
-            />
+            </CollapsibleSectionHeading>
+            {fileFacetsOpen && (
+              <DocumentPropertiesSection
+                fileFieldId={fileFieldId}
+                workspaceId={workspaceId}
+              />
+            )}
           </>
         )}
 
@@ -533,6 +545,34 @@ const SectionHeading = ({
     {icon}
     {children}
   </div>
+);
+
+type CollapsibleSectionHeadingProps = PropsWithChildren<{
+  expanded: boolean;
+  onToggle: () => void;
+}>;
+
+/** A {@link SectionHeading} that opens and closes the section beneath it. */
+const CollapsibleSectionHeading = ({
+  children,
+  expanded,
+  onToggle,
+}: CollapsibleSectionHeadingProps) => (
+  <button
+    aria-expanded={expanded}
+    className="bg-muted/40 text-foreground hover:bg-muted/70 flex w-full items-center gap-1.5 border-b px-4 py-2 text-start text-sm font-semibold transition-colors"
+    onClick={onToggle}
+    type="button"
+  >
+    <ChevronRightIcon
+      aria-hidden="true"
+      className={cn(
+        "size-3.5 shrink-0 transition-transform",
+        expanded && "rotate-90",
+      )}
+    />
+    {children}
+  </button>
 );
 
 type PersonRowProps = {
