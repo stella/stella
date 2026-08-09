@@ -841,18 +841,14 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Forbidden");
   }
 
-  const userCondition = (() => {
-    if (input.user_id !== undefined) {
-      return eq(
-        timeEntries.userId,
-        brandPersistedUserId(input.user_id),
-      );
-    }
-    if (!canReview) {
-      return eq(timeEntries.userId, context.userId);
-    }
-    return undefined;
-  })();
+  const accessConditions = [eq(timeEntries.workspaceId, workspaceId)];
+  if (input.user_id !== undefined) {
+    accessConditions.push(
+      eq(timeEntries.userId, brandPersistedUserId(input.user_id)),
+    );
+  } else if (!canReview) {
+    accessConditions.push(eq(timeEntries.userId, context.userId));
+  }
 
   const rows = await context.scopedDb((tx) =>
     tx
@@ -860,14 +856,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
       .from(timeEntries)
       .where(
         and(
-          eq(timeEntries.workspaceId, workspaceId),
+          ...accessConditions,
           input.entity_id === undefined
             ? undefined
             : eq(
                 timeEntries.workItemId,
                 brandPersistedEntityId(input.entity_id),
               ),
-          userCondition,
           input.date_from === undefined
             ? undefined
             : gte(timeEntries.dateWorked, input.date_from),

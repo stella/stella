@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
@@ -92,20 +92,7 @@ const batchUpdate = createSafeHandler(
               })
               .from(timeEntries)
               .where(
-                and(
-                  condition,
-                  eq(timeEntries.status, BILLING_STATUS.DRAFT),
-                  or(
-                    and(
-                      eq(timeEntries.billable, true),
-                      eq(
-                        timeEntries.currency,
-                        UNPRICED_TIME_ENTRY_CURRENCY,
-                      ),
-                    ),
-                    isNotNull(timeEntries.timerStartedAt),
-                  ),
-                ),
+                and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
               )
               .limit(ids.length);
             const hasRunningTimer = blockers.some(
