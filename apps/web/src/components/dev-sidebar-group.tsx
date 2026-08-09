@@ -150,7 +150,10 @@ export const DevSidebarGroup = () => {
     await pollSeedJob({
       poll: async () => {
         const { data, error } = await api.dev.seed.get();
-        return error === null ? data : null;
+        if (error !== null) {
+          return null;
+        }
+        return data instanceof Response ? null : data;
       },
       onFailed: (message) => {
         setSeeding(false);
@@ -186,7 +189,10 @@ export const DevSidebarGroup = () => {
     await pollSeedJob({
       poll: async () => {
         const { data, error } = await api.dev["seed-firm-knowledge"].get();
-        return error === null ? data : null;
+        if (error !== null) {
+          return null;
+        }
+        return data instanceof Response ? null : data;
       },
       onFailed: (message) => {
         setSeedingFirmKnowledge(false);

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import {
   type AuthoredDocumentPropertyKey,
   type DocumentPropertiesResult,
+  type DocumentProperty,
   type DocumentPropertyKey,
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
@@ -71,6 +72,19 @@ const UNAVAILABLE_MESSAGE_KEYS = {
   TranslationKey
 >;
 
+type AuthoredProperty = DocumentProperty & {
+  key: AuthoredDocumentPropertyKey;
+};
+
+/**
+ * Narrows the property itself, not just its key: filtering on `property.key`
+ * leaves the element typed over every key, so the editable row could be handed
+ * a generated one.
+ */
+const isAuthoredProperty = (
+  property: DocumentProperty,
+): property is AuthoredProperty => isAuthoredDocumentPropertyKey(property.key);
+
 type DocumentPropertiesSectionProps = {
   workspaceId: string;
   fileFieldId: string;
@@ -102,9 +116,7 @@ export const DocumentPropertiesSection = ({
   // Generated facts (word counts, producer, template) are dropped rather than
   // tucked below a disclosure: they are not actionable here, and a generator
   // that never recomputed them reports "0 words" for a document full of text.
-  const authored = data.properties.filter((property) =>
-    isAuthoredDocumentPropertyKey(property.key),
-  );
+  const authored = data.properties.filter(isAuthoredProperty);
   if (authored.length === 0) {
     return (
       <Message>{t("inspector.metadata.documentProperties.empty")}</Message>
