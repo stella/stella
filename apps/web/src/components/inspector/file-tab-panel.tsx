@@ -29,6 +29,7 @@ import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import {
   EMAIL_CHAT_MODE,
   getEmailChatMode,
+  getEmailExtractionRefetchInterval,
   shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
@@ -191,6 +192,11 @@ export const FileTabPanel = ({
   const emailEntityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
     enabled: isEmailDisplay,
+    refetchInterval: ({ state }) =>
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: state.data?.extractionFileFieldId,
+        isEmailDisplay,
+      }),
   });
   const emailChatMode = getEmailChatMode({
     extractionFileFieldId: emailEntityQuery.data?.extractionFileFieldId,

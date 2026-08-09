@@ -25,6 +25,8 @@ export type EmailResolvedChatMode = Exclude<
 export type EmailViewerLayout =
   (typeof EMAIL_VIEWER_LAYOUT)[keyof typeof EMAIL_VIEWER_LAYOUT];
 
+export const EMAIL_EXTRACTION_POLL_INTERVAL_MS = 2000;
+
 export const getEmailChatMode = ({
   extractionFileFieldId,
   fieldId,
@@ -43,6 +45,17 @@ export const shouldSurfaceEmailChatResolutionError = ({
   hasData: boolean;
   isError: boolean;
 }): boolean => isError && !hasData;
+
+export const getEmailExtractionRefetchInterval = ({
+  extractionFileFieldId,
+  isEmailDisplay,
+}: {
+  extractionFileFieldId: string | null | undefined;
+  isEmailDisplay: boolean;
+}): number | false =>
+  isEmailDisplay && extractionFileFieldId === null
+    ? EMAIL_EXTRACTION_POLL_INTERVAL_MS
+    : false;
 
 export const getEmailFileChatContext = ({
   entityId,

@@ -12,8 +12,10 @@ import {
 } from "@/components/inspector/email-html-viewer";
 import {
   EMAIL_CHAT_MODE,
+  EMAIL_EXTRACTION_POLL_INTERVAL_MS,
   EMAIL_VIEWER_LAYOUT,
   getEmailChatMode,
+  getEmailExtractionRefetchInterval,
   getEmailFileChatContext,
   shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
@@ -106,6 +108,27 @@ describe("email viewer", () => {
     expect(
       shouldSurfaceEmailChatResolutionError({ hasData: false, isError: true }),
     ).toBe(true);
+  });
+
+  test("polls only while an open email is awaiting extraction", () => {
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: null,
+        isEmailDisplay: true,
+      }),
+    ).toBe(EMAIL_EXTRACTION_POLL_INTERVAL_MS);
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: "field-current",
+        isEmailDisplay: true,
+      }),
+    ).toBe(false);
+    expect(
+      getEmailExtractionRefetchInterval({
+        extractionFileFieldId: null,
+        isEmailDisplay: false,
+      }),
+    ).toBe(false);
   });
 
   test("does not load the AI host for preview-only email fields", () => {

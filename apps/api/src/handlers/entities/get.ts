@@ -8,6 +8,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
+  selectCurrentExtractedContent,
 } from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -52,6 +53,7 @@ export const readEntityByIdHandler = async function* ({
         with: {
           extractedContent: {
             columns: {
+              extractedAt: true,
               sourceEntityVersionId: true,
               sourceFieldId: true,
               sourceFileId: true,
@@ -74,6 +76,13 @@ export const readEntityByIdHandler = async function* ({
               },
             },
           },
+          // Include tombstones so a rollback cannot make withdrawn legacy
+          // extraction appear current again. This remains bounded to one row.
+          versions: {
+            columns: { id: true },
+            orderBy: { versionNumber: "desc", id: "desc" },
+            limit: 1,
+          },
         },
       }),
     ),
@@ -94,9 +103,16 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
+  const currentExtracted = selectCurrentExtractedContent({
+    extracted: entity.extractedContent,
+    allowLegacy: entity.versions.at(0)?.id === entity.currentVersion.id,
+    currentVersionCreatedAt: entity.currentVersion.createdAt,
+    currentVersionId: entity.currentVersion.id,
+    fields: entity.currentVersion.fields,
+  });
   const extractionFileField = resolveCurrentExtractionFileField({
     currentVersionId: entity.currentVersion.id,
-    extracted: entity.extractedContent,
+    extracted: currentExtracted,
     fields: entity.currentVersion.fields,
   });
   const processingFileField = resolveCurrentFileSourceField({
