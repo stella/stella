@@ -15,7 +15,11 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { getActiveFileSourceForModel } from "@/api/handlers/chat/active-file-model-source";
+import {
+  getActiveFileModelBinding,
+  type ActiveFileModelBinding,
+  type ActiveFileSourceForModel,
+} from "@/api/handlers/chat/active-file-model-source";
 import {
   getResumedUserInteraction,
   isChatPart,
@@ -2316,28 +2320,26 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
       return Result.ok(hydratedMessages);
     }
 
-    const extracted = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.extractedContent.findFirst({
-          where: {
-            entityId: { eq: activeFile.entityId },
-            organizationId: { eq: organizationId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { charCount: true },
-        }),
-      ),
+    const activeFileBinding = yield* Result.await(
+      resolveActiveFileModelBinding({
+        activeFile,
+        fileFieldId: activeFile.fileFieldId,
+        safeDb,
+        workspaceId,
+      }),
     );
-    if (extracted && extracted.charCount > 0) {
+    if (
+      activeFileBinding === null ||
+      activeFileBinding.type === "durable-current"
+    ) {
       return Result.ok(hydratedMessages);
     }
 
     const activeFileFallback = yield* Result.await(
       readActiveFileFallbackForModel({
-        activeFile,
-        fileFieldId: activeFile.fileFieldId,
         organizationId,
-        safeDb,
+        source: activeFileBinding.source,
+        sourceVersion: activeFileBinding.version,
         workspaceId,
       }),
     );
@@ -2361,7 +2363,7 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         fallbackParts.push(
           {
             type: "text",
-            content: `The active file "${activeFileFallback.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
+            content: `The exact ${activeFileFallback.sourceVersion} version of the active file "${activeFileFallback.fileName}" is attached directly as a PDF. Use this attachment for the current question instead of entity-level retrieval.`,
           },
           createRawChatFilePart({
             bytes: activeFileFallback.bytes,
@@ -2374,7 +2376,7 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         fallbackParts.push(
           {
             type: "text",
-            content: `The active file "${activeFileFallback.fileName}" is attached as extracted text because durable extraction is not ready. Use this text for the current question.${activeFileFallback.truncated ? " The attachment is truncated to the first available window." : ""}`,
+            content: `The exact ${activeFileFallback.sourceVersion} version of the active file "${activeFileFallback.fileName}" is attached as extracted text. Use this text for the current question instead of entity-level retrieval.${activeFileFallback.truncated ? " The attachment is truncated to the first available window." : ""}`,
           },
           { type: "text", content: activeFileFallback.content },
         );
@@ -2391,52 +2393,38 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
     return Result.ok(nextMessages);
   });
 
-type ReadActiveFileFallbackForModelProps = {
+type ResolveActiveFileModelBindingProps = {
   activeFile: IncomingActiveFile;
   fileFieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
 };
 
-type ActiveFileFallbackForModel =
-  | { type: "pdf"; bytes: Uint8Array; fileName: string }
-  | {
-      type: "extracted-text";
-      content: string;
-      fileName: string;
-      truncated: boolean;
-    };
-
-const readActiveFileFallbackForModel = async ({
+const resolveActiveFileModelBinding = async ({
   activeFile,
   fileFieldId,
-  organizationId,
   safeDb,
   workspaceId,
-}: ReadActiveFileFallbackForModelProps): Promise<
-  Result<
-    ActiveFileFallbackForModel | null,
-    HandlerError<422 | 500> | SafeDbError
-  >
+}: ResolveActiveFileModelBindingProps): Promise<
+  Result<ActiveFileModelBinding | null, SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const entity = yield* Result.await(
+    const field = yield* Result.await(
       safeDb((tx) =>
-        tx.query.entities.findFirst({
+        tx.query.fields.findFirst({
           where: {
-            id: { eq: activeFile.entityId },
+            id: { eq: fileFieldId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true },
+          columns: { content: true },
           with: {
-            currentVersion: {
-              columns: {},
+            entityVersion: {
+              columns: { deletedAt: true, id: true },
               with: {
-                fields: {
-                  columns: {
-                    content: true,
-                    id: true,
+                entity: {
+                  columns: { currentVersionId: true, id: true },
+                  with: {
+                    extractedContent: { columns: { charCount: true } },
                   },
                 },
               },
@@ -2445,19 +2433,65 @@ const readActiveFileFallbackForModel = async ({
         }),
       ),
     );
-    const field = entity?.currentVersion?.fields.find(
-      (candidate) => candidate.id === fileFieldId,
+    if (!field) {
+      return Result.ok(null);
+    }
+    if (!field.entityVersion) {
+      panic("Active file field is missing its entity version relation");
+    }
+    if (!field.entityVersion.entity) {
+      panic("Active file version is missing its entity relation");
+    }
+    if (
+      field.entityVersion.deletedAt !== null ||
+      field.entityVersion.entity.id !== activeFile.entityId ||
+      field.content.type !== "file"
+    ) {
+      return Result.ok(null);
+    }
+
+    return Result.ok(
+      getActiveFileModelBinding({
+        content: field.content,
+        currentVersionId: field.entityVersion.entity.currentVersionId,
+        extractedCharCount:
+          field.entityVersion.entity.extractedContent?.charCount ?? null,
+        fieldVersionId: field.entityVersion.id,
+      }),
     );
-    const content = field?.content;
-    if (content?.type !== "file") {
-      return Result.ok(null);
-    }
+  });
 
-    const source = getActiveFileSourceForModel(content);
-    if (source === null) {
-      return Result.ok(null);
-    }
+type ReadActiveFileFallbackForModelProps = {
+  organizationId: SafeId<"organization">;
+  source: ActiveFileSourceForModel;
+  sourceVersion: "current" | "historical";
+  workspaceId: SafeId<"workspace">;
+};
 
+type ActiveFileFallbackForModel =
+  | {
+      type: "pdf";
+      bytes: Uint8Array;
+      fileName: string;
+      sourceVersion: "current" | "historical";
+    }
+  | {
+      type: "extracted-text";
+      content: string;
+      fileName: string;
+      sourceVersion: "current" | "historical";
+      truncated: boolean;
+    };
+
+const readActiveFileFallbackForModel = async ({
+  organizationId,
+  source,
+  sourceVersion,
+  workspaceId,
+}: ReadActiveFileFallbackForModelProps): Promise<
+  Result<ActiveFileFallbackForModel | null, HandlerError<422 | 500>>
+> =>
+  await Result.gen(async function* () {
     const s3Key = createFileKey({
       organizationId,
       workspaceId,
@@ -2486,6 +2520,7 @@ const readActiveFileFallbackForModel = async ({
         type: "extracted-text",
         content: extracted.slice(0, LIMITS.chatContextFileMaxChars),
         fileName: source.fileName,
+        sourceVersion,
         truncated: extracted.length > LIMITS.chatContextFileMaxChars,
       };
       return Result.ok(fallback);
@@ -2505,6 +2540,7 @@ const readActiveFileFallbackForModel = async ({
       type: "pdf",
       bytes,
       fileName: source.fileName,
+      sourceVersion,
     };
     return Result.ok(fallback);
   });

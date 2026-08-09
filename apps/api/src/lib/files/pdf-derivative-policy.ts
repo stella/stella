@@ -1,8 +1,4 @@
-import {
-  DOCX_MIME_TYPE,
-  PPTX_MIME_TYPE,
-  XLSX_MIME_TYPE,
-} from "@/api/mime-types";
+import { desktopEditFileTypeForMimeType } from "@stll/api-contract";
 
 /** MIME types accepted by Gotenberg's LibreOffice conversion route. */
 const CONVERTIBLE_MIME_TYPES = {
@@ -35,14 +31,8 @@ export const isConvertibleMimeType = (mimeType: string): boolean =>
   Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
 /** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */
-const NATIVELY_RENDERABLE_MIME_TYPES = {
-  [DOCX_MIME_TYPE]: null,
-  [PPTX_MIME_TYPE]: null,
-  [XLSX_MIME_TYPE]: null,
-} as const satisfies Record<string, null>;
-
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
-  Object.hasOwn(NATIVELY_RENDERABLE_MIME_TYPES, mimeType);
+  desktopEditFileTypeForMimeType(mimeType) !== null;
 
 type ShouldGeneratePdfDerivativeOptions = {
   encrypted?: boolean;

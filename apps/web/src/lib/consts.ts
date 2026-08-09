@@ -1,4 +1,7 @@
-import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@stll/api-contract";
+import {
+  DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  desktopEditFileTypeForMimeType,
+} from "@stll/api-contract";
 
 export const DOCX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
 export const XLSX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
@@ -9,18 +12,15 @@ export type NativeOfficeViewerFormat = "pptx" | "xlsx";
 export const getNativeOfficeViewerFormat = (
   mimeType: string | null | undefined,
 ): NativeOfficeViewerFormat | null => {
-  const normalizedMimeType = mimeType
-    ?.split(";", 1)
-    .at(0)
-    ?.trim()
-    .toLowerCase();
-  if (normalizedMimeType === XLSX_MIME) {
-    return "xlsx";
+  switch (desktopEditFileTypeForMimeType(mimeType ?? "")) {
+    case "xlsx":
+      return "xlsx";
+    case "pptx":
+      return "pptx";
+    case "docx":
+    case null:
+      return null;
   }
-  if (normalizedMimeType === PPTX_MIME) {
-    return "pptx";
-  }
-  return null;
 };
 
 export const isDocxFile = (file: Pick<File, "name" | "type">): boolean =>

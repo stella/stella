@@ -17,6 +17,14 @@ export type ActiveFileSourceForModel =
       mimeType: string;
     };
 
+export type ActiveFileModelBinding =
+  | { type: "durable-current" }
+  | {
+      type: "direct";
+      source: ActiveFileSourceForModel;
+      version: "current" | "historical";
+    };
+
 export const getActiveFileSourceForModel = (
   content: Extract<FieldContent, { type: "file" }>,
 ): ActiveFileSourceForModel | null => {
@@ -51,4 +59,31 @@ export const getActiveFileSourceForModel = (
         mimeType: content.mimeType,
       }
     : null;
+};
+
+type GetActiveFileModelBindingOptions = {
+  content: Extract<FieldContent, { type: "file" }>;
+  currentVersionId: string | null;
+  extractedCharCount: number | null;
+  fieldVersionId: string;
+};
+
+export const getActiveFileModelBinding = ({
+  content,
+  currentVersionId,
+  extractedCharCount,
+  fieldVersionId,
+}: GetActiveFileModelBindingOptions): ActiveFileModelBinding | null => {
+  const source = getActiveFileSourceForModel(content);
+  if (source === null) {
+    return null;
+  }
+
+  const version =
+    currentVersionId === fieldVersionId ? "current" : "historical";
+  if (version === "current" && (extractedCharCount ?? 0) > 0) {
+    return { type: "durable-current" };
+  }
+
+  return { source, type: "direct", version };
 };

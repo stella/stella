@@ -7,7 +7,10 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 
-import { getActiveFileSourceForModel } from "./active-file-model-source";
+import {
+  getActiveFileModelBinding,
+  getActiveFileSourceForModel,
+} from "./active-file-model-source";
 
 type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 
@@ -63,5 +66,36 @@ describe("active-file model source", () => {
         encrypted: true,
       }),
     ).toBeNull();
+  });
+
+  test("uses durable extraction only for the exact current version", () => {
+    const content = fileContent(XLSX_MIME_TYPE);
+
+    expect(
+      getActiveFileModelBinding({
+        content,
+        currentVersionId: "version-current",
+        extractedCharCount: 10,
+        fieldVersionId: "version-current",
+      }),
+    ).toEqual({ type: "durable-current" });
+
+    expect(
+      getActiveFileModelBinding({
+        content,
+        currentVersionId: "version-current",
+        extractedCharCount: 10,
+        fieldVersionId: "version-historical",
+      }),
+    ).toEqual({
+      type: "direct",
+      source: {
+        type: "extracted-text",
+        fileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
+        fileName: "office-file",
+        mimeType: XLSX_MIME_TYPE,
+      },
+      version: "historical",
+    });
   });
 });

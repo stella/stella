@@ -76,12 +76,12 @@ export const OfficeFileViewer = ({
   const requestDesktopOpenAttention = useInspectorCommandStore(
     (state) => state.requestDesktopOpenAttention,
   );
-  const handleStatusChange = useCallback(
-    (status: OfficeViewerStatus) => {
-      if (status.type === "failed") {
-        analytics.captureError(status.error);
-      }
-      setViewerStatus(status);
+  const handleStatusChange = useCallback((status: OfficeViewerStatus) => {
+    setViewerStatus(status);
+  }, []);
+  const handleViewerError = useCallback(
+    (error: Error) => {
+      analytics.captureError(error);
     },
     [analytics],
   );
@@ -203,6 +203,7 @@ export const OfficeFileViewer = ({
             documentBuffer={fileQuery.data.buffer}
             format={format}
             key={`${fieldId}:${String(attempt)}:${String(PRESENTATION_TRAILING_PADDING_PX)}`}
+            onError={handleViewerError}
             onSpreadsheetSelectionChange={setSpreadsheetSelection}
             onStatusChange={handleStatusChange}
             presentationPaddingBottomPx={PRESENTATION_TRAILING_PADDING_PX}

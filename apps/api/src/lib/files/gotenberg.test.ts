@@ -15,19 +15,24 @@ import {
 describe("PDF derivative policy", () => {
   test("does not generate derivatives for natively renderable OOXML files", () => {
     for (const mimeType of [DOCX_MIME_TYPE, PPTX_MIME_TYPE, XLSX_MIME_TYPE]) {
-      expect(
-        shouldGeneratePdfDerivative({
-          encrypted: false,
-          mimeType,
-        }),
-      ).toBe(false);
+      for (const variant of [
+        mimeType,
+        `${mimeType.toUpperCase()}; charset=binary`,
+      ]) {
+        expect(
+          shouldGeneratePdfDerivative({
+            encrypted: false,
+            mimeType: variant,
+          }),
+        ).toBe(false);
 
-      expect(
-        pdfDerivativeStateForFile({
-          encrypted: false,
-          mimeType,
-        }),
-      ).toEqual({ status: "not-required" });
+        expect(
+          pdfDerivativeStateForFile({
+            encrypted: false,
+            mimeType: variant,
+          }),
+        ).toEqual({ status: "not-required" });
+      }
     }
   });
 
