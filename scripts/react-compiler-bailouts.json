@@ -10,7 +10,6 @@
   "apps/web/src/components/dev/autocomplete-playground.tsx::AutocompletePlayground": 0,
   "apps/web/src/components/docx/docx-browser-editor.tsx::DocxBrowserEditorContent": 20,
   "apps/web/src/components/docx/use-edit-session.ts::useEditSession": 1,
-  "apps/web/src/components/inspector/desktop-open-button.tsx::DesktopOpenButton": 0,
   "apps/web/src/components/inspector/inspector-panel.tsx::InspectorPanel": 9,
   "apps/web/src/components/inspector/inspector-rail.tsx::VerticalTab": 0,
   "apps/web/src/components/inspector/versions-facet.tsx::VersionsFacet": 1,

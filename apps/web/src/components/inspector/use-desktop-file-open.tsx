@@ -85,10 +85,11 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
       });
       if (openResult.type !== "opened") {
         detached(toastPromise, "useDesktopFileOpen");
-        return;
+      } else {
+        await toastPromise;
       }
-      await toastPromise;
     } catch (error) {
+      setIsOpening(false);
       if (error instanceof Error && isUnauthorizedError(error)) {
         stellaToast.add({
           description: t(
@@ -117,9 +118,9 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
         title: t("workspaces.files.desktopEdit.unavailableTitle"),
         type: "error",
       });
-    } finally {
-      setIsOpening(false);
+      return;
     }
+    setIsOpening(false);
   };
 
   return { isOpening, open };

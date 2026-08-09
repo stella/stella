@@ -51,6 +51,9 @@ const DEFAULT_OFFICE_VIEWER_RESOURCE_LIMITS = {
 
 const DEFAULT_OFFICE_VIEWER_WORKER_TIMEOUT_MS = 60_000;
 
+const loadPptxViewer = () => import("@silurus/ooxml/pptx");
+const loadXlsxViewer = () => import("@silurus/ooxml/xlsx");
+
 type ViewerInstance = {
   destroy: () => void;
 };
@@ -113,115 +116,119 @@ export const SilurusOfficeFileViewer = ({
       finishSpreadsheetLoad();
     };
 
+    const reportReady = () => {
+      if (disposed || loadState.type !== "loading") {
+        return;
+      }
+      loadState.type = "ready";
+      onStatusChange?.({ type: "ready" });
+    };
+
+    const presentationViewerOptions = {
+      enableHyperlinks: false,
+      enableMediaPlayback: false,
+      enableTextSelection: true,
+      mode: "worker",
+      onError: reportError,
+      resourceLimits,
+      useGoogleFonts: false,
+      workerTimeoutMs,
+      ...(presentationPaddingBottomPx === undefined
+        ? {}
+        : { paddingBottom: presentationPaddingBottomPx }),
+    } as const;
+
     const load = async () => {
-      try {
-        if (format === "xlsx") {
-          const { XlsxViewer, XlsxWorkbook } =
-            await import("@silurus/ooxml/xlsx");
-          const loadedWorkbook = await XlsxWorkbook.load(
-            documentBuffer.slice(0),
-            {
-              mode: "worker",
-              resourceLimits,
-              useGoogleFonts: false,
-              workerTimeoutMs,
-            },
-          );
-          if (disposed) {
-            loadedWorkbook.destroy();
-            return;
-          }
-          workbook = loadedWorkbook;
-          let currentSheetIndex = 0;
-          const spreadsheetReady = new Promise<void>((resolve) => {
-            resolveSpreadsheetReady = resolve;
-          });
-          const reportSelection = (selection: CellRange | null) => {
-            if (disposed) {
-              return;
-            }
-            const request = ++selectionRequest;
-            if (selection === null) {
-              onSpreadsheetSelectionChange?.(null);
-              return;
-            }
-
-            const sheetIndex = currentSheetIndex;
-            const { col, row } = selection.active;
-            detached(
-              loadedWorkbook
-                .getWorksheet(sheetIndex)
-                .then((worksheet) => {
-                  if (disposed || request !== selectionRequest) {
-                    return undefined;
-                  }
-                  const cell = findWorksheetCell(worksheet.rows, row, col);
-                  onSpreadsheetSelectionChange?.({
-                    cellReference: `${toSpreadsheetColumnName(col)}${String(row)}`,
-                    formula: cell?.formula ?? null,
-                    value: cell ? loadedWorkbook.cellText(worksheet, cell) : "",
-                  });
-                  return undefined;
-                })
-                .catch(reportError),
-              "SilurusOfficeFileViewer.selection",
-            );
-          };
-
-          viewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
-            enableHyperlinks: false,
-            onError: reportError,
-            onSelectionChange: reportSelection,
-            onSheetChange: (sheetIndex) => {
-              if (disposed) {
-                return;
-              }
-              currentSheetIndex = sheetIndex;
-              selectionRequest += 1;
-              onSpreadsheetSelectionChange?.(null);
-              markActiveSpreadsheetTab(container, sheetIndex);
-              finishSpreadsheetLoad();
-            },
-            resizable: true,
-            showZoomSlider: true,
-          });
-          if (spreadsheetFooterHeightPx !== undefined) {
-            setSpreadsheetFooterHeight(container, spreadsheetFooterHeightPx);
-          }
-          await spreadsheetReady;
-        } else {
-          const { PptxScrollViewer } = await import("@silurus/ooxml/pptx");
-          if (disposed) {
-            return;
-          }
-          const pptxViewer = new PptxScrollViewer(container, {
-            enableHyperlinks: false,
-            enableMediaPlayback: false,
-            enableTextSelection: true,
+      if (format === "xlsx") {
+        const { XlsxViewer, XlsxWorkbook } = await loadXlsxViewer();
+        const loadedWorkbook = await XlsxWorkbook.load(
+          documentBuffer.slice(0),
+          {
             mode: "worker",
-            onError: reportError,
             resourceLimits,
             useGoogleFonts: false,
             workerTimeoutMs,
-            ...(presentationPaddingBottomPx === undefined
-              ? {}
-              : { paddingBottom: presentationPaddingBottomPx }),
-          });
-          viewer = pptxViewer;
-          await pptxViewer.load(documentBuffer.slice(0));
+          },
+        );
+        if (disposed) {
+          loadedWorkbook.destroy();
+          return;
         }
-        if (!disposed && loadState.type === "loading") {
-          loadState.type = "ready";
-          onStatusChange?.({ type: "ready" });
+        workbook = loadedWorkbook;
+        let currentSheetIndex = 0;
+        const spreadsheetReady = new Promise<void>((resolve) => {
+          resolveSpreadsheetReady = resolve;
+        });
+        const reportSelection = (selection: CellRange | null) => {
+          if (disposed) {
+            return;
+          }
+          selectionRequest += 1;
+          const request = selectionRequest;
+          if (selection === null) {
+            onSpreadsheetSelectionChange?.(null);
+            return;
+          }
+
+          const sheetIndex = currentSheetIndex;
+          const { col, row } = selection.active;
+          detached(
+            loadedWorkbook
+              .getWorksheet(sheetIndex)
+              .then((worksheet) => {
+                if (disposed || request !== selectionRequest) {
+                  return undefined;
+                }
+                const cell = findWorksheetCell(worksheet.rows, row, col);
+                onSpreadsheetSelectionChange?.({
+                  cellReference: `${toSpreadsheetColumnName(col)}${String(row)}`,
+                  formula: cell?.formula ?? null,
+                  value: cell ? loadedWorkbook.cellText(worksheet, cell) : "",
+                });
+                return undefined;
+              })
+              .catch(reportError),
+            "SilurusOfficeFileViewer.selection",
+          );
+        };
+
+        viewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
+          enableHyperlinks: false,
+          onError: reportError,
+          onSelectionChange: reportSelection,
+          onSheetChange: (sheetIndex) => {
+            if (disposed) {
+              return;
+            }
+            currentSheetIndex = sheetIndex;
+            selectionRequest += 1;
+            onSpreadsheetSelectionChange?.(null);
+            markActiveSpreadsheetTab(container, sheetIndex);
+            finishSpreadsheetLoad();
+          },
+          resizable: true,
+          showZoomSlider: true,
+        });
+        if (spreadsheetFooterHeightPx !== undefined) {
+          setSpreadsheetFooterHeight(container, spreadsheetFooterHeightPx);
         }
-      } catch (error) {
-        if (!disposed) {
-          reportError(error);
+        await spreadsheetReady;
+      } else {
+        const { PptxScrollViewer } = await loadPptxViewer();
+        if (disposed) {
+          return;
         }
+        const pptxViewer = new PptxScrollViewer(
+          container,
+          presentationViewerOptions,
+        );
+        viewer = pptxViewer;
+        await pptxViewer.load(documentBuffer.slice(0));
       }
+      reportReady();
     };
 
-    detached(load(), "SilurusOfficeFileViewer.load");
+    detached(load().catch(reportError), "SilurusOfficeFileViewer.load");
 
     return () => {
       disposed = true;
