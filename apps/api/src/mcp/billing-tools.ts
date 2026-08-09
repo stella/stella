@@ -841,6 +841,19 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Forbidden");
   }
 
+  const userCondition = (() => {
+    if (input.user_id !== undefined) {
+      return eq(
+        timeEntries.userId,
+        brandPersistedUserId(input.user_id),
+      );
+    }
+    if (!canReview) {
+      return eq(timeEntries.userId, context.userId);
+    }
+    return undefined;
+  })();
+
   const rows = await context.scopedDb((tx) =>
     tx
       .select(timeEntryColumns)
@@ -854,14 +867,7 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
                 timeEntries.workItemId,
                 brandPersistedEntityId(input.entity_id),
               ),
-          input.user_id !== undefined
-            ? eq(
-                timeEntries.userId,
-                brandPersistedUserId(input.user_id),
-              )
-            : canReview
-              ? undefined
-              : eq(timeEntries.userId, context.userId),
+          userCondition,
           input.date_from === undefined
             ? undefined
             : gte(timeEntries.dateWorked, input.date_from),
@@ -930,9 +936,7 @@ const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(
-      v.nullable(v.pipe(v.string(), v.minLength(1))),
-    ),
+    entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
     date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
