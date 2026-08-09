@@ -337,7 +337,7 @@ export const useFolioCollaborationSession = ({
           const checkpoint = await api["folio-collab-sessions"]({
             sessionId,
           }).checkpoint.post({
-            file: new File([docxBuffer], response.data.fileName, {
+            file: new File([docxBuffer], data.fileName, {
               type: DOCX_MIME,
             }),
             token: freshToken,
@@ -396,7 +396,7 @@ export const useFolioCollaborationSession = ({
             yProseMirror.yCursorPlugin(awareness),
             yProseMirror.yUndoPlugin(),
           ],
-          shouldSeed: response.data.shouldSeed,
+          shouldSeed: data.shouldSeed,
           yXmlFragment,
         };
         openingSession = null;

@@ -18,7 +18,7 @@ import { create } from "zustand";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { api } from "@/lib/api";
-import type { toAPIError } from "@/lib/errors/api";
+import { type toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -196,7 +196,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       if (response.error) {
         return { status: "error" as const, error: response.error };
       }
-      return { status: "success" as const, data: response.data };
+      return { status: "success" as const, data: unwrapEden(response) };
     });
 
     // The request threw (client timeout / dropped connection) instead of

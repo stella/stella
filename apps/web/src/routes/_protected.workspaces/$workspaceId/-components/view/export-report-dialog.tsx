@@ -189,10 +189,7 @@ const ExportReportDialogBody = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports.templates.get({ fetch: { signal } });
-      if (response.error) {
-        return { status: "error" as const, error: response.error };
-      }
-      return { status: "success" as const, data: response.data };
+      return unwrapEden(response);
     },
   });
 
@@ -256,7 +253,10 @@ const ExportReportDialogBody = ({
           format,
           aiNarrative,
         });
-      return unwrapEden(response);
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: unwrapEden(response) };
     });
     setSubmitting(false);
 
