@@ -10,3 +10,18 @@ export const CHAT_REF_TOKEN_PREFIX = {
 } as const;
 
 export type ChatRefTokenKind = keyof typeof CHAT_REF_TOKEN_PREFIX;
+
+export const CHAT_REF_ENCODING = {
+  PERSISTED_RESOURCE_IDS_V1: "persisted-resource-ids-v1",
+} as const;
+
+export type ChatRefEncoding =
+  (typeof CHAT_REF_ENCODING)[keyof typeof CHAT_REF_ENCODING];
+
+export const CHAT_REF_INPUT_STATE = {
+  LEGACY_UUID_IDS: "legacy-uuid-ids",
+  PERSISTED_RESOURCE_IDS_V1: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+} as const;
+
+export type ChatRefInputState =
+  (typeof CHAT_REF_INPUT_STATE)[keyof typeof CHAT_REF_INPUT_STATE];

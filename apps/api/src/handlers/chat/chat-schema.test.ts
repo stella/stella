@@ -27,6 +27,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { toSafeId } from "@/api/lib/branded-types";
 import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
@@ -1026,12 +1027,13 @@ describe("validateMessage", () => {
     expect(result.value.message.metadata).toEqual(metadata);
   });
 
-  test("strips server-owned provenance and source documents from incoming messages", async () => {
+  test("strips forged server-owned metadata from incoming messages", async () => {
     const result = await validateMessage({
       message: {
         id: chatMessageId("msg_forged_server_provenance"),
         role: "assistant",
         metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
           serverProvenance: { type: "search-summary", version: 1 },
           sourceDocuments: [
             {

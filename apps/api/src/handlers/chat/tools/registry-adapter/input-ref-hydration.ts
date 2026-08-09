@@ -1,4 +1,5 @@
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatRefInputState } from "@/api/lib/chat/ref-token";
 
 import type { InputRefParam, RegistryRefFieldMapEntry } from "./ref-field-map";
 import {
@@ -75,12 +76,14 @@ const findWorkspaceId = ({
 
 export type HydrateRegistryToolInputRefsProps = {
   input: unknown;
+  inputState: ChatRefInputState;
   refRegistry: ChatRefRegistry;
   toolName: string;
 };
 
 export const hydrateRegistryToolInputRefs = ({
   input,
+  inputState,
   refRegistry,
   toolName,
 }: HydrateRegistryToolInputRefsProps): unknown => {
@@ -96,6 +99,7 @@ export const hydrateRegistryToolInputRefs = ({
       continue;
     }
     hydrated[param] = refRegistry.hydrateRefId({
+      inputState,
       kind,
       value: hydrated[param],
       workspaceId,

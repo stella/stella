@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
 import { hydrateRegistryToolInputRefs } from "./input-ref-hydration";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -9,6 +10,9 @@ import { dehydrateRefs } from "./ref-mediation";
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const TASK_UUID = "6d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e55";
+const LEGACY_REF_INPUT_STATE = CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS;
+const PERSISTED_REF_INPUT_STATE =
+  CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1;
 
 /** The same declaration the hydrator reads, so the round trip below is tied
  *  to `save_task`'s real input-ref contract rather than a restated one. */
@@ -41,6 +45,7 @@ describe("registry tool input ref hydration", () => {
 
     const hydrated = hydrateRegistryToolInputRefs({
       input: persistedInput,
+      inputState: PERSISTED_REF_INPUT_STATE,
       refRegistry: registry,
       toolName: "save_task",
     });
@@ -73,6 +78,7 @@ describe("registry tool input ref hydration", () => {
     expect(
       hydrateRegistryToolInputRefs({
         input: { matter_id: WS_UUID },
+        inputState: PERSISTED_REF_INPUT_STATE,
         refRegistry: registry,
         toolName: "save_task",
       }),
@@ -86,6 +92,7 @@ describe("registry tool input ref hydration", () => {
     expect(
       hydrateRegistryToolInputRefs({
         input,
+        inputState: PERSISTED_REF_INPUT_STATE,
         refRegistry: registry,
         toolName: "spawn-subagents",
       }),
@@ -99,9 +106,32 @@ describe("registry tool input ref hydration", () => {
     expect(
       hydrateRegistryToolInputRefs({
         input: { matter_id: ref, name: "draft" },
+        inputState: LEGACY_REF_INPUT_STATE,
         refRegistry: registry,
         toolName: "save_task",
       }),
     ).toEqual({ matter_id: ref, name: "draft" });
+  });
+
+  test("hydrates a versioned persisted ID that looks like a ref", () => {
+    const registry = createChatRefRegistry();
+    registry.toMatterRef(toSafeId<"workspace">(WS_UUID));
+    const tokenShapedId = toSafeId<"workspace">("mat_1");
+
+    const hydrated = hydrateRegistryToolInputRefs({
+      input: { matter_id: tokenShapedId },
+      inputState: PERSISTED_REF_INPUT_STATE,
+      refRegistry: registry,
+      toolName: "save_task",
+    });
+
+    expect(hydrated).toEqual({ matter_id: "mat_2" });
+    expect(
+      dehydrateRefs({
+        args: asArgs(hydrated),
+        inputRefs: SAVE_TASK_INPUT_REFS,
+        refRegistry: registry,
+      }).unwrap().args,
+    ).toEqual({ matter_id: tokenShapedId });
   });
 });

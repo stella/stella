@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -245,6 +246,24 @@ describe("persisted chat message parts", () => {
 
     expect(message.metadata).toEqual({
       serverProvenance: { type: "search-summary", version: 1 },
+    });
+  });
+
+  test("preserves ref-encoding-only metadata", () => {
+    const message = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
+      role: "assistant",
+      content: toChatMessageContent({
+        version: 2,
+        data: [{ type: "text", content: "Summary" }],
+        metadata: {
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+        },
+      }),
+    });
+
+    expect(message.metadata).toEqual({
+      refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
     });
   });
 

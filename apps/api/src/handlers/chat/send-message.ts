@@ -154,6 +154,12 @@ import {
 } from "@/api/lib/chat/active-draft-context";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_REF_ENCODING,
+  CHAT_REF_INPUT_STATE,
+  type ChatRefEncoding,
+  type ChatRefInputState,
+} from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
@@ -2485,6 +2491,10 @@ const resolveAssistantMessageRefs = ({
     message.role === "assistant"
       ? {
           ...message,
+          metadata: {
+            ...message.metadata,
+            refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+          },
           parts: message.parts.map(resolvePart),
         }
       : message,
@@ -2495,6 +2505,18 @@ type HydrateAssistantMessageRefsProps = {
   messages: ChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
 };
+
+const CHAT_REF_INPUT_STATE_BY_ENCODING = {
+  [CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1]:
+    CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1,
+} as const satisfies Record<ChatRefEncoding, ChatRefInputState>;
+
+const resolveChatRefInputState = (
+  encoding: ChatRefEncoding | undefined,
+): ChatRefInputState =>
+  encoding === undefined
+    ? CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS
+    : CHAT_REF_INPUT_STATE_BY_ENCODING[encoding];
 
 const hydrateAssistantMessageRefs = ({
   messages,
@@ -2507,12 +2529,14 @@ const hydrateAssistantMessageRefs = ({
   // model as this turn's refs rather than a stale ref beside a raw id.
   const hydrateToolCallInput = (
     part: ChatMessage["parts"][number],
+    inputState: ChatRefInputState,
   ): unknown => {
     if (part.type !== "tool-call" || !("input" in part)) {
       return part;
     }
     const input = hydrateRegistryToolInputRefs({
       input: part.input,
+      inputState,
       refRegistry,
       toolName: part.name,
     });
@@ -2523,9 +2547,11 @@ const hydrateAssistantMessageRefs = ({
 
   const hydratePart = (
     part: ChatMessage["parts"][number],
+    inputState: ChatRefInputState,
   ): ChatMessage["parts"][number] => {
     const hydrated = refRegistry.hydrateAssistantValueRefs(
-      hydrateToolCallInput(part),
+      hydrateToolCallInput(part, inputState),
+      inputState,
     );
     if (!isChatPart(hydrated)) {
       panic("Hydrating assistant refs changed the message part shape");
@@ -2559,7 +2585,13 @@ const hydrateAssistantMessageRefs = ({
 
   return messages.map((message) => {
     if (message.role === "assistant") {
-      return { ...message, parts: message.parts.map(hydratePart) };
+      const inputState = resolveChatRefInputState(
+        message.metadata?.refEncoding,
+      );
+      return {
+        ...message,
+        parts: message.parts.map((part) => hydratePart(part, inputState)),
+      };
     }
     if (message.role === "user") {
       return { ...message, parts: message.parts.map(hydrateUserPart) };

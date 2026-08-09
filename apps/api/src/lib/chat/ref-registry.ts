@@ -10,7 +10,9 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  CHAT_REF_INPUT_STATE,
   CHAT_REF_TOKEN_PREFIX,
+  type ChatRefInputState,
   type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
@@ -34,6 +36,8 @@ export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
  */
 export const CHAT_UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
 const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 const escapeRegex = (value: string) =>
   value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
@@ -153,6 +157,25 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+const isPersistedIdForInput = (
+  value: unknown,
+  inputState: ChatRefInputState,
+): value is string => {
+  if (!isNonEmptyString(value)) {
+    return false;
+  }
+
+  switch (inputState) {
+    case CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1:
+      return true;
+    case CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS:
+      return UUID_REGEX.test(value);
+    default:
+      inputState satisfies never;
+      return false;
+  }
+};
+
 /**
  * The four tenant-content id kinds this registry mediates. Every other id a
  * registry handler emits (user, task-link, invoice, time-entry, template,
@@ -171,6 +194,7 @@ export type ChatRefKind = ChatRefTokenKind;
  * minted for that entity id this turn, and otherwise leaves the value alone.
  */
 export type HydrateRefIdProps = {
+  inputState: ChatRefInputState;
   kind: ChatRefKind;
   value: unknown;
   workspaceId?: unknown;
@@ -188,7 +212,10 @@ export type ChatRefRegistry = {
    */
   getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
-  hydrateAssistantValueRefs: (value: unknown) => unknown;
+  hydrateAssistantValueRefs: (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) => unknown;
   /**
    * Mint (or reuse) this turn's ref for one already-resolved id, chosen by
    * kind rather than by key name. `hydrateAssistantValueRefs` recognizes the
@@ -386,33 +413,44 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     return Object.fromEntries(entries);
   };
 
-  const toHydratedMatterRef = (value: unknown) =>
-    isNonEmptyString(value)
+  const toHydratedMatterRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
       ? toMatterRef(brandPersistedWorkspaceId(value))
       : value;
 
-  const toHydratedPropertyRef = (value: unknown) =>
-    isNonEmptyString(value)
+  const toHydratedPropertyRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
       ? toPropertyRef(brandPersistedPropertyId(value))
       : value;
 
-  const toHydratedContactRef = (value: unknown) =>
-    isNonEmptyString(value)
+  const toHydratedContactRef = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ) =>
+    isPersistedIdForInput(value, inputState)
       ? toContactRef(brandPersistedContactId(value))
       : value;
 
   const toHydratedEntityRef = ({
     entityId,
+    inputState,
     workspaceId,
   }: {
     entityId: unknown;
+    inputState: ChatRefInputState;
     workspaceId: unknown;
   }) => {
-    if (!isNonEmptyString(entityId)) {
+    if (!isPersistedIdForInput(entityId, inputState)) {
       return entityId;
     }
 
-    if (!isNonEmptyString(workspaceId)) {
+    if (!isPersistedIdForInput(workspaceId, inputState)) {
       const matchingRefs = [...entityState.refToTarget.entries()]
         .filter(([, target]) => target.entityId === entityId)
         .map(([ref]) => ref);
@@ -426,12 +464,15 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     });
   };
 
-  const getHydrationWorkspaceId = (value: Record<string, unknown>): unknown => {
-    if (isNonEmptyString(value["matterRef"])) {
+  const getHydrationWorkspaceId = (
+    value: Record<string, unknown>,
+    inputState: ChatRefInputState,
+  ): unknown => {
+    if (isPersistedIdForInput(value["matterRef"], inputState)) {
       return value["matterRef"];
     }
 
-    if (isNonEmptyString(value["workspaceId"])) {
+    if (isPersistedIdForInput(value["workspaceId"], inputState)) {
       return value["workspaceId"];
     }
 
@@ -448,38 +489,44 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     return isUnknownArray(matterRefs) ? matterRefs : [];
   };
 
-  const hydrateAssistantValueRefs = (value: unknown): unknown => {
+  const hydrateAssistantValueRefs = (
+    value: unknown,
+    inputState: ChatRefInputState,
+  ): unknown => {
     if (typeof value === "string") {
       return hydrateAssistantTextRefs(value);
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => hydrateAssistantValueRefs(item));
+      return value.map((item) => hydrateAssistantValueRefs(item, inputState));
     }
 
     if (!isPlainRecord(value)) {
       return value;
     }
 
-    const workspaceId = getHydrationWorkspaceId(value);
+    const workspaceId = getHydrationWorkspaceId(value, inputState);
     const workspaceIds = getHydrationWorkspaceIds(value);
     const entries: [string, unknown][] = [];
 
     for (const [key, child] of Object.entries(value)) {
       if (key === "matterRef") {
-        entries.push([key, toHydratedMatterRef(child)]);
+        entries.push([key, toHydratedMatterRef(child, inputState)]);
         continue;
       }
 
       if (key === "matterRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedMatterRef)]);
+        entries.push([
+          key,
+          child.map((item) => toHydratedMatterRef(item, inputState)),
+        ]);
         continue;
       }
 
       if (key === "entityRef") {
         entries.push([
           key,
-          toHydratedEntityRef({ entityId: child, workspaceId }),
+          toHydratedEntityRef({ entityId: child, inputState, workspaceId }),
         ]);
         continue;
       }
@@ -489,7 +536,11 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           key,
           child === null
             ? null
-            : toHydratedEntityRef({ entityId: child, workspaceId }),
+            : toHydratedEntityRef({
+                entityId: child,
+                inputState,
+                workspaceId,
+              }),
         ]);
         continue;
       }
@@ -500,6 +551,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           child.map((entityId, index) =>
             toHydratedEntityRef({
               entityId,
+              inputState,
               workspaceId:
                 workspaceIds.length === child.length
                   ? workspaceIds.at(index)
@@ -511,45 +563,56 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       }
 
       if (key === "propertyRef" || key === "dependsOnPropertyRef") {
-        entries.push([key, toHydratedPropertyRef(child)]);
+        entries.push([key, toHydratedPropertyRef(child, inputState)]);
         continue;
       }
 
       if (key === "propertyRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedPropertyRef)]);
+        entries.push([
+          key,
+          child.map((item) => toHydratedPropertyRef(item, inputState)),
+        ]);
         continue;
       }
 
       if (key === "contactRef") {
-        entries.push([key, toHydratedContactRef(child)]);
+        entries.push([key, toHydratedContactRef(child, inputState)]);
         continue;
       }
 
       if (key === "contactRefs" && Array.isArray(child)) {
-        entries.push([key, child.map(toHydratedContactRef)]);
+        entries.push([
+          key,
+          child.map((item) => toHydratedContactRef(item, inputState)),
+        ]);
         continue;
       }
 
-      entries.push([key, hydrateAssistantValueRefs(child)]);
+      entries.push([key, hydrateAssistantValueRefs(child, inputState)]);
     }
 
     return Object.fromEntries(entries);
   };
 
   const hydrateRefId = ({
+    inputState,
     kind,
     value,
     workspaceId,
   }: HydrateRefIdProps): unknown => {
     switch (kind) {
       case "matter":
-        return toHydratedMatterRef(value);
+        return toHydratedMatterRef(value, inputState);
       case "entity":
-        return toHydratedEntityRef({ entityId: value, workspaceId });
+        return toHydratedEntityRef({
+          entityId: value,
+          inputState,
+          workspaceId,
+        });
       case "contact":
-        return toHydratedContactRef(value);
+        return toHydratedContactRef(value, inputState);
       case "property":
-        return toHydratedPropertyRef(value);
+        return toHydratedPropertyRef(value, inputState);
       default:
         return kind satisfies never;
     }

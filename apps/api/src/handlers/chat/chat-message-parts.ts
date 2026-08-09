@@ -1228,6 +1228,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
   metadata.mentions === undefined &&
+  metadata.refEncoding === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
