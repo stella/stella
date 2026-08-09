@@ -1,6 +1,6 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
-import type { OpenDocxInDesktopResult } from "@/lib/desktop-bridge";
+import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
 
 type DesktopEditToastMessages = {
@@ -19,7 +19,7 @@ export const showDesktopEditOpenResultToast = async ({
   result,
 }: {
   messages: DesktopEditToastMessages;
-  result: OpenDocxInDesktopResult;
+  result: OpenFileInDesktopResult;
 }) => {
   if (result.type === "opened") {
     stellaToast.add({

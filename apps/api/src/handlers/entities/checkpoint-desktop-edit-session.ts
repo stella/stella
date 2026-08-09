@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   authorizeDesktopEditSession,
   computeTokenExpiresAt,
@@ -19,13 +20,13 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -51,12 +52,6 @@ export const checkpointDesktopEditSessionHandler = async ({
   request,
   server,
 }: CheckpointDesktopEditSessionHandlerProps) => {
-  if (file.type !== DOCX_MIME_TYPE) {
-    return status(400, {
-      message: "Desktop checkpoints currently support only DOCX files.",
-    });
-  }
-
   const authorizedSession = await authorizeDesktopEditSession({
     sessionId,
     sessionToken,
@@ -79,7 +74,7 @@ export const checkpointDesktopEditSessionHandler = async ({
     return status(401, {
       code: "desktop_edit_session_token_expired",
       message:
-        "Desktop edit session token has expired. Reopen the document from stella.",
+        "Desktop edit session token has expired. Reopen the file from stella.",
     });
   }
 
@@ -87,7 +82,16 @@ export const checkpointDesktopEditSessionHandler = async ({
     return status(403, {
       code: "desktop_edit_session_permission_revoked",
       message:
-        "Desktop edit permission was revoked. Reopen the document from stella.",
+        "Desktop edit permission was revoked. Reopen the file from stella.",
+    });
+  }
+
+  const canonicalMimeType = desktopEditMimeTypeForFileType(
+    authorizedSession.value.fileType,
+  );
+  if (file.type !== canonicalMimeType) {
+    return status(400, {
+      message: `Checkpoint content type must be ${canonicalMimeType}.`,
     });
   }
 
@@ -95,9 +99,19 @@ export const checkpointDesktopEditSessionHandler = async ({
   const buffer = await file.arrayBuffer();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
 
+  const validation = await validateDesktopEditFileBuffer({
+    buffer,
+    fileType: authorizedSession.value.fileType,
+  });
+  if (!validation.valid) {
+    return status(422, {
+      message: `File validation failed: ${validation.error}`,
+    });
+  }
+
   const scanResult = await scanFile({
     buffer: new Uint8Array(buffer),
-    declaredMimeType: file.type,
+    declaredMimeType: canonicalMimeType,
     fileName,
   });
 
@@ -146,6 +160,7 @@ export const checkpointDesktopEditSessionHandler = async ({
         checkpointSizeBytes: desktopEditSessions.checkpointSizeBytes,
         checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
         fileName: desktopEditSessions.fileName,
+        fileType: desktopEditSessions.fileType,
         id: desktopEditSessions.id,
         sessionTokenHash: desktopEditSessions.sessionTokenHash,
       })
@@ -180,6 +195,12 @@ export const checkpointDesktopEditSessionHandler = async ({
       });
     }
 
+    if (existingSession.fileType !== authorizedSession.value.fileType) {
+      return status(409, {
+        message: "Desktop edit session file type changed while checkpointing.",
+      });
+    }
+
     if (existingSession.checkpointSha256Hex === sha256Hex) {
       // Extend expiry even on noop to keep the session alive.
       // Pure session token TTL extension; no user-facing content change.
@@ -199,7 +220,7 @@ export const checkpointDesktopEditSessionHandler = async ({
 
     const key = createFileKey({
       fileId: existingSession.checkpointFileId,
-      mimeType: DOCX_MIME_TYPE,
+      mimeType: canonicalMimeType,
       organizationId: authorizedSession.value.organizationId,
       workspaceId: authorizedSession.value.workspaceId,
     });
@@ -290,6 +311,7 @@ export const checkpointDesktopEditSessionHandler = async ({
       },
       metadata: {
         fileName: existingSession.fileName,
+        fileType: existingSession.fileType,
         sizeBytes: file.size,
         sha256Hex,
       },

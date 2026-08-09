@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Labojuma pabeigšana",
     "sessionMovedToAnotherDevice": "Pārvietots uz citu ierīci",
     "sessionNeedsAttention": "Nepieciešama uzmanība",
-    "sessionOpeningInWord": "Tiek atvērts Word",
+    "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Vispārīgi",
     "lastVerified": "Pēdējo reizi pārbaudīts",
     "linkDevice": "Atveriet dokumentu no stella, lai sasaistītu šo ierīci.",
-    "managedWordEditing": "Pārvaldīta Word rediģēšana stella vajadzībām.",
+    "managedOfficeEditing": "Pārvaldīta Office failu rediģēšana stella vajadzībām.",
     "notAvailableYet": "Vēl nav pieejams",
     "notConnected": "Nav savienots",
     "notificationDocumentReady": "Dokuments gatavs",

@@ -152,6 +152,7 @@
       "name": "@stll/desktop",
       "version": "0.0.1",
       "dependencies": {
+        "@stll/api-contract": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tauri-apps/api": "^2.11.1",
         "better-result": "catalog:",

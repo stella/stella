@@ -1,5 +1,8 @@
-export const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@stll/api-contract";
+
+export const DOCX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
+export const XLSX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
+export const PPTX_MIME = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
 
 export const isDocxFile = (file: Pick<File, "name" | "type">): boolean =>
   file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");

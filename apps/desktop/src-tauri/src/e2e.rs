@@ -118,7 +118,7 @@ async fn free_loopback_port() -> u16 {
   listener.local_addr().expect("resolve probe address").port()
 }
 
-fn open_docx_body(session_id: &str) -> serde_json::Value {
+fn open_file_body(session_id: &str) -> serde_json::Value {
   serde_json::json!({
     "apiBaseUrl": "https://api.example.com",
     "entityId": "11111111-1111-1111-1111-111111111111",
@@ -127,6 +127,7 @@ fn open_docx_body(session_id: &str) -> serde_json::Value {
     "remoteSession": {
       "baseVersionNumber": 1,
       "downloadUrl": "https://example.com/doc.docx",
+      "fileType": "docx",
       "fileName": "doc.docx",
       "lastCheckpointAt": null,
       "resumedFromCheckpoint": false,
@@ -205,7 +206,7 @@ async fn cors_preflight_advertises_contract_for_allowed_origin() {
   let bridge = spawn_test_bridge().await;
 
   let response = TestBridge::client()
-    .request(reqwest::Method::OPTIONS, bridge.url("/v1/open-docx"))
+    .request(reqwest::Method::OPTIONS, bridge.url("/v1/open-file"))
     .header("origin", ALLOWED_ORIGIN)
     .header("access-control-request-method", "POST")
     .send()
@@ -235,13 +236,13 @@ async fn cors_preflight_advertises_contract_for_allowed_origin() {
 }
 
 #[tokio::test]
-async fn open_docx_rejects_disallowed_origin() {
+async fn open_file_rejects_disallowed_origin() {
   let bridge = spawn_test_bridge().await;
 
   let response = TestBridge::client()
-    .post(bridge.url("/v1/open-docx"))
+    .post(bridge.url("/v1/open-file"))
     .header("origin", DISALLOWED_ORIGIN)
-    .json(&open_docx_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
+    .json(&open_file_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
     .send()
     .await
     .unwrap();
@@ -250,13 +251,13 @@ async fn open_docx_rejects_disallowed_origin() {
 }
 
 #[tokio::test]
-async fn open_docx_rejects_invalid_session_id() {
+async fn open_file_rejects_invalid_session_id() {
   let bridge = spawn_test_bridge().await;
 
   let response = TestBridge::client()
-    .post(bridge.url("/v1/open-docx"))
+    .post(bridge.url("/v1/open-file"))
     .header("origin", ALLOWED_ORIGIN)
-    .json(&open_docx_body("../etc/passwd"))
+    .json(&open_file_body("../etc/passwd"))
     .send()
     .await
     .unwrap();

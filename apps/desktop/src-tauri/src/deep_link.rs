@@ -5,8 +5,8 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::config;
-use crate::session_manager::{SessionManager, download_docx_standalone};
-use crate::types::{ErrorResponse, OpenDocxRequest, is_safe_session_id};
+use crate::session_manager::{SessionManager, download_file_standalone};
+use crate::types::{ErrorResponse, OpenFileRequest, is_safe_session_id};
 use crate::updater;
 
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
@@ -341,7 +341,7 @@ async fn redeem_desktop_edit_handoff(
   client: &reqwest::Client,
   api_base_url: &str,
   handoff_token: &str,
-) -> Result<OpenDocxRequest, String> {
+) -> Result<OpenFileRequest, String> {
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/redeem");
   let response = client
     .post(url)
@@ -363,7 +363,7 @@ async fn redeem_desktop_edit_handoff(
   }
 
   response
-    .json::<OpenDocxRequest>()
+    .json::<OpenFileRequest>()
     .await
     .map_err(|e| format!("stella desktop could not read the edit handoff: {e}"))
 }
@@ -436,11 +436,16 @@ async fn redeem_and_open_desktop_edit(
   }
 
   let download_url = request.remote_session.download_url.clone();
-  let prefetched_buffer = download_docx_standalone(&http_client, &download_url).await?;
+  let prefetched_buffer = download_file_standalone(
+    request.remote_session.file_type,
+    &http_client,
+    &download_url,
+  )
+  .await?;
 
   let result = {
     let mut mgr = manager.lock().await;
-    mgr.open_docx(request, Some(prefetched_buffer)).await
+    mgr.open_file(request, Some(prefetched_buffer)).await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;

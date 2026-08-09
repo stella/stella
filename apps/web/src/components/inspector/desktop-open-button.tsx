@@ -13,23 +13,30 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
   DesktopBridgeIncompatibleError,
-  openDocxInDesktop,
+  openFileInDesktop,
 } from "@/lib/desktop-bridge";
+import {
+  DESKTOP_EDIT_FILE_TYPES,
+  type DesktopEditFileType,
+} from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 
-export const DocxDesktopOpenButton = ({
+export const DesktopOpenButton = ({
   entityId,
+  fileType,
   propertyId,
   workspaceId,
 }: {
   entityId: string;
+  fileType: DesktopEditFileType;
   propertyId: string;
   workspaceId: string;
 }) => {
   const t = useTranslations();
   const [isOpening, setIsOpening] = useState(false);
+  const application = DESKTOP_EDIT_FILE_TYPES[fileType].application;
   const label = t("workspaces.files.desktopEdit.openAction");
 
   const handleOpen = async () => {
@@ -40,7 +47,7 @@ export const DocxDesktopOpenButton = ({
     setIsOpening(true);
     try {
       const linkedAccount = await getFreshLinkedAccount();
-      const openResult = await openDocxInDesktop({
+      const openResult = await openFileInDesktop({
         apiBaseUrl: env.VITE_API_URL,
         entityId,
         linkedAccount,
@@ -52,12 +59,16 @@ export const DocxDesktopOpenButton = ({
         messages: {
           notOpenedDescription: t(
             "workspaces.files.desktopEdit.notOpenedDescription",
+            { application },
           ),
           openedDescription: t(
             "workspaces.files.desktopEdit.openedDescription",
+            { application },
           ),
           openedTitle: t("workspaces.files.desktopEdit.openedTitle"),
-          sentDescription: t("workspaces.files.desktopEdit.sentDescription"),
+          sentDescription: t("workspaces.files.desktopEdit.sentDescription", {
+            application,
+          }),
           sentTitle: t("workspaces.files.desktopEdit.sentTitle"),
           unavailableTitle: t("workspaces.files.desktopEdit.unavailableTitle"),
           updateRequiredDescription: t(
@@ -111,7 +122,7 @@ export const DocxDesktopOpenButton = ({
           aria-label={label}
           disabled={isOpening}
           onClick={() => {
-            detached(handleOpen(), "DocxDesktopOpenButton");
+            detached(handleOpen(), "DesktopOpenButton");
           }}
           size="icon-xs"
           variant="ghost"

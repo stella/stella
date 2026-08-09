@@ -17,6 +17,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   expiredOwnDesktopEditSessionTargetPredicates,
   liveDesktopEditSessionPredicates,
@@ -28,11 +29,11 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import {
-  lockDocxEditTarget,
-  presignDocxDownloadFromFileId,
-  presignDocxFieldDownload,
-  readCurrentDocxTarget,
-  readVersionDocxTarget,
+  lockDesktopEditTarget,
+  presignDesktopEditDownloadFromFileId,
+  presignDesktopEditFileDownload,
+  readCurrentDesktopEditTarget,
+  readVersionDesktopEditTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -54,6 +55,7 @@ type OpenDesktopEditSessionResponse = {
   baseVersionNumber: number;
   downloadUrl: string;
   fileName: string;
+  fileType: DesktopEditFileType;
   lastCheckpointAt: string | null;
   resumedFromCheckpoint: boolean;
   sessionId: SafeId<"desktopEditSession">;
@@ -78,6 +80,7 @@ type ExistingOpenDesktopEditSession = {
   checkpointFileId: SafeId<"userFile">;
   checkpointUpdatedAt: Date | null;
   fileName: string;
+  fileType: DesktopEditFileType;
   id: SafeId<"desktopEditSession">;
 };
 
@@ -107,6 +110,7 @@ const readExistingOpenDesktopEditSession = async ({
       checkpointFileId: desktopEditSessions.checkpointFileId,
       checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
       fileName: desktopEditSessions.fileName,
+      fileType: desktopEditSessions.fileType,
       id: desktopEditSessions.id,
     })
     .from(desktopEditSessions)
@@ -313,13 +317,15 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   if (existingSession.checkpointUpdatedAt) {
     return {
       baseVersionNumber: baseVersion.versionNumber,
-      downloadUrl: await presignDocxDownloadFromFileId({
+      downloadUrl: await presignDesktopEditDownloadFromFileId({
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
+        fileType: existingSession.fileType,
         organizationId,
         workspaceId,
       }),
       fileName: existingSession.fileName,
+      fileType: existingSession.fileType,
       lastCheckpointAt: existingSession.checkpointUpdatedAt.toISOString(),
       resumedFromCheckpoint: true,
       sessionId: existingSession.id,
@@ -328,8 +334,9 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     } satisfies OpenDesktopEditSessionResponse;
   }
 
-  const baseVersionContent = await readVersionDocxTarget({
+  const baseVersionContent = await readVersionDesktopEditTarget({
     entityVersionId: existingSession.baseVersionId,
+    fileType: existingSession.fileType,
     propertyId,
     tx,
     workspaceId,
@@ -346,12 +353,13 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
 
   return {
     baseVersionNumber: baseVersion.versionNumber,
-    downloadUrl: await presignDocxFieldDownload({
+    downloadUrl: await presignDesktopEditFileDownload({
       fileContent: baseVersionContent,
       organizationId,
       workspaceId,
     }),
     fileName: baseVersionContent.fileName,
+    fileType: existingSession.fileType,
     lastCheckpointAt: null,
     resumedFromCheckpoint: false,
     sessionId: existingSession.id,
@@ -380,7 +388,7 @@ export const openDesktopEditSessionHandler = async function* ({
   if (force) {
     yield* Result.await(
       safeDb(async (tx) => {
-        await lockDocxEditTarget({
+        await lockDesktopEditTarget({
           entityId,
           propertyId,
           tx,
@@ -436,7 +444,7 @@ export const openDesktopEditSessionHandler = async function* ({
       let expiredFolioCollabSessionFiles: ExpiredFolioCollabSessionFiles | null =
         null;
 
-      await lockDocxEditTarget({
+      await lockDesktopEditTarget({
         entityId,
         propertyId,
         tx,
@@ -483,7 +491,7 @@ export const openDesktopEditSessionHandler = async function* ({
         return { expiredFolioCollabSessionFiles, value: null };
       }
 
-      const currentTarget = await readCurrentDocxTarget({
+      const currentTarget = await readCurrentDesktopEditTarget({
         entityId,
         propertyId,
         tx,
@@ -495,7 +503,8 @@ export const openDesktopEditSessionHandler = async function* ({
           expiredFolioCollabSessionFiles,
           value: {
             error: {
-              message: "Target property is not an editable DOCX field.",
+              message:
+                "Target property is not an editable DOCX, XLSX, or PPTX field.",
               statusCode: 400 as const,
             },
           },
@@ -541,6 +550,7 @@ export const openDesktopEditSessionHandler = async function* ({
         createdBy: userId,
         entityId,
         fileName: currentTarget.fileContent.fileName,
+        fileType: currentTarget.fileType,
         id: sessionId,
         propertyId,
         sessionTokenHash,
@@ -560,6 +570,7 @@ export const openDesktopEditSessionHandler = async function* ({
               propertyId,
               baseVersionId: currentTarget.baseVersionId,
               fileName: currentTarget.fileContent.fileName,
+              fileType: currentTarget.fileType,
             },
           },
         },
@@ -569,12 +580,13 @@ export const openDesktopEditSessionHandler = async function* ({
         expiredFolioCollabSessionFiles,
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
-          downloadUrl: await presignDocxFieldDownload({
+          downloadUrl: await presignDesktopEditFileDownload({
             fileContent: currentTarget.fileContent,
             organizationId,
             workspaceId,
           }),
           fileName: currentTarget.fileContent.fileName,
+          fileType: currentTarget.fileType,
           lastCheckpointAt: null,
           resumedFromCheckpoint: false,
           sessionId,

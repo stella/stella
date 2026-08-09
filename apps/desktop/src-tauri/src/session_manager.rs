@@ -69,15 +69,13 @@ const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
 const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
-const WORD_LOCK_PREFIX: &str = "~$";
+const MICROSOFT_OFFICE_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
-const DOCX_EXTENSION: &str = ".docx";
-const DOCX_CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
-const DOCX_DOCUMENT_ENTRY: &str = "word/document.xml";
-const MAX_DOCX_DOWNLOAD_BYTES: u64 = 100 * 1024 * 1024;
+const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
+const MAX_OFFICE_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
 const ZIP_LOCAL_FILE_HEADER_MAGIC: &[u8] = b"PK\x03\x04";
-const GENERIC_DOCX_DOWNLOAD_MIME_TYPES: &[&str] =
+const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
   &["application/octet-stream", "binary/octet-stream"];
 
 // Internal session with runtime-only fields
@@ -86,6 +84,7 @@ struct DesktopSession {
   api_base_url: String,
   base_version_number: i64,
   entity_id: String,
+  file_type: DesktopEditFileType,
   file_name: String,
   file_path: String,
   id: String,
@@ -119,6 +118,7 @@ impl DesktopSession {
       api_base_url: self.api_base_url.clone(),
       base_version_number: self.base_version_number,
       entity_id: self.entity_id.clone(),
+      file_type: self.file_type,
       file_name: self.file_name.clone(),
       file_path: self.file_path.clone(),
       id: self.id.clone(),
@@ -139,6 +139,7 @@ impl DesktopSession {
     SessionSnapshot {
       base_version_number: self.base_version_number,
       entity_id: self.entity_id.clone(),
+      file_type: self.file_type,
       file_name: self.file_name.clone(),
       file_path: self.file_path.clone(),
       id: self.id.clone(),
@@ -195,14 +196,16 @@ fn build_http_client() -> reqwest::Client {
     .unwrap_or_else(|_| reqwest::Client::new())
 }
 
-fn has_docx_extension(name: &str) -> bool {
+fn has_file_type_extension(name: &str, file_type: DesktopEditFileType) -> bool {
   Path::new(name)
     .extension()
     .and_then(|extension| extension.to_str())
-    .is_some_and(|extension| extension.eq_ignore_ascii_case("docx"))
+    .is_some_and(|extension| {
+      extension.eq_ignore_ascii_case(file_type.extension().trim_start_matches('.'))
+    })
 }
 
-fn sanitize_file_name(name: &str) -> String {
+fn sanitize_file_name(name: &str, file_type: DesktopEditFileType) -> String {
   let base = Path::new(name)
     .file_name()
     .and_then(|n| n.to_str())
@@ -219,45 +222,54 @@ fn sanitize_file_name(name: &str) -> String {
 
   let trimmed = sanitized.trim_matches('.');
   if trimmed.is_empty() {
-    return "document.docx".to_string();
+    return file_type.default_file_name().to_string();
   }
 
-  if has_docx_extension(trimmed) {
+  if has_file_type_extension(trimmed, file_type) {
     trimmed.to_string()
   } else {
-    format!("{trimmed}{DOCX_EXTENSION}")
+    format!("{trimmed}{}", file_type.extension())
   }
 }
 
-fn oversized_docx_download_error() -> String {
-  "stella desktop refused an oversized DOCX download.".to_string()
+fn oversized_office_download_error() -> String {
+  "stella desktop refused an oversized Office file download.".to_string()
 }
 
-fn non_docx_download_body_error() -> String {
-  "stella desktop refused a non-DOCX download body.".to_string()
+fn non_office_download_body_error(file_type: DesktopEditFileType) -> String {
+  format!(
+    "stella desktop refused a non-{} download body.",
+    file_type.extension().trim_start_matches('.')
+  )
 }
 
-fn is_allowed_docx_download_content_type(content_type: &str) -> bool {
+fn is_allowed_download_content_type(
+  file_type: DesktopEditFileType,
+  content_type: &str,
+) -> bool {
   let media_type = content_type.split(';').next().unwrap_or_default().trim();
 
-  media_type.eq_ignore_ascii_case(DOCX_MIME_TYPE)
-    || GENERIC_DOCX_DOWNLOAD_MIME_TYPES
+  media_type.eq_ignore_ascii_case(file_type.mime_type())
+    || GENERIC_OFFICE_DOWNLOAD_MIME_TYPES
       .iter()
       .any(|generic| media_type.eq_ignore_ascii_case(generic))
 }
 
-fn validate_docx_download_response(response: &reqwest::Response) -> Result<(), String> {
+fn validate_office_download_response(
+  file_type: DesktopEditFileType,
+  response: &reqwest::Response,
+) -> Result<(), String> {
   if let Some(content_length) = response.headers().get(CONTENT_LENGTH) {
     let size = content_length
       .to_str()
       .ok()
       .and_then(|value| value.parse::<u64>().ok())
       .ok_or_else(|| {
-        "stella desktop received an invalid DOCX download size.".to_string()
+        "stella desktop received an invalid Office file download size.".to_string()
       })?;
 
-    if size > MAX_DOCX_DOWNLOAD_BYTES {
-      return Err(oversized_docx_download_error());
+    if size > MAX_OFFICE_DOWNLOAD_BYTES {
+      return Err(oversized_office_download_error());
     }
   }
 
@@ -265,36 +277,37 @@ fn validate_docx_download_response(response: &reqwest::Response) -> Result<(), S
     return Ok(());
   };
 
-  let content_type = content_type
-    .to_str()
-    .map_err(|_| "stella desktop received an invalid DOCX content type.".to_string())?;
+  let content_type = content_type.to_str().map_err(|_| {
+    "stella desktop received an invalid Office file content type.".to_string()
+  })?;
 
-  if is_allowed_docx_download_content_type(content_type) {
+  if is_allowed_download_content_type(file_type, content_type) {
     return Ok(());
   }
 
-  Err("stella desktop refused a non-DOCX download response.".to_string())
+  Err("stella desktop refused a non-Office file download response.".to_string())
 }
 
-async fn read_docx_download_bytes(
+async fn read_office_download_bytes(
   response: reqwest::Response,
 ) -> Result<Vec<u8>, String> {
   let mut bytes = Vec::new();
   let mut stream = response.bytes_stream();
 
   while let Some(chunk) = stream.next().await {
-    let chunk = chunk
-      .map_err(|e| format!("stella desktop could not read the DOCX download: {e}"))?;
+    let chunk = chunk.map_err(|e| {
+      format!("stella desktop could not read the Office file download: {e}")
+    })?;
     let current_size =
-      u64::try_from(bytes.len()).map_err(|_| oversized_docx_download_error())?;
+      u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
     let chunk_size =
-      u64::try_from(chunk.len()).map_err(|_| oversized_docx_download_error())?;
+      u64::try_from(chunk.len()).map_err(|_| oversized_office_download_error())?;
     let next_size = current_size
       .checked_add(chunk_size)
-      .ok_or_else(oversized_docx_download_error)?;
+      .ok_or_else(oversized_office_download_error)?;
 
-    if next_size > MAX_DOCX_DOWNLOAD_BYTES {
-      return Err(oversized_docx_download_error());
+    if next_size > MAX_OFFICE_DOWNLOAD_BYTES {
+      return Err(oversized_office_download_error());
     }
 
     bytes.extend_from_slice(&chunk);
@@ -303,26 +316,30 @@ async fn read_docx_download_bytes(
   Ok(bytes)
 }
 
-fn validate_docx_download_bytes(bytes: &[u8]) -> Result<(), String> {
-  let size = u64::try_from(bytes.len()).map_err(|_| oversized_docx_download_error())?;
-  if size > MAX_DOCX_DOWNLOAD_BYTES {
-    return Err(oversized_docx_download_error());
+fn validate_office_download_bytes(
+  file_type: DesktopEditFileType,
+  bytes: &[u8],
+) -> Result<(), String> {
+  let size =
+    u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
+  if size > MAX_OFFICE_DOWNLOAD_BYTES {
+    return Err(oversized_office_download_error());
   }
 
   if !bytes.starts_with(ZIP_LOCAL_FILE_HEADER_MAGIC) {
-    return Err(non_docx_download_body_error());
+    return Err(non_office_download_body_error(file_type));
   }
 
-  let archive =
-    ZipArchive::new(Cursor::new(bytes)).map_err(|_| non_docx_download_body_error())?;
-  let has_content_types = archive.index_for_name(DOCX_CONTENT_TYPES_ENTRY).is_some();
-  let has_document = archive.index_for_name(DOCX_DOCUMENT_ENTRY).is_some();
+  let archive = ZipArchive::new(Cursor::new(bytes))
+    .map_err(|_| non_office_download_body_error(file_type))?;
+  let has_content_types = archive.index_for_name(CONTENT_TYPES_ENTRY).is_some();
+  let required_entry = file_type.main_part_path();
 
-  if has_content_types && has_document {
+  if has_content_types && archive.index_for_name(required_entry).is_some() {
     return Ok(());
   }
 
-  Err(non_docx_download_body_error())
+  Err(non_office_download_body_error(file_type))
 }
 
 async fn align_managed_copy_file_name(
@@ -340,20 +357,20 @@ async fn align_managed_copy_file_name(
   }
 
   let parent = path.parent().ok_or_else(|| {
-    "stella desktop could not resolve the managed DOCX folder.".to_string()
+    "stella desktop could not resolve the managed Office file folder.".to_string()
   })?;
   let aligned_path = parent.join(file_name);
 
   if tokio::fs::try_exists(&aligned_path).await.map_err(|e| {
-    format!("stella desktop could not inspect the managed DOCX file: {e}")
+    format!("stella desktop could not inspect the managed Office file: {e}")
   })? {
     return Err(
-      "stella desktop could not align the managed DOCX file name.".to_string(),
+      "stella desktop could not align the managed Office file name.".to_string(),
     );
   }
 
   tokio::fs::rename(path, &aligned_path).await.map_err(|e| {
-    format!("stella desktop could not rename the managed DOCX file: {e}")
+    format!("stella desktop could not rename the managed Office file: {e}")
   })?;
 
   Ok(aligned_path.to_string_lossy().to_string())
@@ -400,8 +417,9 @@ fn did_remote_checkpoint_advance(
   remote > local
 }
 
-fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
-  let Some(candidate_suffix) = candidate.strip_prefix(WORD_LOCK_PREFIX) else {
+fn is_microsoft_office_lock_file_for(candidate: &str, file_name: &str) -> bool {
+  let Some(candidate_suffix) = candidate.strip_prefix(MICROSOFT_OFFICE_LOCK_PREFIX)
+  else {
     return false;
   };
 
@@ -409,7 +427,7 @@ fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
     return true;
   }
 
-  if file_name.starts_with(WORD_LOCK_PREFIX) {
+  if file_name.starts_with(MICROSOFT_OFFICE_LOCK_PREFIX) {
     return false;
   }
 
@@ -428,7 +446,7 @@ fn is_libre_office_lock_file_for(candidate: &str, file_name: &str) -> bool {
 }
 
 fn is_temporary_lock_file_for(candidate: &str, file_name: &str) -> bool {
-  is_word_lock_file_for(candidate, file_name)
+  is_microsoft_office_lock_file_for(candidate, file_name)
     || is_libre_office_lock_file_for(candidate, file_name)
 }
 
@@ -597,6 +615,7 @@ impl SessionManager {
         api_base_url: persisted.api_base_url,
         base_version_number: persisted.base_version_number,
         entity_id: persisted.entity_id,
+        file_type: persisted.file_type,
         file_name: persisted.file_name,
         file_path: persisted.file_path,
         id: persisted.id,
@@ -689,18 +708,19 @@ impl SessionManager {
     })
   }
 
-  pub async fn open_docx(
+  pub async fn open_file(
     &mut self,
-    request: OpenDocxRequest,
+    request: OpenFileRequest,
     prefetched_buffer: Option<Vec<u8>>,
-  ) -> Result<OpenDocxResponse, String> {
+  ) -> Result<OpenFileResponse, String> {
     let key = session_key(
       &request.workspace_id,
       &request.entity_id,
       &request.property_id,
     );
     let remote = &request.remote_session;
-    let managed_file_name = sanitize_file_name(&remote.file_name);
+    let file_type = remote.file_type;
+    let managed_file_name = sanitize_file_name(&remote.file_name, file_type);
 
     // Sync linked account
     if let Some(ref account) = request.linked_account {
@@ -720,6 +740,7 @@ impl SessionManager {
     let can_reuse = if let Some(ref eid) = existing_id {
       if let Some(existing) = self.sessions.get(eid) {
         existing.id == remote.session_id
+          && existing.file_type == file_type
           && Path::new(&existing.file_path).exists()
           && !did_remote_checkpoint_advance(
             &existing.last_checkpoint_at,
@@ -749,6 +770,7 @@ impl SessionManager {
         let session = self.sessions.get_mut(&eid).unwrap();
         session.api_base_url = normalize_api_base_url(&request.api_base_url);
         session.base_version_number = remote.base_version_number;
+        session.file_type = file_type;
         session.file_name = managed_file_name;
         session.file_path = file_path;
         session.last_checkpoint_at = remote.last_checkpoint_at.clone();
@@ -779,7 +801,7 @@ impl SessionManager {
         Some(&file_name),
       );
 
-      return Ok(OpenDocxResponse {
+      return Ok(OpenFileResponse {
         already_open: true,
         file_path,
         session_id,
@@ -804,7 +826,7 @@ impl SessionManager {
     // Use prefetched buffer (downloaded outside the lock) or download now
     let buffer = match prefetched_buffer {
       Some(buf) => buf,
-      None => self.download_docx(&remote.download_url).await?,
+      None => self.download_file(file_type, &remote.download_url).await?,
     };
     let local_sha = hash_bytes(&buffer);
 
@@ -823,6 +845,7 @@ impl SessionManager {
       api_base_url: normalize_api_base_url(&request.api_base_url),
       base_version_number: remote.base_version_number,
       entity_id: request.entity_id,
+      file_type,
       file_name: managed_file_name,
       file_path: file_path.clone(),
       id: remote.session_id.clone(),
@@ -898,7 +921,7 @@ impl SessionManager {
       )),
     );
 
-    Ok(OpenDocxResponse {
+    Ok(OpenFileResponse {
       already_open: false,
       file_path,
       session_id,
@@ -1269,6 +1292,7 @@ impl SessionManager {
     let api_base_url = session.api_base_url.clone();
     let sid = session.id.clone();
     let session_token = session.session_token.clone();
+    let file_type = session.file_type;
     let file_name = session.file_name.clone();
     let last_checkpoint_sha = session.last_checkpoint_sha.clone();
 
@@ -1278,6 +1302,7 @@ impl SessionManager {
     let result = self
       .do_sync_checkpoint(
         &sid,
+        file_type,
         &file_path,
         &api_base_url,
         &session_token,
@@ -1378,6 +1403,7 @@ impl SessionManager {
   async fn do_sync_checkpoint(
     &self,
     session_id: &str,
+    file_type: DesktopEditFileType,
     file_path: &str,
     api_base_url: &str,
     session_token: &str,
@@ -1400,7 +1426,7 @@ impl SessionManager {
         "file",
         reqwest::multipart::Part::bytes(file_bytes)
           .file_name(file_name.to_string())
-          .mime_str(DOCX_MIME_TYPE)
+          .mime_str(file_type.mime_type())
           .unwrap(),
       )
       .text("sessionToken", session_token.to_string());
@@ -1962,23 +1988,27 @@ impl SessionManager {
     session.sse_listener = Some(handle);
   }
 
-  async fn download_docx(&self, url: &str) -> Result<Vec<u8>, String> {
+  async fn download_file(
+    &self,
+    file_type: DesktopEditFileType,
+    url: &str,
+  ) -> Result<Vec<u8>, String> {
     let response = self
       .http_client
       .get(url)
       .timeout(DOWNLOAD_TIMEOUT)
       .send()
       .await
-      .map_err(|e| format!("stella desktop could not download the DOCX draft: {e}"))?;
+      .map_err(|e| format!("stella desktop could not download the Office file: {e}"))?;
 
     if !response.status().is_success() {
-      return Err("stella desktop could not download the DOCX draft.".to_string());
+      return Err("stella desktop could not download the Office file.".to_string());
     }
 
-    validate_docx_download_response(&response)?;
+    validate_office_download_response(file_type, &response)?;
 
-    let bytes = read_docx_download_bytes(response).await?;
-    validate_docx_download_bytes(&bytes)?;
+    let bytes = read_office_download_bytes(response).await?;
+    validate_office_download_bytes(file_type, &bytes)?;
     Ok(bytes)
   }
 
@@ -1997,7 +2027,7 @@ impl SessionManager {
     let file_path = session_folder.join(file_name);
     tokio::fs::write(&file_path, buffer)
       .await
-      .map_err(|e| format!("Failed to write DOCX file: {e}"))?;
+      .map_err(|e| format!("Failed to write Office file: {e}"))?;
 
     Ok(file_path.to_string_lossy().to_string())
   }
@@ -2316,9 +2346,10 @@ pub async fn run_retry_loop(manager: Arc<Mutex<SessionManager>>) {
   }
 }
 
-/// Download a DOCX file without holding the session manager lock.
+/// Download an Office file without holding the session manager lock.
 /// Used by the bridge to avoid blocking other operations during network I/O.
-pub async fn download_docx_standalone(
+pub async fn download_file_standalone(
+  file_type: DesktopEditFileType,
   client: &reqwest::Client,
   url: &str,
 ) -> Result<Vec<u8>, String> {
@@ -2327,16 +2358,16 @@ pub async fn download_docx_standalone(
     .timeout(DOWNLOAD_TIMEOUT)
     .send()
     .await
-    .map_err(|e| format!("stella desktop could not download the DOCX draft: {e}"))?;
+    .map_err(|e| format!("stella desktop could not download the Office file: {e}"))?;
 
   if !response.status().is_success() {
-    return Err("stella desktop could not download the DOCX draft.".to_string());
+    return Err("stella desktop could not download the Office file.".to_string());
   }
 
-  validate_docx_download_response(&response)?;
+  validate_office_download_response(file_type, &response)?;
 
-  let bytes = read_docx_download_bytes(response).await?;
-  validate_docx_download_bytes(&bytes)?;
+  let bytes = read_office_download_bytes(response).await?;
+  validate_office_download_bytes(file_type, &bytes)?;
   Ok(bytes)
 }
 
@@ -2443,6 +2474,7 @@ mod tests {
       api_base_url: "https://api.example.com".to_string(),
       base_version_number: 1,
       entity_id: format!("entity-{id}"),
+      file_type: DesktopEditFileType::Docx,
       file_name: format!("{id}.docx"),
       file_path: std::env::temp_dir()
         .join(format!("{id}.docx"))
@@ -2470,6 +2502,7 @@ mod tests {
       api_base_url: persisted.api_base_url,
       base_version_number: persisted.base_version_number,
       entity_id: persisted.entity_id,
+      file_type: persisted.file_type,
       file_name: persisted.file_name,
       file_path: persisted.file_path,
       id: persisted.id,
@@ -2498,11 +2531,23 @@ mod tests {
   }
 
   #[test]
-  fn is_word_lock_file_for_matches_replacement_and_prefixed_owner_files() {
-    assert!(is_word_lock_file_for("~$cument.docx", "document.docx"));
-    assert!(is_word_lock_file_for("~$document.docx", "document.docx"));
-    assert!(!is_word_lock_file_for("document.docx", "document.docx"));
-    assert!(!is_word_lock_file_for("~$brief.docx", "~$brief.docx"));
+  fn is_microsoft_office_lock_file_for_matches_supported_extensions() {
+    for extension in ["docx", "xlsx", "pptx"] {
+      let file_name = format!("document.{extension}");
+      assert!(is_microsoft_office_lock_file_for(
+        &format!("~$cument.{extension}"),
+        &file_name
+      ));
+      assert!(is_microsoft_office_lock_file_for(
+        &format!("~${file_name}"),
+        &file_name
+      ));
+      assert!(!is_microsoft_office_lock_file_for(&file_name, &file_name));
+    }
+    assert!(!is_microsoft_office_lock_file_for(
+      "~$brief.docx",
+      "~$brief.docx"
+    ));
   }
 
   #[test]
@@ -2523,42 +2568,110 @@ mod tests {
   }
 
   #[test]
-  fn sanitize_file_name_preserves_only_docx_outputs() {
-    assert_eq!(sanitize_file_name("brief.docx"), "brief.docx");
-    assert_eq!(sanitize_file_name("brief.DOCX"), "brief.DOCX");
-    assert_eq!(sanitize_file_name("Agreement"), "Agreement.docx");
-    assert_eq!(sanitize_file_name("payload.sh"), "payload.sh.docx");
-    assert_eq!(sanitize_file_name("../payload.bat"), "payload.bat.docx");
+  fn sanitize_file_name_preserves_the_expected_office_extension() {
+    for (file_type, extension) in [
+      (DesktopEditFileType::Docx, "docx"),
+      (DesktopEditFileType::Xlsx, "xlsx"),
+      (DesktopEditFileType::Pptx, "pptx"),
+    ] {
+      assert_eq!(
+        sanitize_file_name(&format!("brief.{extension}"), file_type),
+        format!("brief.{extension}")
+      );
+      assert_eq!(
+        sanitize_file_name("Agreement", file_type),
+        format!("Agreement.{extension}")
+      );
+      assert_eq!(
+        sanitize_file_name("../payload.bat", file_type),
+        format!("payload.bat.{extension}")
+      );
+    }
   }
 
   #[test]
-  fn docx_download_content_type_allows_docx_and_generic_binary() {
-    assert!(is_allowed_docx_download_content_type(DOCX_MIME_TYPE));
-    assert!(is_allowed_docx_download_content_type(
+  fn office_download_content_type_matches_expected_kind() {
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Docx,
+      DOCX_MIME_TYPE
+    ));
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Docx,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document; charset=binary"
     ));
-    assert!(is_allowed_docx_download_content_type(
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Xlsx,
+      XLSX_MIME_TYPE
+    ));
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Pptx,
+      PPTX_MIME_TYPE
+    ));
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Docx,
       "application/octet-stream"
     ));
-    assert!(is_allowed_docx_download_content_type("binary/octet-stream"));
-    assert!(!is_allowed_docx_download_content_type("text/html"));
+    assert!(is_allowed_download_content_type(
+      DesktopEditFileType::Pptx,
+      "binary/octet-stream"
+    ));
+    assert!(!is_allowed_download_content_type(
+      DesktopEditFileType::Xlsx,
+      DOCX_MIME_TYPE
+    ));
+    assert!(!is_allowed_download_content_type(
+      DesktopEditFileType::Docx,
+      "text/html"
+    ));
   }
 
   #[test]
-  fn docx_download_bytes_require_docx_archive_entries() {
+  fn office_download_bytes_require_kind_specific_archive_entries() {
     assert!(
-      validate_docx_download_bytes(&zip_bytes(&[
-        DOCX_CONTENT_TYPES_ENTRY,
-        DOCX_DOCUMENT_ENTRY
-      ]))
+      validate_office_download_bytes(
+        DesktopEditFileType::Docx,
+        &zip_bytes(&[
+          CONTENT_TYPES_ENTRY,
+          DesktopEditFileType::Docx.main_part_path(),
+        ])
+      )
       .is_ok()
     );
-    assert!(validate_docx_download_bytes(&zip_bytes(&["payload.bin"])).is_err());
-    assert!(validate_docx_download_bytes(b"#!/bin/sh\n").is_err());
+    assert!(
+      validate_office_download_bytes(
+        DesktopEditFileType::Xlsx,
+        &zip_bytes(&[
+          CONTENT_TYPES_ENTRY,
+          DesktopEditFileType::Xlsx.main_part_path(),
+        ])
+      )
+      .is_ok()
+    );
+    assert!(
+      validate_office_download_bytes(
+        DesktopEditFileType::Pptx,
+        &zip_bytes(&[
+          CONTENT_TYPES_ENTRY,
+          DesktopEditFileType::Pptx.main_part_path(),
+        ])
+      )
+      .is_ok()
+    );
+    assert!(
+      validate_office_download_bytes(
+        DesktopEditFileType::Docx,
+        &zip_bytes(&["payload.bin"])
+      )
+      .is_err()
+    );
+    assert!(
+      validate_office_download_bytes(DesktopEditFileType::Docx, b"#!/bin/sh\n")
+        .is_err()
+    );
   }
 
   #[tokio::test]
-  async fn reused_managed_copy_is_renamed_to_sanitized_docx_name() {
+  async fn reused_managed_copy_is_renamed_to_sanitized_office_name() {
     let dir = std::env::temp_dir()
       .join(format!("stella-desktop-test-{}", uuid::Uuid::new_v4()));
     let source = dir.join("Agreement");

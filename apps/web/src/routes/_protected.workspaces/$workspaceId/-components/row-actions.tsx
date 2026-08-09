@@ -70,8 +70,17 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { DOCX_MIME } from "@/lib/consts";
-import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import {
+  DesktopBridgeIncompatibleError,
+  openFileInDesktop,
+  type OpenFileInDesktopResult,
+} from "@/lib/desktop-bridge";
+import {
+  DESKTOP_EDIT_FILE_TYPES,
+  canOpenDesktopEdit,
+  getDesktopEditFileType,
+} from "@/lib/desktop-edit-formats";
+import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
@@ -239,12 +248,23 @@ export const RowActions = ({
           ocrSource: source,
         }),
       );
-  const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
+  const desktopEditFileType =
+    !isBulk && file
+      ? getDesktopEditFileType({
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+        })
+      : null;
+  const hasDesktopEditFileType = desktopEditFileType !== null;
   const desktopEditLockState = getDesktopEditLockState(entity.activeEditBy);
-  const isLockedByMe = isDocx && desktopEditLockState === "locked-by-me";
-  const isLockedByOther = isDocx && desktopEditLockState === "locked-by-other";
-  // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
-  const canOpenInDesktop = isDocx && !isLockedByOther;
+  const isLockedByMe =
+    hasDesktopEditFileType && desktopEditLockState === "locked-by-me";
+  const canOpenInDesktop = canOpenDesktopEdit({
+    context: rowActionContext,
+    fileType: desktopEditFileType,
+    lockState: desktopEditLockState,
+    readOnly: entity.readOnly,
+  });
   const openCopyToMatterDialog = () => {
     setCopyToMatterEntities(
       toCopyToMatterEntities(bulkTargets, getAncestorIds),
@@ -324,6 +344,39 @@ export const RowActions = ({
     failed: t("errors.actionFailed"),
   };
 
+  const showDesktopOpenResult = async (result: OpenFileInDesktopResult) => {
+    if (desktopEditFileType === null) {
+      return;
+    }
+
+    const application =
+      DESKTOP_EDIT_FILE_TYPES[desktopEditFileType].application;
+    await showDesktopEditOpenResultToast({
+      messages: {
+        notOpenedDescription: t(
+          "workspaces.files.desktopEdit.notOpenedDescription",
+          { application },
+        ),
+        openedDescription: t("workspaces.files.desktopEdit.openedDescription", {
+          application,
+        }),
+        openedTitle: t("workspaces.files.desktopEdit.openedTitle"),
+        sentDescription: t("workspaces.files.desktopEdit.sentDescription", {
+          application,
+        }),
+        sentTitle: t("workspaces.files.desktopEdit.sentTitle"),
+        unavailableTitle: t("workspaces.files.desktopEdit.unavailableTitle"),
+        updateRequiredDescription: t(
+          "workspaces.files.desktopEdit.updateRequiredDescription",
+        ),
+        updateRequiredTitle: t(
+          "workspaces.files.desktopEdit.updateRequiredTitle",
+        ),
+      },
+      result,
+    });
+  };
+
   const handleZipDownload = async () => {
     if (isBulk) {
       for (const e of selectedEntities) {
@@ -361,7 +414,7 @@ export const RowActions = ({
   };
 
   const handleOpenInDesktop = async () => {
-    if (!file || file.mimeType !== DOCX_MIME) {
+    if (!file || desktopEditFileType === null) {
       return;
     }
 
@@ -377,13 +430,8 @@ export const RowActions = ({
         ...(isLockedByMe ? { force: true as const } : {}),
       };
 
-      await openDocxInDesktop(desktopInput);
-
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.openedDescription"),
-        title: t("workspaces.files.desktopEdit.openedTitle"),
-        type: "success",
-      });
+      const openResult = await openFileInDesktop(desktopInput);
+      await showDesktopOpenResult(openResult);
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
         stellaToast.add({
@@ -391,6 +439,17 @@ export const RowActions = ({
             "workspaces.files.desktopEdit.authRequiredDescription",
           ),
           title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      if (error instanceof DesktopBridgeIncompatibleError) {
+        stellaToast.add({
+          description: t(
+            "workspaces.files.desktopEdit.updateRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
           type: "error",
         });
         return;
@@ -405,13 +464,13 @@ export const RowActions = ({
   };
 
   const doForceTakeover = async () => {
-    if (!file || file.mimeType !== DOCX_MIME) {
+    if (!file || desktopEditFileType === null) {
       return;
     }
 
     const linkedAccount = await getFreshLinkedAccount();
 
-    await openDocxInDesktop({
+    const openResult = await openFileInDesktop({
       apiBaseUrl: env.VITE_API_URL,
       entityId: file.entityId,
       force: true,
@@ -419,12 +478,7 @@ export const RowActions = ({
       propertyId: file.propertyId,
       workspaceId,
     });
-
-    stellaToast.add({
-      description: t("workspaces.files.desktopEdit.openedDescription"),
-      title: t("workspaces.files.desktopEdit.openedTitle"),
-      type: "success",
-    });
+    await showDesktopOpenResult(openResult);
   };
 
   // Force-release the lock and surface the same auth-aware feedback
@@ -445,6 +499,17 @@ export const RowActions = ({
         return;
       }
 
+      if (forceError instanceof DesktopBridgeIncompatibleError) {
+        stellaToast.add({
+          description: t(
+            "workspaces.files.desktopEdit.updateRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
       stellaToast.add({
         description: t("workspaces.files.desktopEdit.unavailableDescription"),
         title: t("workspaces.files.desktopEdit.unavailableTitle"),
@@ -454,7 +519,7 @@ export const RowActions = ({
   };
 
   const handleReleaseLock = async () => {
-    if (!file || file.mimeType !== DOCX_MIME) {
+    if (!file || desktopEditFileType === null) {
       return;
     }
 
@@ -847,16 +912,19 @@ export const RowActions = ({
             {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
-        {!isCellContext && isDocx && desktopEditLockState !== "unlocked" && (
-          <MenuItem
-            onClick={() => {
-              detached(handleReleaseLock(), "RowActions");
-            }}
-          >
-            <LockOpenIcon />
-            {t("workspaces.files.desktopEdit.releaseLock")}
-          </MenuItem>
-        )}
+        {!isCellContext &&
+          !entity.readOnly &&
+          hasDesktopEditFileType &&
+          desktopEditLockState !== "unlocked" && (
+            <MenuItem
+              onClick={() => {
+                detached(handleReleaseLock(), "RowActions");
+              }}
+            >
+              <LockOpenIcon />
+              {t("workspaces.files.desktopEdit.releaseLock")}
+            </MenuItem>
+          )}
 
         <MenuSeparator />
 

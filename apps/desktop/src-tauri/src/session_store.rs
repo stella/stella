@@ -3,9 +3,13 @@ use std::path::Path;
 use tokio::fs;
 
 use crate::types::{
-  DesktopNotificationPreferences, LinkedAccountSnapshot, SessionStatus,
-  TrustedSelfHostConnection,
+  DesktopEditFileType, DesktopNotificationPreferences, LinkedAccountSnapshot,
+  SessionStatus, TrustedSelfHostConnection,
 };
+
+const fn default_persisted_file_type() -> DesktopEditFileType {
+  DesktopEditFileType::Docx
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +17,9 @@ pub struct PersistedDesktopSession {
   pub api_base_url: String,
   pub base_version_number: i64,
   pub entity_id: String,
+  // Stores written before multi-format editing contain DOCX sessions only.
+  #[serde(default = "default_persisted_file_type")]
+  pub file_type: DesktopEditFileType,
   pub file_name: String,
   pub file_path: String,
   pub id: String,
@@ -152,6 +159,7 @@ mod tests {
       api_base_url: "https://api.example.com".into(),
       base_version_number: 1,
       entity_id: "ent-1".into(),
+      file_type: DesktopEditFileType::Docx,
       file_name: "contract.docx".into(),
       file_path: "/tmp/contract.docx".into(),
       id: "sess-1".into(),
@@ -215,6 +223,16 @@ mod tests {
       deserialized.linked_account.unwrap().email,
       "user@example.com"
     );
+  }
+
+  #[test]
+  fn persisted_docx_session_without_file_type_still_loads() {
+    let mut value = serde_json::to_value(make_session()).unwrap();
+    value.as_object_mut().unwrap().remove("fileType");
+
+    let session: PersistedDesktopSession = serde_json::from_value(value).unwrap();
+
+    assert_eq!(session.file_type, DesktopEditFileType::Docx);
   }
 
   // -- load_session_store --

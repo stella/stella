@@ -12,6 +12,14 @@ export type {
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
+  DESKTOP_EDIT_FILE_TYPES,
+  DESKTOP_EDIT_FILE_TYPE_CONFIG,
+} from "./desktop-edit-file-types";
+export type {
+  DesktopEditFileType,
+  DesktopEditMimeType,
+} from "./desktop-edit-file-types";
+export {
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,

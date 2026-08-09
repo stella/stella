@@ -4,7 +4,7 @@ use tauri::{
 };
 
 use crate::i18n::{t, t_plural};
-use crate::types::{AppSnapshot, SessionSnapshot};
+use crate::types::{AppSnapshot, DesktopEditFileType, SessionSnapshot};
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
@@ -28,7 +28,9 @@ fn format_session_status(session: &SessionSnapshot) -> String {
     crate::types::SessionStatus::Finalizing => {
       t("tray.sessionCreatingRevision").to_string()
     }
-    crate::types::SessionStatus::Opening => t("tray.sessionOpeningInWord").to_string(),
+    crate::types::SessionStatus::Opening => {
+      t("tray.sessionOpeningInOffice").to_string()
+    }
     crate::types::SessionStatus::Ready => if session.pending_finalize {
       t("tray.sessionFinishingEdit")
     } else {
@@ -285,6 +287,7 @@ mod tests {
     SessionSnapshot {
       base_version_number: 1,
       entity_id: "ent-1".into(),
+      file_type: DesktopEditFileType::Docx,
       file_name: "contract.docx".into(),
       file_path: "/tmp/contract.docx".into(),
       id: "sess-1".into(),
@@ -335,7 +338,7 @@ mod tests {
   fn test_format_session_status_opening() {
     init_i18n();
     let s = make_session(SessionStatus::Opening);
-    assert_eq!(format_session_status(&s), "Opening in Word");
+    assert_eq!(format_session_status(&s), "Opening in Office");
   }
 
   #[test]

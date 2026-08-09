@@ -1,7 +1,7 @@
 {
   "bridgePort": 45901,
-  "bridgeVersion": 7,
-  "capabilities": ["self-host.connect"],
+  "bridgeVersion": 9,
+  "capabilities": ["office-edit.v1", "self-host.connect"],
   "linkedAccount": {
     "email": "counsel@example.com",
     "name": "Jane Counsel",
@@ -17,6 +17,7 @@
     {
       "baseVersionNumber": 3,
       "entityId": "8f3b2c1a-9d4e-4f6a-8b2c-1a9d4e4f6a8b",
+      "fileType": "docx",
       "fileName": "merger-agreement.docx",
       "filePath": "/Users/jane/Stella/merger-agreement.docx",
       "id": "b2d4f6a8-1c3e-4a5b-9c7d-2e4f6a8b0c1d",

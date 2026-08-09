@@ -23,8 +23,8 @@ import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
+import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
-import { DocxDesktopOpenButton } from "@/components/inspector/docx-desktop-open-button";
 import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
@@ -62,6 +62,7 @@ import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -309,10 +310,17 @@ export const FileTabPanel = ({
   const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
   const metadataLane = tab.metadataLane ?? "closed";
   const isMetadataLaneExpanded = metadataLane === "expanded";
+  const desktopEditFileType = getDesktopEditFileType({
+    fileName: tab.fileName,
+    mimeType: tab.mimeType,
+  });
   const desktopOpenButton =
-    isNativeDocxDisplay && tab.propertyId !== undefined ? (
-      <DocxDesktopOpenButton
+    canUpdateEntity &&
+    desktopEditFileType !== null &&
+    tab.propertyId !== undefined ? (
+      <DesktopOpenButton
         entityId={tab.entityId}
+        fileType={desktopEditFileType}
         propertyId={tab.propertyId}
         workspaceId={tab.workspaceId}
       />

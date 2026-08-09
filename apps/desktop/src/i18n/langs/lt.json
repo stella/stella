@@ -24,7 +24,7 @@
     "sessionFinishingEdit": "Baigiamas redagavimas",
     "sessionMovedToAnotherDevice": "Perkelta į kitą įrenginį",
     "sessionNeedsAttention": "Reikia dėmesio",
-    "sessionOpeningInWord": "Atidaroma Word programoje",
+    "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis"
   },
   "notification": {
@@ -64,7 +64,7 @@
     "general": "Bendra",
     "lastVerified": "Paskutinį kartą patikrinta",
     "linkDevice": "Atidarykite dokumentą iš stella, kad susietumėte šį įrenginį.",
-    "managedWordEditing": "Valdomas Word redagavimas stella programai.",
+    "managedOfficeEditing": "Valdomas Office failų redagavimas stella programai.",
     "notAvailableYet": "Dar nepasiekiama",
     "notConnected": "Neprisijungta",
     "notificationDocumentReady": "Dokumentas paruoštas",

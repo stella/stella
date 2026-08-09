@@ -2,6 +2,7 @@ import { FetchBoundaryError } from "@stll/errors";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
+import type { DesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -14,7 +15,8 @@ const DESKTOP_BRIDGE_START_POLL_INTERVAL_MS = 1000;
 const DESKTOP_BRIDGE_START_TIMEOUT_MS = 6000;
 const DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS = 750;
 const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
-const MIN_DESKTOP_BRIDGE_VERSION = 3;
+const MIN_DESKTOP_BRIDGE_VERSION = 9;
+const REQUIRED_DESKTOP_BRIDGE_CAPABILITY = "office-edit.v1";
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
@@ -39,6 +41,7 @@ type LinkedAccountSnapshot = {
 type RemoteDesktopSession = {
   baseVersionNumber: number;
   downloadUrl: string;
+  fileType: DesktopEditFileType;
   fileName: string;
   lastCheckpointAt: string | null;
   resumedFromCheckpoint: boolean;
@@ -58,11 +61,11 @@ type DesktopEditHandoffStatus =
   | { status: "opened"; sessionId: string }
   | { status: "pending"; expiresAt: string };
 
-export type OpenDocxInDesktopResult =
+export type OpenFileInDesktopResult =
   | { type: "opened" }
   | { type: "handoff-pending"; waitUntilOpened: Promise<void> };
 
-type OpenDocxInDesktopInput = {
+type OpenFileInDesktopInput = {
   apiBaseUrl: string;
   entityId: string;
   linkedAccount: LinkedAccountSnapshot | null;
@@ -75,6 +78,7 @@ type BridgeResponse = {
 };
 
 type BridgeHealth = {
+  capabilities?: string[];
   bridgeVersion?: number;
 };
 
@@ -88,7 +92,12 @@ const isBridgeResponse = (value: unknown): value is BridgeResponse =>
 const isBridgeHealth = (value: unknown): value is BridgeHealth =>
   typeof value === "object" &&
   value !== null &&
-  (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number");
+  (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number") &&
+  (!("capabilities" in value) ||
+    (Array.isArray(value.capabilities) &&
+      value.capabilities.every(
+        (capability) => typeof capability === "string",
+      )));
 
 const isSelfHostConnectionStatus = (
   value: unknown,
@@ -128,7 +137,8 @@ const readBridgeHealth = async (
 
 const isCompatibleDesktopBridge = (health: BridgeHealth) =>
   typeof health.bridgeVersion === "number" &&
-  health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION;
+  health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION &&
+  health.capabilities?.includes(REQUIRED_DESKTOP_BRIDGE_CAPABILITY) === true;
 
 const signalDesktopUpdateCheck = () => {
   window.location.href = "stella://ping";
@@ -198,7 +208,7 @@ const createDesktopEditHandoff = async ({
   linkedAccount,
   propertyId,
   workspaceId,
-}: OpenDocxInDesktopInput) => {
+}: OpenFileInDesktopInput) => {
   const response = await api
     .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["desktop-edit-handoffs"].post({
@@ -362,14 +372,14 @@ export const connectSelfHostedDesktop = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-const openDocxViaBridge = async ({
+const openFileViaBridge = async ({
   apiBaseUrl,
   entityId,
   force,
   linkedAccount,
   propertyId,
   workspaceId,
-}: OpenDocxInDesktopInput) => {
+}: OpenFileInDesktopInput) => {
   const remoteSession = await openRemoteDesktopSession({
     force,
     entityId,
@@ -380,7 +390,7 @@ const openDocxViaBridge = async ({
   let response: Response;
 
   try {
-    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/open-docx`, {
+    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/open-file`, {
       body: JSON.stringify({
         apiBaseUrl,
         entityId,
@@ -396,39 +406,56 @@ const openDocxViaBridge = async ({
       timeoutMs: 10_000,
     });
   } catch {
-    throw new DesktopBridgeUnavailableError();
+    return await rethrowAfterBridgeCompatibilityCheck(
+      new DesktopBridgeUnavailableError(),
+    );
   }
 
   if (!response.ok) {
     const payload = await parseBridgeResponse(response);
     if (payload?.message) {
-      throw new FetchBoundaryError({
-        url: `${DESKTOP_BRIDGE_URL}/v1/open-docx`,
-        status: response.status,
-        statusText: response.statusText,
-        message: payload.message,
-      });
+      return await rethrowAfterBridgeCompatibilityCheck(
+        new FetchBoundaryError({
+          url: `${DESKTOP_BRIDGE_URL}/v1/open-file`,
+          status: response.status,
+          statusText: response.statusText,
+          message: payload.message,
+        }),
+      );
     }
 
-    throw new DesktopBridgeUnavailableError();
+    return await rethrowAfterBridgeCompatibilityCheck(
+      new DesktopBridgeUnavailableError(),
+    );
   }
 
-  return { type: "opened" } satisfies OpenDocxInDesktopResult;
+  return { type: "opened" } satisfies OpenFileInDesktopResult;
 };
 
-export const openDocxInDesktop = async ({
+const rethrowAfterBridgeCompatibilityCheck = async (
+  error: unknown,
+): Promise<never> => {
+  const health = await readBridgeHealth(500);
+  if (health) {
+    assertCompatibleDesktopBridge(health);
+  }
+
+  throw error;
+};
+
+export const openFileInDesktop = async ({
   apiBaseUrl,
   entityId,
   force,
   linkedAccount,
   propertyId,
   workspaceId,
-}: OpenDocxInDesktopInput) => {
+}: OpenFileInDesktopInput) => {
   const bridgeHealth = await readBridgeHealth(500);
   if (bridgeHealth) {
     assertCompatibleDesktopBridge(bridgeHealth);
 
-    return await openDocxViaBridge({
+    return await openFileViaBridge({
       apiBaseUrl,
       entityId,
       linkedAccount,
@@ -444,7 +471,7 @@ export const openDocxInDesktop = async ({
       signalUpdateCheck: false,
     });
 
-    return await openDocxViaBridge({
+    return await openFileViaBridge({
       apiBaseUrl,
       entityId,
       linkedAccount,
@@ -469,13 +496,6 @@ export const openDocxInDesktop = async ({
       expiresAt: handoff.expiresAt,
       handoffId: handoff.handoffId,
       workspaceId,
-    }).catch(async (error: unknown) => {
-      const lateBridgeHealth = await readBridgeHealth(500);
-      if (lateBridgeHealth) {
-        assertCompatibleDesktopBridge(lateBridgeHealth);
-      }
-
-      throw error;
-    }),
-  } satisfies OpenDocxInDesktopResult;
+    }).catch(rethrowAfterBridgeCompatibilityCheck),
+  } satisfies OpenFileInDesktopResult;
 };

@@ -26,7 +26,7 @@
     "sessionFinishingEdit": "Finishing edit",
     "sessionMovedToAnotherDevice": "Moved to another device",
     "sessionNeedsAttention": "Needs attention",
-    "sessionOpeningInWord": "Opening in Word",
+    "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft"
   },
   "notification": {
@@ -66,7 +66,7 @@
     "general": "General",
     "lastVerified": "Last verified",
     "linkDevice": "Open a document from stella to link this device.",
-    "managedWordEditing": "Managed Word editing for stella.",
+    "managedOfficeEditing": "Managed Office file editing for stella.",
     "notConnected": "Not connected",
     "notAvailableYet": "Not available yet",
     "notifications": "Notifications",

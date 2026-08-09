@@ -4,6 +4,14 @@ import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  desktopEditFileTypeForMimeType,
+  desktopEditMimeTypeForFileType,
+} from "@/api/lib/desktop-edit-file-types";
+import type {
+  DesktopEditFileType,
+  DesktopEditMimeType,
+} from "@/api/lib/desktop-edit-file-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -14,12 +22,19 @@ type DocxFieldContent = Extract<FieldContent, { type: "file" }> & {
   mimeType: typeof DOCX_MIME_TYPE;
 };
 
-type DocxFieldEntry = {
+export type DesktopEditableFileContent = Extract<
+  FieldContent,
+  { type: "file" }
+> & {
+  mimeType: DesktopEditMimeType;
+};
+
+type FileFieldEntry = {
   content: FieldContent;
   propertyId: SafeId<"property">;
 };
 
-export const lockDocxEditTarget = async ({
+export const lockDesktopEditTarget = async ({
   entityId,
   propertyId,
   tx,
@@ -32,6 +47,35 @@ export const lockDocxEditTarget = async ({
 }) => {
   const lockKey = `docx-edit:${workspaceId}:${entityId}:${propertyId}`;
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+};
+
+// The advisory-lock namespace is stable across rolling deployments. Folio's
+// DOCX collaboration path and native desktop editing must keep contending on
+// the same target lock while older API instances may still be running.
+export const lockDocxEditTarget = lockDesktopEditTarget;
+
+export const asDesktopEditableFileContent = (
+  content: FieldContent,
+): {
+  fileContent: DesktopEditableFileContent;
+  fileType: DesktopEditFileType;
+} | null => {
+  if (content.type !== "file") {
+    return null;
+  }
+
+  const fileType = desktopEditFileTypeForMimeType(content.mimeType);
+  if (fileType === null) {
+    return null;
+  }
+
+  return {
+    fileContent: {
+      ...content,
+      mimeType: desktopEditMimeTypeForFileType(fileType),
+    },
+    fileType,
+  };
 };
 
 export const asDocxFieldContent = (
@@ -51,7 +95,7 @@ export const findDocxFieldForProperty = ({
   fieldEntries,
   propertyId,
 }: {
-  fieldEntries: DocxFieldEntry[];
+  fieldEntries: FileFieldEntry[];
   propertyId: SafeId<"property">;
 }) => {
   const targetField = fieldEntries.find(
@@ -68,6 +112,81 @@ export const findDocxFieldForProperty = ({
   }
 
   return content;
+};
+
+export const findDesktopEditableFileForProperty = ({
+  fieldEntries,
+  propertyId,
+}: {
+  fieldEntries: FileFieldEntry[];
+  propertyId: SafeId<"property">;
+}) => {
+  const targetField = fieldEntries.find(
+    (field) => field.propertyId === propertyId,
+  );
+
+  if (!targetField) {
+    return null;
+  }
+
+  return asDesktopEditableFileContent(targetField.content);
+};
+
+export const readCurrentDesktopEditTarget = async ({
+  entityId,
+  propertyId,
+  tx,
+  workspaceId,
+}: {
+  entityId: SafeId<"entity">;
+  propertyId: SafeId<"property">;
+  tx: DatabaseTransaction;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const entity = await tx.query.entities.findFirst({
+    where: {
+      id: { eq: entityId },
+      workspaceId: { eq: workspaceId },
+    },
+    columns: {
+      id: true,
+    },
+    with: {
+      currentVersion: {
+        columns: {
+          id: true,
+          versionNumber: true,
+        },
+        with: {
+          fields: {
+            columns: {
+              content: true,
+              propertyId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!entity?.currentVersion) {
+    return null;
+  }
+
+  const target = findDesktopEditableFileForProperty({
+    fieldEntries: entity.currentVersion.fields,
+    propertyId,
+  });
+
+  if (!target) {
+    return null;
+  }
+
+  return {
+    baseVersionId: entity.currentVersion.id,
+    baseVersionNumber: entity.currentVersion.versionNumber,
+    ...target,
+  };
 };
 
 export const readCurrentDocxTarget = async ({
@@ -185,6 +304,48 @@ export const readVersionDocxTarget = async ({
   return asDocxFieldContent(row.content);
 };
 
+export const readVersionDesktopEditTarget = async ({
+  entityVersionId,
+  fileType,
+  propertyId,
+  tx,
+  workspaceId,
+}: {
+  entityVersionId: SafeId<"entityVersion">;
+  fileType: DesktopEditFileType;
+  propertyId: SafeId<"property">;
+  tx: DatabaseTransaction;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const rows = await tx
+    .select({
+      content: fields.content,
+    })
+    .from(fields)
+    .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
+    .where(
+      and(
+        eq(fields.entityVersionId, entityVersionId),
+        eq(fields.propertyId, propertyId),
+        eq(fields.workspaceId, workspaceId),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  const row = rows.at(0);
+  if (!row) {
+    return null;
+  }
+
+  const target = asDesktopEditableFileContent(row.content);
+  if (!target || target.fileType !== fileType) {
+    return null;
+  }
+
+  return target.fileContent;
+};
+
 export const presignDocxFieldDownload = async ({
   fileContent,
   organizationId,
@@ -223,6 +384,56 @@ export const presignDocxDownloadFromFileId = async ({
     createFileKey({
       fileId,
       mimeType: DOCX_MIME_TYPE,
+      organizationId,
+      workspaceId,
+    }),
+    {
+      expiresIn: 900,
+      fileName,
+      scope: { organizationId, workspaceId },
+    },
+  );
+
+export const presignDesktopEditFileDownload = async ({
+  fileContent,
+  organizationId,
+  workspaceId,
+}: {
+  fileContent: DesktopEditableFileContent;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+}) =>
+  await presignDownloadUrl(
+    createFileKey({
+      fileId: fileContent.id,
+      mimeType: fileContent.mimeType,
+      organizationId,
+      workspaceId,
+    }),
+    {
+      expiresIn: 900,
+      fileName: fileContent.fileName,
+      scope: { organizationId, workspaceId },
+    },
+  );
+
+export const presignDesktopEditDownloadFromFileId = async ({
+  fileId,
+  fileName,
+  fileType,
+  organizationId,
+  workspaceId,
+}: {
+  fileId: string;
+  fileName: string;
+  fileType: DesktopEditFileType;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+}) =>
+  await presignDownloadUrl(
+    createFileKey({
+      fileId,
+      mimeType: desktopEditMimeTypeForFileType(fileType),
       organizationId,
       workspaceId,
     }),
