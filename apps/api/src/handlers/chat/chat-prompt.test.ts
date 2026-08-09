@@ -361,6 +361,7 @@ describe("chat prompt builders", () => {
   });
 
   test("grounds active email answers in source-bound citation blocks", () => {
+    const entityId = toSafeId<"entity">("00000000-0000-4000-8000-000000000041");
     const fieldId = toSafeId<"field">("00000000-0000-4000-8000-000000000042");
     const prompt = appendActiveFilePromptIfEntityExists({
       activeFile: {
@@ -370,7 +371,7 @@ describe("chat prompt builders", () => {
             { id: "body-0001", text: "Payment is due Friday." },
           ],
         },
-        entityId: toSafeId<"entity">("entity_email"),
+        entityId,
         fileFieldId: fieldId,
         fileName: "message.eml",
       },
@@ -381,7 +382,7 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).toContain("EMAIL CITATIONS");
-    expect(prompt).toContain(`#email:${fieldId}:body-0001`);
+    expect(prompt).toContain(`#email:${entityId}:${fieldId}:body-0001`);
     expect(prompt).toContain('"blockId":"header-from"');
     expect(prompt).toContain('"text":"Payment is due Friday."');
   });

@@ -1171,7 +1171,7 @@ const collectEmailCitationText = (element: Element): string => {
     }
     parts.push(collectEmailCitationText(child));
   }
-  return parts.join(" ");
+  return parts.join("");
 };
 
 const normalizeEmailCitationText = (text: string): string =>

@@ -21,7 +21,10 @@ import {
   resolveMentionWorkspaceId,
 } from "@/components/chat/chat-mention-href";
 import { useEntityIconSource } from "@/components/chat/entity-icon-source";
-import { openEntityInInspector } from "@/components/chat/entity-open";
+import {
+  openEmailCitationSource,
+  openEntityInInspector,
+} from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { InlinePill } from "@/components/inline-pill";
@@ -30,13 +33,12 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
+import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   EMAIL_CITATION_HREF_PREFIX,
-  EMAIL_CITATION_SCROLL_EVENT,
-  useKnownEmailCitationTarget,
-  type EmailCitationTarget,
+  requestEmailCitationScroll,
 } from "@/lib/files/email-citations";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -527,7 +529,7 @@ export const StreamdownMentionLink = ({
   workspaceId,
   ...props
 }: StreamdownMentionLinkProps) => {
-  const emailCitationTarget = useKnownEmailCitationTarget(href ?? "");
+  const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
   if (!href) {
     return <span {...props}>{children}</span>;
   }
@@ -553,11 +555,15 @@ export const StreamdownMentionLink = ({
   }
 
   if (href.startsWith(EMAIL_CITATION_HREF_PREFIX)) {
-    if (!emailCitationTarget) {
+    if (!emailCitation) {
       return <span {...props}>{children}</span>;
     }
     return (
-      <EmailCitationChip interactive={interactive} target={emailCitationTarget}>
+      <EmailCitationChip
+        citation={emailCitation}
+        interactive={interactive}
+        workspaceId={workspaceId}
+      >
         {children}
       </EmailCitationChip>
     );
@@ -607,31 +613,46 @@ export const StreamdownMentionLink = ({
 };
 
 const EmailCitationChip = ({
+  citation,
   children,
   interactive,
-  target,
+  workspaceId,
 }: {
+  citation: NonNullable<ReturnType<typeof useVerifiedEmailCitationTarget>>;
   children: React.ReactNode;
   interactive: boolean;
-  target: EmailCitationTarget;
-}) => (
-  <InlinePill
-    data-block-id={target.blockId}
-    leadingIcon={<MailIcon className="size-3 shrink-0" />}
-    onActivate={
-      interactive
-        ? () => {
-            window.dispatchEvent(
-              new CustomEvent(EMAIL_CITATION_SCROLL_EVENT, { detail: target }),
-            );
-          }
-        : undefined
+  workspaceId: string | undefined;
+}) => {
+  const { target } = citation;
+  const handleActivate = (): void => {
+    if (!workspaceId) {
+      return;
     }
-    truncate
-  >
-    {children}
-  </InlinePill>
-);
+    if (
+      citation.type === "verified" &&
+      !openEmailCitationSource({
+        entity: citation.entity,
+        entityId: target.entityId,
+        fieldId: target.fieldId,
+        workspaceId,
+      })
+    ) {
+      return;
+    }
+    requestEmailCitationScroll(target);
+  };
+
+  return (
+    <InlinePill
+      data-block-id={target.blockId}
+      leadingIcon={<MailIcon className="size-3 shrink-0" />}
+      onActivate={interactive && workspaceId ? handleActivate : undefined}
+      truncate
+    >
+      {children}
+    </InlinePill>
+  );
+};
 
 type FolioBlockChipProps = {
   blockId: string;

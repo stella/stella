@@ -4,7 +4,7 @@ export const EMAIL_CITATION_HREF_PREFIX = "#email:";
 export const EMAIL_CITATION_SCROLL_EVENT = "email:scroll-to-citation";
 
 const EMAIL_CITATION_HREF_RE =
-  /^#email:(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>header-(?:bcc|cc|date|from|subject|to)|body-[0-9]{4})$/iu;
+  /^#email:(?<entityId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>header-(?:bcc|cc|date|from|subject|to)|body-[0-9]{4})$/iu;
 
 export type EmailCitationBlock = {
   id: string;
@@ -13,6 +13,7 @@ export type EmailCitationBlock = {
 
 export type EmailCitationTarget = {
   blockId: string;
+  entityId: string;
   fieldId: string;
 };
 
@@ -20,16 +21,24 @@ export const parseEmailCitationHref = (
   href: string,
 ): EmailCitationTarget | null => {
   const match = EMAIL_CITATION_HREF_RE.exec(href);
+  const entityId = match?.groups?.["entityId"];
   const fieldId = match?.groups?.["fieldId"];
   const blockId = match?.groups?.["blockId"];
-  return fieldId && blockId ? { blockId, fieldId } : null;
+  return entityId && fieldId && blockId ? { blockId, entityId, fieldId } : null;
 };
 
 const citationRegistrations = new Map<
   string,
-  Map<symbol, ReadonlySet<string>>
+  Map<symbol, { blockIds: ReadonlySet<string>; entityId: string }>
 >();
 const citationRegistrationListeners = new Set<() => void>();
+let pendingCitationTarget: EmailCitationTarget | null = null;
+
+const dispatchEmailCitationScroll = (target: EmailCitationTarget): void => {
+  window.dispatchEvent(
+    new CustomEvent(EMAIL_CITATION_SCROLL_EVENT, { detail: target }),
+  );
+};
 
 const emitCitationRegistrationChange = (): void => {
   for (const listener of citationRegistrationListeners) {
@@ -39,18 +48,32 @@ const emitCitationRegistrationChange = (): void => {
 
 export const registerEmailCitationBlocks = ({
   blockIds,
+  entityId,
   fieldId,
 }: {
   blockIds: readonly string[];
+  entityId: string;
   fieldId: string;
 }): (() => void) => {
   const registrationId = Symbol(fieldId);
   const registrations =
     citationRegistrations.get(fieldId) ??
-    new Map<symbol, ReadonlySet<string>>();
-  registrations.set(registrationId, new Set(blockIds));
+    new Map<symbol, { blockIds: ReadonlySet<string>; entityId: string }>();
+  registrations.set(registrationId, { blockIds: new Set(blockIds), entityId });
   citationRegistrations.set(fieldId, registrations);
   emitCitationRegistrationChange();
+
+  const pendingTarget = pendingCitationTarget;
+  if (
+    pendingTarget?.entityId === entityId &&
+    pendingTarget.fieldId === fieldId &&
+    isKnownEmailCitationTarget(pendingTarget)
+  ) {
+    pendingCitationTarget = null;
+    queueMicrotask(() => {
+      dispatchEmailCitationScroll(pendingTarget);
+    });
+  }
 
   return () => {
     const current = citationRegistrations.get(fieldId);
@@ -64,18 +87,43 @@ export const registerEmailCitationBlocks = ({
 
 export const isKnownEmailCitationTarget = ({
   blockId,
+  entityId,
   fieldId,
 }: EmailCitationTarget): boolean => {
   const registrations = citationRegistrations.get(fieldId);
   if (!registrations) {
     return false;
   }
-  for (const blockIds of registrations.values()) {
-    if (blockIds.has(blockId)) {
+  for (const registration of registrations.values()) {
+    if (
+      registration.entityId === entityId &&
+      registration.blockIds.has(blockId)
+    ) {
       return true;
     }
   }
   return false;
+};
+
+export const isVerifiedEmailCitationTarget = ({
+  blockIds,
+  sourceFieldIds,
+  target,
+}: {
+  blockIds: readonly string[];
+  sourceFieldIds: readonly string[];
+  target: EmailCitationTarget;
+}): boolean =>
+  sourceFieldIds.includes(target.fieldId) && blockIds.includes(target.blockId);
+
+export const requestEmailCitationScroll = (
+  target: EmailCitationTarget,
+): void => {
+  if (isKnownEmailCitationTarget(target)) {
+    dispatchEmailCitationScroll(target);
+    return;
+  }
+  pendingCitationTarget = target;
 };
 
 const subscribeToEmailCitationRegistrations = (

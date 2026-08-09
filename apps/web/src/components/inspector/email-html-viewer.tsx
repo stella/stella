@@ -37,6 +37,7 @@ import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
 type EmailHtmlViewerProps = {
+  entityId: string;
   fieldId: string;
   layout?: EmailViewerLayout;
   workspaceId: string;
@@ -82,6 +83,7 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
       }
     >
       <EmailHtmlViewer
+        entityId={entityId}
         fieldId={fieldId}
         layout={
           isContextual
@@ -112,6 +114,7 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
 };
 
 export const EmailHtmlViewer = ({
+  entityId,
   fieldId,
   layout = EMAIL_VIEWER_LAYOUT.standard,
   workspaceId,
@@ -134,15 +137,20 @@ export const EmailHtmlViewer = ({
     }
     return registerEmailCitationBlocks({
       blockIds: previewQuery.data.citationBlocks.map(({ id }) => id),
+      entityId,
       fieldId,
     });
-  }, [fieldId, previewQuery.data]);
+  }, [entityId, fieldId, previewQuery.data]);
 
   useExternalSyncEffect(() => {
     const handleCitation = ({
       detail,
     }: CustomEvent<EmailCitationTarget>): void => {
-      if (detail.fieldId !== fieldId || !isKnownEmailCitationTarget(detail)) {
+      if (
+        detail.entityId !== entityId ||
+        detail.fieldId !== fieldId ||
+        !isKnownEmailCitationTarget(detail)
+      ) {
         return;
       }
       setActiveCitationBlockId(detail.blockId);
@@ -156,7 +164,7 @@ export const EmailHtmlViewer = ({
     return () => {
       window.removeEventListener(EMAIL_CITATION_SCROLL_EVENT, handleCitation);
     };
-  }, [fieldId]);
+  }, [entityId, fieldId]);
 
   if (previewQuery.isPending) {
     return (
@@ -231,7 +239,7 @@ export const EmailHtmlViewer = ({
           className={cn(
             "text-foreground text-base font-semibold text-balance",
             activeCitationBlockId === "header-subject" &&
-              "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+              "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
           )}
           data-stella-email-anchor="header-subject"
         >
@@ -255,7 +263,7 @@ export const EmailHtmlViewer = ({
               className={cn(
                 "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
                 activeCitationBlockId === "header-date" &&
-                  "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+                  "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
               )}
               data-stella-email-anchor="header-date"
             >
@@ -379,7 +387,7 @@ const EmailParticipantRow = ({
       className={cn(
         "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
         activeCitationBlockId === citationBlockId &&
-          "bg-amber-100 ring-2 ring-amber-500 ring-offset-2",
+          "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
       )}
       data-stella-email-anchor={citationBlockId}
     >

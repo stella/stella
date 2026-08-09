@@ -180,3 +180,43 @@ export const openEntityInInspector = async (
     return { type: "unsupported" };
   }
 };
+
+export const openEmailCitationSource = ({
+  entity,
+  entityId,
+  fieldId,
+  workspaceId,
+}: {
+  entity: {
+    fields: {
+      content: WorkspaceFieldContent;
+      id: string;
+      propertyId?: string | undefined;
+    }[];
+    name: string | null;
+  };
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+}): boolean => {
+  const field = entity.fields.find(({ id }) => id === fieldId);
+  if (
+    !field ||
+    field.content.type !== "file" ||
+    !isFileDisplayable(field.content)
+  ) {
+    return false;
+  }
+
+  useInspectorTabsStore.getState().openFile({
+    id: field.id,
+    entityId,
+    label: entity.name ?? field.content.fileName,
+    fileName: field.content.fileName,
+    mimeType: field.content.mimeType,
+    pdfFileId: field.content.pdfFileId,
+    propertyId: field.propertyId,
+    workspaceId,
+  });
+  return true;
+};

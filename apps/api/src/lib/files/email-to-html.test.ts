@@ -665,6 +665,22 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).toContain("Line 199");
   });
 
+  test("preserves punctuation and CJK spacing across inline markup", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: "<p>Hello <strong>Jane</strong>, 你好<strong>世界</strong></p>",
+        },
+      }),
+    );
+
+    expect(preview.citationBlocks).toContainEqual({
+      id: "body-0001",
+      text: "Hello Jane, 你好世界",
+    });
+  });
+
   test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
     const nonstandardDelimiter = buildEmailPreview(
       htmlEmail({

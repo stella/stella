@@ -194,6 +194,7 @@ describe("email viewer", () => {
 
     const html = renderWithProviders(
       <EmailHtmlViewer
+        entityId="entity-1"
         fieldId="field-1"
         layout={EMAIL_VIEWER_LAYOUT.contextualChat}
         workspaceId="workspace-1"
@@ -228,7 +229,11 @@ describe("email viewer", () => {
 
   test("renders the scoped loading state", () => {
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-2" workspaceId="workspace-2" />,
+      <EmailHtmlViewer
+        entityId="entity-2"
+        fieldId="field-2"
+        workspaceId="workspace-2"
+      />,
       new QueryClient(),
     );
 
@@ -268,7 +273,11 @@ describe("email viewer", () => {
     }
 
     const html = renderWithProviders(
-      <EmailHtmlViewer fieldId="field-3" workspaceId="workspace-3" />,
+      <EmailHtmlViewer
+        entityId="entity-3"
+        fieldId="field-3"
+        workspaceId="workspace-3"
+      />,
       queryClient,
     );
 

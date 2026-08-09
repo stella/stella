@@ -1128,6 +1128,7 @@ const buildActiveEmailCitationPrompt = (
   activeFile: ActiveFilePromptContext,
 ): string => {
   const snapshot = activeFile.emailCitationSnapshot;
+  const entityId = activeFile.entityId;
   const fileFieldId = activeFile.fileFieldId;
   if (!snapshot || !fileFieldId || snapshot.blocks.length === 0) {
     return "";
@@ -1142,8 +1143,8 @@ const buildActiveEmailCitationPrompt = (
   }));
 
   return [
-    "EMAIL CITATIONS: When you summarise, quote, or make a claim about the open email, cite the supporting message passage inline. Wrap a short meaningful phrase in a Markdown link whose href is `#email:<fileFieldId>:<blockId>`.",
-    `For this email, copy the file field id and block id verbatim. Example: \`[payment is due Friday](#email:${fileFieldId}:body-0001)\`. Never invent an id, never expose the internal href as link text, and cite only the few passages a user would want to verify. Clicking the citation scrolls to and highlights that exact passage in the email viewer.`,
+    "EMAIL CITATIONS: When you summarise, quote, or make a claim about the open email, cite the supporting message passage inline. Wrap a short meaningful phrase in a Markdown link whose href is `#email:<entityId>:<fileFieldId>:<blockId>`.",
+    `For this email, copy the entity id, file field id, and block id verbatim. Example: \`[payment is due Friday](#email:${entityId}:${fileFieldId}:body-0001)\`. Never invent an id, never expose the internal href as link text, and cite only the few passages a user would want to verify. Clicking the citation opens the source email and highlights that exact passage.`,
     ["Email citation blocks:", "```json", JSON.stringify(blocks), "```"].join(
       "\n",
     ),
