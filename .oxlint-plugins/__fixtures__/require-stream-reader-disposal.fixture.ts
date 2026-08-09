@@ -491,3 +491,33 @@ export const leakedQualifiedFetchReader = async (url: string) => {
   const reader = response.body.getReader();
   return await reader.read();
 };
+
+// Allowed: work in the proven EOF branch cannot abandon an active producer.
+export const eofCallbackBeforeRelease = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        processChunk(new Uint8Array());
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: destructuring preserves genuine Response.body provenance.
+export const leakedDestructuredFetchBodyReader = async (url: string) => {
+  const { body } = await fetch(url);
+  if (!body) {
+    return null;
+  }
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: destructured fetch body reader is never released
+  const reader = body.getReader();
+  return await reader.read();
+};

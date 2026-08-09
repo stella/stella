@@ -397,6 +397,49 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const responseBodyInitializer = (
+          variable: ScopeVariable,
+        ): AstNode | null => {
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const" ||
+              !isAstNode(definition.node.id) ||
+              definition.node.id.type !== "ObjectPattern" ||
+              !isAstNode(definition.node.init)
+            ) {
+              continue;
+            }
+            const properties = Array.isArray(definition.node.id.properties)
+              ? definition.node.id.properties
+              : [];
+            for (const property of properties) {
+              if (
+                !isAstNode(property) ||
+                property.type !== "Property" ||
+                getPropertyName(property.key) !== "body"
+              ) {
+                continue;
+              }
+              let target = unwrapValue(property.value);
+              if (target?.type === "AssignmentPattern") {
+                target = unwrapValue(target.left);
+              }
+              if (
+                isIdentifier(target) &&
+                resolveVariable(target) === variable
+              ) {
+                return definition.node.init;
+              }
+            }
+          }
+          return null;
+        };
+
         const isGlobalConstructor = (node: unknown, name: string): boolean => {
           const expression = unwrapValue(node);
           if (expression?.type !== "NewExpression") {
@@ -493,6 +536,13 @@ export default eslintCompatPlugin({
             return false;
           }
           if (variableHasType(variable, "ReadableStream")) {
+            return true;
+          }
+          const responseInitializer = responseBodyInitializer(variable);
+          if (
+            responseInitializer !== null &&
+            isResponseExpression(responseInitializer)
+          ) {
             return true;
           }
           visited.add(variable);
@@ -937,21 +987,24 @@ export default eslintCompatPlugin({
           return false;
         };
 
-        const controlGuardedByDone = (
+        const dominatedByDoneGuard = (
           node: AstNode,
           binding: ScopeVariable,
         ): boolean => {
           let child = node;
           let parent = isAstNode(child.parent) ? child.parent : null;
-          while (parent?.type === "BlockStatement") {
+          while (parent !== null && !FUNCTION_TYPES.has(parent.type)) {
+            if (
+              parent.type === "IfStatement" &&
+              parent.consequent === child &&
+              isDoneGuard(parent.test, binding)
+            ) {
+              return true;
+            }
             child = parent;
             parent = isAstNode(child.parent) ? child.parent : null;
           }
-          return (
-            parent?.type === "IfStatement" &&
-            parent.consequent === child &&
-            isDoneGuard(parent.test, binding)
-          );
+          return false;
         };
 
         const hasPriorCancel = (
@@ -1067,6 +1120,7 @@ export default eslintCompatPlugin({
               if (node.type === "AwaitExpression") {
                 const awaited = unwrapValue(node.argument);
                 if (
+                  !dominatedByDoneGuard(node, binding) &&
                   !containsReaderMethod(awaited, "read", binding) &&
                   !containsReaderMethod(awaited, "cancel", binding)
                 ) {
@@ -1077,6 +1131,7 @@ export default eslintCompatPlugin({
               }
               if (
                 node.type === "CallExpression" &&
+                !dominatedByDoneGuard(node, binding) &&
                 !containsReaderMethod(node, "read", binding) &&
                 !containsReaderMethod(node, "cancel", binding) &&
                 !containsReaderMethod(node, "releaseLock", binding)
@@ -1087,7 +1142,7 @@ export default eslintCompatPlugin({
               }
               if (node.type === "ReturnStatement") {
                 unsafeExit =
-                  !controlGuardedByDone(node, binding) &&
+                  !dominatedByDoneGuard(node, binding) &&
                   !hasPriorCancel(node, binding);
                 return;
               }
@@ -1096,7 +1151,7 @@ export default eslintCompatPlugin({
                 breakExitsLoop(node, loop)
               ) {
                 unsafeExit =
-                  !controlGuardedByDone(node, binding) &&
+                  !dominatedByDoneGuard(node, binding) &&
                   !hasPriorCancel(node, binding);
               }
             });

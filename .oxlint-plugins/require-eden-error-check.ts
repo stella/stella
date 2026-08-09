@@ -98,7 +98,7 @@ const EDEN_HTTP_METHODS = new Set([
   "put",
 ]);
 
-type FlowState = "dead" | "handled" | "unhandled";
+type FlowState = "absent" | "dead" | "handled" | "unhandled";
 
 type FlowOutcome = {
   states: Set<FlowState>;
@@ -179,6 +179,7 @@ export default eslintCompatPlugin({
         const pendingEdenBindings = new Set<Variable>();
         const assignedResults: {
           binding: Variable;
+          canBeAbsent: boolean;
           node: Ranged;
         }[] = [];
 
@@ -328,6 +329,23 @@ export default eslintCompatPlugin({
             expression.type === "ConditionalExpression" &&
             (containsAwaitedTerminalEdenValue(expression.consequent) ||
               containsAwaitedTerminalEdenValue(expression.alternate))
+          );
+        };
+
+        const hasNonEdenPath = (node: unknown): boolean => {
+          if (awaitedTerminalEdenCall(node) !== null) {
+            return false;
+          }
+          const expression = unwrapExpression(node);
+          if (
+            !isAstNode(expression) ||
+            expression.type !== "ConditionalExpression"
+          ) {
+            return true;
+          }
+          return (
+            hasNonEdenPath(expression.consequent) ||
+            hasNonEdenPath(expression.alternate)
           );
         };
 
@@ -760,6 +778,66 @@ export default eslintCompatPlugin({
           }
 
           if (node.type === "IfStatement") {
+            const nullComparison = (() => {
+              const test = unwrapExpression(node.test);
+              if (!isAstNode(test) || test.type !== "BinaryExpression") {
+                return null;
+              }
+              const left = unwrapExpression(test.left);
+              const right = unwrapExpression(test.right);
+              const comparesBindingToNull =
+                (isBindingIdentifier(left, binding) &&
+                  isAstNode(right) &&
+                  right.type === "Literal" &&
+                  right.value === null) ||
+                (isBindingIdentifier(right, binding) &&
+                  isAstNode(left) &&
+                  left.type === "Literal" &&
+                  left.value === null);
+              if (!comparesBindingToNull) {
+                return null;
+              }
+              if (test.operator === "===" || test.operator === "==") {
+                return "absent";
+              }
+              if (test.operator === "!==" || test.operator === "!=") {
+                return "present";
+              }
+              return null;
+            })();
+            if (nullComparison !== null) {
+              const absentStates = new Set<FlowState>();
+              const presentStates = new Set<FlowState>();
+              for (const state of states) {
+                if (state === "absent") {
+                  absentStates.add(state);
+                } else {
+                  presentStates.add(state);
+                }
+              }
+              const consequentStates =
+                nullComparison === "absent" ? absentStates : presentStates;
+              const alternateStates =
+                nullComparison === "absent" ? presentStates : absentStates;
+              const consequent = analyzeStatement(
+                node.consequent,
+                consequentStates,
+                binding,
+              );
+              const alternate = isAstNode(node.alternate)
+                ? analyzeStatement(node.alternate, alternateStates, binding)
+                : {
+                    states: new Set(alternateStates),
+                    unsafe: false,
+                    unsafeExit: undefined,
+                  };
+              return {
+                states: mergeStates(consequent.states, alternate.states),
+                unsafe: consequent.unsafe || alternate.unsafe,
+                unsafeExit:
+                  consequent.unsafeExit ?? alternate.unsafeExit,
+              };
+            }
             const test = analyzeExpression(node.test, states, binding);
             const consequent = analyzeStatement(
               node.consequent,
@@ -917,9 +995,13 @@ export default eslintCompatPlugin({
         const analyzeContinuation = (
           node: unknown,
           binding: Variable,
+          canBeAbsent: boolean,
         ): FlowOutcome => {
           let current = isAstNode(node) ? node : null;
           let states = new Set<FlowState>(["unhandled"]);
+          if (canBeAbsent) {
+            states.add("absent");
+          }
           let unsafe = false;
           let unsafeExit: AstNode | undefined;
 
@@ -1045,7 +1127,11 @@ export default eslintCompatPlugin({
             if (isIdentifier(node.id)) {
               const binding = resolveVariable(node.id);
               if (binding !== null) {
-                assignedResults.push({ binding, node });
+                assignedResults.push({
+                  binding,
+                  canBeAbsent: hasNonEdenPath(node.init),
+                  node,
+                });
               }
               return;
             }
@@ -1061,7 +1147,11 @@ export default eslintCompatPlugin({
             if (isIdentifier(node.left)) {
               const binding = resolveVariable(node.left);
               if (binding !== null) {
-                assignedResults.push({ binding, node });
+                assignedResults.push({
+                  binding,
+                  canBeAbsent: hasNonEdenPath(node.right),
+                  node,
+                });
               }
               return;
             }
@@ -1205,7 +1295,11 @@ export default eslintCompatPlugin({
 
           "Program:exit"() {
             for (const result of assignedResults) {
-              const outcome = analyzeContinuation(result.node, result.binding);
+              const outcome = analyzeContinuation(
+                result.node,
+                result.binding,
+                result.canBeAbsent,
+              );
               if (outcome.unsafe || hasUnhandled(outcome.states)) {
                 reportAssignedResult(outcome.unsafeExit ?? result.node);
               }

@@ -350,3 +350,24 @@ export const checkedInFinallyBeforeReturn = async () => {
     }
   }
 };
+
+// Allowed: the non-Eden branch is narrowed away before the response is used.
+export const checkedConditionalResponse = async () => {
+  const response = condition ? await api.tasks.get() : null;
+  if (response === null) {
+    return null;
+  }
+  consume(response.error);
+  return response.data;
+};
+
+// MUST flag: narrowing the non-Eden branch does not handle the surviving
+// response's error channel.
+export const uncheckedConditionalResponse = async () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: nullable Eden response still requires an error check after narrowing
+  const response = condition ? await api.tasks.get() : null;
+  if (response === null) {
+    return null;
+  }
+  return response.data;
+};
