@@ -149,7 +149,7 @@ function RouteComponent() {
     }
 
     const { data } = response;
-    if (!("items" in data)) {
+    if (!data || !("items" in data)) {
       return;
     }
 
