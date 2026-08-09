@@ -35,6 +35,7 @@ type CurrentWorkflowRequestStateInput = {
   currentRequestId: string | null;
   requestId: string;
   runningValue: string | null;
+  transitionalRunningLockValue: string;
 };
 
 type RunningLockReservationInput = {
@@ -42,6 +43,7 @@ type RunningLockReservationInput = {
   recoveryLockValue: string;
   requestId: string | null;
   runningValue: string | null;
+  transitionalRunningLockValue: string;
 };
 
 type RunningLockReservation =
@@ -144,14 +146,17 @@ export const isCurrentWorkflowRequestState = ({
   currentRequestId,
   requestId,
   runningValue,
+  transitionalRunningLockValue,
 }: CurrentWorkflowRequestStateInput): boolean =>
-  currentRequestId === requestId && runningValue === requestId;
+  currentRequestId === requestId &&
+  (runningValue === requestId || runningValue === transitionalRunningLockValue);
 
 export const selectRunningLockReservation = ({
   expectedRequestId,
   recoveryLockValue,
   requestId,
   runningValue,
+  transitionalRunningLockValue,
 }: RunningLockReservationInput): RunningLockReservation => {
   if (runningValue === null || requestId !== expectedRequestId) {
     return { status: "skip" };
@@ -159,6 +164,13 @@ export const selectRunningLockReservation = ({
 
   if (runningValue === recoveryLockValue) {
     return { status: "reserve", expectedRunningValue: recoveryLockValue };
+  }
+
+  if (runningValue === transitionalRunningLockValue) {
+    return {
+      status: "reserve",
+      expectedRunningValue: transitionalRunningLockValue,
+    };
   }
 
   if (expectedRequestId === null || runningValue !== expectedRequestId) {

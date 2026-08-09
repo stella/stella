@@ -222,7 +222,14 @@ describe("workflow finalization state reads", () => {
     expect(commands).toEqual([
       {
         command: "DEL",
-        args: [`workflow:${workspaceId}:completed-entities`],
+        args: [
+          `workflow:${workspaceId}:completed-entities`,
+          `workflow:${workspaceId}:completed`,
+        ],
+      },
+      {
+        command: "SET",
+        args: [`workflow:${workspaceId}:set-mode`, "1", "EX", "600"],
       },
       {
         command: "SET",
@@ -308,6 +315,21 @@ describe("workflow finalization state reads", () => {
     expect(keys).toContain(`workflow:${workspaceId}:plan-properties`);
     expect(keys).toContain(`workflow:${workspaceId}:scoped`);
     expect(keys).toContain(`workflow:${workspaceId}:service-tier`);
+    expect(keys).toContain(`workflow:${workspaceId}:completed`);
+    expect(keys).toContain(`workflow:${workspaceId}:set-mode`);
+  });
+
+  test("recognizes a transitional constant-valued running lock", async () => {
+    const values = new Map<string, string>([
+      [`workflow:${workspaceId}:request-id`, requestId],
+      [`workflow:${workspaceId}:running`, "1"],
+    ]);
+    const store = createWorkflowRunStateStore({
+      send: async (command, args) =>
+        command === "GET" ? (values.get(args[0] ?? "") ?? null) : null,
+    });
+
+    expect(await store.isCurrentRequest({ requestId, workspaceId })).toBe(true);
   });
 
   test("returns stored missing and corrupt states without throwing", async () => {

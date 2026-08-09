@@ -18,6 +18,7 @@ import {
 
 const WORKFLOW_KEY_PREFIX = "workflow";
 const FINALIZATION_MANIFEST_VERSION = 1;
+const TRANSITIONAL_RUNNING_LOCK_VALUE = "1";
 const RUNNING_LOCK_SCAN_PATTERN = `${WORKFLOW_KEY_PREFIX}:*:running`;
 const RUNNING_LOCK_SCAN_COUNT = "200";
 const RESERVE_RECOVERY_LOCK_SCRIPT = `
@@ -48,9 +49,12 @@ const TRANSITIONAL_FINALIZATION_FIELDS = [
   "service-tier",
 ] as const;
 
+const TRANSITIONAL_COMPLETION_FIELDS = ["completed", "set-mode"] as const;
+
 const WORKFLOW_RUN_STATE_FIELDS = [
   ...CURRENT_WORKFLOW_RUN_STATE_FIELDS,
   ...TRANSITIONAL_FINALIZATION_FIELDS,
+  ...TRANSITIONAL_COMPLETION_FIELDS,
 ] as const;
 
 const workflowFinalizationManifestSchema = v.strictObject({
@@ -368,6 +372,9 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       await resetCompletionState({
         redis,
         completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
+        transitionalCompletedKey: workflowKey(workspaceId, "completed"),
+        setModeKey: workflowKey(workspaceId, "set-mode"),
+        runStateTtlSec: runLockTtlSec,
       });
       await Promise.all([
         redis.send("SET", [
@@ -400,6 +407,7 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
         currentRequestId,
         requestId,
         runningValue,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       });
     },
 
@@ -426,8 +434,11 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
           running: workflowKey(workspaceId, "running"),
           completedEntities: workflowKey(workspaceId, "completed-entities"),
           total: workflowKey(workspaceId, "total"),
+          transitionalCompleted: workflowKey(workspaceId, "completed"),
+          setMode: workflowKey(workspaceId, "set-mode"),
         },
         activeRequestId: requestId,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
         entityId,
         runStateTtlSec: runLockTtlSec,
       }),
@@ -473,6 +484,7 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
         recoveryLockValue,
         requestId,
         runningValue,
+        transitionalRunningLockValue: TRANSITIONAL_RUNNING_LOCK_VALUE,
       });
       if (reservation.status === "skip") {
         return false;

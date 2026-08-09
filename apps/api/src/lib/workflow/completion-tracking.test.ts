@@ -58,6 +58,13 @@ const createFakeRedis = (state: FakeRedisState) => ({
       }
       return args.length;
     }
+    if (command === "SET") {
+      state.strings.set(arg(args, 0), arg(args, 1));
+      if (arg(args, 2) === "EX") {
+        state.ttlSec.set(arg(args, 0), Number(arg(args, 3)));
+      }
+      return "OK";
+    }
     if (command !== "EVAL" || arg(args, 0) !== COMPLETE_ENTITY_SCRIPT) {
       throw new TypeError(`Unexpected Redis command: ${command}`);
     }
@@ -66,13 +73,17 @@ const createFakeRedis = (state: FakeRedisState) => ({
     const runningKey = arg(args, 3);
     const completedEntitiesKey = arg(args, 4);
     const totalKey = arg(args, 5);
-    const activeRequestId = arg(args, 6);
-    const entityId = arg(args, 7);
-    const runStateTtlSec = Number(arg(args, 8));
+    const transitionalCompletedKey = arg(args, 6);
+    const setModeKey = arg(args, 7);
+    const activeRequestId = arg(args, 8);
+    const transitionalRunningLockValue = arg(args, 9);
+    const entityId = arg(args, 10);
+    const runStateTtlSec = Number(arg(args, 11));
 
     if (
       state.strings.get(requestIdKey) !== activeRequestId ||
-      state.strings.get(runningKey) !== activeRequestId
+      (state.strings.get(runningKey) !== activeRequestId &&
+        state.strings.get(runningKey) !== transitionalRunningLockValue)
     ) {
       return [0, 0, 0];
     }
@@ -85,7 +96,15 @@ const createFakeRedis = (state: FakeRedisState) => ({
     completed.add(entityId);
     state.sets.set(completedEntitiesKey, completed);
     state.ttlSec.set(completedEntitiesKey, runStateTtlSec);
-    return [1, completed.size, total];
+    let completedCount = completed.size;
+    if (state.strings.has(setModeKey)) {
+      state.ttlSec.set(setModeKey, runStateTtlSec);
+    } else {
+      completedCount +=
+        Number(state.strings.get(transitionalCompletedKey)) || 0;
+      state.ttlSec.set(transitionalCompletedKey, runStateTtlSec);
+    }
+    return [1, Math.min(completedCount, total), total];
   },
 });
 
@@ -95,14 +114,18 @@ describe("entity completion state", () => {
     running: "workflow:ws_1:running",
     completedEntities: "workflow:ws_1:completed-entities",
     total: "workflow:ws_1:total",
+    transitionalCompleted: "workflow:ws_1:completed",
+    setMode: "workflow:ws_1:set-mode",
   };
   const activeRequestId = "req_1";
+  const transitionalRunningLockValue = "1";
 
   const seedActiveRun = (total: number): FakeRedisState => ({
     strings: new Map([
       [keys.requestId, activeRequestId],
       [keys.running, activeRequestId],
       [keys.total, String(total)],
+      [keys.setMode, "1"],
     ]),
     sets: new Map(),
     ttlSec: new Map(),
@@ -113,6 +136,7 @@ describe("entity completion state", () => {
       redis: createFakeRedis(state),
       keys,
       activeRequestId,
+      transitionalRunningLockValue,
       entityId,
       runStateTtlSec: 3600,
     });
@@ -148,8 +172,12 @@ describe("entity completion state", () => {
     await resetCompletionState({
       redis: createFakeRedis(state),
       completedEntitiesKey: keys.completedEntities,
+      transitionalCompletedKey: keys.transitionalCompleted,
+      setModeKey: keys.setMode,
+      runStateTtlSec: 3600,
     });
     expect(state.sets.has(keys.completedEntities)).toBe(false);
+    expect(state.strings.get(keys.setMode)).toBe("1");
     expect(await complete(state, "entity_a")).toEqual({
       matched: true,
       completed: 1,
@@ -157,18 +185,38 @@ describe("entity completion state", () => {
     });
   });
 
-  test("rejects superseded and obsolete constant-valued locks", async () => {
+  test("rejects superseded locks", async () => {
     const superseded = seedActiveRun(2);
     superseded.strings.set(keys.requestId, "req_2");
     superseded.strings.set(keys.running, "req_2");
     expect(await complete(superseded, "entity_a")).toEqual({
       matched: false,
     });
+  });
 
-    const obsolete = seedActiveRun(2);
-    obsolete.strings.set(keys.running, "1");
-    expect(await complete(obsolete, "entity_a")).toEqual({ matched: false });
-    expect(obsolete.sets.has(keys.completedEntities)).toBe(false);
+  test("finishes a persisted constant-lock run using its prior counter", async () => {
+    const transitional = seedActiveRun(2);
+    transitional.strings.set(keys.running, transitionalRunningLockValue);
+    transitional.strings.delete(keys.setMode);
+    transitional.strings.set(keys.transitionalCompleted, "1");
+
+    expect(await complete(transitional, "entity_b")).toEqual({
+      matched: true,
+      completed: 2,
+      total: 2,
+    });
+    expect(transitional.ttlSec.get(keys.transitionalCompleted)).toBe(3600);
+  });
+
+  test("ignores the old counter for a set-mode run", async () => {
+    const state = seedActiveRun(2);
+    state.strings.set(keys.transitionalCompleted, "99");
+
+    expect(await complete(state, "entity_a")).toEqual({
+      matched: true,
+      completed: 1,
+      total: 2,
+    });
   });
 
   test("rejects missing or invalid totals before mutating completion", async () => {

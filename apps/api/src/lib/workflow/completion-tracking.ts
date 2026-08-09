@@ -6,16 +6,22 @@
 // stale-run check/write race; SADD/SCARD makes retries idempotent per entity.
 //
 // KEYS[1] = request-id, KEYS[2] = running, KEYS[3] = completed-entities,
-// KEYS[4] = total. ARGV[1] = requestId, ARGV[2] = entityId,
-// ARGV[3] = run-state TTL seconds.
+// KEYS[4] = total, KEYS[5] = transitional completed counter,
+// KEYS[6] = set-mode marker. ARGV[1] = requestId,
+// ARGV[2] = transitional running-lock value, ARGV[3] = entityId,
+// ARGV[4] = run-state TTL seconds.
 export const COMPLETE_ENTITY_SCRIPT = `
 local currentRequestId = redis.call("GET", KEYS[1])
 local runningValue = redis.call("GET", KEYS[2])
 local requestId = ARGV[1]
-local entityId = ARGV[2]
-local runStateTtlSec = ARGV[3]
+local transitionalRunningLockValue = ARGV[2]
+local entityId = ARGV[3]
+local runStateTtlSec = ARGV[4]
 
-if currentRequestId ~= requestId or runningValue ~= requestId then
+if currentRequestId ~= requestId then
+  return {0, 0, 0}
+end
+if runningValue ~= requestId and runningValue ~= transitionalRunningLockValue then
   return {0, 0, 0}
 end
 
@@ -27,6 +33,18 @@ end
 redis.call("SADD", KEYS[3], entityId)
 redis.call("EXPIRE", KEYS[3], tonumber(runStateTtlSec))
 local completed = redis.call("SCARD", KEYS[3])
+
+if redis.call("EXISTS", KEYS[6]) == 1 then
+  redis.call("EXPIRE", KEYS[6], tonumber(runStateTtlSec))
+else
+  local transitionalCompleted = tonumber(redis.call("GET", KEYS[5])) or 0
+  completed = completed + transitionalCompleted
+  redis.call("EXPIRE", KEYS[5], tonumber(runStateTtlSec))
+end
+
+if completed > total then
+  completed = total
+end
 return {1, completed, total}
 `;
 
@@ -74,12 +92,15 @@ export type WorkflowCompletionKeys = {
   running: string;
   completedEntities: string;
   total: string;
+  transitionalCompleted: string;
+  setMode: string;
 };
 
 type RecordEntityCompletionArgs = {
   redis: EntityCompletionRedis;
   keys: WorkflowCompletionKeys;
   activeRequestId: string;
+  transitionalRunningLockValue: string;
   entityId: string;
   runStateTtlSec: number;
 };
@@ -88,17 +109,21 @@ export const recordEntityCompletion = async ({
   redis,
   keys,
   activeRequestId,
+  transitionalRunningLockValue,
   entityId,
   runStateTtlSec,
 }: RecordEntityCompletionArgs): Promise<EntityCompletionReply> => {
   const reply = await redis.send("EVAL", [
     COMPLETE_ENTITY_SCRIPT,
-    "4",
+    "6",
     keys.requestId,
     keys.running,
     keys.completedEntities,
     keys.total,
+    keys.transitionalCompleted,
+    keys.setMode,
     activeRequestId,
+    transitionalRunningLockValue,
     entityId,
     String(runStateTtlSec),
   ]);
@@ -113,9 +138,16 @@ export const recordEntityCompletion = async ({
 export const resetCompletionState = async ({
   redis,
   completedEntitiesKey,
+  transitionalCompletedKey,
+  setModeKey,
+  runStateTtlSec,
 }: {
   redis: EntityCompletionRedis;
   completedEntitiesKey: string;
+  transitionalCompletedKey: string;
+  setModeKey: string;
+  runStateTtlSec: number;
 }): Promise<void> => {
-  await redis.send("DEL", [completedEntitiesKey]);
+  await redis.send("DEL", [completedEntitiesKey, transitionalCompletedKey]);
+  await redis.send("SET", [setModeKey, "1", "EX", String(runStateTtlSec)]);
 };
