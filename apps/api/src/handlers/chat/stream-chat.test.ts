@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import type {
   ChatAnonRestoration,
   ChatMessage,
@@ -2043,6 +2044,56 @@ describe("chat stream refs", () => {
         mention:
           "[Mzuri_Umowa_Strona_1.docx](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
         success: true,
+      }),
+    });
+  });
+
+  test("resolves streamed refs only at the registry tool's declared output paths", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const chunks: StreamChunk[] = [
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "tool_1",
+        toolCallName: "list_matters",
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+        toolName: "list_matters",
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        messageId: "message_1",
+        toolCallId: "tool_1",
+        content: JSON.stringify({
+          decisionId: matterRef,
+          matters: [{ decisionId: matterRef, id: matterRef }],
+        }),
+      },
+    ];
+
+    const resolvedChunks = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+          resolveRegistryToolOutputRefs({
+            output,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
+    );
+
+    expect(resolvedChunks.at(1)).toEqual({
+      type: EventType.TOOL_CALL_RESULT,
+      messageId: "message_1",
+      toolCallId: "tool_1",
+      content: JSON.stringify({
+        decisionId: matterRef,
+        matters: [{ decisionId: matterRef, id: workspaceId }],
       }),
     });
   });

@@ -4,7 +4,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
-import { hydrateRegistryToolInputRefs } from "./input-ref-hydration";
+import {
+  hydrateRegistryToolInputRefs,
+  resolveRegistryToolInputRefs,
+} from "./input-ref-hydration";
 import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateRefs } from "./ref-mediation";
 
@@ -29,6 +32,29 @@ const asArgs = (value: unknown): Record<string, unknown> => {
 };
 
 describe("registry tool input ref hydration", () => {
+  test("resolves only input parameters declared as refs", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(WS_UUID);
+    const matterRef = registry.toMatterRef(workspaceId);
+    const input = {
+      decisionId: matterRef,
+      matter_id: matterRef,
+      nested: { title: matterRef },
+    };
+
+    expect(
+      resolveRegistryToolInputRefs({
+        input,
+        refRegistry: registry,
+        toolName: "save_task",
+      }),
+    ).toEqual({
+      decisionId: matterRef,
+      matter_id: workspaceId,
+      nested: { title: matterRef },
+    });
+  });
+
   /**
    * The invariant the persisted approval flow depends on: a tool call stored
    * with resolved ids, replayed on a later turn, must dehydrate back to exactly

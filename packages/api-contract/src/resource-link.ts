@@ -129,12 +129,16 @@ export type ChatMentionResourceHref =
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.entity}${string}`
   | `${typeof CHAT_RESOURCE_HREF_PREFIX.workspace}${string}`;
 
+// Canonical IDs are RFC 3986 components with `.`, `!`, `'`, `(`, `)`, and `*`
+// encoded by `encodeChatResourceId`. Keep the scanner ASCII-only so Unicode
+// punctuation terminates a bare link instead of becoming part of its ID.
+const CANONICAL_COMPONENT = "(?:[A-Za-z0-9_~-]|%[0-9A-Fa-f]{2})+";
+const CANONICAL_HREF_BOUNDARY =
+  "(?=$|[\\s)!\"',.;?`*>\\]}]|(?=(?![\\x00-\\x7F])\\p{P}))";
 const CHAT_RESOURCE_HREF_CANDIDATE_REGEX = new RegExp(
-  `(?:${Object.values(CHAT_RESOURCE_HREF_PREFIX).join("|")})[^\\s)]+`,
+  `(?:${CHAT_RESOURCE_HREF_PREFIX.entity}${CANONICAL_COMPONENT}(?::${CANONICAL_COMPONENT})?|${CHAT_RESOURCE_HREF_PREFIX.workspace}${CANONICAL_COMPONENT}|${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
   "gu",
 );
-const TRAILING_PROSE_PUNCTUATION_REGEX =
-  /(?:[!"',.;:?`*>\]}،؛，、]|\p{Pe}|\p{Pf}|\p{Sentence_Terminal})$/u;
 
 /**
  * A literal dot is legal in an RFC 3986 component, but it is ambiguous at
@@ -292,22 +296,9 @@ export type CanonicalChatResourceHrefMatch = {
 const parseCanonicalChatResourceHrefCandidate = (
   candidate: string,
 ): Omit<CanonicalChatResourceHrefMatch, "index"> | null => {
-  let href = candidate;
-
-  while (href.length > 0) {
-    const target = parseCanonicalChatResourceHref(href);
-    if (target !== null) {
-      return { href: toChatResourceHref(target), target };
-    }
-
-    const withoutTrailingPunctuation = href.replace(
-      TRAILING_PROSE_PUNCTUATION_REGEX,
-      "",
-    );
-    if (withoutTrailingPunctuation === href) {
-      return null;
-    }
-    href = withoutTrailingPunctuation;
+  const target = parseCanonicalChatResourceHref(candidate);
+  if (target !== null) {
+    return { href: toChatResourceHref(target), target };
   }
 
   return null;

@@ -151,6 +151,14 @@ type StoredUserFile = {
 };
 
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
+type AssistantToolInputRefResolver = (props: {
+  input: unknown;
+  toolName: string;
+}) => unknown;
+type AssistantToolOutputRefResolver = (props: {
+  output: unknown;
+  toolName: string;
+}) => unknown;
 
 type StreamChatFinishEvent = {
   outcome: ChatTurnOutcome;
@@ -189,6 +197,8 @@ type StreamChatProps = {
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   safeDb: SafeDb;
   systemSafe: ChatSafePrompt;
@@ -298,6 +308,8 @@ export const streamChat = async ({
   runMode,
   sandboxRun,
   resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   safeDb,
   systemSafe,
@@ -489,6 +501,8 @@ export const streamChat = async ({
             })
           : new Set<string>(),
       resolveAssistantTextRefs,
+      resolveAssistantToolInputRefs,
+      resolveAssistantToolOutputRefs,
       resolveAssistantValueRefs,
       restorationPairs,
       source: stream,
@@ -1811,6 +1825,8 @@ type TransformOutgoingStreamProps = {
   boundary: ChatThirdPartyBoundary;
   initialRestorationPlaceholders: ReadonlySet<string>;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<StreamChunk>;
@@ -1820,6 +1836,8 @@ export const transformOutgoingStream = async function* ({
   boundary,
   initialRestorationPlaceholders,
   resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   restorationPairs,
   source,
@@ -1828,6 +1846,8 @@ export const transformOutgoingStream = async function* ({
     boundary,
     initialRestorationPlaceholders,
     resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
     resolveAssistantValueRefs,
     restorationPairs,
   });
@@ -1847,6 +1867,8 @@ type OutgoingChunkTransformerOptions = {
   boundary: ChatThirdPartyBoundary;
   initialRestorationPlaceholders: ReadonlySet<string>;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   restorationPairs: ChatAnonRestoration[];
 };
@@ -1855,11 +1877,14 @@ const createOutgoingChunkTransformer = ({
   boundary,
   initialRestorationPlaceholders,
   resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   restorationPairs,
 }: OutgoingChunkTransformerOptions) => {
   const buffers = new Map<string, string>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
+  const toolNamesByCallId = new Map<string, string>();
   const lenientCollector =
     boundary.type === "anonymized"
       ? buildLenientPlaceholderCollector(boundary)
@@ -1873,6 +1898,15 @@ const createOutgoingChunkTransformer = ({
       }
     }
   }
+
+  const readToolCallName = (chunk: object): string | undefined => {
+    if ("toolCallName" in chunk && typeof chunk.toolCallName === "string") {
+      return chunk.toolCallName;
+    }
+    return "toolName" in chunk && typeof chunk.toolName === "string"
+      ? chunk.toolName
+      : undefined;
+  };
 
   const emitRestorationDelta = (
     placeholders: ReadonlySet<string>,
@@ -1992,6 +2026,14 @@ const createOutgoingChunkTransformer = ({
   };
 
   const transform = (chunk: StreamChunk): StreamChunk[] => {
+    if (chunk.type === EventType.TOOL_CALL_START) {
+      const toolName = readToolCallName(chunk);
+      if (toolName !== undefined) {
+        toolNamesByCallId.set(chunk.toolCallId, toolName);
+      }
+      return [chunk];
+    }
+
     if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
       return [
         ...emitRestorationDelta(
@@ -2001,6 +2043,7 @@ const createOutgoingChunkTransformer = ({
           ...chunk,
           messages: restoreSnapshotMessages(chunk.messages, {
             boundary,
+            resolveAssistantToolInputRefs,
             resolveAssistantValueRefs,
           }),
         },
@@ -2024,6 +2067,7 @@ const createOutgoingChunkTransformer = ({
             ...chunk.outcome,
             interrupts: restoreInterrupts(chunk.outcome.interrupts, {
               boundary,
+              resolveAssistantToolInputRefs,
               resolveAssistantValueRefs,
             }),
           },
@@ -2097,12 +2141,29 @@ const createOutgoingChunkTransformer = ({
       const key = `tool:${chunk.toolCallId}`;
       const pending = buffers.get(key) ?? "";
       buffers.delete(key);
+      const toolName =
+        readToolCallName(chunk) ?? toolNamesByCallId.get(chunk.toolCallId);
+      if (toolName !== undefined) {
+        toolNamesByCallId.set(chunk.toolCallId, toolName);
+      }
       let input: unknown;
       if ("input" in chunk) {
         input = transformToolCallInput({
           boundary,
           input: chunk.input,
+          resolveAssistantToolInputRefs,
           resolveAssistantValueRefs,
+          toolName,
+        });
+      }
+      let output: unknown;
+      if ("output" in chunk) {
+        output = transformToolCallOutput({
+          boundary,
+          output: chunk.output,
+          resolveAssistantToolOutputRefs,
+          resolveAssistantValueRefs,
+          toolName,
         });
       }
       return [
@@ -2110,17 +2171,27 @@ const createOutgoingChunkTransformer = ({
           text: pending,
           toolCallId: chunk.toolCallId,
         }),
-        input === undefined ? chunk : { ...chunk, input },
+        input === undefined && output === undefined
+          ? chunk
+          : {
+              ...chunk,
+              ...(input === undefined ? {} : { input }),
+              ...(output === undefined ? {} : { output }),
+            },
       ];
     }
 
     if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      const toolName = toolNamesByCallId.get(chunk.toolCallId);
       const result = transformToolResultContent({
         boundary,
         content: chunk.content,
         lenientCollector,
+        resolveAssistantToolOutputRefs,
         resolveAssistantValueRefs,
+        toolName,
       });
+      toolNamesByCallId.delete(chunk.toolCallId);
       return [
         ...emitRestorationDelta(result.placeholders),
         { ...chunk, content: result.content },
@@ -2133,10 +2204,14 @@ const createOutgoingChunkTransformer = ({
     ) {
       const value = isRecord(chunk.value) ? chunk.value : {};
       const rawInput = value["input"];
+      const toolName =
+        typeof value["toolName"] === "string" ? value["toolName"] : undefined;
       const input = transformToolCallInput({
         boundary,
         input: rawInput,
+        resolveAssistantToolInputRefs,
         resolveAssistantValueRefs,
+        toolName,
       });
       return [
         ...emitRestorationDelta(
@@ -2353,7 +2428,9 @@ const collectUnknownStringPlaceholders = (
 type TransformToolCallInputOptions = {
   boundary: ChatThirdPartyBoundary;
   input: unknown;
+  resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  toolName: string | undefined;
 };
 
 /**
@@ -2372,19 +2449,54 @@ type TransformToolCallInputOptions = {
 const transformToolCallInput = ({
   boundary,
   input,
+  resolveAssistantToolInputRefs,
   resolveAssistantValueRefs,
+  toolName,
 }: TransformToolCallInputOptions): unknown => {
   const visibleInput =
     boundary.type === "anonymized"
       ? deanonymizeUnknownStringsFromBoundary(boundary, input, "lenient")
       : input;
+  const declaredInput =
+    toolName !== undefined && resolveAssistantToolInputRefs !== undefined
+      ? resolveAssistantToolInputRefs({ input: visibleInput, toolName })
+      : visibleInput;
   return resolveAssistantValueRefs
-    ? resolveAssistantValueRefs(visibleInput)
-    : visibleInput;
+    ? resolveAssistantValueRefs(declaredInput)
+    : declaredInput;
+};
+
+type TransformToolCallOutputOptions = {
+  boundary: ChatThirdPartyBoundary;
+  output: unknown;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  toolName: string | undefined;
+};
+
+const transformToolCallOutput = ({
+  boundary,
+  output,
+  resolveAssistantToolOutputRefs,
+  resolveAssistantValueRefs,
+  toolName,
+}: TransformToolCallOutputOptions): unknown => {
+  const visibleOutput =
+    boundary.type === "anonymized"
+      ? deanonymizeUnknownStringsFromBoundary(boundary, output, "lenient")
+      : output;
+  const declaredOutput =
+    toolName !== undefined && resolveAssistantToolOutputRefs !== undefined
+      ? resolveAssistantToolOutputRefs({ output: visibleOutput, toolName })
+      : visibleOutput;
+  return resolveAssistantValueRefs
+    ? resolveAssistantValueRefs(declaredOutput)
+    : declaredOutput;
 };
 
 type RestoreVisibleStringOptions = {
   boundary: ChatThirdPartyBoundary;
+  resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
 };
 
@@ -2549,6 +2661,37 @@ const restoreInterrupts = <T extends object>(
     restoreRecordProperty(interrupt, "message", restoreString);
     const metadata = interrupt["metadata"];
     restoreMetadataStringsInPlace(metadata, restoreString);
+    if (
+      !isRecord(metadata) ||
+      options.resolveAssistantToolInputRefs === undefined
+    ) {
+      continue;
+    }
+
+    const binding = metadata["tanstack:interruptBinding"];
+    let toolName: string | undefined;
+    if (typeof metadata["toolName"] === "string") {
+      toolName = metadata["toolName"];
+    } else if (isRecord(binding) && typeof binding["toolName"] === "string") {
+      toolName = binding["toolName"];
+    }
+    if (toolName === undefined) {
+      continue;
+    }
+
+    const resolveInput = (input: unknown): unknown => {
+      const declared = options.resolveAssistantToolInputRefs?.({
+        input,
+        toolName,
+      });
+      return options.resolveAssistantValueRefs?.(declared) ?? declared;
+    };
+    if ("input" in metadata) {
+      metadata["input"] = resolveInput(metadata["input"]);
+    }
+    if (isRecord(binding) && "originalArgs" in binding) {
+      binding["originalArgs"] = resolveInput(binding["originalArgs"]);
+    }
   }
   return restored;
 };
@@ -2561,7 +2704,9 @@ type TransformToolResultContentOptions = {
   boundary: ChatThirdPartyBoundary;
   content: string;
   lenientCollector: LenientPlaceholderCollector | null;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  toolName: string | undefined;
 };
 
 type TransformToolResultContentResult = {
@@ -2573,7 +2718,9 @@ const transformToolResultContent = ({
   boundary,
   content,
   lenientCollector,
+  resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
+  toolName,
 }: TransformToolResultContentOptions): TransformToolResultContentResult => {
   const parsed = parseToolResultContent(content);
   const placeholders =
@@ -2584,9 +2731,13 @@ const transformToolResultContent = ({
     boundary.type === "anonymized"
       ? deanonymizeUnknownStringsFromBoundary(boundary, parsed.value)
       : parsed.value;
+  const declaredValue =
+    toolName !== undefined && resolveAssistantToolOutputRefs !== undefined
+      ? resolveAssistantToolOutputRefs({ output: visibleValue, toolName })
+      : visibleValue;
   const resolvedValue = resolveAssistantValueRefs
-    ? resolveAssistantValueRefs(visibleValue)
-    : visibleValue;
+    ? resolveAssistantValueRefs(declaredValue)
+    : declaredValue;
 
   if (parsed.type === "json") {
     return {

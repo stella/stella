@@ -35,6 +35,54 @@ type HydratedEntityValue = {
 };
 
 describe("chat ref registry", () => {
+  test("resolves exact tokens only in declared ref fields", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const entityId = toSafeId<"entity">("entity-opaque");
+    const propertyId = toSafeId<"property">("property-opaque");
+    const contactId = toSafeId<"contact">("contact-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const entityRef = registry.toEntityRef({ entityId, workspaceId });
+    const propertyRef = registry.toPropertyRef(propertyId);
+    const contactRef = registry.toContactRef(contactId);
+    const refs = [matterRef, entityRef, propertyRef, contactRef];
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...refs),
+        fc.constantFrom(
+          "cursor",
+          "decisionId",
+          "entityId",
+          "id",
+          "title",
+          "workspaceId",
+        ),
+        (ref, key) => {
+          const opaqueValue = { [key]: ref, nested: { [key]: ref } };
+          expect(registry.resolveAssistantValueRefs(opaqueValue)).toEqual(
+            opaqueValue,
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+
+    expect(
+      registry.resolveAssistantValueRefs({
+        contactRef,
+        entityRef,
+        matterRef,
+        propertyRef,
+      }),
+    ).toEqual({
+      contactRef: contactId,
+      entityRef: entityId,
+      matterRef: workspaceId,
+      propertyRef: propertyId,
+    });
+  });
+
   test("uses short refs for model-facing entity links and resolves them for persistence", () => {
     const registry = createChatRefRegistry();
     const workspaceId = toSafeId<"workspace">(

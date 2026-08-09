@@ -151,11 +151,41 @@ describe("chat resource links", () => {
     );
   });
 
-  test("does not partially accept an unencoded opaque ID", () => {
-    expect(
-      findCanonicalChatResourceHrefs(
-        "Ignore #stella-workspace=workspace-1/child.",
+  test("treats Unicode punctuation as a bare-link boundary", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
+        fc.constantFrom("—", "–", "…", "。", "،"),
+        (id, punctuation) => {
+          const target = {
+            type: RESOURCE_TYPE.WORKSPACE,
+            resource: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: toSafeId<"workspace">(id),
+            }),
+          } as const;
+          const href = toChatResourceHref(target);
+          const text = `See ${href}${punctuation}next`;
+
+          expect(findCanonicalChatResourceHrefs(text)).toEqual([
+            { href, index: 4, target },
+          ]);
+          expect(
+            replaceCanonicalChatResourceHrefs(text, () => "matter_ref"),
+          ).toBe(`See matter_ref${punctuation}next`);
+        },
       ),
-    ).toEqual([]);
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
+
+  test("does not partially accept an unencoded opaque ID", () => {
+    for (const text of [
+      "Ignore #stella-workspace=workspace-1/child.",
+      "Ignore #stella-workspace=workspace-é.",
+      "Ignore #stella-workspace=workspace-😀.",
+    ]) {
+      expect(findCanonicalChatResourceHrefs(text)).toEqual([]);
+    }
   });
 });

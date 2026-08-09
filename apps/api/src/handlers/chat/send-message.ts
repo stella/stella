@@ -121,7 +121,11 @@ import type {
   LazyExternalMcpToolsLoader,
   LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
-import { hydrateRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
+import {
+  hydrateRegistryToolInputRefs,
+  resolveRegistryToolInputRefs,
+} from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
+import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -156,8 +160,7 @@ import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
-  CHAT_REF_INPUT_STATE,
-  type ChatRefEncoding,
+  resolveChatRefInputState,
   type ChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -1693,6 +1696,18 @@ const sendMessage = createSafeRootHandler(
                 runMode: body.runMode,
                 sandboxRun,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
+                resolveAssistantToolInputRefs: ({ input, toolName }) =>
+                  resolveRegistryToolInputRefs({
+                    input,
+                    refRegistry,
+                    toolName,
+                  }),
+                resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+                  resolveRegistryToolOutputRefs({
+                    output,
+                    refRegistry,
+                    toolName,
+                  }),
                 resolveAssistantValueRefs:
                   refRegistry.resolveAssistantValueRefs,
                 safeDb,
@@ -2480,7 +2495,32 @@ const resolveAssistantMessageRefs = ({
   const resolvePart = (
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
-    const resolved = refRegistry.resolveAssistantValueRefs(part);
+    const withDeclaredToolRefs =
+      part.type === "tool-call"
+        ? {
+            ...part,
+            ...("input" in part
+              ? {
+                  input: resolveRegistryToolInputRefs({
+                    input: part.input,
+                    refRegistry,
+                    toolName: part.name,
+                  }),
+                }
+              : {}),
+            ...("output" in part
+              ? {
+                  output: resolveRegistryToolOutputRefs({
+                    output: part.output,
+                    refRegistry,
+                    toolName: part.name,
+                  }),
+                }
+              : {}),
+          }
+        : part;
+    const resolved =
+      refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
     if (!isChatPart(resolved)) {
       panic("Resolving assistant refs changed the message part shape");
     }
@@ -2505,18 +2545,6 @@ type HydrateAssistantMessageRefsProps = {
   messages: ChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
 };
-
-const CHAT_REF_INPUT_STATE_BY_ENCODING = {
-  [CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1]:
-    CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1,
-} as const satisfies Record<ChatRefEncoding, ChatRefInputState>;
-
-const resolveChatRefInputState = (
-  encoding: ChatRefEncoding | undefined,
-): ChatRefInputState =>
-  encoding === undefined
-    ? CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS
-    : CHAT_REF_INPUT_STATE_BY_ENCODING[encoding];
 
 const hydrateAssistantMessageRefs = ({
   messages,

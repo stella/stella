@@ -81,6 +81,40 @@ export type HydrateRegistryToolInputRefsProps = {
   toolName: string;
 };
 
+export type ResolveRegistryToolInputRefsProps = {
+  input: unknown;
+  refRegistry: ChatRefRegistry;
+  toolName: string;
+};
+
+/**
+ * Persistence-side inverse of `hydrateRegistryToolInputRefs`. Only parameters
+ * declared by the registry tool's input-ref policy are resolved; every other
+ * opaque value remains untouched even when its text equals a minted ref.
+ */
+export const resolveRegistryToolInputRefs = ({
+  input,
+  refRegistry,
+  toolName,
+}: ResolveRegistryToolInputRefsProps): unknown => {
+  const inputRefs = INPUT_REFS_BY_TOOL.get(toolName);
+  if (inputRefs === undefined || !isRecord(input)) {
+    return input;
+  }
+
+  const resolved = { ...input };
+  for (const { kind, param } of inputRefs) {
+    if (!(param in resolved)) {
+      continue;
+    }
+    resolved[param] = refRegistry.resolveRefId({
+      kind,
+      value: resolved[param],
+    });
+  }
+  return resolved;
+};
+
 export const hydrateRegistryToolInputRefs = ({
   input,
   inputState,

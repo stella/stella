@@ -79,11 +79,11 @@ export type OutputRefField =
 
 /**
  * The three output-side path lists derived from a projection schema's
- * annotations. The runtime transform (`projectForChat`) no longer consumes
- * them — it walks the schema annotations directly — but the contract corpus
- * (`registry-projection-contract.test.ts`) still derives them to prove its
- * fixtures exercise every declared ref path and that every declared strip
- * path is absent from the projected payload (its anti-vacuity guard).
+ * annotations. The forward runtime transform (`projectForChat`) walks the
+ * annotations directly; persistence resolution consumes `outputRefs` as the
+ * inverse path policy. The contract corpus also derives all three lists to
+ * prove its fixtures exercise every declared ref path and that every declared
+ * strip path is absent from the projected payload (its anti-vacuity guard).
  */
 export type RefMediationLists = {
   outputRefs: readonly OutputRefField[];
@@ -439,10 +439,10 @@ const mediationListsCache = new WeakMap<
 
 /**
  * Mechanically derive a converted tool's `outputRefs`/`passthroughIdPaths`/
- * `stripPaths` from its projection schema's annotations. The runtime path
- * (`projectForChat`) does not consume these — its walk reads the annotations
- * directly — but the contract corpus does, for its declared-vs-exercised
- * anti-vacuity guard. Memoized per schema.
+ * `stripPaths` from its projection schema's annotations. `projectForChat`
+ * reads annotations directly; reverse persistence resolution consumes the
+ * ref paths, and the contract corpus consumes all paths for its
+ * declared-vs-exercised anti-vacuity guard. Memoized per schema.
  */
 export const deriveRefMediationEntry = (
   schema: ChatProjectionSchema,
