@@ -959,7 +959,7 @@
     "next": "التالي",
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
-    "none": "None",
+    "none": "لا شيء",
     "notes": "الملاحظات",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
@@ -1020,7 +1020,7 @@
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
     "uncategorized": "غير مصنّف",
-    "undo": "Undo",
+    "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
@@ -1399,47 +1399,47 @@
     "descriptionPlaceholder": "ما الذي يقوم به مسار العمل هذا",
     "disableFlow": "تعطيل مسار العمل",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "حدِّد الخطوات مرة واحدة، ثم شغِّل مسار العمل هذا من أي ملف قانوني. تتوقف عمليات التشغيل عند نقاط المراجعة لحين الموافقة."
     },
     "empty": "لا توجد مسارات عمل بعد",
     "emptyDescription": "أنشئ مسار عمل لتحويل المستندات وهدف محدد إلى مُخرَج نهائي.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "البدء من الصفر",
+      "description": "ابدأ تشغيله من علامة تبويب «مسارات العمل» في ملف قانوني، أو وفق جدول زمني، أو عند تحميل ملفات. يتوقف عند نقاط المراجعة كي يوافق شخص على النتيجة قبل اعتمادها نهائيًا، ويمكن حفظ الناتج كمستند في الملف القانوني.",
+      "examplesTitle": "البدء من مثال",
+      "title": "مسار العمل هو تسلسل محفوظ من خطوات الذكاء الاصطناعي والمراجعة يعيد فريقك تشغيله على مستندات الملف القانوني لإنتاج مخرج متسق."
     },
     "enableFlow": "تفعيل مسار العمل",
     "enabledDescription": "لا يمكن تشغيل مسارات العمل المعطّلة أو تفعيل مشغّلاتها.",
     "enabledLabel": "مُفعَّل",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "إنشاء الملخص",
+        "description": "تلخيص مستندات الملف القانوني لزميل لم يقرأها.",
+        "documentTitle": "ملخص المستندات",
+        "name": "ملخص مستندات الملف",
+        "summaryStepName": "تلخيص المستندات",
+        "summaryStepPrompt": "لخِّص كل مستند من مستندات الإدخال، بما يشمل الأطراف والموضوع والتواريخ الرئيسية والالتزامات والنقاط العالقة. اكتب لزميل لم يقرأ المستند."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "إنشاء التقرير",
+        "description": "إبراز مخاطر تغيير السيطرة والتنازل والمسؤولية في جميع مستندات غرفة البيانات.",
+        "documentTitle": "تقرير مؤشرات الخطر",
+        "name": "مؤشرات الخطر في العناية الواجبة",
+        "reviewGateInstructions": "تحقَّق من مؤشرات الخطر قبل إنشاء التقرير.",
+        "reviewGateStepName": "التحقق من مؤشرات الخطر",
+        "reviewStepName": "استخراج مؤشرات الخطر",
+        "reviewStepPrompt": "اقرأ مستندات الإدخال وأعد تقريرًا بمؤشرات الخطر، يشمل تغيير السيطرة وقيود التنازل وحقوق الإنهاء والحصرية وحدود المسؤولية. اقتبس النص ذا الصلة."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "إنشاء المذكرة",
+        "description": "تحديد البنود غير المعتادة في اتفاقية عدم الإفصاح قبل أن يعتمد عليها فريقك.",
+        "documentTitle": "مذكرة مراجعة اتفاقية عدم الإفصاح",
+        "name": "مراجعة اتفاقية عدم الإفصاح الواردة",
+        "reviewGateInstructions": "تحقَّق من البنود المحددة قبل إنشاء المذكرة.",
+        "reviewGateStepName": "التحقق من البنود المحددة",
+        "reviewStepName": "مراجعة اتفاقية عدم الإفصاح",
+        "reviewStepPrompt": "راجع اتفاقية عدم الإفصاح المرفقة مقارنةً بالمعايير الشائعة في السوق، بما يشمل المدة ونطاق السرية والاستثناءات والقانون الحاكم. حدِّد البنود غير المعتادة مع درجة خطورتها واستشهد بالبند."
       }
     },
     "fileUpload": {
@@ -1509,9 +1509,9 @@
     "steps": {
       "add": "إضافة خطوة:",
       "ai": "خطوة AI",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "ينشئ نصًا وفق تعليماتك، ويمكنه قراءة مستندات الإدخال المحددة.",
       "createDocument": "إنشاء مستند",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "يحفظ أحدث ناتج للذكاء الاصطناعي كمستند في الملف القانوني الذي بدأ فيه التشغيل.",
       "documentTitle": "عنوان المستند",
       "documentTitlePlaceholder": "مثال: مذكرة ملخّص",
       "documentTitleRequired": "أدخل عنوان المستند.",
@@ -1526,7 +1526,7 @@
       "promptRequired": "أدخل مُوجَّهًا لخطوة AI.",
       "required": "أضف خطوة واحدة على الأقل.",
       "reviewGate": "بوابة المراجعة",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "يوقف التشغيل حتى يوافق شخص أو يرفض.",
       "title": "الخطوات"
     },
     "trigger": {
@@ -2001,12 +2001,12 @@
       "addRule": "القاعدة",
       "advanced": "متقدم",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "موافقة",
+        "approveFailed": "تعذرت الموافقة على دليل المراجعة",
+        "approvedOn": "تمت الموافقة في {date}",
+        "approvedToast": "تمت الموافقة على دليل المراجعة",
+        "statusApproved": "معتمد",
+        "statusDraft": "مسودة"
       },
       "askContentLabel": "نوع الإجابة",
       "askQuestionLabel": "السؤال",
@@ -2069,18 +2069,18 @@
       "issuePlaceholder": "مثال: تحديد المسؤولية",
       "loadFailed": "فشل تحميل أدلّة المراجعة",
       "loading": "جارٍ تحميل أدلّة المراجعة…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "إدارة الأنواع…",
       "namePlaceholder": "مثال: مراجعة اتفاقية عدم الإفصاح",
       "nameRequired": "أضِف اسمًا.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "إضافة نقطة نقاش",
+        "escalationLabel": "التصعيد",
+        "escalationPlaceholder": "متى وإلى مَن يتم التصعيد (اختياري)",
+        "rationaleLabel": "المبررات",
+        "rationalePlaceholder": "سبب تمسّكنا بهذا الموقف (اختياري)",
+        "talkingPointPlaceholder": "ما ينبغي قوله",
+        "talkingPointsLabel": "نقاط النقاش",
+        "title": "التفاوض"
       },
       "noPositions": "لا توجد مواقف بعد. أضِف الأول.",
       "optionPlaceholder": "قيمة الخيار",
@@ -2117,17 +2117,17 @@
       },
       "risk": {
         "complianceLabel": "الامتثال",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "المواقف المحددة: {flagged} من {total}",
         "notApplicableExcluded": "({count} غير قابلة للتطبيق، مستبعدة)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "حرج",
+          "high": "مرتفع",
+          "low": "منخفض",
+          "medium": "متوسط",
+          "none": "لا مخاطر"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "ملخص المخاطر",
+        "topIssuesTitle": "أهم المسائل"
       },
       "ruleNumber": "القاعدة {index}",
       "rulePlaceholder": "قاعدة بلغة بسيطة",
@@ -2140,11 +2140,11 @@
       },
       "severityLabel": "الخطورة",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "تمت إضافة دليل المراجعة",
+        "browseButton": "استعراض أدلّة المراجعة الجاهزة",
+        "positionCount": "{count, plural, zero {لا مواقف} one {موقف واحد} two {موقفان} few {# مواقف} many {# موقفًا} other {# موقف}}",
+        "subtitle": "أدلّة مراجعة جاهزة يمكنك إضافتها ثم تكييفها مع معاييرك.",
+        "title": "أدلّة مراجعة جاهزة"
       },
       "switchToAuto": "العودة إلى التلقائي",
       "switchToManual": "التحويل إلى اليدوي",
@@ -2163,10 +2163,10 @@
         "notApplicable": "غير قابل للتطبيق"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "ستُستبدل مسودتك الحالية بمحتوى هذا الإصدار.",
+        "restoreFailed": "تعذرت استعادة الإصدار",
+        "restoredToast": "تمت استعادة الإصدار",
+        "versionHistory": "سجل الإصدارات"
       }
     },
     "sections": {
@@ -2902,12 +2902,12 @@
         "updated": "تم تحديث إعداد التعرّف على النص"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "إضافة نوع مستند (مثل عقد عمل)",
+        "deleteFailed": "تعذر حذف نوع المستند",
+        "description": "حدِّد أنواع المستندات التي تراجعها مؤسستك. تُطبَّق أدلّة المراجعة على هذه الأنواع، ويصنِّف مصنِّف الذكاء الاصطناعي المستندات ضمنها.",
+        "labelAria": "اسم نوع المستند",
+        "reorder": "إعادة ترتيب نوع المستند",
+        "title": "أنواع المستندات"
       },
       "matterNumbering": "ترقيم الملفات القانونية",
       "matterNumberingDescription": "اضبط كيفية توليد أرقام مراجع الملفات القانونية الجديدة",
@@ -3177,7 +3177,7 @@
     "conditionAnd": "و",
     "conditionCount": "{count, plural, zero {# شرط} one {شرط واحد} two {شرطان} few {# شروط} many {# شرطًا} other {# شرط}}",
     "conditionField": "الحقل",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "أدخل صيغة…",
     "conditionMatch": "المطابقة",
     "conditionNamePlaceholder": "اسم الشرط (مثل NPF)",
     "conditionOpAfter": "بعد",
@@ -3196,8 +3196,8 @@
     "conditionOpOnOrBefore": "في أو قبل",
     "conditionOperator": "المُعامِل",
     "conditionOr": "أو",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "استخدام حقل بدلاً من ذلك",
+    "conditionUseFormula": "ƒ قيمة محسوبة…",
     "conditionValue": "القيمة",
     "conditionWhen": "عندما",
     "conditionsTitle": "الشروط",
@@ -3349,7 +3349,7 @@
       "conditionOrBuildNew": "أو أنشئ شرطاً جديداً",
       "conditionReuse": "إعادة استخدام شرط",
       "conditionReusePick": "اختر شرطًا موجودًا…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "شرط محسوب",
       "conditionSource": "كيف يُتّخذ القرار",
       "conditionSourceAi": "الذكاء الاصطناعي يقرّر",
       "conditionSourceAsked": "مطروح",
@@ -3375,7 +3375,7 @@
       "gettingStartedTitle": "للبدء",
       "insert": "إدراج",
       "insertAtCaret": "إدراج عند المؤشّر",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "إدراج شرط",
       "insertFormatDefault": "افتراضي",
       "insertIntoTemplate": "إدراج في القالب",
       "insertItemNumber": "رقم العنصر",
@@ -3518,9 +3518,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "يُستخدم مفتاح المنصة المشترك. أضف مفتاحك الخاص لاستخدام حسابك وحصتك لدى مزود الخدمة.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "مفاتيح البحث على الويب"
     }
   },
   "workspaces": {
@@ -4135,7 +4135,7 @@
       "filterByPlaceholder": "التصفية حسب…",
       "filtersWithCount": "{count, plural, zero {لا عوامل تصفية} one {عامل تصفية واحد} two {عاملا تصفية} few {# عوامل تصفية} many {# عامل تصفية} other {# عامل تصفية}}",
       "groupBy": "التجميع حسب:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
       "hideColumn": "إخفاء العمود",
       "layouts": {
         "calendar": "تقويم",

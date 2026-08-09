@@ -800,7 +800,7 @@
     "active": "Aktív",
     "add": "Hozzáadás",
     "all": "Összes",
-    "and": "And",
+    "and": "És",
     "anonymizationLabels": {
       "address": "Cím",
       "bankAccountNumber": "Bankszámlaszám",
@@ -959,12 +959,12 @@
     "next": "Tovább",
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
-    "none": "None",
+    "none": "Nincs",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
     "options": "Beállítások",
-    "or": "Or",
+    "or": "Vagy",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
@@ -1020,7 +1020,7 @@
     "type": "Típus",
     "typeNameToConfirm": "A megerősítéshez írja be a nevet",
     "uncategorized": "Kategória nélküli",
-    "undo": "Undo",
+    "undo": "Visszavonás",
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
@@ -1399,47 +1399,47 @@
     "descriptionPlaceholder": "Mit csinál ez a munkafolyamat",
     "disableFlow": "Munkafolyamat letiltása",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Határozza meg egyszer a lépéseket, majd futtassa ezt a munkafolyamatot bármely ügyből. A futások a felülvizsgálati ellenőrzőpontokon jóváhagyásra várva megállnak."
     },
     "empty": "Még nincsenek munkafolyamatok",
     "emptyDescription": "Hozzon létre munkafolyamatot, amely a dokumentumokból és egy célból kész eredményt készít.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Kezdés üresen",
+      "description": "Indítsa el egy ügy Munkafolyamatok lapjáról, ütemezés szerint vagy fájlok feltöltésekor. A munkafolyamat az ellenőrzőpontokon megáll, hogy egy személy jóváhagyhassa, mielőtt bármi véglegessé válik; az eredmény dokumentumként menthető az ügybe.",
+      "examplesTitle": "Kezdés példából",
+      "title": "A munkafolyamat MI- és felülvizsgálati lépések mentett sorozata, amelyet csapata ismételten lefuttat az ügy dokumentumain az egységes eredmény érdekében."
     },
     "enableFlow": "Munkafolyamat engedélyezése",
     "enabledDescription": "A letiltott munkafolyamatokat nem lehet futtatni vagy elindítani.",
     "enabledLabel": "Engedélyezve",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Összefoglaló létrehozása",
+        "description": "Foglalja össze az ügy dokumentumait egy olyan kollégának, aki még nem olvasta őket.",
+        "documentTitle": "Dokumentum-összefoglaló",
+        "name": "Az ügy dokumentumainak összefoglalója",
+        "summaryStepName": "Dokumentumok összefoglalása",
+        "summaryStepPrompt": "Foglalja össze az egyes bemeneti dokumentumokat: felek, tárgy, fontos dátumok, kötelezettségek és nyitott kérdések. Olyan kollégának írjon, aki még nem olvasta a dokumentumot."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Jelentés létrehozása",
+        "description": "Tárja fel az adatszobában az irányításváltozással, az engedményezéssel és a felelősséggel kapcsolatos kockázatokat.",
+        "documentTitle": "Kockázatfeltáró jelentés",
+        "name": "A jogi átvilágítás kockázatos pontjai",
+        "reviewGateInstructions": "A jelentés létrehozása előtt ellenőrizze a kockázatos pontokat.",
+        "reviewGateStepName": "Kockázatos pontok ellenőrzése",
+        "reviewStepName": "Kockázatos pontok feltárása",
+        "reviewStepPrompt": "Olvassa el a bemeneti dokumentumokat, és készítsen kockázatfeltáró jelentést az irányításváltozásról, az engedményezési korlátozásokról, a megszüntetési jogokról, a kizárólagosságról és a felelősségi korlátokról. Idézze a vonatkozó szöveget."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Feljegyzés létrehozása",
+        "description": "Jelölje meg a szokatlan kikötéseket egy titoktartási megállapodásban, mielőtt csapata hagyatkozik rá.",
+        "documentTitle": "Titoktartási megállapodás felülvizsgálati feljegyzése",
+        "name": "Titoktartási megállapodás előzetes felülvizsgálata",
+        "reviewGateInstructions": "A feljegyzés létrehozása előtt ellenőrizze a megjelölt kikötéseket.",
+        "reviewGateStepName": "Megjelölt kikötések ellenőrzése",
+        "reviewStepName": "Titoktartási megállapodás felülvizsgálata",
+        "reviewStepPrompt": "Vizsgálja felül a csatolt titoktartási megállapodást a szokásos piaci normák alapján: időtartam, a titoktartás hatálya, kivételek és irányadó jog. Súlyossági besorolással jelölje meg a szokatlan kikötéseket, és idézze a kikötést."
       }
     },
     "fileUpload": {
@@ -1509,9 +1509,9 @@
     "steps": {
       "add": "Lépés hozzáadása:",
       "ai": "AI-lépés",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Az utasításai alapján szöveget ír, és el tudja olvasni a kiválasztott bemeneti dokumentumokat.",
       "createDocument": "Dokumentum létrehozása",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "A legutóbbi MI-kimenetet dokumentumként menti abba az ügybe, amelyből a futás indult.",
       "documentTitle": "Dokumentum címe",
       "documentTitlePlaceholder": "pl. Összefoglaló feljegyzés",
       "documentTitleRequired": "Adja meg a dokumentum címét.",
@@ -1521,12 +1521,12 @@
       "instructionsPlaceholder": "Mit ellenőrizzen az ellenőr",
       "namePlaceholder": "Lépés neve",
       "nameRequired": "Adjon nevet minden lépésnek.",
-      "prompt": "Prompt",
+      "prompt": "Utasítás",
       "promptPlaceholder": "Utasítások az AI-lépéshez",
       "promptRequired": "Adjon meg egy promptot az AI-lépéshez.",
       "required": "Adjon hozzá legalább egy lépést.",
       "reviewGate": "Ellenőrzési pont",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Szünetelteti a futást, amíg egy személy jóvá nem hagyja vagy el nem utasítja.",
       "title": "Lépések"
     },
     "trigger": {
@@ -1878,7 +1878,7 @@
       "builtInSection": "Beépített készségek",
       "chooseFile": "Válassz fájlt, vagy húzd ide",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Készség közzététele"
       },
       "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
       "deleteFile": "Fájl törlése",
@@ -1919,7 +1919,7 @@
       "generateSkill": "Generálás AI-val",
       "generateTitle": "Készség generálása AI-val",
       "generating": "Generálás…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",
       "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizd újra.",
       "importFailureLimit": "Elérted a készségek maximális számát.",
@@ -1941,7 +1941,7 @@
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scopePrivate": "Csak én",
       "scopeTeam": "Mindenki a csapatban",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Válasszon ki egy fájlt a listából, hogy megnyissa a jobb oldali szerkesztőpanelen.",
       "selectedFile": "Kiválasztva: {name}",
       "selectionLimit": "Egyszerre legfeljebb {count} készséget válassz ki.",
       "sourceUpload": "Feltöltve",
@@ -2001,12 +2001,12 @@
       "addRule": "Szabály",
       "advanced": "Speciális",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Jóváhagyás",
+        "approveFailed": "Nem sikerült jóváhagyni a playbookot",
+        "approvedOn": "Jóváhagyva: {date}",
+        "approvedToast": "Playbook jóváhagyva",
+        "statusApproved": "Jóváhagyva",
+        "statusDraft": "Piszkozat"
       },
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
@@ -2069,18 +2069,18 @@
       "issuePlaceholder": "pl. Felelősség korlátozása",
       "loadFailed": "A playbookok betöltése nem sikerült",
       "loading": "Playbookok betöltése…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Típusok kezelése…",
       "namePlaceholder": "pl. NDA felülvizsgálata",
       "nameRequired": "Adjon meg egy nevet.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Tárgyalási pont hozzáadása",
+        "escalationLabel": "Eszkaláció",
+        "escalationPlaceholder": "Mikor és kihez kell eszkalálni (nem kötelező)",
+        "rationaleLabel": "Indoklás",
+        "rationalePlaceholder": "Miért szeretnénk ezt (nem kötelező)",
+        "talkingPointPlaceholder": "Mit mondjunk",
+        "talkingPointsLabel": "Tárgyalási pontok",
+        "title": "Tárgyalás"
       },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
       "optionPlaceholder": "Lehetőség értéke",
@@ -2117,17 +2117,17 @@
       },
       "risk": {
         "complianceLabel": "Megfelelőség",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "{flagged} megjelölt pozíció a(z) {total} közül",
         "notApplicableExcluded": "({count} nem alkalmazható, kizárva)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kritikus",
+          "high": "Magas",
+          "low": "Alacsony",
+          "medium": "Közepes",
+          "none": "Nincs kockázat"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Kockázati összefoglaló",
+        "topIssuesTitle": "Legfontosabb kérdések"
       },
       "ruleNumber": "{index}. szabály",
       "rulePlaceholder": "Egyszerű nyelvű szabály",
@@ -2140,11 +2140,11 @@
       },
       "severityLabel": "Súlyosság",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Playbook hozzáadva",
+        "browseButton": "Kezdő playbookok böngészése",
+        "positionCount": "{count, plural, one {# pozíció} other {# pozíció}}",
+        "subtitle": "Előre elkészített playbookok, amelyeket hozzáadhat, majd saját normáihoz igazíthat.",
+        "title": "Kezdő playbookok"
       },
       "switchToAuto": "Vissza az automatikus módra",
       "switchToManual": "Váltás kézi bevitelre",
@@ -2163,10 +2163,10 @@
         "notApplicable": "Nem alkalmazható"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "A jelenlegi piszkozatot ennek a verziónak a tartalma váltja fel.",
+        "restoreFailed": "Nem sikerült visszaállítani a verziót",
+        "restoredToast": "Verzió visszaállítva",
+        "versionHistory": "Verzióelőzmények"
       }
     },
     "sections": {
@@ -2203,29 +2203,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Válaszoljon meg egy kérdést hiteles forrásokra támaszkodva.",
+            "inside": "forráshierarchia · kutatási utasítás",
+            "title": "Válaszadás források alapján"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Vizsgáljon felül egy dokumentumot, és hivatkozásokkal jelölje meg, ami nem felel meg a szabályoknak.",
+            "inside": "jogrendszerenkénti hivatkozások · ellenőrzőlista · felülvizsgálati utasítás",
+            "title": "Ellenőrzés szabályok alapján"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Kérdezze meg a tényeket, majd készítsen dokumentumtervezetet.",
+            "inside": "interjú · iratminták · szövegezési utasítás",
+            "title": "Adatfelvételtől a tervezetig"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Tartalma",
+        "startBlank": "Kezdés üresen",
+        "startBlankHint": "Üres készség arra az esetre, ha pontosan tudja, mire van szüksége.",
+        "subtitle": "Válasszon kiindulási szerkezetet. Beállítjuk a mappákat, és végigvezetjük a kitöltésükön.",
+        "title": "Hogyan működjön a készsége?"
       },
       "commandConflict": "Már létezik készség ezzel a / paranccsal",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "A készség futtatásához írja be a parancsot a csevegésbe.",
       "commandLabel": "Perjeles parancs (nem kötelező)",
       "commandPlaceholder": "pl. összefoglalás",
       "createTitle": "Új készség",
@@ -2257,9 +2257,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Markdown-forrás",
+    "showFormatted": "Formázott",
+    "showRaw": "Forrás megjelenítése"
   },
   "memory": {
     "addPlaceholder": "Adjon hozzá egy megjegyzést, amelyet az asszisztensnek meg kell jegyeznie…",
@@ -2902,12 +2902,12 @@
         "updated": "A dokumentumszöveg-felismerés beállítása frissítve"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Dokumentumtípus hozzáadása (pl. munkaszerződés)",
+        "deleteFailed": "Nem sikerült törölni a dokumentumtípust",
+        "description": "Határozza meg a szervezet által felülvizsgált dokumentumtípusokat. A playbookok ezekre vonatkoznak, az MI-osztályozó pedig ezekbe sorolja a dokumentumokat.",
+        "labelAria": "Dokumentumtípus neve",
+        "reorder": "Dokumentumtípus átrendezése",
+        "title": "Dokumentumtípusok"
       },
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
@@ -3177,7 +3177,7 @@
     "conditionAnd": "És",
     "conditionCount": "{count, plural, one {# feltétel} other {# feltétel}}",
     "conditionField": "Mező",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Adjon meg egy képletet…",
     "conditionMatch": "Egyezés",
     "conditionNamePlaceholder": "Feltétel neve (pl. NPF)",
     "conditionOpAfter": "után",
@@ -3196,8 +3196,8 @@
     "conditionOpOnOrBefore": "napon vagy előtt",
     "conditionOperator": "Operátor",
     "conditionOr": "Vagy",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Használjon inkább mezőt",
+    "conditionUseFormula": "ƒ Számított érték…",
     "conditionValue": "Érték",
     "conditionWhen": "Ha",
     "conditionsTitle": "Feltételek",
@@ -3349,7 +3349,7 @@
       "conditionOrBuildNew": "vagy hozzon létre újat",
       "conditionReuse": "Meglévő feltétel újrafelhasználása",
       "conditionReusePick": "Válasszon meglévő feltételt…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Számított feltétel",
       "conditionSource": "Hogyan dől el",
       "conditionSourceAi": "Az MI dönt",
       "conditionSourceAsked": "Megkérdezett",
@@ -3375,7 +3375,7 @@
       "gettingStartedTitle": "Első lépések",
       "insert": "Beszúrás",
       "insertAtCaret": "Beszúrás a kurzorhoz",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Feltétel beszúrása",
       "insertFormatDefault": "Alapértelmezett",
       "insertIntoTemplate": "Beszúrás a sablonba",
       "insertItemNumber": "Tétel sorszáma",
@@ -3518,9 +3518,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "A platform megosztott kulcsa van használatban. Saját szolgáltatói fiókja és kvótája használatához adja hozzá a saját kulcsát.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Webes keresési kulcsok"
     }
   },
   "workspaces": {
@@ -3950,7 +3950,7 @@
     },
     "possibleDuplicates": "Lehetséges duplikátumok",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Feltétel hozzáadása",
       "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",
       "addOption": "Opció hozzáadása",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",
@@ -3990,7 +3990,7 @@
       "editColumn": "Oszlop szerkesztése",
       "editConditions": "Feltételek szerkesztése",
       "editConditionsDescription": "Adja meg a feltételeket, amelyek mellett ez a tulajdonság generálódjon.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Kinyerés futtatása csak akkor, ha …",
       "enterAValue": "Adjon meg egy értéket",
       "extractEntityType": "Entitástípus kinyerése",
       "extractEntityTypeDescription": "Hozzon létre AI által kitöltött táblázatoszlopot.",
@@ -4018,7 +4018,7 @@
       "newColumn": "Új oszlop",
       "newColumnDescription": "Válassza ki, hogyan töltődjön ki ez a táblázatoszlop.",
       "newColumnName": "Oszlop neve",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Nincs szűrésre használható mező.",
       "noFirstDocument": "Még nincsenek dokumentumok az előnézethez.",
       "noPropertiesFound": "Nincsenek tulajdonságok",
       "optionsHelp": "Add meg az értékeket, amelyek közül az AI választhat.",
@@ -4041,7 +4041,7 @@
       "scopeMatterDescription": "Használja az összes fájloszlopot, és futtassa az ügyet.",
       "searchOrAddOptions": "Opciók keresése vagy hozzáadása",
       "selectColor": "Szín kiválasztása",
-      "selectField": "Select field",
+      "selectField": "Mező kiválasztása",
       "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
       "singleSelect": "Egyszeres választás",
@@ -4135,7 +4135,7 @@
       "filterByPlaceholder": "Szűrés…",
       "filtersWithCount": "{count, plural, one {# szűrő} other {# szűrő}}",
       "groupBy": "Csoportosítás:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# elem} other {# elem}}",
       "hideColumn": "Oszlop elrejtése",
       "layouts": {
         "calendar": "Naptár",

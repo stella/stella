@@ -800,7 +800,7 @@
     "active": "Aktívny",
     "add": "Pridať",
     "all": "Všetko",
-    "and": "And",
+    "and": "A",
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankového účtu",
@@ -959,12 +959,12 @@
     "next": "Pokračovať",
     "noResults": "Žiadne výsledky",
     "noVersions": "Žiadna história verzií",
-    "none": "None",
+    "none": "Žiadne",
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
     "options": "Možnosti",
-    "or": "Or",
+    "or": "Alebo",
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "pin": "Pripnúť",
@@ -1020,7 +1020,7 @@
     "type": "Typ",
     "typeNameToConfirm": "Na potvrdenie napíšte názov",
     "uncategorized": "Nekategorizované",
-    "undo": "Undo",
+    "undo": "Späť",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
@@ -1399,47 +1399,47 @@
     "descriptionPlaceholder": "Čo tento pracovný postup robí",
     "disableFlow": "Zakázať pracovný postup",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Definujte kroky raz a potom tento pracovný postup spúšťajte z ľubovoľného spisu. Spustenie sa zastaví v kontrolných bodoch, kým ho niekto neschváli."
     },
     "empty": "Zatiaľ žiadne pracovné postupy",
     "emptyDescription": "Vytvorte pracovný postup, ktorý z dokumentov a cieľa vytvorí hotový výstup.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Začať od prázdneho postupu",
+      "description": "Spustite ho z karty Pracovné postupy v spise, podľa plánu alebo po nahratí súborov. V kontrolných bodoch sa zastaví, aby výsledok pred dokončením niekto schválil. Výstup možno uložiť ako dokument v spise.",
+      "examplesTitle": "Začať z príkladu",
+      "title": "Pracovný postup je uložená postupnosť krokov AI a kontroly, ktorú tím opakovane spúšťa na dokumentoch spisu, aby zakaždým vytvoril konzistentný výstup."
     },
     "enableFlow": "Povoliť pracovný postup",
     "enabledDescription": "Zakázané pracovné postupy nie je možné spustiť ani vyvolať.",
     "enabledLabel": "Povolené",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Vytvoriť súhrn",
+        "description": "Zhrnúť dokumenty spisu pre kolegu, ktorý ich ešte nečítal.",
+        "documentTitle": "Súhrn dokumentov",
+        "name": "Súhrn dokumentov spisu",
+        "summaryStepName": "Zhrnúť dokumenty",
+        "summaryStepPrompt": "Zhrňte každý vstupný dokument: strany, predmet, kľúčové dátumy, povinnosti a otvorené otázky. Píšte pre kolegu, ktorý ho ešte nečítal."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Vytvoriť správu",
+        "description": "Odhaliť v dokumentoch dátovej miestnosti riziká zmeny kontroly, postúpenia a zodpovednosti.",
+        "documentTitle": "Správa o kľúčových rizikách",
+        "name": "Kľúčové riziká due diligence",
+        "reviewGateInstructions": "Pred vytvorením správy skontrolujte kľúčové riziká.",
+        "reviewGateStepName": "Skontrolovať kľúčové riziká",
+        "reviewStepName": "Nájsť kľúčové riziká",
+        "reviewStepPrompt": "Prečítajte vstupné dokumenty a pripravte správu o kľúčových rizikách: zmene kontroly, obmedzeniach postúpenia, právach na ukončenie, výlučnosti a obmedzeniach zodpovednosti. Citujte príslušné znenie."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Vytvoriť memorandum",
+        "description": "Označiť neobvyklé ustanovenia v NDA skôr, než sa na ňu váš tím spoľahne.",
+        "documentTitle": "Memorandum z kontroly NDA",
+        "name": "Vstupná kontrola NDA",
+        "reviewGateInstructions": "Pred vytvorením memoranda skontrolujte označené ustanovenia.",
+        "reviewGateStepName": "Skontrolovať označené ustanovenia",
+        "reviewStepName": "Skontrolovať NDA",
+        "reviewStepPrompt": "Skontrolujte priloženú NDA podľa bežných trhových štandardov: dobu trvania, rozsah dôvernosti, výnimky a rozhodné právo. Označte neobvyklé ustanovenia, určte ich závažnosť a citujte príslušné ustanovenie."
       }
     },
     "fileUpload": {
@@ -1509,9 +1509,9 @@
     "steps": {
       "add": "Pridať krok:",
       "ai": "Krok AI",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Vytvára text podľa vašich pokynov a môže čítať vybrané vstupné dokumenty.",
       "createDocument": "Vytvoriť dokument",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "Uloží najnovší výstup AI ako dokument v spise, v ktorom sa spustenie začalo.",
       "documentTitle": "Názov dokumentu",
       "documentTitlePlaceholder": "napr. Súhrnná správa",
       "documentTitleRequired": "Zadajte názov dokumentu.",
@@ -1526,7 +1526,7 @@
       "promptRequired": "Zadajte prompt pre krok AI.",
       "required": "Pridajte aspoň jeden krok.",
       "reviewGate": "Kontrolný bod",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Pozastaví spustenie, kým ho používateľ neschváli alebo nezamietne.",
       "title": "Kroky"
     },
     "trigger": {
@@ -1878,7 +1878,7 @@
       "builtInSection": "Vstavané zručnosti",
       "chooseFile": "Vyberte súbor alebo ho sem presuňte",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Publikovať zručnosť"
       },
       "deleteConfirmDescription": "Zručnosť „{name}“ bude odstránená z tohto pracovného priestoru.",
       "deleteFile": "Vymazať súbor",
@@ -1919,7 +1919,7 @@
       "generateSkill": "Vygenerovať pomocou AI",
       "generateTitle": "Vygenerovať zručnosť pomocou AI",
       "generating": "Generovanie…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
       "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",
       "importFailureLimit": "Bol dosiahnutý limit zručností.",
@@ -1941,7 +1941,7 @@
       "resources": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroja} other {# zdrojov}}",
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v tíme",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Výberom súboru v zozname ho otvoríte v paneli editora vpravo.",
       "selectedFile": "Vybraté: {name}",
       "selectionLimit": "Naraz môžete vybrať najviac {count} zručností.",
       "sourceUpload": "Nahraté",
@@ -2001,12 +2001,12 @@
       "addRule": "Pravidlo",
       "advanced": "Pokročilé",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Schváliť",
+        "approveFailed": "Playbook sa nepodarilo schváliť",
+        "approvedOn": "Schválené {date}",
+        "approvedToast": "Playbook schválený",
+        "statusApproved": "Schválené",
+        "statusDraft": "Koncept"
       },
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
@@ -2069,18 +2069,18 @@
       "issuePlaceholder": "napr. Obmedzenie zodpovednosti",
       "loadFailed": "Playbooky sa nepodarilo načítať",
       "loading": "Načítavam playbooky…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Spravovať typy…",
       "namePlaceholder": "napr. revízia NDA",
       "nameRequired": "Zadajte názov.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Pridať argument",
+        "escalationLabel": "Eskalácia",
+        "escalationPlaceholder": "Kedy a komu eskalovať (voliteľné)",
+        "rationaleLabel": "Odôvodnenie",
+        "rationalePlaceholder": "Prečo túto pozíciu požadujeme (voliteľné)",
+        "talkingPointPlaceholder": "Čo povedať",
+        "talkingPointsLabel": "Argumenty",
+        "title": "Vyjednávanie"
       },
       "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
       "optionPlaceholder": "Hodnota možnosti",
@@ -2117,17 +2117,17 @@
       },
       "risk": {
         "complianceLabel": "Súlad",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "Označených {flagged} z {total} pozícií",
         "notApplicableExcluded": "({count} neaplikovateľné, vylúčené)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Kritické",
+          "high": "Vysoké",
+          "low": "Nízke",
+          "medium": "Stredné",
+          "none": "Bez rizika"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Súhrn rizík",
+        "topIssuesTitle": "Hlavné problémy"
       },
       "ruleNumber": "Pravidlo {index}",
       "rulePlaceholder": "Pravidlo v jednoduchom jazyku",
@@ -2140,11 +2140,11 @@
       },
       "severityLabel": "Závažnosť",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Playbook pridaný",
+        "browseButton": "Prehľadávať úvodné playbooky",
+        "positionCount": "{count, plural, one {# pozícia} few {# pozície} other {# pozícií}}",
+        "subtitle": "Hotové playbooky, ktoré môžete pridať a upraviť podľa svojich štandardov.",
+        "title": "Úvodné playbooky"
       },
       "switchToAuto": "Späť na automatický režim",
       "switchToManual": "Prepnúť na ručné zadanie",
@@ -2163,10 +2163,10 @@
         "notApplicable": "Neaplikovateľné"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Obsah aktuálneho konceptu bude nahradený obsahom tejto verzie.",
+        "restoreFailed": "Verziu sa nepodarilo obnoviť",
+        "restoredToast": "Verzia obnovená",
+        "versionHistory": "História verzií"
       }
     },
     "sections": {
@@ -2203,29 +2203,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Odpovedzte na otázku na základe dôveryhodných zdrojov.",
+            "inside": "hierarchia zdrojov · výskumný prompt",
+            "title": "Odpoveď zo zdrojov"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Skontrolujte dokument, označte nesúlad a doložte ho citáciami.",
+            "inside": "zdroje podľa jurisdikcie · kontrolný zoznam · prompt na kontrolu",
+            "title": "Kontrola podľa pravidiel"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Získajte potrebné fakty a potom vypracujte návrh dokumentu.",
+            "inside": "rozhovor · vzorové dokumenty · prompt na vypracovanie návrhu",
+            "title": "Od zistenia údajov k návrhu"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Obsah",
+        "startBlank": "Začať s prázdnou zručnosťou",
+        "startBlankHint": "Prázdna zručnosť pre prípad, že presne viete, čo potrebujete.",
+        "subtitle": "Vyberte si východiskovú štruktúru. Pripravíme priečinky a prevedieme vás ich vyplnením.",
+        "title": "Ako má vaša zručnosť fungovať?"
       },
       "commandConflict": "Zručnosť s týmto / príkazom už existuje",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "Napíšte tento príkaz do chatu a spustite zručnosť.",
       "commandLabel": "Lomkový príkaz (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "createTitle": "Nová zručnosť",
@@ -2257,9 +2257,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Zdroj Markdownu",
+    "showFormatted": "Formátovaný text",
+    "showRaw": "Zobraziť zdroj"
   },
   "memory": {
     "addPlaceholder": "Pridajte poznámku, ktorú si má asistent zapamätať…",
@@ -2902,12 +2902,12 @@
         "updated": "Nastavenie rozpoznávania textu dokumentov aktualizované"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Pridať typ dokumentu (napr. pracovná zmluva)",
+        "deleteFailed": "Typ dokumentu sa nepodarilo odstrániť",
+        "description": "Definujte typy dokumentov, ktoré vaša organizácia kontroluje. Playbooky sa vzťahujú na tieto typy a klasifikátor AI do nich dokumenty zaraďuje.",
+        "labelAria": "Názov typu dokumentu",
+        "reorder": "Zmeniť poradie typu dokumentu",
+        "title": "Typy dokumentov"
       },
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
@@ -3177,7 +3177,7 @@
     "conditionAnd": "A",
     "conditionCount": "{count, plural, one {# podmienka} few {# podmienky} other {# podmienok}}",
     "conditionField": "Pole",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Zadajte vzorec…",
     "conditionMatch": "Zhoda",
     "conditionNamePlaceholder": "Názov podmienky (napr. NPF)",
     "conditionOpAfter": "po",
@@ -3196,8 +3196,8 @@
     "conditionOpOnOrBefore": "dňa alebo pred",
     "conditionOperator": "Operátor",
     "conditionOr": "Alebo",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Namiesto toho použiť pole",
+    "conditionUseFormula": "ƒ Vypočítaná hodnota…",
     "conditionValue": "Hodnota",
     "conditionWhen": "Keď",
     "conditionsTitle": "Podmienky",
@@ -3349,7 +3349,7 @@
       "conditionOrBuildNew": "alebo vytvorte novú",
       "conditionReuse": "Použiť existujúcu podmienku",
       "conditionReusePick": "Vyberte existujúcu podmienku…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Vypočítaná podmienka",
       "conditionSource": "Ako sa rozhoduje",
       "conditionSourceAi": "Rozhodne AI",
       "conditionSourceAsked": "Opýtané",
@@ -3375,7 +3375,7 @@
       "gettingStartedTitle": "Začíname",
       "insert": "Vložiť",
       "insertAtCaret": "Vložiť na pozíciu kurzora",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Vložiť podmienku",
       "insertFormatDefault": "Predvolená",
       "insertIntoTemplate": "Vložiť do vzoru",
       "insertItemNumber": "Číslo položky",
@@ -3518,9 +3518,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "Používa sa zdieľaný kľúč platformy. Ak chcete používať vlastný účet a kvótu u poskytovateľa, pridajte svoj kľúč.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Kľúče na vyhľadávanie na webe"
     }
   },
   "workspaces": {
@@ -3950,7 +3950,7 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Pridať podmienku",
       "addInputProperty": "Pridajte aspoň jednu vstupnú vlastnosť pomocou \"@\"",
       "addOption": "Pridať možnosť",
       "addPromptForBetterResults": "Pridajte prompt pre lepšie výsledky",
@@ -3990,7 +3990,7 @@
       "editColumn": "Upraviť stĺpec",
       "editConditions": "Upraviť podmienky",
       "editConditionsDescription": "Nastavte podmienky, kedy sa má táto vlastnosť generovať.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Spustiť extrakciu iba vtedy, keď…",
       "enterAValue": "Zadajte hodnotu",
       "extractEntityType": "Extrahovať typ entity",
       "extractEntityTypeDescription": "Vytvorte tabuľkový stĺpec vypĺňaný AI.",
@@ -4018,7 +4018,7 @@
       "newColumn": "Nový stĺpec",
       "newColumnDescription": "Vyberte, ako sa má tento stĺpec tabuľky vypĺňať.",
       "newColumnName": "Názov stĺpca",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Nie sú k dispozícii žiadne polia, podľa ktorých možno filtrovať.",
       "noFirstDocument": "Zatiaľ žiadne dokumenty pre náhľad.",
       "noPropertiesFound": "Neboli nájdené žiadne vlastnosti",
       "optionsHelp": "Zadaj hodnoty, z ktorých si AI môže vybrať.",
@@ -4041,7 +4041,7 @@
       "scopeMatterDescription": "Použiť všetky stĺpce súborov a spustiť celý spis.",
       "searchOrAddOptions": "Hľadať alebo pridať možnosti",
       "selectColor": "Vyberte farbu",
-      "selectField": "Select field",
+      "selectField": "Vybrať pole",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleSelect": "Jednoduchý výber",
@@ -4135,7 +4135,7 @@
       "filterByPlaceholder": "Filtrovať podľa…",
       "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov}}",
       "groupBy": "Zoskupiť podľa:",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položiek}}",
       "hideColumn": "Skryť stĺpec",
       "layouts": {
         "calendar": "Kalendár",

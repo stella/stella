@@ -818,6 +818,200 @@
         "fr": "Contact",
         "pt-BR": "Contato"
       }
+    },
+    {
+      "id": "playbook",
+      "en": "Playbook",
+      "note": "A maintained legal-review and negotiation rule set: preferred positions, fallback wording, risk rules, and escalation guidance. Research across German, Czech, Slovak, Polish, Estonian, Hungarian, Spanish, French, and Brazilian legal-tech usage supports the declined English loanword; Arabic, Lithuanian, and Latvian use the established native review-guide term. Never render this named concept as a literal book of games.",
+      "forbidden": {
+        "ar": ["كتاب اللعب", "كتب اللعب", "بلايبوك", "بلاي بوك"],
+        "cs": [
+          "herní plán",
+          "herního plánu",
+          "herní plány",
+          "herních plánů",
+          "kniha her",
+          "knihy her"
+        ],
+        "sk": [
+          "herný plán",
+          "herného plánu",
+          "herné plány",
+          "herných plánov",
+          "kniha hier",
+          "knihy hier"
+        ],
+        "pl": [
+          "książka gry",
+          "książki gry",
+          "książką gry",
+          "plan gry",
+          "planu gry",
+          "plany gry",
+          "planów gry"
+        ],
+        "de": ["Spielbuch", "Spielbuchs", "Spielbücher", "Spielbüchern"],
+        "et": [
+          "mänguraamat",
+          "mänguraamatu",
+          "mänguraamatud",
+          "mänguraamatute"
+        ],
+        "hu": ["játékkönyv", "játékkönyvet", "játékkönyvek", "játékkönyveket"],
+        "lt": [
+          "žaidimo knyga",
+          "žaidimo knygos",
+          "žaidimo knygą",
+          "žaidimo knygoje",
+          "žaidimų knyga"
+        ],
+        "lv": [
+          "spēļu grāmata",
+          "spēļu grāmatas",
+          "spēļu grāmatai",
+          "spēļu grāmatu",
+          "spēļu grāmatā",
+          "spēļu grāmatām",
+          "spēļu grāmatās"
+        ]
+      },
+      "translations": {
+        "ar": "دليل مراجعة",
+        "cs": "Playbook",
+        "sk": "Playbook",
+        "pl": "Playbook",
+        "de": "Playbook",
+        "et": "Playbook",
+        "hu": "Playbook",
+        "lt": "Peržiūros vadovas",
+        "lv": "Pārbaudes ceļvedis",
+        "es": "Playbook",
+        "fr": "Playbook",
+        "pt-BR": "Playbook"
+      }
+    },
+    {
+      "id": "transaction-due-diligence",
+      "en": "Due diligence",
+      "note": "The transactional M&A investigation represented by Stella's data-room red-flag workflow, not the separate corporate-sustainability duty-of-care concept. Official transaction materials and local legal practice support the preferred terms below. German Sorgfaltspflicht, Estonian hoolsuskohustus, and Hungarian kellő gondosság remain valid for regulatory duties, but are forbidden on this workflow's keys so that context cannot drift.",
+      "forbidden": {
+        "ar": ["الاجتهاد المستحق", "الاجتهاد الواجب"]
+      },
+      "forbiddenOnKey": {
+        "de": ["Sorgfaltspflicht", "Sorgfaltspflichten"],
+        "et": [
+          "hoolsuskohustus",
+          "hoolsuskohustuse",
+          "hoolsuskohustust",
+          "hoolsuskohustused",
+          "hoolsuskohustuste"
+        ],
+        "hu": ["kellő gondosság", "kellő gondosságot", "kellő gondossági"]
+      },
+      "keyTriggers": ["flows.examples.dueDiligence"],
+      "sourceExempt": ["due diligence"],
+      "translations": {
+        "ar": "العناية الواجبة",
+        "cs": "Due diligence",
+        "sk": "Due diligence",
+        "pl": "Due diligence",
+        "de": "Due-Diligence-Prüfung",
+        "et": "Õiguslik audit",
+        "hu": "Jogi átvilágítás",
+        "lt": "Išsamus teisinis patikrinimas",
+        "lv": "Padziļinātā izpēte",
+        "es": "Diligencia debida",
+        "fr": "Due diligence",
+        "pt-BR": "Devida diligência"
+      }
+    },
+    {
+      "id": "escalation",
+      "en": "Escalation",
+      "note": "Routing a negotiation exception or unresolved issue to a designated person or higher approval level. Official approval, risk, procurement, and legal-tech sources support these terms; do not translate it as a promotion, upgrade, or team selection.",
+      "forbidden": {
+        "ar": ["الترقية", "ترقية", "للترقية", "بالترقية"],
+        "cs": ["povýšení", "povýšením", "povýšeními"],
+        "sk": ["povýšenie", "povýšenia", "povýšeniu", "povýšením"],
+        "pl": ["awans", "awansu", "awansem", "awanse", "awansów", "awansami"],
+        "pt-BR": ["escalação", "escalações"]
+      },
+      "translations": {
+        "ar": "التصعيد",
+        "cs": "Eskalace",
+        "sk": "Eskalácia",
+        "pl": "Eskalacja",
+        "de": "Eskalation",
+        "et": "Eskaleerimine",
+        "hu": "Eszkaláció",
+        "lt": "Eskalavimas",
+        "lv": "Eskalācija",
+        "es": "Escalado",
+        "fr": "Escalade",
+        "pt-BR": "Escalonamento"
+      }
+    },
+    {
+      "id": "rationale",
+      "en": "Rationale",
+      "note": "The stated reason supporting a negotiation position. Use the ordinary legal/business justification term below, not a false friend meaning rationality or post-hoc rationalization.",
+      "forbidden": {
+        "cs": ["racionalizace", "racionalizaci", "racionalizací", "racionále"],
+        "sk": [
+          "racionalizácia",
+          "racionalizácie",
+          "racionalizácii",
+          "racionalizáciou",
+          "racionále"
+        ],
+        "pl": [
+          "racjonalizacja",
+          "racjonalizacji",
+          "racjonalizacją",
+          "racjonalizacje",
+          "racjonalizacjami"
+        ],
+        "de": ["Rationalität", "Rationalitäten"],
+        "et": ["ratsionaalsus", "ratsionaalsuse", "ratsionaalsust"],
+        "hu": ["racionalitás", "racionalitást", "racionalitások"],
+        "lt": ["racionalumas", "racionalumo", "racionalumą"],
+        "lv": [
+          "racionalizācija",
+          "racionalizācijas",
+          "racionalizācijai",
+          "racionalizāciju",
+          "racionalizācijā",
+          "racionalizācijām",
+          "racionalizācijās"
+        ],
+        "es": ["racionalización", "racionalizaciones"],
+        "fr": [
+          "rationalisation",
+          "rationalisations",
+          "rationalité",
+          "rationalités"
+        ],
+        "pt-BR": [
+          "racionalização",
+          "racionalizações",
+          "racionalidade",
+          "racionalidades"
+        ]
+      },
+      "translations": {
+        "ar": "المبررات",
+        "cs": "Odůvodnění",
+        "sk": "Odôvodnenie",
+        "pl": "Uzasadnienie",
+        "de": "Begründung",
+        "et": "Põhjendus",
+        "hu": "Indoklás",
+        "lt": "Pagrindimas",
+        "lv": "Pamatojums",
+        "es": "Justificación",
+        "fr": "Justification",
+        "pt-BR": "Justificativa"
+      }
     }
   ],
   "ptBR": [

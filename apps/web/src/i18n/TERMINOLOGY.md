@@ -329,21 +329,25 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 
 <!-- glossary-gen:legal-slavic-baltic start -->
 
-| Concept      | Czech      | Slovak      | Polish             | German         | Estonian      | Hungarian            | Lithuanian             | Latvian             |
-| ------------ | ---------- | ----------- | ------------------ | -------------- | ------------- | -------------------- | ---------------------- | ------------------- |
-| **Matter**   | Spis       | Spis        | Sprawa             | Akte           | Toimik        | Ügy                  | Byla                   | Lieta               |
-| **Team**     | Tým        | Tím         | Zespół             | Team           | Meeskond      | Csapat               | Komanda                | Komanda             |
-| **Case law** | Judikatura | Judikatúra  | Orzecznictwo       | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika        | Tiesu prakse        |
-| **Court**    | Soud       | Súd         | Sąd                | Gericht        | Kohus         | Bíróság              | Teismas                | Tiesa               |
-| **Party**    | Strana     | Strana      | Strona             | Partei         | Osapool       | Fél                  | Šalis                  | Puse                |
-| **Clause**   | Ustanovení | Ustanovenie | Klauzula           | Klausel        | Klausel       | Kikötés              | Sąlyga                 | Klauzula            |
-| **Template** | Vzor       | Vzor        | Szablon            | Vorlage        | Mall          | Sablon               | Šablonas               | Veidne              |
-| **View**     | Zobrazení  | Zobrazenie  | Widok              | Ansicht        | Vaade         | Nézet                | Rodinys                | Skats               |
-| **Preset**   | Předvolba  | Predvoľba   | Ustawienie wstępne | Voreinstellung | Eelseade      | Előbeállítás         | Išankstinis nustatymas | Iepriekšiestatījums |
-| **Folder**   | Složka     | Priečinok   | Folder             | Ordner         | Kaust         | Mappa                | Aplankas               | Mape                |
-| **Tag**      | Štítek     | Štítok      | Tag                | Schlagwort     | Silt          | Címke                | Žyma                   | Birka               |
-| **Draft**    | Koncept    | Koncept     | Wersja robocza     | Entwurf        | Mustand       | Piszkozat            | Juodraštis             | Melnraksts          |
-| **Contact**  | Kontakt    | Kontakt     | Kontakt            | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas              | Kontakts            |
+| Concept           | Czech         | Slovak        | Polish             | German                | Estonian       | Hungarian            | Lithuanian                    | Latvian             |
+| ----------------- | ------------- | ------------- | ------------------ | --------------------- | -------------- | -------------------- | ----------------------------- | ------------------- |
+| **Matter**        | Spis          | Spis          | Sprawa             | Akte                  | Toimik         | Ügy                  | Byla                          | Lieta               |
+| **Team**          | Tým           | Tím           | Zespół             | Team                  | Meeskond       | Csapat               | Komanda                       | Komanda             |
+| **Case law**      | Judikatura    | Judikatúra    | Orzecznictwo       | Rechtsprechung        | Kohtupraktika  | Ítélkezési gyakorlat | Teismų praktika               | Tiesu prakse        |
+| **Court**         | Soud          | Súd           | Sąd                | Gericht               | Kohus          | Bíróság              | Teismas                       | Tiesa               |
+| **Party**         | Strana        | Strana        | Strona             | Partei                | Osapool        | Fél                  | Šalis                         | Puse                |
+| **Clause**        | Ustanovení    | Ustanovenie   | Klauzula           | Klausel               | Klausel        | Kikötés              | Sąlyga                        | Klauzula            |
+| **Template**      | Vzor          | Vzor          | Szablon            | Vorlage               | Mall           | Sablon               | Šablonas                      | Veidne              |
+| **View**          | Zobrazení     | Zobrazenie    | Widok              | Ansicht               | Vaade          | Nézet                | Rodinys                       | Skats               |
+| **Preset**        | Předvolba     | Predvoľba     | Ustawienie wstępne | Voreinstellung        | Eelseade       | Előbeállítás         | Išankstinis nustatymas        | Iepriekšiestatījums |
+| **Folder**        | Složka        | Priečinok     | Folder             | Ordner                | Kaust          | Mappa                | Aplankas                      | Mape                |
+| **Tag**           | Štítek        | Štítok        | Tag                | Schlagwort            | Silt           | Címke                | Žyma                          | Birka               |
+| **Draft**         | Koncept       | Koncept       | Wersja robocza     | Entwurf               | Mustand        | Piszkozat            | Juodraštis                    | Melnraksts          |
+| **Contact**       | Kontakt       | Kontakt       | Kontakt            | Kontakt               | Kontakt        | Kapcsolat            | Kontaktas                     | Kontakts            |
+| **Playbook**      | Playbook      | Playbook      | Playbook           | Playbook              | Playbook       | Playbook             | Peržiūros vadovas             | Pārbaudes ceļvedis  |
+| **Due diligence** | Due diligence | Due diligence | Due diligence      | Due-Diligence-Prüfung | Õiguslik audit | Jogi átvilágítás     | Išsamus teisinis patikrinimas | Padziļinātā izpēte  |
+| **Escalation**    | Eskalace      | Eskalácia     | Eskalacja          | Eskalation            | Eskaleerimine  | Eszkaláció           | Eskalavimas                   | Eskalācija          |
+| **Rationale**     | Odůvodnění    | Odôvodnenie   | Uzasadnienie       | Begründung            | Põhjendus      | Indoklás             | Pagrindimas                   | Pamatojums          |
 
 <!-- glossary-gen:legal-slavic-baltic end -->
 
@@ -351,21 +355,25 @@ Romance:
 
 <!-- glossary-gen:legal-romance start -->
 
-| Concept      | Spanish        | French        | Brazilian Portuguese |
-| ------------ | -------------- | ------------- | -------------------- |
-| **Matter**   | Asunto         | Dossier       | Caso                 |
-| **Team**     | Equipo         | Équipe        | Equipe               |
-| **Case law** | Jurisprudencia | Jurisprudence | Jurisprudência       |
-| **Court**    | Tribunal       | Juridiction   | Tribunal             |
-| **Party**    | Parte          | Partie        | Parte                |
-| **Clause**   | Cláusula       | Clause        | Cláusula             |
-| **Template** | Plantilla      | Modèle        | Modelo               |
-| **View**     | Vista          | Vue           | Visualização         |
-| **Preset**   | Preajuste      | Préréglage    | Predefinição         |
-| **Folder**   | Carpeta        | Dossier       | Pasta                |
-| **Tag**      | Etiqueta       | Étiquette     | Etiqueta             |
-| **Draft**    | Borrador       | Brouillon     | Rascunho             |
-| **Contact**  | Contacto       | Contact       | Contato              |
+| Concept           | Spanish           | French        | Brazilian Portuguese |
+| ----------------- | ----------------- | ------------- | -------------------- |
+| **Matter**        | Asunto            | Dossier       | Caso                 |
+| **Team**          | Equipo            | Équipe        | Equipe               |
+| **Case law**      | Jurisprudencia    | Jurisprudence | Jurisprudência       |
+| **Court**         | Tribunal          | Juridiction   | Tribunal             |
+| **Party**         | Parte             | Partie        | Parte                |
+| **Clause**        | Cláusula          | Clause        | Cláusula             |
+| **Template**      | Plantilla         | Modèle        | Modelo               |
+| **View**          | Vista             | Vue           | Visualização         |
+| **Preset**        | Preajuste         | Préréglage    | Predefinição         |
+| **Folder**        | Carpeta           | Dossier       | Pasta                |
+| **Tag**           | Etiqueta          | Étiquette     | Etiqueta             |
+| **Draft**         | Borrador          | Brouillon     | Rascunho             |
+| **Contact**       | Contacto          | Contact       | Contato              |
+| **Playbook**      | Playbook          | Playbook      | Playbook             |
+| **Due diligence** | Diligencia debida | Due diligence | Devida diligência    |
+| **Escalation**    | Escalado          | Escalade      | Escalonamento        |
+| **Rationale**     | Justificación     | Justification | Justificativa        |
 
 <!-- glossary-gen:legal-romance end -->
 
@@ -373,21 +381,25 @@ Arabic:
 
 <!-- glossary-gen:legal-arabic start -->
 
-| Concept      | Arabic           |
-| ------------ | ---------------- |
-| **Matter**   | ملف قانوني       |
-| **Team**     | فريق             |
-| **Case law** | الاجتهاد القضائي |
-| **Court**    | محكمة            |
-| **Party**    | طرف              |
-| **Clause**   | بند              |
-| **Template** | قالب             |
-| **View**     | عرض              |
-| **Preset**   | إعداد مسبق       |
-| **Folder**   | مجلد             |
-| **Tag**      | وسم              |
-| **Draft**    | مسودة            |
-| **Contact**  | جهة اتصال        |
+| Concept           | Arabic           |
+| ----------------- | ---------------- |
+| **Matter**        | ملف قانوني       |
+| **Team**          | فريق             |
+| **Case law**      | الاجتهاد القضائي |
+| **Court**         | محكمة            |
+| **Party**         | طرف              |
+| **Clause**        | بند              |
+| **Template**      | قالب             |
+| **View**          | عرض              |
+| **Preset**        | إعداد مسبق       |
+| **Folder**        | مجلد             |
+| **Tag**           | وسم              |
+| **Draft**         | مسودة            |
+| **Contact**       | جهة اتصال        |
+| **Playbook**      | دليل مراجعة      |
+| **Due diligence** | العناية الواجبة  |
+| **Escalation**    | التصعيد          |
+| **Rationale**     | المبررات         |
 
 <!-- glossary-gen:legal-arabic end -->
 

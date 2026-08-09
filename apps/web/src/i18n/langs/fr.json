@@ -800,7 +800,7 @@
     "active": "Actif",
     "add": "Ajouter",
     "all": "Tous",
-    "and": "And",
+    "and": "Et",
     "anonymizationLabels": {
       "address": "Adresse",
       "bankAccountNumber": "Numéro de compte bancaire",
@@ -959,12 +959,12 @@
     "next": "Suivant",
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
-    "none": "None",
+    "none": "Aucun",
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
     "options": "Options",
-    "or": "Or",
+    "or": "Ou",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "pin": "Épingler",
@@ -1020,7 +1020,7 @@
     "type": "Type",
     "typeNameToConfirm": "Saisissez le nom pour confirmer",
     "uncategorized": "Non catégorisé",
-    "undo": "Undo",
+    "undo": "Annuler",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
@@ -1399,47 +1399,47 @@
     "descriptionPlaceholder": "Ce que fait ce flux de travail",
     "disableFlow": "Désactiver le flux de travail",
     "editor": {
-      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+      "newFlowIntro": "Définissez les étapes une fois, puis exécutez ce flux de travail depuis n’importe quel dossier. Les exécutions s’interrompent aux points de contrôle pour approbation."
     },
     "empty": "Aucun flux de travail pour l’instant",
     "emptyDescription": "Créez un flux de travail pour transformer des documents et un objectif en un livrable finalisé.",
     "emptyState": {
-      "blankAction": "Start blank",
-      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
-      "examplesTitle": "Start from an example",
-      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+      "blankAction": "Partir de zéro",
+      "description": "Lancez-le depuis l’onglet Flux de travail d’un dossier, selon une planification ou lors du téléversement de fichiers. Il s’interrompt aux points de contrôle afin qu’une personne l’approuve avant sa finalisation ; le résultat peut être enregistré comme document dans le dossier.",
+      "examplesTitle": "Partir d’un exemple",
+      "title": "Un flux de travail est une séquence enregistrée d’étapes d’IA et de révision que votre équipe réexécute sur les documents d’un dossier afin de produire un livrable cohérent."
     },
     "enableFlow": "Activer le flux de travail",
     "enabledDescription": "Les flux de travail désactivés ne peuvent pas être exécutés ni déclenchés.",
     "enabledLabel": "Activé",
     "examples": {
       "documentSummary": {
-        "createStepName": "Create the summary",
-        "description": "Summarize the matter's documents for a colleague who has not read them.",
-        "documentTitle": "Document summary",
-        "name": "Document summary for the file",
-        "summaryStepName": "Summarize the documents",
-        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+        "createStepName": "Créer la synthèse",
+        "description": "Résumez les documents du dossier pour un collègue qui ne les a pas lus.",
+        "documentTitle": "Synthèse des documents",
+        "name": "Synthèse des documents du dossier",
+        "summaryStepName": "Résumer les documents",
+        "summaryStepPrompt": "Résumez chaque document fourni : parties, objet, dates clés, obligations et points en suspens. Rédigez pour un collègue qui ne l’a pas lu."
       },
       "dueDiligence": {
-        "createStepName": "Create the report",
-        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
-        "documentTitle": "Red-flag report",
-        "name": "Due diligence red flags",
-        "reviewGateInstructions": "Check the red flags before the report is created.",
-        "reviewGateStepName": "Check the red flags",
-        "reviewStepName": "Find red flags",
-        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+        "createStepName": "Créer le rapport",
+        "description": "Repérez les risques liés au changement de contrôle, à la cession et à la responsabilité dans l’ensemble d’une data room.",
+        "documentTitle": "Rapport sur les principaux risques",
+        "name": "Principaux risques de la due diligence",
+        "reviewGateInstructions": "Vérifiez les principaux risques avant la création du rapport.",
+        "reviewGateStepName": "Vérifier les principaux risques",
+        "reviewStepName": "Repérer les principaux risques",
+        "reviewStepPrompt": "Lisez les documents fournis et produisez un rapport sur les principaux risques : changement de contrôle, restrictions de cession, droits de résiliation, exclusivité et plafonds de responsabilité. Citez les passages pertinents."
       },
       "ndaIntake": {
-        "createStepName": "Create the memo",
-        "description": "Flag unusual clauses in an NDA before your team relies on it.",
-        "documentTitle": "NDA review memo",
-        "name": "NDA intake review",
-        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
-        "reviewGateStepName": "Check the flagged clauses",
-        "reviewStepName": "Review the NDA",
-        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+        "createStepName": "Créer la note",
+        "description": "Signalez les clauses inhabituelles d’un accord de confidentialité avant que votre équipe ne s’y fie.",
+        "documentTitle": "Note de révision de l’accord de confidentialité",
+        "name": "Révision initiale de l’accord de confidentialité",
+        "reviewGateInstructions": "Vérifiez les clauses signalées avant la création de la note.",
+        "reviewGateStepName": "Vérifier les clauses signalées",
+        "reviewStepName": "Réviser l’accord de confidentialité",
+        "reviewStepPrompt": "Examinez l’accord de confidentialité joint au regard des pratiques courantes du marché : durée, étendue de la confidentialité, exclusions et droit applicable. Signalez les clauses inhabituelles, attribuez-leur un niveau de gravité et citez la clause."
       }
     },
     "fileUpload": {
@@ -1509,24 +1509,24 @@
     "steps": {
       "add": "Ajouter une étape :",
       "ai": "Étape IA",
-      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "aiHelp": "Rédige un texte à partir de vos instructions et peut lire les documents d’entrée sélectionnés.",
       "createDocument": "Créer un document",
-      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "createDocumentHelp": "Enregistre la dernière sortie de l’IA comme document dans le dossier où l’exécution a commencé.",
       "documentTitle": "Titre du document",
       "documentTitlePlaceholder": "p. ex. Note de synthèse",
       "documentTitleRequired": "Saisissez un titre de document.",
       "empty": "Ajoutez au moins une étape.",
       "includeDocuments": "Inclure les documents d’entrée",
-      "instructions": "Instructions",
+      "instructions": "Consignes",
       "instructionsPlaceholder": "Ce que le relecteur doit vérifier",
       "namePlaceholder": "Nom de l’étape",
       "nameRequired": "Saisissez un nom pour chaque étape.",
-      "prompt": "Prompt",
+      "prompt": "Instruction",
       "promptPlaceholder": "Instructions pour l’étape IA",
       "promptRequired": "Saisissez un prompt pour l’étape IA.",
       "required": "Ajoutez au moins une étape.",
       "reviewGate": "Point de contrôle",
-      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "reviewGateHelp": "Interrompt l’exécution jusqu’à ce qu’une personne l’approuve ou la rejette.",
       "title": "Étapes"
     },
     "trigger": {
@@ -1878,7 +1878,7 @@
       "builtInSection": "Compétences intégrées",
       "chooseFile": "Choisissez un fichier ou déposez-le ici",
       "coaching": {
-        "publish": "Publish skill"
+        "publish": "Publier la compétence"
       },
       "deleteConfirmDescription": "« {name} » sera supprimée de cet espace de travail.",
       "deleteFile": "Supprimer le fichier",
@@ -1919,7 +1919,7 @@
       "generateSkill": "Générer avec l'IA",
       "generateTitle": "Générer une compétence avec l'IA",
       "generating": "Génération en cours…",
-      "howItRuns": "How it runs",
+      "howItRuns": "Mode d’exécution",
       "importFailureFetch": "La source de la compétence n’a pas pu être chargée.",
       "importFailureIntegrity": "La source de la compétence a changé après sa détection. Vérifiez-la à nouveau.",
       "importFailureLimit": "La limite de compétences a été atteinte.",
@@ -1941,7 +1941,7 @@
       "resources": "{count, plural, one {# ressource} other {# ressources}}",
       "scopePrivate": "Moi uniquement",
       "scopeTeam": "Toute l’équipe",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
+      "selectFileHint": "Sélectionnez un fichier dans la liste pour l’ouvrir dans le volet d’édition à droite.",
       "selectedFile": "Sélectionné : {name}",
       "selectionLimit": "Sélectionnez jusqu’à {count} compétences à la fois.",
       "sourceUpload": "Importé",
@@ -2001,12 +2001,12 @@
       "addRule": "Règle",
       "advanced": "Avancé",
       "approval": {
-        "approve": "Approve",
-        "approveFailed": "Failed to approve playbook",
-        "approvedOn": "Approved {date}",
-        "approvedToast": "Playbook approved",
-        "statusApproved": "Approved",
-        "statusDraft": "Draft"
+        "approve": "Approuver",
+        "approveFailed": "Échec de l’approbation du playbook",
+        "approvedOn": "Approuvé le {date}",
+        "approvedToast": "Playbook approuvé",
+        "statusApproved": "Approuvé",
+        "statusDraft": "Brouillon"
       },
       "askContentLabel": "Type de réponse",
       "askQuestionLabel": "Question",
@@ -2069,18 +2069,18 @@
       "issuePlaceholder": "p. ex. Limitation de responsabilité",
       "loadFailed": "Échec du chargement des playbooks",
       "loading": "Chargement des playbooks…",
-      "manageTypes": "Manage types…",
+      "manageTypes": "Gérer les types…",
       "namePlaceholder": "p. ex. Revue de NDA",
       "nameRequired": "Ajoutez un nom.",
       "negotiation": {
-        "addTalkingPoint": "Add talking point",
-        "escalationLabel": "Escalation",
-        "escalationPlaceholder": "When/to whom to escalate (optional)",
-        "rationaleLabel": "Rationale",
-        "rationalePlaceholder": "Why we want this (optional)",
-        "talkingPointPlaceholder": "What to say",
-        "talkingPointsLabel": "Talking points",
-        "title": "Negotiation"
+        "addTalkingPoint": "Ajouter un argument de négociation",
+        "escalationLabel": "Escalade",
+        "escalationPlaceholder": "Quand et à qui transmettre pour arbitrage (facultatif)",
+        "rationaleLabel": "Justification",
+        "rationalePlaceholder": "Pourquoi nous le souhaitons (facultatif)",
+        "talkingPointPlaceholder": "Ce qu’il faut dire",
+        "talkingPointsLabel": "Arguments de négociation",
+        "title": "Négociation"
       },
       "noPositions": "Aucun critère pour le moment. Ajoutez le premier.",
       "optionPlaceholder": "Valeur de l'option",
@@ -2117,17 +2117,17 @@
       },
       "risk": {
         "complianceLabel": "Conformité",
-        "flaggedCount": "{flagged} of {total} positions flagged",
+        "flaggedCount": "{flagged} positions signalées sur {total}",
         "notApplicableExcluded": "({count} non applicable, exclu)",
         "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
+          "critical": "Critique",
+          "high": "Élevé",
+          "low": "Faible",
+          "medium": "Moyen",
+          "none": "Aucun risque"
         },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
+        "summaryTitle": "Synthèse des risques",
+        "topIssuesTitle": "Principaux problèmes"
       },
       "ruleNumber": "Règle {index}",
       "rulePlaceholder": "Règle en langage clair",
@@ -2140,11 +2140,11 @@
       },
       "severityLabel": "Gravité",
       "starters": {
-        "addedToast": "Playbook added",
-        "browseButton": "Browse starter playbooks",
-        "positionCount": "{count, plural, one {# position} other {# positions}}",
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
-        "title": "Starter playbooks"
+        "addedToast": "Playbook ajouté",
+        "browseButton": "Parcourir les playbooks de démarrage",
+        "positionCount": "{count, plural, one {# position de négociation} other {# positions de négociation}}",
+        "subtitle": "Des playbooks prêts à l’emploi, à ajouter puis à adapter à vos référentiels.",
+        "title": "Playbooks de démarrage"
       },
       "switchToAuto": "Revenir à l'automatique",
       "switchToManual": "Passer en manuel",
@@ -2163,10 +2163,10 @@
         "notApplicable": "Non applicable"
       },
       "versions": {
-        "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restoreFailed": "Failed to restore version",
-        "restoredToast": "Version restored",
-        "versionHistory": "Version history"
+        "confirmRestore": "Votre brouillon actuel sera remplacé par le contenu de cette version.",
+        "restoreFailed": "Échec de la restauration de la version",
+        "restoredToast": "Version restaurée",
+        "versionHistory": "Historique des versions"
       }
     },
     "sections": {
@@ -2203,29 +2203,29 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Répondez à une question en vous appuyant sur des sources faisant autorité.",
+            "inside": "une hiérarchie des sources · une instruction de recherche",
+            "title": "Répondre à partir de sources"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Examinez un document et signalez les non-conformités avec des citations.",
+            "inside": "des références par juridiction · une liste de contrôle · une instruction de révision",
+            "title": "Vérifier au regard des règles"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Recueillez les faits, puis rédigez un document.",
+            "inside": "un entretien · des documents modèles · une instruction de rédaction",
+            "title": "De la collecte à la rédaction"
           }
         },
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "insideLabel": "Contenu",
+        "startBlank": "Partir de zéro",
+        "startBlankHint": "Une compétence vide, lorsque vous savez exactement ce que vous voulez.",
+        "subtitle": "Choisissez une structure de départ. Nous préparons les dossiers et vous guidons pour les remplir.",
+        "title": "Comment votre compétence doit-elle fonctionner ?"
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
-      "commandHelp": "Type it in chat to run this skill.",
+      "commandHelp": "Saisissez-la dans la discussion pour exécuter cette compétence.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
@@ -2257,9 +2257,9 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown source",
-    "showFormatted": "Formatted",
-    "showRaw": "Show raw"
+    "rawLabel": "Source Markdown",
+    "showFormatted": "Mis en forme",
+    "showRaw": "Afficher le code source"
   },
   "memory": {
     "addPlaceholder": "Ajoutez une note dont l'assistant se souviendra…",
@@ -2902,12 +2902,12 @@
         "updated": "Paramètre de reconnaissance de texte mis à jour"
       },
       "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
+        "addPlaceholder": "Ajouter un type de document (p. ex. contrat de travail)",
+        "deleteFailed": "Impossible de supprimer le type de document",
+        "description": "Définissez les types de documents examinés par votre organisation. Les playbooks s’appliquent à ces types et le classificateur d’IA y classe les documents.",
+        "labelAria": "Nom du type de document",
+        "reorder": "Réorganiser le type de document",
+        "title": "Types de documents"
       },
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
@@ -3177,7 +3177,7 @@
     "conditionAnd": "Et",
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}",
     "conditionField": "Champ",
-    "conditionFormulaPlaceholder": "Enter a formula…",
+    "conditionFormulaPlaceholder": "Saisissez une formule…",
     "conditionMatch": "Correspondance",
     "conditionNamePlaceholder": "Nom de la condition (par ex. NPF)",
     "conditionOpAfter": "après",
@@ -3196,8 +3196,8 @@
     "conditionOpOnOrBefore": "le ou avant",
     "conditionOperator": "Opérateur",
     "conditionOr": "Ou",
-    "conditionUseFieldInstead": "Use a field instead",
-    "conditionUseFormula": "ƒ Calculated value…",
+    "conditionUseFieldInstead": "Utiliser plutôt un champ",
+    "conditionUseFormula": "ƒ Valeur calculée…",
     "conditionValue": "Valeur",
     "conditionWhen": "Lorsque",
     "conditionsTitle": "Conditions",
@@ -3349,7 +3349,7 @@
       "conditionOrBuildNew": "ou créez-en une nouvelle",
       "conditionReuse": "Réutiliser une condition",
       "conditionReusePick": "Choisir une condition existante…",
-      "conditionRuleFallbackLabel": "Calculated condition",
+      "conditionRuleFallbackLabel": "Condition calculée",
       "conditionSource": "Comment c'est décidé",
       "conditionSourceAi": "L'IA décide",
       "conditionSourceAsked": "Demandée",
@@ -3375,7 +3375,7 @@
       "gettingStartedTitle": "Pour commencer",
       "insert": "Insérer",
       "insertAtCaret": "Insérer au curseur",
-      "insertConditionIntoTemplate": "Insert condition",
+      "insertConditionIntoTemplate": "Insérer la condition",
       "insertFormatDefault": "Par défaut",
       "insertIntoTemplate": "Insérer dans le modèle",
       "insertItemNumber": "Numéro de l'élément",
@@ -3518,9 +3518,9 @@
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
       "fetchTitle": "Page reader key",
-      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "platformFallback": "La clé partagée de la plateforme est utilisée. Ajoutez la vôtre pour utiliser votre propre compte et quota auprès du fournisseur.",
       "searchTitle": "Search provider key",
-      "title": "Web search keys"
+      "title": "Clés de recherche web"
     }
   },
   "workspaces": {
@@ -3950,7 +3950,7 @@
     },
     "possibleDuplicates": "Doublons possibles",
     "properties": {
-      "addCondition": "Add condition",
+      "addCondition": "Ajouter une condition",
       "addInputProperty": "Ajoutez au moins une propriété d'entrée avec « @ »",
       "addOption": "Ajouter une option",
       "addPromptForBetterResults": "Ajoutez un prompt pour de meilleurs résultats",
@@ -3990,7 +3990,7 @@
       "editColumn": "Modifier la colonne",
       "editConditions": "Modifier les conditions",
       "editConditionsDescription": "Définissez les conditions de génération de cette propriété.",
-      "editConditionsWhen": "Only run extraction when …",
+      "editConditionsWhen": "Exécuter l’extraction uniquement lorsque…",
       "enterAValue": "Saisir une valeur",
       "extractEntityType": "Extraire un type d'entité",
       "extractEntityTypeDescription": "Créez une colonne de tableau extraite par l'IA.",
@@ -4018,7 +4018,7 @@
       "newColumn": "Nouvelle colonne",
       "newColumnDescription": "Choisissez comment cette colonne du tableau doit être remplie.",
       "newColumnName": "Nom de la colonne",
-      "noConditionFields": "No fields available to filter on.",
+      "noConditionFields": "Aucun champ disponible pour le filtrage.",
       "noFirstDocument": "Aucun document à prévisualiser.",
       "noPropertiesFound": "Aucune propriété trouvée",
       "optionsHelp": "Définis les valeurs parmi lesquelles l'IA peut choisir.",
@@ -4041,7 +4041,7 @@
       "scopeMatterDescription": "Utiliser toutes les colonnes de fichiers et lancer le Matter.",
       "searchOrAddOptions": "Rechercher ou ajouter des options",
       "selectColor": "Sélectionner une couleur",
-      "selectField": "Select field",
+      "selectField": "Sélectionner un champ",
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
@@ -4135,7 +4135,7 @@
       "filterByPlaceholder": "Filtrer par…",
       "filtersWithCount": "{count, plural, one {# filtre} other {# filtres}}",
       "groupBy": "Regrouper par :",
-      "groupItemCount": "{count, plural, one {# item} other {# items}}",
+      "groupItemCount": "{count, plural, one {# élément} other {# éléments}}",
       "hideColumn": "Masquer la colonne",
       "layouts": {
         "calendar": "Calendrier",
