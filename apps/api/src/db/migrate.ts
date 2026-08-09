@@ -48,12 +48,6 @@ const client = new SQL({ url, max: 1 });
 const bootstrapRoleSql = `
 DO $$
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_roles
-    WHERE rolname = '${APPLICATION_RLS_ROLE_NAME}' AND rolcanlogin
-  ) THEN
-    RAISE EXCEPTION 'reserved RLS role ${APPLICATION_RLS_ROLE_NAME} must be NOLOGIN';
-  END IF;
   IF NOT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = '${APPLICATION_RLS_ROLE_NAME}'
   ) THEN
@@ -63,6 +57,13 @@ BEGIN
       WHEN duplicate_object OR unique_violation THEN
         NULL;
     END;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname = '${APPLICATION_RLS_ROLE_NAME}'
+      AND (rolcanlogin OR rolsuper OR rolbypassrls)
+  ) THEN
+    RAISE EXCEPTION 'reserved RLS role ${APPLICATION_RLS_ROLE_NAME} must be NOLOGIN, NOSUPERUSER, and NOBYPASSRLS';
   END IF;
 END
 $$;

@@ -398,6 +398,33 @@ describe("environment doctor output", () => {
         REDIS_URL: "redis://cache.example.com:6379",
       },
     },
+    {
+      expected:
+        "BETTER_AUTH_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        BETTER_AUTH_URL: "http://api.example.com",
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "FRONTEND_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        FRONTEND_URL: "http://workspace.example.com",
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "PUBLIC_URL must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        PUBLIC_URL: "http://public-api.example.com",
+      },
+    },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {
     const result = validateDoctorEnvironment({
       app: "api",

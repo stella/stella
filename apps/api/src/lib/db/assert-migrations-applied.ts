@@ -18,10 +18,12 @@ const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
 type AppliedMigrationRow = { hash: string };
 
-const assertApplicationRlsRolePosture = async (): Promise<void> => {
+export const assertApplicationRlsRolePosture = async (): Promise<void> => {
   const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
     SELECT
+      app_role.rolbypassrls AS "bypassesRls",
       app_role.rolcanlogin AS "canLogin",
+      app_role.rolsuper AS "isSuperuser",
       EXISTS (
         SELECT 1
         FROM pg_catalog.pg_class relation

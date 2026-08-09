@@ -137,6 +137,21 @@ describe("API environment", () => {
         "REDIS_URL must use rediss:// unless it targets a loopback address.",
       overrides: { REDIS_URL: "redis://cache.example.com:6379" },
     },
+    {
+      expected:
+        "BETTER_AUTH_URL must use HTTPS unless it targets a loopback address.",
+      overrides: { BETTER_AUTH_URL: "http://api.example.com" },
+    },
+    {
+      expected:
+        "FRONTEND_URL must use HTTPS unless it targets a loopback address.",
+      overrides: { FRONTEND_URL: "http://workspace.example.com" },
+    },
+    {
+      expected:
+        "PUBLIC_URL must use HTTPS unless it targets a loopback address.",
+      overrides: { PUBLIC_URL: "http://public-api.example.com" },
+    },
   ])(
     "rejects plaintext production transport: $expected",
     ({ expected, overrides }) => {

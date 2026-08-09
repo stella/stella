@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
@@ -425,11 +426,14 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = {
+  BETTER_AUTH_URL: string;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FRONTEND_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
   MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
   MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+  PUBLIC_URL?: string | undefined;
   SES_REGION?: string | undefined;
   SMTP_HOST?: string | undefined;
   SMTP_PORT?: number | undefined;
@@ -439,11 +443,14 @@ type EnvApiInvariantInput = {
 };
 
 export const envApiInvariantViolation = ({
+  BETTER_AUTH_URL,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FRONTEND_URL,
   MICROSOFT_AUTH_CLIENT_ID,
   MICROSOFT_AUTH_CLIENT_SECRET,
   MICROSOFT_AUTH_TENANT_ID,
+  PUBLIC_URL,
   SES_REGION,
   SMTP_HOST,
   SMTP_PORT,
@@ -451,6 +458,23 @@ export const envApiInvariantViolation = ({
   USE_MOCK_AI,
   nodeEnv,
 }: EnvApiInvariantInput): string | null => {
+  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
+    const insecurePublicOrigin = [
+      { name: "BETTER_AUTH_URL", value: BETTER_AUTH_URL },
+      { name: "FRONTEND_URL", value: FRONTEND_URL },
+      { name: "PUBLIC_URL", value: PUBLIC_URL },
+    ].find(
+      ({ value }) =>
+        value !== undefined &&
+        !isTlsOrLoopbackUrl(value, {
+          plaintextProtocol: "http:",
+          tlsProtocol: "https:",
+        }),
+    );
+    if (insecurePublicOrigin !== undefined) {
+      return `${insecurePublicOrigin.name} must use HTTPS unless it targets a loopback address.`;
+    }
+  }
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
     return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
   }
