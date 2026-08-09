@@ -179,7 +179,10 @@ export default createSafeHandler(
           "application/octet-stream")
         : "application/octet-stream";
     const fileName = sanitizeFilename(attachment.fileName ?? "attachment");
-    const safeDisposition = contentDisposition(fileName, disposition);
+    const safeDisposition = contentDisposition(
+      fileName,
+      disposition === "download" ? "attachment" : "inline",
+    );
     if (disposition === "download") {
       yield* Result.await(
         Result.tryPromise(
