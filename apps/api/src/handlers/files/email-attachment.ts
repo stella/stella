@@ -68,6 +68,7 @@ const config = {
     fieldId: tSafeId("field"),
     attachmentId: t.String(),
   }),
+  response: t.Unknown(),
 } satisfies HandlerConfig;
 
 const attachmentNotFound = () => new Response(null, { status: 404 });
