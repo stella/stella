@@ -130,10 +130,10 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: stable aliases of namespace-imported wrappers remain network sinks
   await namespaceRequest(inputUrl, { timeoutMs: 1000 });
 
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.call cannot bypass target analysis
+  // oxlint-disable-next-line no-useless-call, require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.call cannot bypass target analysis
   await fetchWithTimeout.call(undefined, inputUrl, { timeoutMs: 1000 });
 
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.apply cannot bypass target analysis
+  // oxlint-disable-next-line no-useless-call, require-safe-outbound-target/require-safe-outbound-target -- fixture: Function.apply cannot bypass target analysis
   await fetchWithTimeout.apply(undefined, [inputUrl, { timeoutMs: 1000 }]);
 
   const boundRequest = fetchWithTimeout.bind(undefined);
