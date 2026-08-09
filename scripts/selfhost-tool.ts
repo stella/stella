@@ -147,15 +147,15 @@ const apiCatalogEntries = () =>
 export const isImmutableApplicationImage = (image: string) =>
   IMAGE_DIGEST_PATTERN.test(image);
 
-export const isSecureSelfhostGotenbergUrl = (value: string) => {
-  const url = new URL(value);
-  return (
+export const isSecureSelfhostGotenbergUrl = (value: string) => 
+  (
     isTlsOrLoopbackUrl(value, {
       plaintextProtocol: "http:",
       tlsProtocol: "https:",
-    }) || url.href === SELFHOST_GOTENBERG_URL
-  );
-};
+    }) ||
+    (URL.canParse(value) && new URL(value).href === SELFHOST_GOTENBERG_URL)
+  )
+;
 
 export const renderSelfhostEnvExample = () => {
   const header = [
@@ -223,7 +223,7 @@ const generatedArtifacts = () => [
   { content: renderReleaseDoc(), path: RELEASE_DOC_PATH },
 ];
 
-const productionEnvironmentIssues = (text: string) => {
+export const productionEnvironmentIssues = (text: string) => {
   const input = parseEnvText(text, {});
   const result = validateDoctorEnvironment({
     app: "api",
@@ -233,17 +233,25 @@ const productionEnvironmentIssues = (text: string) => {
   if (result.status === "invalid") {
     return result.issues;
   }
+  const issues: string[] = [];
   const image = input["STELLA_API_IMAGE"];
   if (!image || !isImmutableApplicationImage(image)) {
-    return ["STELLA_API_IMAGE must be a digest-qualified image."];
+    issues.push("STELLA_API_IMAGE must be a digest-qualified image.");
   }
   const gotenbergUrl = input["GOTENBERG_URL"];
   if (!gotenbergUrl || !isSecureSelfhostGotenbergUrl(gotenbergUrl)) {
-    return [
+    issues.push(
       "GOTENBERG_URL must use HTTPS, loopback HTTP, or the generated private Compose endpoint.",
-    ];
+    );
   }
-  return [];
+  return issues;
+};
+
+export const existingSelfhostComposeViolations = (absolutePath: string) => {
+  if (!existsSync(absolutePath)) {
+    return [];
+  }
+  return selfhostComposeViolations(readFileSync(absolutePath, "utf-8"));
 };
 
 export const ambientComposeOverrideIssues = (
@@ -411,8 +419,8 @@ const check = () => {
     }
   }
   issues.push(
-    ...selfhostComposeViolations(
-      readFileSync(path.join(REPO_ROOT, SELFHOST_COMPOSE_PATH), "utf-8"),
+    ...existingSelfhostComposeViolations(
+      path.join(REPO_ROOT, SELFHOST_COMPOSE_PATH),
     ),
     ...templateContractIssues(renderSelfhostEnvExample()),
     ...releaseContractIssues(),

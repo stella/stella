@@ -22,6 +22,9 @@ export const isTlsOrLoopbackUrl = (
   value: string,
   { plaintextProtocol, tlsProtocol }: TlsOrLoopbackUrlOptions,
 ) => {
+  if (!URL.canParse(value)) {
+    return false;
+  }
   const url = new URL(value);
   return (
     url.protocol === tlsProtocol ||

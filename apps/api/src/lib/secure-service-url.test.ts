@@ -20,12 +20,13 @@ describe("secure service URL", () => {
     expect(isTlsOrLoopbackUrl(url, HTTP_TRANSPORT)).toBe(true);
   });
 
-  test.each(["http://storage.example.com", "ftp://storage.example.com"])(
-    "rejects remote plaintext or unrelated protocols: %s",
-    (url) => {
-      expect(isTlsOrLoopbackUrl(url, HTTP_TRANSPORT)).toBe(false);
-    },
-  );
+  test.each([
+    "http://storage.example.com",
+    "ftp://storage.example.com",
+    "not a URL",
+  ])("rejects remote plaintext or unrelated protocols: %s", (url) => {
+    expect(isTlsOrLoopbackUrl(url, HTTP_TRANSPORT)).toBe(false);
+  });
 
   test.each([
     ["postgres.railway.internal", true],

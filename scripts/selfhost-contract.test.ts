@@ -12,9 +12,11 @@ import {
 } from "./selfhost-contract";
 import {
   ambientComposeOverrideIssues,
+  existingSelfhostComposeViolations,
   isImmutableApplicationImage,
   isSecureSelfhostGotenbergUrl,
   materializeSelfhostTemplateForValidation,
+  productionEnvironmentIssues,
   releaseManifestIssues,
   renderSelfhostEnvExample,
   workflowContractIssues,
@@ -124,8 +126,36 @@ describe("self-host production environment", () => {
     "http://converter.example.com",
     "http://10.0.0.20:3000",
     "http://gotenberg:3001",
+    "not a URL",
   ])("rejects arbitrary remote plaintext Gotenberg URL %s", (url) => {
     expect(isSecureSelfhostGotenbergUrl(url)).toBe(false);
+  });
+
+  test("reports every deployment-specific environment issue", () => {
+    const environment = materializeSelfhostTemplateForValidation(
+      renderSelfhostEnvExample(),
+    )
+      .replace(
+        /^STELLA_API_IMAGE=.*$/mu,
+        'STELLA_API_IMAGE="ghcr.io/stella/stella-api:latest"',
+      )
+      .replace(
+        /^GOTENBERG_URL=.*$/mu,
+        'GOTENBERG_URL="http://converter.example.com"',
+      );
+
+    expect(productionEnvironmentIssues(environment)).toEqual([
+      "STELLA_API_IMAGE must be a digest-qualified image.",
+      "GOTENBERG_URL must use HTTPS, loopback HTTP, or the generated private Compose endpoint.",
+    ]);
+  });
+
+  test("skips semantic Compose checks when the generated file is absent", () => {
+    expect(
+      existingSelfhostComposeViolations(
+        path.join(tmpdir(), `missing-selfhost-${Bun.randomUUIDv7()}.yml`),
+      ),
+    ).toEqual([]);
   });
 
   test.each(Object.values(SELFHOST_COMPOSE_ENV))(
