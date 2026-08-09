@@ -325,6 +325,12 @@ const countEntityKindGlyphs = (content: string): number => {
 const countMatches = (content: string, pattern: RegExp): number =>
   (content.match(pattern) ?? []).length;
 
+const LEGACY_REALTIME_INVALIDATION_PRODUCER =
+  /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcastQueryInvalidationTo(?:Organization|TargetWorkspace)\s*\()/gu;
+
+const countLegacyRealtimeInvalidationProducers = (content: string): number =>
+  countMatches(stripComments(content), LEGACY_REALTIME_INVALIDATION_PRODUCER);
+
 // Preserve strings, templates, and regex literals because some shared-helper
 // metrics inspect import sources and SQL literals. Only parser-recognized
 // comment trivia is blanked, with line breaks retained so tokens cannot join.
@@ -1137,6 +1143,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countSuperLinearRegexes,
   },
   {
+    id: "legacy-realtime-invalidation-producers",
+    description:
+      "legacy invalidate-query event producers and route activations in API source; migrate to semantic resource events",
+    include: ["apps/api/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countLegacyRealtimeInvalidationProducers,
+  },
+  {
     id: "nullish-array-fallback",
     description:
       "`?? []` fallbacks in app source (structural invariants should panic() instead)",
@@ -1705,6 +1719,19 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
+  'const direct = { type: "invalidate-query", data: ["entities"] };',
+  "const named = { type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY, data: key };",
+  "const workspaceRoute = { invalidateQuery: true };",
+  "const organizationRoute = { invalidateOrganizationQuery: true };",
+  "broadcastQueryInvalidationToOrganization(organizationId, key);",
+  "broadcastQueryInvalidationToTargetWorkspace(workspaceId, key);",
+  "const disabled = { invalidateQuery: false };",
+  "// const ignored = { invalidateQuery: true };",
+];
+const SELF_TEST_LEGACY_REALTIME_INVALIDATIONS = `${LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_LEGACY_REALTIME_INVALIDATIONS = 6;
+
 const ENTITY_GLYPH_FIXTURE_LINES = [
   'import { FolderIcon, FolderOpenIcon, ListTodoIcon } from "lucide-react";',
   "const shut = <FolderIcon />;",
@@ -2090,6 +2117,11 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
     writeFixture(
       root,
+      "apps/api/src/legacy-realtime-invalidations.ts",
+      SELF_TEST_LEGACY_REALTIME_INVALIDATIONS,
+    );
+    writeFixture(
+      root,
       "apps/web/src/entity-glyphs.tsx",
       SELF_TEST_ENTITY_GLYPHS,
     );
@@ -2229,6 +2261,16 @@ const runSelfTest = (): number => {
     if (nullishMetric.count !== EXPECTED_NULLISH) {
       failures.push(
         `nullish-array-fallback counted ${nullishMetric.count}, expected ${EXPECTED_NULLISH}`,
+      );
+    }
+
+    const legacyRealtimeMetric = requireSnapshot(
+      snapshot,
+      "legacy-realtime-invalidation-producers",
+    );
+    if (legacyRealtimeMetric.count !== EXPECTED_LEGACY_REALTIME_INVALIDATIONS) {
+      failures.push(
+        `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
       );
     }
 
