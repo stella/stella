@@ -65,10 +65,6 @@ minimumReleaseAgeExcludes = [
   "@tanstack/react-ai-devtools",
   # TanStack Table 9 stable was adopted before its release-age window. These
   # exact times are publication time plus the five-day quarantine.
-  "@tanstack/react-table", # quarantine-expires: 2026-08-09T06:29:16.564Z
-  "@tanstack/table-core", # quarantine-expires: 2026-08-09T06:25:20.965Z
-  "@tanstack/react-table-devtools", # quarantine-expires: 2026-08-09T06:22:11.882Z
-  "@tanstack/table-devtools", # quarantine-expires: 2026-08-09T06:22:12.725Z
   "@tanstack/openai-base",
   # First patched nanoid 3.x release for GHSA-2v37-7h3g-55p8. Remove after
   # the normal release-age quarantine admits it.
