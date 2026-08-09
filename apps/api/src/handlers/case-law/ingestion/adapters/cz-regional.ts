@@ -567,11 +567,7 @@ const isRetryableListFailure = (error: AdapterFetchError): boolean =>
     error.cause.status !== undefined &&
     error.cause.status >= 500);
 
-const fetchListPage = async ({
-  cursor,
-  signal,
-  state,
-}: FetchListPageOptions) =>
+const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
   await Result.tryPromise(
     {
       try: async ({ signal: attemptSignal }) => {
