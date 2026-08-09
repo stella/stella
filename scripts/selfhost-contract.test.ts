@@ -7,9 +7,11 @@ import { ENV_CATALOG, ENV_OWNER } from "./env-catalog";
 import {
   renderSelfhostCompose,
   SELFHOST_APPLICATION_IMAGE_EXPRESSION,
+  SELFHOST_COMPOSE_ENV,
   selfhostComposeViolations,
 } from "./selfhost-contract";
 import {
+  ambientComposeOverrideIssues,
   isImmutableApplicationImage,
   isSecureSelfhostGotenbergUrl,
   materializeSelfhostTemplateForValidation,
@@ -124,6 +126,32 @@ describe("self-host production environment", () => {
     "http://gotenberg:3001",
   ])("rejects arbitrary remote plaintext Gotenberg URL %s", (url) => {
     expect(isSecureSelfhostGotenbergUrl(url)).toBe(false);
+  });
+
+  test.each(Object.values(SELFHOST_COMPOSE_ENV))(
+    "rejects a conflicting ambient %s override",
+    (name) => {
+      const environment = materializeSelfhostTemplateForValidation(
+        renderSelfhostEnvExample(),
+      );
+      expect(
+        ambientComposeOverrideIssues(environment, { [name]: "override" }),
+      ).toContain(
+        `${name} in the shell conflicts with the checked self-host environment file.`,
+      );
+    },
+  );
+
+  test("allows an ambient Compose value that matches the checked file", () => {
+    const image = `ghcr.io/stella/stella-api@sha256:${"f".repeat(64)}`;
+    const environment = materializeSelfhostTemplateForValidation(
+      renderSelfhostEnvExample(),
+    );
+    expect(
+      ambientComposeOverrideIssues(environment, {
+        STELLA_API_IMAGE: image,
+      }),
+    ).toEqual([]);
   });
 
   test("materializes through the real Docker Compose parser", () => {

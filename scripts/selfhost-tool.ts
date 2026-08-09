@@ -25,6 +25,7 @@ import {
   renderSelfhostDocsContract,
   renderSelfhostRunDocsContract,
   SELFHOST_COMPOSE_PATH,
+  SELFHOST_COMPOSE_ENV,
   SELFHOST_DOC_MARKERS,
   SELFHOST_ENV_EXAMPLE_PATH,
   SELFHOST_ENV_PATH,
@@ -245,6 +246,23 @@ const productionEnvironmentIssues = (text: string) => {
   return [];
 };
 
+export const ambientComposeOverrideIssues = (
+  text: string,
+  ambientEnvironment: NodeJS.ProcessEnv,
+) => {
+  const fileEnvironment = parseEnvText(text, {});
+  const issues: string[] = [];
+  for (const name of Object.values(SELFHOST_COMPOSE_ENV)) {
+    const ambientValue = ambientEnvironment[name];
+    if (ambientValue !== undefined && ambientValue !== fileEnvironment[name]) {
+      issues.push(
+        `${name} in the shell conflicts with the checked self-host environment file.`,
+      );
+    }
+  }
+  return issues;
+};
+
 const templateContractIssues = (text: string) => {
   const issues = productionEnvironmentIssues(
     materializeSelfhostTemplateForValidation(text),
@@ -417,9 +435,11 @@ const doctor = (envPath = SELFHOST_ENV_PATH) => {
     console.error(`${envPath} does not exist.`);
     return false;
   }
-  const issues = productionEnvironmentIssues(
-    readFileSync(absolutePath, "utf-8"),
-  );
+  const text = readFileSync(absolutePath, "utf-8");
+  const issues = [
+    ...productionEnvironmentIssues(text),
+    ...ambientComposeOverrideIssues(text, process.env),
+  ];
   if (issues.length === 0) {
     console.log(`${envPath}: valid production self-host configuration.`);
     return true;

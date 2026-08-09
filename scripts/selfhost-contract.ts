@@ -4,7 +4,15 @@ export const SELFHOST_COMPOSE_PATH = "docker-compose.selfhost.yml";
 export const SELFHOST_ENV_EXAMPLE_PATH = "deploy/selfhost/.env.example";
 export const SELFHOST_ENV_PATH = "deploy/selfhost/.env";
 
-export const SELFHOST_APPLICATION_IMAGE_EXPRESSION = `\${STELLA_API_IMAGE:?set STELLA_API_IMAGE to a digest-qualified image}`;
+export const SELFHOST_COMPOSE_ENV = {
+  apiEnvFile: "STELLA_API_ENV_FILE",
+  applicationImage: "STELLA_API_IMAGE",
+  gotenbergPassword: "GOTENBERG_PASSWORD",
+  gotenbergUsername: "GOTENBERG_USERNAME",
+  signupRateLimitIpSource: "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
+} as const;
+
+export const SELFHOST_APPLICATION_IMAGE_EXPRESSION = `\${${SELFHOST_COMPOSE_ENV.applicationImage}:?set ${SELFHOST_COMPOSE_ENV.applicationImage} to a digest-qualified image}`;
 export const SELFHOST_GOTENBERG_IMAGE =
   "gotenberg/gotenberg:8.34.0@sha256:67097317623a503ba2a6a7e9ae8db6929a1f7e1bbd88077bacf2d325fbdab923";
 
@@ -74,10 +82,10 @@ export const renderSelfhostCompose = () => `${generatedHeader(
   ${SELFHOST_SERVICE.api}:
     image: ${SELFHOST_APPLICATION_IMAGE_EXPRESSION}
     env_file:
-      - \${STELLA_API_ENV_FILE:-${SELFHOST_ENV_PATH}}
+      - \${${SELFHOST_COMPOSE_ENV.apiEnvFile}:-${SELFHOST_ENV_PATH}}
     environment:
       NODE_ENV: production
-      STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: \${STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:-direct}
+      STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: \${${SELFHOST_COMPOSE_ENV.signupRateLimitIpSource}:-direct}
     ports:
       - "\${STELLA_API_HOST_PORT:-3001}:3001"
     depends_on:
@@ -105,7 +113,7 @@ export const renderSelfhostCompose = () => `${generatedHeader(
   ${SELFHOST_SERVICE.documentProcessingWorker}:
     image: ${SELFHOST_APPLICATION_IMAGE_EXPRESSION}
     env_file:
-      - \${STELLA_API_ENV_FILE:-${SELFHOST_ENV_PATH}}
+      - \${${SELFHOST_COMPOSE_ENV.apiEnvFile}:-${SELFHOST_ENV_PATH}}
     environment:
       NODE_ENV: production
     command:
@@ -137,8 +145,8 @@ export const renderSelfhostCompose = () => `${generatedHeader(
     image: ${SELFHOST_GOTENBERG_IMAGE}
     environment:
       API_ENABLE_BASIC_AUTH: "true"
-      GOTENBERG_API_BASIC_AUTH_USERNAME: \${GOTENBERG_USERNAME:?set GOTENBERG_USERNAME in ${SELFHOST_ENV_PATH}}
-      GOTENBERG_API_BASIC_AUTH_PASSWORD: \${GOTENBERG_PASSWORD:?set GOTENBERG_PASSWORD in ${SELFHOST_ENV_PATH}}
+      GOTENBERG_API_BASIC_AUTH_USERNAME: \${${SELFHOST_COMPOSE_ENV.gotenbergUsername}:?set ${SELFHOST_COMPOSE_ENV.gotenbergUsername} in ${SELFHOST_ENV_PATH}}
+      GOTENBERG_API_BASIC_AUTH_PASSWORD: \${${SELFHOST_COMPOSE_ENV.gotenbergPassword}:?set ${SELFHOST_COMPOSE_ENV.gotenbergPassword} in ${SELFHOST_ENV_PATH}}
     healthcheck:
       test:
         - CMD-SHELL
