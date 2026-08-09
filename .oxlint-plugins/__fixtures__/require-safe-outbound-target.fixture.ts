@@ -7,7 +7,9 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
+import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const STATIC_BASE = "https://api.example.com";
@@ -128,6 +130,21 @@ export const mustAllowCanonicalBoundary = async (inputUrl: string) => {
       timeoutMs: 1000,
     });
   }
+
+  const skCourtUrl = restrictSkCourtDocumentUrl(inputUrl);
+  if (skCourtUrl !== null) {
+    await fetchWithTimeout(skCourtUrl, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  await fetchWithTimeout(new URL("https://api.example.com/items").toString(), {
+    timeoutMs: 1000,
+  });
+  await fetchWithTimeout(getS3().presign("fixtures/outbound-target"), {
+    timeoutMs: 1000,
+  });
 };
 
 export const mustAllowUnrelatedBindings = async (

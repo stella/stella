@@ -182,6 +182,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         let allowedFiles = new Set<string>();
+        let fileIsAllowed = false;
 
         const resolveVariable = (
           identifier: IdentifierNode,
@@ -707,17 +708,10 @@ export default eslintCompatPlugin({
           );
         };
 
-        const currentFileIsAllowed = (): boolean => {
-          const filename = normalizePath(filenameForContext(context));
-          return [...allowedFiles].some(
-            (allowed) =>
-              filename === allowed || filename.endsWith(`/${allowed}`),
-          );
-        };
-
         return {
           before() {
             allowedFiles = new Set();
+            fileIsAllowed = false;
             const options = context.options.at(0);
             if (
               typeof options !== "object" ||
@@ -732,10 +726,17 @@ export default eslintCompatPlugin({
                 allowedFiles.add(normalizePath(file));
               }
             }
+            const filename = normalizePath(filenameForContext(context));
+            for (const allowed of allowedFiles) {
+              if (filename === allowed || filename.endsWith(`/${allowed}`)) {
+                fileIsAllowed = true;
+                break;
+              }
+            }
           },
           CallExpression(node: unknown) {
             if (
-              currentFileIsAllowed() ||
+              fileIsAllowed ||
               !isAstNode(node) ||
               !Array.isArray(node.arguments) ||
               node.arguments.length === 0 ||

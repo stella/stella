@@ -46,6 +46,16 @@ describe("provider-issued outbound URL restriction", () => {
         pathPrefixes: ["/api/document"],
       }),
     ).toBeNull();
+    expect(
+      restrictOutboundUrl({
+        rawUrl: "https://court.example/api/document/%252e%252e/admin",
+        hostPolicy: {
+          type: "exact-origin",
+          origins: ["https://court.example"],
+        },
+        pathPrefixes: ["/api/document/"],
+      }),
+    ).toBeNull();
   });
 
   test("accepts an HTTPS host only inside the declared domain family", () => {
@@ -78,9 +88,15 @@ describe("provider-issued outbound URL restriction", () => {
         hostPolicy: policy,
       }),
     ).toBeNull();
+    expect(
+      restrictOutboundUrl({
+        rawUrl: "https://documents.court.example./public/123",
+        hostPolicy: policy,
+      }),
+    ).not.toBeNull();
   });
 
-  test("rejects credentials and fragments", () => {
+  test("rejects malformed, oversized, credentialed, and fragment URLs", () => {
     const hostPolicy = {
       type: "exact-origin" as const,
       origins: ["https://court.example"],
@@ -97,6 +113,16 @@ describe("provider-issued outbound URL restriction", () => {
         rawUrl: "https://court.example/document#private",
         hostPolicy,
       }),
+    ).toBeNull();
+    expect(restrictOutboundUrl({ rawUrl: "", hostPolicy })).toBeNull();
+    expect(
+      restrictOutboundUrl({
+        rawUrl: `https://court.example/${"a".repeat(2048)}`,
+        hostPolicy,
+      }),
+    ).toBeNull();
+    expect(
+      restrictOutboundUrl({ rawUrl: "file:///etc/passwd", hostPolicy }),
     ).toBeNull();
   });
 });

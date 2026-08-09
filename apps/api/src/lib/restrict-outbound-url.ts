@@ -67,7 +67,8 @@ export const restrictOutboundUrl = ({
 
   if (
     pathPrefixes !== undefined &&
-    !pathPrefixes.some((prefix) => pathMatchesPrefix(url.pathname, prefix))
+    (url.pathname.includes("%") ||
+      !pathPrefixes.some((prefix) => pathMatchesPrefix(url.pathname, prefix)))
   ) {
     return null;
   }

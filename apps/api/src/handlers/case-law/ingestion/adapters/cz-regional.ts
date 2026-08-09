@@ -423,6 +423,13 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   const documentUrl = restrictCzRegionalFinaldocUrl(
     toOptionalValue(item.odkaz) ?? "",
   );
+  if (documentUrl === null) {
+    logger.warn("case_law.ingestion.outbound_url_rejected", {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      caseNumber,
+    });
+    return null;
+  }
 
   return {
     caseNumber,
@@ -432,9 +439,9 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     country: "CZE",
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
-    sourceDocumentId: documentIdFromLink(toOptionalValue(item.odkaz)),
-    sourceUrl: documentUrl?.toString(),
-    documentUrl: documentUrl?.toString(),
+    sourceDocumentId: documentIdFromLink(documentUrl.toString()),
+    sourceUrl: documentUrl.toString(),
+    documentUrl: documentUrl.toString(),
     metadata: {
       caseNumber,
       sheetNumber,
