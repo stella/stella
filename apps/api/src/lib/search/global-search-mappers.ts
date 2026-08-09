@@ -1,4 +1,8 @@
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
+import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import type { EntityGlobalSearchHit } from "@/api/lib/search/types";
 import { parseEntityKind } from "@/api/lib/search/types";
 
@@ -41,7 +45,12 @@ export const mapEntityHit = (row: RawRow): ScoredEntityGlobalSearchHit => {
   const kind = parseEntityKind(row["type"]);
   const entityId = String(row["id"]);
   const workspaceId = String(row["workspace_id"]);
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: brandPersistedEntityId(entityId),
+  });
   const hit: EntityGlobalSearchHit = {
+    ...globalSearchIdentity(resource),
     id: `entity:${entityId}`,
     type: kind,
     entityId,

@@ -1,5 +1,12 @@
 import { Result } from "better-result";
 
+import {
+  CHAT_RESOURCE_HREF_PREFIX,
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
@@ -36,11 +43,11 @@ const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
 const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "iu");
 const PERSISTED_ENTITY_LINK_REGEX = new RegExp(
-  `#stella-entity=(${UUID_PATTERN}):(${UUID_PATTERN})`,
+  `${CHAT_RESOURCE_HREF_PREFIX.entity.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}(${UUID_PATTERN}):(${UUID_PATTERN})`,
   "giu",
 );
 const PERSISTED_WORKSPACE_LINK_REGEX = new RegExp(
-  `#stella-workspace=(${UUID_PATTERN})`,
+  `${CHAT_RESOURCE_HREF_PREFIX.workspace.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}(${UUID_PATTERN})`,
   "giu",
 );
 
@@ -49,6 +56,18 @@ const escapeMarkdownLinkLabel = (label: string) =>
 
 const createEntityRefKey = ({ entityId, workspaceId }: EntityTarget) =>
   `${workspaceId}:${entityId}`;
+
+const toWorkspaceResource = (workspaceId: SafeId<"workspace">) =>
+  resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: workspaceId });
+
+const toEntityResourceTarget = ({ entityId, workspaceId }: EntityTarget) => ({
+  type: RESOURCE_TYPE.ENTITY,
+  resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+  location: {
+    type: "workspace" as const,
+    workspace: toWorkspaceResource(workspaceId),
+  },
+});
 
 export type EntityTarget = {
   entityId: SafeId<"entity">;
@@ -281,7 +300,10 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           reportUnknownAssistantRef("matter", ref);
           return CHAT_UNRESOLVED_REF_HREF;
         }
-        return `#stella-workspace=${workspaceId}`;
+        return toChatResourceHref({
+          type: RESOURCE_TYPE.WORKSPACE,
+          resource: toWorkspaceResource(workspaceId),
+        });
       },
       text,
     });
@@ -294,7 +316,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           reportUnknownAssistantRef("entity", ref);
           return CHAT_UNRESOLVED_REF_HREF;
         }
-        return `#stella-entity=${target.workspaceId}:${target.entityId}`;
+        return toChatResourceHref(toEntityResourceTarget(target));
       },
       text: withWorkspaceRefs,
     });

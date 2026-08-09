@@ -11,6 +11,20 @@ describe("chat mention hrefs", () => {
     ).toEqual({
       category: "entity",
       id: "0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34",
+      target: {
+        type: "entity",
+        resource: {
+          type: "entity",
+          id: "c09ec856-d945-5ecc-82e3-bb5382165f34",
+        },
+        location: {
+          type: "workspace",
+          workspace: {
+            type: "workspace",
+            id: "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+          },
+        },
+      },
     });
   });
 

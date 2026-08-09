@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
 import { roles } from "@stll/permissions";
@@ -65,6 +66,7 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -547,7 +549,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     description:
       "Search the shared case-law corpus. Supports free-text search plus " +
       "optional filters such as court, country, language, date range, and " +
-      "decision type.",
+      "decision type. Each result includes a route-independent resourceName.",
     inputSchema: {
       type: "object",
       properties: {
@@ -629,9 +631,9 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read a single case-law decision by its decision ID. Returns metadata, " +
-      "plain text, citation links, and source URLs. Long decision text and " +
-      "large citation lists are returned in windows; pass the returned " +
-      "nextCursor back as cursor to read more.",
+      "plain text, citation links, source URLs, and its route-independent " +
+      "resourceName. Long decision text and large citation lists are returned " +
+      "in windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1673,27 +1675,34 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   const payload = textResult({
     facets: result.facets,
     nextCursor: result.nextCursor,
-    results: result.hits.map((hit) => ({
-      appUrl: buildCaseLawDecisionAppUrl({
+    results: result.hits.map((hit) => {
+      const resource = resourceRef({
+        type: RESOURCE_TYPE.CASE_LAW_DECISION,
+        id: brandPersistedCaseLawDecisionId(hit.decisionId),
+      });
+      return {
+        appUrl: buildCaseLawDecisionAppUrl({
+          caseNumber: hit.caseNumber,
+          country: hit.country,
+          court: hit.court,
+          language: hit.language,
+          languageAlternateCount: hit.languageAlternateCount,
+          slug: hit.slug,
+        }),
         caseNumber: hit.caseNumber,
+        citationCount: hit.citationCount,
         country: hit.country,
         court: hit.court,
+        decisionDate: hit.decisionDate,
+        decisionId: hit.decisionId,
+        resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
+        decisionType: hit.decisionType,
+        ecli: hit.ecli,
         language: hit.language,
-        languageAlternateCount: hit.languageAlternateCount,
-        slug: hit.slug,
-      }),
-      caseNumber: hit.caseNumber,
-      citationCount: hit.citationCount,
-      country: hit.country,
-      court: hit.court,
-      decisionDate: hit.decisionDate,
-      decisionId: hit.decisionId,
-      decisionType: hit.decisionType,
-      ecli: hit.ecli,
-      language: hit.language,
-      snippet: hit.headline,
-      sourceUrl: hit.sourceUrl,
-    })),
+        snippet: hit.headline,
+        sourceUrl: hit.sourceUrl,
+      };
+    }),
     totalCount: result.totalCount,
   } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
 
@@ -1774,6 +1783,10 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
   const aiTextAllowed = result.source.allowsDerivedAi;
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: brandPersistedCaseLawDecisionId(result.id),
+  });
 
   const plainText = aiTextAllowed
     ? (toPlainDecisionText({
@@ -1832,6 +1845,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       court: result.court,
       decisionDate: toIsoDateString(result.decisionDate),
       decisionId: result.id,
+      resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
       decisionType: result.decisionType,
       documentUrl: result.documentUrl,
       ecli: result.ecli,

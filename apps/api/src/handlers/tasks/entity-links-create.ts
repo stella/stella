@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
-import type { Static } from "elysia";
+
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import type { ResourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityLinks } from "@/api/db/schema";
@@ -23,7 +25,11 @@ export type CreateEntityLinkHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof createEntityLinkBodySchema>;
+  body: {
+    source: ResourceRef<"entity">;
+    target: ResourceRef<"entity">;
+    linkType?: string | undefined;
+  };
 };
 
 // Shared entity-link creation logic reused by the HTTP handler and the
@@ -34,6 +40,8 @@ export const createEntityLinkHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateEntityLinkHandlerProps) {
+  const sourceEntityId = body.source.id;
+  const targetEntityId = body.target.id;
   const linkType = body.linkType ?? "related";
   if (!includes(ENTITY_LINK_TYPES, linkType)) {
     return Result.err(
@@ -41,7 +49,7 @@ export const createEntityLinkHandler = async function* ({
     );
   }
 
-  if (body.sourceEntityId === body.targetEntityId) {
+  if (sourceEntityId === targetEntityId) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -56,14 +64,14 @@ export const createEntityLinkHandler = async function* ({
         await Promise.all([
           tx.query.entities.findFirst({
             where: {
-              id: { eq: body.sourceEntityId },
+              id: { eq: sourceEntityId },
               workspaceId: { eq: workspaceId },
             },
             columns: { id: true, kind: true, readOnly: true },
           }),
           tx.query.entities.findFirst({
             where: {
-              id: { eq: body.targetEntityId },
+              id: { eq: targetEntityId },
               workspaceId: { eq: workspaceId },
             },
             columns: { id: true, kind: true, readOnly: true },
@@ -103,8 +111,8 @@ export const createEntityLinkHandler = async function* ({
       tx.query.entityLinks.findFirst({
         where: {
           workspaceId: { eq: workspaceId },
-          sourceEntityId: { eq: body.targetEntityId },
-          targetEntityId: { eq: body.sourceEntityId },
+          sourceEntityId: { eq: targetEntityId },
+          targetEntityId: { eq: sourceEntityId },
         },
         columns: { id: true },
       }),
@@ -125,8 +133,8 @@ export const createEntityLinkHandler = async function* ({
         .insert(entityLinks)
         .values({
           workspaceId,
-          sourceEntityId: body.sourceEntityId,
-          targetEntityId: body.targetEntityId,
+          sourceEntityId,
+          targetEntityId,
           linkType,
         })
         .onConflictDoNothing()
@@ -134,9 +142,7 @@ export const createEntityLinkHandler = async function* ({
 
       if (rows.length > 0) {
         const taskEntityId =
-          sourceEntity.kind === "task"
-            ? body.sourceEntityId
-            : body.targetEntityId;
+          sourceEntity.kind === "task" ? sourceEntityId : targetEntityId;
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -145,8 +151,8 @@ export const createEntityLinkHandler = async function* ({
             kind: "task",
             change: "entity-link-added",
             linkType,
-            sourceEntityId: body.sourceEntityId,
-            targetEntityId: body.targetEntityId,
+            sourceEntityId,
+            targetEntityId,
           },
         });
       }
@@ -178,7 +184,17 @@ const createEntityLink = createSafeHandler(
       safeDb,
       workspaceId,
       recordAuditEvent,
-      body,
+      body: {
+        source: resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: body.sourceEntityId,
+        }),
+        target: resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: body.targetEntityId,
+        }),
+        ...(body.linkType === undefined ? {} : { linkType: body.linkType }),
+      },
     });
   },
 );

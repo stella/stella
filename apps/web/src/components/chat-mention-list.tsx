@@ -11,16 +11,16 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { isEntityKind } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
-  ChatMentionKind,
   ChatMentionOption,
   ChatReferenceCategory,
+  ChatWorkspaceMentionOption,
 } from "@/components/chat-mention-extension";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
@@ -75,7 +75,10 @@ export const ChatMentionList = ({
       }
       return await loadWorkspaceEntities(
         {
-          id: drillTarget.workspaceId,
+          resource: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">(drillTarget.workspaceId),
+          }),
           label: drillTarget.name,
           category: "workspace",
           kind: "workspace",
@@ -129,13 +132,13 @@ export const ChatMentionList = ({
     }
   };
 
-  const handleDrillDown = (workspace: ChatMentionOption) => {
+  const handleDrillDown = (workspace: ChatWorkspaceMentionOption) => {
     if (!workspace.sourceViewId) {
       return;
     }
 
     setDrillTarget({
-      workspaceId: workspace.id,
+      workspaceId: workspace.resource.id,
       viewId: workspace.sourceViewId,
       name: workspace.label,
     });
@@ -312,7 +315,7 @@ export const ChatMentionList = ({
                       <div
                         className="flex min-w-0 items-center"
                         data-mention-index={flatIndex}
-                        key={item.id}
+                        key={item.resource.id}
                       >
                         <Button
                           className={cn(
@@ -320,17 +323,12 @@ export const ChatMentionList = ({
                             safeIndex === flatIndex &&
                               "bg-accent text-accent-foreground",
                           )}
-                          key={item.id}
+                          key={item.resource.id}
                           onClick={() => selectItem(flatIndex)}
                           size="sm"
                           variant="ghost"
                         >
-                          <MentionIcon
-                            category={item.category}
-                            id={item.id}
-                            kind={item.kind}
-                            mimeType={item.mimeType}
-                          />
+                          <MentionIcon mention={item} />
                           <span className="min-w-0 flex-1 truncate">
                             {item.label}
                           </span>
@@ -364,17 +362,12 @@ export const ChatMentionList = ({
                   safeIndex === i && "bg-accent text-accent-foreground",
                 )}
                 data-mention-index={i}
-                key={item.id}
+                key={item.resource.id}
                 onClick={() => selectItem(i)}
                 size="sm"
                 variant="ghost"
               >
-                <MentionIcon
-                  category={item.category}
-                  id={item.id}
-                  kind={item.kind}
-                  mimeType={item.mimeType}
-                />
+                <MentionIcon mention={item} />
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               </Button>
             ))}
@@ -409,35 +402,28 @@ const useCategoryLabel = () => {
 /** Resolves the category/kind-appropriate glyph for a mention row. Exported
  *  so the composer (+) menu's Context submenu can render byte-identical
  *  icons for the same options the "@" popover lists. */
-export const MentionIcon = ({
-  id,
-  category,
-  kind,
-  mimeType,
-}: {
-  id: string;
-  category: ChatReferenceCategory;
-  kind: ChatMentionKind;
-  mimeType: string | null;
-}) => {
-  if (category === "workspace") {
+export const MentionIcon = ({ mention }: { mention: ChatMentionOption }) => {
+  if (mention.category === "workspace") {
     return (
-      <MatterIcon className="size-3.5 shrink-0" matter={{ id, color: null }} />
+      <MatterIcon
+        className="size-3.5 shrink-0"
+        matter={{ id: mention.resource.id, color: null }}
+      />
     );
   }
 
-  if (category === "decision") {
+  if (mention.category === "decision") {
     return <LandmarkIcon className="text-muted-foreground size-3.5 shrink-0" />;
   }
 
   return (
     <EntityIcon
       className="text-muted-foreground size-3.5 shrink-0"
-      source={
-        isEntityKind(kind)
-          ? { type: "resolved", kind, mimeType }
-          : { type: "unknown" }
-      }
+      source={{
+        type: "resolved",
+        kind: mention.kind,
+        mimeType: mention.mimeType,
+      }}
     />
   );
 };
@@ -490,7 +476,7 @@ type ChatMentionListHandle = ReturnType<
 
 type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
   loadWorkspaceEntities: (
-    workspace: ChatMentionOption,
+    workspace: ChatWorkspaceMentionOption,
     query: string,
   ) => Promise<ChatMentionOption[]>;
   ref?: Ref<ChatMentionListHandle>;

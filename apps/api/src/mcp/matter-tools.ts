@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { entities, LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -1903,7 +1904,13 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
         safeDb: context.safeDb,
         workspaceId,
         recordAuditEvent,
-        body: { sourceEntityId: taskId, targetEntityId },
+        body: {
+          source: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: taskId }),
+          target: resourceRef({
+            type: RESOURCE_TYPE.ENTITY,
+            id: targetEntityId,
+          }),
+        },
       }),
     );
     if (Result.isError(linked)) {

@@ -33,12 +33,13 @@ export const createEmptyChatDraftDoc = (): JSONContent => ({
 const createMentionNode = (mention: ChatMentionOption): JSONContent => ({
   type: "mention",
   attrs: {
-    id: mention.id,
+    id: mention.resource.id,
     label: mention.label,
     category: mention.category,
     kind: mention.kind,
     mimeType: mention.mimeType,
-    sourceWorkspaceId: mention.sourceWorkspaceId,
+    sourceWorkspaceId:
+      mention.category === "entity" ? mention.sourceWorkspaceId : undefined,
   },
 });
 

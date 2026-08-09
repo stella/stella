@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -73,7 +75,34 @@ const listEntityLinks = createSafeHandler(
       ),
     );
 
-    return Result.ok([...asSource, ...asTarget]);
+    const links = [];
+    for (const link of [...asSource, ...asTarget]) {
+      links.push({
+        ...link,
+        sourceEntity:
+          link.sourceEntity === null
+            ? null
+            : {
+                ...link.sourceEntity,
+                resource: resourceRef({
+                  type: RESOURCE_TYPE.ENTITY,
+                  id: link.sourceEntity.id,
+                }),
+              },
+        targetEntity:
+          link.targetEntity === null
+            ? null
+            : {
+                ...link.targetEntity,
+                resource: resourceRef({
+                  type: RESOURCE_TYPE.ENTITY,
+                  id: link.targetEntity.id,
+                }),
+              },
+      });
+    }
+
+    return Result.ok(links);
   },
 );
 

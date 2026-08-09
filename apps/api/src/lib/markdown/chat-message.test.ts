@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
 describe("chat message markdown serializer", () => {
@@ -41,6 +43,10 @@ describe("chat message markdown serializer", () => {
           category: "entity",
           id: "ent_123",
           label: "Retention Memo",
+          resource: resourceRef({
+            type: RESOURCE_TYPE.ENTITY,
+            id: toSafeId<"entity">("ent_123"),
+          }),
           workspaceId: "ws_123",
         },
       ],
@@ -76,7 +82,15 @@ describe("chat message markdown serializer", () => {
     const { mentions, text } = normalizeChatMessageHtml(html, ["ws_ok"]);
 
     expect(mentions).toEqual([
-      { category: "workspace", id: "ws_ok", label: "OK WS" },
+      {
+        category: "workspace",
+        id: "ws_ok",
+        label: "OK WS",
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE,
+          id: toSafeId<"workspace">("ws_ok"),
+        }),
+      },
     ]);
     expect(text).toBe("In and [OK WS](#stella-workspace=ws_ok).");
   });
@@ -92,6 +106,10 @@ describe("chat message markdown serializer", () => {
         category: "entity",
         id: "ent_2",
         label: "Doc B",
+        resource: resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: toSafeId<"entity">("ent_2"),
+        }),
         workspaceId: "ws_ok",
       },
     ]);

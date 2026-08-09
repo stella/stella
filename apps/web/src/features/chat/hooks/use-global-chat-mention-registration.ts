@@ -1,3 +1,5 @@
+import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type {
   ChatMentionOption,
@@ -40,7 +42,10 @@ const searchCaseLawMentions = async (
   assertPublicLawApiData(data, "searchPublicCaseLawMentions");
 
   return data.hits.map((hit) => ({
-    id: hit.decisionId,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: toSafeId<"caseLawDecision">(hit.decisionId),
+    }),
     label: hit.caseNumber,
     category: "decision",
     kind: "decision",

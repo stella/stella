@@ -3,6 +3,12 @@ import { and, eq, isNull, like, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+
 import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -1056,7 +1062,17 @@ const uploadEntityHandler = async function* ({
         });
 
         if (generatedDraft !== undefined && generatedDraftPartIndex !== null) {
-          const href = `#stella-entity=${workspaceId}:${entityId}`;
+          const href = toChatResourceHref({
+            type: RESOURCE_TYPE.ENTITY,
+            resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+            location: {
+              type: "workspace",
+              workspace: resourceRef({
+                type: RESOURCE_TYPE.WORKSPACE,
+                id: workspaceId,
+              }),
+            },
+          });
           const generatedOutput = {
             success: true,
             entityId,

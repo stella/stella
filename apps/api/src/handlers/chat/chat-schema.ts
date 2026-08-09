@@ -8,7 +8,11 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  parseResourceRef,
+  resourceRef,
+  RESOURCE_TYPE,
   type ChatRunMode,
+  toSafeId,
 } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -1029,14 +1033,55 @@ const parseMentionsMetadata = (
       return null;
     }
     if (category === "workspace") {
-      mentions.push({ category, id, label });
+      const resourceValue = mention["resource"];
+      const parsedResource = parseResourceRef(resourceValue);
+      if (
+        (resourceValue !== undefined && parsedResource === null) ||
+        (parsedResource !== null &&
+          (parsedResource.type !== RESOURCE_TYPE.WORKSPACE ||
+            parsedResource.id !== id))
+      ) {
+        return null;
+      }
+      mentions.push({
+        category,
+        id,
+        label,
+        resource:
+          parsedResource ??
+          resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">(id),
+          }),
+      });
       continue;
     }
     const workspaceId = mention["workspaceId"];
     if (typeof workspaceId !== "string" && workspaceId !== null) {
       return null;
     }
-    mentions.push({ category, id, label, workspaceId });
+    const resourceValue = mention["resource"];
+    const parsedResource = parseResourceRef(resourceValue);
+    if (
+      (resourceValue !== undefined && parsedResource === null) ||
+      (parsedResource !== null &&
+        (parsedResource.type !== RESOURCE_TYPE.ENTITY ||
+          parsedResource.id !== id))
+    ) {
+      return null;
+    }
+    mentions.push({
+      category,
+      id,
+      label,
+      resource:
+        parsedResource ??
+        resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: toSafeId<"entity">(id),
+        }),
+      workspaceId,
+    });
   }
 
   return { mentions };

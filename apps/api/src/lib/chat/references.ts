@@ -1,3 +1,6 @@
+import { CHAT_RESOURCE_HREF_PREFIX } from "@stll/api-contract";
+import type { ResourceRef } from "@stll/api-contract";
+
 export const CHAT_MENTION_CATEGORIES = ["entity", "workspace"] as const;
 
 export type ChatMentionCategory = (typeof CHAT_MENTION_CATEGORIES)[number];
@@ -11,13 +14,13 @@ export type ChatMentionHrefPrefixMap = {
 };
 
 export const CHAT_MENTION_HREF_PREFIXES = {
-  entity: "#stella-entity=",
-  workspace: "#stella-workspace=",
+  entity: CHAT_RESOURCE_HREF_PREFIX.entity,
+  workspace: CHAT_RESOURCE_HREF_PREFIX.workspace,
 } as const satisfies ChatMentionHrefPrefixMap;
 
 export const CHAT_REFERENCE_HREF_PREFIXES = {
   ...CHAT_MENTION_HREF_PREFIXES,
-  decision: "#stella-decision=",
+  decision: CHAT_RESOURCE_HREF_PREFIX.case_law_decision,
 } as const;
 
 export type ChatReferenceHrefPrefix =
@@ -33,9 +36,13 @@ type BaseChatMention = {
 export type ChatMention =
   | (BaseChatMention & {
       category: "entity";
+      resource: ResourceRef<"entity">;
       workspaceId: string | null;
     })
-  | (BaseChatMention & { category: "workspace" });
+  | (BaseChatMention & {
+      category: "workspace";
+      resource: ResourceRef<"workspace">;
+    });
 
 export type ChatMentionsData = {
   mentions: ChatMention[];

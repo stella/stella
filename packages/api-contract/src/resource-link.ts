@@ -1,0 +1,236 @@
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  type ResourceRef,
+  type ResourceType,
+} from "./resource-ref";
+import { toSafeId } from "./safe-id";
+
+export const CHAT_RESOURCE_HREF_PREFIX = {
+  [RESOURCE_TYPE.CASE_LAW_DECISION]: "#stella-decision=",
+  [RESOURCE_TYPE.ENTITY]: "#stella-entity=",
+  [RESOURCE_TYPE.WORKSPACE]: "#stella-workspace=",
+} as const;
+
+type ChatResourceLinkDisposition =
+  | {
+      type: "supported";
+      location: "none" | "workspace";
+      mention: "generated_reference" | "selectable";
+    }
+  | { type: "unsupported" };
+
+/**
+ * Total policy for durable resource links and mention rendering in chat.
+ * Identity does not imply navigability or mention eligibility; each new
+ * resource kind must explicitly choose both behaviors.
+ */
+export const CHAT_RESOURCE_LINK_DISPOSITION = {
+  [RESOURCE_TYPE.AGENT_SKILL]: { type: "unsupported" },
+  [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: { type: "unsupported" },
+  [RESOURCE_TYPE.AI_MEMORY]: { type: "unsupported" },
+  [RESOURCE_TYPE.BILLING_CODE]: { type: "unsupported" },
+  [RESOURCE_TYPE.CASE_LAW_DECISION]: {
+    type: "supported",
+    location: "none",
+    mention: "generated_reference",
+  },
+  [RESOURCE_TYPE.CASE_LAW_SOURCE]: { type: "unsupported" },
+  [RESOURCE_TYPE.CHAT_MESSAGE]: { type: "unsupported" },
+  [RESOURCE_TYPE.CHAT_THREAD]: { type: "unsupported" },
+  [RESOURCE_TYPE.CLAUSE]: { type: "unsupported" },
+  [RESOURCE_TYPE.CLAUSE_CATEGORY]: { type: "unsupported" },
+  [RESOURCE_TYPE.CLAUSE_VARIANT]: { type: "unsupported" },
+  [RESOURCE_TYPE.CLAUSE_VERSION]: { type: "unsupported" },
+  [RESOURCE_TYPE.CONTACT]: { type: "unsupported" },
+  [RESOURCE_TYPE.DOCUMENT_TYPE]: { type: "unsupported" },
+  [RESOURCE_TYPE.ENTITY]: {
+    type: "supported",
+    location: "workspace",
+    mention: "selectable",
+  },
+  [RESOURCE_TYPE.ENTITY_VERSION]: { type: "unsupported" },
+  [RESOURCE_TYPE.EXPENSE]: { type: "unsupported" },
+  [RESOURCE_TYPE.FIELD]: { type: "unsupported" },
+  [RESOURCE_TYPE.FLOW_DEFINITION]: { type: "unsupported" },
+  [RESOURCE_TYPE.FLOW_RUN]: { type: "unsupported" },
+  [RESOURCE_TYPE.INVOICE]: { type: "unsupported" },
+  [RESOURCE_TYPE.LEGAL_LIST]: { type: "unsupported" },
+  [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: { type: "unsupported" },
+  [RESOURCE_TYPE.LEGISLATION_SOURCE]: { type: "unsupported" },
+  [RESOURCE_TYPE.MCP_CONNECTOR]: { type: "unsupported" },
+  [RESOURCE_TYPE.ORGANIZATION]: { type: "unsupported" },
+  [RESOURCE_TYPE.PLAYBOOK]: { type: "unsupported" },
+  [RESOURCE_TYPE.PLAYBOOK_VERSION]: { type: "unsupported" },
+  [RESOURCE_TYPE.PROPERTY]: { type: "unsupported" },
+  [RESOURCE_TYPE.RATE_ENTRY]: { type: "unsupported" },
+  [RESOURCE_TYPE.RATE_TABLE]: { type: "unsupported" },
+  [RESOURCE_TYPE.REPORT_EXPORT]: { type: "unsupported" },
+  [RESOURCE_TYPE.SAVED_SEARCH]: { type: "unsupported" },
+  [RESOURCE_TYPE.STYLE_SET]: { type: "unsupported" },
+  [RESOURCE_TYPE.TEMPLATE]: { type: "unsupported" },
+  [RESOURCE_TYPE.TEMPLATE_CATEGORY]: { type: "unsupported" },
+  [RESOURCE_TYPE.TEMPLATE_VERSION]: { type: "unsupported" },
+  [RESOURCE_TYPE.TIME_ENTRY]: { type: "unsupported" },
+  [RESOURCE_TYPE.USER]: { type: "unsupported" },
+  [RESOURCE_TYPE.USER_FILE]: { type: "unsupported" },
+  [RESOURCE_TYPE.WORKSPACE]: {
+    type: "supported",
+    location: "none",
+    mention: "selectable",
+  },
+  [RESOURCE_TYPE.WORKSPACE_VIEW]: { type: "unsupported" },
+  [RESOURCE_TYPE.WORKSPACE_VIEW_TEMPLATE]: { type: "unsupported" },
+} as const satisfies Record<ResourceType, ChatResourceLinkDisposition>;
+
+type ChatResourceLinkTargetFor<TType extends ResourceType> =
+  (typeof CHAT_RESOURCE_LINK_DISPOSITION)[TType] extends {
+    type: "supported";
+    location: "workspace";
+  }
+    ? {
+        type: TType;
+        resource: ResourceRef<TType>;
+        location:
+          | {
+              type: "workspace";
+              workspace: ResourceRef<"workspace">;
+            }
+          | { type: "render_context" };
+      }
+    : (typeof CHAT_RESOURCE_LINK_DISPOSITION)[TType] extends {
+          type: "supported";
+        }
+      ? { type: TType; resource: ResourceRef<TType> }
+      : never;
+
+export type ChatResourceLinkTarget = {
+  [TType in ResourceType]: ChatResourceLinkTargetFor<TType>;
+}[ResourceType];
+
+export type ChatResourceHref =
+  `${(typeof CHAT_RESOURCE_HREF_PREFIX)[keyof typeof CHAT_RESOURCE_HREF_PREFIX]}${string}`;
+
+type ChatMentionableResourceType = {
+  [TType in ResourceType]: (typeof CHAT_RESOURCE_LINK_DISPOSITION)[TType] extends {
+    mention: "selectable";
+  }
+    ? TType
+    : never;
+}[ResourceType];
+
+export type ChatMentionResourceLinkTarget = Extract<
+  ChatResourceLinkTarget,
+  { type: ChatMentionableResourceType }
+>;
+
+export type ChatMentionResourceHref =
+  | `${typeof CHAT_RESOURCE_HREF_PREFIX.entity}${string}`
+  | `${typeof CHAT_RESOURCE_HREF_PREFIX.workspace}${string}`;
+
+export const toChatMentionResourceHref = (
+  target: ChatMentionResourceLinkTarget,
+): ChatMentionResourceHref => {
+  switch (target.type) {
+    case RESOURCE_TYPE.ENTITY:
+      return target.location.type === "workspace"
+        ? `${CHAT_RESOURCE_HREF_PREFIX.entity}${target.location.workspace.id}:${target.resource.id}`
+        : `${CHAT_RESOURCE_HREF_PREFIX.entity}${target.resource.id}`;
+    case RESOURCE_TYPE.WORKSPACE:
+      return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${target.resource.id}`;
+    default:
+      return target satisfies never;
+  }
+};
+
+export const toChatResourceHref = (
+  target: ChatResourceLinkTarget,
+): ChatResourceHref => {
+  switch (target.type) {
+    case RESOURCE_TYPE.CASE_LAW_DECISION:
+      return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${target.resource.id}`;
+    case RESOURCE_TYPE.ENTITY:
+    case RESOURCE_TYPE.WORKSPACE:
+      return toChatMentionResourceHref(target);
+    default:
+      return target satisfies never;
+  }
+};
+
+const parseEntityTarget = (value: string): ChatResourceLinkTarget | null => {
+  const separatorIndex = value.indexOf(":");
+  if (
+    value.length === 0 ||
+    separatorIndex === 0 ||
+    separatorIndex === value.length - 1
+  ) {
+    return null;
+  }
+
+  if (separatorIndex === -1) {
+    return {
+      type: RESOURCE_TYPE.ENTITY,
+      resource: resourceRef({
+        type: RESOURCE_TYPE.ENTITY,
+        id: toSafeId<"entity">(value),
+      }),
+      location: { type: "render_context" },
+    };
+  }
+
+  const workspaceId = value.slice(0, separatorIndex);
+  const entityId = value.slice(separatorIndex + 1);
+  return {
+    type: RESOURCE_TYPE.ENTITY,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: toSafeId<"entity">(entityId),
+    }),
+    location: {
+      type: "workspace",
+      workspace: resourceRef({
+        type: RESOURCE_TYPE.WORKSPACE,
+        id: toSafeId<"workspace">(workspaceId),
+      }),
+    },
+  };
+};
+
+/** Parse persisted chat links into identity plus separate route context. */
+export const parseChatResourceHref = (
+  href: string,
+): ChatResourceLinkTarget | null => {
+  if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity)) {
+    return parseEntityTarget(
+      href.slice(CHAT_RESOURCE_HREF_PREFIX.entity.length),
+    );
+  }
+
+  if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.workspace)) {
+    const id = href.slice(CHAT_RESOURCE_HREF_PREFIX.workspace.length);
+    return id.length > 0
+      ? {
+          type: RESOURCE_TYPE.WORKSPACE,
+          resource: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">(id),
+          }),
+        }
+      : null;
+  }
+
+  if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision)) {
+    const id = href.slice(CHAT_RESOURCE_HREF_PREFIX.case_law_decision.length);
+    return id.length > 0
+      ? {
+          type: RESOURCE_TYPE.CASE_LAW_DECISION,
+          resource: resourceRef({
+            type: RESOURCE_TYPE.CASE_LAW_DECISION,
+            id: toSafeId<"caseLawDecision">(id),
+          }),
+        }
+      : null;
+  }
+
+  return null;
+};

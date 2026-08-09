@@ -1,3 +1,9 @@
+import {
+  CHAT_RESOURCE_HREF_PREFIX,
+  parseChatResourceHref,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
+
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -13,7 +19,7 @@ export const extractMentionWorkspaceIds = (
   const ids = new Set<SafeId<"workspace">>();
   for (const mention of mentions) {
     if (mention.category === "workspace") {
-      ids.add(brandPersistedWorkspaceId(mention.id));
+      ids.add(brandPersistedWorkspaceId(mention.resource.id));
       continue;
     }
     if (mention.workspaceId !== null) {
@@ -131,12 +137,15 @@ const collectStructuralWorkspaceIds = (
   }
 };
 
-// Captures the workspace UUID from `#stella-workspace=<uuid>` and
-// the leading workspace UUID from `#stella-entity=<workspace>:<entity>`.
-// The entity form's second segment (the entity UUID) is intentionally
-// not captured — only the workspace it belongs to gates RLS.
-const STELLA_TEXT_REF_WORKSPACE_REGEX =
-  /#stella-(?:workspace|entity)=(?<workspaceId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gu;
+const UUID_PATTERN =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
+const escapeRegex = (value: string) =>
+  value.replaceAll(REGEX_SPECIAL_CHARS, "\\$&");
+const STELLA_TEXT_REF_REGEX = new RegExp(
+  `(?:${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.workspace)}${UUID_PATTERN}|${escapeRegex(CHAT_RESOURCE_HREF_PREFIX.entity)}${UUID_PATTERN}:${UUID_PATTERN})`,
+  "giu",
+);
 
 const collectTextRefWorkspaceIds = (
   part: unknown,
@@ -151,10 +160,24 @@ const collectTextRefWorkspaceIds = (
   if (!("content" in part) || typeof part.content !== "string") {
     return;
   }
-  for (const match of part.content.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
-    const captured = match.groups?.["workspaceId"];
-    if (captured) {
-      ids.add(brandPersistedWorkspaceId(captured));
+  for (const match of part.content.matchAll(STELLA_TEXT_REF_REGEX)) {
+    const target = parseChatResourceHref(match[0]);
+    if (target === null) {
+      continue;
+    }
+    switch (target.type) {
+      case RESOURCE_TYPE.ENTITY:
+        if (target.location.type === "workspace") {
+          ids.add(target.location.workspace.id);
+        }
+        break;
+      case RESOURCE_TYPE.WORKSPACE:
+        ids.add(target.resource.id);
+        break;
+      case RESOURCE_TYPE.CASE_LAW_DECISION:
+        break;
+      default:
+        target satisfies never;
     }
   }
 };

@@ -1,0 +1,84 @@
+import {
+  RESOURCE_TYPE,
+  toResourceName,
+  type ResourceRef,
+  type ResourceType,
+} from "@stll/api-contract";
+
+import type { RESOURCE_AUTHORIZATION_DISPOSITION } from "@/api/lib/resource-authorization";
+
+type McpResourceSerializationDisposition<TType extends ResourceType> =
+  | { type: "chat_ref_mediated" }
+  | { type: "domain_projection" }
+  | ((typeof RESOURCE_AUTHORIZATION_DISPOSITION)[TType]["type"] extends "corpus_policy"
+      ? { type: "authorized_corpus_resource_name" }
+      : never);
+
+const DOMAIN_PROJECTION = { type: "domain_projection" } as const;
+
+/**
+ * Total MCP egress policy. Tenant identifiers stay in their permission-aware
+ * domain projections (or the chat ref registry). A corpus resource name may
+ * be emitted only after its owning domain has applied record/source policy.
+ */
+export const MCP_RESOURCE_SERIALIZATION_DISPOSITION = {
+  [RESOURCE_TYPE.AGENT_SKILL]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.AI_MEMORY]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.BILLING_CODE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CASE_LAW_DECISION]: {
+    type: "authorized_corpus_resource_name",
+  },
+  [RESOURCE_TYPE.CASE_LAW_SOURCE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CHAT_MESSAGE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CHAT_THREAD]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CLAUSE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CLAUSE_CATEGORY]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CLAUSE_VARIANT]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CLAUSE_VERSION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.CONTACT]: { type: "chat_ref_mediated" },
+  [RESOURCE_TYPE.DOCUMENT_TYPE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.ENTITY]: { type: "chat_ref_mediated" },
+  [RESOURCE_TYPE.ENTITY_VERSION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.EXPENSE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.FIELD]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.FLOW_DEFINITION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.FLOW_RUN]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.INVOICE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.LEGAL_LIST]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: {
+    type: "authorized_corpus_resource_name",
+  },
+  [RESOURCE_TYPE.LEGISLATION_SOURCE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.MCP_CONNECTOR]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.ORGANIZATION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.PLAYBOOK]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.PLAYBOOK_VERSION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.PROPERTY]: { type: "chat_ref_mediated" },
+  [RESOURCE_TYPE.RATE_ENTRY]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.RATE_TABLE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.REPORT_EXPORT]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.SAVED_SEARCH]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.STYLE_SET]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.TEMPLATE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.TEMPLATE_CATEGORY]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.TEMPLATE_VERSION]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.TIME_ENTRY]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.USER]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.USER_FILE]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.WORKSPACE]: { type: "chat_ref_mediated" },
+  [RESOURCE_TYPE.WORKSPACE_VIEW]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.WORKSPACE_VIEW_TEMPLATE]: DOMAIN_PROJECTION,
+} as const satisfies {
+  [TType in ResourceType]: McpResourceSerializationDisposition<TType>;
+};
+
+type AuthorizedCorpusMcpResourceType = {
+  [TType in ResourceType]: (typeof MCP_RESOURCE_SERIALIZATION_DISPOSITION)[TType]["type"] extends "authorized_corpus_resource_name"
+    ? TType
+    : never;
+}[ResourceType];
+
+export const serializeAuthorizedCorpusMcpResourceName = (
+  resource: ResourceRef<AuthorizedCorpusMcpResourceType>,
+) => toResourceName(resource);

@@ -903,17 +903,12 @@ const ComposerContextMatterSub = ({
     }
     return fileOptions.map((option) => (
       <MenuItem
-        key={option.id}
+        key={option.resource.id}
         onClick={() => {
           handleSelect(option);
         }}
       >
-        <MentionIcon
-          category={option.category}
-          id={option.id}
-          kind={option.kind}
-          mimeType={option.mimeType}
-        />
+        <MentionIcon mention={option} />
         <BidiText as="span" className="min-w-0 flex-1 truncate">
           {option.label}
         </BidiText>

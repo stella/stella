@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -20,6 +22,14 @@ import {
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
 process.env["S3_REGION"] ??= "us-east-1";
+
+const entityResourceName = (entityId: string) =>
+  toResourceName(
+    resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: toSafeId<"entity">(entityId),
+    }),
+  );
 
 describe("global search SQL scope", () => {
   beforeEach(() => {
@@ -316,37 +326,39 @@ describe("global search SQL scope", () => {
   test("preserves the SQL timestamp score in filter-only cursors", async () => {
     const dialect = new PgDialect();
     const preciseScore = Date.parse("2026-07-29T08:00:00.999Z") + 0.5;
-    rootDbExecuteMock.mockImplementation(async (query) => {
-      const compiled = dialect.sqlToQuery(query);
-      if (
-        compiled.sql.includes("FROM search_documents sd") &&
-        compiled.sql.includes("JOIN workspaces w")
-      ) {
-        return [
-          {
-            id: "entity_1",
-            workspace_id: "ws_1",
-            workspace_name: "Matter",
-            type: "document",
-            title: "First",
-            headline: null,
-            score: preciseScore,
-            updated_at: new Date("2026-07-29T08:00:00.999Z"),
-          },
-          {
-            id: "entity_2",
-            workspace_id: "ws_1",
-            workspace_name: "Matter",
-            type: "document",
-            title: "Second",
-            headline: null,
-            score: preciseScore - 0.4,
-            updated_at: new Date("2026-07-29T08:00:00.999Z"),
-          },
-        ];
-      }
-      return [];
-    });
+    rootDbExecuteMock.mockImplementation(
+      async (query): Promise<Record<string, unknown>[]> => {
+        const compiled = dialect.sqlToQuery(query);
+        if (
+          compiled.sql.includes("FROM search_documents sd") &&
+          compiled.sql.includes("JOIN workspaces w")
+        ) {
+          return [
+            {
+              id: "entity_1",
+              workspace_id: "ws_1",
+              workspace_name: "Matter",
+              type: "document",
+              title: "First",
+              headline: null,
+              score: preciseScore,
+              updated_at: new Date("2026-07-29T08:00:00.999Z"),
+            },
+            {
+              id: "entity_2",
+              workspace_id: "ws_1",
+              workspace_name: "Matter",
+              type: "document",
+              title: "Second",
+              headline: null,
+              score: preciseScore - 0.4,
+              updated_at: new Date("2026-07-29T08:00:00.999Z"),
+            },
+          ];
+        }
+        return [];
+      },
+    );
 
     const result = await searchGlobal({
       query: "",
@@ -361,6 +373,9 @@ describe("global search SQL scope", () => {
     });
 
     expect(result.hits.map(({ id }) => id)).toEqual(["entity:entity_1"]);
+    expect(result.hits.map(({ resourceName }) => resourceName)).toEqual([
+      entityResourceName("entity_1"),
+    ]);
     expect(decodeGlobalSearchCursor(result.nextCursor ?? undefined)).toEqual({
       score: preciseScore,
       id: "entity:entity_1",

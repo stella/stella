@@ -1,3 +1,4 @@
+import { CHAT_RESOURCE_HREF_PREFIX } from "@stll/api-contract";
 import type {
   BlockContent,
   Footnote,
@@ -13,9 +14,6 @@ import type { ChatExportCitationStyle } from "@/api/handlers/chat/export/citatio
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 
 const FOLIO_CITATION_PREFIX = "#folio:";
-const DECISION_CITATION_PREFIX = "#stella-decision=";
-const ENTITY_REFERENCE_PREFIX = "#stella-entity=";
-const WORKSPACE_REFERENCE_PREFIX = "#stella-workspace=";
 const SEARCH_SUMMARY_CITATION_TARGET_PREFIX = "#stella-search-summary=";
 const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
 const SEARCH_SUMMARY_SOURCE_NUMBER = /^\[(?<number>[1-9]\d*)\]/u;
@@ -36,10 +34,10 @@ const isCitationHyperlink = (
     href.startsWith("https://") ||
     href.startsWith("http://") ||
     href.startsWith(FOLIO_CITATION_PREFIX) ||
-    href.startsWith(DECISION_CITATION_PREFIX) ||
+    href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision) ||
     (internalReferenceMode !== "references" &&
-      (href.startsWith(ENTITY_REFERENCE_PREFIX) ||
-        href.startsWith(WORKSPACE_REFERENCE_PREFIX)))
+      (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
+        href.startsWith(CHAT_RESOURCE_HREF_PREFIX.workspace)))
   );
 };
 
@@ -103,9 +101,9 @@ const isVerifiedSearchSummaryTarget = (
   internalReferenceMode: InternalReferenceMode,
 ): boolean =>
   internalReferenceMode === "verified-citations" &&
-  (target.startsWith(DECISION_CITATION_PREFIX) ||
-    target.startsWith(ENTITY_REFERENCE_PREFIX) ||
-    target.startsWith(WORKSPACE_REFERENCE_PREFIX));
+  (target.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision) ||
+    target.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
+    target.startsWith(CHAT_RESOURCE_HREF_PREFIX.workspace));
 
 const citationFootnoteText = (
   hyperlink: Hyperlink,

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toResourceName,
+  toSafeId,
+} from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
@@ -16,16 +22,25 @@ type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 const chatHit = (
   overrides: Pick<ChatGlobalSearchHit, "threadId" | "workspaceId">,
-): ChatGlobalSearchHit => ({
-  id: `chat:${overrides.threadId}`,
-  type: "chat",
-  title: "Review privilege memo",
-  headline: null,
-  updatedAt: "2026-06-06T10:00:00.000Z",
-  threadId: overrides.threadId,
-  workspaceId: overrides.workspaceId,
-  workspaceName: overrides.workspaceId ? "Matter Alpha" : null,
-});
+): ChatGlobalSearchHit => {
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CHAT_THREAD,
+    id: toSafeId<"chatThread">(overrides.threadId),
+  });
+
+  return {
+    id: `chat:${overrides.threadId}`,
+    type: "chat",
+    resource,
+    resourceName: toResourceName(resource),
+    title: "Review privilege memo",
+    headline: null,
+    updatedAt: "2026-06-06T10:00:00.000Z",
+    threadId: overrides.threadId,
+    workspaceId: overrides.workspaceId,
+    workspaceName: overrides.workspaceId ? "Matter Alpha" : null,
+  };
+};
 
 describe("search chat result routing", () => {
   test("opens global chat hits on the global chat route", () => {
@@ -158,6 +173,10 @@ describe("document routes", () => {
 
 describe("recent file previews", () => {
   test("reuses stored file metadata as a native document search hit", () => {
+    const resource = resourceRef({
+      type: RESOURCE_TYPE.ENTITY,
+      id: toSafeId<"entity">("entity-1"),
+    });
     expect(
       getRecentFilePreviewHit({
         entityId: "entity-1",
@@ -179,6 +198,8 @@ describe("recent file previews", () => {
       lastEditedByImage: null,
       lastEditedByName: null,
       mimeType: "application/pdf",
+      resource,
+      resourceName: toResourceName(resource),
       title: "Disclosure.pdf",
       type: "document",
       updatedAt: "2021-03-15T10:00:00.000Z",

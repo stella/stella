@@ -1,6 +1,6 @@
-import type { Brand } from "valibot";
-
 import type { ChatSendMode } from "@stll/anonymize-chat";
+
+import type { SafeId } from "./safe-id";
 
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
@@ -12,11 +12,6 @@ export const CHAT_TURN_INTENT = {
 
 export const CHAT_RUN_MODE = { agent: "agent" } as const;
 export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
-
-export type SafeId<TType extends string> = string &
-  Brand<"SafeId"> & {
-    readonly __safeIdType?: TType;
-  };
 
 type DocxEditSnapshot = {
   canApplyEdits?: boolean;

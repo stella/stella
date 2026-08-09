@@ -1,15 +1,19 @@
 import * as cheerio from "cheerio";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatMentionResourceHref,
+  toSafeId,
+} from "@stll/api-contract";
+
 import type {
   ChatMention,
   ChatMentionCategory,
   ChatMentionHref,
   ChatReferenceCategory,
 } from "@/api/lib/chat/references";
-import {
-  CHAT_MENTION_HREF_PREFIXES,
-  CHAT_REFERENCE_HREF_PREFIXES,
-} from "@/api/lib/chat/references";
+import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 const ALLOWED_TAGS = new Set([
@@ -124,11 +128,27 @@ const parseReferenceCategory = (
 };
 
 const toMentionHref = (mention: ChatMention): ChatMentionHref => {
-  if (mention.category === "entity" && mention.workspaceId !== null) {
-    return `${CHAT_MENTION_HREF_PREFIXES.entity}${mention.workspaceId}:${mention.id}`;
+  if (mention.category === "entity") {
+    return toChatMentionResourceHref({
+      type: RESOURCE_TYPE.ENTITY,
+      resource: mention.resource,
+      location:
+        mention.workspaceId === null
+          ? { type: "render_context" }
+          : {
+              type: "workspace",
+              workspace: resourceRef({
+                type: RESOURCE_TYPE.WORKSPACE,
+                id: toSafeId<"workspace">(mention.workspaceId),
+              }),
+            },
+    });
   }
 
-  return `${CHAT_MENTION_HREF_PREFIXES[mention.category]}${mention.id}`;
+  return toChatMentionResourceHref({
+    type: RESOURCE_TYPE.WORKSPACE,
+    resource: mention.resource,
+  });
 };
 
 const toReferenceHref = ({
@@ -146,8 +166,8 @@ const dedupeMentions = (mentions: readonly ChatMention[]): ChatMention[] => {
   for (const mention of mentions) {
     const key =
       mention.category === "entity"
-        ? `${mention.category}:${mention.workspaceId ?? ""}:${mention.id}`
-        : `${mention.category}:${mention.id}`;
+        ? `${mention.resource.type}:${mention.workspaceId ?? ""}:${mention.resource.id}`
+        : `${mention.resource.type}:${mention.resource.id}`;
 
     if (seen.has(key)) {
       continue;
@@ -165,7 +185,7 @@ const mentionIsWorkspaceAccessible = (
   accessibleWorkspaceIds: readonly string[],
 ): boolean => {
   if (mention.category === "workspace") {
-    return accessibleWorkspaceIds.includes(mention.id);
+    return accessibleWorkspaceIds.includes(mention.resource.id);
   }
 
   if (mention.workspaceId !== null) {
@@ -208,12 +228,20 @@ const replaceMentionsWithAnchors = (
             category,
             id,
             label,
+            resource: resourceRef({
+              type: RESOURCE_TYPE.ENTITY,
+              id: toSafeId<"entity">(id),
+            }),
             workspaceId: sourceWorkspaceId,
           }
         : {
             category,
             id,
             label,
+            resource: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: toSafeId<"workspace">(id),
+            }),
           };
 
     if (!mentionIsWorkspaceAccessible(mention, accessibleWorkspaceIds)) {

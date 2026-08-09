@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,53 +23,63 @@ const wsB = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000b");
 const wsC = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000c");
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-0000000000aa");
 
+const workspaceMention = ({
+  id,
+  label,
+}: {
+  id: SafeId<"workspace">;
+  label: string;
+}): ChatMention => ({
+  category: "workspace",
+  id,
+  label,
+  resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id }),
+});
+
+const entityMention = ({
+  id,
+  label,
+  workspaceId,
+}: {
+  id: string;
+  label: string;
+  workspaceId: SafeId<"workspace"> | null;
+}): ChatMention => ({
+  category: "entity",
+  id,
+  label,
+  resource: resourceRef({
+    type: RESOURCE_TYPE.ENTITY,
+    id: toSafeId<"entity">(id),
+  }),
+  workspaceId,
+});
+
 describe("extractMentionWorkspaceIds", () => {
   test("workspace mention contributes its own ID", () => {
-    const mentions: ChatMention[] = [
-      { id: wsA, label: "Matter A", category: "workspace" },
-    ];
+    const mentions = [workspaceMention({ id: wsA, label: "Matter A" })];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([wsA]);
   });
 
   test("entity mention contributes its workspace ID", () => {
-    const mentions: ChatMention[] = [
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: wsA,
-      },
+    const mentions = [
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: wsA }),
     ];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([wsA]);
   });
 
   test("entity mention without workspace contributes nothing", () => {
-    const mentions: ChatMention[] = [
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: null,
-      },
+    const mentions = [
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: null }),
     ];
     expect(extractMentionWorkspaceIds(mentions)).toEqual([]);
   });
 
   test("multiple mentions across workspaces deduplicate", () => {
-    const mentions: ChatMention[] = [
-      { id: wsA, label: "Matter A", category: "workspace" },
-      {
-        id: "entity_1",
-        label: "Doc 1",
-        category: "entity",
-        workspaceId: wsA,
-      },
-      {
-        id: "entity_2",
-        label: "Doc 2",
-        category: "entity",
-        workspaceId: wsB,
-      },
+    const mentions = [
+      workspaceMention({ id: wsA, label: "Matter A" }),
+      entityMention({ id: "entity_1", label: "Doc 1", workspaceId: wsA }),
+      entityMention({ id: "entity_2", label: "Doc 2", workspaceId: wsB }),
     ];
     expect(new Set(extractMentionWorkspaceIds(mentions))).toEqual(
       new Set([wsA, wsB]),
@@ -147,7 +159,7 @@ describe("extractAssistantWorkspaceIds", () => {
     const parts = [
       {
         type: "text" as const,
-        content: `See [matter](#stella-workspace=${wsA}) and the related document at #stella-entity=${wsB}:abc.`,
+        content: `See [matter](#stella-workspace=${wsA}) and the related document at #stella-entity=${wsB}:00000000-0000-0000-0000-000000000001.`,
       },
     ];
     expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
@@ -188,6 +200,16 @@ describe("extractAssistantWorkspaceIds", () => {
         type: "text" as const,
         content:
           "garbage #stella-workspace=not-a-uuid and #stella-entity=zz:yy",
+      },
+    ];
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+
+  test("relative entity links do not masquerade as workspace identities", () => {
+    const parts = [
+      {
+        type: "text" as const,
+        content: `relative #stella-entity=${wsA}`,
       },
     ];
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);

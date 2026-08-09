@@ -10,11 +10,15 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
-import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
+import {
+  parseStellaMentionHref,
+  resolveMentionWorkspaceId,
+} from "@/components/chat/chat-mention-href";
 import { useEntityIconSource } from "@/components/chat/entity-icon-source";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
@@ -30,7 +34,6 @@ import { detached } from "@/lib/detached";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
 /**
@@ -376,13 +379,9 @@ const ParsedMentionChip = ({
     select: (state) => state.location.pathname,
   });
 
-  const { category, id: rawId } = parsed;
-  const separator = rawId.indexOf(":");
-  const mentionWorkspaceId =
-    category === "entity" && separator !== -1
-      ? rawId.slice(0, separator)
-      : workspaceId;
-  const id = separator !== -1 ? rawId.slice(separator + 1) : rawId;
+  const { category, target } = parsed;
+  const mentionWorkspaceId = resolveMentionWorkspaceId(target, workspaceId);
+  const id = target.resource.id;
   const textLabel = typeof label === "string" ? label : "Reference";
 
   if (category === "entity") {
@@ -451,10 +450,11 @@ const MentionChip = ({
   interactive,
   workspaceId,
 }: MentionChipProps) => {
-  if (href.startsWith(DECISION_HASH_PREFIX)) {
+  const resourceTarget = parseChatResourceHref(href);
+  if (resourceTarget?.resource.type === RESOURCE_TYPE.CASE_LAW_DECISION) {
     return (
       <DecisionChip
-        decisionRef={href.slice(DECISION_HASH_PREFIX.length)}
+        decisionRef={resourceTarget.resource.id}
         interactive={interactive}
         label={label}
       />
@@ -545,11 +545,10 @@ export const StreamdownMentionLink = ({
   }
 
   const mentionChip =
-    href.startsWith(DECISION_HASH_PREFIX) ||
+    parseChatResourceHref(href) !== null ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
     href.startsWith(WORKSPACE_REF_HASH_PREFIX) ||
-    href.startsWith(SKILL_REF_HASH_PREFIX) ||
-    parseStellaMentionHref(href) ? (
+    href.startsWith(SKILL_REF_HASH_PREFIX) ? (
       <MentionChip
         href={href}
         interactive={interactive}

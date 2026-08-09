@@ -4,7 +4,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_TURN_INTENT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -359,6 +363,10 @@ describe("validateMessage", () => {
             category: "entity",
             id: "entity_1",
             label: "Source memo",
+            resource: resourceRef({
+              type: RESOURCE_TYPE.ENTITY,
+              id: toSafeId<"entity">("entity_1"),
+            }),
             workspaceId: "workspace_1",
           },
         ],
@@ -390,6 +398,78 @@ describe("validateMessage", () => {
     }
 
     expect(result.value.message.metadata).toEqual(metadata);
+  });
+
+  test("upgrades legacy mention metadata to canonical resource identity", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_legacy_mention"),
+        role: "assistant",
+        metadata: {
+          mentions: {
+            mentions: [
+              {
+                category: "workspace",
+                id: "workspace_1",
+                label: "Matter",
+              },
+            ],
+          },
+        },
+        parts: [{ type: "text", content: "Done" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_legacy_mention"),
+      tools: noTools,
+      userId: userId("user_legacy_mention"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata?.mentions).toEqual({
+      mentions: [
+        {
+          category: "workspace",
+          id: "workspace_1",
+          label: "Matter",
+          resource: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: toSafeId<"workspace">("workspace_1"),
+          }),
+        },
+      ],
+    });
+  });
+
+  test("rejects mention metadata whose legacy and canonical identities drift", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_drifted_mention"),
+        role: "assistant",
+        metadata: {
+          mentions: {
+            mentions: [
+              {
+                category: "entity",
+                id: "entity_1",
+                label: "Source memo",
+                resource: { type: "entity", id: "entity_2" },
+                workspaceId: "workspace_1",
+              },
+            ],
+          },
+        },
+        parts: [{ type: "text", content: "Done" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_drifted_mention"),
+      tools: noTools,
+      userId: userId("user_drifted_mention"),
+    });
+
+    expect(Result.isError(result)).toBe(true);
   });
 
   test("restores server-owned rich parts on assistant continuations", async () => {

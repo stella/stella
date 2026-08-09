@@ -4,6 +4,12 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  toChatResourceHref,
+} from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawSearchDocuments,
@@ -803,15 +809,31 @@ const toModelSearchResultContext = (context: SearchResultContext) => ({
 const citationHref = (context: SearchResultContext): string | null => {
   const hit = context.hit;
   if (hit.type === "case-law") {
-    return `#stella-decision=${hit.decisionId}`;
+    return toChatResourceHref({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      resource: hit.resource,
+    });
   }
   if (hit.type === "matter") {
-    return `#stella-workspace=${hit.workspaceId}`;
+    return toChatResourceHref({
+      type: RESOURCE_TYPE.WORKSPACE,
+      resource: hit.resource,
+    });
   }
   if (hit.type === "contact") {
     return null;
   }
-  return `#stella-entity=${hit.workspaceId}:${hit.entityId}`;
+  return toChatResourceHref({
+    type: RESOURCE_TYPE.ENTITY,
+    resource: hit.resource,
+    location: {
+      type: "workspace",
+      workspace: resourceRef({
+        type: RESOURCE_TYPE.WORKSPACE,
+        id: brandPersistedWorkspaceId(hit.workspaceId),
+      }),
+    },
+  });
 };
 
 const buildChatSummaryText = ({
