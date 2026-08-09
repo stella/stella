@@ -74,6 +74,38 @@ describe("template value-source state", () => {
     ).toEqual([{ path: "amount", inputType: "number", formula: "base * 2" }]);
   });
 
+  test("preserves AI adaptation for a registry lookup", () => {
+    const [field] = parseFields({
+      fields: [
+        {
+          path: "company",
+          inputType: "text",
+          aiPrompt: "Match the surrounding grammatical case.",
+          aiAdapt: true,
+          lookup: {
+            registry: "companies-house",
+            formats: [{ key: "output_1", template: "{{name}}" }],
+          },
+        },
+      ],
+    });
+
+    expect(
+      buildManifest({}, field === undefined ? [] : [field]).fields,
+    ).toEqual([
+      {
+        path: "company",
+        inputType: "text",
+        aiPrompt: "Match the surrounding grammatical case.",
+        aiAdapt: true,
+        lookup: {
+          registry: "companies-house",
+          formats: [{ key: "output_1", template: "{{name}}" }],
+        },
+      },
+    ]);
+  });
+
   test("does not serialize a stale legacy sibling against the discriminator", () => {
     const [field] = parseFields({
       fields: [{ path: "amount", inputType: "number" }],

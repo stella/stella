@@ -366,6 +366,15 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
       return field;
     case "lookup":
       field.lookup = f.valueSource.lookup;
+      // Registry lookup resolves the submitted identifier first, then the
+      // per-occurrence AI adapter rewrites the rendered company text. Keep
+      // that supported composition, including its optional instruction.
+      if (f.aiAdapt) {
+        field.aiAdapt = true;
+        if (f.aiPrompt) {
+          field.aiPrompt = f.aiPrompt;
+        }
+      }
       return field;
     case "composite":
       field.parts = f.valueSource.parts;

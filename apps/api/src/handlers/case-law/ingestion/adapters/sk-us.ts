@@ -366,7 +366,7 @@ const executeSearch = async (
     return null;
   }
 
-  const data = await response.json();
+  const data: unknown = await response.json();
   if (!isSearchResponse(data)) {
     const preview = JSON.stringify(data).slice(0, 200);
     panic(`SK ÚS search returned an invalid payload: ${preview}`);

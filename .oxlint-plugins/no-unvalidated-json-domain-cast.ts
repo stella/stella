@@ -179,6 +179,54 @@ export default eslintCompatPlugin({
           );
         };
 
+        const hasRawJsonTypeAnnotation = (variable: Variable): boolean =>
+          variable.defs.some(
+            (definition) =>
+              isAstNode(definition.name) &&
+              definition.name.typeAnnotation &&
+              isRawJsonType(definition.name.typeAnnotation),
+          );
+
+        const isIdentifierReference = (
+          node: unknown,
+        ): node is ESTree.IdentifierReference => isIdentifier(node);
+
+        const isUnvalidatedJsonValue = (
+          node: unknown,
+          seenVariables: ReadonlySet<Variable> = new Set(),
+        ): boolean => {
+          const current = peelRuntimeExpression(node);
+          if (isRawJsonBoundary(current)) {
+            return true;
+          }
+          if (!isIdentifierReference(current)) {
+            return false;
+          }
+          const variable = resolveVariable(current);
+          if (
+            variable === null ||
+            seenVariables.has(variable) ||
+            hasRawJsonTypeAnnotation(variable)
+          ) {
+            return false;
+          }
+          const nextSeenVariables = new Set(seenVariables);
+          nextSeenVariables.add(variable);
+          return (
+            variable.defs.some(
+              (definition) =>
+                definition.type === "Variable" &&
+                definition.node.type === "VariableDeclarator" &&
+                isUnvalidatedJsonValue(definition.node.init, nextSeenVariables),
+            ) ||
+            variable.references.some(
+              (reference) =>
+                reference.isWrite() &&
+                isUnvalidatedJsonValue(reference.writeExpr, nextSeenVariables),
+            )
+          );
+        };
+
         const checkAssertion = (node: unknown) => {
           if (!isAstNode(node)) {
             return;
@@ -206,7 +254,7 @@ export default eslintCompatPlugin({
             return false;
           }
           if (node.type === "ReturnStatement") {
-            return isRawJsonBoundary(node.argument);
+            return isUnvalidatedJsonValue(node.argument);
           }
           return Object.entries(node).some(
             ([key, child]) =>
@@ -227,7 +275,7 @@ export default eslintCompatPlugin({
           }
           const body = node.body;
           const returnsRawJson =
-            isRawJsonBoundary(body) || containsRawJsonReturn(body);
+            isUnvalidatedJsonValue(body) || containsRawJsonReturn(body);
           if (returnsRawJson) {
             context.report({ node, messageId: "unvalidatedDomain" });
           }

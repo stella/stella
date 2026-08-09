@@ -17,6 +17,7 @@ declare const response: { json: () => Promise<never> };
 declare const genericResponse: { json: <T>() => Promise<T> };
 declare const raw: string;
 declare const schema: unknown;
+declare const isRegistryCompany: (value: unknown) => value is RegistryCompany;
 declare const v: {
   parse: (inputSchema: unknown, input: unknown) => RegistryCompany;
   safeParse: (inputSchema: unknown, input: unknown) => unknown;
@@ -73,6 +74,54 @@ export const assignedParse = () => {
 
 // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
 export const annotatedFunctionReturn = (): RegistryCompany => JSON.parse(raw);
+
+export const annotatedLocalReturn =
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  (): RegistryCompany => {
+    const parsed = JSON.parse(raw);
+    return parsed;
+  };
+
+export const annotatedAliasedLocalReturn =
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  (): RegistryCompany => {
+    const parsed = JSON.parse(raw);
+    const payload = parsed;
+    return payload;
+  };
+
+export const annotatedAssignedLocalReturn =
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  (): RegistryCompany => {
+    // oxlint-disable-next-line eslint/prefer-const
+    let parsed;
+    parsed = JSON.parse(raw);
+    return parsed;
+  };
+
+export const validatedLocalReturn = (): RegistryCompany => {
+  const rawValue = JSON.parse(raw);
+  const parsed = v.parse(schema, rawValue);
+  return parsed;
+};
+
+export const guardedInferredLocalReturn =
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  (): RegistryCompany => {
+    const parsed = JSON.parse(raw);
+    if (!isRegistryCompany(parsed)) {
+      return v.parse(schema, null);
+    }
+    return parsed;
+  };
+
+export const guardedUnknownLocalReturn = (): RegistryCompany => {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isRegistryCompany(parsed)) {
+    return v.parse(schema, null);
+  }
+  return parsed;
+};
 
 export const annotatedAsyncFunctionReturn =
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast

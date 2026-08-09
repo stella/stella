@@ -46,7 +46,7 @@ const readJsonRecord = async (
   response: Response,
   context: string,
 ): Promise<Record<string, unknown>> => {
-  const body = await response.json();
+  const body: unknown = await response.json();
   if (isRecord(body)) {
     return body;
   }
