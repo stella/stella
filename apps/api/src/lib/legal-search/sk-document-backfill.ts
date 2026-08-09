@@ -105,6 +105,7 @@ export const fetchPdfBytes = async (
   }
 
   const response = await fetchWithTimeout(target, {
+    redirect: "error",
     signal,
     timeoutMs: PDF_TIMEOUT_MS,
   });

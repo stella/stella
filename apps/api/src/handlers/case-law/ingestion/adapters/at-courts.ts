@@ -316,6 +316,7 @@ const fetchFulltext = async (
 
   try {
     const response = await fetchWithTimeout(target, {
+      redirect: "error",
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     });

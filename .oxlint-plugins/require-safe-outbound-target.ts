@@ -55,6 +55,18 @@ const TRUSTED_PROVIDER_RESTRICTIONS = new Map([
 ]);
 const DYNAMIC_PART = "\u0000";
 const ABSOLUTE_ORIGIN = /^(?:https?):\/\/([^/?#]+)/u;
+const RESTRICTED_TARGET_ORIGIN = "https://restricted.invalid";
+const MUTATING_COLLECTION_METHODS = new Set([
+  "copyWithin",
+  "fill",
+  "pop",
+  "push",
+  "reverse",
+  "shift",
+  "sort",
+  "splice",
+  "unshift",
+]);
 
 type Scope = {
   set: Map<string, ScopeVariable>;
@@ -114,6 +126,25 @@ const hasFixedOrigin = (pattern: string | null): boolean => {
 
 const normalizePath = (path: string): string => path.replaceAll("\\", "/");
 
+const isProvablyRelativeUrlPattern = (pattern: string | null): boolean => {
+  if (pattern === null || pattern.startsWith(DYNAMIC_PART)) {
+    return false;
+  }
+  const dynamicIndex = pattern.indexOf(DYNAMIC_PART);
+  if (dynamicIndex === -1) {
+    return !pattern.startsWith("//") && !/^[a-z][a-z\d+.-]*:/iu.test(pattern);
+  }
+  const prefix = pattern.slice(0, dynamicIndex);
+  if (prefix.startsWith("./") || prefix.startsWith("../")) {
+    return true;
+  }
+  if (prefix.startsWith("/")) {
+    return prefix.length > 1 && !prefix.startsWith("//");
+  }
+  const fixedBoundary = prefix.search(/[/?#]/u);
+  return fixedBoundary >= 0 && !prefix.slice(0, fixedBoundary).includes(":");
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-safe-outbound-target" },
   rules: {
@@ -121,6 +152,10 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
+          uncheckedRedirect:
+            "A provider-restricted outbound target must set redirect: " +
+            '"error" so a cross-origin redirect cannot escape the validated ' +
+            "destination boundary.",
           unsafeOutboundTarget:
             "This outbound request has no statically proven destination " +
             "origin. Route arbitrary URLs through safeOutboundFetchBytes() " +
@@ -230,6 +265,53 @@ export default eslintCompatPlugin({
             );
           });
 
+        const variableHasDeepMutation = (variable: ScopeVariable): boolean =>
+          variable.references.some((reference) => {
+            let current = reference.identifier;
+            if (!isAstNode(current)) {
+              return false;
+            }
+            while (
+              isAstNode(current.parent) &&
+              current.parent.type === "MemberExpression" &&
+              current.parent.object === current
+            ) {
+              current = current.parent;
+              const parent = current.parent;
+              if (
+                isAstNode(parent) &&
+                ((parent.type === "AssignmentExpression" &&
+                  parent.left === current) ||
+                  (parent.type === "UpdateExpression" &&
+                    parent.argument === current) ||
+                  (parent.type === "UnaryExpression" &&
+                    parent.operator === "delete" &&
+                    parent.argument === current))
+              ) {
+                return true;
+              }
+              if (
+                isAstNode(parent) &&
+                parent.type === "CallExpression" &&
+                parent.callee === current
+              ) {
+                const methodName =
+                  current.computed === false
+                    ? getPropertyName(current.property)
+                    : isStringLiteral(current.property)
+                      ? current.property.value
+                      : null;
+                if (
+                  methodName !== null &&
+                  MUTATING_COLLECTION_METHODS.has(methodName)
+                ) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          });
+
         const staticPattern = (
           node: unknown,
           visited = new Set<ScopeVariable>(),
@@ -322,7 +404,9 @@ export default eslintCompatPlugin({
               return direct;
             }
             const base = staticPattern(expression.arguments.at(1), visited);
-            return hasFixedOrigin(base) ? `${base}/${DYNAMIC_PART}` : null;
+            return hasFixedOrigin(base) && isProvablyRelativeUrlPattern(direct)
+              ? `${base}/${DYNAMIC_PART}`
+              : null;
           }
           if (
             expression.type === "CallExpression" &&
@@ -334,7 +418,7 @@ export default eslintCompatPlugin({
               imported.importedName === TRUSTED_RESTRICTION_HELPER &&
               hasStaticRestrictionPolicy(expression, visited)
             ) {
-              return `https://restricted.invalid/${DYNAMIC_PART}`;
+              return `${RESTRICTED_TARGET_ORIGIN}/${DYNAMIC_PART}`;
             }
             if (
               imported !== null &&
@@ -342,7 +426,7 @@ export default eslintCompatPlugin({
                 imported.importedName,
               ) === true
             ) {
-              return `https://restricted.invalid/${DYNAMIC_PART}`;
+              return `${RESTRICTED_TARGET_ORIGIN}/${DYNAMIC_PART}`;
             }
           }
           if (
@@ -413,7 +497,11 @@ export default eslintCompatPlugin({
             return null;
           }
           const variable = resolveVariable(expression);
-          if (variable === null || visited.has(variable)) {
+          if (
+            variable === null ||
+            visited.has(variable) ||
+            variableHasDeepMutation(variable)
+          ) {
             return null;
           }
           const initializer = stableInitializer(variable);
@@ -432,7 +520,11 @@ export default eslintCompatPlugin({
           const expression = unwrapExpression(node);
           if (isEstreeIdentifier(expression)) {
             const variable = resolveVariable(expression);
-            if (variable === null || visited.has(variable)) {
+            if (
+              variable === null ||
+              visited.has(variable) ||
+              variableHasDeepMutation(variable)
+            ) {
               return null;
             }
             const initializer = stableInitializer(variable);
@@ -519,6 +611,20 @@ export default eslintCompatPlugin({
           }
           const paths = staticArrayValues(pathPrefixes, visited);
           return paths !== null && paths.every((path) => path.startsWith("/"));
+        };
+
+        const rejectsRedirects = (call: AstNode): boolean => {
+          if (!Array.isArray(call.arguments)) {
+            return false;
+          }
+          const options = resolveObjectExpression(
+            call.arguments.at(1),
+            new Set(),
+          );
+          return (
+            options !== null &&
+            staticPattern(objectPropertyValue(options, "redirect")) === "error"
+          );
         };
 
         const importInfo = (
@@ -635,10 +741,21 @@ export default eslintCompatPlugin({
               return;
             }
             const target = node.arguments.at(0);
-            if (!hasFixedOrigin(staticPattern(target))) {
+            const pattern = staticPattern(target);
+            if (!hasFixedOrigin(pattern)) {
               context.report({
                 node: target ?? node,
                 messageId: "unsafeOutboundTarget",
+              });
+              return;
+            }
+            if (
+              pattern.startsWith(`${RESTRICTED_TARGET_ORIGIN}/`) &&
+              !rejectsRedirects(node)
+            ) {
+              context.report({
+                node,
+                messageId: "uncheckedRedirect",
               });
             }
           },

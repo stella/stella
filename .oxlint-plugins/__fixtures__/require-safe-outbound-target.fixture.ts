@@ -55,6 +55,35 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
   mutableUrl.hostname = inputUrl;
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a URL's authority invalidates its static origin proof
   await fetchWithTimeout(mutableUrl, { timeoutMs: 1000 });
+
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an absolute runtime first argument overrides the fixed URL base
+  await fetchWithTimeout(new URL(inputUrl, STATIC_BASE), { timeoutMs: 1000 });
+
+  const mutableOrigins = ["https://provider.example"];
+  mutableOrigins.push(new URL(inputUrl).origin);
+  const widenedPolicy = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: { type: "exact-origin", origins: mutableOrigins },
+  });
+  if (widenedPolicy !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a const policy array invalidates its static trust proof
+    await fetchWithTimeout(widenedPolicy, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
+  }
+
+  const redirectableProviderUrl = restrictOutboundUrl({
+    rawUrl: inputUrl,
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ["https://provider.example"],
+    },
+  });
+  if (redirectableProviderUrl !== null) {
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: provider-restricted targets must reject redirects at the network sink
+    await fetchWithTimeout(redirectableProviderUrl, { timeoutMs: 1000 });
+  }
 };
 
 export const mustAllowFixedOrigins = async (id: string) => {
@@ -94,7 +123,10 @@ export const mustAllowCanonicalBoundary = async (inputUrl: string) => {
     },
   });
   if (providerUrl !== null) {
-    await fetchWithTimeout(providerUrl, { timeoutMs: 1000 });
+    await fetchWithTimeout(providerUrl, {
+      redirect: "error",
+      timeoutMs: 1000,
+    });
   }
 };
 

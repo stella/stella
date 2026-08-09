@@ -296,7 +296,10 @@ const fetchFinaldoc = async (
   try {
     const response = await fetchWithRetry(
       target.toString(),
-      { headers: { Accept: "application/json" } },
+      {
+        headers: { Accept: "application/json" },
+        redirect: "error",
+      },
       {
         maxRetries: 1,
         signal,
