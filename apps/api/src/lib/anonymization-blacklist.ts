@@ -124,15 +124,17 @@ export const loadAnonymizationGazetteerEntries = async ({
       .orderBy(asc(anonymizationBlacklistEntries.canonical)),
   );
 
-  return rows.map((row): GazetteerEntry => ({
-    id: row.id,
-    canonical: row.canonical,
-    label: row.label,
-    variants: row.variants,
-    workspaceId: row.workspaceId ?? organizationId,
-    createdAt: row.createdAt.getTime(),
-    source: "manual",
-  }));
+  return rows.map(
+    (row): GazetteerEntry => ({
+      id: row.id,
+      canonical: row.canonical,
+      label: row.label,
+      variants: row.variants,
+      workspaceId: row.workspaceId ?? organizationId,
+      createdAt: row.createdAt.getTime(),
+      source: "manual",
+    }),
+  );
 };
 
 // Org-wide custom regex rules belong here once @stll/anonymize-wasm exposes a
