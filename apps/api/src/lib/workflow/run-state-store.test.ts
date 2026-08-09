@@ -232,6 +232,14 @@ describe("workflow finalization state reads", () => {
         args: [`workflow:${workspaceId}:set-mode`, "1", "EX", "600"],
       },
       {
+        command: "DEL",
+        args: [
+          `workflow:${workspaceId}:plan-properties`,
+          `workflow:${workspaceId}:scoped`,
+          `workflow:${workspaceId}:service-tier`,
+        ],
+      },
+      {
         command: "SET",
         args: [`workflow:${workspaceId}:total`, "3", "EX", "600"],
       },

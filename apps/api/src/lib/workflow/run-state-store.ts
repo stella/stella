@@ -376,6 +376,12 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
         setModeKey: workflowKey(workspaceId, "set-mode"),
         runStateTtlSec: runLockTtlSec,
       });
+      await redis.send(
+        "DEL",
+        TRANSITIONAL_FINALIZATION_FIELDS.map((field) =>
+          workflowKey(workspaceId, field),
+        ),
+      );
       await Promise.all([
         redis.send("SET", [
           workflowKey(workspaceId, "total"),
