@@ -72,10 +72,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  entitiesKeys,
-  entityOptions,
-} from "@/lib/workspaces/queries/entities";
+import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 type MatterOrigin = {
   color: string | null;
