@@ -1,10 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { timeEntriesApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
 import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
-import { toSafeId } from "@/lib/safe-id";
+import {
+  fetchTimeEntries,
+  fetchTimeEntrySummary,
+} from "@/lib/workspaces/time-entries-api";
 
 type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
@@ -66,7 +67,7 @@ type TeamTimeEntrySummary = {
 };
 
 export const timeEntriesKeys = {
-  all: timeEntriesQueryRoot,
+  all: (workspaceId: string) => ["timeEntries", workspaceId],
   list: (workspaceId: string, key: TimeEntriesListKey) => [
     ...timeEntriesKeys.all(workspaceId),
     {
@@ -111,24 +112,16 @@ const listTimeEntries = async ({
   filters: TimeEntriesFilters;
   cursor?: string;
   signal?: AbortSignal;
-}) => {
-  const { workItemId, userId, ...restFilters } = filters;
-  const response = await timeEntriesApi({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  }).get({
+}) => 
+  fetchTimeEntries({
+    workspaceId,
     query: {
-      ...restFilters,
+      ...filters,
       ...(cursor !== undefined && { cursor }),
-      ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
-      ...(workItemId !== undefined && {
-        workItemId: toSafeId<"entity">(workItemId),
-      }),
     },
-    fetch: signal ? { signal } : {},
-  });
-
-  return unwrapEden(response);
-};
+    signal,
+  })
+;
 
 type ListPersonalTimeEntriesOptions = {
   cursor: string | undefined;
@@ -199,13 +192,11 @@ export const timeEntrySummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).summary.get({
+      const summary = await fetchTimeEntrySummary({
+        workspaceId,
         query: { dateFrom, dateTo },
-        fetch: { signal },
+        signal,
       });
-      const summary = unwrapEden(response);
       if (summary.scope !== "personal") {
         return panic("Expected a personal time-entry summary");
       }
@@ -225,13 +216,11 @@ export const timeEntryTeamSummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).summary.get({
+      const summary = await fetchTimeEntrySummary({
+        workspaceId,
         query: { dateFrom, dateTo, scope: "team" },
-        fetch: { signal },
+        signal,
       });
-      const summary = unwrapEden(response);
       if (summary.scope !== "team") {
         return panic("Expected a team time-entry summary");
       }
@@ -258,18 +247,17 @@ export const activeTimerOptions = (workspaceId: string) =>
     staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).get({
+      const page = await fetchTimeEntries({
+        workspaceId,
         query: {
           source: "timer",
           status: "draft",
           hasActiveTimer: true,
         },
-        fetch: { signal },
+        signal,
       });
 
-      return unwrapEden(response).items.at(0) ?? null;
+      return page.items.at(0) ?? null;
     },
     refetchInterval: 60_000,
   });

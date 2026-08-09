@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
 export type ApiValidationErrorValue = {
@@ -33,6 +35,34 @@ export type NormalizedApiError = {
   details?: Record<string, unknown>;
   rawMessage?: string;
   status: number;
+};
+
+const apiValidationErrorValueSchema = v.looseObject({
+  expected: v.optional(v.string()),
+  found: v.optional(v.unknown()),
+  message: v.optional(v.string()),
+  on: v.string(),
+  property: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  type: v.literal(API_VALIDATION_ERROR_CODE),
+});
+
+const apiErrorObjectValueSchema = v.looseObject({
+  code: v.optional(v.string()),
+  message: v.string(),
+});
+
+const apiErrorValueSchema = v.union([
+  apiValidationErrorValueSchema,
+  apiErrorObjectValueSchema,
+  v.string(),
+  v.null(),
+  v.undefined(),
+]);
+
+export const parseApiErrorValue = (input: unknown): ApiErrorValue => {
+  const result = v.safeParse(apiErrorValueSchema, input);
+  return result.success ? result.output : null;
 };
 
 const ERROR_TEXT_KEYS = new Set(["code", "message"]);

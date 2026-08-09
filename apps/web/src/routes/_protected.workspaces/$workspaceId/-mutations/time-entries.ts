@@ -1,9 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { timeEntriesApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
+import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
 
 type CreateTimeEntryVars = {
   workspaceId: string;
@@ -26,16 +25,17 @@ export const useCreateTimeEntry = () => {
       workItemId,
       ...body
     }: CreateTimeEntryVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).put({
-        ...body,
-        ...(workItemId && {
-          workItemId: toSafeId<"entity">(workItemId),
-        }),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "create",
+          body: {
+            queryKey: timeEntriesKeys.all(workspaceId),
+            ...body,
+            ...(workItemId && { workItemId }),
+          },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -64,17 +64,18 @@ export const useUpdateTimeEntry = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
       const { id, workItemId, ...restBody } = body;
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).patch({
-        ...restBody,
-        id: toSafeId<"timeEntry">(id),
-        ...(workItemId !== undefined && {
-          workItemId: workItemId ? toSafeId<"entity">(workItemId) : null,
-        }),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "update",
+          body: {
+            queryKey: timeEntriesKeys.all(workspaceId),
+            ...restBody,
+            id,
+            ...(workItemId !== undefined && { workItemId }),
+          },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -92,13 +93,13 @@ export const useDeleteTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).delete({
-        id: toSafeId<"timeEntry">(id),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "delete",
+          body: { queryKey: timeEntriesKeys.all(workspaceId), id },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -118,14 +119,13 @@ export const useStartTimer = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: StartTimerVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).timer.start.post({
-        ...body,
-        workItemId: toSafeId<"entity">(body.workItemId),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "timer_start",
+          body: { queryKey: timeEntriesKeys.all(workspaceId), ...body },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -142,11 +142,13 @@ export const useStopTimer = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId }: StopTimerVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).timer.stop.post({});
-
-      return unwrapEden(response);
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "timer_stop",
+          body: { queryKey: timeEntriesKeys.all(workspaceId) },
+        },
+      });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -165,14 +167,16 @@ export const useBatchUpdateTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).batch.post({
-        ...body,
-        ids: body.ids.map((id) => toSafeId<"timeEntry">(id)),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "batch_update",
+          body: {
+            queryKey: timeEntriesKeys.all(workspaceId),
+            ...body,
+          },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -190,13 +194,13 @@ export const useBatchDeleteTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).batch.delete({
-        ids: ids.map((id) => toSafeId<"timeEntry">(id)),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "batch_delete",
+          body: { queryKey: timeEntriesKeys.all(workspaceId), ids },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -215,18 +219,16 @@ export const useSplitTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }).split.post({
-        ...body,
-        id: toSafeId<"timeEntry">(body.id),
-        splits: body.splits.map((split) => ({
-          ...split,
-          workItemId: toSafeId<"entity">(split.workItemId),
-        })),
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "split",
+          body: {
+            queryKey: timeEntriesKeys.all(workspaceId),
+            ...body,
+          },
+        },
       });
-
-      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

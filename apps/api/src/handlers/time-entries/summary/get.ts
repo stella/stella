@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { TimeEntrySummary } from "@stll/api-contract";
+
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
@@ -12,25 +14,6 @@ import { LIMITS } from "@/api/lib/limits";
 
 const MAX_SUMMARY_DAYS = 31;
 const MAX_TEAM_SUMMARY_ROWS = LIMITS.workspaceMembersCount * MAX_SUMMARY_DAYS;
-
-type TimeEntrySummary =
-  | {
-      scope: "personal";
-      entryCount: number;
-      totalMinutes: number;
-      billedMinutes: number;
-    }
-  | {
-      scope: "team";
-      viewerTotalMinutes: number;
-      members: {
-        userId: string;
-        name: string;
-        email: string;
-        image: string | null;
-        daily: { dateWorked: string; totalMinutes: number }[];
-      }[];
-    };
 
 const okTimeEntrySummary = (summary: TimeEntrySummary) => Result.ok(summary);
 

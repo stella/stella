@@ -10,11 +10,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { timeEntriesApi } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { toSafeId } from "@/lib/safe-id";
+import { polishTimeEntryNarrative } from "@/lib/workspaces/time-entries-api";
 
 type TimeEntryNarrativeFieldProps = {
   id: string;
@@ -47,12 +45,9 @@ export const TimeEntryNarrativeField = ({
     }
 
     setIsPolishing(true);
-    const requestResult = await Result.tryPromise(async () => {
-      const response = await timeEntriesApi({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      })["polish-narrative"].post({ narrative, instruction });
-      return unwrapEden(response);
-    });
+    const requestResult = await Result.tryPromise(() =>
+      polishTimeEntryNarrative({ instruction, narrative, workspaceId }),
+    );
     setIsPolishing(false);
 
     if (Result.isError(requestResult)) {
