@@ -4,12 +4,12 @@ import type { ChangeEvent, PropsWithChildren, ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
+  CogIcon,
   DownloadIcon,
   FileTextIcon,
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
-  Settings2Icon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
@@ -225,7 +225,7 @@ const StyleSetsPage = () => {
                   size="icon-xs"
                   variant="ghost"
                 >
-                  <Settings2Icon />
+                  <CogIcon />
                 </Button>
               )}
             </div>
@@ -261,7 +261,7 @@ const StyleSetsPage = () => {
                       size="icon-xs"
                       variant="ghost"
                     >
-                      <Settings2Icon />
+                      <CogIcon />
                     </Button>
                     <Button
                       aria-label={t("common.rename")}

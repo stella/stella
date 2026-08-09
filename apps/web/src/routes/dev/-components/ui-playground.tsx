@@ -6,13 +6,13 @@ import {
   BellIcon,
   ChevronDownIcon,
   ClockIcon,
+  CogIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
   LinkIcon,
   MailIcon,
   SearchIcon,
-  SettingsIcon,
   ShieldIcon,
   Trash2Icon,
   UserIcon,
@@ -358,7 +358,7 @@ export function UiPlayground() {
                     Disabled
                   </Button>
                   <Button aria-label="Settings" size="icon" variant="ghost">
-                    <SettingsIcon />
+                    <CogIcon />
                   </Button>
                 </div>
               </PlaygroundSection>

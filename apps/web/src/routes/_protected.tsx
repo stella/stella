@@ -9,6 +9,7 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import {
+  CogIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
   PinIcon,
@@ -46,7 +47,6 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
-import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -492,10 +492,7 @@ function ProtectedContent() {
             title={t("workspaces.matterInfo")}
             variant="ghost"
           >
-            <MatterIcon
-              className="size-4"
-              matter={{ id: workspaceId, color: workspace?.color ?? null }}
-            />
+            <CogIcon className="size-4" />
           </Button>
         </>
       )}
