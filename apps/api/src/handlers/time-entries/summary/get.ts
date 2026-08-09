@@ -13,6 +13,27 @@ import { LIMITS } from "@/api/lib/limits";
 const MAX_SUMMARY_DAYS = 31;
 const MAX_TEAM_SUMMARY_ROWS = LIMITS.workspaceMembersCount * MAX_SUMMARY_DAYS;
 
+type TimeEntrySummary =
+  | {
+      scope: "personal";
+      entryCount: number;
+      totalMinutes: number;
+      billedMinutes: number;
+    }
+  | {
+      scope: "team";
+      viewerTotalMinutes: number;
+      members: {
+        userId: string;
+        name: string;
+        email: string;
+        image: string | null;
+        daily: { dateWorked: string; totalMinutes: number }[];
+      }[];
+    };
+
+const okTimeEntrySummary = (summary: TimeEntrySummary) => Result.ok(summary);
+
 const timeEntrySummaryQuerySchema = t.Object({
   dateFrom: t.String({ format: "date" }),
   dateTo: t.String({ format: "date" }),
@@ -133,8 +154,8 @@ const readTimeEntrySummary = createSafeHandler(
         membersById.set(row.userId, teamMember);
       }
 
-      return Result.ok({
-        scope: "team" as const,
+      return okTimeEntrySummary({
+        scope: "team",
         viewerTotalMinutes,
         members: [...membersById.values()],
       });
@@ -160,8 +181,8 @@ const readTimeEntrySummary = createSafeHandler(
       ),
     );
 
-    return Result.ok({
-      scope: "personal" as const,
+    return okTimeEntrySummary({
+      scope: "personal",
       ...(summary ?? { entryCount: 0, totalMinutes: 0, billedMinutes: 0 }),
     });
   },

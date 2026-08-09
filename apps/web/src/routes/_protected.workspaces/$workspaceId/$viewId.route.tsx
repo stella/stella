@@ -114,11 +114,10 @@ export const Route = createFileRoute(
       if (!canReadTimeEntries) {
         return;
       }
-      const canReviewTimeEntries =
-        authClient.organization.checkRolePermission({
-          role,
-          permissions: { timeEntry: ["approve"] },
-        });
+      const canReviewTimeEntries = authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["approve"] },
+      });
 
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);

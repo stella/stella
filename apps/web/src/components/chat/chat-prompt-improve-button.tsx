@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
+import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

@@ -46,11 +46,11 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type {
   ClauseBody,
   ClauseParagraph,
 } from "@/components/templates/clause-editor-types";
-import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";

@@ -76,9 +76,7 @@ export const ManualTimeEntryForm = ({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label id="time-entry-duration-label">
-            {t("billing.duration")}
-          </Label>
+          <Label id="time-entry-duration-label">{t("billing.duration")}</Label>
           <DurationInput
             id="time-entry-duration"
             labelledBy="time-entry-duration-label"

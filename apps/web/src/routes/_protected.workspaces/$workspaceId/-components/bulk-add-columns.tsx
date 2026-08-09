@@ -544,44 +544,47 @@ const DraftCard = ({
   const autoPromptDisabled =
     !isAi || trimmedName.length === 0 || suggestPrompt.isPending;
 
-  const handleAutoPrompt = useCallback((instruction: string) => {
-    if (autoPromptDisabled) {
-      return;
-    }
-    suggestPrompt.mutate(
-      {
-        workspaceId,
-        name: trimmedName,
-        contentType: draft.contentType,
-        instruction,
-      },
-      {
-        onSuccess: ({ prompt: suggested }) => {
-          const editor = editorRef.current;
-          if (!editor || editor.isDestroyed) {
-            onChange({ prompt: suggested });
-            return;
-          }
-          editor.commands.setContent(suggested);
-          onChange({ prompt: editor.getHTML() });
+  const handleAutoPrompt = useCallback(
+    (instruction: string) => {
+      if (autoPromptDisabled) {
+        return;
+      }
+      suggestPrompt.mutate(
+        {
+          workspaceId,
+          name: trimmedName,
+          contentType: draft.contentType,
+          instruction,
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("workspaces.properties.autoPromptFailed"),
-            type: "error",
-          });
+        {
+          onSuccess: ({ prompt: suggested }) => {
+            const editor = editorRef.current;
+            if (!editor || editor.isDestroyed) {
+              onChange({ prompt: suggested });
+              return;
+            }
+            editor.commands.setContent(suggested);
+            onChange({ prompt: editor.getHTML() });
+          },
+          onError: () => {
+            stellaToast.add({
+              title: t("workspaces.properties.autoPromptFailed"),
+              type: "error",
+            });
+          },
         },
-      },
-    );
-  }, [
-    autoPromptDisabled,
-    draft.contentType,
-    onChange,
-    suggestPrompt,
-    t,
-    trimmedName,
-    workspaceId,
-  ]);
+      );
+    },
+    [
+      autoPromptDisabled,
+      draft.contentType,
+      onChange,
+      suggestPrompt,
+      t,
+      trimmedName,
+      workspaceId,
+    ],
+  );
 
   const sourceIds = useMemo(
     () => [...new Set([...draft.fileIds, ...draft.mentions])],

@@ -365,15 +365,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         const month = parts[1] ?? 1;
         const day = parts[2] ?? 1;
         const entryDate = new Date(year, month - 1, day);
-        const dayIdx =
-          (entryDate.getDay() - firstWeekday + 7) % 7;
+        const dayIdx = (entryDate.getDay() - firstWeekday + 7) % 7;
         daily[dayIdx] = (daily[dayIdx] ?? 0) + entry.totalMinutes / 60;
       }
 
       return {
         ...member,
-        name:
-          getDisplayName(member.name, member.email) ?? UNKNOWN_USER_LABEL,
+        name: getDisplayName(member.name, member.email) ?? UNKNOWN_USER_LABEL,
         daily,
       };
     });
@@ -744,7 +742,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             </div>
             <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
               <div
-                className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-12 border-b py-2")}
+                className={cn(
+                  TEAM_HEATMAP_GRID_CLASS,
+                  "min-h-12 border-b py-2",
+                )}
               >
                 <span />
                 {Array.from({ length: 7 }, (_, i) => (
@@ -847,7 +848,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 </TooltipRoot>
                                 <PopoverPopup className="w-56" sideOffset={8}>
                                   <p className="text-muted-foreground p-2 text-xs font-medium">
-                                    {member.name} · {dayLabel} · {formatHours(hours)}
+                                    {member.name} · {dayLabel} ·{" "}
+                                    {formatHours(hours)}
                                   </p>
                                 </PopoverPopup>
                               </Popover>

@@ -14,6 +14,7 @@ import "@/components/workspaces/properties/property-input/tiptap.css";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -23,7 +24,6 @@ import {
   createPromptSlashSuggestion,
   PromptSlash,
 } from "@/components/chat/prompt-slash-extension";
-import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
   PROMPT_EDITOR_SELECTION_CLASS,
