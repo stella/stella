@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { DESKTOP_EDIT_FILE_TYPES } from "@stll/api-contract";
+
 import {
   isAppSnapshot,
   type AppSnapshot,
@@ -335,6 +337,20 @@ describe("desktop bridge RPC golden fixtures", () => {
 
   test("isAppSnapshot accepts the canonical app-snapshot fixture", () => {
     expect(isAppSnapshot(readFixture("app-snapshot.json"))).toBe(true);
+  });
+
+  test("isAppSnapshot accepts every canonical session file type", () => {
+    for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
+      expect(
+        isAppSnapshot({
+          ...appSnapshot,
+          sessions: appSnapshot.sessions.map((session) => ({
+            ...session,
+            fileType,
+          })),
+        }),
+      ).toBe(true);
+    }
   });
 
   test("isAppSnapshot rejects a snapshot missing a required field", () => {

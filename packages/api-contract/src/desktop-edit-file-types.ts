@@ -4,34 +4,54 @@ export type DesktopEditFileType = (typeof DESKTOP_EDIT_FILE_TYPES)[number];
 
 type DesktopEditFileTypeConfig = {
   extension: `.${DesktopEditFileType}`;
+  mainPartContentType: string;
   mainPartPath: string;
   mainRootLocalName: string;
+  mainRootNamespace: string;
   mimeType: string;
 };
 
 export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
   docx: {
     extension: ".docx",
+    mainPartContentType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
     mainPartPath: "word/document.xml",
     mainRootLocalName: "document",
+    mainRootNamespace:
+      "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
     mimeType:
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   },
   xlsx: {
     extension: ".xlsx",
+    mainPartContentType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
     mainPartPath: "xl/workbook.xml",
     mainRootLocalName: "workbook",
+    mainRootNamespace:
+      "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   },
   pptx: {
     extension: ".pptx",
+    mainPartContentType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
     mainPartPath: "ppt/presentation.xml",
     mainRootLocalName: "presentation",
+    mainRootNamespace:
+      "http://schemas.openxmlformats.org/presentationml/2006/main",
     mimeType:
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   },
 } as const satisfies Record<DesktopEditFileType, DesktopEditFileTypeConfig>;
+
+export const isDesktopEditFileType = (
+  value: unknown,
+): value is DesktopEditFileType =>
+  typeof value === "string" &&
+  DESKTOP_EDIT_FILE_TYPES.some((fileType) => fileType === value);
 
 export const desktopEditFileTypeForMimeType = (
   mimeType: string,

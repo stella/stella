@@ -4,25 +4,34 @@ import JSZip from "jszip";
 import {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  type DesktopEditFileType,
 } from "@/api/lib/desktop-edit-file-types";
 
 import { validateDesktopEditFileBuffer } from "./validate-desktop-edit-file-buffer";
 
-const CONTENT_TYPES_XML =
-  '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>';
+const CONTENT_TYPES_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+
+type MakePackageOptions = {
+  fileType: DesktopEditFileType;
+  mainPartContentType?: string;
+  mainRootNamespace?: string;
+};
 
 const makePackage = async ({
-  mainPartPath,
-  mainRootLocalName,
-}: {
-  mainPartPath: string;
-  mainRootLocalName: string;
-}) => {
+  fileType,
+  mainPartContentType,
+  mainRootNamespace,
+}: MakePackageOptions) => {
+  const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES_XML);
   zip.file(
-    mainPartPath,
-    `<?xml version="1.0"?><x:${mainRootLocalName} xmlns:x="urn:test"/>`,
+    "[Content_Types].xml",
+    `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${mainPartContentType ?? config.mainPartContentType}"/></Types>`,
+  );
+  zip.file(
+    config.mainPartPath,
+    `<?xml version="1.0"?><x:${config.mainRootLocalName} xmlns:x="${mainRootNamespace ?? config.mainRootNamespace}"/>`,
   );
   return await zip.generateAsync({ type: "arraybuffer" });
 };
@@ -30,17 +39,45 @@ const makePackage = async ({
 describe("desktop edit file validation", () => {
   for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
     test(`accepts a structurally valid ${fileType} package`, async () => {
-      const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
-      const buffer = await makePackage(config);
+      const buffer = await makePackage({ fileType });
 
       expect(await validateDesktopEditFileBuffer({ buffer, fileType })).toEqual(
         { valid: true },
       );
     });
+
+    test(`rejects a ${fileType} package with the wrong main namespace`, async () => {
+      const buffer = await makePackage({
+        fileType,
+        mainRootNamespace: "urn:wrong-office-namespace",
+      });
+
+      expect(await validateDesktopEditFileBuffer({ buffer, fileType })).toEqual(
+        {
+          valid: false,
+          error: `Malformed ${DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType].mainPartPath}: unexpected root element`,
+        },
+      );
+    });
+
+    test(`rejects a ${fileType} package with the wrong main-part content type`, async () => {
+      const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
+      const buffer = await makePackage({
+        fileType,
+        mainPartContentType: "application/xml",
+      });
+
+      expect(await validateDesktopEditFileBuffer({ buffer, fileType })).toEqual(
+        {
+          valid: false,
+          error: `Malformed [Content_Types].xml: missing /${config.mainPartPath} override`,
+        },
+      );
+    });
   }
 
   test("rejects a valid package from a different Office family", async () => {
-    const buffer = await makePackage(DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx);
+    const buffer = await makePackage({ fileType: "xlsx" });
 
     expect(
       await validateDesktopEditFileBuffer({ buffer, fileType: "pptx" }),
@@ -52,7 +89,10 @@ describe("desktop edit file validation", () => {
 
   test("rejects a package without content type declarations", async () => {
     const zip = new JSZip();
-    zip.file("word/document.xml", '<w:document xmlns:w="urn:test"/>');
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+    );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     expect(
@@ -64,9 +104,16 @@ describe("desktop edit file validation", () => {
   });
 
   test("rejects a malformed main part", async () => {
+    const config = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
     const zip = new JSZip();
-    zip.file("[Content_Types].xml", CONTENT_TYPES_XML);
-    zip.file("xl/workbook.xml", '<x:workbook xmlns:x="urn:test">');
+    zip.file(
+      "[Content_Types].xml",
+      `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${config.mainPartContentType}"/></Types>`,
+    );
+    zip.file(
+      config.mainPartPath,
+      `<x:workbook xmlns:x="${config.mainRootNamespace}">`,
+    );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     const result = await validateDesktopEditFileBuffer({

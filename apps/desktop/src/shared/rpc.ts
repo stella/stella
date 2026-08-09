@@ -1,4 +1,7 @@
-import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@stll/api-contract";
+import {
+  DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  isDesktopEditFileType,
+} from "@stll/api-contract";
 import type { DesktopEditFileType } from "@stll/api-contract";
 
 export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
@@ -126,9 +129,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
-const isFileType = (value: unknown): value is DesktopEditFileType =>
-  value === "docx" || value === "xlsx" || value === "pptx";
-
 export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
   if (!isRecord(value)) {
     return false;
@@ -140,7 +140,8 @@ export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
     typeof value["runningSince"] === "string" &&
     Array.isArray(value["sessions"]) &&
     value["sessions"].every(
-      (session) => isRecord(session) && isFileType(session["fileType"]),
+      (session) =>
+        isRecord(session) && isDesktopEditFileType(session["fileType"]),
     ) &&
     Array.isArray(value["trustedSelfHostConnections"]) &&
     isRecord(value["notificationPreferences"]) &&

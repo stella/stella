@@ -6,6 +6,9 @@ import {
 } from "@/api/lib/desktop-edit-file-types";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
+const CONTENT_TYPES_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+
 export type ValidateDesktopEditFileBufferResult =
   | { valid: true }
   | { valid: false; error: string };
@@ -28,12 +31,24 @@ export const validateDesktopEditFileBuffer = async ({
       return { valid: false, error: "Missing [Content_Types].xml" };
     }
 
+    let contentTypesDocument: slimdom.Document;
     try {
-      slimdom.parseXmlDocument(contentTypesXml);
+      contentTypesDocument = slimdom.parseXmlDocument(contentTypesXml);
     } catch (error) {
       return {
         valid: false,
         error: `Malformed [Content_Types].xml: ${error instanceof Error ? error.message : "unknown error"}`,
+      };
+    }
+
+    const contentTypesRoot = contentTypesDocument.documentElement;
+    if (
+      contentTypesRoot?.localName !== "Types" ||
+      contentTypesRoot.namespaceURI !== CONTENT_TYPES_NAMESPACE
+    ) {
+      return {
+        valid: false,
+        error: "Malformed [Content_Types].xml: unexpected root element",
       };
     }
 
@@ -52,10 +67,28 @@ export const validateDesktopEditFileBuffer = async ({
       };
     }
 
-    if (document.documentElement?.localName !== config.mainRootLocalName) {
+    if (
+      document.documentElement?.localName !== config.mainRootLocalName ||
+      document.documentElement.namespaceURI !== config.mainRootNamespace
+    ) {
       return {
         valid: false,
         error: `Malformed ${config.mainPartPath}: unexpected root element`,
+      };
+    }
+
+    const expectedPartName = `/${config.mainPartPath}`;
+    const hasMainPartOverride = contentTypesRoot
+      .getElementsByTagNameNS(CONTENT_TYPES_NAMESPACE, "Override")
+      .some(
+        (override) =>
+          override.getAttribute("PartName") === expectedPartName &&
+          override.getAttribute("ContentType") === config.mainPartContentType,
+      );
+    if (!hasMainPartOverride) {
+      return {
+        valid: false,
+        error: `Malformed [Content_Types].xml: missing ${expectedPartName} override`,
       };
     }
 

@@ -15,6 +15,7 @@ export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
+  isDesktopEditFileType,
 } from "./desktop-edit-file-types";
 export type {
   DesktopEditFileType,

@@ -4,7 +4,19 @@ import {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
+  isDesktopEditFileType,
 } from "./desktop-edit-file-types";
+
+describe("desktop edit file types", () => {
+  test("accepts every canonical file type and rejects unsupported values", () => {
+    for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
+      expect(isDesktopEditFileType(fileType)).toBe(true);
+    }
+
+    expect(isDesktopEditFileType("pdf")).toBe(false);
+    expect(isDesktopEditFileType(null)).toBe(false);
+  });
+});
 
 describe("desktop edit MIME classification", () => {
   test("classifies every supported MIME independent of casing and parameters", () => {
