@@ -14,10 +14,11 @@ type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+type ApiTimeEntriesRoutes = ApiV1Routes["time-entries"];
 type MemoriesRoutes = (typeof memoriesRoute)["~Routes"];
 type EmptyElysia = Elysia;
 type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories"> & {
+  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
       ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
         entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
@@ -25,6 +26,11 @@ type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
         };
       };
     };
+  };
+};
+type TimeEntriesRoutes = {
+  v1: {
+    "time-entries": ApiTimeEntriesRoutes;
   };
 };
 
@@ -46,6 +52,14 @@ export type MemoriesAPI = Elysia<
   EmptyElysia["~Definitions"],
   EmptyElysia["~Metadata"],
   MemoriesRoutes
+>;
+
+export type TimeEntriesAPI = Elysia<
+  EmptyElysia["~Prefix"],
+  EmptyElysia["~Singleton"],
+  EmptyElysia["~Definitions"],
+  EmptyElysia["~Metadata"],
+  TimeEntriesRoutes
 >;
 
 export { toSafeId } from "@/api/lib/branded-types";

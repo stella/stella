@@ -140,14 +140,16 @@ export const generateTanStackTextForRole = async (
 
 export const generateTanStackTextResultForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-): Promise<TanStackTextGenerationResult> => {
+) => {
   const model = resolveTanStackTextModel(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
-  let output = "";
-  let finishReason: TanStackTextFinishReason = null;
+  const result: TanStackTextGenerationResult = {
+    finishReason: null,
+    text: "",
+  };
 
   for await (const delta of streamTanStackTextDeltas({
     abortController,
@@ -160,13 +162,13 @@ export const generateTanStackTextResultForRole = async (
     system: guardedSystemPrompt(options),
     temperature: options.temperature,
     onFinishReason: (value) => {
-      finishReason = value;
+      result.finishReason = value;
     },
   })) {
-    output += delta;
+    result.text += delta;
   }
 
-  return { text: output, finishReason };
+  return result;
 };
 
 export const streamTanStackTextForRole = (

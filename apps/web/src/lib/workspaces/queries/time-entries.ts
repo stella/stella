@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { api } from "@/lib/api";
+import { timeEntriesApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -32,6 +32,37 @@ type TimeEntriesListKey = {
   source?: TimeEntrySource | undefined;
   billable?: boolean | undefined;
   hasActiveTimer?: boolean | undefined;
+};
+
+type PersonalTimeEntry = {
+  billable: boolean;
+  dateWorked: string;
+  durationMinutes: number;
+  id: string;
+  narrative: string;
+  status: TimeEntryStatus;
+};
+
+type PersonalTimeEntryPage = {
+  items: PersonalTimeEntry[];
+  nextCursor: string | null;
+};
+
+type PersonalTimeEntrySummary = {
+  billedMinutes: number;
+  entryCount: number;
+  totalMinutes: number;
+};
+
+type TeamTimeEntrySummary = {
+  members: {
+    daily: { dateWorked: string; totalMinutes: number }[];
+    email: string;
+    image: string | null;
+    name: string;
+    userId: string;
+  }[];
+  viewerTotalMinutes: number;
 };
 
 export const timeEntriesKeys = {
@@ -82,7 +113,7 @@ const listTimeEntries = async ({
   signal?: AbortSignal;
 }) => {
   const { workItemId, userId, ...restFilters } = filters;
-  const response = await api["time-entries"]({
+  const response = await timeEntriesApi({
     workspaceId: toSafeId<"workspace">(workspaceId),
   }).get({
     query: {
@@ -97,6 +128,40 @@ const listTimeEntries = async ({
   });
 
   return unwrapEden(response);
+};
+
+type ListPersonalTimeEntriesOptions = {
+  cursor: string | undefined;
+  filters: TimeEntriesFilters;
+  signal: AbortSignal | undefined;
+  workspaceId: string;
+};
+
+const listPersonalTimeEntries = async ({
+  cursor,
+  filters,
+  signal,
+  workspaceId,
+}: ListPersonalTimeEntriesOptions): Promise<PersonalTimeEntryPage> => {
+  const page = await listTimeEntries({
+    workspaceId,
+    filters,
+    ...(cursor !== undefined && { cursor }),
+    ...(signal !== undefined && { signal }),
+  });
+  return {
+    items: page.items.map(
+      ({ billable, dateWorked, durationMinutes, id, narrative, status }) => ({
+        billable,
+        dateWorked,
+        durationMinutes,
+        id,
+        narrative,
+        status,
+      }),
+    ),
+    nextCursor: page.nextCursor,
+  };
 };
 
 export const timeEntriesOptions = (
@@ -117,10 +182,10 @@ export const timeEntriesInfiniteOptions = (
     queryKey: [...timeEntriesKeys.list(workspaceId, filters), "infinite"],
     initialPageParam: "",
     queryFn: async ({ pageParam, signal }) =>
-      await listTimeEntries({
+      await listPersonalTimeEntries({
         workspaceId,
         filters,
-        ...(pageParam.length > 0 && { cursor: pageParam }),
+        cursor: pageParam.length > 0 ? pageParam : undefined,
         signal,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -134,7 +199,7 @@ export const timeEntrySummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).summary.get({
         query: { dateFrom, dateTo },
@@ -148,7 +213,7 @@ export const timeEntrySummaryOptions = (
         entryCount: summary.entryCount,
         totalMinutes: summary.totalMinutes,
         billedMinutes: summary.billedMinutes,
-      };
+      } satisfies PersonalTimeEntrySummary;
     },
   });
 
@@ -160,7 +225,7 @@ export const timeEntryTeamSummaryOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).summary.get({
         query: { dateFrom, dateTo, scope: "team" },
@@ -172,8 +237,19 @@ export const timeEntryTeamSummaryOptions = (
       }
       return {
         viewerTotalMinutes: summary.viewerTotalMinutes,
-        members: summary.members,
-      };
+        members: summary.members.map(
+          ({ daily, email, image, name, userId }) => ({
+            daily: daily.map(({ dateWorked, totalMinutes }) => ({
+              dateWorked,
+              totalMinutes,
+            })),
+            email,
+            image,
+            name,
+            userId,
+          }),
+        ),
+      } satisfies TeamTimeEntrySummary;
     },
   });
 
@@ -182,7 +258,7 @@ export const activeTimerOptions = (workspaceId: string) =>
     staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({
+      const response = await timeEntriesApi({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).get({
         query: {
