@@ -187,6 +187,9 @@ describe("hasSecureDatabaseTransport", () => {
     "postgres://owner:password@db.example.com/stella",
     "postgres://owner:password@db.example.com/stella?sslmode=disable",
     "postgres://owner:password@db.example.com/stella?sslmode=prefer",
+    "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=disable",
+    "postgres://owner:password@db.example.com/stella?sslmode=disable&sslmode=require",
+    "postgres://owner:password@db.example.com/stella?sslmode=require&sslmode=verify-full",
   ])("rejects remote database transport without TLS: %s", (databaseUrl) => {
     expect(hasSecureDatabaseTransport(databaseUrl)).toBe(false);
   });

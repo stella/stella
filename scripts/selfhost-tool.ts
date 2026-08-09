@@ -22,10 +22,12 @@ import {
   renderReleaseDocsContract,
   renderSelfhostCompose,
   renderSelfhostDocsContract,
+  renderSelfhostRunDocsContract,
   SELFHOST_COMPOSE_PATH,
   SELFHOST_DOC_MARKERS,
   SELFHOST_ENV_EXAMPLE_PATH,
   SELFHOST_ENV_PATH,
+  SELFHOST_RUN_DOC_MARKERS,
   selfhostComposeViolations,
 } from "./selfhost-contract";
 
@@ -181,12 +183,18 @@ const replaceGeneratedBlock = (
   return `${document.slice(0, start)}${generated}${document.slice(after)}`;
 };
 
-const renderSelfhostDoc = () =>
-  replaceGeneratedBlock(
+const renderSelfhostDoc = () => {
+  const documentWithContract = replaceGeneratedBlock(
     readFileSync(path.join(REPO_ROOT, SELFHOST_DOC_PATH), "utf-8"),
     SELFHOST_DOC_MARKERS,
     renderSelfhostDocsContract(),
   );
+  return replaceGeneratedBlock(
+    documentWithContract,
+    SELFHOST_RUN_DOC_MARKERS,
+    renderSelfhostRunDocsContract(),
+  );
+};
 
 const renderReleaseDoc = () =>
   replaceGeneratedBlock(
@@ -244,6 +252,39 @@ const templateContractIssues = (text: string) => {
   return issues;
 };
 
+export const releaseManifestIssues = (output: unknown) => {
+  if (typeof output !== "object" || output === null) {
+    return ["The release manifest script did not return an object."];
+  }
+  const values = new Map(Object.entries(output));
+  const issues: string[] = [];
+  for (const artifact of Object.values(RELEASE_ARTIFACT)) {
+    if (!Object.hasOwn(output, artifact.manifestKey)) {
+      issues.push(`Release manifest is missing ${artifact.manifestKey}.`);
+      continue;
+    }
+    const manifestArtifact = values.get(artifact.manifestKey);
+    if (typeof manifestArtifact !== "object" || manifestArtifact === null) {
+      issues.push(
+        `Release manifest ${artifact.manifestKey} must be an artifact object.`,
+      );
+      continue;
+    }
+    const reference = new Map(Object.entries(manifestArtifact)).get(
+      "reference",
+    );
+    if (
+      typeof reference !== "string" ||
+      !isImmutableApplicationImage(reference)
+    ) {
+      issues.push(
+        `Release manifest ${artifact.manifestKey}.reference must be a digest-qualified image reference.`,
+      );
+    }
+  }
+  return issues;
+};
+
 const releaseContractIssues = () => {
   const digest = `sha256:${"a".repeat(64)}`;
   const manifest = Bun.spawnSync({
@@ -265,16 +306,7 @@ const releaseContractIssues = () => {
     return ["The release manifest script rejected the contract fixture."];
   }
   const output: unknown = JSON.parse(manifest.stdout.toString());
-  if (typeof output !== "object" || output === null) {
-    return ["The release manifest script did not return an object."];
-  }
-  const keys = Object.keys(output);
-  const issues: string[] = [];
-  for (const artifact of Object.values(RELEASE_ARTIFACT)) {
-    if (!keys.includes(artifact.manifestKey)) {
-      issues.push(`Release manifest is missing ${artifact.manifestKey}.`);
-    }
-  }
+  const issues = releaseManifestIssues(output);
   const workflow = readFileSync(
     path.join(REPO_ROOT, RELEASE_WORKFLOW_PATH),
     "utf-8",

@@ -237,13 +237,18 @@ From the repository root, validate the production profile, inspect the resolved
 Compose model, migrate, then start the three declared services. Run the web SSR
 server separately as described above.
 
+<!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->
 ```bash
 bun run selfhost:doctor
 docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml config --quiet
 docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml run --rm --no-deps api \
+  bun /app/apps/api/src/db/migrate.js
+docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml up -d
 ```
+<!-- END GENERATED SELF-HOST RUN COMMANDS -->
 
 `STELLA_API_IMAGE` has no default. Copy the digest-qualified API reference from
 the release's `release-manifest.json`; Compose fails interpolation when it is

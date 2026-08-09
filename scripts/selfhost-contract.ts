@@ -264,6 +264,11 @@ export const SELFHOST_DOC_MARKERS = {
   end: "<!-- END GENERATED SELF-HOST CONTRACT -->",
 } as const;
 
+export const SELFHOST_RUN_DOC_MARKERS = {
+  begin: "<!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->",
+  end: "<!-- END GENERATED SELF-HOST RUN COMMANDS -->",
+} as const;
+
 export const RELEASE_DOC_MARKERS = {
   begin: "<!-- BEGIN GENERATED RELEASE ARTIFACT CONTRACT -->",
   end: "<!-- END GENERATED RELEASE ARTIFACT CONTRACT -->",
@@ -285,6 +290,22 @@ export const renderSelfhostDocsContract = () => {
     SELFHOST_DOC_MARKERS.end,
   ].join("\n");
 };
+
+export const renderSelfhostRunDocsContract = () =>
+  [
+    SELFHOST_RUN_DOC_MARKERS.begin,
+    "```bash",
+    "bun run selfhost:doctor",
+    "docker compose --env-file deploy/selfhost/.env \\",
+    "  -f docker-compose.selfhost.yml config --quiet",
+    "docker compose --env-file deploy/selfhost/.env \\",
+    "  -f docker-compose.selfhost.yml run --rm --no-deps api \\",
+    "  bun /app/apps/api/src/db/migrate.js",
+    "docker compose --env-file deploy/selfhost/.env \\",
+    "  -f docker-compose.selfhost.yml up -d",
+    "```",
+    SELFHOST_RUN_DOC_MARKERS.end,
+  ].join("\n");
 
 export const renderReleaseDocsContract = () =>
   [

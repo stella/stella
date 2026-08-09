@@ -12,6 +12,7 @@ import {
 import {
   isImmutableApplicationImage,
   materializeSelfhostTemplateForValidation,
+  releaseManifestIssues,
   renderSelfhostEnvExample,
   workflowContractIssues,
 } from "./selfhost-tool";
@@ -158,6 +159,36 @@ describe("self-host production environment", () => {
     expect(configured.stderr.toString()).toBe("");
     expect(configured.exitCode).toBe(0);
   });
+});
+
+describe("release manifest contract", () => {
+  const digestArtifact = {
+    reference: `ghcr.io/stella/stella-api@sha256:${"a".repeat(64)}`,
+  };
+
+  test("accepts digest-qualified artifact references", () => {
+    expect(
+      releaseManifestIssues({
+        image: digestArtifact,
+        webImage: digestArtifact,
+      }),
+    ).toEqual([]);
+  });
+
+  test.each(["image", "webImage"])(
+    "rejects a mutable %s reference",
+    (manifestKey) => {
+      expect(
+        releaseManifestIssues({
+          image: digestArtifact,
+          webImage: digestArtifact,
+          [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
+        }),
+      ).toContain(
+        `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
+      );
+    },
+  );
 });
 
 describe("self-host workflow contract", () => {

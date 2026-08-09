@@ -29,9 +29,13 @@ const SUPPORTED_DATABASE_PROTOCOLS = ["postgres:", "postgresql:"] as const;
 
 export const hasSecureDatabaseTransport = (databaseUrl: string) => {
   const parsed = new URL(databaseUrl);
+  if (isLoopbackHostname(parsed.hostname)) {
+    return true;
+  }
+  const sslmodes = parsed.searchParams.getAll("sslmode");
   return (
-    isLoopbackHostname(parsed.hostname) ||
-    ALLOWED_SSLMODES.some((mode) => mode === parsed.searchParams.get("sslmode"))
+    sslmodes.length === 1 &&
+    ALLOWED_SSLMODES.some((mode) => mode === sslmodes.at(0))
   );
 };
 
