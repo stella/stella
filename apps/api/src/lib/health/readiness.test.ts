@@ -5,6 +5,7 @@ import {
   READINESS_DEPENDENCY,
   type ReadinessDependency,
   type ReadinessProbes,
+  probeObjectStorageReadiness,
   runReadinessProbes,
 } from "@/api/lib/health/readiness";
 
@@ -27,6 +28,47 @@ const successfulProbes = (calls: ReadinessDependency[]): ReadinessProbes => ({
 });
 
 describe("API dependency readiness", () => {
+  test("provisions a readable marker without requiring bucket listing", async () => {
+    const calls: string[] = [];
+    let markerExists = false;
+
+    await probeObjectStorageReadiness(
+      {
+        read: async () => {
+          calls.push("read");
+          if (!markerExists) {
+            throw Object.assign(new Error("Access denied"), {
+              name: "AccessDenied",
+            });
+          }
+        },
+        write: async () => {
+          calls.push("write");
+          markerExists = true;
+        },
+      },
+      new AbortController().signal,
+    );
+
+    expect(calls).toEqual(["read", "write", "read"]);
+  });
+
+  test("reads an existing marker without rewriting it", async () => {
+    const calls: string[] = [];
+    await probeObjectStorageReadiness(
+      {
+        read: async () => {
+          calls.push("read");
+        },
+        write: async () => {
+          calls.push("write");
+        },
+      },
+      new AbortController().signal,
+    );
+    expect(calls).toEqual(["read"]);
+  });
+
   test("exercises the declared dependency set in both directions", async () => {
     const calls: ReadinessDependency[] = [];
     expect(await runReadinessProbes(successfulProbes(calls))).toEqual({

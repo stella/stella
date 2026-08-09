@@ -6,7 +6,7 @@ import { fetchWithTimeout } from "@/api/lib/fetch";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { getS3 } from "@/api/lib/s3";
+import { getS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const READINESS_DEPENDENCY = {
@@ -30,6 +30,8 @@ export type ReadinessOutcome =
 
 const PROBE_TIMEOUT_MS = 5000;
 const S3_READINESS_KEY = "system/readiness/v1";
+const S3_READINESS_CONTENT_TYPE = "application/octet-stream";
+const S3_READINESS_BYTES = new Uint8Array();
 let scheduledJobsReady = false;
 
 const probeRedis = async (signal: AbortSignal): Promise<void> => {
@@ -53,8 +55,42 @@ const probeRedis = async (signal: AbortSignal): Promise<void> => {
   }
 };
 
-const probeObjectStorage = async (): Promise<void> => {
-  await getS3().exists(S3_READINESS_KEY);
+type ObjectStorageReadinessProbe = {
+  read: (signal: AbortSignal) => Promise<void>;
+  write: (signal: AbortSignal) => Promise<void>;
+};
+
+export const probeObjectStorageReadiness = async (
+  { read, write }: ObjectStorageReadinessProbe,
+  signal: AbortSignal,
+): Promise<void> => {
+  const existingMarker = await Result.tryPromise({
+    try: async () => await read(signal),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(existingMarker)) {
+    return;
+  }
+  await write(signal);
+  await read(signal);
+};
+
+const objectStorageReadinessProbe = {
+  read: async (signal: AbortSignal) => {
+    await getS3ObjectWithSignal(S3_READINESS_KEY, signal);
+  },
+  write: async (signal: AbortSignal) => {
+    await putS3ObjectWithSignal(
+      S3_READINESS_KEY,
+      S3_READINESS_BYTES,
+      S3_READINESS_CONTENT_TYPE,
+      signal,
+    );
+  },
+} satisfies ObjectStorageReadinessProbe;
+
+const probeObjectStorage = async (signal: AbortSignal): Promise<void> => {
+  await probeObjectStorageReadiness(objectStorageReadinessProbe, signal);
 };
 
 const probeDocumentConverter = async (signal: AbortSignal): Promise<void> => {
