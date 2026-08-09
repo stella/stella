@@ -80,6 +80,7 @@ export const updateTimeEntryHandler = async function* ({
         columns: {
           status: true,
           dateWorked: true,
+          timezoneId: true,
           durationMinutes: true,
           billedMinutes: true,
           narrative: true,
@@ -232,6 +233,7 @@ export const updateTimeEntryHandler = async function* ({
   const updates = {
     ...pickDefined(body, [
       "dateWorked",
+      "timezoneId",
       "durationMinutes",
       "narrative",
       "invoiceNarrative",

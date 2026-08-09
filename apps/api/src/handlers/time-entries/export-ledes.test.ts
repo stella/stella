@@ -161,6 +161,22 @@ describe("exportLedesHandler billing integrity", () => {
     expect(result.error.message).toContain("single currency");
   });
 
+  test("rejects unpriced entries instead of emitting zero-value fee lines", async () => {
+    const result = await runExportResult([
+      timeEntryRow({ currency: "XXX", rateAtEntry: 0 }),
+    ]);
+
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      throw new TypeError("Expected unpriced export to fail");
+    }
+    expect(result.error).toBeInstanceOf(HandlerError);
+    if (!(result.error instanceof HandlerError)) {
+      throw new TypeError("Expected a handler error");
+    }
+    expect(result.error.message).toContain("without an effective rate");
+  });
+
   test("neutralizes delimiter injection in narrative and timekeeper name", async () => {
     let call = 0;
     const scopedDb = asTestRaw<ScopedDb>(async () => {

@@ -19,6 +19,9 @@ import {
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
 
+export const ACTIVE_TIMER_INDEX_NAME =
+  "time_entries_one_active_timer_per_user_idx";
+
 export const timeEntries = p.pgTable(
   "time_entries",
   {
@@ -88,7 +91,7 @@ export const timeEntries = p.pgTable(
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
     p.index("time_entries_invoice_idx").on(table.invoiceId),
     p
-      .uniqueIndex("time_entries_one_active_timer_per_user_idx")
+      .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
       .on(table.userId)
       .where(sql`${table.timerStartedAt} IS NOT NULL`),
     p.check(

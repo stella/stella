@@ -3,6 +3,7 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
+  ACTIVE_TIMER_INDEX_NAME,
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
@@ -12,9 +13,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStartBodySchema = t.Object({
@@ -79,88 +81,107 @@ const timerStart = createSafeHandler(
 
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the workspace time entry limit.
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`,
-        );
-        const activeTimerCount = await tx.$count(
-          timeEntries,
-          and(
-            eq(timeEntries.userId, user.id),
-            isNotNull(timeEntries.timerStartedAt),
-            eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
-            eq(timeEntries.status, BILLING_STATUS.DRAFT),
-          ),
-        );
-        if (activeTimerCount >= LIMITS.activeTimersPerUser) {
-          return { type: "active_timer" as const };
-        }
+    const txResult = await safeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`,
+      );
+      const activeTimerCount = await tx.$count(
+        timeEntries,
+        and(
+          eq(timeEntries.userId, user.id),
+          isNotNull(timeEntries.timerStartedAt),
+          eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
+          eq(timeEntries.status, BILLING_STATUS.DRAFT),
+        ),
+      );
+      if (activeTimerCount >= LIMITS.activeTimersPerUser) {
+        return { type: "active_timer" as const };
+      }
 
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
-        const totalEntries = await tx.$count(
-          timeEntries,
-          eq(timeEntries.workspaceId, workspaceId),
-        );
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      const totalEntries = await tx.$count(
+        timeEntries,
+        eq(timeEntries.workspaceId, workspaceId),
+      );
 
-        if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
-          return { type: "limit" as const };
-        }
+      if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
+        return { type: "limit" as const };
+      }
 
-        const [entry] = await tx
-          .insert(timeEntries)
-          .values({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            userId: user.id,
-            workItemId: workItemId ?? null,
-            dateWorked: todayStr,
-            timezoneId: body.timezoneId,
-            durationMinutes: 0,
-            billedMinutes: 0,
-            rateAtEntry: cents(rateAtEntry),
-            currency,
-            narrative: body.narrative ?? "",
-            source: TIME_ENTRY_SOURCE.TIMER,
-            status: BILLING_STATUS.DRAFT,
-            timerStartedAt: now,
-          })
-          .returning({
-            id: timeEntries.id,
-            timerStartedAt: timeEntries.timerStartedAt,
-          });
+      const [entry] = await tx
+        .insert(timeEntries)
+        .values({
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+          userId: user.id,
+          workItemId: workItemId ?? null,
+          dateWorked: todayStr,
+          timezoneId: body.timezoneId,
+          durationMinutes: 0,
+          billedMinutes: 0,
+          rateAtEntry: cents(rateAtEntry),
+          currency,
+          narrative: body.narrative ?? "",
+          source: TIME_ENTRY_SOURCE.TIMER,
+          status: BILLING_STATUS.DRAFT,
+          timerStartedAt: now,
+        })
+        .returning({
+          id: timeEntries.id,
+          timerStartedAt: timeEntries.timerStartedAt,
+        });
 
-        if (entry) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-            resourceId: entry.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  workItemId: workItemId ?? null,
-                  dateWorked: todayStr,
-                  source: TIME_ENTRY_SOURCE.TIMER,
-                  status: BILLING_STATUS.DRAFT,
-                  timerStartedAt: now.toISOString(),
-                  rateAtEntry: cents(rateAtEntry),
-                  currency,
-                },
+      if (entry) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: entry.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                workItemId: workItemId ?? null,
+                dateWorked: todayStr,
+                source: TIME_ENTRY_SOURCE.TIMER,
+                status: BILLING_STATUS.DRAFT,
+                timerStartedAt: now.toISOString(),
+                rateAtEntry: cents(rateAtEntry),
+                currency,
               },
             },
-          });
-        }
+          },
+        });
+      }
 
-        return entry
-          ? { type: "created" as const, entry }
-          : { type: "limit" as const };
-      }),
-    );
+      return entry
+        ? { type: "created" as const, entry }
+        : { type: "limit" as const };
+    });
 
-    if (txResult.type === "active_timer") {
+    if (Result.isError(txResult)) {
+      if (
+        DatabaseError.is(txResult.error) &&
+        isPgConstraintError(
+          txResult.error.cause,
+          PG_ERROR.UNIQUE_VIOLATION,
+          ACTIVE_TIMER_INDEX_NAME,
+        )
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "You already have an active timer. Stop it first.",
+          }),
+        );
+      }
+      return Result.err(txResult.error);
+    }
+
+    const txValue = txResult.value;
+
+    if (txValue.type === "active_timer") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -169,7 +190,7 @@ const timerStart = createSafeHandler(
       );
     }
 
-    if (txResult.type === "limit") {
+    if (txValue.type === "limit") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -179,8 +200,8 @@ const timerStart = createSafeHandler(
     }
 
     return Result.ok({
-      id: txResult.entry.id,
-      timerStartedAt: txResult.entry.timerStartedAt?.toISOString(),
+      id: txValue.entry.id,
+      timerStartedAt: txValue.entry.timerStartedAt?.toISOString(),
     });
   },
 );

@@ -12,6 +12,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -167,6 +168,14 @@ export const exportLedesHandler = async ({
       row.status === BILLING_STATUS.WRITTEN_OFF
     ) {
       continue;
+    }
+    if (row.currency === UNPRICED_TIME_ENTRY_CURRENCY) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "LEDES export contains time entries without an effective rate",
+        }),
+      );
     }
     const totalCents = prorateHourlyCents({
       billedMinutes: row.billedMinutes,

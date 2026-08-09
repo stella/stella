@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -9,6 +9,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import updateTimeEntryById from "./update";
 
 type UpdateTimeEntryCtx = Parameters<typeof updateTimeEntryById.handler>[0];
+
+afterEach(() => {
+  setSystemTime();
+});
 
 const createContext = ({
   safeDb,
@@ -158,5 +162,66 @@ describe("updateTimeEntryById", () => {
     });
     expect(appliedUpdates).not.toHaveProperty("rateAtEntry");
     expect(appliedUpdates).not.toHaveProperty("currency");
+  });
+
+  test("persists the timezone used to validate an edited date", async () => {
+    setSystemTime(new Date("2026-08-09T12:00:00.000Z"));
+    let appliedUpdates: Record<string, unknown> | undefined;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        timeEntries: {
+          findFirst: async () => ({
+            status: BILLING_STATUS.DRAFT,
+            dateWorked: "2026-08-07",
+            timezoneId: "UTC",
+            durationMinutes: 30,
+            billedMinutes: 30,
+            narrative: "Original narrative",
+            invoiceNarrative: null,
+            billable: false,
+            noCharge: false,
+            workItemId: null,
+            userId: toSafeId<"user">("user_test"),
+            taskCode: null,
+            activityCode: null,
+            rateAtEntry: 0,
+            currency: "XXX",
+          }),
+        },
+      },
+      update: () => ({
+        set: (updates: Record<string, unknown>) => {
+          appliedUpdates = updates;
+          return {
+            where: () => ({
+              returning: async () => [
+                { id: toSafeId<"timeEntry">("time_entry_test") },
+              ],
+            }),
+          };
+        },
+      }),
+    });
+
+    const result = await updateTimeEntryById.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          id: toSafeId<"timeEntry">("time_entry_test"),
+          dateWorked: "2026-08-08",
+          timezoneId: "Europe/Prague",
+        },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+
+    expect(result).toEqual({
+      id: toSafeId<"timeEntry">("time_entry_test"),
+    });
+    expect(appliedUpdates).toMatchObject({
+      dateWorked: "2026-08-08",
+      timezoneId: "Europe/Prague",
+    });
   });
 });
