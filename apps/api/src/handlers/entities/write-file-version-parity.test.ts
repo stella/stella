@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { REVIEWED_VERSION_MUTATION_OWNERS } from "@/api/lib/entity-versions/version-write-ownership-policy";
+
 const API_SOURCE_ROOT = path.resolve(import.meta.dir, "../..");
 
 const FILE_VERSION_PERSISTENCE_PATHS = {
@@ -49,6 +51,15 @@ const findImporters = async (moduleSpecifier: string): Promise<string[]> => {
 };
 
 describe("entity-version persistence ownership", () => {
+  test("keeps every reviewed direct mutation owner attached to a production source", () => {
+    const declaredOwners = Object.keys(REVIEWED_VERSION_MUTATION_OWNERS).sort();
+    expect(declaredOwners).toEqual(
+      productionSourcePaths
+        .filter((sourcePath) => sourcePath in REVIEWED_VERSION_MUTATION_OWNERS)
+        .sort(),
+    );
+  });
+
   test("binds every ordinary byte transport to a declared persistence boundary", async () => {
     const [bufferConsumers, directTransactionConsumers] = await Promise.all([
       findImporters(
