@@ -1,0 +1,311 @@
+// Passive regression fixture for
+// `require-stream-reader-disposal/require-stream-reader-disposal`.
+//
+// Rule-specific disables mark acquisitions the rule MUST reject. If detection
+// regresses, unused-directive reporting fails this fixture. Unannotated calls
+// cover proven disposal, ownership transfer, and provenance boundaries.
+
+declare const stopEarly: boolean;
+declare const streamFailure: Error;
+
+// MUST flag: a locally owned reader keeps its stream locked when it is neither
+// transferred nor released in a finally block.
+export const leakedReader = async (stream: ReadableStream<Uint8Array>) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: locally owned reader is never disposed
+  const reader = stream.getReader();
+  await reader.read();
+};
+
+// MUST flag: a release after the loop is bypassed by read rejection and is not
+// an unconditional lifecycle boundary.
+export const releaseOutsideFinally = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: release is not protected by finally
+  const reader = stream.getReader();
+  while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+    const result = await reader.read();
+    if (result.done) {
+      break;
+    }
+  }
+  reader.releaseLock();
+};
+
+// MUST flag: an early return can stop the producer before EOF; releasing the
+// lock does not cancel that producer.
+export const earlyReturnWithoutCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: early return releases without cancelling
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+      if (stopEarly) {
+        return;
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: a non-EOF break abandons the producer even though finally
+// releases the reader lock.
+export const breakWithoutCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: non-EOF break requires cancellation
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done || stopEarly) {
+        break;
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// Allowed: read rejection means the stream is already errored. The reader must
+// still release its lock, but there is no active producer left to cancel.
+export const naturalReadErrorRelease = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: an explicit throw after a partial read leaves the producer active
+// unless cancellation is guaranteed before finally releases the lock.
+export const throwWithoutCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: explicit error exit releases without cancelling
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+    throw streamFailure;
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: cancellation on only one branch does not cover the successful
+// partial-read path through the other branch.
+export const branchOnlyCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: conditional cancel does not dominate every partial-read path
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+    if (stopEarly) {
+      await reader.cancel().catch(() => undefined);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: consumer cancellation resumes an async generator at finally, so
+// releaseLock without cancel leaves the producer active.
+export async function* generatorWithoutCancel(
+  stream: ReadableStream<Uint8Array>,
+) {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: generator consumer can stop at yield without cancelling
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+      yield result.value;
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Allowed: EOF is the only ordinary loop exit, read failures cancel in catch,
+// and finally releases the lock on both paths.
+export const consumeToEnd = async (stream: ReadableStream<Uint8Array>) => {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// Allowed: unconditional cancellation in finally covers early return and read
+// rejection before releaseLock runs.
+export const cancelEarlyExit = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    const result = await reader.read();
+    if (!result.done && stopEarly) {
+      return;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
+// Allowed: the cancel immediately after the one-shot read dominates every
+// successful partial-read path; read rejection already errors the stream.
+export const cancelAfterOneShotRead = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+    await reader.cancel().catch(() => undefined);
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// Allowed: cancellation in the same branch dominates its early return, while
+// EOF is a terminal stream state that needs only lock release.
+export const cancelBeforeReturn = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+      if (stopEarly) {
+        await reader.cancel().catch(() => undefined);
+        return;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// Allowed: immutable aliases preserve the reader identity through disposal.
+export const aliasedReaderCleanup = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  const ownedReader = reader;
+  try {
+    await ownedReader.read();
+  } finally {
+    await ownedReader.cancel().catch(() => undefined);
+    ownedReader.releaseLock();
+  }
+};
+
+// Allowed: Response.body is a proven ReadableStream source rather than a
+// method-name-only match.
+export const responseBodyCleanup = async (response: Response) => {
+  if (response.body === null) {
+    return;
+  }
+  const reader = response.body.getReader();
+  try {
+    await reader.read();
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
+// Allowed: returning the reader explicitly transfers its lifecycle to the
+// caller, both directly and through an immutable alias.
+export const transferReader = (stream: ReadableStream<Uint8Array>) =>
+  stream.getReader();
+
+export const transferAliasedReader = (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  const transferredReader = reader;
+  return transferredReader;
+};
+
+// Allowed: consumer cancellation of an async generator reaches finally, where
+// cancel runs before releaseLock.
+export async function* cancellableGenerator(
+  stream: ReadableStream<Uint8Array>,
+) {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+      yield result.value;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+// Allowed: method names do not establish Web Streams provenance.
+export const unrelatedReader = (source: {
+  getReader: () => { read: () => Promise<string> };
+}) => {
+  const reader = source.getReader();
+  return reader.read();
+};
+
+// Allowed: a locally shadowed constructor is not the browser ReadableStream.
+export const shadowedReadableStream = (
+  ReadableStream: new () => { getReader: () => { read: () => string } },
+) => {
+  const reader = new ReadableStream().getReader();
+  return reader.read();
+};

@@ -547,6 +547,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
@@ -958,6 +959,20 @@ export default defineConfig({
       ],
       rules: {
         "no-path-prefix-containment/no-path-prefix-containment": "error",
+      },
+    },
+    {
+      // Web Streams readers own a lock and, on premature termination, the
+      // upstream producer. Keep that lifecycle paired across every runtime.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-stream-reader-disposal.fixture.ts",
+      ],
+      rules: {
+        "require-stream-reader-disposal/require-stream-reader-disposal":
+          "error",
       },
     },
     {

@@ -8,52 +8,96 @@
 // after a fresher call already won — the classic out-of-order-response race.
 //
 // Detection is intentionally lexical and scoped to the queryFn's own
-// function body; it does not follow calls into helper functions or into
-// nested closures defined inside the queryFn (e.g. a `.then(...)` callback).
+// function body. Besides inline functions, it resolves an identifier through
+// stable same-file function declarations, const function initializers, and
+// const aliases. It does not follow calls made by the queryFn into another
+// helper or into nested closures defined inside it (e.g. a `.then(...)`
+// callback).
 // Flags a `queryFn` property when:
 //   - It sits inside an object that also has a `queryKey` property (covers
 //     `useQuery({...})`, `useInfiniteQuery({...})`, `queryOptions({...})`,
 //     `infiniteQueryOptions({...})`, and factory functions that return one
 //     of those), and
-//   - Its value is an inline function whose body contains a *direct*
-//     `fetch(...)` call or an Eden `api.*` call chain (`api.foo.bar.get(...)`,
-//     rooted at the `api` client from `@/lib/api`), and
+//   - Its value is an inline function or one statically resolved same-file
+//     function whose body contains a *direct* browser-global `fetch(...)`
+//     call or an Eden `api.*` call chain (`api.foo.bar.get(...)`, rooted at
+//     the named `api` import from `@/lib/api`), and
 //   - Its first parameter does not destructure `signal`.
 //
 // Flags:
 //   queryFn: async () => { return await fetch(url); }
 //   queryFn: async () => { const r = await api.things.get(); return r.data; }
 //   queryFn: async ({ pageParam }) => await api.things.get({ query: { pageParam } })
+//   const fetchThing = async () => await fetch(url);
+//   queryFn: fetchThing
 //
 // Allows:
 //   queryFn: async ({ signal }) => await fetch(url, { signal })
 //   queryFn: async ({ signal }) => await api.things.get({ fetch: { signal } })
-//   queryFn: fetchThing               // identifier reference — not inspected;
-//                                      // audit the helper's own signature by hand
+//   queryFn: importedFetchThing       // queryFn imports are deliberately opaque
+//   queryFn: mutableFetchThing        // mutable/reassigned queryFn bindings are opaque
+//   queryFn: async (fetch) => await fetch(url) // local fetch is unrelated
+//   queryFn: async (api) => await api.cache.get() // local api is unrelated
 //   queryFn: async () => await loadFromWorker() // no direct fetch/api call
 //   { queryFn: async () => await fetch(url) }   // no sibling `queryKey` —
 //                                                // not a query-options object
 //
-// A queryFn that only calls a same-file or imported helper is not flagged
-// even if that helper itself drops the signal — verifying transitively would
-// require whole-program call-graph analysis, which this rule deliberately
-// avoids to stay fast and low-noise. Audit new helpers by hand: give them a
-// `{ signal }: { signal: AbortSignal }` parameter and thread it into
-// `fetch`/Eden calls the same way the queryFn case does.
+// A queryFn that only calls another same-file or imported helper is not
+// flagged even if that nested helper drops the signal: verifying transitively
+// would require whole-program call-graph analysis, which this rule
+// deliberately avoids to stay fast and low-noise. Audit new nested helpers by
+// hand: give them a `{ signal }: { signal: AbortSignal }` parameter and thread
+// it into `fetch`/Eden calls the same way the queryFn case does.
 //
 // Escape hatch: `// SAFETY:` + `// oxlint-disable-next-line
 // require-query-signal/require-query-signal` when the call genuinely cannot
 // race (e.g. a one-shot dev-only probe) or the signal already reaches the
 // call through an opaque context identifier instead of a destructure.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier } from "./utils.ts";
+import {
+  getImportedName,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+  isStringLiteral,
+} from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
+  "FunctionDeclaration",
   "FunctionExpression",
 ]);
+
+type Scope = {
+  set: Map<string, ScopeVariable>;
+  upper: Scope | null;
+};
+
+type ScopeVariable = {
+  defs: {
+    node: unknown;
+    parent: unknown;
+    type: string;
+  }[];
+  references: {
+    init?: boolean;
+    isWrite?: () => boolean;
+  }[];
+};
+
+type NetworkCall = {
+  kind: NetworkKind;
+  node: Ranged;
+  owner: AstNode;
+};
+
+type NetworkKind = "eden" | "fetch";
+
+const API_MODULE = "@/lib/api";
+const GLOBAL_FETCH_HOSTS = new Set(["globalThis", "self", "window"]);
 
 const isFunctionNode = (node) => FUNCTION_TYPES.has(node?.type);
 
@@ -97,14 +141,11 @@ const skipWrapperAncestors = (node) => {
   return current;
 };
 
-// True when `fn` is the direct value of a `queryFn` property inside an
-// object literal that also declares a `queryKey` property.
-const isQueryFnFunction = (fn) => {
-  const property = skipWrapperAncestors(fn.parent);
-  if (property?.type !== "Property") {
-    return false;
-  }
-  if (getPropertyName(property.key) !== "queryFn") {
+const isQueryFnProperty = (property) => {
+  if (
+    property?.type !== "Property" ||
+    getPropertyName(property.key) !== "queryFn"
+  ) {
     return false;
   }
   const objectExpression = property.parent;
@@ -116,6 +157,13 @@ const isQueryFnFunction = (fn) => {
       sibling?.type === "Property" &&
       getPropertyName(sibling.key) === "queryKey",
   );
+};
+
+// True when `fn` is the direct value of a `queryFn` property inside an
+// object literal that also declares a `queryKey` property.
+const isQueryFnFunction = (fn) => {
+  const property = skipWrapperAncestors(fn.parent);
+  return isQueryFnProperty(property);
 };
 
 // TanStack Query always invokes queryFn with one context argument; the
@@ -141,10 +189,10 @@ const signalBindingName = (fn) => {
   return null;
 };
 
-const isFetchCallee = (callee) => {
+const isFetchCallee = (callee, isGlobalReference) => {
   const unwrapped = unwrapTS(callee);
   if (isIdentifier(unwrapped, "fetch")) {
-    return true;
+    return isGlobalReference(unwrapped, "fetch");
   }
   if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
@@ -154,9 +202,9 @@ const isFetchCallee = (callee) => {
   }
   const object = unwrapTS(unwrapped.object);
   return (
-    isIdentifier(object, "globalThis") ||
-    isIdentifier(object, "window") ||
-    isIdentifier(object, "self")
+    isIdentifier(object) &&
+    GLOBAL_FETCH_HOSTS.has(object.name) &&
+    isGlobalReference(object, object.name)
   );
 };
 
@@ -188,7 +236,7 @@ const HTTP_VERBS = new Set(["get", "post", "put", "patch", "delete", "head"]);
 // The Eden client is always imported as `api` from `@/lib/api` (see
 // CLAUDE.md). A call chain rooted at that identifier and ending in an HTTP
 // verb hits the network.
-const isEdenApiCallee = (callee) => {
+const isEdenApiCallee = (callee, isEdenApiRoot) => {
   const unwrapped = unwrapTS(callee);
   if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
@@ -197,7 +245,7 @@ const isEdenApiCallee = (callee) => {
   if (propertyName === null || !HTTP_VERBS.has(propertyName)) {
     return false;
   }
-  return rootIdentifier(unwrapped.object)?.name === "api";
+  return isEdenApiRoot(rootIdentifier(unwrapped.object));
 };
 
 const containsSignalIdentifier = (node, bindingName) => {
@@ -237,8 +285,8 @@ const getObjectPropertyValue = (node, name) => {
   return property?.value ?? null;
 };
 
-const callThreadsSignal = (node, bindingName) => {
-  if (isFetchCallee(node.callee)) {
+const callThreadsSignal = (node, bindingName, kind: NetworkKind) => {
+  if (kind === "fetch") {
     return containsSignalIdentifier(
       getObjectPropertyValue(node.arguments.at(1), "signal"),
       bindingName,
@@ -271,24 +319,172 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const networkCalls = new Array<NetworkCall>();
+        const queryFnReferences = new Array<
+          AstNode & { type: "Identifier"; name: string }
+        >();
+
+        const resolveVariable = (
+          identifier: AstNode & { type: "Identifier"; name: string },
+        ): ScopeVariable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const isGlobalReference = (node: unknown, name: string): boolean => {
+          if (!isIdentifier(node, name)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          return variable === null || variable.defs.length === 0;
+        };
+
+        const isEdenApiRoot = (node: unknown): boolean => {
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || variable.defs.length !== 1) {
+            return false;
+          }
+          const definition = variable.defs.at(0);
+          return (
+            definition?.type === "ImportBinding" &&
+            isAstNode(definition.node) &&
+            getImportedName(definition.node) === "api" &&
+            isAstNode(definition.parent) &&
+            definition.parent.type === "ImportDeclaration" &&
+            isStringLiteral(definition.parent.source) &&
+            definition.parent.source.value === API_MODULE
+          );
+        };
+
+        const networkKind = (callee: unknown): NetworkKind | null => {
+          if (isFetchCallee(callee, isGlobalReference)) {
+            return "fetch";
+          }
+          return isEdenApiCallee(callee, isEdenApiRoot) ? "eden" : null;
+        };
+
+        const hasReassignment = (variable: ScopeVariable): boolean =>
+          variable.references.some(
+            (reference) =>
+              reference.init !== true && reference.isWrite?.() === true,
+          );
+
+        const resolveLocalQueryFunction = (
+          identifier: AstNode & { type: "Identifier"; name: string },
+          visited = new Set<ScopeVariable>(),
+        ): AstNode | null => {
+          const variable = resolveVariable(identifier);
+          if (
+            variable === null ||
+            variable.defs.length !== 1 ||
+            visited.has(variable) ||
+            hasReassignment(variable)
+          ) {
+            return null;
+          }
+          visited.add(variable);
+
+          const definition = variable.defs.at(0);
+          if (
+            definition?.type === "FunctionName" &&
+            isAstNode(definition.node) &&
+            definition.node.type === "FunctionDeclaration"
+          ) {
+            return definition.node;
+          }
+          if (
+            definition?.type !== "Variable" ||
+            !isAstNode(definition.node) ||
+            definition.node.type !== "VariableDeclarator" ||
+            !isIdentifier(definition.node.id, identifier.name) ||
+            !isAstNode(definition.parent) ||
+            definition.parent.type !== "VariableDeclaration" ||
+            definition.parent.kind !== "const"
+          ) {
+            return null;
+          }
+
+          const initializer = unwrapTS(definition.node.init);
+          if (isFunctionNode(initializer)) {
+            return initializer;
+          }
+          return isIdentifier(initializer)
+            ? resolveLocalQueryFunction(initializer, visited)
+            : null;
+        };
+
         return {
+          before() {
+            networkCalls.length = 0;
+            queryFnReferences.length = 0;
+          },
+          Property(node) {
+            if (!isQueryFnProperty(node)) {
+              return;
+            }
+            const value = unwrapTS(node.value);
+            if (isIdentifier(value)) {
+              queryFnReferences.push(value);
+            }
+          },
           CallExpression(node) {
-            const callee = node.callee;
-            if (!isFetchCallee(callee) && !isEdenApiCallee(callee)) {
+            const kind = networkKind(node.callee);
+            if (kind === null) {
               return;
             }
 
             const owner = nearestEnclosingFunction(node);
-            const bindingName = owner ? signalBindingName(owner) : null;
+            if (!isAstNode(owner)) {
+              return;
+            }
+
+            if (!isQueryFnFunction(owner)) {
+              networkCalls.push({ kind, node, owner });
+              return;
+            }
+
+            const bindingName = signalBindingName(owner);
             if (
-              !owner ||
-              !isQueryFnFunction(owner) ||
-              (bindingName !== null && callThreadsSignal(node, bindingName))
+              bindingName !== null &&
+              callThreadsSignal(node, bindingName, kind)
             ) {
               return;
             }
 
             context.report({ node, messageId: "missingQuerySignal" });
+          },
+          "Program:exit"() {
+            const queryFunctions = new Set<AstNode>();
+            for (const reference of queryFnReferences) {
+              const queryFunction = resolveLocalQueryFunction(reference);
+              if (queryFunction !== null) {
+                queryFunctions.add(queryFunction);
+              }
+            }
+
+            for (const { kind, node, owner } of networkCalls) {
+              if (!queryFunctions.has(owner)) {
+                continue;
+              }
+              const bindingName = signalBindingName(owner);
+              if (
+                bindingName !== null &&
+                callThreadsSignal(node, bindingName, kind)
+              ) {
+                continue;
+              }
+              context.report({ node, messageId: "missingQuerySignal" });
+            }
           },
         };
       },

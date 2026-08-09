@@ -1,4 +1,8 @@
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import {
+  eslintCompatPlugin,
+  type Ranged,
+  type Variable,
+} from "@oxlint/plugins";
 // Prevents Eden treaty responses from being consumed through promise
 // chaining or discarded outright, either of which lets a failed API call
 // masquerade as success.
@@ -13,13 +17,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // `await api...;` expression statement or a `void api...;` discard drops
 // the resolved `{ data, error }` on the floor the same way.
 //
-// Coverage is intentionally narrow: this rule flags chained consumption
-// (`.then`/`.catch`) and *direct* discards (a bare `await api...;`
-// statement, a bare fire-and-forget `api...;` statement with no
-// `await`/`void` at all, or `void api...`) of an Eden call's own result. It
-// does NOT do flow analysis — `const response = api...; /* response never
-// checked */` is out of scope, because tracing whether an assigned variable
-// is later inspected requires data-flow tracking this rule does not attempt.
+// Assigned awaited responses are followed through their local lexical scope.
+// Every path must inspect `.error`, destructure `error`, or pass the whole
+// response to the canonical `unwrapEden` adapter before reading `.data`,
+// escaping or returning the response, reassigning its binding, or leaving the
+// scope. The analysis deliberately stays local: passing an unchecked response
+// to an opaque helper is an escape rather than an assumed proof.
 //
 // Flags:
 //   api.tasks({ id }).patch(body).then((response) => { ... })
@@ -32,14 +35,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Allows:
 //   const response = await api.tasks({ id }).patch(body);
 //   if (response.error) { ... }
+//   return response.data
+//   const { data, error } = await api.tasks.get()
+//   return unwrapEden(response)
 //   promise.then(cb)            // chain rooted at a non-`api` identifier
 //   apiResult.then(cb)          // `api` call already assigned to a variable;
 //                                // trace the call site where the variable
 //                                // was produced instead
-//   const response = await api...;  // assigned; not a direct discard, and
-//                                     // out of scope per above (no flow
-//                                     // analysis of whether `response.error`
-//                                     // is later checked)
 //   const api = makeScopedClient(); api.tasks({ id }).patch(body);
 //                                     // a local `api` that shadows the
 //                                     // `@/lib/api` import resolves to a
@@ -82,11 +84,30 @@ import {
 } from "./utils.ts";
 
 const API_MODULE = "@/lib/api";
+const ERROR_ADAPTER_MODULE = "@/lib/errors/api";
+const APPROVED_RESPONSE_ADAPTERS = new Set(["unwrapEden"]);
+const EDEN_HTTP_METHODS = new Set([
+  "delete",
+  "get",
+  "head",
+  "options",
+  "patch",
+  "post",
+  "put",
+]);
+
+type FlowState = "dead" | "handled" | "unhandled";
+
+type FlowOutcome = {
+  states: Set<FlowState>;
+  unsafe: boolean;
+  unsafeExit?: AstNode | undefined;
+};
 
 // Same untyped-AST-node shape as utils.ts's private `AstNode`: a `type`
 // discriminant plus an index signature so every other property reads back
 // as `unknown` (never `any`) without an unsafe cast.
-type AstNode = { type: string } & Record<string, unknown>;
+type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
 const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
@@ -154,10 +175,20 @@ export default eslintCompatPlugin({
             "let a failed request masquerade as success. Use `const " +
             "response = await api...; if (response.error) { ... }` " +
             "(toAPIError for the message) instead.",
+          requireEdenAssignedErrorCheck:
+            "This assigned Eden response can be consumed or leave scope " +
+            "without its error channel being inspected. Check `.error`, " +
+            "destructure `{ data, error }`, or pass the response to the " +
+            "imported `unwrapEden()` adapter before using `.data` or " +
+            "letting the response escape.",
         },
       },
       createOnce(context) {
         const apiLocalNames = new Set<string>();
+        const assignedResults: {
+          binding: Variable;
+          node: Ranged;
+        }[] = [];
 
         // Resolve the `Variable` an Identifier reference binds to by
         // walking the scope chain outward from its use site — the same
@@ -260,9 +291,655 @@ export default eslintCompatPlugin({
           });
         };
 
+        const awaitedTerminalEdenCall = (node: unknown): AstNode | null => {
+          const awaited = unwrapExpression(node);
+          if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
+            return null;
+          }
+          const call = unwrapExpression(awaited.argument);
+          if (!isAstNode(call) || call.type !== "CallExpression") {
+            return null;
+          }
+          const callee = unwrapExpression(call.callee);
+          if (!isAstNode(callee) || callee.type !== "MemberExpression") {
+            return null;
+          }
+          const method = getPropertyName(callee.property);
+          if (method === null || !EDEN_HTTP_METHODS.has(method)) {
+            return null;
+          }
+          return isGenuineApiRoot(getChainRoot(call)) ? call : null;
+        };
+
+        const isApprovedResponseAdapter = (node: unknown): boolean => {
+          const callee = unwrapExpression(node);
+          if (!isIdentifier(callee)) {
+            return false;
+          }
+          const variable = resolveVariable(callee);
+          return (
+            variable !== null &&
+            variable.defs.some((definition) => {
+              if (
+                definition.type !== "ImportBinding" ||
+                !isAstNode(definition.node) ||
+                !isAstNode(definition.parent) ||
+                definition.parent.type !== "ImportDeclaration" ||
+                !isStringLiteral(definition.parent.source) ||
+                definition.parent.source.value !== ERROR_ADAPTER_MODULE
+              ) {
+                return false;
+              }
+              const importedName = getImportedName(definition.node);
+              return (
+                importedName !== null &&
+                APPROVED_RESPONSE_ADAPTERS.has(importedName)
+              );
+            })
+          );
+        };
+
+        const isBindingIdentifier = (
+          node: unknown,
+          binding: unknown,
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          return (
+            isIdentifier(expression) && resolveVariable(expression) === binding
+          );
+        };
+
+        const hasUnhandled = (states: ReadonlySet<FlowState>): boolean =>
+          states.has("unhandled");
+
+        const handledStates = (
+          states: ReadonlySet<FlowState>,
+        ): Set<FlowState> => {
+          const next = new Set<FlowState>();
+          for (const state of states) {
+            next.add(state === "unhandled" ? "handled" : state);
+          }
+          return next;
+        };
+
+        const deadStates = (states: ReadonlySet<FlowState>): Set<FlowState> => {
+          const next = new Set<FlowState>();
+          if (states.size > 0) {
+            next.add("dead");
+          }
+          return next;
+        };
+
+        const mergeStates = (
+          ...stateSets: readonly ReadonlySet<FlowState>[]
+        ): Set<FlowState> => {
+          const merged = new Set<FlowState>();
+          for (const states of stateSets) {
+            for (const state of states) {
+              merged.add(state);
+            }
+          }
+          return merged;
+        };
+
+        const containsBindingReference = (
+          node: unknown,
+          binding: unknown,
+          seen = new Set<unknown>(),
+        ): boolean => {
+          if (!isAstNode(node) || seen.has(node)) {
+            return false;
+          }
+          seen.add(node);
+          if (isBindingIdentifier(node, binding)) {
+            return true;
+          }
+          for (const [key, value] of Object.entries(node)) {
+            if (key === "parent") {
+              continue;
+            }
+            if (Array.isArray(value)) {
+              if (
+                value.some((child) =>
+                  containsBindingReference(child, binding, seen),
+                )
+              ) {
+                return true;
+              }
+              continue;
+            }
+            if (containsBindingReference(value, binding, seen)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        const childNodes = (node: AstNode): AstNode[] => {
+          const children: AstNode[] = [];
+          for (const [key, value] of Object.entries(node)) {
+            if (key === "parent") {
+              continue;
+            }
+            if (Array.isArray(value)) {
+              for (const child of value) {
+                if (isAstNode(child)) {
+                  children.push(child);
+                }
+              }
+              continue;
+            }
+            if (isAstNode(value)) {
+              children.push(value);
+            }
+          }
+          return children;
+        };
+
+        const patternProperties = (pattern: unknown): Set<string> => {
+          const properties = new Set<string>();
+          if (!isAstNode(pattern) || pattern.type !== "ObjectPattern") {
+            return properties;
+          }
+          const patternItems = Array.isArray(pattern.properties)
+            ? pattern.properties
+            : [];
+          for (const property of patternItems) {
+            if (!isAstNode(property) || property.type !== "Property") {
+              continue;
+            }
+            const name = getPropertyName(property.key);
+            if (name !== null) {
+              properties.add(name);
+            }
+          }
+          return properties;
+        };
+
+        const analyzeExpression = (
+          node: unknown,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const expression = unwrapExpression(node);
+          if (!isAstNode(expression)) {
+            return { states: new Set(states), unsafe: false };
+          }
+
+          if (isBindingIdentifier(expression, binding)) {
+            return {
+              states: new Set(states),
+              unsafe: hasUnhandled(states),
+            };
+          }
+
+          // `typeof response` observes only the binding's runtime kind; it
+          // neither consumes nor exports the Eden response. Keeping it
+          // neutral also gives the scope-completion fixture a non-vacuous
+          // use without pretending that it checks the error channel.
+          if (
+            expression.type === "UnaryExpression" &&
+            expression.operator === "typeof" &&
+            isBindingIdentifier(expression.argument, binding)
+          ) {
+            return { states: new Set(states), unsafe: false };
+          }
+
+          if (expression.type === "MemberExpression") {
+            if (isBindingIdentifier(expression.object, binding)) {
+              const property = getPropertyName(expression.property);
+              if (property === "error") {
+                return { states: handledStates(states), unsafe: false };
+              }
+              return {
+                states: new Set(states),
+                unsafe: hasUnhandled(states),
+              };
+            }
+          }
+
+          if (
+            expression.type === "ArrowFunctionExpression" ||
+            expression.type === "FunctionExpression" ||
+            expression.type === "FunctionDeclaration"
+          ) {
+            return {
+              states: new Set(states),
+              unsafe:
+                hasUnhandled(states) &&
+                containsBindingReference(expression, binding),
+            };
+          }
+
+          if (
+            expression.type === "CallExpression" ||
+            expression.type === "NewExpression"
+          ) {
+            let current = new Set(states);
+            let unsafe = false;
+            const approved = isApprovedResponseAdapter(expression.callee);
+            const calleeOutcome = analyzeExpression(
+              expression.callee,
+              current,
+              binding,
+            );
+            current = calleeOutcome.states;
+            unsafe ||= calleeOutcome.unsafe;
+            const argumentsList = Array.isArray(expression.arguments)
+              ? expression.arguments
+              : [];
+            for (const argument of argumentsList) {
+              if (isBindingIdentifier(argument, binding)) {
+                if (approved) {
+                  current = handledStates(current);
+                } else {
+                  unsafe ||= hasUnhandled(current);
+                }
+                continue;
+              }
+              const outcome = analyzeExpression(argument, current, binding);
+              current = outcome.states;
+              unsafe ||= outcome.unsafe;
+            }
+            return { states: current, unsafe };
+          }
+
+          if (expression.type === "ConditionalExpression") {
+            const test = analyzeExpression(expression.test, states, binding);
+            const consequent = analyzeExpression(
+              expression.consequent,
+              test.states,
+              binding,
+            );
+            const alternate = analyzeExpression(
+              expression.alternate,
+              test.states,
+              binding,
+            );
+            return {
+              states: mergeStates(consequent.states, alternate.states),
+              unsafe: test.unsafe || consequent.unsafe || alternate.unsafe,
+            };
+          }
+
+          if (expression.type === "LogicalExpression") {
+            const left = analyzeExpression(expression.left, states, binding);
+            const right = analyzeExpression(
+              expression.right,
+              left.states,
+              binding,
+            );
+            return {
+              states: mergeStates(left.states, right.states),
+              unsafe: left.unsafe || right.unsafe,
+            };
+          }
+
+          if (expression.type === "AssignmentExpression") {
+            if (isBindingIdentifier(expression.right, binding)) {
+              const properties = patternProperties(expression.left);
+              return properties.has("error")
+                ? { states: handledStates(states), unsafe: false }
+                : { states: new Set(states), unsafe: hasUnhandled(states) };
+            }
+
+            const right = analyzeExpression(expression.right, states, binding);
+            if (isBindingIdentifier(expression.left, binding)) {
+              return {
+                states: deadStates(right.states),
+                unsafe: right.unsafe || hasUnhandled(right.states),
+              };
+            }
+
+            const leftTarget = unwrapExpression(expression.left);
+            if (
+              expression.operator === "=" &&
+              isAstNode(leftTarget) &&
+              leftTarget.type === "MemberExpression" &&
+              isBindingIdentifier(leftTarget.object, binding)
+            ) {
+              return {
+                states: right.states,
+                unsafe: right.unsafe || hasUnhandled(right.states),
+              };
+            }
+            const left = analyzeExpression(
+              expression.left,
+              right.states,
+              binding,
+            );
+            return {
+              states: left.states,
+              unsafe: right.unsafe || left.unsafe,
+            };
+          }
+
+          if (expression.type === "UpdateExpression") {
+            if (!isBindingIdentifier(expression.argument, binding)) {
+              return analyzeExpression(expression.argument, states, binding);
+            }
+            return {
+              states: deadStates(states),
+              unsafe: hasUnhandled(states),
+            };
+          }
+
+          if (expression.type === "SequenceExpression") {
+            let current = new Set(states);
+            let unsafe = false;
+            const expressions = Array.isArray(expression.expressions)
+              ? expression.expressions
+              : [];
+            for (const item of expressions) {
+              const outcome = analyzeExpression(item, current, binding);
+              current = outcome.states;
+              unsafe ||= outcome.unsafe;
+            }
+            return { states: current, unsafe };
+          }
+
+          let current = new Set(states);
+          let unsafe = false;
+          for (const child of childNodes(expression)) {
+            const outcome = analyzeExpression(child, current, binding);
+            current = outcome.states;
+            unsafe ||= outcome.unsafe;
+          }
+          return { states: current, unsafe };
+        };
+
+        const analyzeStatements = (
+          statements: readonly unknown[],
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          let current = new Set(states);
+          let unsafe = false;
+          let unsafeExit: AstNode | undefined;
+          for (const statement of statements) {
+            const outcome = analyzeStatement(statement, current, binding);
+            current = outcome.states;
+            unsafe ||= outcome.unsafe;
+            unsafeExit ??= outcome.unsafeExit;
+          }
+          return { states: current, unsafe, unsafeExit };
+        };
+
+        const analyzeStatement = (
+          node: unknown,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          if (!isAstNode(node)) {
+            return { states: new Set(states), unsafe: false };
+          }
+
+          if (node.type === "BlockStatement") {
+            return analyzeStatements(
+              Array.isArray(node.body) ? node.body : [],
+              states,
+              binding,
+            );
+          }
+
+          if (node.type === "ExpressionStatement") {
+            return analyzeExpression(node.expression, states, binding);
+          }
+
+          if (node.type === "VariableDeclaration") {
+            let current = new Set(states);
+            let unsafe = false;
+            const declarations = Array.isArray(node.declarations)
+              ? node.declarations
+              : [];
+            for (const declaration of declarations) {
+              if (
+                !isAstNode(declaration) ||
+                declaration.type !== "VariableDeclarator"
+              ) {
+                continue;
+              }
+              if (isBindingIdentifier(declaration.init, binding)) {
+                const properties = patternProperties(declaration.id);
+                if (properties.has("error")) {
+                  current = handledStates(current);
+                } else {
+                  unsafe ||= hasUnhandled(current);
+                }
+                continue;
+              }
+              const outcome = analyzeExpression(
+                declaration.init,
+                current,
+                binding,
+              );
+              current = outcome.states;
+              unsafe ||= outcome.unsafe;
+            }
+            return { states: current, unsafe };
+          }
+
+          if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+            const argument = analyzeExpression(node.argument, states, binding);
+            const exitsUnhandled = hasUnhandled(argument.states);
+            return {
+              states: deadStates(argument.states),
+              unsafe: argument.unsafe || exitsUnhandled,
+              unsafeExit:
+                argument.unsafeExit ??
+                (exitsUnhandled &&
+                !containsBindingReference(node.argument, binding)
+                  ? node
+                  : undefined),
+            };
+          }
+
+          if (node.type === "IfStatement") {
+            const test = analyzeExpression(node.test, states, binding);
+            const consequent = analyzeStatement(
+              node.consequent,
+              test.states,
+              binding,
+            );
+            const alternate = isAstNode(node.alternate)
+              ? analyzeStatement(node.alternate, test.states, binding)
+              : {
+                  states: new Set(test.states),
+                  unsafe: false,
+                  unsafeExit: undefined,
+                };
+            return {
+              states: mergeStates(consequent.states, alternate.states),
+              unsafe: test.unsafe || consequent.unsafe || alternate.unsafe,
+              unsafeExit:
+                test.unsafeExit ??
+                consequent.unsafeExit ??
+                alternate.unsafeExit,
+            };
+          }
+
+          if (
+            node.type === "ForStatement" ||
+            node.type === "ForInStatement" ||
+            node.type === "ForOfStatement" ||
+            node.type === "WhileStatement" ||
+            node.type === "DoWhileStatement"
+          ) {
+            const entry = analyzeExpression(node.init, states, binding);
+            const test = analyzeExpression(node.test, entry.states, binding);
+            const right = analyzeExpression(node.right, test.states, binding);
+            const body = analyzeStatement(node.body, right.states, binding);
+            const update = analyzeExpression(
+              node.update,
+              body.states,
+              binding,
+            );
+            return {
+              states: mergeStates(test.states, update.states),
+              unsafe:
+                entry.unsafe ||
+                test.unsafe ||
+                right.unsafe ||
+                body.unsafe ||
+                update.unsafe,
+              unsafeExit:
+                entry.unsafeExit ??
+                test.unsafeExit ??
+                right.unsafeExit ??
+                body.unsafeExit ??
+                update.unsafeExit,
+            };
+          }
+
+          if (node.type === "SwitchStatement") {
+            const discriminant = analyzeExpression(
+              node.discriminant,
+              states,
+              binding,
+            );
+            const branches: Set<FlowState>[] = [
+              new Set(discriminant.states),
+            ];
+            let unsafe = discriminant.unsafe;
+            let unsafeExit = discriminant.unsafeExit;
+            const cases = Array.isArray(node.cases) ? node.cases : [];
+            for (const switchCase of cases) {
+              if (!isAstNode(switchCase)) {
+                continue;
+              }
+              const test = analyzeExpression(
+                switchCase.test,
+                discriminant.states,
+                binding,
+              );
+              const branch = analyzeStatements(
+                Array.isArray(switchCase.consequent)
+                  ? switchCase.consequent
+                  : [],
+                test.states,
+                binding,
+              );
+              branches.push(branch.states);
+              unsafe ||= test.unsafe || branch.unsafe;
+              unsafeExit ??= test.unsafeExit ?? branch.unsafeExit;
+            }
+            return {
+              states: mergeStates(...branches),
+              unsafe,
+              unsafeExit,
+            };
+          }
+
+          if (node.type === "TryStatement") {
+            const tried = analyzeStatement(node.block, states, binding);
+            // An explicit throw carries the state reached in the try body.
+            // Starting catch from the pre-try state would resurrect an
+            // already-inspected response and falsely reject a catch return.
+            const caught = isAstNode(node.handler)
+              ? analyzeStatement(node.handler.body, tried.states, binding)
+              : {
+                  states: new Set<FlowState>(),
+                  unsafe: false,
+                  unsafeExit: undefined,
+                };
+            const combined = {
+              states: mergeStates(tried.states, caught.states),
+              unsafe: tried.unsafe || caught.unsafe,
+              unsafeExit: tried.unsafeExit ?? caught.unsafeExit,
+            };
+            if (!isAstNode(node.finalizer)) {
+              return combined;
+            }
+            const finalized = analyzeStatement(
+              node.finalizer,
+              combined.states,
+              binding,
+            );
+            return {
+              states: finalized.states,
+              unsafe: combined.unsafe || finalized.unsafe,
+              unsafeExit: combined.unsafeExit ?? finalized.unsafeExit,
+            };
+          }
+
+          if (node.type === "LabeledStatement" || node.type === "WithStatement") {
+            return analyzeStatement(node.body, states, binding);
+          }
+
+          return analyzeExpression(node, states, binding);
+        };
+
+        const analyzeContinuation = (
+          node: unknown,
+          binding: Variable,
+        ): FlowOutcome => {
+          let current = isAstNode(node) ? node : null;
+          let states = new Set<FlowState>(["unhandled"]);
+          let unsafe = false;
+          let unsafeExit: AstNode | undefined;
+
+          while (current !== null) {
+            const parent = isAstNode(current.parent) ? current.parent : null;
+            if (
+              parent !== null &&
+              (parent.type === "BlockStatement" || parent.type === "Program") &&
+              Array.isArray(parent.body)
+            ) {
+              const index = parent.body.indexOf(current);
+              if (index !== -1) {
+                const outcome = analyzeStatements(
+                  parent.body.slice(index + 1),
+                  states,
+                  binding,
+                );
+                states = outcome.states;
+                unsafe ||= outcome.unsafe;
+                unsafeExit ??= outcome.unsafeExit;
+
+                // A declaration's block is normally reached immediately.
+                // An assignment may sit in a nested branch or try block;
+                // keep climbing until the assigned binding's own lexical
+                // scope so its outer continuation is not hidden.
+                if (parent === binding.scope.block) {
+                  return { states, unsafe, unsafeExit };
+                }
+              }
+            }
+
+            // A finally block runs after an acquisition in the try body and
+            // before the enclosing statement continuation.
+            if (
+              parent?.type === "TryStatement" &&
+              current === parent.block &&
+              isAstNode(parent.finalizer)
+            ) {
+              const finalized = analyzeStatement(
+                parent.finalizer,
+                states,
+                binding,
+              );
+              states = finalized.states;
+              unsafe ||= finalized.unsafe;
+              unsafeExit ??= finalized.unsafeExit;
+            }
+
+            current = parent;
+          }
+
+          return { states, unsafe, unsafeExit };
+        };
+
+        const reportAssignedResult = (node: Ranged): void => {
+          context.report({
+            node,
+            messageId: "requireEdenAssignedErrorCheck",
+          });
+        };
+
         return {
           before() {
             apiLocalNames.clear();
+            assignedResults.length = 0;
           },
           ImportDeclaration(node) {
             if (node.source?.value !== API_MODULE) {
@@ -300,6 +977,38 @@ export default eslintCompatPlugin({
               messageId: "requireEdenErrorCheck",
               data: { method },
             });
+          },
+
+          VariableDeclarator(node) {
+            if (awaitedTerminalEdenCall(node.init) === null) {
+              return;
+            }
+            if (isIdentifier(node.id)) {
+              const binding = resolveVariable(node.id);
+              if (binding !== null) {
+                assignedResults.push({ binding, node });
+              }
+              return;
+            }
+            if (!patternProperties(node.id).has("error")) {
+              reportAssignedResult(node);
+            }
+          },
+
+          AssignmentExpression(node) {
+            if (awaitedTerminalEdenCall(node.right) === null) {
+              return;
+            }
+            if (isIdentifier(node.left)) {
+              const binding = resolveVariable(node.left);
+              if (binding !== null) {
+                assignedResults.push({ binding, node });
+              }
+              return;
+            }
+            if (!patternProperties(node.left).has("error")) {
+              reportAssignedResult(node);
+            }
           },
 
           // `await api...;` as a bare expression statement, or a bare
@@ -379,6 +1088,15 @@ export default eslintCompatPlugin({
               messageId: "requireEdenErrorCheckDiscarded",
               data: { form: "void api..." },
             });
+          },
+
+          "Program:exit"() {
+            for (const result of assignedResults) {
+              const outcome = analyzeContinuation(result.node, result.binding);
+              if (outcome.unsafe || hasUnhandled(outcome.states)) {
+                reportAssignedResult(outcome.unsafeExit ?? result.node);
+              }
+            }
           },
         };
       },

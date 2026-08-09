@@ -1453,6 +1453,7 @@ const RegistryAutofillControl = ({
     }
     if (seq !== lookupSeq.current) {
       // A newer lookup started while this one was in flight; drop its result.
+      // eslint-disable-next-line require-eden-error-check/require-eden-error-check -- SAFETY: the superseded lookup response is intentionally discarded
       return;
     }
     setLoading(false);
