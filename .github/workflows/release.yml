@@ -1097,6 +1097,7 @@ jobs:
       - name: Verify production serves the release commit
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
         run: bun scripts/check-api-deployment.ts
 

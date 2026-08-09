@@ -174,6 +174,49 @@ describe("API deployment health receipt", () => {
     );
   });
 
+  test("gates API releases on readiness", async () => {
+    const [deploymentScript, releaseWorkflow, publishWorkflow] =
+      await Promise.all([
+        Bun.file(new URL("check-api-deployment.ts", import.meta.url)).text(),
+        Bun.file(
+          new URL("../.github/workflows/release.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+        ).text(),
+      ]);
+    const releaseGateStart = releaseWorkflow.indexOf(
+      "- name: Verify production serves the release commit",
+    );
+    const releaseWebGateStart = releaseWorkflow.indexOf(
+      "- name: Verify production web serves the release commit",
+      releaseGateStart,
+    );
+    const releaseGate = releaseWorkflow.slice(
+      releaseGateStart,
+      releaseWebGateStart,
+    );
+    const publishGateStart = publishWorkflow.indexOf(
+      "- name: Wait for the corresponding API release in production",
+    );
+    const publishCanaryStart = publishWorkflow.indexOf(
+      "- name: Canary the exact packed CLI against production",
+      publishGateStart,
+    );
+    const publishGate = publishWorkflow.slice(
+      publishGateStart,
+      publishCanaryStart,
+    );
+
+    expect(releaseGateStart).toBeGreaterThanOrEqual(0);
+    expect(releaseWebGateStart).toBeGreaterThan(releaseGateStart);
+    expect(publishGateStart).toBeGreaterThanOrEqual(0);
+    expect(publishCanaryStart).toBeGreaterThan(publishGateStart);
+    expect(deploymentScript).toContain('const DEFAULT_PROBE_PATH = "ready";');
+    expect(releaseGate).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
+    expect(publishGate).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
+  });
+
   test("preserves a configured API path prefix", () => {
     expect(getApiHealthUrl("https://example.com/api").toString()).toBe(
       "https://example.com/api/health",

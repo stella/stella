@@ -273,6 +273,7 @@ jobs:
           && (github.event_name == 'workflow_run' || inputs.publish)
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ steps.release-source.outputs.expected_production_commit }}
+          API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
         run: bun scripts/check-api-deployment.ts
 
