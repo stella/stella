@@ -66,6 +66,15 @@ type CreateEntityFromBufferInput = {
   mimeType: string;
   parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
+  provenance?:
+    | {
+        type: "email_attachment";
+        attachmentId: string;
+        sourceEntityId: SafeId<"entity">;
+        sourceFieldId: SafeId<"field">;
+        sourceWorkspaceId: SafeId<"workspace">;
+      }
+    | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -120,6 +129,7 @@ export const createEntityFromBuffer = async ({
   mimeType,
   parentId,
   scanWarnings,
+  provenance,
   afterCreate,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -332,7 +342,7 @@ export const createEntityFromBuffer = async ({
           resourceId: entityId,
           changes: {
             created: {
-              old: null,
+              old: provenance ?? null,
               new: {
                 kind: "document",
                 fileName,
@@ -436,6 +446,10 @@ export const createEntityFromBuffer = async ({
   broadcast(workspaceId, {
     type: "invalidate-query",
     data: ["entities", workspaceId],
+  });
+  broadcast(workspaceId, {
+    type: "invalidate-query",
+    data: ["workspaces", workspaceId, "overview"],
   });
 
   return Result.ok({ entityId, entityVersionId, fieldId, fileName });

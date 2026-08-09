@@ -75,6 +75,10 @@ const workspaceId = toSafeId<"workspace">(
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
+const sourceEntityId = toSafeId<"entity">(
+  "00000000-0000-0000-0000-000000000006",
+);
+const sourceFieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000007");
 
 type IntentPersistenceBase = {
   [key: string]: unknown;
@@ -239,6 +243,13 @@ describe("createEntityFromBuffer", () => {
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       parentId,
+      provenance: {
+        type: "email_attachment",
+        attachmentId: "ea1.example",
+        sourceEntityId,
+        sourceFieldId,
+        sourceWorkspaceId: workspaceId,
+      },
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -247,7 +258,13 @@ describe("createEntityFromBuffer", () => {
       action: "create",
       changes: {
         created: {
-          old: null,
+          old: {
+            type: "email_attachment",
+            attachmentId: "ea1.example",
+            sourceEntityId,
+            sourceFieldId,
+            sourceWorkspaceId: workspaceId,
+          },
           new: {
             kind: "document",
             fileName: "Generated Agreement.docx",
@@ -268,6 +285,10 @@ describe("createEntityFromBuffer", () => {
     expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
       type: "invalidate-query",
       data: ["entities", workspaceId],
+    });
+    expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
+      type: "invalidate-query",
+      data: ["workspaces", workspaceId, "overview"],
     });
   });
 

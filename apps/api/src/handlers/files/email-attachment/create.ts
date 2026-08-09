@@ -100,6 +100,13 @@ export default createSafeHandler(
         fileName: attachment.fileName,
         mimeType: attachment.mimeType,
         parentId,
+        provenance: {
+          type: "email_attachment",
+          attachmentId,
+          sourceEntityId: attachment.sourceEntityId,
+          sourceFieldId: fieldId,
+          sourceWorkspaceId: workspaceId,
+        },
         scanWarnings,
       }).then((result) => Result.mapError(result, toSaveHandlerError)),
     );
