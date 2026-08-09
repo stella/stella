@@ -3,6 +3,13 @@
 // Suppressions become unused, and fail CI, if a must-flag case stops matching.
 
 type RegistryCompany = { id: string };
+type RegistryState = { company: RegistryCompany; raw: unknown };
+type RawPayload = unknown;
+// oxlint-disable-next-line typescript/consistent-type-definitions
+interface RegistryStateInterface {
+  company: RegistryCompany;
+  raw: RawPayload;
+}
 type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue };
 type ReadonlyJsonValue =
@@ -21,6 +28,8 @@ declare const useFallback: boolean;
 declare const fallbackCompany: RegistryCompany;
 declare const maybeFallbackCompany: RegistryCompany | undefined;
 declare const state: { company: RegistryCompany; raw: unknown };
+declare const aliasState: RegistryState;
+declare const interfaceState: RegistryStateInterface;
 declare const isRegistryCompany: (value: unknown) => value is RegistryCompany;
 declare const v: {
   parse: (inputSchema: unknown, input: unknown) => RegistryCompany;
@@ -86,6 +95,10 @@ export const logicallyAnnotatedParse = () => {
   return parsed;
 };
 
+export const satisfiesParse = () =>
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  JSON.parse(raw) satisfies RegistryCompany;
+
 export const assignedParse = () => {
   let parsed: RegistryCompany;
   if (raw === "") {
@@ -118,6 +131,16 @@ export const indirectlyAssignedMemberParse = () => {
   const rawValue = JSON.parse(raw);
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   state.company = rawValue;
+};
+
+export const assignedAliasMemberParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  aliasState.company = JSON.parse(raw);
+};
+
+export const assignedInterfaceMemberParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  interfaceState.company = JSON.parse(raw);
 };
 
 export const indirectlyAssertedParse = () => {
@@ -215,8 +238,9 @@ export const rawJsonAssignment = () => {
 };
 
 export const rawJsonMemberAssignment = () => {
-  const value: unknown = JSON.parse(raw);
-  state.raw = value;
+  state.raw = JSON.parse(raw);
+  aliasState.raw = JSON.parse(raw);
+  interfaceState.raw = JSON.parse(raw);
 };
 
 export const inferredUnknownAssignment = (input: unknown) => {

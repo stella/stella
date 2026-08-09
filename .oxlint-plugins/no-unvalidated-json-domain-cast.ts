@@ -9,11 +9,14 @@
 //   (await response.json()) as RegistryCompany
 //   response.json<RegistryCompany>()
 //   JSON.parse(raw) as DocumentAst
+//   JSON.parse(raw) satisfies RegistryCompany
 //   const payload: RegistryCompany = JSON.parse(raw)
+//   state.company = JSON.parse(raw) // company: RegistryCompany
 //
 // Allows:
 //   const payload: unknown = await response.json()
 //   const payload: JsonValue = JSON.parse(raw)
+//   state.raw = JSON.parse(raw) // raw: unknown
 //   v.parse(schema, await response.json())
 //   v.safeParse(openSchema, JSON.parse(raw))
 
@@ -148,6 +151,9 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const jsonParseAliases = new Set<string>();
+        const namedTypeAnnotations = new Map<Variable, unknown>();
+        const memberAssignmentCandidates =
+          new Array<ESTree.AssignmentExpression>();
         const isRawJsonBoundary = (node: unknown): boolean =>
           isJsonParseCall(node, jsonParseAliases) || isResponseJsonCall(node);
 
@@ -190,6 +196,176 @@ export default eslintCompatPlugin({
         const isIdentifierReference = (
           node: unknown,
         ): node is ESTree.IdentifierReference => isIdentifier(node);
+
+        const namedTypeAnnotationFor = (node: unknown): unknown => {
+          if (!isIdentifierReference(node)) {
+            return undefined;
+          }
+          const variable = resolveVariable(node);
+          return variable === null
+            ? undefined
+            : namedTypeAnnotations.get(variable);
+        };
+
+        type MemberTargetDisposition = "closed" | "open" | "unresolved";
+
+        const hasTypeParameters = (node: unknown): boolean =>
+          isAstNode(node) &&
+          isAstNode(node.typeParameters) &&
+          Array.isArray(node.typeParameters.params) &&
+          node.typeParameters.params.length > 0;
+
+        const typeDisposition = (
+          node: unknown,
+          seenTypeNames: ReadonlySet<string> = new Set(),
+        ): MemberTargetDisposition => {
+          const typeNode = unwrapTypeAnnotation(node);
+          if (typeNode === null) {
+            return "unresolved";
+          }
+          if (isRawJsonType(typeNode) || typeNode.type === "TSAnyKeyword") {
+            return "open";
+          }
+          if (typeNode.type === "TSUnionType") {
+            const types = Array.isArray(typeNode.types) ? typeNode.types : [];
+            const dispositions = types.map((type) =>
+              typeDisposition(type, seenTypeNames),
+            );
+            if (dispositions.some((disposition) => disposition === "open")) {
+              return "open";
+            }
+            return dispositions.some((disposition) => disposition === "closed")
+              ? "closed"
+              : "unresolved";
+          }
+          if (
+            typeNode.type === "TSTypeReference" &&
+            isIdentifier(typeNode.typeName)
+          ) {
+            const typeName = typeNode.typeName.name;
+            if (seenTypeNames.has(typeName)) {
+              return "unresolved";
+            }
+            const declaration = namedTypeAnnotationFor(typeNode.typeName);
+            if (
+              isAstNode(declaration) &&
+              declaration.type === "TSTypeAliasDeclaration" &&
+              !hasTypeParameters(declaration)
+            ) {
+              const nextSeenTypeNames = new Set(seenTypeNames);
+              nextSeenTypeNames.add(typeName);
+              return typeDisposition(
+                declaration.typeAnnotation,
+                nextSeenTypeNames,
+              );
+            }
+          }
+          return "closed";
+        };
+
+        const memberPropertyDisposition = (
+          node: unknown,
+          propertyName: string,
+          seenTypeNames: ReadonlySet<string> = new Set(),
+        ): MemberTargetDisposition => {
+          const typeNode = unwrapTypeAnnotation(node);
+          if (typeNode === null) {
+            return "unresolved";
+          }
+          if (
+            typeNode.type === "TSTypeReference" &&
+            isIdentifier(typeNode.typeName)
+          ) {
+            const typeName = typeNode.typeName.name;
+            if (seenTypeNames.has(typeName)) {
+              return "unresolved";
+            }
+            const declaration = namedTypeAnnotationFor(typeNode.typeName);
+            if (isAstNode(declaration) && !hasTypeParameters(declaration)) {
+              const nextSeenTypeNames = new Set(seenTypeNames);
+              nextSeenTypeNames.add(typeName);
+              return memberPropertyDisposition(
+                declaration.type === "TSTypeAliasDeclaration"
+                  ? declaration.typeAnnotation
+                  : declaration,
+                propertyName,
+                nextSeenTypeNames,
+              );
+            }
+            return "unresolved";
+          }
+          const members =
+            typeNode.type === "TSTypeLiteral"
+              ? typeNode.members
+              : typeNode.type === "TSInterfaceDeclaration"
+                ? isAstNode(typeNode.body)
+                  ? typeNode.body.body
+                  : undefined
+                : typeNode.type === "TSInterfaceBody"
+                  ? typeNode.body
+                  : undefined;
+          if (Array.isArray(members)) {
+            const property = members.find(
+              (member) =>
+                isAstNode(member) &&
+                member.type === "TSPropertySignature" &&
+                getPropertyName(member.key) === propertyName,
+            );
+            if (isAstNode(property)) {
+              return typeDisposition(property.typeAnnotation, seenTypeNames);
+            }
+          }
+          if (
+            typeNode.type === "TSInterfaceDeclaration" &&
+            Array.isArray(typeNode.extends)
+          ) {
+            for (const heritage of typeNode.extends) {
+              if (!isAstNode(heritage) || !isIdentifier(heritage.expression)) {
+                continue;
+              }
+              const inherited = namedTypeAnnotationFor(heritage.expression);
+              if (hasTypeParameters(inherited)) {
+                continue;
+              }
+              const disposition = memberPropertyDisposition(
+                inherited,
+                propertyName,
+                seenTypeNames,
+              );
+              if (disposition !== "unresolved") {
+                return disposition;
+              }
+            }
+          }
+          return "unresolved";
+        };
+
+        const memberTargetDisposition = (
+          member: ESTree.MemberExpression,
+        ): MemberTargetDisposition => {
+          const propertyName = getPropertyName(member.property);
+          const object = peelRuntimeExpression(member.object);
+          if (propertyName === null || !isIdentifierReference(object)) {
+            return "unresolved";
+          }
+          const variable = resolveVariable(object);
+          if (variable === null) {
+            return "unresolved";
+          }
+          for (const definition of variable.defs) {
+            if (!isAstNode(definition.name)) {
+              continue;
+            }
+            const disposition = memberPropertyDisposition(
+              definition.name.typeAnnotation,
+              propertyName,
+            );
+            if (disposition !== "unresolved") {
+              return disposition;
+            }
+          }
+          return "unresolved";
+        };
 
         const isUnvalidatedJsonValue = (
           node: unknown,
@@ -296,6 +472,8 @@ export default eslintCompatPlugin({
         return {
           before() {
             jsonParseAliases.clear();
+            namedTypeAnnotations.clear();
+            memberAssignmentCandidates.length = 0;
             return isProductionBoundaryFile(filenameForContext(context));
           },
           CallExpression(node) {
@@ -310,18 +488,44 @@ export default eslintCompatPlugin({
           },
           ArrowFunctionExpression: checkFunctionReturn,
           AssignmentExpression(node) {
+            if (node.operator !== "=" || !isUnvalidatedJsonValue(node.right)) {
+              return;
+            }
             if (
-              node.operator === "=" &&
-              isUnvalidatedJsonValue(node.right) &&
-              ((node.left.type === "Identifier" &&
-                hasClosedTypeAnnotation(node.left)) ||
-                node.left.type === "MemberExpression")
+              node.left.type === "Identifier" &&
+              hasClosedTypeAnnotation(node.left)
             ) {
               context.report({ node, messageId: "unvalidatedDomain" });
+              return;
+            }
+            if (node.left.type === "MemberExpression") {
+              memberAssignmentCandidates.push(node);
             }
           },
           FunctionDeclaration: checkFunctionReturn,
           FunctionExpression: checkFunctionReturn,
+          "Program:exit"() {
+            for (const assignment of memberAssignmentCandidates) {
+              if (
+                assignment.left.type === "MemberExpression" &&
+                memberTargetDisposition(assignment.left) === "closed"
+              ) {
+                context.report({
+                  node: assignment,
+                  messageId: "unvalidatedDomain",
+                });
+              }
+            }
+          },
+          TSInterfaceDeclaration(node) {
+            if (isIdentifierReference(node.id)) {
+              const variable = resolveVariable(node.id);
+              if (variable !== null) {
+                namedTypeAnnotations.set(variable, node);
+              }
+            }
+          },
+          TSSatisfiesExpression: checkAssertion,
           VariableDeclarator(node) {
             if (node.id.type === "Identifier" && isJsonParseMember(node.init)) {
               jsonParseAliases.add(node.id.name);
@@ -335,6 +539,14 @@ export default eslintCompatPlugin({
             }
           },
           TSAsExpression: checkAssertion,
+          TSTypeAliasDeclaration(node) {
+            if (isIdentifierReference(node.id)) {
+              const variable = resolveVariable(node.id);
+              if (variable !== null) {
+                namedTypeAnnotations.set(variable, node);
+              }
+            }
+          },
           TSTypeAssertion: checkAssertion,
         };
       },
