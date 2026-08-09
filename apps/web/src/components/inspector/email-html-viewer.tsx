@@ -7,17 +7,21 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { cn } from "@stll/ui/lib/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
 import {
   EMAIL_CHAT_MODE,
+  EMAIL_VIEWER_LAYOUT,
   getEmailAttachmentSize,
   getEmailFileChatContext,
   localizeEmailBodyHtml,
   parseEmailDate,
   type EmailBodyFoldLabels,
   type EmailResolvedChatMode,
+  type EmailViewerLayout,
 } from "@/components/inspector/email-html-viewer.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -27,6 +31,7 @@ import { formatFullTimestamp } from "@/lib/relative-time";
 
 type EmailHtmlViewerProps = {
   fieldId: string;
+  layout?: EmailViewerLayout;
   workspaceId: string;
 };
 
@@ -49,28 +54,30 @@ type EmailFileViewerProps = EmailFileViewerBaseProps &
 export const EmailFileViewer = (props: EmailFileViewerProps) => {
   const t = useTranslations();
   const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
-
-  if (chatMode === EMAIL_CHAT_MODE.contextual) {
-    const fileChatContext = getEmailFileChatContext({
-      entityId,
-      fieldId,
-      fileName,
-      workspaceId,
-    });
-
-    return (
-      <FileViewerWithAI
-        {...fileChatContext}
-        className="flex min-h-0 flex-1 flex-col"
-      >
-        <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
-      </FileViewerWithAI>
-    );
-  }
+  const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
+  const fileChatContext = isContextual
+    ? getEmailFileChatContext({ entityId, fieldId, fileName, workspaceId })
+    : { activeFile: undefined, workspaceId };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <EmailHtmlViewer fieldId={fieldId} workspaceId={workspaceId} />
+    <FileViewerWithAI
+      {...fileChatContext}
+      className="flex min-h-0 flex-1 flex-col"
+      overlayActivation={
+        isContextual
+          ? FILE_CHAT_OVERLAY_ACTIVATION.active
+          : FILE_CHAT_OVERLAY_ACTIVATION.deferred
+      }
+    >
+      <EmailHtmlViewer
+        fieldId={fieldId}
+        layout={
+          isContextual
+            ? EMAIL_VIEWER_LAYOUT.contextualChat
+            : EMAIL_VIEWER_LAYOUT.standard
+        }
+        workspaceId={workspaceId}
+      />
       {chatMode === EMAIL_CHAT_MODE.resolutionError ? (
         <div
           className="bg-background flex shrink-0 items-center justify-center gap-2 border-t p-2"
@@ -88,12 +95,13 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
           </Button>
         </div>
       ) : null}
-    </div>
+    </FileViewerWithAI>
   );
 };
 
 export const EmailHtmlViewer = ({
   fieldId,
+  layout = EMAIL_VIEWER_LAYOUT.standard,
   workspaceId,
 }: EmailHtmlViewerProps) => {
   const t = useTranslations();
@@ -164,7 +172,12 @@ export const EmailHtmlViewer = ({
   });
 
   return (
-    <article className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <article
+      className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+        layout === EMAIL_VIEWER_LAYOUT.contextualChat && "pb-40",
+      )}
+    >
       <header className="bg-background max-h-[45%] shrink-0 overflow-y-auto overscroll-contain border-b px-4 py-3">
         <h1 className="text-foreground text-base font-semibold text-balance">
           <BidiText as="span">{subject}</BidiText>

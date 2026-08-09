@@ -72,6 +72,8 @@ describe("email viewer", () => {
     );
 
     expect(html).toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).toContain("pb-40");
     expect(html).toContain("flex min-h-0 flex-1 flex-col");
     expect(html).toContain('role="status"');
   });
@@ -119,6 +121,8 @@ describe("email viewer", () => {
     );
 
     expect(html).not.toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).not.toContain("pb-40");
     expect(html).toContain('role="status"');
   });
 
@@ -138,6 +142,8 @@ describe("email viewer", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("Try again");
     expect(html).not.toContain('data-file-viewer-ai="true"');
+    expect(html).toContain('data-file-viewer-root="true"');
+    expect(html).not.toContain("pb-40");
   });
 
   test("renders native metadata and keeps attachments informational", () => {

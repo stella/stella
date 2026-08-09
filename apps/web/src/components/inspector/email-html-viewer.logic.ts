@@ -11,12 +11,19 @@ export const EMAIL_CHAT_MODE = {
   resolutionError: "resolution-error",
 } as const;
 
+export const EMAIL_VIEWER_LAYOUT = {
+  contextualChat: "contextual-chat",
+  standard: "standard",
+} as const;
+
 export type EmailChatMode =
   (typeof EMAIL_CHAT_MODE)[keyof typeof EMAIL_CHAT_MODE];
 export type EmailResolvedChatMode = Exclude<
   EmailChatMode,
   typeof EMAIL_CHAT_MODE.resolutionError
 >;
+export type EmailViewerLayout =
+  (typeof EMAIL_VIEWER_LAYOUT)[keyof typeof EMAIL_VIEWER_LAYOUT];
 
 export const getEmailChatMode = ({
   extractionFileFieldId,
