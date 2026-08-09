@@ -247,7 +247,7 @@ describe("detect-e2e-changes", () => {
       ].join("-"),
     );
     expect(playwrightSetup).toContain(
-      "actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae",
+      "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
     );
     expect(playwrightSetup).toContain("id: browser-cache");
     expect(playwrightSetup).toContain("full|launch-verified");
