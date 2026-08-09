@@ -18,8 +18,7 @@ describe("readCappedBytes", () => {
     expect(await readCappedBytes(stream, 2)).toBeNull();
     expect(cancelled).toBe(true);
 
-    const reader = stream.getReader();
-    reader.releaseLock();
+    expect(stream.locked).toBe(false);
   });
 
   test("releases its reader lock when reading fails", async () => {
@@ -38,7 +37,6 @@ describe("readCappedBytes", () => {
     }
     expect(result.error.message).toContain("stream failed");
 
-    const reader = stream.getReader();
-    reader.releaseLock();
+    expect(stream.locked).toBe(false);
   });
 });

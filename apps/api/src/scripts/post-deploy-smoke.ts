@@ -529,10 +529,10 @@ export const readStreamPrefix = async (
   if (!response.body) {
     return "";
   }
-  const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const deadline = Date.now() + timeoutMs;
   let buffered = "";
+  const reader = response.body.getReader();
   try {
     while (buffered.length < maxBytes) {
       // oxlint-disable-next-line no-await-in-loop -- sequential prefix read: each chunk extends the buffer we then scan
@@ -552,6 +552,7 @@ export const readStreamPrefix = async (
     }
   } finally {
     await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
   return buffered;
 };

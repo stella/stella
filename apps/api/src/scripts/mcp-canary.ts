@@ -372,34 +372,38 @@ const inspectNotificationStream = async (
   body: ReadableStream<Uint8Array>,
 ): Promise<StreamObservation> => {
   const reader = body.getReader();
-  const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
-  const observeUntilDeadline = async (): Promise<StreamObservation> => {
-    const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) {
-      return "open";
-    }
-    const readObservation = await Promise.race([
-      reader.read().then(
-        ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
-        () => "read_failed" as const,
-      ),
-      Bun.sleep(remainingMs).then(() => "open" as const),
-    ]);
-
-    // Reads stay sequential: a frame can be followed immediately by EOF,
-    // which is the truncation this bounded observation is meant to catch.
-    return readObservation === "frame"
-      ? observeUntilDeadline()
-      : readObservation;
-  };
-
-  const observation = await observeUntilDeadline();
   try {
-    await reader.cancel();
-  } catch {
-    return "cancel_failed";
+    const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
+    const observeUntilDeadline = async (): Promise<StreamObservation> => {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        return "open";
+      }
+      const readObservation = await Promise.race([
+        reader.read().then(
+          ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
+          () => "read_failed" as const,
+        ),
+        Bun.sleep(remainingMs).then(() => "open" as const),
+      ]);
+
+      // Reads stay sequential: a frame can be followed immediately by EOF,
+      // which is the truncation this bounded observation is meant to catch.
+      return readObservation === "frame"
+        ? observeUntilDeadline()
+        : readObservation;
+    };
+
+    const observation = await observeUntilDeadline();
+    try {
+      await reader.cancel();
+    } catch {
+      return "cancel_failed";
+    }
+    return observation;
+  } finally {
+    reader.releaseLock();
   }
-  return observation;
 };
 
 export const runAuthenticatedStreamProbe = async (

@@ -917,8 +917,12 @@ const ClauseInlineTextField = ({
 
   const commit = useClauseFieldSave({
     value,
-    persist: async (next) =>
-      await api.clauses({ clauseId }).post({ [field]: next }),
+    persist: async (next) => {
+      const { data, error } = await api
+        .clauses({ clauseId })
+        .post({ [field]: next });
+      return { data, error };
+    },
     onRefresh,
     onError: () => setDraft(value ?? ""),
   });
@@ -1097,8 +1101,12 @@ const ClauseUsageNotesField = ({
 
   const save = useClauseFieldSave({
     value,
-    persist: async (next) =>
-      await api.clauses({ clauseId }).post({ usageNotes: next }),
+    persist: async (next) => {
+      const { data, error } = await api
+        .clauses({ clauseId })
+        .post({ usageNotes: next });
+      return { data, error };
+    },
     onRefresh,
   });
 
@@ -1631,7 +1639,7 @@ const HistoryTab = ({
     setLoading(true);
     setDiffResult(null);
 
-    const response = await api
+    const { data, error } = await api
       .clauses({ clauseId })
       .versions({ versionId })
       .get();
@@ -1644,20 +1652,16 @@ const HistoryTab = ({
 
     setLoading(false);
 
-    if (response.error) {
+    if (error) {
       stellaToast.add({
         type: "error",
         title: t("clauses.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorMessage(error, t("common.unexpectedError")),
       });
       setSelectedId(null);
       return;
     }
 
-    const data = response.data;
     if (data instanceof Response) {
       setSelectedId(null);
       return;

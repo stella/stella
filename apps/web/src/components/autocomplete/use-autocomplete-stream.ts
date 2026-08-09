@@ -94,40 +94,45 @@ const consumeAutocompleteStream = async (
   body: ReadableStream<Uint8Array>,
   cb: StreamCallbacks,
 ): Promise<void> => {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next
-    const chunk = await reader.read();
-    if (chunk.done) {
-      cb.onDone();
-      return;
-    }
-    buffer += decoder.decode(chunk.value, { stream: true });
-    const boundary = buffer.lastIndexOf("\n\n");
-    if (boundary === -1) {
-      continue;
-    }
-    const ready = buffer.slice(0, boundary + 2);
-    buffer = buffer.slice(boundary + 2);
-    for (const event of parseSSE(ready)) {
-      if (event.event === "token") {
-        const text = readStringField(event.data, "text");
-        if (text !== null && text.length > 0) {
-          const alive = cb.onToken(text);
-          if (!alive) {
-            return;
-          }
-        }
-      } else if (event.event === "error") {
-        cb.onError();
-        return;
-      } else if (event.event === "done") {
+  const reader = body.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next
+      const chunk = await reader.read();
+      if (chunk.done) {
         cb.onDone();
         return;
       }
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const boundary = buffer.lastIndexOf("\n\n");
+      if (boundary === -1) {
+        continue;
+      }
+      const ready = buffer.slice(0, boundary + 2);
+      buffer = buffer.slice(boundary + 2);
+      for (const event of parseSSE(ready)) {
+        if (event.event === "token") {
+          const text = readStringField(event.data, "text");
+          if (text !== null && text.length > 0) {
+            const alive = cb.onToken(text);
+            if (!alive) {
+              return;
+            }
+          }
+        } else if (event.event === "error") {
+          cb.onError();
+          return;
+        } else if (event.event === "done") {
+          cb.onDone();
+          return;
+        }
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 };
 

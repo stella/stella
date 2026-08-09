@@ -63,6 +63,9 @@ const isByteStreamReadResult = (
     : done === false && chunk instanceof Uint8Array;
 };
 
+const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
+  body.getReader();
+
 const formatUnknownToolName = (toolName: string): string =>
   toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
     ? toolName
@@ -561,13 +564,29 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
-      const reader = response.body.getReader();
+      const reader = takeStreamReaderOwnership(response.body);
+      let readerReleased = false;
       const completeExchange = async () => {
         request.signal.removeEventListener("abort", abortExchange);
+        if (!readerReleased) {
+          reader.releaseLock();
+          readerReleased = true;
+        }
         await teardown();
       };
       const abortExchange = () => {
-        detached(completeExchange(), "mcp.legacy-stream-teardown");
+        detached(
+          (async () => {
+            try {
+              await reader.cancel(request.signal.reason);
+            } catch (error) {
+              reportTransportError(error, "cancel_stream");
+            } finally {
+              await completeExchange();
+            }
+          })(),
+          "mcp.legacy-stream-teardown",
+        );
       };
       request.signal.addEventListener("abort", abortExchange, {
         once: true,
@@ -575,6 +594,10 @@ export const createMcpHttpRequestHandler = ({
 
       const monitoredBody = new ReadableStream<Uint8Array>({
         pull: async (controller) => {
+          if (readerReleased) {
+            controller.close();
+            return;
+          }
           try {
             const readResult: unknown = await reader.read();
             if (!isByteStreamReadResult(readResult)) {

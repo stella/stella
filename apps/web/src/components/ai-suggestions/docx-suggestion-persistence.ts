@@ -27,6 +27,7 @@ import { Result } from "better-result";
 import type { FolioAIEditApplyMode } from "@stll/folio-react";
 
 import { api } from "@/lib/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 export type DocxResolveResult = "synced" | "stale" | "failed";
 
@@ -64,20 +65,17 @@ export const resolveDocxSuggestionRequest = async ({
     status === "accepted"
       ? { status, appliedMode: appliedMode ?? "tracked-changes" }
       : { status };
-  const result = await Result.tryPromise(
-    async () =>
-      await api["docx-suggestions"]({ workspaceId })
-        .entity({ entityId })
-        .suggestion({ suggestionId })
-        .resolve.patch(body),
-  );
+  const result = await Result.tryPromise(async () => {
+    const response = await api["docx-suggestions"]({ workspaceId })
+      .entity({ entityId })
+      .suggestion({ suggestionId })
+      .resolve.patch(body);
+    return unwrapEden(response);
+  });
   if (Result.isError(result)) {
     return "failed";
   }
-  if (result.value.error) {
-    return "failed";
-  }
-  return result.value.data.updated ? "synced" : "stale";
+  return result.value.updated ? "synced" : "stale";
 };
 
 /**
@@ -88,18 +86,15 @@ export const revertDocxSuggestionRequest = async ({
   entityId,
   suggestionId,
 }: RevertDocxSuggestionRequestArgs): Promise<DocxResolveResult> => {
-  const result = await Result.tryPromise(
-    async () =>
-      await api["docx-suggestions"]({ workspaceId })
-        .entity({ entityId })
-        .suggestion({ suggestionId })
-        .revert.patch(),
-  );
+  const result = await Result.tryPromise(async () => {
+    const response = await api["docx-suggestions"]({ workspaceId })
+      .entity({ entityId })
+      .suggestion({ suggestionId })
+      .revert.patch();
+    return unwrapEden(response);
+  });
   if (Result.isError(result)) {
     return "failed";
   }
-  if (result.value.error) {
-    return "failed";
-  }
-  return result.value.data.updated ? "synced" : "stale";
+  return result.value.updated ? "synced" : "stale";
 };

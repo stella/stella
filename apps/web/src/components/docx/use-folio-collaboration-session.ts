@@ -181,7 +181,7 @@ export const useFolioCollaborationSession = ({
 
     detached(
       (async () => {
-        const response = await api
+        const { data, error } = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           ["folio-collab-sessions"].open.post({
             entityId: toSafeId<"entity">(entityId),
@@ -192,20 +192,20 @@ export const useFolioCollaborationSession = ({
           return;
         }
 
-        if (response.error) {
+        if (error) {
           setState({
             status: "error",
             collaboration: null,
             message: userErrorMessage(
-              response.error,
+              error,
               "Failed to open collaborative editing.",
             ),
           });
           return;
         }
 
-        const sessionId = response.data.collabSessionId;
-        let token = response.data.token;
+        const sessionId = data.collabSessionId;
+        let token = data.token;
         openingSession = { sessionId, token };
 
         if (isDisposed()) {
@@ -213,17 +213,17 @@ export const useFolioCollaborationSession = ({
           return;
         }
 
-        let tokenExpiresAtMs = new Date(response.data.tokenExpiresAt).getTime();
+        let tokenExpiresAtMs = new Date(data.tokenExpiresAt).getTime();
         const seedDocumentBuffer = await (async () => {
-          if (!response.data.shouldSeed) {
+          if (!data.shouldSeed) {
             return null;
           }
 
-          if (response.data.seedDownloadUrl === null) {
+          if (data.seedDownloadUrl === null) {
             panic("Collaborative editing seed file is unavailable.");
           }
 
-          return await fetchSeedDocumentBuffer(response.data.seedDownloadUrl);
+          return await fetchSeedDocumentBuffer(data.seedDownloadUrl);
         })();
 
         if (isDisposed()) {
@@ -268,7 +268,7 @@ export const useFolioCollaborationSession = ({
 
         provider = new hocuspocus.HocuspocusProvider({
           document: ydoc,
-          name: response.data.roomName,
+          name: data.roomName,
           token: async () => (await refreshTokenIfNeeded()) ?? "",
           url: collabUrl,
         });
@@ -337,7 +337,7 @@ export const useFolioCollaborationSession = ({
           const checkpoint = await api["folio-collab-sessions"]({
             sessionId,
           }).checkpoint.post({
-            file: new File([docxBuffer], response.data.fileName, {
+            file: new File([docxBuffer], data.fileName, {
               type: DOCX_MIME,
             }),
             token: freshToken,
@@ -396,7 +396,7 @@ export const useFolioCollaborationSession = ({
             yProseMirror.yCursorPlugin(awareness),
             yProseMirror.yUndoPlugin(),
           ],
-          shouldSeed: response.data.shouldSeed,
+          shouldSeed: data.shouldSeed,
           yXmlFragment,
         };
         openingSession = null;

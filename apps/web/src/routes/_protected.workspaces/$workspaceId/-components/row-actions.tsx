@@ -73,7 +73,7 @@ import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -589,16 +589,16 @@ export const RowActions = ({
     let failedCount = 0;
     for (const e of targets) {
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: duplicate mutations share the same query-key cache invalidation and risk rate limits if fired concurrently
-      const result = await Result.tryPromise(
-        async () =>
-          await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .duplicate.post({
-              queryKey: entitiesKeys.all(workspaceId),
-              entityId: toSafeId<"entity">(e.entityId),
-            }),
-      );
-      if (Result.isError(result) || result.value.error) {
+      const result = await Result.tryPromise(async () => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .duplicate.post({
+            queryKey: entitiesKeys.all(workspaceId),
+            entityId: toSafeId<"entity">(e.entityId),
+          });
+        return unwrapEden(response);
+      });
+      if (Result.isError(result)) {
         failedCount++;
       }
     }

@@ -217,25 +217,22 @@ function RouteComponent() {
         query,
         fetch: { signal: controller.signal },
       });
+      const { data, error } = response;
 
       // Discard if aborted (filter changed mid-flight).
       if (controller.signal.aborted) {
         return;
       }
 
-      if (response.error) {
+      if (error) {
         stellaToast.add({
           type: "error",
           title: t("clauses.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
+          description: userErrorMessage(error, t("common.unexpectedError")),
         });
         return;
       }
 
-      const { data } = response;
       if (data instanceof Response) {
         return;
       }

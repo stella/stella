@@ -6,17 +6,16 @@ export const readCappedBytes = async (
   body: ReadableStream<Uint8Array>,
   maxBytes: number,
 ): Promise<Uint8Array | null> => {
-  const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   let overflowed = false;
-  const readable = {
-    [Symbol.asyncIterator]: () => ({
-      next: async () => await reader.read(),
-    }),
-  };
-
+  const reader = body.getReader();
   try {
+    const readable = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => await reader.read(),
+      }),
+    };
     for await (const value of readable) {
       total += value.byteLength;
       if (total > maxBytes) {

@@ -98,42 +98,47 @@ export const readBoundedOcrJson = async (
     });
   }
 
-  const reader = response.body.getReader();
   const bytes = new Uint8Array(maxBytes);
   let chunkCount = 0;
   let totalBytes = 0;
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- a response stream must be pulled sequentially; chunk and byte caps bound the loop
-    const chunk = await reader.read();
-    if (chunk.done) {
-      break;
+  const reader = response.body.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- a response stream must be pulled sequentially; chunk and byte caps bound the loop
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      const value: unknown = chunk.value;
+      if (!(value instanceof Uint8Array)) {
+        throw new DocumentOcrProviderError({
+          code: "invalid_response",
+          message: "OCR service returned an invalid response body",
+        });
+      }
+      chunkCount += 1;
+      if (
+        chunkCount > OCR_MAX_RESPONSE_CHUNKS ||
+        value.byteLength > maxBytes - totalBytes
+      ) {
+        throw new DocumentOcrProviderError({
+          code: "response_too_large",
+          message: "OCR service response exceeded the allowed size",
+        });
+      }
+      bytes.set(value, totalBytes);
+      totalBytes += value.byteLength;
     }
-    const value: unknown = chunk.value;
-    if (!(value instanceof Uint8Array)) {
-      throw new DocumentOcrProviderError({
-        code: "invalid_response",
-        message: "OCR service returned an invalid response body",
-      });
-    }
-    chunkCount += 1;
-    if (
-      chunkCount > OCR_MAX_RESPONSE_CHUNKS ||
-      value.byteLength > maxBytes - totalBytes
-    ) {
-      // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before the bounded provider error is surfaced
-      await reader.cancel();
-      throw new DocumentOcrProviderError({
-        code: "response_too_large",
-        message: "OCR service response exceeded the allowed size",
-      });
-    }
-    bytes.set(value, totalBytes);
-    totalBytes += value.byteLength;
+    const parsed: unknown = JSON.parse(
+      new TextDecoder().decode(bytes.subarray(0, totalBytes)),
+    );
+    return parsed;
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
   }
-  const parsed: unknown = JSON.parse(
-    new TextDecoder().decode(bytes.subarray(0, totalBytes)),
-  );
-  return parsed;
 };
 
 const serviceUrl = (): string => {

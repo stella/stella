@@ -178,35 +178,14 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       },
     }));
 
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .playbooks({
-            playbookId: toSafeId<"playbookDefinition">(playbookId),
-          })
-          .review.post(
-            {
-              entityId: toSafeId<"entity">(entityId),
-              fileFieldId: toSafeId<"field">(fileFieldId),
-            },
-            {
-              fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) },
-            },
-          ),
-    );
-
-    // The request threw (client timeout / dropped connection) instead of
-    // returning an Eden response — move to the error state so the facet is not
-    // stuck on "Reviewing…". There is no Eden error payload to report.
-    if (Result.isError(result)) {
+    const failUnexpected = () => {
       set((state) => {
         const current = state.sessions[key] ?? EMPTY_SESSION;
         return {
           sessions: {
             ...state.sessions,
             [key]: {
-              status: "error",
+              status: "error" as const,
               playbookId,
               findings: current.findings,
               fixState: current.fixState,
@@ -216,13 +195,45 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           },
         };
       });
-      return { ok: false, message: unexpectedErrorMessage, error: null };
+      return {
+        ok: false as const,
+        message: unexpectedErrorMessage,
+        error: null,
+      };
+    };
+
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .playbooks({
+          playbookId: toSafeId<"playbookDefinition">(playbookId),
+        })
+        .review.post(
+          {
+            entityId: toSafeId<"entity">(entityId),
+            fileFieldId: toSafeId<"field">(fileFieldId),
+          },
+          {
+            fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) },
+          },
+        );
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: response.data };
+    });
+
+    // The request threw (client timeout / dropped connection) instead of
+    // returning an Eden response — move to the error state so the facet is not
+    // stuck on "Reviewing…". There is no Eden error payload to report.
+    if (Result.isError(result)) {
+      return failUnexpected();
     }
-
-    const response = result.value;
-
-    if (response.error) {
-      const message = userErrorMessage(response.error, unexpectedErrorMessage);
+    if (result.value.status === "error") {
+      const message = userErrorMessage(
+        result.value.error,
+        unexpectedErrorMessage,
+      );
       set((state) => {
         const current = state.sessions[key] ?? EMPTY_SESSION;
         return {
@@ -239,16 +250,17 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           },
         };
       });
-      return { ok: false, message, error: response.error };
+      return { ok: false, message, error: result.value.error };
     }
 
+    const findings = result.value.data;
     set((state) => ({
       sessions: {
         ...state.sessions,
         [key]: {
           status: "idle",
           playbookId,
-          findings: response.data,
+          findings,
           // A fresh run supersedes prior fixes — old revision ids
           // belong to a stale set of findings.
           fixState: {},

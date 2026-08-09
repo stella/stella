@@ -178,12 +178,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   const handleCreateTask = useCallback(async () => {
-    const response = await api.tasks({ workspaceId }).put({
-      queryKey: entitiesKeys.all(workspaceId),
-      name: t("tasks.untitled"),
-    });
-    const entityId = response.data?.entityId;
-    if (response.error || !entityId) {
+    const { data: taskData, error: taskError } = await api
+      .tasks({ workspaceId })
+      .put({
+        queryKey: entitiesKeys.all(workspaceId),
+        name: t("tasks.untitled"),
+      });
+    const entityId = taskData?.entityId;
+    if (taskError || !entityId) {
       stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",

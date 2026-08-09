@@ -152,40 +152,45 @@ const consumeStream = async (
   body: ReadableStream<Uint8Array>,
   handlers: StreamHandlers,
 ): Promise<void> => {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let done = false;
-  while (!done) {
-    // oxlint-disable-next-line no-await-in-loop -- streaming reader: each read advances the same ReadableStream and must complete before the next, so reads are inherently sequential
-    const chunk = await reader.read();
-    if (chunk.done) {
-      break;
-    }
-    buffer += decoder.decode(chunk.value, { stream: true });
-    const boundary = buffer.lastIndexOf("\n\n");
-    if (boundary === -1) {
-      continue;
-    }
-    const ready = buffer.slice(0, boundary + 2);
-    buffer = buffer.slice(boundary + 2);
-    for (const event of parseSSE(ready)) {
-      if (event.event === "token") {
-        const text = readStringField(event.data, "text");
-        if (text !== null && text.length > 0) {
-          handlers.onToken(text);
-        }
-      } else if (event.event === "error") {
-        handlers.onStreamError(
-          readStringField(event.data, "message") ?? "stream error",
-        );
-        done = true;
-        break;
-      } else if (event.event === "done") {
-        done = true;
+  const reader = body.getReader();
+  try {
+    while (!done) {
+      // oxlint-disable-next-line no-await-in-loop -- streaming reader: each read advances the same ReadableStream and must complete before the next, so reads are inherently sequential
+      const chunk = await reader.read();
+      if (chunk.done) {
         break;
       }
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const boundary = buffer.lastIndexOf("\n\n");
+      if (boundary === -1) {
+        continue;
+      }
+      const ready = buffer.slice(0, boundary + 2);
+      buffer = buffer.slice(boundary + 2);
+      for (const event of parseSSE(ready)) {
+        if (event.event === "token") {
+          const text = readStringField(event.data, "text");
+          if (text !== null && text.length > 0) {
+            handlers.onToken(text);
+          }
+        } else if (event.event === "error") {
+          handlers.onStreamError(
+            readStringField(event.data, "message") ?? "stream error",
+          );
+          done = true;
+          break;
+        } else if (event.event === "done") {
+          done = true;
+          break;
+        }
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 };
 

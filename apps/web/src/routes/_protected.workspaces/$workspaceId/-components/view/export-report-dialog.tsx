@@ -243,18 +243,21 @@ const ExportReportDialogBody = ({
         };
 
     setSubmitting(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .reports.export.post({
-            templateRef,
-            viewId: toSafeId<"workspaceView">(view.id),
-            mode,
-            format,
-            aiNarrative,
-          }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports.export.post({
+          templateRef,
+          viewId: toSafeId<"workspaceView">(view.id),
+          mode,
+          format,
+          aiNarrative,
+        });
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const, data: unwrapEden(response) };
+    });
     setSubmitting(false);
 
     if (Result.isError(result)) {
@@ -266,22 +269,20 @@ const ExportReportDialogBody = ({
       });
       return;
     }
-
-    const response = result.value;
-    if (response.error) {
-      analytics.captureError(toAPIError(response.error));
+    if (result.value.status === "error") {
+      analytics.captureError(toAPIError(result.value.error));
       stellaToast.add({
         type: "error",
         title: t("workspaces.views.reportExport.failed"),
         description: userErrorMessage(
-          response.error,
+          result.value.error,
           t("common.unexpectedError"),
         ),
       });
       return;
     }
 
-    onStarted(response.data.exportId, mode);
+    onStarted(result.value.data.exportId, mode);
   };
 
   // "Customize" is offered only for a built-in: cloning it into the org's
@@ -295,12 +296,15 @@ const ExportReportDialogBody = ({
       return;
     }
     setCustomizing(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey });
+      if (response.error) {
+        return { status: "error" as const, error: response.error };
+      }
+      return { status: "success" as const };
+    });
     setCustomizing(false);
 
     if (Result.isError(result)) {
@@ -311,12 +315,14 @@ const ExportReportDialogBody = ({
       });
       return;
     }
-    const response = result.value;
-    if (response.error) {
-      analytics.captureError(toAPIError(response.error));
+    if (result.value.status === "error") {
+      analytics.captureError(toAPIError(result.value.error));
       stellaToast.add({
         type: "error",
-        title: userErrorMessage(response.error, t("common.unexpectedError")),
+        title: userErrorMessage(
+          result.value.error,
+          t("common.unexpectedError"),
+        ),
       });
       return;
     }

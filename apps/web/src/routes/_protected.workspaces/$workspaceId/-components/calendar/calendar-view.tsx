@@ -105,15 +105,17 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       datePropertyId === TASK_DATE_IDS[1]
         ? toAllDayAgendaDateTime(date)
         : undefined;
-    const response = await api.tasks({ workspaceId }).put({
-      queryKey: entitiesKeys.all(workspaceId),
-      name: t("tasks.untitled"),
-      ...(dueDate && { dueDate }),
-      ...(startAt && { allDay: true, startAt }),
-    });
+    const { data: taskData, error: taskError } = await api
+      .tasks({ workspaceId })
+      .put({
+        queryKey: entitiesKeys.all(workspaceId),
+        name: t("tasks.untitled"),
+        ...(dueDate && { dueDate }),
+        ...(startAt && { allDay: true, startAt }),
+      });
 
-    const entityId = response.data?.entityId;
-    if (response.error || !entityId) {
+    const entityId = taskData?.entityId;
+    if (taskError || !entityId) {
       stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",

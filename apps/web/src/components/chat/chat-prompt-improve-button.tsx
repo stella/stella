@@ -13,7 +13,7 @@ import Tooltip from "@/components/tooltip";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 type ChatPromptImproveButtonProps = {
   anonymized: boolean;
@@ -45,15 +45,15 @@ export const ChatPromptImproveButton = ({
     }
 
     setIsPending(true);
-    const result = await Result.tryPromise(
-      async () =>
-        await api.chat["improve-prompt"].post({
-          prompt,
-          sendMode: anonymized
-            ? CHAT_SEND_MODE.anonymized
-            : CHAT_SEND_MODE.rawOverride,
-        }),
-    );
+    const result = await Result.tryPromise(async () => {
+      const response = await api.chat["improve-prompt"].post({
+        prompt,
+        sendMode: anonymized
+          ? CHAT_SEND_MODE.anonymized
+          : CHAT_SEND_MODE.rawOverride,
+      });
+      return unwrapEden(response);
+    });
     setIsPending(false);
 
     if (Result.isError(result)) {
@@ -64,15 +64,6 @@ export const ChatPromptImproveButton = ({
       });
       return;
     }
-    if (result.value.error) {
-      getAnalytics().captureError(toAPIError(result.value.error));
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-      return;
-    }
-
     if (!isCurrentDraftUnchanged({ controller, editor, prompt })) {
       stellaToast.add({
         title: t("chat.improvePromptDraftChanged"),
@@ -81,7 +72,7 @@ export const ChatPromptImproveButton = ({
       return;
     }
 
-    controller.setContent(result.value.data.prompt);
+    controller.setContent(result.value.prompt);
     controller.focus();
   };
 

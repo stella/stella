@@ -77,6 +77,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
@@ -1030,15 +1031,15 @@ const ComposerMcpSubmenu = ({
   };
 
   const handleToggle = async (connectionId: string, nextEnabled: boolean) => {
-    const result = await Result.tryPromise(
-      async () =>
-        await api.mcp
-          .connections({
-            connectionId: toSafeId<"mcpUserConnection">(connectionId),
-          })
-          .patch({ enabled: nextEnabled, queryKey: ["mcp"] }),
-    );
-    if (Result.isError(result) || result.value.error) {
+    const result = await Result.tryPromise(async () => {
+      const response = await api.mcp
+        .connections({
+          connectionId: toSafeId<"mcpUserConnection">(connectionId),
+        })
+        .patch({ enabled: nextEnabled, queryKey: ["mcp"] });
+      return unwrapEden(response);
+    });
+    if (Result.isError(result)) {
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
       return;
     }

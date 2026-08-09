@@ -1451,25 +1451,22 @@ const RegistryAutofillControl = ({
       getAnalytics().captureError(error);
       return;
     }
+    const { data, error } = response;
     if (seq !== lookupSeq.current) {
       // A newer lookup started while this one was in flight; drop its result.
       return;
     }
     setLoading(false);
 
-    if (response.error) {
+    if (error) {
       stellaToast.add({
         type: "error",
         title: t("templates.registryNotFound"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorMessage(error, t("common.unexpectedError")),
       });
       return;
     }
 
-    const { data } = response;
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
       stellaToast.add({
         type: "error",
@@ -2041,7 +2038,7 @@ export const TemplateForm = ({
 
       const fillResponse = async () => {
         if (templateId) {
-          return await api
+          return api
             .templates({ templateId })
             .fill.post(
               { values: valuesJson, clauseOverrides },
@@ -2053,7 +2050,7 @@ export const TemplateForm = ({
             "TemplateForm: transient fill requires a file when templateId is absent",
           );
         }
-        return await api.templates.fill.post(
+        return api.templates.fill.post(
           { file, values: valuesJson },
           { query: { format } },
         );

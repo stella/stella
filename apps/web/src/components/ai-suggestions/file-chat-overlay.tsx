@@ -143,7 +143,7 @@ import {
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -707,23 +707,18 @@ const persistQueuedSuggestions = async ({
     return;
   }
 
-  const result = await Result.tryPromise(
-    async () =>
-      await api["docx-suggestions"]({ workspaceId })
-        .entity({ entityId })
-        .put({ suggestions, originThreadId: chatThreadId ?? null }),
-  );
+  const result = await Result.tryPromise(async () => {
+    const response = await api["docx-suggestions"]({ workspaceId })
+      .entity({ entityId })
+      .put({ suggestions, originThreadId: chatThreadId ?? null });
+    return unwrapEden(response);
+  });
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error);
     return;
   }
-  const { data, error } = result.value;
-  if (error) {
-    getAnalytics().captureError(toAPIError(error));
-    return;
-  }
   const refToId = Object.fromEntries(
-    data.items.map(({ ref, id }) => [ref, id]),
+    result.value.items.map(({ ref, id }) => [ref, id]),
   );
   useReviewStore.getState().reconcileServerIds(entityId, refToId);
 
