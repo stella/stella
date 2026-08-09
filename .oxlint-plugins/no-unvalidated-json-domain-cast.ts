@@ -159,6 +159,9 @@ export default eslintCompatPlugin({
           new Array<ESTree.AssignmentExpression>();
         const typedInitializationCandidates =
           new Array<ESTree.VariableDeclarator>();
+        const assertionCandidates = new Array<unknown>();
+        const functionReturnCandidates = new Array<unknown>();
+        const genericCallCandidates = new Array<unknown>();
         const isRawJsonBoundary = (node: unknown): boolean =>
           isJsonParseCall(node, jsonParseAliases) || isResponseJsonCall(node);
 
@@ -248,6 +251,14 @@ export default eslintCompatPlugin({
             isIdentifier(typeNode.typeName)
           ) {
             const typeName = typeNode.typeName.name;
+            if (typeName === "Promise") {
+              const typeArguments = isAstNode(typeNode.typeArguments)
+                ? typeNode.typeArguments.params
+                : undefined;
+              return Array.isArray(typeArguments)
+                ? typeDisposition(typeArguments.at(0), seenTypeNames)
+                : "unresolved";
+            }
             if (seenTypeNames.has(typeName)) {
               return "unresolved";
             }
@@ -525,7 +536,17 @@ export default eslintCompatPlugin({
               return false;
             }
             return current.properties.some((property) => {
-              if (!isAstNode(property) || property.type !== "Property") {
+              if (!isAstNode(property)) {
+                return false;
+              }
+              if (property.type === "SpreadElement") {
+                return hasUnvalidatedJsonAtTypedTarget(
+                  property.argument,
+                  typeAnnotation,
+                  seenVariables,
+                );
+              }
+              if (property.type !== "Property") {
                 return false;
               }
               const propertyName = getPropertyName(property.key);
@@ -551,13 +572,23 @@ export default eslintCompatPlugin({
               return false;
             }
             return current.elements.some((element, index) => {
-              if (!isAstNode(element) || element.type === "SpreadElement") {
+              if (!isAstNode(element)) {
                 return false;
               }
               const elementType = arrayElementTypeAnnotation(
                 typeAnnotation,
                 index,
               );
+              if (element.type === "SpreadElement") {
+                return (
+                  elementType !== undefined &&
+                  hasUnvalidatedJsonAtTypedTarget(
+                    element.argument,
+                    elementType,
+                    seenVariables,
+                  )
+                );
+              }
               return (
                 elementType !== undefined &&
                 hasUnvalidatedJsonAtTypedTarget(
@@ -605,8 +636,10 @@ export default eslintCompatPlugin({
             return;
           }
           if (
-            isUnvalidatedJsonValue(node.expression) &&
-            !isRawJsonType(node.typeAnnotation)
+            hasUnvalidatedJsonAtTypedTarget(
+              node.expression,
+              node.typeAnnotation,
+            )
           ) {
             context.report({ node, messageId: "unvalidatedDomain" });
           }
@@ -642,7 +675,7 @@ export default eslintCompatPlugin({
           if (
             !isAstNode(node) ||
             !node.returnType ||
-            isRawJsonType(node.returnType)
+            typeDisposition(node.returnType) === "open"
           ) {
             return;
           }
@@ -660,19 +693,17 @@ export default eslintCompatPlugin({
             namedTypeAnnotations.clear();
             memberAssignmentCandidates.length = 0;
             typedInitializationCandidates.length = 0;
+            assertionCandidates.length = 0;
+            functionReturnCandidates.length = 0;
+            genericCallCandidates.length = 0;
             return isProductionBoundaryFile(filenameForContext(context));
           },
           CallExpression(node) {
-            const typeArgument = node.typeArguments?.params.at(0);
-            if (
-              typeArgument &&
-              isRawJsonBoundary(node) &&
-              !isRawJsonType(typeArgument)
-            ) {
-              context.report({ node, messageId: "unvalidatedDomain" });
-            }
+            genericCallCandidates.push(node);
           },
-          ArrowFunctionExpression: checkFunctionReturn,
+          ArrowFunctionExpression(node) {
+            functionReturnCandidates.push(node);
+          },
           AssignmentExpression(node) {
             if (node.operator !== "=" || !isUnvalidatedJsonValue(node.right)) {
               return;
@@ -688,9 +719,36 @@ export default eslintCompatPlugin({
               memberAssignmentCandidates.push(node);
             }
           },
-          FunctionDeclaration: checkFunctionReturn,
-          FunctionExpression: checkFunctionReturn,
+          FunctionDeclaration(node) {
+            functionReturnCandidates.push(node);
+          },
+          FunctionExpression(node) {
+            functionReturnCandidates.push(node);
+          },
           "Program:exit"() {
+            for (const node of assertionCandidates) {
+              checkAssertion(node);
+            }
+            for (const node of functionReturnCandidates) {
+              checkFunctionReturn(node);
+            }
+            for (const node of genericCallCandidates) {
+              if (!isAstNode(node)) {
+                continue;
+              }
+              const typeArgument =
+                isAstNode(node.typeArguments) &&
+                Array.isArray(node.typeArguments.params)
+                  ? node.typeArguments.params.at(0)
+                  : undefined;
+              if (
+                typeArgument !== undefined &&
+                isRawJsonBoundary(node) &&
+                typeDisposition(typeArgument) !== "open"
+              ) {
+                context.report({ node, messageId: "unvalidatedDomain" });
+              }
+            }
             for (const declaration of typedInitializationCandidates) {
               if (
                 isAstNode(declaration.id) &&
@@ -726,7 +784,9 @@ export default eslintCompatPlugin({
               }
             }
           },
-          TSSatisfiesExpression: checkAssertion,
+          TSSatisfiesExpression(node) {
+            assertionCandidates.push(node);
+          },
           VariableDeclarator(node) {
             if (node.id.type === "Identifier" && isJsonParseMember(node.init)) {
               jsonParseAliases.add(node.id.name);
@@ -735,7 +795,9 @@ export default eslintCompatPlugin({
               typedInitializationCandidates.push(node);
             }
           },
-          TSAsExpression: checkAssertion,
+          TSAsExpression(node) {
+            assertionCandidates.push(node);
+          },
           TSTypeAliasDeclaration(node) {
             if (isIdentifierReference(node.id)) {
               const variable = resolveVariable(node.id);
@@ -744,7 +806,9 @@ export default eslintCompatPlugin({
               }
             }
           },
-          TSTypeAssertion: checkAssertion,
+          TSTypeAssertion(node) {
+            assertionCandidates.push(node);
+          },
         };
       },
     },

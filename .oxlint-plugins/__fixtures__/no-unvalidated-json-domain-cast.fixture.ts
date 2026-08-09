@@ -47,6 +47,9 @@ export const genericResponseClaim = async () =>
 export const genericUnknownResponse = async () =>
   await genericResponse.json<unknown>();
 
+export const genericRawAliasResponse = async () =>
+  await genericResponse.json<RawPayload>();
+
 export const assertedParse = () =>
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast, typescript/no-unsafe-type-assertion
   JSON.parse(raw) as RegistryCompany;
@@ -103,6 +106,12 @@ export const annotatedObjectLiteralParse = () => {
   return payload;
 };
 
+export const annotatedSpreadParse = () => {
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  const payload: RegistryState = { ...JSON.parse(raw) };
+  return payload;
+};
+
 export const annotatedArrayLiteralParse = () => {
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   const companies: RegistryCompany[] = [JSON.parse(raw)];
@@ -117,6 +126,12 @@ export const annotatedOpenObjectLiteralParse = () => {
 export const satisfiesParse = () =>
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   JSON.parse(raw) satisfies RegistryCompany;
+
+export const satisfiesObjectLiteralParse = () =>
+  // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
+  ({ company: JSON.parse(raw), raw: null }) satisfies RegistryState;
+
+export const assertedRawAlias = () => JSON.parse(raw) as RawPayload;
 
 export const assignedParse = () => {
   let parsed: RegistryCompany;
@@ -243,7 +258,10 @@ export const readonlyRawJsonValue = () => {
 };
 
 export const rawJsonFunctionReturn = (): JsonValue => JSON.parse(raw);
+export const rawJsonAliasFunctionReturn = (): RawPayload => JSON.parse(raw);
 export const rawJsonAsyncFunctionReturn = async (): Promise<unknown> =>
+  await response.json();
+export const rawJsonAliasAsyncFunctionReturn = async (): Promise<RawPayload> =>
   await response.json();
 
 export const rawJsonAssignment = () => {
