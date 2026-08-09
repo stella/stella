@@ -602,7 +602,7 @@ describe("public law sitemap", () => {
       "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
     );
     expect(source).toContain("if (isDocumentRoute)");
-    expect(source).toContain("timeEntriesOptions(workspaceId");
+    expect(source).toContain("timeEntrySummaryOptions(");
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
