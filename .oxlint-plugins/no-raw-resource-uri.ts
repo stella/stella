@@ -114,7 +114,7 @@ export default eslintCompatPlugin({
                 (reference) =>
                   typeof reference.isWrite === "function" &&
                   reference.isWrite() &&
-                  reference.init !== true,
+                  !reference.init,
               )
             ) {
               return null;

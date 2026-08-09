@@ -1,5 +1,13 @@
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import type { ChatRefInputState } from "@/api/lib/chat/ref-token";
+import { Result } from "better-result";
+
+import type {
+  ChatRefRegistry,
+  EntityTarget,
+} from "@/api/lib/chat/ref-registry";
+import type {
+  ChatEntityRefContext,
+  ChatRefInputState,
+} from "@/api/lib/chat/ref-token";
 
 import type { InputRefParam, RegistryRefFieldMapEntry } from "./ref-field-map";
 import {
@@ -59,7 +67,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * its `matter_id`), so the sibling matter param is the reliable source; without
  * one the registry falls back to a ref it already minted for that entity id.
  */
-const findWorkspaceId = ({
+const findMatterWorkspaceId = ({
   input,
   inputRefs,
 }: {
@@ -74,7 +82,27 @@ const findWorkspaceId = ({
   return undefined;
 };
 
+const findEntityWorkspaceId = ({
+  contexts,
+  input,
+  matterWorkspaceId,
+  param,
+}: {
+  contexts: readonly ChatEntityRefContext[];
+  input: Record<string, unknown>;
+  matterWorkspaceId: unknown;
+  param: string;
+}): unknown => {
+  if (matterWorkspaceId !== undefined) {
+    return matterWorkspaceId;
+  }
+  const entityId = input[param];
+  return contexts.find((context) => context.entity.id === entityId)?.workspace
+    .id;
+};
+
 export type HydrateRegistryToolInputRefsProps = {
+  entityContexts?: readonly ChatEntityRefContext[] | undefined;
   input: unknown;
   inputState: ChatRefInputState;
   refRegistry: ChatRefRegistry;
@@ -83,6 +111,7 @@ export type HydrateRegistryToolInputRefsProps = {
 
 export type ResolveRegistryToolInputRefsProps = {
   input: unknown;
+  onEntityRefResolved?: ((target: EntityTarget) => void) | undefined;
   refRegistry: ChatRefRegistry;
   toolName: string;
 };
@@ -94,6 +123,7 @@ export type ResolveRegistryToolInputRefsProps = {
  */
 export const resolveRegistryToolInputRefs = ({
   input,
+  onEntityRefResolved,
   refRegistry,
   toolName,
 }: ResolveRegistryToolInputRefsProps): unknown => {
@@ -107,15 +137,30 @@ export const resolveRegistryToolInputRefs = ({
     if (!(param in resolved)) {
       continue;
     }
+    const value = resolved[param];
+    if (
+      kind === "entity" &&
+      typeof value === "string" &&
+      onEntityRefResolved !== undefined
+    ) {
+      const target = refRegistry.resolveEntityRefTargets([value]);
+      if (Result.isOk(target)) {
+        const firstTarget = target.value.at(0);
+        if (firstTarget !== undefined) {
+          onEntityRefResolved(firstTarget);
+        }
+      }
+    }
     resolved[param] = refRegistry.resolveRefId({
       kind,
-      value: resolved[param],
+      value,
     });
   }
   return resolved;
 };
 
 export const hydrateRegistryToolInputRefs = ({
+  entityContexts = [],
   input,
   inputState,
   refRegistry,
@@ -126,7 +171,7 @@ export const hydrateRegistryToolInputRefs = ({
     return input;
   }
 
-  const workspaceId = findWorkspaceId({ input, inputRefs });
+  const matterWorkspaceId = findMatterWorkspaceId({ input, inputRefs });
   const hydrated = { ...input };
   for (const { kind, param } of inputRefs) {
     if (!(param in hydrated)) {
@@ -136,7 +181,15 @@ export const hydrateRegistryToolInputRefs = ({
       inputState,
       kind,
       value: hydrated[param],
-      workspaceId,
+      workspaceId:
+        kind === "entity"
+          ? findEntityWorkspaceId({
+              contexts: entityContexts,
+              input,
+              matterWorkspaceId,
+              param,
+            })
+          : matterWorkspaceId,
     });
   }
   return hydrated;

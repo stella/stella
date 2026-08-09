@@ -5,7 +5,11 @@ import { and, eq } from "drizzle-orm";
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_TURN_INTENT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -125,7 +129,10 @@ import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
 } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
-import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
+import {
+  hydrateRegistryToolOutputRefs,
+  resolveRegistryToolOutputRefs,
+} from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -160,7 +167,10 @@ import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
+  CHAT_REF_INPUT_STATE,
+  isChatRefContext,
   resolveChatRefInputState,
+  type ChatEntityRefContext,
   type ChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -2262,6 +2272,10 @@ const prepareChatContext = async ({
         workspaceId,
       }),
     );
+    const messagesWithHydratedRefs = hydrateAssistantMessageRefs({
+      messages: messagesWithActiveFileFallback,
+      refRegistry,
+    });
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
@@ -2269,10 +2283,7 @@ const prepareChatContext = async ({
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
       activeSkillContext: systemPrompt.activeSkillContext,
-      hydratedMessages: hydrateAssistantMessageRefs({
-        messages: messagesWithActiveFileFallback,
-        refRegistry,
-      }),
+      hydratedMessages: messagesWithHydratedRefs,
     });
   });
 
@@ -2494,8 +2505,10 @@ const resolveAssistantMessageRefs = ({
 }: ResolveAssistantMessageRefsProps): PersistableChatMessage[] => {
   const resolvePart = (
     part: ChatMessage["parts"][number],
+    entityContexts: ChatEntityRefContext[],
+    toolNamesByCallId: ReadonlyMap<string, string>,
   ): ChatMessage["parts"][number] => {
-    const withDeclaredToolRefs =
+    let withDeclaredToolRefs: unknown =
       part.type === "tool-call"
         ? {
             ...part,
@@ -2503,6 +2516,19 @@ const resolveAssistantMessageRefs = ({
               ? {
                   input: resolveRegistryToolInputRefs({
                     input: part.input,
+                    onEntityRefResolved: (target) => {
+                      entityContexts.push({
+                        entity: resourceRef({
+                          type: RESOURCE_TYPE.ENTITY,
+                          id: target.entityId,
+                        }),
+                        toolCallId: part.id,
+                        workspace: resourceRef({
+                          type: RESOURCE_TYPE.WORKSPACE,
+                          id: target.workspaceId,
+                        }),
+                      });
+                    },
                     refRegistry,
                     toolName: part.name,
                   }),
@@ -2519,6 +2545,23 @@ const resolveAssistantMessageRefs = ({
               : {}),
           }
         : part;
+    if (part.type === "tool-result" && typeof part.content === "string") {
+      const content = part.content;
+      const toolName = toolNamesByCallId.get(part.toolCallId);
+      const parsed = Result.try((): unknown => JSON.parse(content));
+      if (toolName !== undefined && Result.isOk(parsed)) {
+        const serialized = JSON.stringify(
+          resolveRegistryToolOutputRefs({
+            output: parsed.value,
+            refRegistry,
+            toolName,
+          }),
+        );
+        if (typeof serialized === "string") {
+          withDeclaredToolRefs = { ...part, content: serialized };
+        }
+      }
+    }
     const resolved =
       refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
     if (!isChatPart(resolved)) {
@@ -2527,18 +2570,30 @@ const resolveAssistantMessageRefs = ({
     return resolved;
   };
 
-  return messages.map((message) =>
-    message.role === "assistant"
-      ? {
-          ...message,
-          metadata: {
-            ...message.metadata,
-            refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
-          },
-          parts: message.parts.map(resolvePart),
-        }
-      : message,
-  );
+  return messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const entityContexts: ChatEntityRefContext[] = [];
+    const toolNamesByCallId = new Map<string, string>();
+    for (const part of message.parts) {
+      if (part.type === "tool-call") {
+        toolNamesByCallId.set(part.id, part.name);
+      }
+    }
+    const parts = message.parts.map((part) =>
+      resolvePart(part, entityContexts, toolNamesByCallId),
+    );
+    return {
+      ...message,
+      metadata: {
+        ...message.metadata,
+        refContext: { version: 1, entities: entityContexts },
+        refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+      },
+      parts,
+    };
+  });
 };
 
 type HydrateAssistantMessageRefsProps = {
@@ -2550,35 +2605,81 @@ const hydrateAssistantMessageRefs = ({
   messages,
   refRegistry,
 }: HydrateAssistantMessageRefsProps): ChatMessage[] => {
-  // A persisted tool call carries its input refs already resolved to real ids,
-  // and `arguments` (the provider-visible copy) still carries the *previous*
-  // turn's ref numbering. Re-mint both from the declared input-ref map before
-  // the generic walk, so the replayed call reaches `dehydrateRefs` and the
-  // model as this turn's refs rather than a stale ref beside a raw id.
-  const hydrateToolCallInput = (
+  // A persisted tool call carries its declared refs resolved to real ids.
+  // Re-mint its input and output paths before the generic field-policy walk,
+  // using the server-owned entity context when no matter input is present.
+  const hydrateToolCallPart = (
     part: ChatMessage["parts"][number],
+    entityContexts: readonly ChatEntityRefContext[],
     inputState: ChatRefInputState,
   ): unknown => {
-    if (part.type !== "tool-call" || !("input" in part)) {
+    if (part.type !== "tool-call") {
       return part;
     }
-    const input = hydrateRegistryToolInputRefs({
-      input: part.input,
-      inputState,
-      refRegistry,
-      toolName: part.name,
-    });
-    return input === part.input
-      ? part
-      : { ...part, input, arguments: JSON.stringify(input) };
+    const rawInput: unknown = "input" in part ? part.input : undefined;
+    const input =
+      rawInput === undefined
+        ? undefined
+        : hydrateRegistryToolInputRefs({
+            entityContexts,
+            input: rawInput,
+            inputState,
+            refRegistry,
+            toolName: part.name,
+          });
+    const output =
+      "output" in part
+        ? hydrateRegistryToolOutputRefs({
+            entityContexts,
+            input: rawInput,
+            inputState,
+            output: part.output,
+            refRegistry,
+            toolName: part.name,
+          })
+        : undefined;
+    return {
+      ...part,
+      ...(input === undefined
+        ? {}
+        : { input, arguments: JSON.stringify(input) }),
+      ...(output === undefined ? {} : { output }),
+    };
   };
 
   const hydratePart = (
     part: ChatMessage["parts"][number],
+    entityContexts: readonly ChatEntityRefContext[],
     inputState: ChatRefInputState,
+    toolCallsById: ReadonlyMap<string, { input: unknown; name: string }>,
   ): ChatMessage["parts"][number] => {
+    let withDeclaredToolRefs = hydrateToolCallPart(
+      part,
+      entityContexts,
+      inputState,
+    );
+    if (part.type === "tool-result" && typeof part.content === "string") {
+      const content = part.content;
+      const toolCall = toolCallsById.get(part.toolCallId);
+      const parsed = Result.try((): unknown => JSON.parse(content));
+      if (toolCall !== undefined && Result.isOk(parsed)) {
+        const serialized = JSON.stringify(
+          hydrateRegistryToolOutputRefs({
+            entityContexts,
+            input: toolCall.input,
+            inputState,
+            output: parsed.value,
+            refRegistry,
+            toolName: toolCall.name,
+          }),
+        );
+        if (typeof serialized === "string") {
+          withDeclaredToolRefs = { ...part, content: serialized };
+        }
+      }
+    }
     const hydrated = refRegistry.hydrateAssistantValueRefs(
-      hydrateToolCallInput(part, inputState),
+      withDeclaredToolRefs,
       inputState,
     );
     if (!isChatPart(hydrated)) {
@@ -2611,21 +2712,73 @@ const hydrateAssistantMessageRefs = ({
         }
       : part;
 
-  return messages.map((message) => {
+  const hydratedMessages: ChatMessage[] = [];
+  for (const message of messages) {
     if (message.role === "assistant") {
       const inputState = resolveChatRefInputState(
         message.metadata?.refEncoding,
       );
-      return {
+      const refContext = message.metadata?.refContext;
+      if (
+        inputState === CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2 &&
+        !isChatRefContext(refContext)
+      ) {
+        panic("Stored chat reference context is invalid");
+      }
+      const entityContexts = isChatRefContext(refContext)
+        ? refContext.entities
+        : [];
+      const toolCallsById = new Map<string, { input: unknown; name: string }>();
+      for (const part of message.parts) {
+        if (part.type === "tool-call") {
+          toolCallsById.set(part.id, {
+            input: "input" in part ? part.input : undefined,
+            name: part.name,
+          });
+        }
+      }
+      hydratedMessages.push({
         ...message,
-        parts: message.parts.map((part) => hydratePart(part, inputState)),
-      };
+        // Ref context is persistence-only. Hydration has consumed it, and
+        // leaving raw workspace ids in message metadata would make the
+        // provider-bound ingress guard report a false residual-id leak.
+        metadata:
+          message.metadata === undefined
+            ? undefined
+            : { ...message.metadata, refContext: undefined },
+        parts: message.parts.map((part) => {
+          let toolCallId: string | undefined;
+          if (part.type === "tool-call") {
+            toolCallId = part.id;
+          } else if (part.type === "tool-result") {
+            toolCallId = part.toolCallId;
+          }
+          const partEntityContexts =
+            toolCallId === undefined
+              ? []
+              : entityContexts.filter(
+                  (context) => context.toolCallId === toolCallId,
+                );
+          return hydratePart(
+            part,
+            partEntityContexts,
+            inputState,
+            toolCallsById,
+          );
+        }),
+      });
+      continue;
     }
     if (message.role === "user") {
-      return { ...message, parts: message.parts.map(hydrateUserPart) };
+      hydratedMessages.push({
+        ...message,
+        parts: message.parts.map(hydrateUserPart),
+      });
+      continue;
     }
-    return message;
-  });
+    hydratedMessages.push(message);
+  }
+  return hydratedMessages;
 };
 
 type RecomputeThreadDataScopeProps = {

@@ -2043,8 +2043,11 @@ const createOutgoingChunkTransformer = ({
           ...chunk,
           messages: restoreSnapshotMessages(chunk.messages, {
             boundary,
+            lenientCollector,
             resolveAssistantToolInputRefs,
+            resolveAssistantToolOutputRefs,
             resolveAssistantValueRefs,
+            toolNamesByCallId,
           }),
         },
       ];
@@ -2497,89 +2500,66 @@ const transformToolCallOutput = ({
 type RestoreVisibleStringOptions = {
   boundary: ChatThirdPartyBoundary;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
 };
 
-const createVisibleStringRestorer = ({
-  boundary,
-  resolveAssistantValueRefs,
-}: RestoreVisibleStringOptions) => {
-  const restoreString = (text: string): string => {
+const createVisibleValueRestorer =
+  ({ boundary, resolveAssistantValueRefs }: RestoreVisibleStringOptions) =>
+  (value: unknown): unknown => {
     const visible =
       boundary.type === "anonymized"
-        ? deanonymizeUnknownStringsFromBoundary(boundary, text, "lenient")
-        : text;
-    if (typeof visible !== "string") {
-      return panic("String restoration changed an AG-UI leaf's shape");
-    }
-    const resolved = resolveAssistantValueRefs?.(visible) ?? visible;
+        ? deanonymizeUnknownStringsFromBoundary(boundary, value, "lenient")
+        : value;
+    return resolveAssistantValueRefs?.(visible) ?? visible;
+  };
+
+const createVisibleStringRestorer = (options: RestoreVisibleStringOptions) => {
+  const restoreValue = createVisibleValueRestorer(options);
+  const restoreString = (text: string): string => {
+    const resolved = restoreValue(text);
     if (typeof resolved !== "string") {
-      return panic("Chat ref restoration changed an AG-UI leaf's shape");
+      return panic("Value restoration changed an AG-UI string's shape");
     }
     return resolved;
   };
   return restoreString;
 };
 
-const restoreApplicationStringsInPlace = (
-  node: unknown,
-  restoreString: (text: string) => string,
-): void => {
-  if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index += 1) {
-      const child: unknown = node[index];
-      if (typeof child === "string") {
-        node[index] = restoreString(child);
-      } else {
-        restoreApplicationStringsInPlace(child, restoreString);
-      }
-    }
-    return;
-  }
-  if (!isRecord(node)) {
-    return;
-  }
-  for (const [key, child] of Object.entries(node)) {
-    if (typeof child === "string") {
-      node[key] = restoreString(child);
-    } else {
-      restoreApplicationStringsInPlace(child, restoreString);
-    }
-  }
-};
-
 const restoreRecordProperty = (
   record: Record<string, unknown>,
   key: string,
-  restoreString: (text: string) => string,
+  restoreValue: (value: unknown) => unknown,
 ): void => {
   const value = record[key];
-  if (typeof value === "string") {
-    record[key] = restoreString(value);
-    return;
+  if (value !== undefined) {
+    record[key] = restoreValue(value);
   }
-  restoreApplicationStringsInPlace(value, restoreString);
 };
 
-const restoreMetadataStringsInPlace = (
+const restoreMetadataValuesInPlace = (
   metadata: unknown,
-  restoreString: (text: string) => string,
+  restoreValue: (value: unknown) => unknown,
 ): void => {
   if (!isRecord(metadata)) {
     return;
   }
-  for (const [key, value] of Object.entries(metadata)) {
-    if (key !== "tanstack:interruptBinding") {
-      if (typeof value === "string") {
-        metadata[key] = restoreString(value);
-      } else {
-        restoreApplicationStringsInPlace(value, restoreString);
-      }
-      continue;
-    }
-    if (isRecord(value)) {
-      restoreRecordProperty(value, "originalArgs", restoreString);
-    }
+  const applicationMetadata = Object.fromEntries(
+    Object.entries(metadata).filter(
+      ([key]) => key !== "tanstack:interruptBinding",
+    ),
+  );
+  const restoredMetadata = restoreValue(applicationMetadata);
+  if (!isRecord(restoredMetadata)) {
+    panic("Value restoration changed AG-UI metadata's shape");
+  }
+  for (const [key, value] of Object.entries(restoredMetadata)) {
+    metadata[key] = value;
+  }
+
+  const binding = metadata["tanstack:interruptBinding"];
+  if (isRecord(binding)) {
+    restoreRecordProperty(binding, "originalArgs", restoreValue);
   }
 };
 
@@ -2590,11 +2570,17 @@ const restoreMetadataStringsInPlace = (
  * nested leaf, even when an application happens to use keys such as `id` or
  * `type`.
  */
+type RestoreSnapshotMessagesOptions = RestoreVisibleStringOptions & {
+  lenientCollector: LenientPlaceholderCollector | null;
+  toolNamesByCallId: Map<string, string>;
+};
+
 const restoreSnapshotMessages = <T extends object>(
   messages: T,
-  options: RestoreVisibleStringOptions,
+  options: RestoreSnapshotMessagesOptions,
 ): T => {
   const restored = structuredClone(messages);
+  const restoreValue = createVisibleValueRestorer(options);
   const restoreString = createVisibleStringRestorer(options);
   if (!Array.isArray(restored)) {
     return restored;
@@ -2605,38 +2591,63 @@ const restoreSnapshotMessages = <T extends object>(
     }
     const role = message["role"];
     const content = message["content"];
+    const toolCalls = message["toolCalls"];
+    if (Array.isArray(toolCalls)) {
+      for (const toolCall of toolCalls) {
+        if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
+          continue;
+        }
+        const toolCallId = toolCall["id"];
+        const toolName = toolCall["function"]["name"];
+        if (typeof toolCallId === "string" && typeof toolName === "string") {
+          options.toolNamesByCallId.set(toolCallId, toolName);
+        }
+      }
+    }
     if (role === "activity") {
-      restoreApplicationStringsInPlace(content, restoreString);
+      message["content"] = restoreValue(content);
     } else if (role === "user" && Array.isArray(content)) {
       for (const part of content) {
         if (!isRecord(part)) {
           continue;
         }
         if (part["type"] === "text") {
-          restoreRecordProperty(part, "text", restoreString);
+          restoreRecordProperty(part, "text", restoreValue);
         } else {
-          restoreMetadataStringsInPlace(part["metadata"], restoreString);
+          restoreMetadataValuesInPlace(part["metadata"], restoreValue);
           if (part["type"] === "binary") {
-            restoreRecordProperty(part, "filename", restoreString);
+            restoreRecordProperty(part, "filename", restoreValue);
           }
         }
       }
+    } else if (
+      role === "tool" &&
+      typeof content === "string" &&
+      typeof message["toolCallId"] === "string"
+    ) {
+      message["content"] = transformToolResultContent({
+        boundary: options.boundary,
+        content,
+        lenientCollector: options.lenientCollector,
+        resolveAssistantToolOutputRefs: options.resolveAssistantToolOutputRefs,
+        resolveAssistantValueRefs: options.resolveAssistantValueRefs,
+        toolName: options.toolNamesByCallId.get(message["toolCallId"]),
+      }).content;
     } else if (typeof content === "string") {
       message["content"] = restoreString(content);
     }
-    restoreMetadataStringsInPlace(message["metadata"], restoreString);
+    restoreMetadataValuesInPlace(message["metadata"], restoreValue);
     if (role === "tool") {
-      restoreRecordProperty(message, "error", restoreString);
+      restoreRecordProperty(message, "error", restoreValue);
     }
-    const toolCalls = message["toolCalls"];
-    if (!Array.isArray(toolCalls)) {
-      continue;
-    }
-    for (const toolCall of toolCalls) {
-      if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
-        continue;
+
+    if (Array.isArray(toolCalls)) {
+      for (const toolCall of toolCalls) {
+        if (!isRecord(toolCall) || !isRecord(toolCall["function"])) {
+          continue;
+        }
+        restoreRecordProperty(toolCall["function"], "arguments", restoreValue);
       }
-      restoreRecordProperty(toolCall["function"], "arguments", restoreString);
     }
   }
   return restored;
@@ -2650,7 +2661,7 @@ const restoreInterrupts = <T extends object>(
   options: RestoreVisibleStringOptions,
 ): T => {
   const restored = structuredClone(interrupts);
-  const restoreString = createVisibleStringRestorer(options);
+  const restoreValue = createVisibleValueRestorer(options);
   if (!Array.isArray(restored)) {
     return restored;
   }
@@ -2658,9 +2669,9 @@ const restoreInterrupts = <T extends object>(
     if (!isRecord(interrupt)) {
       continue;
     }
-    restoreRecordProperty(interrupt, "message", restoreString);
+    restoreRecordProperty(interrupt, "message", restoreValue);
     const metadata = interrupt["metadata"];
-    restoreMetadataStringsInPlace(metadata, restoreString);
+    restoreMetadataValuesInPlace(metadata, restoreValue);
     if (
       !isRecord(metadata) ||
       options.resolveAssistantToolInputRefs === undefined

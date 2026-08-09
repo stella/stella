@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
+import {
+  CHAT_REF_INPUT_STATE,
+  type ChatEntityRefContext,
+} from "@/api/lib/chat/ref-token";
 
 import {
   hydrateRegistryToolInputRefs,
@@ -159,5 +164,44 @@ describe("registry tool input ref hydration", () => {
         refRegistry: registry,
       }).unwrap().args,
     ).toEqual({ matter_id: tokenShapedId });
+  });
+
+  test("round-trips an entity-only input with its workspace context", () => {
+    const resolvingRegistry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(WS_UUID);
+    const entityId = toSafeId<"entity">(TASK_UUID);
+    const entityRef = resolvingRegistry.toEntityRef({ entityId, workspaceId });
+    const entityContexts: ChatEntityRefContext[] = [];
+
+    expect(
+      resolveRegistryToolInputRefs({
+        input: { entity_id: entityRef },
+        onEntityRefResolved: (target) => {
+          entityContexts.push({
+            entity: resourceRef({
+              type: RESOURCE_TYPE.ENTITY,
+              id: target.entityId,
+            }),
+            toolCallId: "tool-1",
+            workspace: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: target.workspaceId,
+            }),
+          });
+        },
+        refRegistry: resolvingRegistry,
+        toolName: "read_document",
+      }),
+    ).toEqual({ entity_id: entityId });
+
+    expect(
+      hydrateRegistryToolInputRefs({
+        entityContexts,
+        input: { entity_id: entityId },
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        refRegistry: createChatRefRegistry(),
+        toolName: "read_document",
+      }),
+    ).toEqual({ entity_id: "ent_1" });
   });
 });

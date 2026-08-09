@@ -27,6 +27,9 @@ describe("chat ref encoding validation", () => {
     expect(
       resolveChatRefInputState(CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1),
     ).toBe(CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1);
+    expect(
+      resolveChatRefInputState(CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2),
+    ).toBe(CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2);
     expect(() => resolveChatRefInputState("future-ref-encoding")).toThrow(
       "Unknown persisted chat ref encoding",
     );

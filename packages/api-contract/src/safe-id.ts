@@ -1,6 +1,12 @@
 import * as v from "valibot";
 
-const safeIdSchema = v.pipe(v.string(), v.minLength(1), v.brand("SafeId"));
+export const isSafeIdValue = (value: string): boolean => value.length > 0;
+
+const safeIdSchema = v.pipe(
+  v.string(),
+  v.check(isSafeIdValue, "Expected a non-empty identifier"),
+  v.brand("SafeId"),
+);
 
 /**
  * Portable compile-time identifier brand. Runtime validation belongs to the

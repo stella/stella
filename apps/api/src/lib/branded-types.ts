@@ -1,8 +1,15 @@
 import * as v from "valibot";
 
-import type { SafeId as PortableSafeId } from "@stll/api-contract";
+import {
+  isSafeIdValue,
+  type SafeId as PortableSafeId,
+} from "@stll/api-contract";
 
-const safeIdSchema = v.pipe(v.string(), v.brand("SafeId"));
+const safeIdSchema = v.pipe(
+  v.string(),
+  v.check(isSafeIdValue, "Expected a non-empty identifier"),
+  v.brand("SafeId"),
+);
 
 export type SafeIdType =
   | "accountDeletionRequest"

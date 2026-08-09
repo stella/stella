@@ -2,7 +2,11 @@ import type { ToolCallState } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
+import {
+  CHAT_RICH_PART_LIMITS,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -249,7 +253,22 @@ describe("persisted chat message parts", () => {
     });
   });
 
-  test("preserves ref-encoding-only metadata", () => {
+  test("preserves server-owned ref metadata", () => {
+    const entityId = toSafeId<"entity">("entity-1");
+    const workspaceId = toSafeId<"workspace">("workspace-1");
+    const refContext = {
+      version: 1 as const,
+      entities: [
+        {
+          entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+          toolCallId: "tool-1",
+          workspace: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: workspaceId,
+          }),
+        },
+      ],
+    };
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
       role: "assistant",
@@ -257,13 +276,15 @@ describe("persisted chat message parts", () => {
         version: 2,
         data: [{ type: "text", content: "Summary" }],
         metadata: {
-          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+          refContext,
+          refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
         },
       }),
     });
 
     expect(message.metadata).toEqual({
-      refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+      refContext,
+      refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
     });
   });
 

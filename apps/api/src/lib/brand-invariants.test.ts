@@ -1,4 +1,4 @@
-import { test } from "bun:test";
+import { expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -31,6 +31,10 @@ test("SafeId constructors return the requested brand", () => {
     SafeId<"workspace">
   >();
   expectTypeOf(createSafeId<"entity">()).toEqualTypeOf<SafeId<"entity">>();
+});
+
+test("SafeId constructors reject empty identifiers", () => {
+  expect(() => toSafeId<"entity">("")).toThrow();
 });
 
 test("Secret is nominal and kinds do not cross", () => {

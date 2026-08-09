@@ -15,7 +15,7 @@ import type {
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
 import type { persistedChatMessageContentProof } from "@/api/lib/chat/persisted-message-content";
-import type { ChatRefEncoding } from "@/api/lib/chat/ref-token";
+import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
 import type { UserFileUrl } from "@/api/lib/user-files/types";
 
@@ -115,6 +115,8 @@ export type ChatMessageMetadata = {
   /** Server-owned marker for the ID representation persisted in tool parts.
    * Incoming client metadata deliberately does not accept this field. */
   refEncoding?: ChatRefEncoding | undefined;
+  /** Server-owned workspace context for entity-only persisted tool inputs. */
+  refContext?: ChatRefContext | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:

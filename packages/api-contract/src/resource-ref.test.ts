@@ -103,6 +103,7 @@ describe("canonical resource identity", () => {
     expect(parseResourceRef(null)).toBeNull();
     expect(parseResourceRef({ type: "unknown", id: "id" })).toBeNull();
     expect(parseResourceRef({ type: RESOURCE_TYPE.ENTITY, id: "" })).toBeNull();
+    expect(() => toSafeId<"entity">("")).toThrow();
     expect(
       parseResourceRef({
         type: RESOURCE_TYPE.ENTITY,

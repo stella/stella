@@ -167,6 +167,7 @@ const isPersistedIdForInput = (
 
   switch (inputState) {
     case CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1:
+    case CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2:
       return true;
     case CHAT_REF_INPUT_STATE.LEGACY_UUID_IDS:
       return UUID_REGEX.test(value);

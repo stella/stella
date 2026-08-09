@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { encodeRfc3986Component } from "./rfc3986";
-import type { SafeId } from "./safe-id";
+import { isSafeIdValue, toSafeId, type SafeId } from "./safe-id";
 
 /** Stable product nouns. Presentation labels and storage table names may differ. */
 export const RESOURCE_TYPE = {
@@ -124,8 +124,6 @@ export const isResourceType = (value: unknown): value is ResourceType =>
 const isUnknownRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const safeIdSchema = v.pipe(v.string(), v.minLength(1), v.brand("SafeId"));
-
 export const isResourceRef = (value: unknown): value is ResourceRef => {
   if (!isUnknownRecord(value)) {
     return false;
@@ -140,7 +138,7 @@ export const isResourceRef = (value: unknown): value is ResourceRef => {
   }
   const type = value["type"];
   const id = value["id"];
-  return isResourceType(type) && typeof id === "string" && id.length > 0;
+  return isResourceType(type) && typeof id === "string" && isSafeIdValue(id);
 };
 
 const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
@@ -198,11 +196,11 @@ export const parseResourceName = (input: unknown): ResourceRef | null => {
     return null;
   }
   try {
-    const idResult = v.safeParse(safeIdSchema, decodeURIComponent(encodedId));
-    if (!idResult.success) {
+    const id = decodeURIComponent(encodedId);
+    if (!isSafeIdValue(id)) {
       return null;
     }
-    const resource = parseResourceRef({ type, id: idResult.output });
+    const resource = parseResourceRef({ type, id: toSafeId(id) });
     return resource !== null && toResourceName(resource) === input
       ? resource
       : null;

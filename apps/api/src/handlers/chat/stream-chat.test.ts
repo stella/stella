@@ -2097,6 +2097,91 @@ describe("chat stream refs", () => {
       }),
     });
   });
+
+  test("restores declared outputs and structured refs in message snapshots", async () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">("workspace-opaque");
+    const matterRef = registry.toMatterRef(workspaceId);
+    const [snapshot] = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks([
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "assistant-1",
+                role: "assistant",
+                toolCalls: [
+                  {
+                    id: "tool-1",
+                    type: "function",
+                    function: { arguments: "{}", name: "list_matters" },
+                  },
+                ],
+              },
+              {
+                id: "tool-result-1",
+                role: "tool",
+                toolCallId: "tool-1",
+                content: JSON.stringify({
+                  decisionId: matterRef,
+                  matters: [{ decisionId: matterRef, id: matterRef }],
+                }),
+              },
+              {
+                id: "activity-1",
+                role: "activity",
+                activityType: "review",
+                content: { matterRef },
+              },
+            ],
+          },
+        ]),
+        resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+          resolveRegistryToolOutputRefs({
+            output,
+            refRegistry: registry,
+            toolName,
+          }),
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
+    );
+
+    expect(snapshot).toEqual({
+      type: EventType.MESSAGES_SNAPSHOT,
+      messages: [
+        {
+          id: "assistant-1",
+          role: "assistant",
+          toolCalls: [
+            {
+              id: "tool-1",
+              type: "function",
+              function: { arguments: "{}", name: "list_matters" },
+            },
+          ],
+        },
+        {
+          id: "tool-result-1",
+          role: "tool",
+          toolCallId: "tool-1",
+          content: JSON.stringify({
+            decisionId: matterRef,
+            matters: [{ decisionId: matterRef, id: workspaceId }],
+          }),
+        },
+        {
+          id: "activity-1",
+          role: "activity",
+          activityType: "review",
+          content: { matterRef: workspaceId },
+        },
+      ],
+    });
+  });
 });
 
 describe("chat message hydration", () => {

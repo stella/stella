@@ -1,5 +1,11 @@
 import { panic } from "better-result";
 
+import {
+  isResourceRef,
+  RESOURCE_TYPE,
+  type ResourceRef,
+} from "@stll/api-contract";
+
 /**
  * Model-facing spellings only. Persisted IDs may have the same text; the
  * protocol stage, not a reserved string namespace, distinguishes them.
@@ -15,6 +21,7 @@ export type ChatRefTokenKind = keyof typeof CHAT_REF_TOKEN_PREFIX;
 
 export const CHAT_REF_ENCODING = {
   PERSISTED_RESOURCE_IDS_V1: "persisted-resource-ids-v1",
+  PERSISTED_RESOURCE_REFS_V2: "persisted-resource-refs-v2",
 } as const;
 
 export type ChatRefEncoding =
@@ -28,6 +35,7 @@ export const isChatRefEncoding = (value: unknown): value is ChatRefEncoding =>
 export const CHAT_REF_INPUT_STATE = {
   LEGACY_UUID_IDS: "legacy-uuid-ids",
   PERSISTED_RESOURCE_IDS_V1: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
+  PERSISTED_RESOURCE_REFS_V2: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
 } as const;
 
 export type ChatRefInputState =
@@ -36,7 +44,39 @@ export type ChatRefInputState =
 const CHAT_REF_INPUT_STATE_BY_ENCODING = {
   [CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1]:
     CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_IDS_V1,
+  [CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2]:
+    CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
 } as const satisfies Record<ChatRefEncoding, ChatRefInputState>;
+
+export type ChatEntityRefContext = {
+  entity: ResourceRef<"entity">;
+  toolCallId: string;
+  workspace: ResourceRef<"workspace">;
+};
+
+export type ChatRefContext = {
+  version: 1;
+  entities: ChatEntityRefContext[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isChatEntityRefContext = (
+  value: unknown,
+): value is ChatEntityRefContext =>
+  isRecord(value) &&
+  typeof value["toolCallId"] === "string" &&
+  isResourceRef(value["entity"]) &&
+  value["entity"].type === RESOURCE_TYPE.ENTITY &&
+  isResourceRef(value["workspace"]) &&
+  value["workspace"].type === RESOURCE_TYPE.WORKSPACE;
+
+export const isChatRefContext = (value: unknown): value is ChatRefContext =>
+  isRecord(value) &&
+  value["version"] === 1 &&
+  Array.isArray(value["entities"]) &&
+  value["entities"].every(isChatEntityRefContext);
 
 /** Classify persisted message metadata before it controls ref hydration. */
 export const resolveChatRefInputState = (
