@@ -1951,6 +1951,7 @@ export default defineConfig({
               "apps/api/src/lib/deepl/client.ts",
               "apps/api/src/lib/document-processing-provider.ts",
               "apps/api/src/lib/files/gotenberg.ts",
+              "apps/api/src/lib/health/readiness.ts",
               "apps/api/src/lib/hosted-usage-provider/client.ts",
               "apps/api/src/lib/legal-search/corpus-index-client.ts",
               "apps/api/src/lib/s3.ts",
