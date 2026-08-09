@@ -38,12 +38,9 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - retry cleanup only;
--- a cancelled concurrent build can leave an INVALID index with this name.
-DROP INDEX CONCURRENTLY IF EXISTS "time_entries_one_active_timer_per_user_idx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts -- A failed concurrent build must be replaced, not retained as INVALID.
-CREATE UNIQUE INDEX CONCURRENTLY "time_entries_one_active_timer_per_user_idx"
+-- Preserve a valid uniqueness boundary across retries. The migration runner
+-- concurrently repairs an interrupted INVALID build before completion.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "time_entries_one_active_timer_per_user_idx"
   ON "time_entries" ("user_id")
   WHERE "timer_started_at" IS NOT NULL;
 --> statement-breakpoint
