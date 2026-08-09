@@ -48,6 +48,8 @@ type ScopeVariable = {
   }[];
 };
 
+type IdentifierNode = AstNode & { name: string };
+
 type Acquisition = {
   binding: ScopeVariable | null;
   node: Ranged;
@@ -175,13 +177,43 @@ const callWithinExpressionStatement = (
   if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
     return false;
   }
-  let matched = false;
-  visitNodes(statement, statement, (node) => {
-    if (predicate(node)) {
-      matched = true;
+  const containsUnconditionalCall = (node: unknown): boolean => {
+    const expression = unwrapValue(node);
+    if (expression === null) {
+      return false;
     }
-  });
-  return matched;
+    if (expression.type === "AwaitExpression") {
+      return containsUnconditionalCall(expression.argument);
+    }
+    if (
+      expression.type === "CallExpression" &&
+      expression.optional !== true
+    ) {
+      if (predicate(expression)) {
+        return true;
+      }
+      const callee = unwrapValue(expression.callee);
+      if (
+        callee?.type === "MemberExpression" &&
+        callee.optional !== true &&
+        containsUnconditionalCall(callee.object)
+      ) {
+        return true;
+      }
+      return Array.isArray(expression.arguments)
+        ? expression.arguments.some(containsUnconditionalCall)
+        : false;
+    }
+    if (
+      expression.type === "SequenceExpression" &&
+      Array.isArray(expression.expressions)
+    ) {
+      return expression.expressions.some(containsUnconditionalCall);
+    }
+    return false;
+  };
+
+  return containsUnconditionalCall(statement.expression);
 };
 
 const abruptCompletionTarget = (node: AstNode): AstNode | null => {
@@ -267,7 +299,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const acquisitions: Acquisition[] = [];
 
-        const resolveVariable = (identifier): ScopeVariable | null => {
+        const resolveVariable = (
+          identifier: IdentifierNode,
+        ): ScopeVariable | null => {
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope !== null) {
             const variable = scope.set.get(identifier.name);
@@ -318,7 +352,9 @@ export default eslintCompatPlugin({
           );
         };
 
-        const definitionName = (definition): AstNode | null => {
+        const definitionName = (
+          definition: ScopeVariable["defs"][number],
+        ): AstNode | null => {
           if (isAstNode(definition.name)) {
             return definition.name;
           }
@@ -343,7 +379,7 @@ export default eslintCompatPlugin({
 
         const constInitializer = (
           variable: ScopeVariable,
-        ): unknown | null => {
+        ): AstNode | null => {
           for (const definition of variable.defs) {
             if (
               definition.type === "Variable" &&
@@ -353,7 +389,9 @@ export default eslintCompatPlugin({
               definition.parent.type === "VariableDeclaration" &&
               definition.parent.kind === "const"
             ) {
-              return definition.node.init;
+              return isAstNode(definition.node.init)
+                ? definition.node.init
+                : null;
             }
           }
           return null;

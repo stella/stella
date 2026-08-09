@@ -18,9 +18,7 @@ describe("readCappedBytes", () => {
     expect(await readCappedBytes(stream, 2)).toBeNull();
     expect(cancelled).toBe(true);
 
-    // eslint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- SAFETY: this immediate acquisition only proves that readCappedBytes released its lock
-    const reader = stream.getReader();
-    reader.releaseLock();
+    expect(stream.locked).toBe(false);
   });
 
   test("releases its reader lock when reading fails", async () => {
@@ -39,8 +37,6 @@ describe("readCappedBytes", () => {
     }
     expect(result.error.message).toContain("stream failed");
 
-    // eslint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- SAFETY: this immediate acquisition only proves that readCappedBytes released its lock
-    const reader = stream.getReader();
-    reader.releaseLock();
+    expect(stream.locked).toBe(false);
   });
 });

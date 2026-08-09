@@ -133,6 +133,35 @@ export const branchOnlyCancel = async (
   }
 };
 
+// MUST flag: cleanup calls nested behind a short-circuit are not guaranteed to
+// execute when the finalizer runs.
+export const conditionalRelease = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: conditional release does not discharge ownership
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+  } finally {
+    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
+    stopEarly && reader.releaseLock();
+  }
+};
+
+export const conditionalCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: conditional cancel cannot cover premature completion
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+  } finally {
+    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
+    stopEarly && (await reader.cancel());
+    reader.releaseLock();
+  }
+};
+
 // MUST flag: consumer cancellation resumes an async generator at finally, so
 // releaseLock without cancel leaves the producer active.
 export async function* generatorWithoutCancel(
@@ -249,6 +278,21 @@ export const aliasedReaderCleanup = async (
 // Allowed: Response.body is a proven ReadableStream source rather than a
 // method-name-only match.
 export const responseBodyCleanup = async (response: Response) => {
+  if (response.body === null) {
+    return;
+  }
+  const reader = response.body.getReader();
+  try {
+    await reader.read();
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
+// Allowed: an awaited global fetch also proves Response.body provenance.
+export const fetchedBodyCleanup = async (url: string) => {
+  const response = await fetch(url);
   if (response.body === null) {
     return;
   }

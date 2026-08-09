@@ -78,10 +78,12 @@ import {
 import {
   getImportedName,
   getPropertyName,
+  isAstNode,
   isIdentifier,
   isStringLiteral,
   unwrapExpression,
 } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const API_MODULE = "@/lib/api";
 const ERROR_ADAPTER_MODULE = "@/lib/errors/api";
@@ -103,17 +105,6 @@ type FlowOutcome = {
   unsafe: boolean;
   unsafeExit?: AstNode | undefined;
 };
-
-// Same untyped-AST-node shape as utils.ts's private `AstNode`: a `type`
-// discriminant plus an index signature so every other property reads back
-// as `unknown` (never `any`) without an unsafe cast.
-type AstNode = Ranged & { type: string } & Record<string, unknown>;
-
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof (node as { type: unknown }).type === "string";
 
 // Walk a call/member chain down to its syntactic root, unwrapping both
 // `foo(...)` (CallExpression -> callee) and `foo.bar` / `foo["bar"]`
@@ -1009,6 +1000,57 @@ export default eslintCompatPlugin({
             if (!patternProperties(node.left).has("error")) {
               reportAssignedResult(node);
             }
+          },
+
+          AwaitExpression(node) {
+            if (awaitedTerminalEdenCall(node) === null) {
+              return;
+            }
+
+            let expression: AstNode = node;
+            let parent = isAstNode(expression.parent)
+              ? expression.parent
+              : null;
+            while (
+              parent !== null &&
+              (parent.type === "TSAsExpression" ||
+                parent.type === "TSNonNullExpression" ||
+                parent.type === "TSSatisfiesExpression" ||
+                parent.type === "TSTypeAssertion")
+            ) {
+              expression = parent;
+              parent = isAstNode(expression.parent)
+                ? expression.parent
+                : null;
+            }
+
+            if (
+              (parent?.type === "VariableDeclarator" &&
+                parent.init === expression) ||
+              (parent?.type === "AssignmentExpression" &&
+                parent.right === expression) ||
+              (parent?.type === "ExpressionStatement" &&
+                parent.expression === expression)
+            ) {
+              return;
+            }
+            if (
+              parent?.type === "MemberExpression" &&
+              parent.object === expression &&
+              getPropertyName(parent.property) === "error"
+            ) {
+              return;
+            }
+            if (
+              parent?.type === "CallExpression" &&
+              Array.isArray(parent.arguments) &&
+              parent.arguments.includes(expression) &&
+              isApprovedResponseAdapter(parent.callee)
+            ) {
+              return;
+            }
+
+            reportAssignedResult(node);
           },
 
           // `await api...;` as a bare expression statement, or a bare

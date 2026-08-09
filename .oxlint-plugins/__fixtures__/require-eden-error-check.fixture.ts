@@ -19,6 +19,29 @@ export const discardedAwait = async () => {
   await api.tasks.get();
 };
 
+// MUST flag: directly returning the awaited response or its data channel never
+// inspects the sibling error channel.
+export const directlyReturnedAwait = async () =>
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a directly returned response escapes unchecked
+  await api.tasks.get();
+
+export const directlyConsumedData = async () =>
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: direct data consumption skips the error channel
+  (await api.tasks.get()).data;
+
+export const directlyEscapedToOpaqueConsumer = async () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: an opaque helper cannot prove direct awaited response handling
+  consume(await api.tasks.get());
+};
+
+// Allowed: direct inspection of the error channel and the canonical adapter
+// both handle the response without an intermediate binding.
+export const directlyInspectedError = async () =>
+  (await api.tasks.get()).error;
+
+export const directlyAdaptedResponse = async () =>
+  unwrapResponse(await api.tasks.get());
+
 // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: bare promise discard cannot inspect error
 api.tasks.get();
 // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: void discard cannot inspect error
@@ -106,9 +129,8 @@ export const inspectedOnOnlyOneBranch = async () => {
 export const inspectedOnOnlyOneLogicalBranch = async () => {
   // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a short-circuited error read is not guaranteed
   const response = await api.tasks.get();
-  if (condition) {
-    consume(response.error);
-  }
+  // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: short-circuiting is the control-flow shape under test
+  condition && consume(response.error);
   return response.data;
 };
 

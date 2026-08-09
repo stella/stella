@@ -594,6 +594,10 @@ export const createMcpHttpRequestHandler = ({
 
       const monitoredBody = new ReadableStream<Uint8Array>({
         pull: async (controller) => {
+          if (readerReleased) {
+            controller.close();
+            return;
+          }
           try {
             const readResult: unknown = await reader.read();
             if (!isByteStreamReadResult(readResult)) {

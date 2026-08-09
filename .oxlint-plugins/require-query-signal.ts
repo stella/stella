@@ -285,7 +285,17 @@ const getObjectPropertyValue = (node, name) => {
   return property?.value ?? null;
 };
 
-const callThreadsSignal = (node, bindingName, kind: NetworkKind) => {
+type CallThreadsSignalParams = {
+  bindingName: string;
+  kind: NetworkKind;
+  node: AstNode;
+};
+
+const callThreadsSignal = ({
+  bindingName,
+  kind,
+  node,
+}: CallThreadsSignalParams) => {
   if (kind === "fetch") {
     return containsSignalIdentifier(
       getObjectPropertyValue(node.arguments.at(1), "signal"),
@@ -456,7 +466,7 @@ export default eslintCompatPlugin({
             const bindingName = signalBindingName(owner);
             if (
               bindingName !== null &&
-              callThreadsSignal(node, bindingName, kind)
+              callThreadsSignal({ bindingName, kind, node })
             ) {
               return;
             }
@@ -479,7 +489,7 @@ export default eslintCompatPlugin({
               const bindingName = signalBindingName(owner);
               if (
                 bindingName !== null &&
-                callThreadsSignal(node, bindingName, kind)
+                callThreadsSignal({ bindingName, kind, node })
               ) {
                 continue;
               }

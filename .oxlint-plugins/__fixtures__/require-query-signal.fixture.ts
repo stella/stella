@@ -328,6 +328,24 @@ export const mutableReferenceOptions = {
   queryFn: mutableQueryFn,
 };
 
+// A function declaration that is later reassigned is also opaque. This reaches
+// the FunctionName definition path and pins its reassignment guard.
+async function reassignedDeclaredQueryFn() {
+  return await fetch(url);
+}
+
+export const replaceReassignedDeclaredQueryFn = (
+  replacement: () => Promise<Response>,
+) => {
+  // oxlint-disable-next-line eslint/no-func-assign -- fixture: function-binding reassignment is the behavior under test
+  reassignedDeclaredQueryFn = replacement;
+};
+
+export const reassignedDeclarationReferenceOptions = {
+  queryKey: ["thing", "reassigned-declaration-helper"],
+  queryFn: reassignedDeclaredQueryFn,
+};
+
 // Overload sets have ambiguous definitions and remain unproven.
 function overloadedQueryFn(context: {
   kind: "basic";
