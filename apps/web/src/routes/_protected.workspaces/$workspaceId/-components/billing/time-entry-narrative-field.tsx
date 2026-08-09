@@ -45,8 +45,9 @@ export const TimeEntryNarrativeField = ({
     }
 
     setIsPolishing(true);
-    const requestResult = await Result.tryPromise(() =>
-      polishTimeEntryNarrative({ instruction, narrative, workspaceId }),
+    const requestResult = await Result.tryPromise(
+      async () =>
+        await polishTimeEntryNarrative({ instruction, narrative, workspaceId }),
     );
     setIsPolishing(false);
 

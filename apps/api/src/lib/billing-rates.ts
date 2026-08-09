@@ -138,12 +138,13 @@ export const resolveRate = async function* ({
   dateWorked: string;
 }): AsyncGenerator<Err<never, SafeDbError>, ResolvedRate | null, unknown> {
   const rates = yield* Result.await(
-    safeDb((tx) =>
-      resolveRatesInTransaction({
-        lookups: [{ dateWorked, userId }],
-        tx,
-        workspaceId,
-      }),
+    safeDb(
+      async (tx) =>
+        await resolveRatesInTransaction({
+          lookups: [{ dateWorked, userId }],
+          tx,
+          workspaceId,
+        }),
     ),
   );
   return rates.get(rateLookupKey({ dateWorked, userId })) ?? null;

@@ -575,7 +575,7 @@ describe("TanStack AI text generation", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["partial"], "length");
 
-    const error = await generateTanStackTextForRole({
+    const caught = await generateTanStackTextForRole({
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
@@ -589,7 +589,7 @@ describe("TanStack AI text generation", () => {
       (error: unknown) => error,
     );
 
-    expect(error).toMatchObject({ status: 502 });
+    expect(caught).toMatchObject({ status: 502 });
   });
 
   test("collects text through the error-aware streaming boundary", async () => {

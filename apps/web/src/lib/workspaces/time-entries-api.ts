@@ -34,7 +34,7 @@ type TimeEntryRequestOptions<T> = {
   body?: unknown;
   method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
   parse: (input: unknown) => T | null;
-  path: `/${string}`;
+  path: "" | `/${string}`;
   query?: Record<string, TimeEntryQueryValue>;
   signal?: AbortSignal | undefined;
   workspaceId: string;
@@ -106,7 +106,7 @@ export const fetchTimeEntries = async ({
 }: FetchTimeEntriesOptions): Promise<BrowserTimeEntryListPage> => {
   const page = await requestTimeEntries({
     parse: parseTimeEntryListPage,
-    path: "/",
+    path: "",
     query,
     signal,
     workspaceId,
@@ -119,12 +119,12 @@ export const fetchTimeEntries = async ({
   };
 };
 
-export const fetchTimeEntrySummary = ({
+export const fetchTimeEntrySummary = async ({
   query,
   signal,
   workspaceId,
 }: FetchTimeEntriesOptions): Promise<TimeEntrySummary> =>
-  requestTimeEntries({
+  await requestTimeEntries({
     parse: parseTimeEntrySummary,
     path: "/summary",
     query,
@@ -237,12 +237,12 @@ type PolishTimeEntryNarrativeOptions = {
   workspaceId: string;
 };
 
-export const polishTimeEntryNarrative = ({
+export const polishTimeEntryNarrative = async ({
   instruction,
   narrative,
   workspaceId,
 }: PolishTimeEntryNarrativeOptions): Promise<{ narrative: string }> =>
-  requestTimeEntries({
+  await requestTimeEntries({
     body: { instruction, narrative },
     method: "POST",
     parse: parsePolishedTimeEntryNarrativeResponse,

@@ -692,8 +692,11 @@ const revokeRemovedMemberAccess = async ({
   await rootDb.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 
-    const timerWorkspaces = await tx
-      .selectDistinct({ id: timeEntries.workspaceId })
+    const [activeTimer] = await tx
+      .select({
+        id: timeEntries.id,
+        workspaceId: timeEntries.workspaceId,
+      })
       .from(timeEntries)
       .innerJoin(workspaces, eq(workspaces.id, timeEntries.workspaceId))
       .where(
@@ -703,7 +706,8 @@ const revokeRemovedMemberAccess = async ({
           isNotNull(timeEntries.timerStartedAt),
           isNull(timeEntries.timerStoppedAt),
         ),
-      );
+      )
+      .limit(1);
 
     const recordAuditEvent = createBackgroundAuditRecorder({
       execution: {
@@ -722,41 +726,39 @@ const revokeRemovedMemberAccess = async ({
       workspaceId: null,
     });
 
-    const now = new Date();
-    for (const workspace of timerWorkspaces) {
+    if (activeTimer) {
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspace.id}))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext(${activeTimer.workspaceId}))`,
       );
-      const lockedWorkspace = await tx
+      const [lockedWorkspace] = await tx
         .select({ id: workspaces.id })
         .from(workspaces)
-        .where(eq(workspaces.id, workspace.id))
+        .where(eq(workspaces.id, activeTimer.workspaceId))
         .for("update");
-      if (!lockedWorkspace.at(0)) {
-        continue;
-      }
-      const activeTimers = await tx
-        .select({
-          billedMinutes: timeEntries.billedMinutes,
-          durationMinutes: timeEntries.durationMinutes,
-          id: timeEntries.id,
-          timerStartedAt: timeEntries.timerStartedAt,
-        })
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.workspaceId, workspace.id),
-            eq(timeEntries.userId, userId),
-            isNotNull(timeEntries.timerStartedAt),
-            isNull(timeEntries.timerStoppedAt),
-          ),
-        )
-        .for("update");
+      const [timer] = lockedWorkspace
+        ? await tx
+            .select({
+              billedMinutes: timeEntries.billedMinutes,
+              durationMinutes: timeEntries.durationMinutes,
+              id: timeEntries.id,
+              timerStartedAt: timeEntries.timerStartedAt,
+            })
+            .from(timeEntries)
+            .where(
+              and(
+                eq(timeEntries.id, activeTimer.id),
+                eq(timeEntries.workspaceId, activeTimer.workspaceId),
+                eq(timeEntries.userId, userId),
+                isNotNull(timeEntries.timerStartedAt),
+                isNull(timeEntries.timerStoppedAt),
+              ),
+            )
+            .limit(1)
+            .for("update")
+        : [];
 
-      for (const timer of activeTimers) {
-        if (!timer.timerStartedAt) {
-          continue;
-        }
+      if (timer?.timerStartedAt) {
+        const now = new Date();
         const durationMinutes = Math.max(
           1,
           Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
@@ -777,7 +779,7 @@ const revokeRemovedMemberAccess = async ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
           resourceId: timer.id,
-          workspaceId: workspace.id,
+          workspaceId: activeTimer.workspaceId,
           changes: {
             timerStartedAt: {
               old: timer.timerStartedAt.toISOString(),
