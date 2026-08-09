@@ -5,7 +5,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { resolveCurrentFileSourceField } from "@/api/lib/document-content-provenance";
+import {
+  resolveCurrentExtractionFileField,
+  resolveCurrentFileSourceField,
+} from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -91,7 +94,12 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
-  const extractionFileField = resolveCurrentFileSourceField({
+  const extractionFileField = resolveCurrentExtractionFileField({
+    currentVersionId: entity.currentVersion.id,
+    extracted: entity.extractedContent,
+    fields: entity.currentVersion.fields,
+  });
+  const processingFileField = resolveCurrentFileSourceField({
     currentVersionId: entity.currentVersion.id,
     extracted: entity.extractedContent,
     fields: entity.currentVersion.fields,
@@ -104,6 +112,7 @@ export const readEntityByIdHandler = async function* ({
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
     extractionFileFieldId: extractionFileField?.id ?? null,
+    processingFileFieldId: processingFileField?.id ?? null,
     fields: entity.currentVersion.fields,
   });
 };
@@ -118,11 +127,20 @@ const config = {
 const readEntityById = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params }) {
-    return yield* readEntityByIdHandler({
+    const entity = yield* readEntityByIdHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
     });
+    return {
+      entityId: entity.entityId,
+      kind: entity.kind,
+      name: entity.name,
+      currentVersionId: entity.currentVersionId,
+      currentVersionCreatedAt: entity.currentVersionCreatedAt,
+      extractionFileFieldId: entity.extractionFileFieldId,
+      fields: entity.fields,
+    };
   },
 );
 

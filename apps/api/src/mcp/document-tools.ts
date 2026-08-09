@@ -1175,7 +1175,7 @@ const loadVersionHistory = async ({
 type CurrentDocumentForState = {
   currentVersionCreatedAt: Date;
   currentVersionId: SafeId<"entityVersion">;
-  extractionFileFieldId: SafeId<"field"> | null;
+  processingFileFieldId: SafeId<"field"> | null;
   fields: {
     content: FieldContent;
     id: SafeId<"field">;
@@ -1279,10 +1279,10 @@ const loadDocumentProcessingStates = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<DocumentProcessingStates> => {
   const sourceField =
-    current.extractionFileFieldId === null
+    current.processingFileFieldId === null
       ? null
       : (current.fields.find(
-          ({ id }) => id === current.extractionFileFieldId,
+          ({ id }) => id === current.processingFileFieldId,
         ) ?? panic("Extraction source field is not current"));
   if (sourceField !== null && sourceField.content.type !== "file") {
     panic("Extraction source field does not contain a file");

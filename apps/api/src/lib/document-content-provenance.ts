@@ -15,7 +15,7 @@ export type ExtractedContentSourceProvenance = Pick<
 >;
 
 type FileFieldRow = {
-  content: FieldContent;
+  content: FieldContent | null;
   id: SafeId<"field">;
   propertyId?: SafeId<"property"> | undefined;
 };
@@ -23,7 +23,7 @@ type FileFieldRow = {
 const findOnlyFileField = <T extends FileFieldRow>(
   fields: readonly T[],
 ): T | null => {
-  const fileFields = fields.filter(({ content }) => content.type === "file");
+  const fileFields = fields.filter(({ content }) => content?.type === "file");
   return fileFields.length === 1 ? (fileFields.at(0) ?? null) : null;
 };
 
@@ -36,13 +36,16 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
   extracted: ExtractedContentSourceProvenance | null | undefined;
   fields: readonly T[];
 }): T | null => {
-  const legacyOrMissingSource =
-    !extracted ||
-    (extracted.sourceEntityVersionId === null &&
-      extracted.sourceFieldId === null &&
-      extracted.sourceFileId === null &&
-      extracted.sourceSha256Hex === null);
-  if (legacyOrMissingSource) {
+  if (!extracted) {
+    return null;
+  }
+
+  const legacySource =
+    extracted.sourceEntityVersionId === null &&
+    extracted.sourceFieldId === null &&
+    extracted.sourceFileId === null &&
+    extracted.sourceSha256Hex === null;
+  if (legacySource) {
     return findOnlyFileField(fields);
   }
 
@@ -51,7 +54,7 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
       extracted.sourceEntityVersionId === currentVersionId &&
       id === extracted.sourceFieldId,
   );
-  return field?.content.type === "file" &&
+  return field?.content?.type === "file" &&
     field.content.id === extracted.sourceFileId &&
     field.content.sha256Hex === extracted.sourceSha256Hex
     ? field
@@ -74,6 +77,10 @@ export const resolveCurrentFileSourceField = <T extends FileFieldRow>({
   extracted: ExtractedContentSourceProvenance | null | undefined;
   fields: readonly T[];
 }): T | null => {
+  if (!extracted) {
+    return findOnlyFileField(fields);
+  }
+
   const exactOrLegacySource = resolveCurrentExtractionFileField({
     currentVersionId,
     extracted,
@@ -112,7 +119,7 @@ export const selectCurrentExtractedContent = <
   currentVersionCreatedAt: Date;
   currentVersionId: SafeId<"entityVersion">;
   fields: readonly {
-    content: FieldContent;
+    content: FieldContent | null;
     id: SafeId<"field">;
     propertyId?: SafeId<"property"> | undefined;
   }[];

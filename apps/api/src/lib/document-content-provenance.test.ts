@@ -148,6 +148,46 @@ describe("selectCurrentExtractedContent", () => {
     ).toBeNull();
   });
 
+  test("keeps missing extraction unavailable while allowing one live file source", () => {
+    expect(
+      resolveCurrentExtractionFileField({
+        currentVersionId,
+        extracted: null,
+        fields,
+      }),
+    ).toBeNull();
+    expect(
+      resolveCurrentFileSourceField({
+        currentVersionId,
+        extracted: null,
+        fields,
+      }),
+    ).toBe(currentField);
+  });
+
+  test("ignores stored JSON-null fields while resolving a legacy source", () => {
+    expect(
+      resolveCurrentExtractionFileField({
+        currentVersionId,
+        extracted: {
+          ...projection,
+          sourceEntityVersionId: null,
+          sourceFieldId: null,
+          sourceFileId: null,
+          sourceSha256Hex: null,
+        },
+        fields: [
+          {
+            content: null,
+            id: toSafeId<"field">("field_null"),
+            propertyId: toSafeId<"property">("property_null"),
+          },
+          currentField,
+        ],
+      }),
+    ).toBe(currentField);
+  });
+
   test("does not guess after a same-version source identity mismatch", () => {
     expect(
       resolveCurrentFileSourceField({

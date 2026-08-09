@@ -1250,7 +1250,7 @@ type CurrentDocument = {
     fields: {
       id: SafeId<"field">;
       propertyId: SafeId<"property">;
-      content: FieldContent;
+      content: FieldContent | null;
     }[];
     id: SafeId<"entityVersion">;
   };
@@ -1317,7 +1317,7 @@ const loadCurrentVersionDocxMarkdown = async ({
     extracted: document.extractedContent,
     fields: document.currentVersion.fields,
   });
-  const file = fileField?.content.type === "file" ? fileField.content : null;
+  const file = fileField?.content?.type === "file" ? fileField.content : null;
   if (!isDocxFileContent(file)) {
     return { kind: "not-docx" };
   }

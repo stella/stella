@@ -120,10 +120,13 @@ describe("readEntityByIdHandler", () => {
       expect(result.value.extractionFileFieldId).toBe(
         toSafeId<"field">("field_sibling"),
       );
+      expect(result.value.processingFileFieldId).toBe(
+        toSafeId<"field">("field_sibling"),
+      );
     }
   });
 
-  test("returns one current file while persisted extraction is from an older version", async () => {
+  test("keeps stale extraction unavailable while returning one live processing file", async () => {
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Replacement Agreement",
@@ -162,8 +165,55 @@ describe("readEntityByIdHandler", () => {
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.extractionFileFieldId).toBe(
+      expect(result.value.extractionFileFieldId).toBeNull();
+      expect(result.value.processingFileFieldId).toBe(
         toSafeId<"field">("field_current"),
+      );
+    }
+  });
+
+  test("keeps missing extraction unavailable and ignores JSON-null fields", async () => {
+    findFirstMock.mockResolvedValue({
+      kind: "document",
+      name: "Pending Email",
+      extractedContent: null,
+      currentVersion: {
+        id: "entity_version_1",
+        fields: [
+          {
+            id: "field_null",
+            propertyId: "property_null",
+            content: null,
+          },
+          {
+            id: "field_email",
+            propertyId: "property_email",
+            content: {
+              type: "file",
+              id: "file_email",
+              sha256Hex: "a".repeat(64),
+            },
+          },
+        ],
+      },
+    });
+    const { safeDb } = createScopedDbMock({
+      query: { entities: { findFirst: findFirstMock } },
+    });
+
+    const result = await Result.gen(() =>
+      readEntityByIdHandler({
+        safeDb,
+        workspaceId: toSafeId("ws_1"),
+        entityId: toSafeId("entity_1"),
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.extractionFileFieldId).toBeNull();
+      expect(result.value.processingFileFieldId).toBe(
+        toSafeId<"field">("field_email"),
       );
     }
   });
