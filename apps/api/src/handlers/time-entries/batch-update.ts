@@ -210,10 +210,7 @@ const batchUpdate = createSafeHandler(
               )
               .for("update");
 
-            const unpricedRows = candidates.filter(
-              (row) => row.currency === UNPRICED_TIME_ENTRY_CURRENCY,
-            );
-            const rateLookups = unpricedRows.flatMap((row) =>
+            const rateLookups = candidates.flatMap((row) =>
               row.userId
                 ? [
                     {
@@ -228,7 +225,7 @@ const batchUpdate = createSafeHandler(
               tx,
               workspaceId,
             });
-            const unresolved = unpricedRows.some(
+            const unresolved = candidates.some(
               (row) =>
                 !row.userId ||
                 !resolvedRates.has(
@@ -251,7 +248,7 @@ const batchUpdate = createSafeHandler(
                 oldRateAtEntry: number;
               }
             >();
-            const rateCases = unpricedRows.flatMap((row) => {
+            const rateCases = candidates.flatMap((row) => {
               const resolved = row.userId
                 ? resolvedRates.get(
                     rateLookupKey({
@@ -263,12 +260,17 @@ const batchUpdate = createSafeHandler(
               if (!resolved) {
                 return [];
               }
-              rateChanges.set(row.id, {
-                newCurrency: resolved.currency,
-                newRateAtEntry: resolved.hourlyRate,
-                oldCurrency: row.currency,
-                oldRateAtEntry: row.rateAtEntry,
-              });
+              if (
+                row.currency !== resolved.currency ||
+                row.rateAtEntry !== resolved.hourlyRate
+              ) {
+                rateChanges.set(row.id, {
+                  newCurrency: resolved.currency,
+                  newRateAtEntry: resolved.hourlyRate,
+                  oldCurrency: row.currency,
+                  oldRateAtEntry: row.rateAtEntry,
+                });
+              }
               return [
                 {
                   id: row.id,

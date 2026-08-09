@@ -85,7 +85,7 @@ export const AiRewriteControl = ({
     >
       <Button
         aria-label={actionLabel}
-        className="min-h-11 min-w-11 rounded-e-none"
+        className="size-11 max-w-11 flex-none rounded-e-none"
         disabled={unavailable}
         onClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
         size="icon-sm"
@@ -103,11 +103,11 @@ export const AiRewriteControl = ({
         <PopoverTrigger
           render={
             <Button
-              aria-label={t("editWithAI")}
-              className="min-h-11 min-w-11 rounded-s-none border-s px-1"
+              aria-label={t("chooseRewriteInstruction")}
+              className="size-11 max-w-11 flex-none rounded-s-none border-s px-1"
               disabled={unavailable}
               size="icon-sm"
-              tooltip={t("editWithAI")}
+              tooltip={t("chooseRewriteInstruction")}
               type="button"
               variant="ghost"
             />

@@ -47,6 +47,7 @@ type UnknownRecord = Record<string, unknown> & {
   timerStoppedAt?: unknown;
   timezoneId?: unknown;
   totalMinutes?: unknown;
+  totalTeamMinutes?: unknown;
   updated?: unknown;
   updatedAt?: unknown;
   userId?: unknown;
@@ -172,6 +173,7 @@ const parseTeamSummary = (input: UnknownRecord): TimeEntrySummary | null => {
   if (
     input.scope !== "team" ||
     !Array.isArray(input.members) ||
+    !isInteger(input.totalTeamMinutes) ||
     !isInteger(input.viewerTotalMinutes)
   ) {
     return null;
@@ -213,6 +215,7 @@ const parseTeamSummary = (input: UnknownRecord): TimeEntrySummary | null => {
   return {
     members,
     scope: "team",
+    totalTeamMinutes: input.totalTeamMinutes,
     viewerTotalMinutes: input.viewerTotalMinutes,
   };
 };

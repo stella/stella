@@ -8,6 +8,8 @@ import { Label } from "@stll/ui/components/label";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { addDays, parseIsoDateLocal } from "@/lib/dates";
+import { localISODate } from "@/lib/local-iso-date";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 
@@ -35,6 +37,10 @@ export const ManualTimeEntryForm = ({
 }: ManualTimeEntryFormProps) => {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
+  const today = localISODate();
+  const earliestDate = localISODate(
+    addDays(parseIsoDateLocal(today) ?? new Date(), -90),
+  );
   const [dateWorked, setDateWorked] = useState(defaultValues.dateWorked);
   const [durationMinutes, setDurationMinutes] = useState(
     defaultValues.durationMinutes,
@@ -75,6 +81,8 @@ export const ManualTimeEntryForm = ({
           <DatePickerPopover
             id="time-entry-date"
             labelledBy="time-entry-date-label"
+            maxDate={today}
+            minDate={earliestDate}
             onChange={(value) => setDateWorked(value ?? "")}
             value={dateWorked}
           />

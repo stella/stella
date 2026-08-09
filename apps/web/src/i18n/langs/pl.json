@@ -29,6 +29,7 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuj z AI",
+    "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
       "cta": "Otwórz ustawienia AI",

@@ -63,6 +63,7 @@ type TeamTimeEntrySummary = {
     name: string;
     userId: string;
   }[];
+  totalTeamMinutes: number;
   viewerTotalMinutes: number;
 };
 
@@ -225,6 +226,7 @@ export const timeEntryTeamSummaryOptions = (
       }
       return {
         viewerTotalMinutes: summary.viewerTotalMinutes,
+        totalTeamMinutes: summary.totalTeamMinutes,
         members: summary.members.map(
           ({ daily, email, image, name, userId }) => ({
             daily: daily.map(({ dateWorked, totalMinutes }) => ({

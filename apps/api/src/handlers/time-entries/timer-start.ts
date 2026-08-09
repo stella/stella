@@ -7,6 +7,7 @@ import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -38,6 +39,7 @@ const timerStart = createSafeHandler(
     workspaceId,
     user,
     body,
+    memberRole,
     recordAuditEvent,
   }) {
     const now = new Date();
@@ -101,14 +103,32 @@ const timerStart = createSafeHandler(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
       const [activeWorkspace] = await tx
-        .select({ id: workspaces.id })
+        .select({
+          workspaceMemberId: workspaceMembers.id,
+        })
         .from(workspaces)
+        .leftJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, workspaces.id),
+            eq(workspaceMembers.userId, user.id),
+          ),
+        )
         .where(
-          and(eq(workspaces.id, workspaceId), eq(workspaces.status, "active")),
+          and(
+            eq(workspaces.id, workspaceId),
+            eq(workspaces.organizationId, session.activeOrganizationId),
+            eq(workspaces.status, "active"),
+          ),
         )
         .limit(1);
       if (!activeWorkspace) {
         return { type: "workspace_inactive" as const };
+      }
+      const hasAdminBypass =
+        memberRole.role === "owner" || memberRole.role === "admin";
+      if (activeWorkspace.workspaceMemberId === null && !hasAdminBypass) {
+        return { type: "workspace_inaccessible" as const };
       }
       const totalEntries = await tx.$count(
         timeEntries,
@@ -213,6 +233,15 @@ const timerStart = createSafeHandler(
         new HandlerError({
           status: 409,
           message: "This matter is no longer active",
+        }),
+      );
+    }
+
+    if (txValue.type === "workspace_inaccessible") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Matter not found or not accessible",
         }),
       );
     }

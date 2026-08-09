@@ -8,32 +8,38 @@ SET statement_timeout = 0;
 -- Older timer starts were not serialized. Preserve the newest running draft
 -- timer and close non-draft or older duplicate timers at the minimum valid
 -- duration before enforcing the invariant.
--- stella-migration-safety: reviewed bulk-backfill - the update is bounded to non-draft running timers and rows ranked after the newest active draft timer for the same user; normally there are none.
+-- stella-migration-safety: reviewed bulk-backfill - the update is bounded to running timers in inactive matters, non-draft running timers, and rows ranked after the newest active draft timer for the same user; normally there are none.
 WITH ranked_active_timers AS (
   SELECT
-    "id",
-    "duration_minutes",
-    "billed_minutes",
-    "timer_started_at",
-    "timer_stopped_at",
+    "entry"."id",
+    "entry"."duration_minutes",
+    "entry"."billed_minutes",
+    "entry"."timer_started_at",
+    "entry"."timer_stopped_at",
+    "entry"."workspace_id",
+    "workspace"."status" AS "workspace_status",
     ROW_NUMBER() OVER (
-      PARTITION BY "user_id"
+      PARTITION BY "entry"."user_id"
       ORDER BY
-        ("status" = 'draft') DESC,
-        "timer_started_at" DESC,
-        "id" DESC
+        ("workspace"."status" = 'active') DESC,
+        ("entry"."status" = 'draft') DESC,
+        "entry"."timer_started_at" DESC,
+        "entry"."id" DESC
     ) AS "timer_rank"
-  FROM "time_entries"
-  WHERE "timer_started_at" IS NOT NULL
-    AND "timer_stopped_at" IS NULL
-    AND "user_id" IS NOT NULL
+  FROM "time_entries" AS "entry"
+  INNER JOIN "workspaces" AS "workspace"
+    ON "workspace"."id" = "entry"."workspace_id"
+  WHERE "entry"."timer_started_at" IS NOT NULL
+    AND "entry"."timer_stopped_at" IS NULL
+    AND "entry"."user_id" IS NOT NULL
 ),
 timers_to_repair AS MATERIALIZED (
   SELECT ranked_active_timers.*
   FROM ranked_active_timers
   INNER JOIN "time_entries" AS "entry"
     ON "entry"."id" = ranked_active_timers."id"
-  WHERE "entry"."status" <> 'draft'
+  WHERE "ranked_active_timers"."workspace_status" <> 'active'
+    OR "entry"."status" <> 'draft'
     OR ranked_active_timers."timer_rank" > 1
 ),
 repaired_timers AS (

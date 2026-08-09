@@ -29,6 +29,7 @@
   },
   "ai": {
     "analyzeWithAI": "Analüüsi AI-ga",
+    "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
       "cta": "Ava AI seaded",

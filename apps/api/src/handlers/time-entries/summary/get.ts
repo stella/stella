@@ -71,13 +71,13 @@ const readTimeEntrySummary = createSafeHandler(
         safeDb((tx) =>
           tx
             .select({
-              totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
+              totalTeamMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
+              viewerTotalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}) filter (where ${timeEntries.userId} = ${currentUser.id}), 0)::int`,
             })
             .from(timeEntries)
             .where(
               and(
                 eq(timeEntries.workspaceId, workspaceId),
-                eq(timeEntries.userId, currentUser.id),
                 gte(timeEntries.dateWorked, query.dateFrom),
                 lte(timeEntries.dateWorked, query.dateTo),
               ),
@@ -156,7 +156,8 @@ const readTimeEntrySummary = createSafeHandler(
 
       return okTimeEntrySummary({
         scope: "team",
-        viewerTotalMinutes: viewerSummary?.totalMinutes ?? 0,
+        totalTeamMinutes: viewerSummary?.totalTeamMinutes ?? 0,
+        viewerTotalMinutes: viewerSummary?.viewerTotalMinutes ?? 0,
         members: [...membersById.values()],
       });
     }

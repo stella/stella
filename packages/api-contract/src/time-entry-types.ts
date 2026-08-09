@@ -49,5 +49,6 @@ export type TimeEntrySummary =
         userId: string;
       }[];
       scope: "team";
+      totalTeamMinutes: number;
       viewerTotalMinutes: number;
     };

@@ -32,6 +32,7 @@ type Messages = {
   };
   "ai": {
     "analyzeWithAI": "Analyze with AI";
+    "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
     "keyRequired": {
       "cta": "Open AI settings";

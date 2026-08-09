@@ -215,7 +215,7 @@ export const PersonalTimesheetDay = ({
                 dateWorked: editingEntry?.dateWorked ?? date,
                 durationMinutes: editingEntry?.durationMinutes ?? 0,
                 narrative: editingEntry?.narrative ?? "",
-                billable: editingEntry?.billable ?? true,
+                billable: editingEntry?.billable ?? false,
               }}
               onCancel={() => setDialog({ type: "closed" })}
               onSubmit={submit}

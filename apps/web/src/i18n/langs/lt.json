@@ -29,6 +29,7 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuoti su DI",
+    "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
       "cta": "Atidaryti AI nustatymus",

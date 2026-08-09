@@ -377,11 +377,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
   }, [teamTimeSummary, firstWeekday]);
 
-  const totalTeamHoursThisWeek = teamHeatmap.reduce(
-    (sum, member) =>
-      sum + member.daily.reduce((memberTotal, hours) => memberTotal + hours, 0),
-    0,
-  );
+  const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
   // Tasks with due dates, sorted by nearest deadline first
   const tasksWithDue = useMemo(

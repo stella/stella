@@ -29,6 +29,7 @@
   },
   "ai": {
     "analyzeWithAI": "Analyzovat pomocí AI",
+    "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
       "cta": "Otevřít nastavení AI",
