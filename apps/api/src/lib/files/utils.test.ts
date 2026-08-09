@@ -49,6 +49,21 @@ describe("resolveUploadMime", () => {
     }
   });
 
+  test("canonicalizes supported MIME aliases", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/x-pdf",
+        fileName: "contract.pdf",
+      }),
+    ).toBe("application/pdf");
+    expect(
+      resolveUploadMime({
+        declaredMime: "image/jpg",
+        fileName: "photo.jpg",
+      }),
+    ).toBe("image/jpeg");
+  });
+
   test("recovers previewable documents reported as generic", () => {
     expect(
       resolveUploadMime({

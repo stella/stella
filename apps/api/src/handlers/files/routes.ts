@@ -178,19 +178,6 @@ export const filesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
-  .use(
-    rateLimit({
-      scoping: "scoped",
-      duration: API_RATE_LIMITS.upload.duration,
-      max: API_RATE_LIMITS.upload.max,
-      ...createRedisRateLimit({
-        failurePolicy: "fail_open_local",
-        scope: "upload",
-      }),
-      skip: (request) =>
-        !isUploadRateLimitedPath(new URL(request.url).pathname),
-    }),
-  )
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -230,6 +217,18 @@ filesRoute.get(
   },
 );
 
+filesRoute.use(
+  rateLimit({
+    scoping: "scoped",
+    duration: API_RATE_LIMITS.upload.duration,
+    max: API_RATE_LIMITS.upload.max,
+    ...createRedisRateLimit({
+      failurePolicy: "fail_open_local",
+      scope: "upload",
+    }),
+    skip: (request) => !isUploadRateLimitedPath(new URL(request.url).pathname),
+  }),
+);
 filesRoute.post(
   "/email-attachment/:fieldId/:attachmentId/save",
   saveEmailAttachmentEndpoint.handler,

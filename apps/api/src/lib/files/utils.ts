@@ -28,6 +28,11 @@ const GENERIC_UPLOAD_MIME_TYPES = new Set([
   "binary/octet-stream",
 ]);
 
+const UPLOAD_MIME_TYPE_ALIASES = new Map([
+  ["application/x-pdf", "application/pdf"],
+  ["image/jpg", "image/jpeg"],
+]);
+
 type ResolveUploadMimeProps = {
   declaredMime: string;
   fileName: string;
@@ -45,18 +50,22 @@ export const resolveUploadMime = ({
   declaredMime,
   fileName,
 }: ResolveUploadMimeProps): string => {
-  if (!GENERIC_UPLOAD_MIME_TYPES.has(declaredMime)) {
-    return declaredMime;
+  const canonicalDeclaredMime =
+    UPLOAD_MIME_TYPE_ALIASES.get(declaredMime) ?? declaredMime;
+  if (!GENERIC_UPLOAD_MIME_TYPES.has(canonicalDeclaredMime)) {
+    return canonicalDeclaredMime;
   }
   const dotIndex = fileName.lastIndexOf(".");
   if (dotIndex === -1) {
-    return declaredMime;
+    return canonicalDeclaredMime;
   }
   const extension = fileName
     .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
     .toLowerCase();
   const lookupName = `file.${extension}`;
-  return Bun.file(lookupName).type.split(";").at(0)?.trim() || declaredMime;
+  return (
+    Bun.file(lookupName).type.split(";").at(0)?.trim() || canonicalDeclaredMime
+  );
 };
 
 /**
