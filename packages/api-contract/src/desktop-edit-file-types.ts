@@ -33,5 +33,28 @@ export const DESKTOP_EDIT_FILE_TYPE_CONFIG = {
   },
 } as const satisfies Record<DesktopEditFileType, DesktopEditFileTypeConfig>;
 
+export const desktopEditFileTypeForMimeType = (
+  mimeType: string,
+): DesktopEditFileType | null => {
+  const normalizedMimeType = mimeType
+    .split(";", 1)
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+  if (!normalizedMimeType) {
+    return null;
+  }
+
+  for (const fileType of DESKTOP_EDIT_FILE_TYPES) {
+    if (
+      DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType].mimeType === normalizedMimeType
+    ) {
+      return fileType;
+    }
+  }
+
+  return null;
+};
+
 export type DesktopEditMimeType =
   (typeof DESKTOP_EDIT_FILE_TYPE_CONFIG)[DesktopEditFileType]["mimeType"];

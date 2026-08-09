@@ -14,6 +14,7 @@ export type { EntityKind } from "./entity-kinds";
 export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  desktopEditFileTypeForMimeType,
 } from "./desktop-edit-file-types";
 export type {
   DesktopEditFileType,

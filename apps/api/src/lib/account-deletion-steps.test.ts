@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
-import { deletePendingUploads } from "@/api/lib/account-deletion-steps";
+import {
+  deleteDesktopEditSessionsAndHandoffs,
+  deletePendingUploads,
+} from "@/api/lib/account-deletion-steps";
 import { toSafeId } from "@/api/lib/branded-types";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -151,5 +154,63 @@ describe("pendingUploadS3KeysForDeletion", () => {
         }),
       ),
     );
+  });
+});
+
+describe("desktop edit session deletion", () => {
+  test("queues each checkpoint under its persisted file type", async () => {
+    const organizationId = toSafeId<"organization">(
+      "0198fa3d-fc8d-7000-8000-000000000010",
+    );
+    const workspaceId = toSafeId<"workspace">(
+      "0198fa3d-fc8d-7000-8000-000000000011",
+    );
+    const checkpointRows = [
+      {
+        checkpointFileId: toSafeId<"userFile">(
+          "0198fa3d-fc8d-7000-8000-000000000012",
+        ),
+        fileType: "docx",
+        organizationId,
+        workspaceId,
+      },
+      {
+        checkpointFileId: toSafeId<"userFile">(
+          "0198fa3d-fc8d-7000-8000-000000000013",
+        ),
+        fileType: "xlsx",
+        organizationId,
+        workspaceId,
+      },
+      {
+        checkpointFileId: toSafeId<"userFile">(
+          "0198fa3d-fc8d-7000-8000-000000000014",
+        ),
+        fileType: "pptx",
+        organizationId,
+        workspaceId,
+      },
+    ] as const;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({ where: async () => checkpointRows }),
+        }),
+      }),
+      delete: () => ({ where: async () => undefined }),
+    });
+    const s3KeysToDelete: string[] = [];
+
+    await deleteDesktopEditSessionsAndHandoffs({
+      tx,
+      currentUserId: "user-1",
+      s3KeysToDelete,
+    });
+
+    expect(s3KeysToDelete).toEqual([
+      `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000012.docx`,
+      `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000013.xlsx`,
+      `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000014.pptx`,
+    ]);
   });
 });
