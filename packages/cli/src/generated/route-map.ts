@@ -61823,7 +61823,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "list"],
                 capabilityId: "time-entries.list",
                 description:
-                  "List time entries in a matter, optionally filtered by workItemId (the document, folder, or task providing context), userId, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+                  "List time entries in a matter, optionally filtered by workItemId (the document, folder, or task providing context), userId or scope=me, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
                 access: "read",
                 flags: [
                   {
@@ -61844,6 +61844,17 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "query",
                     partPath: "userId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "List only entries recorded by the signed-in user",
+                    flag: "--scope",
+                    prop: "scope",
+                    required: false,
+                    part: "query",
+                    partPath: "scope",
                   },
                   {
                     kind: "string",
@@ -61950,6 +61961,12 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                           description:
                             "List only entries recorded by this user",
+                        },
+                        scope: {
+                          description:
+                            "List only entries recorded by the signed-in user",
+                          const: "me",
+                          type: "string",
                         },
                         workItemId: {
                           minLength: 36,
