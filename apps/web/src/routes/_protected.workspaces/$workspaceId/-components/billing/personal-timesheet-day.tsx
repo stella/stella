@@ -46,13 +46,11 @@ import {
 type PersonalTimesheetDayProps = {
   workspaceId: string;
   date: string;
-  userId: string;
 };
 
 export const PersonalTimesheetDay = ({
   workspaceId,
   date,
-  userId,
 }: PersonalTimesheetDayProps) => {
   const t = useTranslations();
   const [dialog, setDialog] = useState<
@@ -66,7 +64,7 @@ export const PersonalTimesheetDay = ({
     timeEntriesInfiniteOptions(workspaceId, {
       dateFrom: date,
       dateTo: date,
-      userId,
+      scope: "me",
     }),
   );
   const { data: summary } = useSuspenseQuery(

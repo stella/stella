@@ -11,6 +11,7 @@ type TimeEntrySource = "manual" | "timer";
 
 type TimeEntriesFilters = {
   userId?: string;
+  scope?: "me";
   workItemId?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -22,6 +23,7 @@ type TimeEntriesFilters = {
 
 type TimeEntriesListKey = {
   userId?: string | undefined;
+  scope?: "me" | undefined;
   workItemId?: string | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
@@ -37,6 +39,7 @@ export const timeEntriesKeys = {
     ...timeEntriesKeys.all(workspaceId),
     {
       userId: key.userId,
+      scope: key.scope,
       workItemId: key.workItemId,
       dateFrom: key.dateFrom,
       dateTo: key.dateTo,

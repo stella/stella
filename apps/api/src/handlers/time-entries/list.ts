@@ -49,6 +49,11 @@ const readTimeEntriesQuerySchema = t.Object({
   userId: t.Optional(
     withDescription(tUserId, "List only entries recorded by this user"),
   ),
+  scope: t.Optional(
+    t.Literal("me", {
+      description: "List only entries recorded by the signed-in user",
+    }),
+  ),
   workItemId: t.Optional(
     tSafeId("entity", {
       description:
@@ -104,8 +109,8 @@ const readTimeEntries = createSafeHandler(
   {
     description:
       "List time entries in a matter, optionally filtered by workItemId " +
-      "(the document, folder, or task providing context), userId, a date-worked " +
-      "range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
+      "(the document, folder, or task providing context), userId or scope=me, " +
+      "a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
       "entry's id, entity, user, date, minutes, rate (minor currency " +
       "units), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
@@ -127,7 +132,18 @@ const readTimeEntries = createSafeHandler(
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
 
     const requestedUserId = query.userId;
-    if (requestedUserId) {
+    if (query.scope === "me" && requestedUserId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "scope and userId cannot be combined",
+        }),
+      );
+    }
+
+    if (query.scope === "me") {
+      conditions.push(eq(timeEntries.userId, currentUser.id));
+    } else if (requestedUserId) {
       if (!canReviewMatterEntries && requestedUserId !== currentUser.id) {
         return Result.err(
           new HandlerError({ status: 403, message: "Forbidden" }),
