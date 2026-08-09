@@ -380,6 +380,13 @@ describe("emailToHtml (.eml)", () => {
     'Content-Disposition: attachment; filename="notes.txt"',
     "",
     "Attachment text",
+    "--BND",
+    "Content-Type: image/png",
+    "Content-Transfer-Encoding: base64",
+    "Content-ID: <evidence456>",
+    'Content-Disposition: attachment; filename="evidence.png"',
+    "",
+    PNG_BASE64,
     "--BND--",
     "",
   ].join("\r\n");
@@ -453,7 +460,7 @@ describe("emailToHtml (.eml)", () => {
     );
   });
 
-  test("lists ordinary attachments without duplicating inline CID images", async () => {
+  test("hides referenced inline images but preserves unreferenced CID attachments", async () => {
     const result = await emailToPreview(toArrayBuffer(eml), "message/rfc822");
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
@@ -465,6 +472,11 @@ describe("emailToHtml (.eml)", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 16,
+      },
+      {
+        fileName: "evidence.png",
+        mimeType: "image/png",
+        sizeBytes: Buffer.from(PNG_BASE64, "base64").byteLength,
       },
     ]);
   });

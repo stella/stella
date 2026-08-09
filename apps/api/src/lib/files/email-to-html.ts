@@ -146,6 +146,7 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
+  const referencedContentIds = getReferencedInlineContentIds(parsed.body);
 
   return {
     subject: parsed.subject,
@@ -157,7 +158,9 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
     attachments: parsed.attachments
       .filter(
         ({ contentId }) =>
-          !contentId || !inlineContentIds.has(contentId.toLowerCase()),
+          !contentId ||
+          !inlineContentIds.has(contentId.toLowerCase()) ||
+          !referencedContentIds.has(contentId.toLowerCase()),
       )
       .map(({ fileName, mimeType, bytes }) => ({
         fileName,
@@ -166,6 +169,23 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
       })),
     bodyHtml: renderEmailBodyHtml(parsed),
   };
+};
+
+const getReferencedInlineContentIds = (body: EmailBody): Set<string> => {
+  const contentIds = new Set<string>();
+  if (body.type !== "html") {
+    return contentIds;
+  }
+
+  const $ = load(body.html);
+  $("img").each((_, element) => {
+    const src = $(element).attr("src")?.trim();
+    if (!src || !src.toLowerCase().startsWith("cid:")) {
+      return;
+    }
+    contentIds.add(stripAngleBrackets(src.slice("cid:".length)).toLowerCase());
+  });
+  return contentIds;
 };
 
 export const parseEmail = async (

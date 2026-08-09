@@ -19,17 +19,21 @@ describe("email viewer metadata", () => {
 
   test("selects a readable unit for attachment sizes", () => {
     expect(getEmailAttachmentSize(512)).toEqual({ unit: "byte", value: 512 });
-    expect(getEmailAttachmentSize(2048)).toEqual({
+    expect(getEmailAttachmentSize(2000)).toEqual({
       unit: "kilobyte",
       value: 2,
     });
-    expect(getEmailAttachmentSize(2 * 1024 * 1024)).toEqual({
+    expect(getEmailAttachmentSize(2 * 1000 * 1000)).toEqual({
       unit: "megabyte",
       value: 2,
     });
-    expect(getEmailAttachmentSize(2 * 1024 * 1024 * 1024)).toEqual({
+    expect(getEmailAttachmentSize(2 * 1000 * 1000 * 1000)).toEqual({
       unit: "gigabyte",
       value: 2,
+    });
+    expect(getEmailAttachmentSize(1_000_000)).toEqual({
+      unit: "megabyte",
+      value: 1,
     });
   });
 });
