@@ -80,11 +80,22 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
     timeoutMs: 1000,
   });
 
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: URL parsing strips leading whitespace before an authority delimiter
+  await fetchWithTimeout(new URL(` //${inputUrl}`, STATIC_BASE), {
+    timeoutMs: 1000,
+  });
+
   const originalUrl = new URL("https://api.example.com/items");
   const urlAlias = originalUrl;
   urlAlias.hostname = inputUrl;
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: mutating a URL through an alias invalidates the original binding's proof
   await fetchWithTimeout(originalUrl, { timeoutMs: 1000 });
+
+  const computedMutationUrl = new URL("https://api.example.com/items");
+  const authorityKey = "hostname";
+  computedMutationUrl[authorityKey] = inputUrl;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a stable computed authority key invalidates the URL's static proof
+  await fetchWithTimeout(computedMutationUrl, { timeoutMs: 1000 });
 
   const escapedUrl = new URL("https://api.example.com/items");
   mutateTarget(escapedUrl, inputUrl);

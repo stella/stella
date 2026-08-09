@@ -72,6 +72,16 @@ const MUTATING_COLLECTION_METHODS = new Set([
   "splice",
   "unshift",
 ]);
+const URL_ORIGIN_PROPERTIES = new Set([
+  "hash",
+  "host",
+  "hostname",
+  "href",
+  "password",
+  "port",
+  "protocol",
+  "username",
+]);
 
 type Scope = {
   set: Map<string, ScopeVariable>;
@@ -135,6 +145,7 @@ const isProvablyRelativeUrlPattern = (pattern: string | null): boolean => {
   if (
     pattern === null ||
     pattern.startsWith(DYNAMIC_PART) ||
+    pattern.trimStart() !== pattern ||
     pattern.includes("\\")
   ) {
     return false;
@@ -316,29 +327,8 @@ export default eslintCompatPlugin({
                     parent.right === expression))
               );
             }
-            const propertyName =
-              member.computed === false
-                ? getPropertyName(member.property)
-                : isStringLiteral(member.property)
-                  ? member.property.value
-                  : null;
-            if (
-              propertyName === null ||
-              ![
-                "hash",
-                "host",
-                "hostname",
-                "href",
-                "password",
-                "port",
-                "protocol",
-                "username",
-              ].includes(propertyName)
-            ) {
-              return false;
-            }
             const parent = member.parent;
-            return (
+            const isWrite =
               isAstNode(parent) &&
               ((parent.type === "AssignmentExpression" &&
                 parent.left === member) ||
@@ -346,7 +336,19 @@ export default eslintCompatPlugin({
                   parent.argument === member) ||
                 (parent.type === "UnaryExpression" &&
                   parent.operator === "delete" &&
-                  parent.argument === member))
+                  parent.argument === member));
+            if (!isWrite) {
+              return false;
+            }
+            const propertyName =
+              member.computed === false
+                ? getPropertyName(member.property)
+                : staticPattern(member.property);
+            return (
+              (member.computed === true &&
+                (propertyName === null ||
+                  propertyName.includes(DYNAMIC_PART))) ||
+              URL_ORIGIN_PROPERTIES.has(propertyName ?? "")
             );
           });
         };
