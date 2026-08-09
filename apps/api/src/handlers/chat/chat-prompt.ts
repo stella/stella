@@ -443,18 +443,19 @@ const resolveActiveFilePromptContext = async ({
   if (!row) {
     return Result.ok(null);
   }
+  const content = row.content;
   if (
-    !row.content ||
-    row.content.type !== "file" ||
-    row.content.encrypted ||
+    !content ||
+    content.type !== "file" ||
+    content.encrypted ||
     !row.entityVersionId ||
-    row.content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document
+    content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document
   ) {
     return Result.ok(activeFilePromptBase);
   }
   const emailMimeType = resolveEmailMimeType({
-    fileName: row.content.fileName,
-    mimeType: row.content.mimeType,
+    fileName: content.fileName,
+    mimeType: content.mimeType,
   });
   if (!emailMimeType) {
     return Result.ok(activeFilePromptBase);
@@ -466,8 +467,8 @@ const resolveActiveFilePromptContext = async ({
         createFileKey({
           organizationId,
           workspaceId,
-          fileId: row.content.id,
-          mimeType: row.content.mimeType,
+          fileId: content.id,
+          mimeType: content.mimeType,
         }),
       ),
     catch: (cause) => cause,

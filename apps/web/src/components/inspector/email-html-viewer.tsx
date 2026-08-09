@@ -425,10 +425,10 @@ const scrollToEmailCitation = ({
 }): void => {
   const bodyDocument = bodyFrame?.contentDocument;
   if (bodyDocument) {
-    for (const active of bodyDocument.querySelectorAll(
+    for (const active of bodyDocument.querySelectorAll<HTMLElement>(
       "[data-stella-email-citation-active]",
     )) {
-      active.removeAttribute("data-stella-email-citation-active");
+      delete active.dataset.stellaEmailCitationActive;
     }
   }
 
@@ -447,7 +447,7 @@ const scrollToEmailCitation = ({
     return;
   }
   openAncestorDetails(bodyTarget);
-  bodyTarget.setAttribute("data-stella-email-citation-active", "");
+  bodyTarget.dataset.stellaEmailCitationActive = "";
   bodyTarget.scrollIntoView({ behavior: "smooth", block: "center" });
 };
 

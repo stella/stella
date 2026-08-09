@@ -2,6 +2,8 @@ import { useMemo, useSyncExternalStore } from "react";
 
 export const EMAIL_CITATION_HREF_PREFIX = "#email:";
 export const EMAIL_CITATION_SCROLL_EVENT = "email:scroll-to-citation";
+const EMAIL_CITATION_LOOKUP_EVENT = "email:lookup-citation";
+const EMAIL_CITATION_REGISTRATION_EVENT = "email:citation-registration";
 
 const EMAIL_CITATION_HREF_RE =
   /^#email:(?<entityId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>header-(?:bcc|cc|date|from|subject|to)|body-[0-9]{4})$/iu;
@@ -27,11 +29,6 @@ export const parseEmailCitationHref = (
   return entityId && fieldId && blockId ? { blockId, entityId, fieldId } : null;
 };
 
-const citationRegistrations = new Map<
-  string,
-  Map<symbol, { blockIds: ReadonlySet<string>; entityId: string }>
->();
-const citationRegistrationListeners = new Set<() => void>();
 let pendingCitationTarget: EmailCitationTarget | null = null;
 
 const dispatchEmailCitationScroll = (target: EmailCitationTarget): void => {
@@ -41,9 +38,7 @@ const dispatchEmailCitationScroll = (target: EmailCitationTarget): void => {
 };
 
 const emitCitationRegistrationChange = (): void => {
-  for (const listener of citationRegistrationListeners) {
-    listener();
-  }
+  window.dispatchEvent(new Event(EMAIL_CITATION_REGISTRATION_EVENT));
 };
 
 export const registerEmailCitationBlocks = ({
@@ -55,19 +50,25 @@ export const registerEmailCitationBlocks = ({
   entityId: string;
   fieldId: string;
 }): (() => void) => {
-  const registrationId = Symbol(fieldId);
-  const registrations =
-    citationRegistrations.get(fieldId) ??
-    new Map<symbol, { blockIds: ReadonlySet<string>; entityId: string }>();
-  registrations.set(registrationId, { blockIds: new Set(blockIds), entityId });
-  citationRegistrations.set(fieldId, registrations);
+  const registeredBlockIds = new Set(blockIds);
+  const handleLookup = (event: CustomEvent<EmailCitationTarget>): void => {
+    const target = event.detail;
+    if (
+      target.entityId === entityId &&
+      target.fieldId === fieldId &&
+      registeredBlockIds.has(target.blockId)
+    ) {
+      event.preventDefault();
+    }
+  };
+  window.addEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
   emitCitationRegistrationChange();
 
   const pendingTarget = pendingCitationTarget;
   if (
     pendingTarget?.entityId === entityId &&
     pendingTarget.fieldId === fieldId &&
-    isKnownEmailCitationTarget(pendingTarget)
+    registeredBlockIds.has(pendingTarget.blockId)
   ) {
     pendingCitationTarget = null;
     queueMicrotask(() => {
@@ -76,34 +77,20 @@ export const registerEmailCitationBlocks = ({
   }
 
   return () => {
-    const current = citationRegistrations.get(fieldId);
-    current?.delete(registrationId);
-    if (current?.size === 0) {
-      citationRegistrations.delete(fieldId);
-    }
+    window.removeEventListener(EMAIL_CITATION_LOOKUP_EVENT, handleLookup);
     emitCitationRegistrationChange();
   };
 };
 
-export const isKnownEmailCitationTarget = ({
-  blockId,
-  entityId,
-  fieldId,
-}: EmailCitationTarget): boolean => {
-  const registrations = citationRegistrations.get(fieldId);
-  if (!registrations) {
-    return false;
-  }
-  for (const registration of registrations.values()) {
-    if (
-      registration.entityId === entityId &&
-      registration.blockIds.has(blockId)
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
+export const isKnownEmailCitationTarget = (
+  target: EmailCitationTarget,
+): boolean =>
+  !window.dispatchEvent(
+    new CustomEvent(EMAIL_CITATION_LOOKUP_EVENT, {
+      cancelable: true,
+      detail: target,
+    }),
+  );
 
 export const isVerifiedEmailCitationTarget = ({
   blockIds,
@@ -129,9 +116,9 @@ export const requestEmailCitationScroll = (
 const subscribeToEmailCitationRegistrations = (
   listener: () => void,
 ): (() => void) => {
-  citationRegistrationListeners.add(listener);
+  window.addEventListener(EMAIL_CITATION_REGISTRATION_EVENT, listener);
   return () => {
-    citationRegistrationListeners.delete(listener);
+    window.removeEventListener(EMAIL_CITATION_REGISTRATION_EVENT, listener);
   };
 };
 
@@ -155,6 +142,8 @@ export const useKnownEmailCitationTarget = (
 declare global {
   // eslint-disable-next-line typescript-eslint/consistent-type-definitions -- interface declaration merging is required to augment lib.dom WindowEventMap
   interface WindowEventMap {
+    "email:citation-registration": Event;
+    "email:lookup-citation": CustomEvent<EmailCitationTarget>;
     "email:scroll-to-citation": CustomEvent<EmailCitationTarget>;
   }
 }
