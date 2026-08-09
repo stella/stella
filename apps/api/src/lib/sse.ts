@@ -36,7 +36,7 @@ const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 const encoder = new TextEncoder();
 
 const formatSSE = (event: WorkspaceRealtimeEvent): Uint8Array => {
-  const payload = JSON.stringify({ type: event.type, data: event.data });
+  const payload = JSON.stringify(event);
   return encoder.encode(`data: ${payload}\n\n`);
 };
 

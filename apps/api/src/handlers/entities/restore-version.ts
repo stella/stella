@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -13,8 +15,8 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -233,10 +235,10 @@ export default createSafeHandler(
       }),
     );
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: params.entityId }),
+    );
 
     return Result.ok({
       versionId: nextVersionId,

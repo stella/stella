@@ -6,12 +6,13 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
+import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 
 export const viewsKeys = {
   // Locale-independent prefix. Mutations invalidate this so every cached locale
   // variant (`["views", workspaceId, lang]`) is dropped, not just the one
   // currently loaded — React Query matches `invalidateQueries` by prefix.
-  all: (workspaceId: string) => ["views", workspaceId],
+  all: viewsRootKey,
   // Default view names are localized server-side per Accept-Language, so the
   // cache identity must include the locale — otherwise switching language keeps
   // serving the previously-localized names until an unrelated refetch. Use

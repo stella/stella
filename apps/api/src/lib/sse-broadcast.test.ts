@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
+import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { parseRedisPayload } from "@/api/lib/sse-broadcast";
 
@@ -35,6 +35,17 @@ describe("SSE Redis payload parsing", () => {
     ).toBe("organization");
     expect(
       parseRedisPayload(
+        redisPayload("workspace", {
+          type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+          resource: {
+            type: RESOURCE_TYPE.ENTITY,
+            id: "00000000-0000-4000-8000-000000000002",
+          },
+        }),
+      )?.scope,
+    ).toBe("workspace");
+    expect(
+      parseRedisPayload(
         redisPayload("session", {
           type: REALTIME_EVENT_TYPE.SESSION_CLOSED,
           data: { reason: "expired" },
@@ -63,6 +74,25 @@ describe("SSE Redis payload parsing", () => {
             answer: "Draft answer",
             status: "streaming",
           },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseRedisPayload(
+        redisPayload("organization", {
+          type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+          resource: {
+            type: RESOURCE_TYPE.ENTITY,
+            id: "00000000-0000-4000-8000-000000000002",
+          },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseRedisPayload(
+        redisPayload("workspace", {
+          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+          resource: { type: RESOURCE_TYPE.ENTITY, id: "" },
         }),
       ),
     ).toBeNull();

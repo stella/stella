@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
@@ -96,10 +98,10 @@ const deleteView = createSafeHandler(
       }),
     );
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["views", workspaceId],
-    });
+    broadcastWorkspaceResourceDeleted(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id: viewId }),
+    );
 
     return Result.ok({});
   },

@@ -1,11 +1,14 @@
 import * as v from "valibot";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
+import { isResourceRef, type ResourceRef } from "./resource-ref";
 
 export const REALTIME_EVENT_TYPE = {
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
   INVALIDATE_QUERY: "invalidate-query",
+  RESOURCE_DELETED: "resource.deleted",
+  RESOURCE_UPDATED: "resource.updated",
   SESSION_CLOSED: "session-closed",
   SESSION_TAKEN_OVER: "session-taken-over",
   TAKEOVER_REQUESTED: "takeover-requested",
@@ -18,6 +21,23 @@ const invalidateQueryEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.INVALIDATE_QUERY),
   data: v.pipe(v.array(nonEmptyStringSchema), v.minLength(1)),
 });
+
+const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
+
+const resourceUpdatedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_UPDATED),
+  resource: resourceRefSchema,
+});
+
+const resourceDeletedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
+  resource: resourceRefSchema,
+});
+
+const resourceRealtimeEventSchema = v.variant("type", [
+  resourceUpdatedEventSchema,
+  resourceDeletedEventSchema,
+]);
 
 const workflowExtractionPreviewEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW),
@@ -47,11 +67,17 @@ const flowRunUpdateEventSchema = v.object({
 
 const workspaceRealtimeEventSchema = v.variant("type", [
   invalidateQueryEventSchema,
+  resourceUpdatedEventSchema,
+  resourceDeletedEventSchema,
   workflowExtractionPreviewEventSchema,
   flowRunUpdateEventSchema,
 ]);
 
 const organizationRealtimeEventSchema = invalidateQueryEventSchema;
+
+export type ResourceRealtimeEvent = v.InferOutput<
+  typeof resourceRealtimeEventSchema
+>;
 
 export type WorkspaceRealtimeEvent = v.InferOutput<
   typeof workspaceRealtimeEventSchema
@@ -59,6 +85,18 @@ export type WorkspaceRealtimeEvent = v.InferOutput<
 export type OrganizationRealtimeEvent = v.InferOutput<
   typeof organizationRealtimeEventSchema
 >;
+
+export const resourceUpdatedRealtimeEvent = (resource: ResourceRef) =>
+  ({
+    type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+    resource,
+  }) as const satisfies ResourceRealtimeEvent;
+
+export const resourceDeletedRealtimeEvent = (resource: ResourceRef) =>
+  ({
+    type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+    resource,
+  }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),

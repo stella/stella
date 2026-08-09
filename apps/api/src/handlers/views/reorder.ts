@@ -104,6 +104,8 @@ const reorderViews = createSafeHandler(
       }),
     );
 
+    // Reordering updates multiple views. Keep the collection invalidation until
+    // the semantic contract has an honest bounded-batch event.
     broadcast(workspaceId, {
       type: "invalidate-query",
       data: ["views", workspaceId],

@@ -2,13 +2,15 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
@@ -114,10 +116,10 @@ const convertView = createSafeHandler(
       createdAt: existing.createdAt.toISOString(),
     };
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["views", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id: viewId }),
+    );
 
     return Result.ok(view);
   },

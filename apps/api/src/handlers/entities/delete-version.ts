@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
@@ -19,6 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 
@@ -365,10 +368,10 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", workspaceId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+  );
   broadcast(workspaceId, {
     type: "invalidate-query",
     data: ["files"],

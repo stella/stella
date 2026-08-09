@@ -8,8 +8,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import {
-  getWorkspaceRealtimeQueryKey,
+  getWorkspaceRealtimeQueryActions,
   parseWorkspaceRealtimeMessage,
+  WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
@@ -24,9 +25,8 @@ const getWorkspaceSSEUrl = (workspaceId: string) =>
   apiUrl(`/workspaces/${workspaceId}/events`);
 
 /**
- * Subscribe to workspace-scoped SSE events. On receiving an
- * `invalidate-query` event, the corresponding React Query keys
- * are invalidated, triggering background refetches.
+ * Subscribe to workspace-scoped SSE events and apply their validated React
+ * Query cache actions.
  *
  * Auto-reconnects via the native EventSource reconnection
  * behaviour. Cleans up on unmount or when workspaceId changes.
@@ -42,12 +42,24 @@ export const useWorkspaceSSE = (
     (event: WorkspaceRealtimeEvent) => {
       options.onEvent?.(event);
 
-      const queryKey = getWorkspaceRealtimeQueryKey(event);
-      if (queryKey) {
-        detached(
-          queryClient.invalidateQueries({ queryKey }),
-          "useWorkspaceSSE",
-        );
+      const actions = getWorkspaceRealtimeQueryActions(event, workspaceId);
+      for (const action of actions) {
+        switch (action.type) {
+          case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
+            detached(
+              queryClient.invalidateQueries({ queryKey: action.queryKey }),
+              "useWorkspaceSSE",
+            );
+            break;
+          case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
+            queryClient.removeQueries({
+              queryKey: action.queryKey,
+              exact: false,
+            });
+            break;
+          default:
+            action satisfies never;
+        }
       }
     },
   );

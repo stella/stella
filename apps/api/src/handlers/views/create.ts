@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { workspaceViews } from "@/api/db/schema";
@@ -9,7 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { broadcast } from "@/api/lib/sse";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   parseViewLayout,
   tCreateViewInputSchema,
@@ -165,10 +166,10 @@ const createView = createSafeHandler(
       );
     }
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["views", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id: body.id }),
+    );
 
     return Result.ok(txResult.view);
   },

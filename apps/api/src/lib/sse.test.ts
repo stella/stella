@@ -2,6 +2,9 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   REALTIME_EVENT_TYPE,
+  resourceRef,
+  resourceUpdatedRealtimeEvent,
+  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -331,6 +334,29 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     const { value } = await reader.read();
     const text = new TextDecoder().decode(value);
     expect(text).toContain("local-only");
+
+    controller.abort();
+    await flushMicrotasks();
+  });
+
+  test("preserves the resource carried by a semantic event", async () => {
+    stopSse();
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+    const entityId = toSafeId<"entity">("entity-semantic-event");
+
+    broadcast(
+      workspaceId,
+      resourceUpdatedRealtimeEvent(
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+      ),
+    );
+
+    const text = new TextDecoder().decode((await reader.read()).value);
+    expect(text).toContain(`"resource":{"type":"entity","id":"${entityId}"}`);
 
     controller.abort();
     await flushMicrotasks();

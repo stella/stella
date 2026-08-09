@@ -1,6 +1,8 @@
 import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -38,10 +40,10 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const toSafeDb =
@@ -446,14 +448,10 @@ export const createEntityFromBuffer = async ({
     workspaceId,
   }).catch(captureError);
 
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", workspaceId],
-  });
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["workspaces", workspaceId, "overview"],
-  });
+  broadcastWorkspaceResourceUpdated(
+    workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+  );
 
   return Result.ok({ entityId, entityVersionId, fieldId, fileName });
 };

@@ -5,27 +5,43 @@ import {
   parseOrganizationRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
+  resourceDeletedRealtimeEvent,
+  resourceUpdatedRealtimeEvent,
   type OrganizationRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
+import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
+import { toSafeId } from "./safe-id";
 
 const INVALIDATE_QUERY_EVENT = {
   type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY,
   data: ["entities", "workspace-1"],
 } satisfies OrganizationRealtimeEvent;
 
+const ENTITY_RESOURCE = resourceRef({
+  type: RESOURCE_TYPE.ENTITY,
+  id: toSafeId<"entity">("entity-1"),
+});
+
+const RESOURCE_UPDATED_EVENT = resourceUpdatedRealtimeEvent(ENTITY_RESOURCE);
+const RESOURCE_DELETED_EVENT = resourceDeletedRealtimeEvent(ENTITY_RESOURCE);
+
+const WORKFLOW_EXTRACTION_PREVIEW_EVENT = {
+  type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
+  data: {
+    entityId: "entity-1",
+    entityVersionId: "entity-version-1",
+    propertyId: "property-1",
+    answer: "Draft answer",
+    status: "streaming",
+  },
+} satisfies WorkspaceRealtimeEvent;
+
 const WORKSPACE_EVENT_FIXTURES = [
   INVALIDATE_QUERY_EVENT,
-  {
-    type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
-    data: {
-      entityId: "entity-1",
-      entityVersionId: "entity-version-1",
-      propertyId: "property-1",
-      answer: "Draft answer",
-      status: "streaming",
-    },
-  },
+  RESOURCE_UPDATED_EVENT,
+  RESOURCE_DELETED_EVENT,
+  WORKFLOW_EXTRACTION_PREVIEW_EVENT,
   {
     type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
     data: {
@@ -64,6 +80,18 @@ describe("realtime event contracts", () => {
     ).toBeNull();
     expect(
       parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+        resource: { type: RESOURCE_TYPE.ENTITY, id: "" },
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+        resource: { type: "unknown", id: "entity-1" },
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
         data: { entityId: "entity-1" },
       }),
@@ -74,8 +102,10 @@ describe("realtime event contracts", () => {
     expect(parseOrganizationRealtimeEvent(INVALIDATE_QUERY_EVENT)).toEqual(
       INVALIDATE_QUERY_EVENT,
     );
+    expect(parseOrganizationRealtimeEvent(RESOURCE_UPDATED_EVENT)).toBeNull();
+    expect(parseOrganizationRealtimeEvent(RESOURCE_DELETED_EVENT)).toBeNull();
     expect(
-      parseOrganizationRealtimeEvent(WORKSPACE_EVENT_FIXTURES[1]),
+      parseOrganizationRealtimeEvent(WORKFLOW_EXTRACTION_PREVIEW_EVENT),
     ).toBeNull();
   });
 

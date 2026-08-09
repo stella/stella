@@ -2,6 +2,8 @@
 import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
   PendingUploadFinalizedResult,
@@ -23,11 +25,11 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -299,10 +301,10 @@ export const finalizeEntityVersion = async function* ({
     }).catch((error: unknown) => {
       captureError(error, { versionId: entityVersionId });
     });
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
+    broadcastWorkspaceResourceUpdated(
+      workspaceId,
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+    );
   };
 
   return finalizeOk({ finalizedResult, finalKey, afterPromote });

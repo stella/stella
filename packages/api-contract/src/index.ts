@@ -66,6 +66,8 @@ export {
   parseOrganizationRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
+  resourceDeletedRealtimeEvent,
+  resourceUpdatedRealtimeEvent,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export { isSafeIdValue, toSafeId } from "./safe-id";
@@ -74,6 +76,7 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  ResourceRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
 export {

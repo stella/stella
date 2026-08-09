@@ -1,6 +1,8 @@
 import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
@@ -29,11 +31,11 @@ import {
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { broadcast } from "@/api/lib/sse";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
@@ -349,10 +351,10 @@ export const createEntityVersionFromBuffer = async ({
   }).catch((error: unknown) => {
     captureError(error, { versionId: entityVersionId });
   });
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", workspaceId],
-  });
+  broadcastWorkspaceResourceUpdated(
+    workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+  );
 
   return Result.ok({
     entityId,
