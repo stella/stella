@@ -70,7 +70,7 @@ export const escapedToOpaqueConsumer = async () => {
 // MUST flag: reassigning the binding discards the first response. The second
 // response is inspected so the fixture isolates the overwritten value.
 export const reassignedBeforeInspection = async () => {
-  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: reassignment discards the first error channel
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, eslint/no-useless-assignment -- fixture: reassignment discards the first error channel
   let response = await api.tasks.get();
   response = await api.tasks.get();
   consume(response.error);
@@ -87,6 +87,7 @@ export const assignedInsideTryWithoutCheck = async () => {
     return null;
   }
   consume(typeof response);
+  return undefined;
 };
 
 // MUST flag: inspection in one conditional branch does not dominate the
@@ -105,7 +106,9 @@ export const inspectedOnOnlyOneBranch = async () => {
 export const inspectedOnOnlyOneLogicalBranch = async () => {
   // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a short-circuited error read is not guaranteed
   const response = await api.tasks.get();
-  condition && consume(response.error);
+  if (condition) {
+    consume(response.error);
+  }
   return response.data;
 };
 
@@ -187,7 +190,9 @@ export const destructuredAfterAssignment = async () => {
 
 export const destructuredByAssignment = async () => {
   const response = await api.tasks.get();
+  // oxlint-disable-next-line eslint/prefer-const -- fixture: assignment destructuring requires a mutable target
   let data: unknown;
+  // oxlint-disable-next-line eslint/prefer-const -- fixture: assignment destructuring requires a mutable target
   let error: unknown;
   ({ data, error } = response);
   consume(error);

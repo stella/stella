@@ -222,6 +222,7 @@ export const cancelBeforeReturn = async (
         return;
       }
       if (stopEarly) {
+        // oxlint-disable-next-line no-await-in-loop -- fixture: stream cancellation is sequential with the read
         await reader.cancel().catch(() => undefined);
         return;
       }
@@ -295,11 +296,11 @@ export async function* cancellableGenerator(
 }
 
 // Allowed: method names do not establish Web Streams provenance.
-export const unrelatedReader = (source: {
+export const unrelatedReader = async (source: {
   getReader: () => { read: () => Promise<string> };
 }) => {
   const reader = source.getReader();
-  return reader.read();
+  return await reader.read();
 };
 
 // Allowed: a locally shadowed constructor is not the browser ReadableStream.

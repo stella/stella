@@ -122,10 +122,9 @@ export const declaredFetchReferenceOptions = {
 };
 
 // Const arrow initializers are inspected too, including direct Eden calls.
-const constEdenQueryFn = async () => {
+const constEdenQueryFn = async () =>
   // oxlint-disable-next-line require-query-signal/require-query-signal -- fixture: const arrow drops the query signal
-  return await edenApi.tasks.get();
-};
+  await edenApi.tasks.get();
 
 export const constEdenReferenceOptions = {
   queryKey: ["things", "const-helper"],
@@ -158,17 +157,16 @@ export const declaredWrongSignalReferenceOptions = {
 };
 
 // Stable const aliases and TS wrappers preserve same-file provenance.
-const aliasedMissingSignalTarget = async () => {
+const aliasedMissingSignalTarget = async () =>
   // oxlint-disable-next-line require-query-signal/require-query-signal -- fixture: aliases cannot hide a direct network call
-  return await edenApi.tasks.get();
-};
+  await edenApi.tasks.get();
 const firstMissingSignalAlias = aliasedMissingSignalTarget;
 const secondMissingSignalAlias =
   firstMissingSignalAlias satisfies typeof firstMissingSignalAlias;
 
 export const aliasedMissingSignalReferenceOptions = {
   queryKey: ["things", "aliased-helper"],
-  queryFn: secondMissingSignalAlias as typeof secondMissingSignalAlias,
+  queryFn: secondMissingSignalAlias,
 };
 
 // --- Cases the rule MUST NOT flag ---
@@ -280,7 +278,7 @@ export const makeInlineLocalApiOptions = (
 // An unrelated imported namespace named api is not the Eden client.
 export const inlineUnrelatedImportedApiOptions = {
   queryKey: ["thing", "inline-imported-api"],
-  queryFn: async () => api.get(url),
+  queryFn: () => api.get(url),
 };
 
 // Identifier-valued queryFns retain the binding identities of local fetch,
@@ -310,7 +308,7 @@ export const localApiReferenceOptions = {
   queryFn: localApiQueryFn,
 };
 
-const importedApiQueryFn = async () => api.get(url);
+const importedApiQueryFn = () => api.get(url);
 export const unrelatedImportedApiReferenceOptions = {
   queryKey: ["thing", "imported-api-helper"],
   queryFn: importedApiQueryFn,
@@ -335,6 +333,7 @@ function overloadedQueryFn(context: {
   kind: "basic";
   signal: AbortSignal;
 }): Promise<Response>;
+// oxlint-disable-next-line typescript/unified-signatures -- fixture: overload definitions make the queryFn binding deliberately ambiguous
 function overloadedQueryFn(context: {
   kind: "paged";
   pageParam: number;

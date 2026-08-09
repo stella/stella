@@ -528,7 +528,11 @@ export default eslintCompatPlugin({
             current = parent;
             parent = isAstNode(current.parent) ? current.parent : null;
           }
-          return parent?.type === "ReturnStatement" && parent.argument === current;
+          return (
+            (parent?.type === "ReturnStatement" && parent.argument === current) ||
+            (parent?.type === "ArrowFunctionExpression" &&
+              parent.body === current)
+          );
         };
 
         const methodStatementIndexes = (
