@@ -368,3 +368,92 @@ export const shadowedReadableStream = (
   const reader = new ReadableStream().getReader();
   return reader.read();
 };
+
+// MUST flag: qualified browser globals have the same ReadableStream ownership
+// semantics as the bare constructor.
+export const leakedQualifiedGlobalReader = () => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: qualified global stream reader is never released
+  const reader = new globalThis.ReadableStream<Uint8Array>().getReader();
+  return reader.read();
+};
+
+// MUST flag: a rejecting cancel skips the following releaseLock call.
+export const rejectingCancelSkipsRelease = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: cancellation rejection can bypass lock release
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
+};
+
+// Allowed: a nested finalizer releases the lock even when cancellation rejects.
+export const nestedReleaseFinalizer = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
+
+// MUST flag: an intervening rejection can exit before ownership transfers.
+export const throwingBeforeTransfer = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: awaited work can reject before the final transfer
+  const reader = stream.getReader();
+  await Promise.resolve();
+  return reader;
+};
+
+// MUST flag: an early exit before a later read/cancel pair is not covered by
+// that trailing cancellation.
+export const earlyExitBeforeTrailingCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: the first partial read can exit before trailing cancellation
+  const reader = stream.getReader();
+  try {
+    await reader.read();
+    if (stopEarly) {
+      return;
+    }
+    await reader.read();
+    await reader.cancel().catch(() => undefined);
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// MUST flag: processing can reject after a partial read while only releasing
+// the lock, leaving the producer active.
+export const rejectingProcessingWithoutCancel = async (
+  stream: ReadableStream<Uint8Array>,
+) => {
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: processing rejection after a read requires cancellation
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- fixture: awaited processing is the unsafe exit under test
+      await Promise.resolve(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};

@@ -399,10 +399,21 @@ export default eslintCompatPlugin({
 
         const isGlobalConstructor = (node: unknown, name: string): boolean => {
           const expression = unwrapValue(node);
-          return (
-            expression !== null &&
-            expression.type === "NewExpression" &&
-            isGlobalReference(expression.callee, name)
+          if (expression?.type !== "NewExpression") {
+            return false;
+          }
+          if (isGlobalReference(expression.callee, name)) {
+            return true;
+          }
+          const callee = unwrapValue(expression.callee);
+          if (
+            callee?.type !== "MemberExpression" ||
+            staticMemberName(callee) !== name
+          ) {
+            return false;
+          }
+          return ["globalThis", "self", "window"].some((host) =>
+            isGlobalReference(callee.object, host),
           );
         };
 
@@ -598,6 +609,89 @@ export default eslintCompatPlugin({
           return indexes;
         };
 
+        const handledCancelStatement = (
+          statement: unknown,
+          binding: ScopeVariable,
+        ): boolean => {
+          if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
+            return false;
+          }
+          let expression = unwrapValue(statement.expression);
+          if (expression?.type === "AwaitExpression") {
+            expression = unwrapValue(expression.argument);
+          }
+          if (expression?.type !== "CallExpression") {
+            return false;
+          }
+          const callee = unwrapValue(expression.callee);
+          return (
+            callee?.type === "MemberExpression" &&
+            staticMemberName(callee) === "catch" &&
+            readerMethodCall(callee.object, "cancel", binding) !== null
+          );
+        };
+
+        type FinalizerCleanup = {
+          cancelBeforeRelease: boolean;
+          releases: boolean;
+        };
+
+        const finalizerCleanup = (
+          block: unknown,
+          binding: ScopeVariable,
+        ): FinalizerCleanup => {
+          if (
+            !isAstNode(block) ||
+            block.type !== "BlockStatement" ||
+            !Array.isArray(block.body)
+          ) {
+            return { cancelBeforeRelease: false, releases: false };
+          }
+          let handledCancel = false;
+          for (const statement of block.body) {
+            if (
+              callWithinExpressionStatement(statement, (candidate) =>
+                readerMethodCall(candidate, "releaseLock", binding),
+              )
+            ) {
+              return {
+                cancelBeforeRelease: handledCancel,
+                releases: true,
+              };
+            }
+            if (
+              callWithinExpressionStatement(statement, (candidate) =>
+                readerMethodCall(candidate, "cancel", binding),
+              )
+            ) {
+              if (!handledCancelStatement(statement, binding)) {
+                return { cancelBeforeRelease: false, releases: false };
+              }
+              handledCancel = true;
+              continue;
+            }
+            if (
+              isAstNode(statement) &&
+              statement.type === "TryStatement" &&
+              isAstNode(statement.finalizer)
+            ) {
+              const nested = finalizerCleanup(statement.finalizer, binding);
+              if (nested.releases) {
+                const tryCancels =
+                  methodStatementIndexes(statement.block, "cancel", binding)
+                    .length > 0;
+                return {
+                  cancelBeforeRelease:
+                    handledCancel || tryCancels || nested.cancelBeforeRelease,
+                  releases: true,
+                };
+              }
+            }
+            return { cancelBeforeRelease: false, releases: false };
+          }
+          return { cancelBeforeRelease: false, releases: false };
+        };
+
         const tryCoversAcquisition = (
           tryNode: AstNode,
           acquisition: Acquisition,
@@ -652,8 +746,7 @@ export default eslintCompatPlugin({
               node.type !== "TryStatement" ||
               !isAstNode(node.finalizer) ||
               !tryCoversAcquisition(node, acquisition, binding) ||
-              methodStatementIndexes(node.finalizer, "releaseLock", binding)
-                .length === 0
+              !finalizerCleanup(node.finalizer, binding).releases
             ) {
               return;
             }
@@ -679,6 +772,40 @@ export default eslintCompatPlugin({
             !isAstNode(finalStatement) ||
             finalStatement.type !== "ReturnStatement" ||
             canonicalBinding(finalStatement.argument) !== binding
+          ) {
+            return false;
+          }
+
+          const acquisitionSite = statementSite(acquisition.node);
+          if (
+            acquisitionSite === null ||
+            acquisitionSite.block !== body ||
+            !Array.isArray(body.body)
+          ) {
+            return false;
+          }
+          const acquisitionIndex = body.body.indexOf(
+            acquisitionSite.statement,
+          );
+          const returnIndex = body.body.indexOf(finalStatement);
+          if (
+            acquisitionIndex === -1 ||
+            returnIndex === -1 ||
+            !body.body
+              .slice(acquisitionIndex + 1, returnIndex)
+              .every(
+                (statement) =>
+                  isAstNode(statement) &&
+                  statement.type === "VariableDeclaration" &&
+                  statement.kind === "const" &&
+                  Array.isArray(statement.declarations) &&
+                  statement.declarations.every(
+                    (declaration) =>
+                      isAstNode(declaration) &&
+                      declaration.type === "VariableDeclarator" &&
+                      canonicalBinding(declaration.init) === binding,
+                  ),
+              )
           ) {
             return false;
           }
@@ -878,7 +1005,10 @@ export default eslintCompatPlugin({
           if (readCalls.length === 0) {
             return false;
           }
-          if (trailingCancelCoversTopLevelReads(tryNode, binding)) {
+          if (
+            readCalls.length === 1 &&
+            trailingCancelCoversTopLevelReads(tryNode, binding)
+          ) {
             return false;
           }
           const handlerCancels = catchCancels(tryNode, binding);
@@ -903,6 +1033,17 @@ export default eslintCompatPlugin({
               }
               if (node.type === "YieldExpression") {
                 unsafeExit = true;
+                return;
+              }
+              if (node.type === "AwaitExpression") {
+                const awaited = unwrapValue(node.argument);
+                if (
+                  !readerMethodCall(awaited, "read", binding) &&
+                  !readerMethodCall(awaited, "cancel", binding)
+                ) {
+                  unsafeExit =
+                    !handlerCancels && !hasPriorCancel(node, binding);
+                }
                 return;
               }
               if (node.type === "ReturnStatement") {
@@ -980,22 +1121,9 @@ export default eslintCompatPlugin({
                 });
                 continue;
               }
-              const releaseIndexes = methodStatementIndexes(
-                tryNode.finalizer,
-                "releaseLock",
-                binding,
-              );
-              const cancelIndexes = methodStatementIndexes(
-                tryNode.finalizer,
-                "cancel",
-                binding,
-              );
-              const releaseIndex = releaseIndexes.at(0);
-              const finalizerCancelsFirst =
-                releaseIndex !== undefined &&
-                cancelIndexes.some((index) => index < releaseIndex);
+              const cleanup = finalizerCleanup(tryNode.finalizer, binding);
               if (
-                !finalizerCancelsFirst &&
+                !cleanup.cancelBeforeRelease &&
                 readPathsRequireFinalCancel(tryNode, binding)
               ) {
                 context.report({

@@ -176,6 +176,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const apiLocalNames = new Set<string>();
+        const pendingEdenBindings = new Set<Variable>();
         const assignedResults: {
           binding: Variable;
           node: Ranged;
@@ -282,12 +283,8 @@ export default eslintCompatPlugin({
           });
         };
 
-        const awaitedTerminalEdenCall = (node: unknown): AstNode | null => {
-          const awaited = unwrapExpression(node);
-          if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
-            return null;
-          }
-          const call = unwrapExpression(awaited.argument);
+        const terminalEdenCall = (node: unknown): AstNode | null => {
+          const call = unwrapExpression(node);
           if (!isAstNode(call) || call.type !== "CallExpression") {
             return null;
           }
@@ -300,6 +297,25 @@ export default eslintCompatPlugin({
             return null;
           }
           return isGenuineApiRoot(getChainRoot(call)) ? call : null;
+        };
+
+        const awaitedTerminalEdenCall = (node: unknown): AstNode | null => {
+          const awaited = unwrapExpression(node);
+          if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
+            return null;
+          }
+          const direct = terminalEdenCall(awaited.argument);
+          if (direct !== null) {
+            return direct;
+          }
+          const operand = unwrapExpression(awaited.argument);
+          if (!isIdentifier(operand)) {
+            return null;
+          }
+          const binding = resolveVariable(operand);
+          return binding !== null && pendingEdenBindings.has(binding)
+            ? awaited
+            : null;
         };
 
         const containsAwaitedTerminalEdenValue = (node: unknown): boolean => {
@@ -491,7 +507,12 @@ export default eslintCompatPlugin({
 
           if (expression.type === "MemberExpression") {
             if (isBindingIdentifier(expression.object, binding)) {
-              const property = getPropertyName(expression.property);
+              const property =
+                expression.computed === true
+                  ? isStringLiteral(expression.property)
+                    ? expression.property.value
+                    : null
+                  : getPropertyName(expression.property);
               if (property === "error") {
                 return { states: handledStates(states), unsafe: false };
               }
@@ -762,12 +783,21 @@ export default eslintCompatPlugin({
             };
           }
 
+          if (node.type === "DoWhileStatement") {
+            const body = analyzeStatement(node.body, states, binding);
+            const test = analyzeExpression(node.test, body.states, binding);
+            return {
+              states: mergeStates(body.states, test.states),
+              unsafe: body.unsafe || test.unsafe,
+              unsafeExit: body.unsafeExit ?? test.unsafeExit,
+            };
+          }
+
           if (
             node.type === "ForStatement" ||
             node.type === "ForInStatement" ||
             node.type === "ForOfStatement" ||
-            node.type === "WhileStatement" ||
-            node.type === "DoWhileStatement"
+            node.type === "WhileStatement"
           ) {
             const entry = analyzeExpression(node.init, states, binding);
             const test = analyzeExpression(node.test, entry.states, binding);
@@ -801,12 +831,16 @@ export default eslintCompatPlugin({
               states,
               binding,
             );
-            const branches: Set<FlowState>[] = [
-              new Set(discriminant.states),
-            ];
+            const cases = Array.isArray(node.cases) ? node.cases : [];
+            const hasDefault = cases.some(
+              (switchCase) =>
+                isAstNode(switchCase) && switchCase.test === null,
+            );
+            const branches: Set<FlowState>[] = hasDefault
+              ? []
+              : [new Set(discriminant.states)];
             let unsafe = discriminant.unsafe;
             let unsafeExit = discriminant.unsafeExit;
-            const cases = Array.isArray(node.cases) ? node.cases : [];
             for (const switchCase of cases) {
               if (!isAstNode(switchCase)) {
                 continue;
@@ -854,14 +888,21 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.finalizer)) {
               return combined;
             }
+            const finalizerInput = combined.unsafeExit
+              ? mergeStates(combined.states, states)
+              : combined.states;
             const finalized = analyzeStatement(
               node.finalizer,
-              combined.states,
+              finalizerInput,
               binding,
             );
+            const pendingExitHandled =
+              combined.unsafeExit !== undefined &&
+              !hasUnhandled(finalized.states);
             return {
               states: finalized.states,
-              unsafe: combined.unsafe || finalized.unsafe,
+              unsafe:
+                (combined.unsafe && !pendingExitHandled) || finalized.unsafe,
               unsafeExit: combined.unsafeExit ?? finalized.unsafeExit,
             };
           }
@@ -943,6 +984,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             apiLocalNames.clear();
+            pendingEdenBindings.clear();
             assignedResults.length = 0;
           },
           ImportDeclaration(node) {
@@ -984,6 +1026,19 @@ export default eslintCompatPlugin({
           },
 
           VariableDeclarator(node) {
+            if (
+              terminalEdenCall(node.init) !== null &&
+              isIdentifier(node.id) &&
+              isAstNode(node.parent) &&
+              node.parent.type === "VariableDeclaration" &&
+              node.parent.kind === "const"
+            ) {
+              const binding = resolveVariable(node.id);
+              if (binding !== null) {
+                pendingEdenBindings.add(binding);
+              }
+              return;
+            }
             if (!containsAwaitedTerminalEdenValue(node.init)) {
               return;
             }

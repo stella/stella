@@ -284,3 +284,67 @@ export const assignedLocalApi = async (
   const response = await api.tasks.get();
   return response.data;
 };
+
+// MUST flag: deferring the await does not erase the Eden promise's origin.
+export const uncheckedDeferredAwait = async () => {
+  const pending = api.tasks.get();
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: deferred Eden response still needs its error channel checked
+  const response = await pending;
+  return response.data;
+};
+
+// Allowed: a deferred Eden promise is checked after it resolves.
+export const checkedDeferredAwait = async () => {
+  const pending = api.tasks.get();
+  const response = await pending;
+  consume(response.error);
+  return response.data;
+};
+
+// MUST flag: a dynamic computed key can select data at runtime and therefore
+// cannot prove the error channel was inspected.
+export const dynamicComputedResponseKey = async () => {
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: dynamic computed property is not proof of error handling
+  const response = await api.tasks.get();
+  const key: "data" | "error" = condition ? "data" : "error";
+  return response[key];
+};
+
+// Allowed: every real do-while path executes the body-level error check before
+// data can be consumed.
+export const checkedInDoWhileBody = async () => {
+  const response = await api.tasks.get();
+  do {
+    if (response.error) {
+      return null;
+    }
+  } while (condition);
+  return response.data;
+};
+
+// Allowed: a switch with default has no unmatched path when every branch
+// checks the error channel.
+export const checkedInExhaustiveSwitch = async (value: number) => {
+  const response = await api.tasks.get();
+  switch (value) {
+    case 1:
+      consume(response.error);
+      break;
+    default:
+      consume(response.error);
+  }
+  return response.data;
+};
+
+// Allowed: finally runs before the pending return and handles the response's
+// error channel on that exit.
+export const checkedInFinallyBeforeReturn = async () => {
+  const response = await api.tasks.get();
+  try {
+    return null;
+  } finally {
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
+  }
+};
