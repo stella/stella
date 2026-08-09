@@ -13,6 +13,7 @@ import {
 } from "@/lib/files/file-metadata-query.logic";
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 
 type FileByFieldIdKey = FileMetadataQueryKey;
 
@@ -24,6 +25,14 @@ type FileData = {
   buffer: ArrayBuffer;
 };
 
+export type EmailAttachmentDescriptor = {
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number;
+  previewable: boolean;
+};
+
 type EmailHtmlPreviewData = {
   subject: string | null;
   from: string | null;
@@ -31,13 +40,7 @@ type EmailHtmlPreviewData = {
   cc: string[];
   bcc: string[];
   date: string | null;
-  attachments: {
-    id: string;
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-    previewable: boolean;
-  }[];
+  attachments: EmailAttachmentDescriptor[];
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
@@ -162,6 +165,32 @@ export const emailAttachmentPreviewOptions = ({
       return await response.arrayBuffer();
     },
   });
+
+export const saveEmailAttachment = async ({
+  attachmentId,
+  destinationWorkspaceId,
+  fieldId,
+  parentId,
+  sourceWorkspaceId,
+}: {
+  attachmentId: string;
+  destinationWorkspaceId: string;
+  fieldId: string;
+  parentId: string | null;
+  sourceWorkspaceId: string;
+}) => {
+  const response = await api
+    .files({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
+    ["email-attachment"]({
+      fieldId: toSafeId<"field">(fieldId),
+      attachmentId,
+    })
+    .save.post({
+      destinationWorkspaceId: toSafeId<"workspace">(destinationWorkspaceId),
+      parentId: parentId ? toSafeId<"entity">(parentId) : null,
+    });
+  return unwrapEden(response);
+};
 
 export const textFileOptions = (props: FileOptionsProps) =>
   queryOptions({

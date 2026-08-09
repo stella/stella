@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 
-describe("entity upload rate limiting", () => {
-  test("covers every endpoint that processes uploaded document bytes", () => {
+describe("document write rate limiting", () => {
+  test("covers every endpoint that stores new document bytes", () => {
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload")).toBe(true);
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload/")).toBe(true);
     expect(
@@ -18,6 +18,16 @@ describe("entity upload rate limiting", () => {
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload-version/")).toBe(
       true,
     );
+    expect(
+      isUploadRateLimitedPath(
+        "/v1/files/ws_1/email-attachment/field_1/ea1.token/save",
+      ),
+    ).toBe(true);
+    expect(
+      isUploadRateLimitedPath(
+        "/v1/files/ws_1/email-attachment/field_1/ea1.token/save/",
+      ),
+    ).toBe(true);
   });
 
   test("does not cover non-upload entity endpoints", () => {
@@ -31,6 +41,11 @@ describe("entity upload rate limiting", () => {
     expect(
       isUploadRateLimitedPath(
         "/v1/entities/ws_1/upload-generated-document/extra",
+      ),
+    ).toBe(false);
+    expect(
+      isUploadRateLimitedPath(
+        "/v1/files/ws_1/email-attachment/field_1/ea1.token/preview",
       ),
     ).toBe(false);
   });

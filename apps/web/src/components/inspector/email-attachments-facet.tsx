@@ -1,31 +1,52 @@
 import { useState, type ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangleIcon, ArrowLeftIcon, PaperclipIcon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ChevronDownIcon,
+  PaperclipIcon,
+  SaveIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { DocumentIcon } from "@/components/document-icon";
+import {
+  MatterTargetPicker,
+  type MatterTarget,
+} from "@/components/matter-target-picker";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   emailAttachmentPreviewOptions,
   emailHtmlPreviewOptions,
+  saveEmailAttachment,
+  type EmailAttachmentDescriptor,
 } from "@/lib/files/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type EmailAttachmentsFacetProps = {
   fieldId: string;
   workspaceId: string;
-};
-
-type AttachmentDescriptor = {
-  id: string;
-  fileName: string | null;
-  mimeType: string | null;
-  previewable: boolean;
 };
 
 export const EmailAttachmentsFacet = ({
@@ -33,10 +54,30 @@ export const EmailAttachmentsFacet = ({
   workspaceId,
 }: EmailAttachmentsFacetProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
+  const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
   const previewQuery = useQuery(
     emailHtmlPreviewOptions({ fieldId, workspaceId }),
   );
+  const saveMutation = useMutation({
+    mutationFn: saveEmailAttachment,
+    onSuccess: async ({ workspaceId: destinationWorkspaceId }) => {
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(destinationWorkspaceId),
+      });
+      setSaveTargetId(null);
+      setMatterTarget(null);
+      stellaToast.add({
+        title: t("workspaces.copyToMatter.copied"),
+        type: "success",
+      });
+    },
+    onError: () => {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    },
+  });
 
   if (previewQuery.isPending) {
     return <Skeleton className="m-3 h-24 rounded-sm" />;
@@ -61,23 +102,111 @@ export const EmailAttachmentsFacet = ({
       />
     );
   }
-  if (selected !== undefined) {
-    return (
+  const saveTargetAttachment = previewQuery.data.attachments.find(
+    ({ id }) => id === saveTargetId,
+  );
+  const saveAttachment = ({
+    attachment,
+    destination,
+  }: {
+    attachment: EmailAttachmentDescriptor;
+    destination: MatterTarget;
+  }) => {
+    saveMutation.mutate({
+      attachmentId: attachment.id,
+      destinationWorkspaceId: destination.workspaceId,
+      fieldId,
+      parentId: destination.parentId,
+      sourceWorkspaceId: workspaceId,
+    });
+  };
+  const openMatterPicker = (attachmentId: string) => {
+    setMatterTarget(null);
+    setSaveTargetId(attachmentId);
+  };
+  const closeMatterPicker = () => {
+    setMatterTarget(null);
+    setSaveTargetId(null);
+  };
+  const content =
+    selected !== undefined ? (
       <AttachmentPreview
         attachment={selected}
         fieldId={fieldId}
         onBack={() => setSelectedId(null)}
+        onChooseMatter={() => openMatterPicker(selected.id)}
+        onSave={() =>
+          saveAttachment({
+            attachment: selected,
+            destination: { workspaceId, parentId: null },
+          })
+        }
+        saving={saveMutation.isPending}
         workspaceId={workspaceId}
       />
+    ) : (
+      <AttachmentList
+        attachments={previewQuery.data.attachments}
+        fieldId={fieldId}
+        onChooseMatter={openMatterPicker}
+        onSave={(attachment) =>
+          saveAttachment({
+            attachment,
+            destination: { workspaceId, parentId: null },
+          })
+        }
+        onSelect={setSelectedId}
+        saving={saveMutation.isPending}
+      />
     );
-  }
 
   return (
-    <AttachmentList
-      attachments={previewQuery.data.attachments}
-      fieldId={fieldId}
-      onSelect={setSelectedId}
-    />
+    <>
+      {content}
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            closeMatterPicker();
+          }
+        }}
+        open={saveTargetAttachment !== undefined}
+      >
+        <DialogPopup className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("common.selectAMatter")}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel>
+            <MatterTargetPicker
+              excludeWorkspaceId={workspaceId}
+              onChange={setMatterTarget}
+              value={matterTarget}
+            />
+          </DialogPanel>
+          <DialogFooter>
+            <Button onClick={closeMatterPicker} variant="ghost">
+              {t("common.cancel")}
+            </Button>
+            <Button
+              disabled={
+                matterTarget === null ||
+                saveTargetAttachment === undefined ||
+                saveMutation.isPending
+              }
+              onClick={() => {
+                if (matterTarget && saveTargetAttachment) {
+                  saveAttachment({
+                    attachment: saveTargetAttachment,
+                    destination: matterTarget,
+                  });
+                }
+              }}
+            >
+              {saveMutation.isPending ? t("common.loading") : t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+    </>
   );
 };
 
@@ -85,11 +214,17 @@ const AttachmentPreview = ({
   attachment,
   fieldId,
   onBack,
+  onChooseMatter,
+  onSave,
+  saving,
   workspaceId,
 }: {
-  attachment: AttachmentDescriptor;
+  attachment: EmailAttachmentDescriptor;
   fieldId: string;
   onBack: () => void;
+  onChooseMatter: () => void;
+  onSave: () => void;
+  saving: boolean;
   workspaceId: string;
 }) => {
   const t = useTranslations();
@@ -132,9 +267,18 @@ const AttachmentPreview = ({
         >
           <DirectionalIcon className="size-3.5" icon={ArrowLeftIcon} />
         </Button>
-        <BidiText as="span" className="min-w-0 truncate text-sm font-medium">
+        <BidiText
+          as="span"
+          className="min-w-0 flex-1 truncate text-sm font-medium"
+        >
           {fileName}
         </BidiText>
+        <AttachmentSaveControls
+          compact={false}
+          disabled={saving}
+          onChooseMatter={onChooseMatter}
+          onSave={onSave}
+        />
       </div>
       <div className="bg-muted/30 flex min-h-0 flex-1 items-center justify-center p-2">
         <AttachmentPreviewContent
@@ -226,11 +370,17 @@ const AttachmentPreviewContent = ({
 const AttachmentList = ({
   attachments,
   fieldId,
+  onChooseMatter,
+  onSave,
   onSelect,
+  saving,
 }: {
-  attachments: readonly AttachmentDescriptor[];
+  attachments: readonly EmailAttachmentDescriptor[];
   fieldId: string;
+  onChooseMatter: (id: string) => void;
+  onSave: (attachment: EmailAttachmentDescriptor) => void;
   onSelect: (id: string) => void;
+  saving: boolean;
 }) => {
   const t = useTranslations();
 
@@ -254,7 +404,10 @@ const AttachmentList = ({
             <AttachmentListItem
               attachment={attachment}
               key={attachment.id}
+              onChooseMatter={onChooseMatter}
+              onSave={onSave}
               onSelect={onSelect}
+              saving={saving}
             />
           ))}
         </ul>
@@ -265,10 +418,16 @@ const AttachmentList = ({
 
 const AttachmentListItem = ({
   attachment,
+  onChooseMatter,
+  onSave,
   onSelect,
+  saving,
 }: {
-  attachment: AttachmentDescriptor;
+  attachment: EmailAttachmentDescriptor;
+  onChooseMatter: (id: string) => void;
+  onSave: (attachment: EmailAttachmentDescriptor) => void;
   onSelect: (id: string) => void;
+  saving: boolean;
 }) => {
   const t = useTranslations();
   const fileName = attachment.fileName ?? t("emailViewer.unnamedAttachment");
@@ -276,27 +435,85 @@ const AttachmentListItem = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/60 flex min-h-11 w-full items-center gap-2 rounded-md border px-2 text-start text-xs"
-        disabled={!attachment.previewable}
-        onClick={() => onSelect(attachment.id)}
-        type="button"
-      >
-        <DocumentIcon
-          className="text-muted-foreground size-4 shrink-0"
-          fileName={fileName}
-          mimeType={attachment.mimeType ?? "application/octet-stream"}
+      <div className="hover:bg-muted/60 flex min-h-11 w-full items-center rounded-md border text-xs">
+        <button
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start disabled:cursor-default"
+          disabled={!attachment.previewable}
+          onClick={() => onSelect(attachment.id)}
+          type="button"
+        >
+          <DocumentIcon
+            className="text-muted-foreground size-4 shrink-0"
+            fileName={fileName}
+            mimeType={attachment.mimeType ?? "application/octet-stream"}
+          />
+          <BidiText as="span" className="min-w-0 flex-1 truncate">
+            {fileName}
+          </BidiText>
+          {!attachment.previewable ? (
+            <span className="text-muted-foreground shrink-0">
+              {unsupportedLabel}
+            </span>
+          ) : null}
+        </button>
+        <AttachmentSaveControls
+          compact
+          disabled={saving}
+          onChooseMatter={() => onChooseMatter(attachment.id)}
+          onSave={() => onSave(attachment)}
         />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
-          {fileName}
-        </BidiText>
-        {!attachment.previewable ? (
-          <span className="text-muted-foreground shrink-0">
-            {unsupportedLabel}
-          </span>
-        ) : null}
-      </button>
+      </div>
     </li>
+  );
+};
+
+const AttachmentSaveControls = ({
+  compact,
+  disabled,
+  onChooseMatter,
+  onSave,
+}: {
+  compact: boolean;
+  disabled: boolean;
+  onChooseMatter: () => void;
+  onSave: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex shrink-0 items-center">
+      <Button
+        aria-label={t("common.save")}
+        className={compact ? "min-h-11 min-w-11" : undefined}
+        disabled={disabled}
+        onClick={onSave}
+        size={compact ? "icon-sm" : "sm"}
+        variant="ghost"
+      >
+        <SaveIcon aria-hidden="true" className="size-3.5" />
+        {!compact ? t("common.save") : null}
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              aria-label={t("common.selectAMatter")}
+              className={compact ? "min-h-11 min-w-11" : undefined}
+              disabled={disabled}
+              size="icon-sm"
+              variant="ghost"
+            />
+          }
+        >
+          <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onChooseMatter}>
+            {t("common.selectAMatter")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 };
 
