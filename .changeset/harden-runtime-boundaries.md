@@ -1,6 +1,5 @@
 ---
 "@stll/business-registries": patch
-"@stll/boe": patch
 "@stll/conditions": patch
 ---
 
