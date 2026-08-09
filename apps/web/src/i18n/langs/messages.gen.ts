@@ -1232,7 +1232,11 @@ type Messages = {
     "bodyTitle": "Email body";
     "cc": "Cc";
     "from": "Sender";
+    "hideQuotedHistory": "Hide previous messages";
+    "hideSignature": "Hide signature";
     "noSubject": "(No subject)";
+    "showQuotedHistory": "Show previous messages";
+    "showSignature": "Show signature";
     "to": "Recipients";
     "unnamedAttachment": "Unnamed attachment";
   };

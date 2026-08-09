@@ -11,10 +11,13 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { DocumentIcon } from "@/components/document-icon";
 import {
   getEmailAttachmentSize,
+  localizeEmailBodyHtml,
   parseEmailDate,
+  type EmailBodyFoldLabels,
 } from "@/components/inspector/email-html-viewer.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
@@ -79,6 +82,20 @@ export const EmailHtmlViewer = ({
   const hasAdditionalParticipants =
     preview.cc.length > 0 || preview.bcc.length > 0;
   const attachmentKeyOccurrences = new Map<string, number>();
+  const bodyHtml = localizeEmailBodyHtml({
+    bodyFolds: preview.bodyFolds,
+    bodyHtml: preview.bodyHtml,
+    labels: {
+      [EMAIL_BODY_FOLD_KIND.quotedHistory]: {
+        hide: t("emailViewer.hideQuotedHistory"),
+        show: t("emailViewer.showQuotedHistory"),
+      },
+      [EMAIL_BODY_FOLD_KIND.signature]: {
+        hide: t("emailViewer.hideSignature"),
+        show: t("emailViewer.showSignature"),
+      },
+    } satisfies EmailBodyFoldLabels,
+  });
 
   return (
     <article className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -170,7 +187,7 @@ export const EmailHtmlViewer = ({
           className="bg-background size-full border-0"
           referrerPolicy="no-referrer"
           sandbox=""
-          srcDoc={preview.bodyHtml}
+          srcDoc={bodyHtml}
           title={t("emailViewer.bodyTitle")}
         />
       </div>

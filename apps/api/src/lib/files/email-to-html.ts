@@ -13,7 +13,7 @@
  */
 import { Result, TaggedError } from "better-result";
 import { type Cheerio, load } from "cheerio";
-import { type Element, isTag } from "domhandler";
+import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -109,6 +109,7 @@ type EmailPreview = {
     mimeType: string | null;
     sizeBytes: number;
   }[];
+  bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
 
@@ -173,6 +174,7 @@ export const buildEmailPreview = (parsed: ParsedEmail): EmailPreview => {
         mimeType,
         sizeBytes: bytes.byteLength,
       })),
+    bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
   };
 };
@@ -497,6 +499,40 @@ body, table, td, div, p, span {
   color: inherit;
   text-decoration: none;
 }
+[data-stella-email-fold] {
+  margin: 8px 0;
+}
+[data-stella-email-fold] > summary {
+  align-items: center;
+  border-radius: 6px;
+  color: #71717a;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  list-style: none;
+  min-height: 44px;
+  min-width: 44px;
+  user-select: none;
+}
+[data-stella-email-fold] > summary:hover {
+  background: #f4f4f5;
+  color: #3f3f46;
+}
+[data-stella-email-fold] > summary::-webkit-details-marker {
+  display: none;
+}
+[data-stella-email-fold-label="open"] {
+  display: none;
+}
+[data-stella-email-fold][open] > summary [data-stella-email-fold-label="closed"] {
+  display: none;
+}
+[data-stella-email-fold][open] > summary [data-stella-email-fold-label="open"] {
+  display: inline;
+}
+[data-stella-email-fold][open] > summary {
+  margin-bottom: 8px;
+}
 `;
 
 export const renderEmailHtml = (parsed: ParsedEmail): string => {
@@ -531,14 +567,17 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
  * retained because they describe forwarded message content.
  */
 type RenderedEmailBody = {
+  bodyFolds: EmailBodyFold[];
   bodyHtml: string;
   referencedContentIds: Set<string>;
 };
 
 const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   if (parsed.body.type === "text") {
+    const renderedTextBody = renderPlainTextBody(parsed.body.text);
     return {
-      bodyHtml: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`,
+      bodyFolds: renderedTextBody.bodyFolds,
+      bodyHtml: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto">${renderedTextBody.html}</body></html>`,
       referencedContentIds: new Set(),
     };
   }
@@ -546,6 +585,7 @@ const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   const $ = load(parsed.body.html);
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
+  const bodyFolds = foldQuotedHistoryAndSignatures($);
   const referencedContentIds = getReferencedInlineContentIds($);
   inlineCidImages($, parsed.inlineImages);
 
@@ -562,6 +602,7 @@ const renderEmailBody = (parsed: ParsedEmail): RenderedEmailBody => {
   }
 
   return {
+    bodyFolds,
     bodyHtml: `<!DOCTYPE html>${$.html()}`,
     referencedContentIds,
   };
@@ -657,6 +698,45 @@ const SAFE_DATA_IMAGE_RE =
   /^data:image\/(?:png|jpe?g|gif|webp|bmp|tiff);base64,/iu;
 const BR_TAG_RE = /<br\s*\/?>/iu;
 const RFC822_HEADER_LINE_RE = /^[A-Za-z0-9-]+:/u;
+const EMAIL_QUOTE_SELECTOR = [
+  "blockquote[type='cite']",
+  ".gmail_quote",
+  ".protonmail_quote",
+  ".yahoo_quoted",
+  ".zmail_extra",
+  "[data-marker='__QUOTED_TEXT__']",
+].join(",");
+const EMAIL_SIGNATURE_SELECTOR = [
+  "#Signature",
+  "#signature",
+  ".AppleMailSignature",
+  ".gmail_signature",
+  ".moz-signature",
+  ".protonmail_signature_block",
+  ".yahoo_signature",
+].join(",");
+const EMAIL_FOLD_SELECTOR = `${EMAIL_QUOTE_SELECTOR},${EMAIL_SIGNATURE_SELECTOR}`;
+const EMAIL_FOLD_KIND = {
+  quote: "quoted-history",
+  signature: "signature",
+} as const;
+
+export type EmailFoldKind =
+  (typeof EMAIL_FOLD_KIND)[keyof typeof EMAIL_FOLD_KIND];
+
+export type EmailBodyFold = {
+  id: string;
+  kind: EmailFoldKind;
+};
+
+type EmailFoldCandidate = {
+  element: Element;
+  kind: EmailFoldKind;
+};
+
+type EmailBodyToken =
+  | { type: "candidate"; candidate: EmailFoldCandidate }
+  | { type: "content" };
 
 type CheerioApi = ReturnType<typeof load>;
 
@@ -677,6 +757,10 @@ const sanitizeDom = ($: CheerioApi): void => {
     for (const attribute of Object.keys(node.attribs)) {
       const name = attribute.toLowerCase();
       if (PRESENTATION_COLOR_ATTRIBUTES.has(name)) {
+        $(node).removeAttr(attribute);
+        continue;
+      }
+      if (name.startsWith("data-stella-email-fold")) {
         $(node).removeAttr(attribute);
         continue;
       }
@@ -705,6 +789,179 @@ const sanitizeDom = ($: CheerioApi): void => {
       }
     }
   });
+};
+
+const foldQuotedHistoryAndSignatures = ($: CheerioApi): EmailBodyFold[] => {
+  const candidates: EmailFoldCandidate[] = [];
+  $(EMAIL_FOLD_SELECTOR).each((_, element) => {
+    if (!isTag(element) || $(element).parents(EMAIL_FOLD_SELECTOR).length > 0) {
+      return;
+    }
+    candidates.push({
+      element,
+      kind: $(element).is(EMAIL_QUOTE_SELECTOR)
+        ? EMAIL_FOLD_KIND.quote
+        : EMAIL_FOLD_KIND.signature,
+    });
+  });
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const candidateByElement = new Map(
+    candidates.map((candidate) => [candidate.element, candidate]),
+  );
+  const tokens: EmailBodyToken[] = [];
+  const visit = (element: Element): void => {
+    const candidate = candidateByElement.get(element);
+    if (candidate) {
+      tokens.push({ type: "candidate", candidate });
+      return;
+    }
+
+    if (element.name === "img" && nonEmpty($(element).attr("src"))) {
+      tokens.push({ type: "content" });
+    }
+
+    for (const child of element.children) {
+      if (isText(child)) {
+        if (nonEmpty(child.data)) {
+          tokens.push({ type: "content" });
+        }
+        continue;
+      }
+      if (isTag(child)) {
+        visit(child);
+      }
+    }
+  };
+
+  const body = $("body").get(0);
+  if (!body || !isTag(body)) {
+    return [];
+  }
+  visit(body);
+
+  const lastVisibleContentIndex = tokens.findLastIndex(
+    (token) => token.type === "content",
+  );
+  if (lastVisibleContentIndex === -1) {
+    return [];
+  }
+
+  const bodyFolds: EmailBodyFold[] = [];
+  for (const [index, token] of tokens.entries()) {
+    if (token.type !== "candidate" || index < lastVisibleContentIndex) {
+      continue;
+    }
+    const bodyFold = {
+      id: `fold-${bodyFolds.length}`,
+      kind: token.candidate.kind,
+    } satisfies EmailBodyFold;
+    wrapEmailFold($, token.candidate, bodyFold.id);
+    bodyFolds.push(bodyFold);
+  }
+  return bodyFolds;
+};
+
+const wrapEmailFold = (
+  $: CheerioApi,
+  { element, kind }: EmailFoldCandidate,
+  id: string,
+): void => {
+  const details = $(
+    `<details data-stella-email-fold="${kind}"><summary data-stella-email-fold-summary="${id}"></summary></details>`,
+  );
+  $(element).before(details);
+  details.append(element);
+};
+
+type PlainTextSection = {
+  type: "content" | EmailFoldKind;
+  text: string;
+};
+
+type RenderedPlainTextBody = {
+  bodyFolds: EmailBodyFold[];
+  html: string;
+};
+
+const renderPlainTextBody = (text: string): RenderedPlainTextBody => {
+  const sections = splitPlainTextBody(text);
+  const bodyFolds: EmailBodyFold[] = [];
+  const html = sections
+    .map(({ type, text: sectionText }) => {
+      const pre = `<pre style="${PRE_STYLE}">${escapeHtml(sectionText)}</pre>`;
+      if (type === "content") {
+        return pre;
+      }
+      const bodyFold = {
+        id: `fold-${bodyFolds.length}`,
+        kind: type,
+      } satisfies EmailBodyFold;
+      bodyFolds.push(bodyFold);
+      return `<details data-stella-email-fold="${type}"><summary data-stella-email-fold-summary="${bodyFold.id}"></summary>${pre}</details>`;
+    })
+    .join("");
+  return { bodyFolds, html };
+};
+
+const splitPlainTextBody = (text: string): PlainTextSection[] => {
+  const lines = text.split("\n");
+  let quoteStart = lines.length;
+  let foundQuote = false;
+
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const line = lines[index]?.replace(/\r$/u, "") ?? "";
+    if (line.trim().length === 0) {
+      continue;
+    }
+    if (/^\s*>/u.test(line)) {
+      foundQuote = true;
+      quoteStart = index;
+      continue;
+    }
+    break;
+  }
+
+  if (!foundQuote) {
+    quoteStart = lines.length;
+  }
+
+  let signatureStart = -1;
+  for (let index = quoteStart - 1; index > 0; index--) {
+    const line = lines[index]?.replace(/\r$/u, "") ?? "";
+    if (line === "-- ") {
+      signatureStart = index;
+      break;
+    }
+  }
+
+  const firstFoldStart = signatureStart === -1 ? quoteStart : signatureStart;
+  if (firstFoldStart === lines.length) {
+    return [{ type: "content", text }];
+  }
+
+  const visibleText = lines.slice(0, firstFoldStart).join("\n");
+  if (!nonEmpty(visibleText)) {
+    return [{ type: "content", text }];
+  }
+
+  const sections: PlainTextSection[] = [{ type: "content", text: visibleText }];
+  if (signatureStart !== -1) {
+    sections.push({
+      type: EMAIL_FOLD_KIND.signature,
+      text: lines.slice(signatureStart, quoteStart).join("\n"),
+    });
+  }
+  if (foundQuote) {
+    sections.push({
+      type: EMAIL_FOLD_KIND.quote,
+      text: lines.slice(quoteStart).join("\n"),
+    });
+  }
+  return sections;
 };
 
 const stripDuplicateNestedMessageHeaders = ($: CheerioApi): void => {

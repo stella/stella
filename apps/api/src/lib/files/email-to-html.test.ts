@@ -401,6 +401,156 @@ describe("renderEmailHtml", () => {
     expect(preview.bodyHtml).not.toContain("<form");
   });
 
+  test("folds trailing HTML history and signatures without removing content", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>Current reply</p>",
+            '<div class="gmail_signature" data-stella-email-fold="forged">Kind regards<br>Žofie</div>',
+            '<div class="gmail_quote"><blockquote type="cite">Earlier message<script>steal()</script></blockquote></div>',
+          ].join(""),
+        },
+      }),
+    );
+
+    expect(preview.bodyFolds).toEqual([
+      { id: "fold-0", kind: "signature" },
+      { id: "fold-1", kind: "quoted-history" },
+    ]);
+    expect(preview.bodyHtml).toContain(
+      '<details data-stella-email-fold="signature"><summary data-stella-email-fold-summary="fold-0"></summary>',
+    );
+    expect(preview.bodyHtml).toContain(
+      '<details data-stella-email-fold="quoted-history"><summary data-stella-email-fold-summary="fold-1"></summary>',
+    );
+    expect(preview.bodyHtml).toContain("Kind regards<br>Žofie");
+    expect(preview.bodyHtml).toContain("Earlier message");
+    expect(preview.bodyHtml).not.toContain("forged");
+    expect(preview.bodyHtml).not.toContain("<script");
+    expect(preview.bodyHtml).not.toContain("steal()");
+  });
+
+  test("keeps inline replies and quote-only messages expanded", () => {
+    const inlineReply = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            "<p>First answer</p>",
+            '<blockquote type="cite">Question</blockquote>',
+            "<p>Second answer</p>",
+          ].join(""),
+        },
+      }),
+    );
+    const quoteOnly = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<blockquote type="cite"><p>Only quoted content</p></blockquote>',
+        },
+      }),
+    );
+
+    expect(inlineReply.bodyFolds).toEqual([]);
+    expect(inlineReply.bodyHtml).not.toContain("data-stella-email-fold=");
+    expect(inlineReply.bodyHtml).toContain("Question");
+    expect(quoteOnly.bodyFolds).toEqual([]);
+    expect(quoteOnly.bodyHtml).not.toContain("data-stella-email-fold=");
+    expect(quoteOnly.bodyHtml).toContain("Only quoted content");
+  });
+
+  test("creates one fold for nested quoted HTML", () => {
+    const preview = buildEmailPreview(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<p>Reply</p><div class="gmail_quote"><blockquote type="cite">Parent<blockquote type="cite">Child</blockquote></blockquote></div>',
+        },
+      }),
+    );
+
+    expect(preview.bodyFolds).toEqual([
+      { id: "fold-0", kind: "quoted-history" },
+    ]);
+    expect(
+      preview.bodyHtml.match(/data-stella-email-fold="quoted-history"/gu),
+    ).toHaveLength(1);
+    expect(preview.bodyHtml).toContain("Parent");
+    expect(preview.bodyHtml).toContain("Child");
+  });
+
+  test("folds only trailing plain-text quote runs and standard signatures", () => {
+    const body = [
+      "Aktuální odpověď",
+      "",
+      "-- ",
+      "Žofie Nováková",
+      "> Předchozí zpráva",
+      "> Druhý řádek",
+    ].join("\r\n");
+    const preview = buildEmailPreview(
+      htmlEmail({ body: { type: "text", text: body } }),
+    );
+
+    expect(preview.bodyFolds).toEqual([
+      { id: "fold-0", kind: "signature" },
+      { id: "fold-1", kind: "quoted-history" },
+    ]);
+    expect(preview.bodyHtml).toContain("Aktuální odpověď");
+    expect(preview.bodyHtml).toContain("Žofie Nováková");
+    expect(preview.bodyHtml).toContain("&gt; Předchozí zpráva");
+    expect(
+      parsedEmailToText(htmlEmail({ body: { type: "text", text: body } })),
+    ).toContain("> Druhý řádek");
+  });
+
+  test("keeps nonstandard and nonterminal plain-text delimiters visible", () => {
+    const nonstandardDelimiter = buildEmailPreview(
+      htmlEmail({
+        body: { type: "text", text: "Reply\n--\nNot a signature" },
+      }),
+    );
+    const inlineQuote = buildEmailPreview(
+      htmlEmail({
+        body: { type: "text", text: "Reply\n> Question\nAnswer" },
+      }),
+    );
+
+    expect(nonstandardDelimiter.bodyFolds).toEqual([]);
+    expect(nonstandardDelimiter.bodyHtml).toContain("--");
+    expect(inlineQuote.bodyFolds).toEqual([]);
+    expect(inlineQuote.bodyHtml).toContain("&gt; Question");
+  });
+
+  test("keeps declared folds and generated markers in exact correspondence", () => {
+    const bodies: ParsedEmail["body"][] = [
+      {
+        type: "html",
+        html: '<p>Reply</p><div class="gmail_signature">Name</div>',
+      },
+      {
+        type: "html",
+        html: '<p>Reply</p><blockquote type="cite">History</blockquote>',
+      },
+      { type: "text", text: "Reply\n-- \nName\n> History" },
+      { type: "text", text: "No folded content" },
+    ];
+
+    for (const body of bodies) {
+      const preview = buildEmailPreview(htmlEmail({ body }));
+      const markerIds = Array.from(
+        preview.bodyHtml.matchAll(
+          /data-stella-email-fold-summary="(?<id>fold-\d+)"/gu,
+        ),
+        (match) => match.groups?.["id"],
+      );
+      expect(markerIds).toEqual(preview.bodyFolds.map(({ id }) => id));
+    }
+  });
+
   test("formats sanitized headers and body text for extraction", () => {
     const text = parsedEmailToText(
       htmlEmail({

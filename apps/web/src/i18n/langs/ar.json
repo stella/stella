@@ -1229,7 +1229,11 @@
     "bodyTitle": "محتوى البريد الإلكتروني",
     "cc": "نسخة",
     "from": "المرسل",
+    "hideQuotedHistory": "إخفاء الرسائل السابقة",
+    "hideSignature": "إخفاء التوقيع",
     "noSubject": "(بلا موضوع)",
+    "showQuotedHistory": "عرض الرسائل السابقة",
+    "showSignature": "عرض التوقيع",
     "to": "المستلمون",
     "unnamedAttachment": "مرفق بلا اسم"
   },

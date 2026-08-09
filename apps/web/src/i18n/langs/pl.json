@@ -1229,7 +1229,11 @@
     "bodyTitle": "Treść e-maila",
     "cc": "DW",
     "from": "Nadawca",
+    "hideQuotedHistory": "Ukryj poprzednie wiadomości",
+    "hideSignature": "Ukryj podpis",
     "noSubject": "(Brak tematu)",
+    "showQuotedHistory": "Pokaż poprzednie wiadomości",
+    "showSignature": "Pokaż podpis",
     "to": "Odbiorcy",
     "unnamedAttachment": "Nienazwany załącznik"
   },

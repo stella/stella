@@ -48,7 +48,9 @@ describe("email viewer", () => {
         },
       ],
       bcc: ["blind@example.org"],
-      bodyHtml: "<p>Message body</p>",
+      bodyFolds: [{ id: "fold-0", kind: "quoted-history" }],
+      bodyHtml:
+        '<p>Message body</p><details data-stella-email-fold="quoted-history"><summary data-stella-email-fold-summary="fold-0"></summary><blockquote>Previous message</blockquote></details>',
       cc: ["copy@example.org"],
       date: "Mon, 02 Jun 2026 10:00:00 +0000",
       from: "Sender <sender@example.org>",
@@ -73,6 +75,9 @@ describe("email viewer", () => {
     expect(html).toContain('sandbox=""');
     expect(html).toContain("srcDoc=");
     expect(html).toContain("Message body");
+    expect(html).toContain("Show previous messages");
+    expect(html).toContain("Hide previous messages");
+    expect(html).toContain("Previous message");
     expect(html).not.toContain("href=");
     expect(html).not.toContain("<button");
   });

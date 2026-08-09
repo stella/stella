@@ -1229,7 +1229,11 @@
     "bodyTitle": "Cuerpo del correo",
     "cc": "Copia",
     "from": "Remitente",
+    "hideQuotedHistory": "Ocultar mensajes anteriores",
+    "hideSignature": "Ocultar firma",
     "noSubject": "(Sin asunto)",
+    "showQuotedHistory": "Mostrar mensajes anteriores",
+    "showSignature": "Mostrar firma",
     "to": "Destinatarios",
     "unnamedAttachment": "Archivo adjunto sin nombre"
   },

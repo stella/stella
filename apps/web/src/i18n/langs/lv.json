@@ -1229,7 +1229,11 @@
     "bodyTitle": "E-pasta pamatteksts",
     "cc": "Kopija",
     "from": "Sūtītājs",
+    "hideQuotedHistory": "Paslēpt iepriekšējos ziņojumus",
+    "hideSignature": "Paslēpt parakstu",
     "noSubject": "(Bez tēmas)",
+    "showQuotedHistory": "Rādīt iepriekšējos ziņojumus",
+    "showSignature": "Rādīt parakstu",
     "to": "Saņēmēji",
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },

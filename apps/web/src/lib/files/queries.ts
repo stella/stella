@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   fileContentQueryKey,
   fileMetadataQueryKey,
@@ -33,6 +34,7 @@ type EmailHtmlPreviewData = {
     mimeType: string | null;
     sizeBytes: number;
   }[];
+  bodyFolds: EmailBodyFold[];
   bodyHtml: string;
 };
 
@@ -112,6 +114,7 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         bcc: data.bcc,
         date: data.date,
         attachments: data.attachments,
+        bodyFolds: data.bodyFolds,
         bodyHtml: data.bodyHtml,
       } satisfies EmailHtmlPreviewData;
     },
