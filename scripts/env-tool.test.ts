@@ -371,6 +371,33 @@ describe("environment doctor output", () => {
         S3_SECRET_ACCESS_KEY: "USE-IAM-ROLE",
       },
     },
+    {
+      expected: "DATABASE_URL must enable TLS outside loopback.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        DATABASE_URL:
+          "postgres://owner:password@db.example.com:5432/stella?sslmode=disable",
+        NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "S3_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        S3_ENDPOINT: "http://storage.example.com",
+      },
+    },
+    {
+      expected:
+        "REDIS_URL must use rediss:// unless it targets a loopback address.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+        REDIS_URL: "redis://cache.example.com:6379",
+      },
+    },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {
     const result = validateDoctorEnvironment({
       app: "api",

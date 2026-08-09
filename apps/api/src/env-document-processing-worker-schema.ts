@@ -1,19 +1,13 @@
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
 
-const isSecureOcrServiceUrl = (value: string) => {
-  const url = new URL(value);
-  if (url.protocol === "https:") {
-    return true;
-  }
-  return (
-    url.protocol === "http:" &&
-    (url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "[::1]")
-  );
-};
+const isSecureOcrServiceUrl = (value: string) =>
+  isTlsOrLoopbackUrl(value, {
+    plaintextProtocol: "http:",
+    tlsProtocol: "https:",
+  });
 
 /**
  * Environment shared by the API process and document-processing worker.
@@ -47,12 +41,23 @@ export const envDocumentProcessingWorkerServerSchema = {
 type DocumentProcessingEnvInvariantInput = {
   contentEncryptionKey: string | undefined;
   nodeEnv: string | undefined;
+  redisUrl: string;
 };
 
 export const documentProcessingEnvInvariantViolation = ({
   contentEncryptionKey,
   nodeEnv,
+  redisUrl,
 }: DocumentProcessingEnvInvariantInput): string | null => {
+  if (
+    DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") &&
+    !isTlsOrLoopbackUrl(redisUrl, {
+      plaintextProtocol: "redis:",
+      tlsProtocol: "rediss:",
+    })
+  ) {
+    return "REDIS_URL must use rediss:// unless it targets a loopback address.";
+  }
   if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !contentEncryptionKey) {
     return "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.";
   }

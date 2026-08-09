@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { APPLICATION_RLS_ROLE_NAME } from "./db/role-names";
+import { isLoopbackHostname } from "./lib/secure-service-url";
 
 /**
  * Resolve the Postgres connection URL.
@@ -25,6 +26,14 @@ const COMPONENT_KEYS = [
 // and have no legitimate reason to appear in a managed deploy.
 const ALLOWED_SSLMODES = ["require", "verify-ca", "verify-full"] as const;
 const SUPPORTED_DATABASE_PROTOCOLS = ["postgres:", "postgresql:"] as const;
+
+export const hasSecureDatabaseTransport = (databaseUrl: string) => {
+  const parsed = new URL(databaseUrl);
+  return (
+    isLoopbackHostname(parsed.hostname) ||
+    ALLOWED_SSLMODES.some((mode) => mode === parsed.searchParams.get("sslmode"))
+  );
+};
 
 const assertDatabaseLoginIsNotReserved = (username: string) => {
   let decodedUsername: string;

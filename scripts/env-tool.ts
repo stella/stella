@@ -723,6 +723,7 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   const documentProcessingIssue = documentProcessingEnvInvariantViolation({
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
     nodeEnv,
+    redisUrl: output.REDIS_URL,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);

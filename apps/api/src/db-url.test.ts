@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveDatabaseUrl } from "@/api/db-url";
+import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 
 const components = {
   DB_HOST: "db.example",
@@ -169,4 +169,25 @@ describe("resolveDatabaseUrl", () => {
       ).toThrow(/DB_PORT must be numeric/u);
     },
   );
+});
+
+describe("hasSecureDatabaseTransport", () => {
+  test.each([
+    "postgres://owner:password@db.example.com/stella?sslmode=require",
+    "postgres://owner:password@db.example.com/stella?sslmode=verify-ca",
+    "postgres://owner:password@db.example.com/stella?sslmode=verify-full",
+    "postgres://owner:password@localhost/stella?sslmode=disable",
+    "postgres://owner:password@127.0.0.1/stella",
+    "postgres://owner:password@[::1]/stella",
+  ])("accepts encrypted or loopback database transport: %s", (databaseUrl) => {
+    expect(hasSecureDatabaseTransport(databaseUrl)).toBe(true);
+  });
+
+  test.each([
+    "postgres://owner:password@db.example.com/stella",
+    "postgres://owner:password@db.example.com/stella?sslmode=disable",
+    "postgres://owner:password@db.example.com/stella?sslmode=prefer",
+  ])("rejects remote database transport without TLS: %s", (databaseUrl) => {
+    expect(hasSecureDatabaseTransport(databaseUrl)).toBe(false);
+  });
 });

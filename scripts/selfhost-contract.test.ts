@@ -76,6 +76,9 @@ describe("self-host production environment", () => {
     expect(example).toContain('SELFHOST_LOCAL_PASSWORD_AUTH="true"');
     expect(example).toContain('SELFHOST_BOOTSTRAP_TOKEN=""');
     expect(example).toContain('USE_MOCK_AI="false"');
+    expect(example).toContain(
+      'REDIS_URL="rediss://valkey.example.internal:6379"',
+    );
     expect(example).not.toMatch(/^EMAIL_PROVIDER=/mu);
     expect(example).not.toMatch(/^SMTP_HOST=/mu);
 

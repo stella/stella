@@ -118,4 +118,37 @@ describe("API environment", () => {
       'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
     );
   });
+
+  test.each([
+    {
+      expected: "DATABASE_URL must enable TLS outside loopback.",
+      overrides: {
+        DATABASE_URL:
+          "postgres://owner:password@db.example.com:5432/stella?sslmode=disable",
+      },
+    },
+    {
+      expected:
+        "S3_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: { S3_ENDPOINT: "http://storage.example.com" },
+    },
+    {
+      expected:
+        "REDIS_URL must use rediss:// unless it targets a loopback address.",
+      overrides: { REDIS_URL: "redis://cache.example.com:6379" },
+    },
+  ])(
+    "rejects plaintext production transport: $expected",
+    ({ expected, overrides }) => {
+      const result = bootApiEnvironment({
+        ...baseEnv,
+        ...overrides,
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "production",
+      });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(expected);
+    },
+  );
 });

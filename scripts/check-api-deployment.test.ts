@@ -140,6 +140,10 @@ describe("API deployment health receipt", () => {
       "needs: [resolve, build, prepare-web-image, smoke]",
     );
     expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
+    expect(releaseWorkflow).toContain("curl -fsS http://127.0.0.1:3001/live");
+    expect(releaseWorkflow).toContain(
+      `grep -q '"message":"scheduler.started"'`,
+    );
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
     expect(promoteAction).toContain("refresh_app_token");

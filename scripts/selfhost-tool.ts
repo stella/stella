@@ -79,7 +79,7 @@ const SELFHOST_API_EXAMPLES = {
   GOTENBERG_PASSWORD: "",
   GOTENBERG_URL: "http://gotenberg:3000",
   GOTENBERG_USERNAME: "stella",
-  REDIS_URL: "redis://valkey.example.internal:6379",
+  REDIS_URL: "rediss://valkey.example.internal:6379",
   REQUIRE_PERSONAL_AI_KEY: "true",
   S3_ACCESS_KEY_ID: "",
   S3_BUCKET: "stella",

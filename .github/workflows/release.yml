@@ -314,7 +314,8 @@ jobs:
             stella-api:smoke
 
           for _ in {1..60}; do
-            if curl -fsS http://127.0.0.1:3001/live >/dev/null; then
+            if curl -fsS http://127.0.0.1:3001/live >/dev/null \
+              && docker logs stella-api-smoke 2>&1 | grep -q '"message":"scheduler.started"'; then
               exit 0
             fi
             if [[ "$(docker inspect --format='{{.State.Running}}' stella-api-smoke 2>/dev/null)" != "true" ]]; then
