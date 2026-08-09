@@ -11,7 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
@@ -64,11 +64,11 @@ const config = {
   query: t.Object({
     disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
   }),
-  params: workspaceParams({
+  params: t.Object({
+    workspaceId: tSafeId("workspace"),
     fieldId: tSafeId("field"),
     attachmentId: t.String(),
   }),
-  response: t.Unknown(),
 } satisfies HandlerConfig;
 
 const attachmentNotFound = () => new Response(null, { status: 404 });

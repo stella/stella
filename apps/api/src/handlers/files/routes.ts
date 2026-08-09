@@ -209,6 +209,5 @@ filesRoute.get(
     params: emailAttachmentEndpoint.config.params,
     permissions: emailAttachmentEndpoint.config.permissions,
     query: emailAttachmentEndpoint.config.query,
-    response: emailAttachmentEndpoint.config.response,
   },
 );
