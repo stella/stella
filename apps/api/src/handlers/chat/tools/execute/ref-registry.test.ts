@@ -14,6 +14,7 @@ import {
   CHAT_UNRESOLVED_REF_HREF,
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
+import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
 describe("chat ref registry", () => {
   test("never infers ref semantics from structured field names", () => {
@@ -167,6 +168,38 @@ describe("chat ref registry", () => {
     ]);
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("does not brand ill-formed persisted ref IDs during hydration", () => {
+    const registry = createChatRefRegistry();
+    const illFormedId = "resource_\uD800";
+
+    for (const kind of ["matter", "property", "contact"] as const) {
+      expect(
+        registry.hydrateRefId({
+          inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+          kind,
+          value: illFormedId,
+        }),
+      ).toBe(illFormedId);
+    }
+    expect(
+      registry.hydrateRefId({
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        kind: "entity",
+        value: illFormedId,
+        workspaceId: illFormedId,
+      }),
+    ).toBe(illFormedId);
+    const entityId = "entity-safe";
+    expect(
+      registry.hydrateRefId({
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        kind: "entity",
+        value: entityId,
+        workspaceId: illFormedId,
+      }),
+    ).toBe(entityId);
   });
 
   test("hydrates canonical links with opaque IDs without replacing a UUID prefix", () => {

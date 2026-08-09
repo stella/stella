@@ -1,11 +1,15 @@
 import {
   findCanonicalChatResourceHrefs,
+  isSafeIdValue,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+const isWorkspaceIdCandidate = (value: unknown): value is string =>
+  typeof value === "string" && isSafeIdValue(value);
 
 // Walks a parsed user-message mention list for any workspace IDs the
 // message embeds — entity mentions carry a workspaceId; workspace
@@ -18,10 +22,13 @@ export const extractMentionWorkspaceIds = (
   const ids = new Set<SafeId<"workspace">>();
   for (const mention of mentions) {
     if (mention.category === "workspace") {
-      ids.add(brandPersistedWorkspaceId(mention.resource.id));
+      ids.add(mention.resource.id);
       continue;
     }
-    if (mention.workspaceId !== null) {
+    if (
+      mention.workspaceId !== null &&
+      isWorkspaceIdCandidate(mention.workspaceId)
+    ) {
       ids.add(brandPersistedWorkspaceId(mention.workspaceId));
     }
   }
@@ -57,10 +64,10 @@ export const extractMessageWorkspaceIds = (
   const refContext = message.metadata?.refContext;
   if (refContext !== undefined) {
     for (const context of refContext.entities) {
-      ids.add(brandPersistedWorkspaceId(context.workspace.id));
+      ids.add(context.workspace.id);
     }
     for (const workspace of refContext.workspaceScope) {
-      ids.add(brandPersistedWorkspaceId(workspace.id));
+      ids.add(workspace.id);
     }
   }
   return Array.from(ids);
@@ -115,9 +122,6 @@ const collectPartsWorkspaceIds = (
 // a workspace ID. Adding a new field name here is the one place to
 // extend coverage when a new tool output shape ships.
 const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
-
-const isWorkspaceIdCandidate = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
 
 const collectStructuralWorkspaceIds = (
   value: unknown,

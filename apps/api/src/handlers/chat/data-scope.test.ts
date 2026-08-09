@@ -367,7 +367,7 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
-  test("source-document metadata with empty workspaceId contributes nothing", () => {
+  test("source-document metadata with unsafe workspaceId contributes nothing", () => {
     const message = {
       id: "assistant-1",
       role: "assistant",
@@ -387,6 +387,13 @@ describe("extractAssistantWorkspaceIds", () => {
             mimeType: "application/pdf",
             title: "B",
             workspaceId: null,
+          },
+          {
+            entityId: "entity-3",
+            kind: "document",
+            mimeType: "application/pdf",
+            title: "C",
+            workspaceId: "workspace_\uD800",
           },
         ],
       },

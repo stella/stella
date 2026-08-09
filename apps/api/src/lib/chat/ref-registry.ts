@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import {
+  isSafeIdValue,
   replaceCanonicalChatResourceHrefs,
   resourceRef,
   RESOURCE_TYPE,
@@ -151,14 +152,11 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null &&
   Object.getPrototypeOf(value) === Object.prototype;
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
-
 const isPersistedIdForInput = (
   value: unknown,
   inputState: ChatRefInputState,
 ): value is string => {
-  if (!isNonEmptyString(value)) {
+  if (typeof value !== "string" || !isSafeIdValue(value)) {
     return false;
   }
 
