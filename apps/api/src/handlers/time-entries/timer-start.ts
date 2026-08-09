@@ -8,9 +8,9 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { resolveRate } from "@/api/handlers/rates/resolve";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

@@ -10,11 +10,11 @@ import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/handlers/time-entries/authorization";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/handlers/time-entries/constants";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
