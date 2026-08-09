@@ -4,6 +4,7 @@ import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import type { PromptSafeText } from "@/api/lib/prompt-safety";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
@@ -39,7 +40,7 @@ export const buildExtractedFileMessage = ({
   content,
   simplifiedName,
 }: {
-  content: string;
+  content: PromptSafeText;
   simplifiedName: string;
 }): string =>
   [

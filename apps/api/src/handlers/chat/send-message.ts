@@ -194,7 +194,7 @@ import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provena
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
-import { extractFileText } from "@/api/lib/search/extract-content";
+import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   requireTanStackAIAvailableForRole,
   validateTanStackDevModelOverride,
@@ -2344,10 +2344,6 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         workspaceId,
       }),
     );
-    if (activeFileFallback === null) {
-      return Result.ok(hydratedMessages);
-    }
-
     const nextMessages = [...hydratedMessages];
     const latestUserMessage = hydratedMessages.at(latestUserIndex);
     if (!latestUserMessage) {
@@ -2509,7 +2505,7 @@ const readActiveFileFallbackForModel = async ({
   sourceVersion,
   workspaceId,
 }: ReadActiveFileFallbackForModelProps): Promise<
-  Result<ActiveFileFallbackForModel | null, HandlerError<422 | 500>>
+  Result<ActiveFileFallbackForModel, HandlerError<422 | 500>>
 > =>
   await Result.gen(async function* () {
     if (
@@ -2541,18 +2537,30 @@ const readActiveFileFallbackForModel = async ({
     }
 
     if (source.type === "extracted-text") {
-      const extracted = await extractFileText(buffer, source.mimeType, {
-        feature: "active-file-fallback",
-      });
-      if (extracted === null) {
-        return Result.ok(null);
+      const extracted = await extractFileTextResult(buffer, source.mimeType);
+      if (Result.isError(extracted)) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to extract active file for AI context",
+            cause: extracted.error,
+          }),
+        );
+      }
+      if (extracted.value === null) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Active file does not contain extractable text",
+          }),
+        );
       }
       const fallback: ActiveFileFallbackForModel = {
         type: "extracted-text",
-        content: extracted.slice(0, LIMITS.chatContextFileMaxChars),
+        content: extracted.value.slice(0, LIMITS.chatContextFileMaxChars),
         fileName: source.fileName,
         sourceVersion,
-        truncated: extracted.length > LIMITS.chatContextFileMaxChars,
+        truncated: extracted.value.length > LIMITS.chatContextFileMaxChars,
       };
       return Result.ok(fallback);
     }

@@ -173,16 +173,11 @@ export const fetchAndPrepareFiles = async (
             cause: extracted.error,
           });
         }
-        if (extracted.value === null) {
-          throw new WorkflowIntegrationError({
-            message: "Native Office file contains no extractable text",
-          });
-        }
         return {
           kind: "extracted-text",
           fileFieldId: meta.fileFieldId,
           fileId: meta.fileId,
-          content: extracted.value,
+          content: extracted.value ?? "",
           simplifiedName,
         };
       }

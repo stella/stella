@@ -11,6 +11,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { streamTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -179,10 +180,14 @@ export const generateWorkflowData = async ({
       messageContent.push({
         type: "text",
         content: buildExtractedFileMessage({
-          content: limitExtractedTextPromptContent({
-            content: file.content,
-            fileCount: extractedTextFileCount,
-          }),
+          content: sanitizeForPrompt(
+            untrustedText(
+              limitExtractedTextPromptContent({
+                content: file.content,
+                fileCount: extractedTextFileCount,
+              }),
+            ),
+          ),
           simplifiedName: file.simplifiedName,
         }),
       });
