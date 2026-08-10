@@ -213,12 +213,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
     params: workspaceParams({ fieldId: tSafeId("field") }),
     // A partial patch: only the named properties change, and an empty string
     // clears one. Omitting a key leaves whatever the document already carried.
-    //
-    // `queryKey` rides along because the `invalidateQuery` macro replaces the
-    // route's body with its own schema, which requires it — a body without it
-    // is rejected before this handler ever runs.
     body: t.Object({
-      queryKey: t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
       ...AUTHORED_PROPERTY_BODY,
     }),
   } satisfies HandlerConfig,

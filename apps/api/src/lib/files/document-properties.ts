@@ -493,21 +493,19 @@ const clearElements = (xml: string, names: readonly string[]): string => {
   return cleared;
 };
 
-const REGEX_META_RE = /[.*+?^${}()|[\]\\]/gu;
+const XML_NAMESPACE_DECLARATION_RE =
+  /\bxmlns(?::(?<prefix>[A-Za-z_][\w.-]*))?\s*=\s*(?<quote>["'])(?<namespace>[^"']*)\k<quote>/gu;
 
-const qualifiedNames = (xml: string, element: XmlElement): string[] => {
-  const namespace = element.namespace.replace(REGEX_META_RE, "\\$&");
-  const declarations = new RegExp(
-    `xmlns(?::(?<prefix>[A-Za-z_][\\w.-]*))?\\s*=\\s*["']${namespace}["']`,
-    "gu",
-  );
-  return [...xml.matchAll(declarations)].map(({ groups }) => {
-    const prefix = groups?.["prefix"];
-    return prefix === undefined
-      ? element.localName
-      : `${prefix}:${element.localName}`;
-  });
-};
+const qualifiedNames = (xml: string, element: XmlElement): string[] => 
+  [...xml.matchAll(XML_NAMESPACE_DECLARATION_RE)]
+    .filter(({ groups }) => groups?.["namespace"] === element.namespace)
+    .map(({ groups }) => {
+      const prefix = groups?.["prefix"];
+      return prefix === undefined
+        ? element.localName
+        : `${prefix}:${element.localName}`;
+    })
+;
 
 const clearNamespacedElements = (
   xml: string,
