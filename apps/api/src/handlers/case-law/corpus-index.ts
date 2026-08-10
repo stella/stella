@@ -1373,20 +1373,19 @@ const hasPendingGenerationProjection = async (
     ),
   );
 
-const hasGenerationCheckpoint = async (
+const selectGenerationCheckpointStatus = async (
   scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
   generation: string,
-): Promise<boolean> =>
-  await scopedDb(async (tx) =>
-    Boolean(
+): Promise<CaseLawCorpusIndexBackfillStatus | null> =>
+  await scopedDb(
+    async (tx) =>
       (
         await tx
-          .select({ generation: caseLawCorpusIndexBackfills.generation })
+          .select({ status: caseLawCorpusIndexBackfills.status })
           .from(caseLawCorpusIndexBackfills)
           .where(eq(caseLawCorpusIndexBackfills.generation, generation))
           .limit(1)
-      ).at(0),
-    ),
+      ).at(0)?.status ?? null,
   );
 
 const validateGenerationBoundary = (generation: string): void => {
@@ -2085,17 +2084,25 @@ export const backfillCorpusIndex = async (
   options: { readConcurrency?: number } = {},
 ): Promise<CorpusIndexBackfillResult> => {
   validateGenerationBoundary(generation);
-  const [sourceReconciliation, pendingProjection, checkpoint] =
+  const [sourceReconciliation, pendingProjection, checkpointStatus] =
     await Promise.all([
       selectSourceReconciliationCheckpoint(scopedDb, generation),
       hasPendingGenerationProjection(scopedDb, generation),
-      hasGenerationCheckpoint(scopedDb, generation),
+      selectGenerationCheckpointStatus(scopedDb, generation),
     ]);
   // A serving generation without a checkpoint has no durable projection
-  // targets yet. Start its bounded snapshot first; inventing a synthetic
-  // completed checkpoint would suppress that replay and leave future appends
-  // without a crash-recoverable target record.
-  if (!checkpoint || sourceReconciliation || pendingProjection) {
+  // targets yet (inventing a synthetic completed checkpoint would suppress
+  // that replay and leave future appends without a crash-recoverable target
+  // record), and one still `running` owes the rest of its snapshot walk.
+  // Both need the generation page. The second condition is load-bearing on
+  // its own: the pending drain empties the queue on the very invocations
+  // that advance the walk, so a quiet corpus with nothing pending must not
+  // park an incomplete walk on the incremental path.
+  if (
+    checkpointStatus !== CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE ||
+    sourceReconciliation ||
+    pendingProjection
+  ) {
     const result = await backfillCorpusIndexGenerationPage(
       scopedDb,
       batchSize,

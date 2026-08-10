@@ -57,6 +57,8 @@ const flagValue = (name: string): string | undefined => {
   return value;
 };
 
+const DECIMAL_INTEGER = /^\d+$/u;
+
 const positiveInteger = (
   raw: string | undefined,
   fallback: number,
@@ -65,7 +67,7 @@ const positiveInteger = (
   if (raw === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(raw, 10);
+  const parsed = DECIMAL_INTEGER.test(raw) ? Number.parseInt(raw, 10) : NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     console.error(`--${name} must be a positive integer, got: ${raw}`);
     process.exit(1);
@@ -73,16 +75,26 @@ const positiveInteger = (
   return parsed;
 };
 
+/**
+ * The SPARQL endpoint caps responses at 10,000 bindings and a truncated
+ * targeted listing now throws; up to 24 languages with occasional
+ * re-published manifestations per pair keeps 300 CELEX safely under it.
+ */
+const MAX_SPARQL_CHUNK = 300;
+
 const outPath = flagValue("out") ?? "eu-ecj-census.json";
 const pageSize = positiveInteger(
   flagValue("page-size"),
   DEFAULT_PAGE_SIZE,
   "page-size",
 );
-const sparqlChunk = positiveInteger(
-  flagValue("sparql-chunk"),
-  DEFAULT_SPARQL_CHUNK,
-  "sparql-chunk",
+const sparqlChunk = Math.min(
+  positiveInteger(
+    flagValue("sparql-chunk"),
+    DEFAULT_SPARQL_CHUNK,
+    "sparql-chunk",
+  ),
+  MAX_SPARQL_CHUNK,
 );
 
 const ingestionDb = createIngestionDb(rlsDb);

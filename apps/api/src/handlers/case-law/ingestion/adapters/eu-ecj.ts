@@ -223,6 +223,9 @@ type QueryDecisionsOptions = {
 /** CELEX numbers are alphanumeric with optional bracketed suffixes. */
 const CELEX = /^[0-9A-Z()]+$/u;
 
+/** Boundary check for callers that accept CELEX numbers as input. */
+export const isValidCelex = (value: string): boolean => CELEX.test(value);
+
 const queryDecisions = async ({
   dateFrom,
   dateTo,
@@ -310,6 +313,17 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
+    // A truncated targeted listing is never acceptable: a census or
+    // re-fetch keyed on it would classify the missing variants as never
+    // published. The date-window crawl keeps the warning shape it has
+    // always had; its per-day pages sit far below the cap.
+    if (celexFilter && celexFilter.length > 0) {
+      throw new AdapterFetchError({
+        message: `CJEU SPARQL listing truncated at ${SPARQL_LIMIT} bindings; use fewer CELEX numbers per query`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: dateFrom,
+      });
+    }
     logger.warn("case_law.ingestion.sparql_limit_hit", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       limit: SPARQL_LIMIT,

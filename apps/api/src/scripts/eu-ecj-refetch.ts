@@ -4,7 +4,11 @@ import { rlsDb } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
+  fetchDecisionsByCelex,
+  isValidCelex,
+  listCelexVariants,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
   allocateSourceObservationOrder,
   DECISION_REFRESH,
@@ -26,12 +30,18 @@ import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
  * The CELEX list comes from the census report
  * (`src/scripts/eu-ecj-census.ts`), which classifies stored rows against
  * Cellar's own listing; this runner visits the re-fetchable ones. Each
- * result goes through `processDecision` under `DECISION_REFRESH.ALWAYS`
- * (the publisher's document may hash identically while the payload the
- * parser derives is what changed), ordered on the source's observation
- * counter under its ingestion lease, so a run cannot interleave with a
- * live crawl. Interrupt with Ctrl-C: the current decision finishes, and
- * the report names the CELEX to resume `--after`.
+ * CELEX is listed again before it is fetched, so a variant the fetch
+ * silently drops (transient non-OK, timeout, short body) is detected by
+ * count and the CELEX lands in the failed set instead of being advanced
+ * past. Results go through `processDecision` under
+ * `DECISION_REFRESH.ALWAYS` (the publisher's document may hash
+ * identically while the payload the parser derives is what changed),
+ * ordered on the source's observation counter under its ingestion lease,
+ * so a run cannot interleave with a live crawl.
+ *
+ * Failed CELEX are written to a JSON file at the end; feed it back via
+ * `--celex-file` to retry exactly those. Interrupt with Ctrl-C: the
+ * current decision finishes and the report names the resume point.
  *
  *   # what a run would visit, contacting nothing
  *   bun run src/scripts/eu-ecj-refetch.ts --census eu-ecj-census.json
@@ -48,15 +58,20 @@ const DEFAULT_DELAY_MS = 500;
 /** Consecutive failed CELEX before the run halts; mirrors the crawl. */
 const FAILURE_HALT_THRESHOLD = 10;
 const CELEX_FETCH_TIMEOUT_MS = 5 * 60_000;
+const SPARQL_TIMEOUT_MS = 60_000;
+const DEFAULT_FAILED_OUT = "eu-ecj-refetch-failed.json";
 
 const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
 
-  --census <path>   Census report whose refetchableCelex list is visited.
-  --celex <a,b,c>   Visit these CELEX numbers instead of a census file.
-  --apply           Fetch and write. Omitted, the run prints the plan only.
-  --limit <n>       Maximum CELEX to visit this run.
-  --after <celex>   Resume strictly after this CELEX (sorted order).
-  --delay-ms <n>    Pause between decisions (default ${DEFAULT_DELAY_MS}).`;
+  --census <path>      Census report whose refetchableCelex list is visited.
+  --celex <a,b,c>      Visit these CELEX numbers instead of a census file.
+  --celex-file <path>  Visit the JSON string array in this file (e.g. a
+                       previous run's failed set).
+  --apply              Fetch and write. Omitted, the run prints the plan only.
+  --limit <n>          Maximum CELEX to visit this run.
+  --after <celex>      Resume strictly after this CELEX (sorted order).
+  --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
+  --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).`;
 
 const flagValue = (name: string): string | undefined => {
   const index = process.argv.indexOf(`--${name}`);
@@ -74,6 +89,8 @@ const flagValue = (name: string): string | undefined => {
 
 const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
 
+const DECIMAL_INTEGER = /^\d+$/u;
+
 const positiveInteger = (
   raw: string | undefined,
   fallback: number,
@@ -82,7 +99,7 @@ const positiveInteger = (
   if (raw === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(raw, 10);
+  const parsed = DECIMAL_INTEGER.test(raw) ? Number.parseInt(raw, 10) : NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     console.error(`--${name} must be a positive integer, got: ${raw}`);
     process.exit(1);
@@ -93,23 +110,31 @@ const positiveInteger = (
 const apply = hasFlag("apply");
 const limitFlag = flagValue("limit");
 const limit =
-  limitFlag === undefined
-    ? null
-    : positiveInteger(limitFlag, Number.NaN, "limit");
+  limitFlag === undefined ? null : positiveInteger(limitFlag, 0, "limit");
 const after = flagValue("after") ?? null;
 const delayMs = positiveInteger(
   flagValue("delay-ms"),
   DEFAULT_DELAY_MS,
   "delay-ms",
 );
+const failedOutPath = flagValue("failed-out") ?? DEFAULT_FAILED_OUT;
 
 const censusPath = flagValue("census");
 const celexFlag = flagValue("celex");
-if ((censusPath === undefined) === (celexFlag === undefined)) {
-  console.error("Exactly one of --census or --celex is required.");
+const celexFilePath = flagValue("celex-file");
+const sourcesGiven = [censusPath, celexFlag, celexFilePath].filter(
+  (value) => value !== undefined,
+);
+if (sourcesGiven.length !== 1) {
+  console.error(
+    "Exactly one of --census, --celex or --celex-file is required.",
+  );
   console.error(USAGE);
   process.exit(1);
 }
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 const isCensusReport = (
   value: unknown,
@@ -117,12 +142,19 @@ const isCensusReport = (
   typeof value === "object" &&
   value !== null &&
   "refetchableCelex" in value &&
-  Array.isArray(value.refetchableCelex) &&
-  value.refetchableCelex.every((celex) => typeof celex === "string");
+  isStringArray(value.refetchableCelex);
 
 const requestedCelex = await (async (): Promise<string[]> => {
   if (celexFlag !== undefined) {
     return celexFlag.split(",").map((celex) => celex.trim());
+  }
+  if (celexFilePath !== undefined) {
+    const parsed: unknown = JSON.parse(await Bun.file(celexFilePath).text());
+    if (!isStringArray(parsed)) {
+      console.error(`${celexFilePath} is not a JSON array of CELEX strings`);
+      process.exit(1);
+    }
+    return parsed;
   }
   const parsed: unknown = JSON.parse(await Bun.file(censusPath ?? "").text());
   if (!isCensusReport(parsed)) {
@@ -131,6 +163,21 @@ const requestedCelex = await (async (): Promise<string[]> => {
   }
   return parsed.refetchableCelex;
 })();
+
+// Validated here, before the lease: a malformed entry deep in the plan
+// would otherwise burn the consecutive-failure budget mid-run and could
+// halt a valid recovery.
+const malformed = requestedCelex.filter((celex) => !isValidCelex(celex));
+if (malformed.length > 0) {
+  console.error(
+    `Invalid CELEX number(s): ${malformed.slice(0, 5).join(", ")}${malformed.length > 5 ? ` (+${malformed.length - 5} more)` : ""}`,
+  );
+  process.exit(1);
+}
+if (after !== null && !isValidCelex(after)) {
+  console.error(`--after must be a CELEX number, got: ${after}`);
+  process.exit(1);
+}
 
 const plan = [...new Set(requestedCelex)]
   .sort()
@@ -179,26 +226,30 @@ if (sourceLease === null) {
   process.exit(1);
 }
 
-let interrupted = false;
+// Object-held so the flag's cross-callback mutation is visible to
+// per-site flow analysis; a plain boolean reads as always-false.
+const runState = { interrupted: false };
 process.on("SIGINT", () => {
-  interrupted = true;
+  runState.interrupted = true;
   console.error("interrupt received; finishing the current decision…");
 });
 
 const counts = {
   visited: 0,
+  variantsExpected: 0,
   variantsFetched: 0,
   complete: 0,
   retryable: 0,
-  emptyCelex: 0,
+  missingVariants: 0,
 };
+const failedCelex: string[] = [];
 let lastVisited: string | null = null;
 let consecutiveFailures = 0;
 let haltReason: string | null = null;
 
 try {
   for (const celex of plan) {
-    if (interrupted) {
+    if (runState.interrupted) {
       haltReason = "interrupted";
       break;
     }
@@ -210,13 +261,28 @@ try {
     lastVisited = celex;
     let celexFailed = false;
     try {
+      // Listed again right before the fetch: the count is what detects a
+      // variant the fetch dropped silently, and the extra query per CELEX
+      // is noise next to the manifestation downloads themselves.
+      // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
+      const expected = await listCelexVariants({
+        celexNumbers: [celex],
+        signal: AbortSignal.timeout(SPARQL_TIMEOUT_MS),
+      });
+      counts.variantsExpected += expected.length;
       // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
       const results = await fetchDecisionsByCelex({
         celexNumbers: [celex],
         signal: AbortSignal.timeout(CELEX_FETCH_TIMEOUT_MS),
       });
-      if (results.length === 0) {
-        counts.emptyCelex += 1;
+      if (results.length < expected.length) {
+        // The missing variants stay stored as they were; the CELEX goes to
+        // the failed set so a retry revisits every variant.
+        counts.missingVariants += expected.length - results.length;
+        celexFailed = true;
+        console.error(
+          `${celex}: fetched ${results.length} of ${expected.length} listed variants`,
+        );
       }
       for (const result of results) {
         counts.variantsFetched += 1;
@@ -251,10 +317,15 @@ try {
       celexFailed = true;
       console.error(`${celex}: failed —`, error);
     }
-    consecutiveFailures = celexFailed ? consecutiveFailures + 1 : 0;
+    if (celexFailed) {
+      failedCelex.push(celex);
+      consecutiveFailures += 1;
+    } else {
+      consecutiveFailures = 0;
+    }
     if (counts.visited % 25 === 0) {
       console.error(
-        `progress: ${counts.visited}/${plan.length} celex, ${counts.complete} variants written`,
+        `progress: ${counts.visited}/${plan.length} celex, ${counts.complete} variants written, ${failedCelex.length} celex failed`,
       );
     }
     // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
@@ -266,10 +337,16 @@ try {
 
 console.log("--- outcomes ---");
 console.log(`celex visited:     ${counts.visited} of ${plan.length}`);
+console.log(`variants listed:   ${counts.variantsExpected}`);
 console.log(`variants fetched:  ${counts.variantsFetched}`);
 console.log(`written:           ${counts.complete}`);
 console.log(`retryable:         ${counts.retryable}`);
-console.log(`celex w/o results: ${counts.emptyCelex}`);
+console.log(`variants missing:  ${counts.missingVariants}`);
+if (failedCelex.length > 0) {
+  await Bun.write(failedOutPath, `${JSON.stringify(failedCelex, null, 2)}\n`);
+  console.log(`celex failed:      ${failedCelex.length} → ${failedOutPath}`);
+  console.log(`retry them with:   --celex-file ${failedOutPath} --apply`);
+}
 if (haltReason !== null) {
   console.log(`halted:            ${haltReason}`);
 }

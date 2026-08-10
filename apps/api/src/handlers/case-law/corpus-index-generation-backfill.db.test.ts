@@ -2587,6 +2587,58 @@ test(
 );
 
 test(
+  "an incomplete walk is driven even when nothing is pending",
+  async () => {
+    // The drain empties the pending queue on the same invocations that
+    // advance the walk, so "checkpoint exists, nothing pending" is now the
+    // steady state of a quiet corpus mid-rebuild. Routed to the incremental
+    // path, the snapshot cursor would never advance again and the
+    // generation would sit at `running` forever.
+    const generation = "case_law_v65";
+    const boundary = (
+      await db
+        .select({
+          createdAtToken: timestampCasToken(caseLawDecisions.createdAt),
+          id: caseLawDecisions.id,
+        })
+        .from(caseLawDecisions)
+        .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+        .limit(1)
+    ).at(0);
+    if (!boundary) {
+      throw new Error("expected seeded decisions");
+    }
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      cursorCreatedAt: sql`${boundary.createdAtToken}::timestamptz`,
+      cursorId: boundary.id,
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "running",
+    });
+
+    try {
+      // The cursor already sits at the last decision, so driving the walk
+      // one page observes the drained snapshot and completes. The checkpoint
+      // flip is the discriminating assertion: the routing defect sends the
+      // call to the incremental path, which leaves the status at `running`
+      // without ever touching the walk.
+      expect(await backfillCorpusIndex(scopedDb, 10, generation)).toEqual({
+        indexed: 0,
+        status: "complete",
+      });
+      expect(await readCheckpoint(generation)).toMatchObject({
+        status: "complete",
+      });
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "drains pending projections while the generation is still running",
   async () => {
     // The wedge this guards: with the drain tied to a completed walk, a
