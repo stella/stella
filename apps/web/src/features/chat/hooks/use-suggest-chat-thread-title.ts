@@ -8,7 +8,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -24,8 +24,8 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
 
   const suggest = async (): Promise<string | null> => {
     setIsPending(true);
-    const result = await Result.tryPromise(
-      async () =>
+    const result = await Result.tryPromise(async () =>
+      unwrapEden(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
           .title.suggest.post(undefined, {
@@ -34,6 +34,7 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
                 ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
                 : {},
           }),
+      ),
     );
     setIsPending(false);
 
@@ -42,13 +43,8 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
       return null;
     }
-    if (result.value.error) {
-      getAnalytics().captureError(toAPIError(result.value.error));
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-      return null;
-    }
 
-    return result.value.data.title;
+    return result.value.title;
   };
 
   return { suggest, isPending };
