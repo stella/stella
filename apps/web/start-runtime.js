@@ -1,4 +1,5 @@
 import { env, file, serve } from "bun";
+import { fileURLToPath } from "node:url";
 
 import handler from "./dist/server/server.js";
 
@@ -41,6 +42,90 @@ const createStartHandler = (candidate) => {
 };
 
 const startHandler = createStartHandler(handler);
+
+const SERVER_DIST_URL = new URL("dist/server/", import.meta.url);
+
+/**
+ * @param {unknown} error Import failure.
+ * @returns {boolean} Whether the failure broke module resolution or linking.
+ */
+const isModuleGraphError = (error) =>
+  typeof error === "object" &&
+  error !== null &&
+  (("name" in error && error.name === "ResolveMessage") ||
+    ("code" in error && error.code === "ERR_MODULE_NOT_FOUND") ||
+    // Linking failures (e.g. an import binding the resolved file does not
+    // export) surface as SyntaxError, never from evaluating browser-only
+    // code — evaluation happens after the whole subtree linked.
+    error instanceof SyntaxError);
+
+/**
+ * Import the entire server module graph before accepting traffic.
+ *
+ * The SSR bundle externalizes npm dependencies and splits routes into lazily
+ * imported chunks, so a missing runtime dependency otherwise surfaces on the
+ * first request that reaches it — after the deploy's health checks passed and
+ * the previous tasks drained. Loading every chunk here turns that class into
+ * a boot failure: the rollout never becomes healthy and the previous release
+ * keeps serving.
+ *
+ * Only resolution and linking failures are fatal. Some route chunks are
+ * browser-only and throw on evaluation outside a browser (e.g. module-scope
+ * `window` reads); ESM links the full static subtree before evaluating, so
+ * tolerating those cannot hide a broken module graph.
+ *
+ * @returns {Promise<number>} Number of server modules resolved.
+ */
+const loadServerModuleGraph = async () => {
+  const chunkGlob = new Bun.Glob("**/*.js");
+  const chunkPaths = await Array.fromAsync(
+    chunkGlob.scan({ cwd: fileURLToPath(SERVER_DIST_URL) }),
+  );
+  if (chunkPaths.length === 0) {
+    throw new Error("dist/server contains no modules; broken build output");
+  }
+
+  const results = await Promise.all(
+    chunkPaths.map(async (chunkPath) => {
+      try {
+        await import(new URL(chunkPath, SERVER_DIST_URL).href);
+        return null;
+      } catch (error) {
+        return { chunkPath, error };
+      }
+    }),
+  );
+  const failures = results.filter((result) => result !== null);
+  /** @param {{ chunkPath: string, error: unknown }} failure Failed chunk import. */
+  const describe = ({ chunkPath, error }) =>
+    `dist/server/${chunkPath}: ${error instanceof Error ? error.message : String(error)}`;
+  for (const failure of failures.filter(
+    ({ error }) => !isModuleGraphError(error),
+  )) {
+    // eslint-disable-next-line no-console -- boot boundary; the wrapper has no logger and this must reach container logs
+    console.warn(
+      `server chunk threw on evaluation (browser-only chunk, tolerated) — ${describe(failure)}`,
+    );
+  }
+  const fatal = failures.filter(({ error }) => isModuleGraphError(error));
+  if (fatal.length > 0) {
+    throw new Error(
+      `server module graph failed to resolve:\n${fatal.map(describe).join("\n")}`,
+    );
+  }
+
+  return chunkPaths.length - failures.length;
+};
+
+const serverModuleCount = await loadServerModuleGraph();
+
+// `--smoke` proves the graph resolves inside a candidate filesystem (the
+// Docker runner stage, CI) without binding a port, then exits.
+if (process.argv.includes("--smoke")) {
+  // eslint-disable-next-line no-console -- smoke-mode proof line for image build and CI logs
+  console.log(`web runtime ok: ${serverModuleCount} server modules resolved`);
+  process.exit(0);
+}
 
 /**
  * @param {Response} response Response to make compatible with wasm worker isolation.

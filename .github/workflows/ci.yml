@@ -50,6 +50,7 @@ jobs:
       ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
+      web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
       - name: Check if PR is trusted
@@ -102,6 +103,7 @@ jobs:
               echo "ocr_image_required=true"
               echo "package_checks_required=true"
               echo "web_build_required=true"
+              echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -123,6 +125,7 @@ jobs:
               echo "ocr_image_required=false"
               echo "package_checks_required=true"
               echo "web_build_required=false"
+              echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -155,6 +158,7 @@ jobs:
           mobile_build_required=false
           ocr_image_required=false
           web_build_required=false
+          web_image_smoke_required=false
           windows_scripts_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
@@ -197,6 +201,17 @@ jobs:
                 windows_scripts_required=true
                 ;;
             esac
+            # The runner-image filesystem boundary: anything that changes what
+            # the image ships or how its runtime closure is staged. Workspace
+            # manifests shape staging (exports maps, build scripts) and
+            # vite.config.ts decides what stays external to the SSR bundle;
+            # ordinary app-source changes are covered by web-build's cheaper
+            # in-checkout boot smoke instead of a full image build.
+            case "$file" in
+              apps/web/Dockerfile|apps/web/start-runtime.js|apps/web/vite.config.ts|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+                web_image_smoke_required=true
+                ;;
+            esac
           done
 
           # The production e2e shards consume web-build's artifact, so any
@@ -219,6 +234,7 @@ jobs:
             echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
             echo "web_build_required=$web_build_required"
+            echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
           } >> "$GITHUB_OUTPUT"
 
@@ -797,6 +813,13 @@ jobs:
       - name: Test @stll resolution pin
         run: bun test scripts/stll-registry-resolutions.test.ts
 
+      # The runner image stages workspace packages reached by externalized
+      # runtime dependencies. Guard the closure derivation and the
+      # manifest-only-fails / staged-succeeds property.
+      - name: Test web runtime staging
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/stage-web-runtime.test.ts
+
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
@@ -1098,9 +1121,11 @@ jobs:
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot start-runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
-        # fails to resolve here rather than at deploy time. /health is served by
-        # the runtime wrapper, so a clean boot proves the production module graph
-        # resolves.
+        # fails to resolve here rather than at deploy time. start-runtime.js
+        # imports the full server module graph before serving, so a reachable
+        # /health proves every chunk's dependencies resolve — but only against
+        # this checkout's filesystem; the web-image-smoke job covers the
+        # runner image's stricter boundary.
         env:
           NPM_TOKEN: ""
         run: |
@@ -1129,6 +1154,61 @@ jobs:
             echo "web SSR runtime failed to boot under --production deps" >&2
             exit 1
           fi
+
+  # The prod-deps boot smoke above runs inside a full checkout, where
+  # workspace sources exist and can mask the runner image's filesystem
+  # boundary. Build the real runner
+  # image: the Dockerfile stages the runtime workspace closure and proves the
+  # full server module graph resolves (`start-runtime.js --smoke`) against
+  # the exact tree that ships, then boot the container across that boundary.
+  web-image-smoke:
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.web_image_smoke_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build runner image
+        run: >-
+          docker build
+          --file apps/web/Dockerfile
+          --build-arg PUBLIC_API_URL=https://api.smoke.invalid
+          --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
+          --tag stella-web-runner:ci
+          .
+
+      - name: Boot runner container
+        run: |
+          set -euo pipefail
+          docker run --detach --name web-runner \
+            --publish 127.0.0.1:3199:3002 stella-web-runner:ci
+          ready=
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          docker logs web-runner
+          if [[ "$ready" != "1" ]]; then
+            echo "web runner image failed to serve /health" >&2
+            exit 1
+          fi
+
+      - name: Cleanup runner container
+        if: always()
+        run: docker rm --force web-runner 2>/dev/null || true
 
   # Expo/Metro bundle smoke. TypeScript and lint do not exercise Babel,
   # autolinking, or platform-specific module resolution, so keep one path-
@@ -1974,6 +2054,7 @@ jobs:
         postgres-suites,
         typecheck-baseline,
         web-build,
+        web-image-smoke,
         mobile-build,
         landing-build,
         e2e,
@@ -2006,6 +2087,7 @@ jobs:
           POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
+          WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
           # When the CI plan was skipped (draft PR or
@@ -2023,6 +2105,7 @@ jobs:
                   || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
+                  || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" \
                   || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
@@ -2056,12 +2139,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
