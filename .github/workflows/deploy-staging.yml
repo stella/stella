@@ -49,6 +49,7 @@ jobs:
         id: probe
         env:
           STAGING_HEALTH_URL: https://api-staging.stll.app/ready
+          STAGING_LEGACY_HEALTH_URL: https://api-staging.stll.app/health
         run: |
           set -euo pipefail
 
@@ -73,6 +74,22 @@ jobs:
                 "$STAGING_HEALTH_URL"
             )"; then
               http_status="000"
+            fi
+
+            if [[ "$http_status" == "404" ]]; then
+              echo "Staging does not expose /ready; checking the legacy /health endpoint."
+              if ! http_status="$(
+                curl \
+                  --connect-timeout 5 \
+                  --max-time 10 \
+                  --output "$response_file" \
+                  --silent \
+                  --show-error \
+                  --write-out '%{http_code}' \
+                  "$STAGING_LEGACY_HEALTH_URL"
+              )"; then
+                http_status="000"
+              fi
             fi
 
             if [[ "$http_status" == "200" ]] &&

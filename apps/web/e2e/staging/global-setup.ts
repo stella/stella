@@ -155,7 +155,7 @@ const ORIGINS: Origin[] = [
         allowMissingMarker: false,
         expectedCommit,
         label: "api",
-        url: `${API_URL}/health`,
+        url: `${API_URL}/ready`,
       }),
   },
   {
