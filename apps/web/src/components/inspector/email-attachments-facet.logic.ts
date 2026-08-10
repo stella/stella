@@ -1,3 +1,10 @@
+import { panic } from "better-result";
+
+import {
+  EMAIL_TEXT_ATTACHMENT_CHARSET,
+  type EmailTextAttachmentCharset,
+} from "@stll/api-contract";
+
 export const EMAIL_ATTACHMENT_PREVIEW_KIND = {
   image: "image",
   pdf: "pdf",
@@ -36,17 +43,27 @@ export const getEmailAttachmentPreviewKind = (
 
 const getByteOrderMarkEncoding = (
   bytes: Uint8Array,
-): "utf-16be" | "utf-16le" | "utf-8" | null => {
+): EmailTextAttachmentCharset | null => {
   if (bytes.at(0) === 0xef && bytes.at(1) === 0xbb && bytes.at(2) === 0xbf) {
-    return "utf-8";
+    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
   }
   if (bytes.at(0) === 0xff && bytes.at(1) === 0xfe) {
-    return "utf-16le";
+    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le;
   }
   if (bytes.at(0) === 0xfe && bytes.at(1) === 0xff) {
-    return "utf-16be";
+    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be;
   }
   return null;
+};
+
+const decodeUtf16Be = (bytes: Uint8Array): string => {
+  const completeByteLength = bytes.byteLength - (bytes.byteLength % 2);
+  const littleEndianBytes = new Uint8Array(completeByteLength);
+  for (let index = 0; index < completeByteLength; index += 2) {
+    littleEndianBytes[index] = bytes[index + 1] ?? 0;
+    littleEndianBytes[index + 1] = bytes[index] ?? 0;
+  }
+  return new TextDecoder("utf-16").decode(littleEndianBytes);
 };
 
 export const decodeEmailTextAttachment = ({
@@ -54,11 +71,26 @@ export const decodeEmailTextAttachment = ({
   charset,
 }: {
   buffer: ArrayBuffer;
-  charset: string | null;
+  charset: EmailTextAttachmentCharset | null;
 }): string => {
   const bytes = new Uint8Array(buffer);
-  const encoding = charset ?? getByteOrderMarkEncoding(bytes) ?? "utf-8";
-  return new TextDecoder(encoding).decode(bytes);
+  const encoding =
+    charset ??
+    getByteOrderMarkEncoding(bytes) ??
+    EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
+  switch (encoding) {
+    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf8:
+      return new TextDecoder().decode(bytes);
+    case EMAIL_TEXT_ATTACHMENT_CHARSET.windows1252:
+      return new TextDecoder("windows-1252").decode(bytes);
+    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le:
+      return new TextDecoder("utf-16").decode(bytes);
+    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be:
+      return decodeUtf16Be(bytes);
+    default:
+      encoding satisfies never;
+      return panic("Unsupported email attachment charset");
+  }
 };
 
 export const getEmailAttachmentActivationId = ({

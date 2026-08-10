@@ -16,7 +16,11 @@ import { type Cheerio, load } from "cheerio";
 import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
-import { EMAIL_HEADER_CITATION_ID } from "@stll/api-contract";
+import {
+  EMAIL_HEADER_CITATION_ID,
+  EMAIL_TEXT_ATTACHMENT_CHARSET,
+  type EmailTextAttachmentCharset,
+} from "@stll/api-contract";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
@@ -96,7 +100,7 @@ export class EmailParseError extends TaggedError("EmailParseError")<{
 type InlineImage = { cid: string; mimeType: string; dataBase64: string };
 
 export type EmailAttachment = {
-  charset: string | null;
+  charset: EmailTextAttachmentCharset | null;
   contentId: string | null;
   fileName: string | null;
   mimeType: string | null;
@@ -104,7 +108,7 @@ export type EmailAttachment = {
 };
 
 export type EmailAttachmentDescriptor = {
-  charset: string | null;
+  charset: EmailTextAttachmentCharset | null;
   id: string;
   fileName: string | null;
   mimeType: string | null;
@@ -333,7 +337,9 @@ export const parsedEmailToText = (parsed: ParsedEmail): string => {
 
 // ── .eml parsing (postal-mime) ──────────────────────────
 
-const normalizeEmailAttachmentCharset = (value: unknown): string | null => {
+const normalizeEmailAttachmentCharset = (
+  value: unknown,
+): EmailTextAttachmentCharset | null => {
   const normalized = typeof value === "string" ? value.trim() : "";
   if (
     normalized.length === 0 ||
@@ -343,12 +349,29 @@ const normalizeEmailAttachmentCharset = (value: unknown): string | null => {
     return null;
   }
 
-  return Result.try(() => new TextDecoder(normalized).encoding).unwrapOr(null);
+  switch (normalized) {
+    case "cp1252":
+    case "iso-8859-1":
+    case "latin1":
+    case "windows-1252":
+      return EMAIL_TEXT_ATTACHMENT_CHARSET.windows1252;
+    case "us-ascii":
+    case "utf-8":
+    case "utf8":
+      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
+    case "utf-16":
+    case "utf-16le":
+      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le;
+    case "utf-16be":
+      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be;
+    default:
+      return null;
+  }
 };
 
 const resolveEmailAttachmentCharset = (
   mimeType: string | null,
-): string | null => {
+): EmailTextAttachmentCharset | null => {
   if (!mimeType) {
     return null;
   }
@@ -364,7 +387,7 @@ const resolveEmailAttachmentCharset = (
 const findPostalMimeAttachmentCharset = (
   parser: unknown,
   attachmentContent: unknown,
-): string | null => {
+): EmailTextAttachmentCharset | null => {
   // PostalMime omits attachment Content-Type parameters from its public
   // result. Its parsed node retains them; guard every lookup so an upstream
   // shape change degrades to BOM/UTF-8 decoding instead of breaking preview.
@@ -372,7 +395,7 @@ const findPostalMimeAttachmentCharset = (
     return null;
   }
 
-  const visit = (node: unknown): string | null => {
+  const visit = (node: unknown): EmailTextAttachmentCharset | null => {
     if (!isRecord(node)) {
       return null;
     }

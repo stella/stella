@@ -450,7 +450,7 @@ const AttachmentPreviewContent = ({
   previewTruncated,
   scaleOffset,
 }: {
-  charset: string | null;
+  charset: EmailAttachmentDescriptor["charset"];
   fileName: string;
   imageFailed: boolean;
   imageAttempt: number;
