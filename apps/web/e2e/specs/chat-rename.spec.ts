@@ -63,10 +63,12 @@ test("breadcrumb rename with suggestion propagates to the threads sheet", async 
     breadcrumb.getByRole("button", { name: committedTitle }),
   ).toBeVisible({ timeout: 30_000 });
 
-  // The threads sheet lists the same thread under the new title.
+  // The threads sheet lists the same thread under the new title. `.first()`
+  // because reruns against a persistent local database accumulate threads
+  // carrying this same deterministic title; one visible match is the signal.
   await page.getByRole("button", { name: "History" }).click();
   const sheet = page.getByRole("dialog");
-  await expect(sheet.getByText(committedTitle)).toBeVisible({
+  await expect(sheet.getByText(committedTitle).first()).toBeVisible({
     timeout: 30_000,
   });
 });

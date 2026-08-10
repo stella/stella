@@ -2655,7 +2655,12 @@ export const chatThreadTitleOptions = ({
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
-    refetchType: "inactive",
+    // "all", not "inactive": the threads sheet keeps an always-mounted
+    // observer (15 min staleTime, no focus refetch), so an active entry
+    // marked stale has no later trigger and would render the pre-mutation
+    // list until remount — e.g. "No conversations yet" right after the
+    // first send, or a stale title after a rename.
+    refetchType: "all",
     // Match every cached `["chat", <orgId>, "threads", "grouped"]` entry —
     // we cannot reconstruct orgId here so we walk by structural shape.
     predicate: (query) => {
