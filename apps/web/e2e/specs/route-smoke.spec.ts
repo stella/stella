@@ -14,6 +14,10 @@ import {
   resolveE2eExecutionProfile,
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
+import {
+  E2E_CLEANUP_TARGET_TYPE,
+  registerDeferredE2eCleanup,
+} from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import {
   type RouteNetworkMetrics,
@@ -253,12 +257,14 @@ const declareRouteSmokeGroup = ({
     let context: BrowserContext;
     let world: SmokeWorld | null = null;
     // Recorded the moment each fixture is created (not only after the whole
-    // setup succeeds), so a failure mid-setup still tears down what exists.
+    // setup succeeds), so a registry failure still tears down what exists.
     let createdWorkspace: SmokeWorld["workspace"] | null = null;
     let createdContactId: string | null = null;
+    let workspaceCleanupRegistered = false;
+    let contactCleanupRegistered = false;
     const networkResults = new Map<string, RouteNetworkMetrics>();
 
-    test.beforeAll(async ({ browser }) => {
+    test.beforeAll(async ({ browser }, testInfo) => {
       apiRequest = await apiRequestFactory.newContext({
         storageState: STORAGE_STATE,
       });
@@ -266,8 +272,18 @@ const declareRouteSmokeGroup = ({
 
       const workspace = await createTestWorkspace(apiRequest, "route-smoke");
       createdWorkspace = workspace;
+      await registerDeferredE2eCleanup(testInfo.project.outputDir, {
+        type: E2E_CLEANUP_TARGET_TYPE.WORKSPACE,
+        id: workspace.id,
+      });
+      workspaceCleanupRegistered = true;
       const contactId = await createContact(apiRequest);
       createdContactId = contactId;
+      await registerDeferredE2eCleanup(testInfo.project.outputDir, {
+        type: E2E_CLEANUP_TARGET_TYPE.CONTACT,
+        id: contactId,
+      });
+      contactCleanupRegistered = true;
       const documentRoute = await createUploadedDocumentRoute({
         fileName: "route-smoke.docx",
         request: apiRequest,
@@ -277,20 +293,18 @@ const declareRouteSmokeGroup = ({
     });
 
     test.afterAll(async () => {
-      // Best-effort but total: attempt every teardown step even if one throws,
-      // so a single failure cannot strand the other fixture or leak the browser
-      // context / request context. Runs on the beforeAll-owned request context
-      // (not a per-test fixture), so it cannot race a timing-out test body into
-      // the "context closed" masking error.
+      // Registered API fixtures are deleted by global teardown after every
+      // measured page is closed. Only registry failures fall back to immediate
+      // cleanup here; the run is already failing in that case.
       const failures: unknown[] = [];
-      if (createdContactId !== null) {
+      if (createdContactId !== null && !contactCleanupRegistered) {
         try {
           await apiDelete(apiRequest, `/contacts/${createdContactId}`);
         } catch (error) {
           failures.push(error);
         }
       }
-      if (createdWorkspace !== null) {
+      if (createdWorkspace !== null && !workspaceCleanupRegistered) {
         try {
           await deleteTestWorkspace(apiRequest, createdWorkspace.id);
         } catch (error) {
