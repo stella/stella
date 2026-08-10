@@ -14,7 +14,7 @@ Project: desktop-tauri
 - alloc-stdlib 0.2.4 — BSD-3-Clause
 - android_system_properties 0.1.5 — MIT/Apache-2.0
 - anyhow 1.0.104 — Apache-2.0 OR MIT
-- apple-native-keyring-store 1.0.1 — Apache-2.0 OR MIT
+- apple-native-keyring-store 1.0.2 — Apache-2.0 OR MIT
 - arbitrary 1.4.2 — Apache-2.0 OR MIT
 - arboard 3.6.1 — Apache-2.0 OR MIT
 - async-broadcast 0.7.2 — Apache-2.0 OR MIT

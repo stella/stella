@@ -152,6 +152,12 @@
             "location": "apps/web/src/lib/chat-anonymized-store.ts#1"
           },
           {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/email-citations.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -578,7 +584,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
@@ -638,6 +644,9 @@
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
           },
           {
@@ -666,6 +675,15 @@
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#1"
@@ -2596,7 +2614,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1101.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1102.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2648,13 +2666,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1101.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1102.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1101.0"
+      "version": "3.1102.0"
     },
     {
       "authors": [
@@ -2662,7 +2680,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1101.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1102.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2711,13 +2729,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1101.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1102.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1101.0"
+      "version": "3.1102.0"
     },
     {
       "authors": [
@@ -2725,7 +2743,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1101.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1102.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2774,13 +2792,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1101.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1102.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1101.0"
+      "version": "3.1102.0"
     },
     {
       "authors": [
@@ -2788,7 +2806,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1101.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1102.0",
       "evidence": {
         "identity": [
           {
@@ -2836,13 +2854,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1101.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1102.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1101.0"
+      "version": "3.1102.0"
     },
     {
       "authors": [
@@ -3113,6 +3131,12 @@
           },
           {
             "location": "apps/web/src/lib/chat-anonymized-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
@@ -3541,7 +3565,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
@@ -3601,6 +3625,9 @@
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
           },
           {
@@ -3629,6 +3656,15 @@
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#1"
@@ -5863,6 +5899,12 @@
             "location": "apps/web/src/lib/chat-anonymized-store.ts#1"
           },
           {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/email-citations.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -6289,7 +6331,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
@@ -6349,6 +6391,9 @@
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
           },
           {
@@ -6377,6 +6422,15 @@
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#1"
@@ -7671,6 +7725,69 @@
       "scope": "required",
       "type": "library",
       "version": "2.6.2"
+    },
+    {
+      "authors": [
+        {
+          "name": "Yuki Yokotani <silurus.dev@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/@silurus/ooxml@0.76.2",
+      "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@silurus/ooxml/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@silurus/ooxml/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ooxml.silurus.dev"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/yukiyokotani/office-open-xml-viewer.git"
+        }
+      ],
+      "group": "@silurus",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ooxml",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@silurus/ooxml/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40silurus/ooxml@0.76.2",
+      "scope": "required",
+      "tags": [
+        "xml"
+      ],
+      "type": "library",
+      "version": "0.76.2"
     },
     {
       "authors": [
@@ -9809,6 +9926,9 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-verified-email-citation-target.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/queries.ts#1"
           },
           {
@@ -10079,7 +10199,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#18"
+            "location": "apps/web/src/components/app-sidebar.tsx#22"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#4"
@@ -10163,6 +10283,9 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#3"
           },
           {
@@ -10194,6 +10317,9 @@
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#5"
@@ -10696,7 +10822,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router-devtools@1.167.0",
+      "bom-ref": "pkg:npm/@tanstack/react-router-devtools@1.167.1",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10745,10 +10871,10 @@
           "value": "node_modules/@tanstack/react-router-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router-devtools@1.167.0",
+      "purl": "pkg:npm/%40tanstack/react-router-devtools@1.167.1",
       "scope": "required",
       "type": "library",
-      "version": "1.167.0"
+      "version": "1.167.1"
     },
     {
       "authors": [
@@ -10816,7 +10942,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.18",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.19",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10907,7 +11033,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#24"
+            "location": "apps/web/src/components/app-sidebar.tsx#28"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#5"
@@ -11444,10 +11570,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.18",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.19",
       "scope": "required",
       "type": "library",
-      "version": "1.170.18"
+      "version": "1.170.19"
     },
     {
       "authors": [
@@ -11455,7 +11581,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.34",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.36",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -11519,10 +11645,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.34",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.36",
       "scope": "required",
       "type": "library",
-      "version": "1.168.34"
+      "version": "1.168.36"
     },
     {
       "authors": [
@@ -12498,6 +12624,9 @@
             "location": "apps/web/src/components/chat-mention-extension.ts#2"
           },
           {
+            "location": "apps/web/src/components/chat-mention-node-attrs.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#3"
           },
           {
@@ -12505,6 +12634,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-field-mention-extension.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/chat-mention-list.tsx#5"
           }
         ]
       },
@@ -12950,6 +13082,12 @@
             "location": "apps/web/src/lib/chat-anonymized-store.ts#1"
           },
           {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/email-citations.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -13376,7 +13514,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
@@ -13436,6 +13574,9 @@
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
           },
           {
@@ -13464,6 +13605,15 @@
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#1"
@@ -14511,7 +14661,7 @@
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-mention-list.tsx#5"
+            "location": "apps/web/src/components/chat-mention-list.tsx#6"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/mention-list.tsx#4"
@@ -15087,6 +15237,12 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry-lazy.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#1"
           },
           {
@@ -15297,6 +15453,12 @@
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/input-ref-hydration.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/output-ref-resolution.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts#1"
           },
           {
@@ -15456,9 +15618,6 @@
             "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-version-from-buffer.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/entities/create.ts#1"
           },
           {
@@ -15604,6 +15763,18 @@
           },
           {
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment-loader.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment-save-scan.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/get.ts#1"
@@ -16572,6 +16743,9 @@
             "location": "apps/api/src/lib/agent-skills/skills.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ai-config-response.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
@@ -16585,6 +16759,9 @@
           },
           {
             "location": "apps/api/src/lib/api-handlers.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/audit-log.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth.ts#19"
@@ -16626,6 +16803,9 @@
             "location": "apps/api/src/lib/chat/ref-registry.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/ref-token.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat-model-selection.ts#1"
           },
           {
@@ -16642,6 +16822,9 @@
           },
           {
             "location": "apps/api/src/lib/data-url.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/migration-history.ts#1"
@@ -16692,7 +16875,10 @@
             "location": "apps/api/src/lib/entity-deletion-cleanup-queue.ts#1"
           },
           {
-            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#16"
+            "location": "apps/api/src/lib/entity-filters.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#1"
           },
           {
             "location": "apps/api/src/lib/entity-versions/load-entity-version-docx-buffer.ts#12"
@@ -16747,6 +16933,9 @@
           },
           {
             "location": "apps/api/src/lib/groupable-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/health/readiness.ts#1"
           },
           {
             "location": "apps/api/src/lib/hosted-usage-provider/client.ts#3"
@@ -17094,13 +17283,25 @@
             "location": "apps/web/src/components/chat/use-chat-model-selection.ts#3"
           },
           {
+            "location": "apps/web/src/components/docx/docx-browser-editor.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-edit-session.ts#11"
+          },
+          {
             "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/inspector/email-html-viewer.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-download-service.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/tasks/task-links.logic.ts#1"
           },
           {
             "location": "apps/web/src/env.ts#2"
@@ -17179,6 +17380,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-model.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-clause-field-save.ts#1"
@@ -17319,6 +17523,9 @@
             "location": "packages/cli/src/upload-document.ts#1"
           },
           {
+            "location": "packages/conditions/src/evaluate.ts#8"
+          },
+          {
             "location": "packages/errors/src/index.ts#1"
           },
           {
@@ -17385,6 +17592,9 @@
             "location": "scripts/ratchet.ts#27"
           },
           {
+            "location": "scripts/selfhost-tool.ts#2"
+          },
+          {
             "location": "scripts/sync-lockfile-workspace-versions.ts#3"
           },
           {
@@ -17439,7 +17649,13 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#4"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#7"
@@ -17756,6 +17972,12 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry-lazy.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#1"
           },
           {
@@ -17966,6 +18188,12 @@
             "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/input-ref-hydration.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/output-ref-resolution.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts#1"
           },
           {
@@ -18125,9 +18353,6 @@
             "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-version-from-buffer.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/entities/create.ts#1"
           },
           {
@@ -18273,6 +18498,18 @@
           },
           {
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment-loader.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment-save-scan.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/get.ts#1"
@@ -19241,6 +19478,9 @@
             "location": "apps/api/src/lib/agent-skills/skills.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ai-config-response.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
@@ -19254,6 +19494,9 @@
           },
           {
             "location": "apps/api/src/lib/api-handlers.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/audit-log.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth.ts#19"
@@ -19295,6 +19538,9 @@
             "location": "apps/api/src/lib/chat/ref-registry.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/ref-token.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat-model-selection.ts#1"
           },
           {
@@ -19311,6 +19557,9 @@
           },
           {
             "location": "apps/api/src/lib/data-url.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/migration-history.ts#1"
@@ -19361,7 +19610,10 @@
             "location": "apps/api/src/lib/entity-deletion-cleanup-queue.ts#1"
           },
           {
-            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#16"
+            "location": "apps/api/src/lib/entity-filters.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#1"
           },
           {
             "location": "apps/api/src/lib/entity-versions/load-entity-version-docx-buffer.ts#12"
@@ -19416,6 +19668,9 @@
           },
           {
             "location": "apps/api/src/lib/groupable-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/health/readiness.ts#1"
           },
           {
             "location": "apps/api/src/lib/hosted-usage-provider/client.ts#3"
@@ -19763,13 +20018,25 @@
             "location": "apps/web/src/components/chat/use-chat-model-selection.ts#3"
           },
           {
+            "location": "apps/web/src/components/docx/docx-browser-editor.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-edit-session.ts#11"
+          },
+          {
             "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/inspector/email-html-viewer.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-download-service.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/tasks/task-links.logic.ts#1"
           },
           {
             "location": "apps/web/src/env.ts#2"
@@ -19848,6 +20115,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-model.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-clause-field-save.ts#1"
@@ -19988,6 +20258,9 @@
             "location": "packages/cli/src/upload-document.ts#1"
           },
           {
+            "location": "packages/conditions/src/evaluate.ts#8"
+          },
+          {
             "location": "packages/errors/src/index.ts#1"
           },
           {
@@ -20054,6 +20327,9 @@
             "location": "scripts/ratchet.ts#27"
           },
           {
+            "location": "scripts/selfhost-tool.ts#2"
+          },
+          {
             "location": "scripts/sync-lockfile-workspace-versions.ts#3"
           },
           {
@@ -20108,7 +20384,13 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#4"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#7"
@@ -20248,7 +20530,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.0.5",
+      "bom-ref": "pkg:npm/bullmq@6.0.6",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -20333,10 +20615,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.0.5",
+      "purl": "pkg:npm/bullmq@6.0.6",
       "scope": "required",
       "type": "library",
-      "version": "6.0.5"
+      "version": "6.0.6"
     },
     {
       "authors": [
@@ -21637,9 +21919,6 @@
             "location": "apps/api/src/handlers/entities/copy-utils.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/create-version-from-buffer.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/entities/create.ts#2"
           },
           {
@@ -21758,6 +22037,9 @@
           },
           {
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment-loader.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/get.ts#2"
@@ -22441,7 +22723,7 @@
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
           },
           {
-            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/timestamp-cas.ts#1"
@@ -22516,16 +22798,16 @@
             "location": "apps/api/src/lib/entity-deletion-cleanup-queue.ts#3"
           },
           {
-            "location": "apps/api/src/lib/entity-filters.ts#1"
+            "location": "apps/api/src/lib/entity-filters.ts#2"
           },
           {
-            "location": "apps/api/src/lib/entity-filters.ts#2"
+            "location": "apps/api/src/lib/entity-filters.ts#3"
           },
           {
             "location": "apps/api/src/lib/entity-versions/compute-version-diff.ts#1"
           },
           {
-            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#17"
+            "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#2"
           },
           {
             "location": "apps/api/src/lib/entity-versions/desktop-edit-session-utils.ts#1"
@@ -23632,6 +23914,12 @@
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/files/email-attachment/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/files/email-attachment.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/files/get.ts#3"
           },
           {
@@ -23663,6 +23951,9 @@
           },
           {
             "location": "apps/api/src/handlers/health/routes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/health/routes.ts#3"
           },
           {
             "location": "apps/api/src/handlers/hosted-usage-webhook/routes.ts#13"
@@ -24122,9 +24413,6 @@
           },
           {
             "location": "apps/api/src/handlers/tasks/entity-links-create.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/entity-links-create.ts#3"
           },
           {
             "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#3"
@@ -25081,6 +25369,89 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/agent-auth/id-jag.ts#3"
+          },
+          {
+            "location": "apps/api/src/agent-auth/id-jag.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/agent-auth-idjag.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/agent-auth-idjag.ts#10"
+          },
+          {
+            "location": "apps/api/src/mcp/auth.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/panva/jose"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "jose",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/better-auth/node_modules/jose/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@modelcontextprotocol/sdk/node_modules/jose/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@modelcontextprotocol/client/node_modules/jose/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
+        }
+      ],
+      "purl": "pkg:npm/jose@6.2.7",
+      "scope": "required",
+      "tags": [
+        "security"
+      ],
+      "type": "library",
+      "version": "6.2.7"
+    },
+    {
+      "authors": [
+        {
+          "name": "Filip Skokan <panva.ip@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/jose@6.2.8",
+      "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/jose/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -25133,13 +25504,13 @@
           "value": "node_modules/jose/package.json"
         }
       ],
-      "purl": "pkg:npm/jose@6.2.7",
+      "purl": "pkg:npm/jose@6.2.8",
       "scope": "required",
       "tags": [
         "security"
       ],
       "type": "library",
-      "version": "6.2.7"
+      "version": "6.2.8"
     },
     {
       "authors": [
@@ -25248,7 +25619,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.27.0",
+      "bom-ref": "pkg:npm/lucide-react@1.28.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -25321,7 +25692,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#35"
+            "location": "apps/web/src/components/app-sidebar.tsx#39"
           },
           {
             "location": "apps/web/src/components/catalogue/catalogue-entry-icon.tsx#1"
@@ -25375,7 +25746,7 @@
             "location": "apps/web/src/components/chat/spawn-subagents-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#10"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#11"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#11"
@@ -25390,7 +25761,7 @@
             "location": "apps/web/src/components/chat/web-search-sources.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat-mention-list.tsx#11"
+            "location": "apps/web/src/components/chat-mention-list.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat-mention-node.tsx#3"
@@ -25444,10 +25815,13 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
           },
           {
+            "location": "apps/web/src/components/inspector/desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#3"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#4"
@@ -25840,7 +26214,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.tsx#16"
+            "location": "apps/web/src/routes/_protected.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
@@ -26176,13 +26550,13 @@
           "value": "node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.27.0",
+      "purl": "pkg:npm/lucide-react@1.28.0",
       "scope": "required",
       "tags": [
         "network"
       ],
       "type": "library",
-      "version": "1.27.0"
+      "version": "1.28.0"
     },
     {
       "authors": [
@@ -26381,7 +26755,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.409.5",
+      "bom-ref": "pkg:npm/posthog-js@1.410.6",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -26437,10 +26811,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.409.5",
+      "purl": "pkg:npm/posthog-js@1.410.6",
       "scope": "required",
       "type": "library",
-      "version": "1.409.5"
+      "version": "1.410.6"
     },
     {
       "authors": [
@@ -26448,7 +26822,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.47.3",
+      "bom-ref": "pkg:npm/posthog-node@5.47.7",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -26493,10 +26867,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.47.3",
+      "purl": "pkg:npm/posthog-node@5.47.7",
       "scope": "required",
       "type": "library",
-      "version": "5.47.3"
+      "version": "5.47.7"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -27458,6 +27832,12 @@
             "location": "apps/web/src/lib/chat-anonymized-store.ts#1"
           },
           {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/email-citations.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -27884,7 +28264,7 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
@@ -27944,6 +28324,9 @@
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
           },
           {
@@ -27972,6 +28355,15 @@
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/silurus-office-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#1"
@@ -29165,6 +29557,9 @@
             "location": "apps/api/src/lib/docx/template-manifest.ts#15"
           },
           {
+            "location": "apps/api/src/lib/entity-versions/validate-desktop-edit-file-buffer.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/entity-versions/validate-docx-buffer.ts#1"
           }
         ]
@@ -29328,8 +29723,8 @@
           "name": "Jakub Antalik"
         }
       ],
-      "bom-ref": "pkg:npm/thinking-orbs@0.1.1",
-      "description": "Dotted thought-orb loading indicators for AI & agent UIs — six tuned states, two sizes, auto dark/light",
+      "bom-ref": "pkg:npm/thinking-orbs@0.2.0",
+      "description": "Dotted thought-orb loading indicators for AI & agent UIs — nine tuned states, two sizes, auto dark/light",
       "evidence": {
         "identity": [
           {
@@ -29383,13 +29778,13 @@
           "value": "node_modules/thinking-orbs/package.json"
         }
       ],
-      "purl": "pkg:npm/thinking-orbs@0.1.1",
+      "purl": "pkg:npm/thinking-orbs@0.2.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.1.1"
+      "version": "0.2.0"
     },
     {
       "authors": [
@@ -29673,7 +30068,7 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#4"
           },
           {
-            "location": "apps/web/src/components/docx/use-edit-session.ts#11"
+            "location": "apps/web/src/components/docx/use-edit-session.ts#12"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#5"
@@ -29694,7 +30089,7 @@
             "location": "apps/landing/src/components/react/AnonymizeLiveDemo.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#36"
+            "location": "apps/web/src/components/app-sidebar.tsx#40"
           },
           {
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#20"
@@ -29910,7 +30305,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#37"
+            "location": "apps/web/src/components/app-sidebar.tsx#41"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -30018,7 +30413,7 @@
             "location": "apps/web/src/components/chat/spawn-subagents-card.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#11"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
@@ -30039,7 +30434,7 @@
             "location": "apps/web/src/components/chat-input-surface.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat-mention-list.tsx#12"
+            "location": "apps/web/src/components/chat-mention-list.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#12"
@@ -30090,10 +30485,13 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
           },
           {
+            "location": "apps/web/src/components/inspector/desktop-open-button.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#10"
           },
           {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#4"
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#5"
@@ -30132,6 +30530,9 @@
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-rail-context-menu.tsx#2"
           },
           {
@@ -30154,6 +30555,9 @@
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#9"
@@ -30651,7 +31055,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#24"
           },
           {
-            "location": "apps/web/src/routes/_protected.tsx#17"
+            "location": "apps/web/src/routes/_protected.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
@@ -31377,6 +31781,12 @@
             "location": "apps/api/src/lib/hosted-usage-provider/event-schemas.ts#14"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-storage.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/document-types.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/lists/source-locator.ts#1"
           },
           {
@@ -31497,6 +31907,9 @@
             "location": "apps/web/src/lib/dev-otp.ts#2"
           },
           {
+            "location": "apps/web/src/lib/files/queries.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
@@ -31530,7 +31943,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-metadata.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-model.ts#1"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-model.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr.ts#1"
@@ -31551,10 +31964,13 @@
             "location": "packages/anonymize-chat/src/index.ts#1"
           },
           {
-            "location": "packages/api-contract/src/chat.ts#1"
+            "location": "packages/api-contract/src/realtime-events.ts#1"
           },
           {
-            "location": "packages/api-contract/src/realtime-events.ts#1"
+            "location": "packages/api-contract/src/resource-ref.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/safe-id.ts#1"
           },
           {
             "location": "packages/catalogue/scripts/validate.ts#16"
@@ -31605,10 +32021,19 @@
             "location": "packages/legal-ast/src/analysis.ts#5"
           },
           {
+            "location": "packages/legal-ast/src/document-ast.ts#5"
+          },
+          {
+            "location": "packages/legal-ast/src/inline.ts#1"
+          },
+          {
             "location": "scripts/env-catalog.ts#1"
           },
           {
             "location": "scripts/env-tool.ts#14"
+          },
+          {
+            "location": "scripts/selfhost-contract.ts#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
@@ -32010,7 +32435,7 @@
             "location": "apps/web/src/stores/config-store.ts#2"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#38"
+            "location": "apps/web/src/components/app-sidebar.tsx#42"
           },
           {
             "location": "apps/web/src/components/dev-root.tsx#3"
@@ -32100,7 +32525,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#38"
+            "location": "apps/web/src/components/app-sidebar.tsx#42"
           },
           {
             "location": "apps/web/src/components/dev-root.tsx#3"

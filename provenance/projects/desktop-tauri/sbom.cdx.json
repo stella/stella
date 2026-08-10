@@ -328,7 +328,7 @@
       "version": "1.0.104"
     },
     {
-      "bom-ref": "pkg:cargo/apple-native-keyring-store@1.0.1",
+      "bom-ref": "pkg:cargo/apple-native-keyring-store@1.0.2",
       "evidence": {
         "identity": [
           {
@@ -349,7 +349,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "797f94b6a53d7d10b56dc18290e0d40a2158352f108bb4ff32350825081a9f29"
+          "content": "2b350bfd03649e07aa05c0a81b3e15934374e585c98204a57e20b9d49f49bb9a"
         }
       ],
       "licenses": [
@@ -371,12 +371,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/apple-native-keyring-store@1.0.1",
+      "purl": "pkg:cargo/apple-native-keyring-store@1.0.2",
       "tags": [
         "native"
       ],
       "type": "library",
-      "version": "1.0.1"
+      "version": "1.0.2"
     },
     {
       "bom-ref": "pkg:cargo/arbitrary@1.4.2",
@@ -29727,7 +29727,7 @@
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/security-framework@3.7.0"
       ],
-      "ref": "pkg:cargo/apple-native-keyring-store@1.0.1"
+      "ref": "pkg:cargo/apple-native-keyring-store@1.0.2"
     },
     {
       "dependsOn": [
@@ -32695,7 +32695,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/apple-native-keyring-store@1.0.1",
+        "pkg:cargo/apple-native-keyring-store@1.0.2",
         "pkg:cargo/axum@0.8.9",
         "pkg:cargo/chrono@0.4.45",
         "pkg:cargo/dirs@6.0.0",
