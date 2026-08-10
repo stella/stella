@@ -811,7 +811,7 @@
     "@oxlint/plugins": "1.75.0",
     "@silurus/ooxml": "0.76.2",
     "@stll/anonymize-data": "0.0.9",
-    "@stll/anonymize-wasm": "2.7.3",
+    "@stll/anonymize-wasm": "2.7.6",
     "@stll/folio-agents": "0.8.2",
     "@stll/folio-core": "0.15.13",
     "@stll/folio-react": "0.13.2",
@@ -2146,7 +2146,7 @@
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.9", "", {}, "sha512-15frKBbGsM4RhWHqqbSOs11umcXzEtnYR+OH4j1xosMh3HfrvIrqkJSk57HKyu2YgFr8LWYQ5d4dCQoU5Eu/Sg=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@2.7.3", "", { "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-Tq3EyM1nOAsw9HJpaaOCA+ZLJ3n9rVbMMkhcxYq4bGNZItpIQu01GsGCprDqvcfs0TFNUzB5hUMN6jUnMj/T0Q=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@2.7.6", "", { "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-WpPKjvKiTPTA47toTm1i4R/T5mHoZJwdif3b0M+FnAGk9OpDp9oAFRt43rigNsCPPkWTuz0Xo4XgN7YkYYOnBA=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 

@@ -133,6 +133,7 @@ ENV FEATURE_TODOS=true
 ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+ENV STLL_ANONYMIZE_ASSET_DIR=/app/anonymize-native
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
@@ -150,12 +151,13 @@ COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
-# @stll/anonymize-wasm resolves its native glue, WASM, and prepared pipeline
-# packages relative to `dist/wasm.mjs`; Bun's compiled binary resolves those
-# bundled asset URLs under `$bunfs/root/native`.
+# @stll/anonymize-wasm loads its native glue via ESM import(), which a
+# compiled binary resolves against its embedded filesystem only — fs APIs
+# fall back to disk, import() does not. STLL_ANONYMIZE_ASSET_DIR points the
+# loader at a real directory instead.
 COPY --chown=stella:stella --from=deps \
     /app/node_modules/@stll/anonymize-wasm/dist/native/ \
-    /\$bunfs/root/native/
+    /app/anonymize-native/
 # quickjs-emscripten loads this WASM file at runtime from the
 # compiled Bun binary's `$bunfs/root` asset directory.
 COPY --chown=stella:stella --from=deps \
