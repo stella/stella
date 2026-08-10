@@ -46,31 +46,53 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
-  test("gives ask-user turn ownership only after its input is complete", () => {
-    const streamingCall = {
-      arguments: '{"question":"Which',
-      id: "ask-streaming",
-      name: "ask-user",
-      state: "input-streaming",
-      type: "tool-call",
-    } as const satisfies ChatPart;
-    const completeCall = {
-      arguments: '{"question":"Which jurisdiction applies?"}',
-      id: "ask-complete",
-      name: "ask-user",
-      state: "input-complete",
-      type: "tool-call",
-    } as const satisfies ChatPart;
+  test("classifies every ask-user tool-call state for turn ownership", () => {
+    type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 
-    expect(
-      getAwaitingUserInteraction({
-        parts: [streamingCall],
+    const getInteractionForState = (state: ToolCallState) => {
+      const call = {
+        arguments: '{"question":"Which jurisdiction applies?"}',
+        id: `ask-${state}`,
+        name: "ask-user",
+        state,
+        type: "tool-call",
+      } satisfies ChatPart;
+
+      return getAwaitingUserInteraction({
+        parts: [call],
         role: "assistant",
-      }),
-    ).toBeNull();
-    expect(
-      getAwaitingUserInteraction({ parts: [completeCall], role: "assistant" }),
-    ).toEqual({ type: "ask-user", toolCallId: "ask-complete" });
+      });
+    };
+
+    expect({
+      "approval-requested": getInteractionForState("approval-requested"),
+      "approval-responded": getInteractionForState("approval-responded"),
+      "awaiting-input": getInteractionForState("awaiting-input"),
+      complete: getInteractionForState("complete"),
+      error: getInteractionForState("error"),
+      "input-complete": getInteractionForState("input-complete"),
+      "input-streaming": getInteractionForState("input-streaming"),
+    } satisfies Record<
+      ToolCallState,
+      ReturnType<typeof getInteractionForState>
+    >).toEqual({
+      "approval-requested": {
+        toolCallId: "ask-approval-requested",
+        type: "approval",
+      },
+      "approval-responded": null,
+      "awaiting-input": null,
+      complete: null,
+      error: null,
+      "input-complete": {
+        toolCallId: "ask-input-complete",
+        type: "ask-user",
+      },
+      "input-streaming": null,
+    } as const satisfies Record<
+      ToolCallState,
+      ReturnType<typeof getInteractionForState>
+    >);
   });
 
   test("keeps every pending approval actionable", () => {

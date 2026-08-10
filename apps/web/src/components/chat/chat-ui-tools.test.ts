@@ -922,21 +922,33 @@ describe("isChatTurnInFlight", () => {
 });
 
 describe("isRunningToolPart", () => {
-  test("distinguishes a streaming call from a terminal call", () => {
-    expect(
+  test("classifies every tool-call state", () => {
+    type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
+
+    const isRunningForState = (state: ToolCallState) =>
       isRunningToolPart({
         name: "web_search",
-        state: "input-streaming",
+        state,
         type: "tool-call",
-      }),
-    ).toBe(true);
-    expect(
-      isRunningToolPart({
-        name: "web_search",
-        state: "error",
-        type: "tool-call",
-      }),
-    ).toBe(false);
+      });
+
+    expect({
+      "approval-requested": isRunningForState("approval-requested"),
+      "approval-responded": isRunningForState("approval-responded"),
+      "awaiting-input": isRunningForState("awaiting-input"),
+      complete: isRunningForState("complete"),
+      error: isRunningForState("error"),
+      "input-complete": isRunningForState("input-complete"),
+      "input-streaming": isRunningForState("input-streaming"),
+    } satisfies Record<ToolCallState, boolean>).toEqual({
+      "approval-requested": false,
+      "approval-responded": false,
+      "awaiting-input": true,
+      complete: false,
+      error: false,
+      "input-complete": true,
+      "input-streaming": true,
+    } as const satisfies Record<ToolCallState, boolean>);
   });
 
   test("rejects unknown runtime states", () => {
