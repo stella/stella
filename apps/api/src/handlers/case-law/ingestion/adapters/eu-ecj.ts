@@ -525,6 +525,55 @@ export const fetchDecisionsByCelex = async ({
   return decisions;
 };
 
+export type EcjCelexVariant = {
+  celex: string;
+  language: EcjLanguage;
+};
+
+type ListCelexVariantsOptions = {
+  celexNumbers: readonly string[];
+  signal: AbortSignal;
+};
+
+/**
+ * List which language variants Cellar holds as XHTML for the given CELEX
+ * numbers, without fetching any manifestation body.
+ *
+ * A stored variant absent from this listing was never published as XHTML:
+ * the census separating re-fetchable rows from phantom ones keys on exactly
+ * that. Same query, filters and language mapping as the crawl, so the
+ * listing cannot disagree with what a re-fetch would visit.
+ */
+export const listCelexVariants = async ({
+  celexNumbers,
+  signal,
+}: ListCelexVariantsOptions): Promise<EcjCelexVariant[]> => {
+  if (celexNumbers.length === 0) {
+    return [];
+  }
+  const bindings = await queryDecisions({
+    dateFrom: COURT_EPOCH,
+    dateTo: toIsoDate(new Date()),
+    celexFilter: celexNumbers,
+    signal,
+  });
+  const variants: EcjCelexVariant[] = [];
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    const language = toEcjLanguage(binding.language.value);
+    if (language === undefined) {
+      continue;
+    }
+    const key = `${binding.celex.value}:${language}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    variants.push({ celex: binding.celex.value, language });
+  }
+  return variants;
+};
+
 /** Historical media type whose string payload passed through normalization. */
 const ECJ_RAW_CONTENT_TYPE = "application/xhtml+xml";
 
