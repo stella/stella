@@ -49,6 +49,7 @@ jobs:
         id: probe
         env:
           STAGING_HEALTH_URL: https://api-staging.stll.app/ready
+          STAGING_LEGACY_HEALTH_URL: https://api-staging.stll.app/health
         run: |
           set -euo pipefail
 
@@ -73,6 +74,22 @@ jobs:
                 "$STAGING_HEALTH_URL"
             )"; then
               http_status="000"
+            fi
+
+            if [[ "$http_status" == "404" ]]; then
+              echo "Staging does not expose /ready; checking the legacy /health endpoint."
+              if ! http_status="$(
+                curl \
+                  --connect-timeout 5 \
+                  --max-time 10 \
+                  --output "$response_file" \
+                  --silent \
+                  --show-error \
+                  --write-out '%{http_code}' \
+                  "$STAGING_LEGACY_HEALTH_URL"
+              )"; then
+                http_status="000"
+              fi
             fi
 
             if [[ "$http_status" == "200" ]] &&
@@ -346,6 +363,36 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Verify staging readiness
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          STAGING_READY_URL: https://api-staging.stll.app/ready
+        run: |
+          set -euo pipefail
+
+          response_file="$RUNNER_TEMP/staging-ready.json"
+          http_status="000"
+          if ! http_status="$(
+            curl \
+              --connect-timeout 5 \
+              --max-time 10 \
+              --output "$response_file" \
+              --silent \
+              --show-error \
+              --write-out '%{http_code}' \
+              "$STAGING_READY_URL"
+          )"; then
+            http_status="000"
+          fi
+
+          if [[ "$http_status" != "200" ]] ||
+            ! jq -e --arg expected_commit "$EXPECTED_COMMIT" \
+              '.status == "ok" and .commit == $expected_commit' \
+              "$response_file" >/dev/null 2>&1; then
+            echo "::error::Staging /ready must return HTTP 200 with status ok and commit ${EXPECTED_COMMIT}; received HTTP ${http_status}."
+            exit 1
+          fi
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f

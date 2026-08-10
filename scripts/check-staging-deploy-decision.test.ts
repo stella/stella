@@ -38,6 +38,32 @@ const extractDecideScript = (workflow: string) => {
     .join("\n");
 };
 
+const extractStepScript = (
+  workflow: string,
+  stepName: string,
+  nextMarker: string,
+) => {
+  const stepStart = workflow.indexOf(`      - name: ${stepName}\n`);
+  const runStart = workflow.indexOf("run: |\n", stepStart);
+  const stepEnd = workflow.indexOf(nextMarker, runStart);
+  if (stepStart === -1 || runStart === -1 || stepEnd === -1) {
+    throw new Error(
+      `deploy-staging.yml no longer exposes the ${stepName} step`,
+    );
+  }
+
+  const body = workflow.slice(runStart + "run: |\n".length, stepEnd);
+  const indents = body
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.length - line.trimStart().length);
+  const dedent = Math.min(...indents);
+  return body
+    .split("\n")
+    .map((line) => line.slice(dedent))
+    .join("\n");
+};
+
 type DecisionCase = {
   committedHoursAgo?: number;
   deployedSha?: string;
@@ -53,6 +79,8 @@ type Decision = { deploy: string; exitCode: number };
 
 let workspace = "";
 let scriptPath = "";
+let probeScriptPath = "";
+let postReadinessScriptPath = "";
 
 const runDecision = async ({
   committedHoursAgo = 1,
@@ -98,14 +126,115 @@ const runDecision = async ({
   return { deploy: deploy ?? "", exitCode: result.exitCode };
 };
 
+type ProbeCase = {
+  healthBody?: string;
+  healthStatus?: string;
+  readyBody?: string;
+  readyStatus?: string;
+};
+
+const runProbe = async ({
+  healthBody = `{"status":"ok","commit":"${OTHER_SHA}"}`,
+  healthStatus = "200",
+  readyBody = `{"status":"ok","commit":"${TIP_SHA}"}`,
+  readyStatus = "200",
+}: ProbeCase) => {
+  const outputPath = path.join(
+    workspace,
+    `probe-output-${Bun.randomUUIDv7()}.txt`,
+  );
+  const callsPath = path.join(
+    workspace,
+    `probe-calls-${Bun.randomUUIDv7()}.txt`,
+  );
+  await Promise.all([Bun.write(outputPath, ""), Bun.write(callsPath, "")]);
+
+  const result = Bun.spawnSync(["bash", probeScriptPath], {
+    env: {
+      ...process.env,
+      GITHUB_OUTPUT: outputPath,
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      RUNNER_TEMP: workspace,
+      STAGING_HEALTH_URL: "https://api-staging.stll.app/ready",
+      STAGING_LEGACY_HEALTH_URL: "https://api-staging.stll.app/health",
+      STUB_CALLS_PATH: callsPath,
+      STUB_HEALTH_BODY: healthBody,
+      STUB_HEALTH_STATUS: healthStatus,
+      STUB_READY_BODY: readyBody,
+      STUB_READY_STATUS: readyStatus,
+    },
+  });
+
+  return {
+    calls: await Bun.file(callsPath).text(),
+    exitCode: result.exitCode,
+    output: await Bun.file(outputPath).text(),
+  };
+};
+
+const runPostReadiness = async ({
+  body,
+  expectedCommit = TIP_SHA,
+  status,
+}: {
+  body: string;
+  expectedCommit?: string;
+  status: string;
+}) => {
+  const callsPath = path.join(
+    workspace,
+    `post-readiness-calls-${Bun.randomUUIDv7()}.txt`,
+  );
+  await Bun.write(callsPath, "");
+
+  const result = Bun.spawnSync(["bash", postReadinessScriptPath], {
+    env: {
+      ...process.env,
+      EXPECTED_COMMIT: expectedCommit,
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      RUNNER_TEMP: workspace,
+      STAGING_READY_URL: "https://api-staging.stll.app/ready",
+      STUB_CALLS_PATH: callsPath,
+      STUB_HEALTH_BODY: body,
+      STUB_HEALTH_STATUS: status,
+      STUB_READY_BODY: body,
+      STUB_READY_STATUS: status,
+    },
+  });
+
+  return {
+    calls: await Bun.file(callsPath).text(),
+    exitCode: result.exitCode,
+  };
+};
+
 beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), "staging-deploy-decision-"));
   scriptPath = path.join(workspace, "decide.sh");
+  probeScriptPath = path.join(workspace, "probe.sh");
+  postReadinessScriptPath = path.join(workspace, "post-readiness.sh");
 
-  const script = extractDecideScript(await Bun.file(WORKFLOW_URL).text());
+  const workflow = await Bun.file(WORKFLOW_URL).text();
+  const script = extractDecideScript(workflow);
   expect(script).toContain("set -euo pipefail");
   expect(script).toContain("readonly MAX_DEFERRAL_HOURS=");
   await Bun.write(scriptPath, script);
+  await Bun.write(
+    probeScriptPath,
+    extractStepScript(
+      workflow,
+      "Probe staging health",
+      "\n      # Absent staging defers",
+    ),
+  );
+  await Bun.write(
+    postReadinessScriptPath,
+    extractStepScript(
+      workflow,
+      "Verify staging readiness",
+      "\n      - name: Setup Bun",
+    ),
+  );
 
   // Stands in for the reads the script makes: the last recorded staging
   // deployment, the oldest commit staging has not taken, and the tip's own
@@ -125,6 +254,41 @@ exit 0
 `,
   );
   await chmod(stub, 0o755);
+
+  const curlStub = path.join(workspace, "curl");
+  await Bun.write(
+    curlStub,
+    `#!/usr/bin/env bash
+set -euo pipefail
+output=""
+url=""
+for ((index = 1; index <= $#; index += 1)); do
+  arg="\${!index}"
+  if [[ "$arg" == "--output" ]]; then
+    next=$((index + 1))
+    output="\${!next}"
+  elif [[ "$arg" == https://* ]]; then
+    url="$arg"
+  fi
+done
+echo "$url" >> "$STUB_CALLS_PATH"
+if [[ "$url" == */ready ]]; then
+  if [[ "$STUB_READY_STATUS" == "000" ]]; then
+    exit 7
+  fi
+  printf '%s' "$STUB_READY_BODY" > "$output"
+  printf '%s' "$STUB_READY_STATUS"
+  exit 0
+fi
+printf '%s' "$STUB_HEALTH_BODY" > "$output"
+printf '%s' "$STUB_HEALTH_STATUS"
+`,
+  );
+  await chmod(curlStub, 0o755);
+
+  const sleepStub = path.join(workspace, "sleep");
+  await Bun.write(sleepStub, "#!/usr/bin/env bash\nexit 0\n");
+  await chmod(sleepStub, 0o755);
 });
 
 afterAll(async () => {
@@ -251,5 +415,62 @@ describe("staging deploy decision", () => {
         status: "not_ready",
       }),
     ).toEqual({ deploy: "deploy=false", exitCode: 0 });
+  });
+});
+
+describe("staging readiness cutover", () => {
+  test("accepts a legacy health response only after /ready returns exact 404", async () => {
+    const result = await runProbe({
+      healthBody: `{"status":"ok","commit":"${OTHER_SHA}"}`,
+      healthStatus: "200",
+      readyBody: '{"status":"missing"}',
+      readyStatus: "404",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("status=ready");
+    expect(result.output).toContain(`served_commit=${OTHER_SHA}`);
+    expect(result.calls).toBe(
+      "https://api-staging.stll.app/ready\nhttps://api-staging.stll.app/health\n",
+    );
+  });
+
+  test.each(["503", "000"])(
+    "does not fall back to /health when /ready returns %s",
+    async (readyStatus) => {
+      const result = await runProbe({
+        healthBody: `{"status":"ok","commit":"${OTHER_SHA}"}`,
+        healthStatus: "200",
+        readyBody: '{"status":"not_ready"}',
+        readyStatus,
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.output).toContain("status=not_ready");
+      expect(result.calls).toBe(
+        "https://api-staging.stll.app/ready\n".repeat(3),
+      );
+    },
+  );
+
+  test("requires post-deploy /ready to report the expected commit", async () => {
+    const matching = await runPostReadiness({
+      body: `{"status":"ok","commit":"${TIP_SHA}"}`,
+      status: "200",
+    });
+    const stale = await runPostReadiness({
+      body: `{"status":"ok","commit":"${OTHER_SHA}"}`,
+      status: "200",
+    });
+
+    expect(matching.exitCode).toBe(0);
+    expect(stale.exitCode).not.toBe(0);
+    expect(matching.calls).toBe("https://api-staging.stll.app/ready\n");
+    expect(stale.calls).toBe("https://api-staging.stll.app/ready\n");
+
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    expect(
+      workflow.indexOf("      - name: Verify staging readiness\n"),
+    ).toBeLessThan(workflow.indexOf("      - name: Run staging web smoke\n"));
   });
 });
