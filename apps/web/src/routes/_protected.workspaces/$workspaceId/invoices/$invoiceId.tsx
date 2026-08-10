@@ -400,7 +400,7 @@ const InvoiceDetail = ({
               <thead>
                 <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
-                    {t("common.context")}
+                    {t("chat.composerMenu.context")}
                   </th>
                   <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
