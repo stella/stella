@@ -416,6 +416,7 @@ type Messages = {
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
+    "choosePromptImprovementStrategy": "Prompt improvement options";
     "composerMenu": {
       "context": "Context";
       "mcpServers": "MCP servers";
@@ -546,6 +547,24 @@ type Messages = {
       "fromPromptFallback": "Skill";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Turn complex work into ordered sub-tasks.";
+        "label": "Break into steps";
+      };
+      "specifyOutput": {
+        "description": "Make the audience, scope, format, length, and success criteria explicit.";
+        "label": "Specify the output";
+      };
+      "structure": {
+        "description": "Organize the goal, context, constraints, and deliverable.";
+        "label": "Structure the request";
+      };
+      "verify": {
+        "description": "Ask for sources, assumptions, inconsistencies, and uncertainty to be checked.";
+        "label": "Add verification criteria";
+      };
+    };
     "prompts": {
       "noResults": "No matching skills";
       "noShortcuts": "No skills yet. Add some in Knowledge → Skills.";

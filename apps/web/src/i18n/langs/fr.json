@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
+    "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
     "composerMenu": {
       "context": "Contexte",
       "mcpServers": "Serveurs MCP",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Compétence"
     },
     "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Transforme un travail complexe en sous-tâches ordonnées.",
+        "label": "Décomposer en étapes"
+      },
+      "specifyOutput": {
+        "description": "Explicite le public, le périmètre, le format, la longueur et les critères de réussite.",
+        "label": "Préciser le résultat attendu"
+      },
+      "structure": {
+        "description": "Organise l’objectif, le contexte, les contraintes et le livrable attendu.",
+        "label": "Structurer la demande"
+      },
+      "verify": {
+        "description": "Demande de vérifier les sources, les hypothèses, les incohérences et les incertitudes.",
+        "label": "Ajouter des critères de vérification"
+      }
+    },
     "prompts": {
       "noResults": "Aucun skill correspondant",
       "noShortcuts": "Aucune compétence pour le moment. Ajoutez-en dans Connaissances → Compétences.",

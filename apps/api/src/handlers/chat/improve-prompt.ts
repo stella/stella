@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import {
+  CHAT_PROMPT_IMPROVEMENT_STRATEGIES,
+  CHAT_PROMPT_IMPROVEMENT_STRATEGY,
+  type ChatPromptImprovementStrategy,
+} from "@stll/api-contract/chat";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
@@ -24,12 +29,23 @@ Rules:
 - Prefer direct instructions and make the desired outcome explicit.
 - Keep a short draft concise. Use paragraphs or bullets only when they materially improve a longer request.`;
 
+const PROMPT_IMPROVEMENT_INSTRUCTIONS = {
+  [CHAT_PROMPT_IMPROVEMENT_STRATEGY.decompose]:
+    "For a genuinely complex request, break it into ordered, actionable sub-tasks that preserve dependencies. If it is already simple, improve its structure without adding unnecessary steps.",
+  [CHAT_PROMPT_IMPROVEMENT_STRATEGY.specifyOutput]:
+    "Make the desired audience, scope, format, length, and success criteria explicit where the draft supports them. Do not invent requirements; omit dimensions the user did not imply.",
+  [CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure]:
+    "Organize the request into a clear objective, relevant context, constraints, and desired deliverable. Include only sections supported by the draft; do not add placeholders or invent missing details.",
+  [CHAT_PROMPT_IMPROVEMENT_STRATEGY.verify]:
+    "Add proportionate verification criteria: distinguish facts from assumptions, request source or citation checks when relevant, identify inconsistencies, and surface material uncertainty. Do not demand sources for purely generative tasks.",
+} as const satisfies Record<ChatPromptImprovementStrategy, string>;
+
 const config = {
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
     prompt: t.String({ minLength: 1, maxLength: 12_000 }),
-    instruction: t.String({ minLength: 1, maxLength: 2000 }),
+    strategy: t.UnionEnum(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
     sendMode: t.Union([
       t.Literal(CHAT_SEND_MODE.anonymized),
       t.Literal(CHAT_SEND_MODE.rawOverride),
@@ -62,12 +78,11 @@ const improvePrompt = createSafeRootHandler(
     }
 
     const prompt = body.prompt.trim();
-    const instruction = body.instruction.trim();
-    if (prompt.length === 0 || instruction.length === 0) {
+    if (prompt.length === 0) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "Prompt and rewrite instruction are required",
+          message: "Prompt is required",
         }),
       );
     }
@@ -106,7 +121,7 @@ const improvePrompt = createSafeRootHandler(
               {
                 role: "user",
                 content: JSON.stringify({
-                  instruction,
+                  instruction: PROMPT_IMPROVEMENT_INSTRUCTIONS[body.strategy],
                   draft: prompt,
                 }),
               },

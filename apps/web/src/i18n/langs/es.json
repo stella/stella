@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
+    "choosePromptImprovementStrategy": "Opciones para mejorar el prompt",
     "composerMenu": {
       "context": "Contexto",
       "mcpServers": "Servidores MCP",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Habilidad"
     },
     "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Convierte el trabajo complejo en subtareas ordenadas.",
+        "label": "Dividir en pasos"
+      },
+      "specifyOutput": {
+        "description": "Explicita la audiencia, el alcance, el formato, la extensión y los criterios de éxito.",
+        "label": "Especificar el resultado"
+      },
+      "structure": {
+        "description": "Organiza el objetivo, el contexto, las restricciones y el resultado esperado.",
+        "label": "Estructurar la solicitud"
+      },
+      "verify": {
+        "description": "Solicita comprobar fuentes, supuestos, incoherencias e incertidumbres.",
+        "label": "Añadir criterios de verificación"
+      }
+    },
     "prompts": {
       "noResults": "Sin habilidades coincidentes",
       "noShortcuts": "Aún no hay habilidades. Añádalas en Conocimiento → Habilidades.",

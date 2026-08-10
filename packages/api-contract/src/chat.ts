@@ -13,6 +13,32 @@ export const CHAT_TURN_INTENT = {
 export const CHAT_RUN_MODE = { agent: "agent" } as const;
 export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
 
+export const CHAT_PROMPT_IMPROVEMENT_STRATEGY = {
+  decompose: "decompose",
+  specifyOutput: "specify-output",
+  structure: "structure",
+  verify: "verify",
+} as const;
+
+export type ChatPromptImprovementStrategy =
+  (typeof CHAT_PROMPT_IMPROVEMENT_STRATEGY)[keyof typeof CHAT_PROMPT_IMPROVEMENT_STRATEGY];
+
+export const CHAT_PROMPT_IMPROVEMENT_STRATEGIES = [
+  CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure,
+  CHAT_PROMPT_IMPROVEMENT_STRATEGY.specifyOutput,
+  CHAT_PROMPT_IMPROVEMENT_STRATEGY.decompose,
+  CHAT_PROMPT_IMPROVEMENT_STRATEGY.verify,
+] as const;
+
+type MissingChatPromptImprovementStrategy = Exclude<
+  ChatPromptImprovementStrategy,
+  (typeof CHAT_PROMPT_IMPROVEMENT_STRATEGIES)[number]
+>;
+
+true satisfies MissingChatPromptImprovementStrategy extends never
+  ? true
+  : never;
+
 type DocxEditSnapshot = {
   canApplyEdits?: boolean;
   blocks: {

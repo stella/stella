@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
+    "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
     "composerMenu": {
       "context": "Kontekst",
       "mcpServers": "Serwery MCP",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Umiejętność"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Dzieli złożone zadanie na uporządkowane podzadania.",
+        "label": "Podziel na kroki"
+      },
+      "specifyOutput": {
+        "description": "Jednoznacznie określa odbiorców, zakres, format, długość i kryteria sukcesu.",
+        "label": "Określ rezultat"
+      },
+      "structure": {
+        "description": "Porządkuje cel, kontekst, ograniczenia i oczekiwany rezultat.",
+        "label": "Uporządkuj polecenie"
+      },
+      "verify": {
+        "description": "Zleca sprawdzenie źródeł, założeń, niespójności i niepewności.",
+        "label": "Dodaj kryteria weryfikacji"
+      }
+    },
     "prompts": {
       "noResults": "Brak pasujących umiejętności",
       "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",

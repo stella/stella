@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
+    "choosePromptImprovementStrategy": "Optionen zur Prompt-Verbesserung",
     "composerMenu": {
       "context": "Kontext",
       "mcpServers": "MCP-Server",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Fähigkeit"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
+        "label": "In Schritte aufteilen"
+      },
+      "specifyOutput": {
+        "description": "Legt Zielgruppe, Umfang, Format, Länge und Erfolgskriterien ausdrücklich fest.",
+        "label": "Ausgabe festlegen"
+      },
+      "structure": {
+        "description": "Ordnet Ziel, Kontext, Einschränkungen und gewünschtes Ergebnis.",
+        "label": "Anfrage strukturieren"
+      },
+      "verify": {
+        "description": "Fordert die Prüfung von Quellen, Annahmen, Widersprüchen und Unsicherheiten an.",
+        "label": "Prüfkriterien ergänzen"
+      }
+    },
     "prompts": {
       "noResults": "Keine passenden Skills",
       "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",

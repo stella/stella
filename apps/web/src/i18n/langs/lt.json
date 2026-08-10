@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
+    "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
     "composerMenu": {
       "context": "Kontekstas",
       "mcpServers": "MCP serveriai",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Įgūdis"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Sudėtingą darbą suskaido į nuoseklias smulkesnes užduotis.",
+        "label": "Suskaidyti į veiksmus"
+      },
+      "specifyOutput": {
+        "description": "Aiškiai nurodo auditoriją, apimtį, formatą, ilgį ir sėkmės kriterijus.",
+        "label": "Patikslinti rezultatą"
+      },
+      "structure": {
+        "description": "Sutvarko tikslą, kontekstą, apribojimus ir pageidaujamą rezultatą.",
+        "label": "Struktūruoti užklausą"
+      },
+      "verify": {
+        "description": "Prašo patikrinti šaltinius, prielaidas, neatitikimus ir neapibrėžtumą.",
+        "label": "Pridėti tikrinimo kriterijus"
+      }
+    },
     "prompts": {
       "noResults": "Nėra atitinkančių įgūdžių",
       "noShortcuts": "Įgūdžių dar nėra. Pridėkite juos skiltyje Žinios → Įgūdžiai.",

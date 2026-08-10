@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./chat": "./src/chat.ts",
     "./entity-options": "./src/entity-options.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./time-entries": "./src/time-entries.ts",

@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
+    "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "composerMenu": {
       "context": "Kontextus",
       "mcpServers": "MCP-kiszolgálók",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Készség"
     },
     "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
+        "label": "Lépésekre bontás"
+      },
+      "specifyOutput": {
+        "description": "Egyértelművé teszi a célközönséget, a terjedelmet, a formátumot, a hosszt és a sikerkritériumokat.",
+        "label": "Kimenet pontosítása"
+      },
+      "structure": {
+        "description": "Rendszerezi a célt, a kontextust, a korlátokat és a kívánt eredményt.",
+        "label": "Feladat strukturálása"
+      },
+      "verify": {
+        "description": "Kéri a források, feltételezések, ellentmondások és bizonytalanságok ellenőrzését.",
+        "label": "Ellenőrzési kritériumok hozzáadása"
+      }
+    },
     "prompts": {
       "noResults": "Nincs egyező skill",
       "noShortcuts": "Még nincsenek készségek. Adjon hozzá a Tudás → Készségek részen.",

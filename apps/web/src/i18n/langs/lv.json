@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
+    "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "composerMenu": {
       "context": "Konteksts",
       "mcpServers": "MCP serveri",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Prasme"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Sadala sarežģītu darbu secīgos apakšuzdevumos.",
+        "label": "Sadalīt soļos"
+      },
+      "specifyOutput": {
+        "description": "Skaidri norāda auditoriju, tvērumu, formātu, garumu un sekmīga rezultāta kritērijus.",
+        "label": "Precizēt rezultātu"
+      },
+      "structure": {
+        "description": "Sakārto mērķi, kontekstu, ierobežojumus un vēlamo rezultātu.",
+        "label": "Strukturēt uzdevumu"
+      },
+      "verify": {
+        "description": "Lūdz pārbaudīt avotus, pieņēmumus, pretrunas un neskaidrības.",
+        "label": "Pievienot pārbaudes kritērijus"
+      }
+    },
     "prompts": {
       "noResults": "Nav atbilstošu prasmju",
       "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",

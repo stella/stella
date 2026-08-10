@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
+    "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "composerMenu": {
       "context": "Kontext",
       "mcpServers": "MCP servery",
@@ -543,6 +544,24 @@
       "fromPromptFallback": "Dovednost"
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Rozdělí složitý úkol na seřazené dílčí kroky.",
+        "label": "Rozdělit do kroků"
+      },
+      "specifyOutput": {
+        "description": "Výslovně uvede publikum, rozsah, formát, délku a kritéria úspěchu.",
+        "label": "Upřesnit výstup"
+      },
+      "structure": {
+        "description": "Uspořádá cíl, kontext, omezení a požadovaný výstup.",
+        "label": "Strukturovat zadání"
+      },
+      "verify": {
+        "description": "Vyžádá kontrolu zdrojů, předpokladů, rozporů a nejistot.",
+        "label": "Přidat kritéria ověření"
+      }
+    },
     "prompts": {
       "noResults": "Žádné odpovídající dovednosti",
       "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
