@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import type { AnyElysia } from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -33,7 +34,7 @@ const timeEntryRealtimeUpdates = workspaceResourceSetUpdates(
  * boundary so its billing schemas are not recursively instantiated through
  * every route mounted after it.
  */
-export const timeEntriesRoute: Elysia = new Elysia({
+export const timeEntriesRoute: AnyElysia = new Elysia({
   prefix: "/time-entries/:workspaceId",
 })
   .use(workspaceAccessMacro)
