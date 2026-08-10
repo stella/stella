@@ -134,7 +134,7 @@
     "@oxlint/plugins": "1.75.0",
     "@silurus/ooxml": "0.76.2",
     "@stll/anonymize-data": "0.0.9",
-    "@stll/anonymize-wasm": "2.7.3",
+    "@stll/anonymize-wasm": "2.7.6",
     "@stll/folio-agents": "0.8.2",
     "@stll/folio-core": "0.15.13",
     "@stll/folio-react": "0.13.2",
