@@ -132,13 +132,17 @@ ENV HOST=0.0.0.0
 ENV PORT=3002
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
-# The runtime needs only the workspace manifests (node_modules linkage), the
-# server entry, and the built output. Workspace sources stay in the build
-# stages; `scripts/check-web-docker-platform.test.ts` enforces this boundary.
+# Bun links workspace dependencies into /app/packages. Folio remains external
+# to the SSR bundle and imports these source-exporting workspaces at runtime;
+# keep that exact dependency closure without restoring the full pruned tree.
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
+COPY --chown=stella:stella --from=pruner /app/out/full/packages/conditions/src ./packages/conditions/src
+COPY --chown=stella:stella --from=pruner /app/out/full/packages/docx-utils/src ./packages/docx-utils/src
+COPY --chown=stella:stella --from=pruner /app/out/full/packages/template-conditions/src ./packages/template-conditions/src
 COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
+RUN bun -e 'await import("@stll/folio-core/docx/xmlParser"); await import("@stll/folio-core/prosemirror/plugins/templateDirectives")'
 USER stella
 EXPOSE 3002
 CMD ["bun", "start-runtime.js"]
