@@ -1,6 +1,6 @@
 {
   "name": "@stll/docx-utils",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Low-level helpers for reading and writing DOCX/OOXML zip packages: text and binary extraction, relationship and content-type management, and namespace constants.",
   "keywords": [
     "docx",
