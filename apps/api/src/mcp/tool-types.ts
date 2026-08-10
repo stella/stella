@@ -4,8 +4,6 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 
-import type { PermissionInput } from "@stll/permissions";
-
 import type { env } from "@/api/env";
 import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -144,11 +142,13 @@ export type McpToolDefinition = {
   feature?: McpToolFeatureFlag;
   inputSchema: McpToolInputSchema;
   /**
-   * Alternative session-member grants for discovery and dispatch. Any one
-   * complete permission object is sufficient. This internal registry metadata
-   * is not projected onto the MCP wire shape.
+   * Optional session-member visibility predicate, enforced centrally for both
+   * discovery and dispatch. Internal registry metadata; never projected onto
+   * the MCP wire shape.
    */
-  memberPermissionAlternatives?: readonly PermissionInput[];
+  isVisibleToMemberRole?: (
+    memberRole: McpRequestContext["memberRole"],
+  ) => boolean;
   name: string;
   scope: ToolScope;
 };

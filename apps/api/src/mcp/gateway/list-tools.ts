@@ -5,7 +5,6 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -68,13 +67,11 @@ const isStaticToolVisibleToRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
 ): boolean => {
-  if (definition.memberPermissionAlternatives === undefined) {
+  if (definition.isVisibleToMemberRole === undefined) {
     return true;
   }
 
-  return definition.memberPermissionAlternatives.some((permissions) =>
-    hasMemberPermission({ role: context.memberRole }, permissions),
-  );
+  return definition.isVisibleToMemberRole(context.memberRole);
 };
 
 /**

@@ -358,7 +358,8 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
-    memberPermissionAlternatives: [{ timeEntry: ["read"] }],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["read"] }).success,
     name: "list_time_entries",
     scope: "stella:read",
   },
@@ -433,10 +434,9 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
-    memberPermissionAlternatives: [
-      { timeEntry: ["create"] },
-      { timeEntry: ["update"] },
-    ],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
+      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
     name: "save_time_entry",
     scope: "stella:billing_write",
   },
@@ -463,7 +463,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
-    memberPermissionAlternatives: [{ timeEntry: ["delete"] }],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
     name: "delete_time_entry",
     scope: "stella:billing_write",
   },
@@ -493,7 +494,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
-    memberPermissionAlternatives: [{ rate: ["read"] }],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ rate: ["read"] }).success,
     name: "resolve_rate",
     scope: "stella:read",
   },
@@ -536,7 +538,8 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
-    memberPermissionAlternatives: [{ workspace: ["read"] }],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ workspace: ["read"] }).success,
     name: "list_invoices",
     scope: "stella:read",
   },
@@ -558,7 +561,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
-    memberPermissionAlternatives: [{ organizationSettings: ["update"] }],
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ organizationSettings: ["update"] }).success,
     name: "get_usage",
     scope: "stella:read",
   },
