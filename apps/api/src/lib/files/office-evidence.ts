@@ -127,11 +127,7 @@ const decodeEvidenceRow = async (
 
   const decryptResult = await Result.tryPromise({
     try: async () =>
-      await decryptContent(
-        organizationId,
-        payloadCiphertext,
-        payloadIv,
-      ),
+      await decryptContent(organizationId, payloadCiphertext, payloadIv),
     catch: (cause) => cause,
   });
   if (Result.isError(decryptResult)) {
@@ -259,9 +255,7 @@ const claimOfficeEvidence = async ({
       return { claimToken, type: "claimed" };
     }
 
-    const existing = (
-      await selectEvidenceRows(tx, scope, source)
-    ).at(0);
+    const existing = (await selectEvidenceRows(tx, scope, source)).at(0);
     if (!existing) {
       return { type: "pending" };
     }
@@ -282,10 +276,7 @@ const claimOfficeEvidence = async ({
       .where(
         and(
           evidenceSourceWhere(scope, source),
-          eq(
-            officeFileEvidence.status,
-            OFFICE_EVIDENCE_STATUS.processing,
-          ),
+          eq(officeFileEvidence.status, OFFICE_EVIDENCE_STATUS.processing),
           eq(officeFileEvidence.claimToken, existing.claimToken),
           lte(officeFileEvidence.claimExpiresAt, now),
         ),
@@ -316,10 +307,7 @@ const abandonOfficeEvidenceClaim = async ({
       .where(
         and(
           evidenceSourceWhere({ organizationId, workspaceId }, source),
-          eq(
-            officeFileEvidence.status,
-            OFFICE_EVIDENCE_STATUS.processing,
-          ),
+          eq(officeFileEvidence.status, OFFICE_EVIDENCE_STATUS.processing),
           eq(officeFileEvidence.claimToken, claimToken),
         ),
       );
@@ -458,10 +446,7 @@ const createClaimedOfficeEvidence = async ({
       .where(
         and(
           evidenceSourceWhere(scope, source),
-          eq(
-            officeFileEvidence.status,
-            OFFICE_EVIDENCE_STATUS.processing,
-          ),
+          eq(officeFileEvidence.status, OFFICE_EVIDENCE_STATUS.processing),
           eq(officeFileEvidence.claimToken, claimToken),
         ),
       )

@@ -26,9 +26,7 @@ const unavailableCodeSql = sql.join(
 );
 const processingStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.processing}'`);
 const availableStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.available}'`);
-const unavailableStatusSql = sql.raw(
-  `'${OFFICE_EVIDENCE_STATUS.unavailable}'`,
-);
+const unavailableStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.unavailable}'`);
 
 export const officeFileEvidence = p.pgTable(
   "office_file_evidence",

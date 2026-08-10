@@ -244,11 +244,7 @@ const extractPptxBlocks = async (
       continue;
     }
     blocks.push({
-      id: createBlockId(
-        OFFICE_EVIDENCE_FORMAT.pptx,
-        String(slideIndex),
-        text,
-      ),
+      id: createBlockId(OFFICE_EVIDENCE_FORMAT.pptx, String(slideIndex), text),
       locator: { type: "pptx", slideIndex },
       text,
     });
