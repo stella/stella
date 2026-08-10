@@ -129,7 +129,9 @@ const resolveTarget = async () => {
       .onConflictDoNothing()
       .returning({ id: workspaces.id });
     if (!insertedWorkspaces.at(0)) {
-      panic("The email QA matter already exists but is not an eligible target.");
+      panic(
+        "The email QA matter already exists but is not an eligible target.",
+      );
     }
     await rootDb
       .insert(workspaceMembers)
@@ -179,8 +181,7 @@ const resolveTarget = async () => {
   const missingDefaultViews = defaultViews.filter(
     (defaultView) =>
       !existingViews.some(
-        (existingView) =>
-          existingView.layout.type === defaultView.layout.type,
+        (existingView) => existingView.layout.type === defaultView.layout.type,
       ),
   );
   if (missingDefaultViews.length > 0) {
