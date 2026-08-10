@@ -761,8 +761,9 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}"
 
       - name: Property-test convention guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test packages/property-testing/src/convention.test.ts
+        run: |
+          bun test packages/property-testing/src/convention.test.ts
+          bun test packages/property-testing/src/ci-gate-coverage.test.ts
 
       - name: Test marketing recording verification guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

@@ -1,8 +1,10 @@
 import path from "node:path";
 
-import { POSTGRES_TEST_MARKER } from "../src/tests/test-database-environment";
+import packageJson from "../package.json" with { type: "json" };
 
-const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
+const POSTGRES_TEST_RUNNER = packageJson.ciGateTestRunners["test:postgres"];
+const POSTGRES_TEST_MARKER = POSTGRES_TEST_RUNNER.gate;
+
 const apiRoot = path.resolve(import.meta.dir, "..");
 
 if (!process.env["DATABASE_URL"]) {
@@ -11,7 +13,7 @@ if (!process.env["DATABASE_URL"]) {
 }
 
 const discoveredTests = [
-  ...new Bun.Glob(TEST_FILE_GLOB).scanSync({
+  ...new Bun.Glob(POSTGRES_TEST_RUNNER.testFileGlob).scanSync({
     cwd: apiRoot,
     onlyFiles: true,
   }),
@@ -52,7 +54,7 @@ const testProcess = Bun.spawn({
   cwd: apiRoot,
   env: {
     ...process.env,
-    STELLA_RUN_POSTGRES_TESTS: "true",
+    [POSTGRES_TEST_MARKER]: POSTGRES_TEST_RUNNER.gateValue,
   },
   stdin: "inherit",
   stdout: "inherit",

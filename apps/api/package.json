@@ -131,5 +131,13 @@
     "vite": "catalog:",
     "vite-plugin-singlefile": "^2.3.0"
   },
+  "ciGateTestRunners": {
+    "test:postgres": {
+      "gate": "STELLA_RUN_POSTGRES_TESTS",
+      "gateValue": "true",
+      "runner": "scripts/run-postgres-tests.ts",
+      "testFileGlob": "src/**/*.test.{ts,tsx}"
+    }
+  },
   "crawlPosture": "unserved"
 }
