@@ -513,6 +513,8 @@
     "modelSelector": {
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
+      "effortHelpDescription": "Určuje, koľko uvažovania model použije pred odpoveďou. Vyššie úrovne môžu pomôcť pri zložitej práci, ale zvyčajne trvajú dlhšie. Bodka označuje predvolenú úroveň poskytovateľa pre tento model.",
+      "effortHelpLabel": "O úrovni uvažovania",
       "effortLabel": "Úroveň uvažovania",
       "effortValues": {
         "high": "Vysoké",
@@ -524,6 +526,7 @@
         "providerDefault": "Predvolené",
         "xhigh": "Veľmi vysoké"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Vybrať model chatu",
       "viaProvider": "cez {provider}"
     },

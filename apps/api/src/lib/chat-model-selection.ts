@@ -19,6 +19,7 @@ import { panic } from "better-result";
  */
 import {
   BYOK_MODEL_OPTIONS,
+  getModelDefaultReasoningEffort,
   getModelDisplayMetadata,
   getModelReasoningEfforts,
 } from "@stll/ai-catalog";
@@ -45,6 +46,7 @@ export type ChatModelSelection = {
 };
 
 export type ChatModelOption = ChatModelSelection & {
+  defaultReasoningEffort: ReasoningEffort | null;
   displayName: string;
   iconProvider: BYOKProvider;
   reasoningEfforts: readonly ReasoningEffort[] | null;
@@ -116,6 +118,10 @@ const chatModelOptionsForProvider = (
       return panic(`Missing display metadata for offered model "${modelId}"`);
     }
     return {
+      defaultReasoningEffort:
+        provider === "openrouter"
+          ? getModelDefaultReasoningEffort(modelId)
+          : null,
       provider,
       modelId,
       displayName: metadata.displayName,

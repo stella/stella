@@ -92,8 +92,37 @@ export type UpstreamCapabilities = {
   temperature: boolean | null;
 };
 
+/** OpenRouter's concrete provider-default effort for each published model. */
+export type OpenRouterReasoningDefaults = ReadonlyMap<string, string>;
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+/**
+ * Parse the public OpenRouter model catalogue into model-id/default-effort
+ * pairs. Missing reasoning metadata is valid and simply produces no entry.
+ */
+export const parseOpenRouterReasoningDefaults = (
+  body: unknown,
+): OpenRouterReasoningDefaults => {
+  const defaults = new Map<string, string>();
+  if (!isObject(body) || !Array.isArray(body["data"])) {
+    return defaults;
+  }
+  for (const item of body["data"]) {
+    if (!isObject(item) || typeof item["id"] !== "string") {
+      continue;
+    }
+    const reasoning = item["reasoning"];
+    if (
+      isObject(reasoning) &&
+      typeof reasoning["default_effort"] === "string"
+    ) {
+      defaults.set(item["id"], reasoning["default_effort"]);
+    }
+  }
+  return defaults;
+};
 
 export const parseUpstreamCapabilities = (
   modelVal: unknown,

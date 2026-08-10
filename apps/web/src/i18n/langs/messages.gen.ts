@@ -516,6 +516,8 @@ type Messages = {
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";
+      "effortHelpDescription": "Controls how much reasoning the model uses before answering. Higher levels can help with complex work but usually take longer. The dot marks the provider's default for this model.";
+      "effortHelpLabel": "About reasoning effort";
       "effortLabel": "Reasoning effort";
       "effortValues": {
         "high": "High";
@@ -527,6 +529,7 @@ type Messages = {
         "providerDefault": "Default";
         "xhigh": "Extra high";
       };
+      "selectionLabel": "{model} | {effort}";
       "title": "Select chat model";
       "viaProvider": "via {provider}";
     };

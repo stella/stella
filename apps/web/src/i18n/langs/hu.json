@@ -513,6 +513,8 @@
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
+      "effortHelpDescription": "Meghatározza, mennyi gondolkodást használjon a modell válaszadás előtt. A magasabb szintek segíthetnek az összetett feladatoknál, de általában több időt vesznek igénybe. A pont a szolgáltató alapértelmezett szintjét jelöli ennél a modellnél.",
+      "effortHelpLabel": "A gondolkodási szintről",
       "effortLabel": "Gondolkodási szint",
       "effortValues": {
         "high": "Magas",
@@ -524,6 +526,7 @@
         "providerDefault": "Alapértelmezett",
         "xhigh": "Nagyon magas"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Csevegési modell kiválasztása",
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
     },

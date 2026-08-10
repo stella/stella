@@ -513,6 +513,8 @@
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
+      "effortHelpDescription": "Nosaka, cik daudz spriešanas modelis izmanto pirms atbildes. Augstāki līmeņi var palīdzēt sarežģītos uzdevumos, bet parasti aizņem vairāk laika. Punkts apzīmē pakalpojuma sniedzēja noklusējuma līmeni šim modelim.",
+      "effortHelpLabel": "Par spriešanas līmeni",
       "effortLabel": "Spriešanas līmenis",
       "effortValues": {
         "high": "Augsts",
@@ -524,6 +526,7 @@
         "providerDefault": "Noklusējuma",
         "xhigh": "Ļoti augsts"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
     },

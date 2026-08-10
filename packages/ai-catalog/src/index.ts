@@ -26,6 +26,7 @@ import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrout
 import * as v from "valibot";
 
 import {
+  MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
@@ -763,6 +764,7 @@ export type ResolvedReasoningEffort = v.InferOutput<
 // capabilities.gen.ts (regenerate with `bun --filter @stll/ai-catalog
 // gen:capabilities`).
 export {
+  MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
@@ -814,6 +816,20 @@ export const getModelReasoningEfforts = (
   modelId: string,
 ): readonly ReasoningEffort[] | null =>
   MODEL_REASONING_EFFORTS_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
+
+const MODEL_DEFAULT_REASONING_EFFORTS_BY_ID: Readonly<
+  Record<string, ReasoningEffort | null>
+> = MODEL_DEFAULT_REASONING_EFFORTS;
+
+/**
+ * Concrete provider-default effort published for a model, or null when the
+ * provider exposes no named default. Unknown ids also resolve to null.
+ */
+export const getModelDefaultReasoningEffort = (
+  modelId: string,
+): ReasoningEffort | null =>
+  MODEL_DEFAULT_REASONING_EFFORTS_BY_ID[normalizeModelCatalogId(modelId)] ??
+  null;
 
 // Sole constructor of the ResolvedReasoningEffort brand; every call
 // site below has already established membership in the model's

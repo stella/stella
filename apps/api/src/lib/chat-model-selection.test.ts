@@ -184,6 +184,19 @@ describe("getConfiguredChatModelOptions", () => {
       expect(option.reasoningEfforts).toEqual(
         getChatModelReasoningEfforts(option),
       );
+      if (
+        option.provider === "openrouter" &&
+        option.reasoningEfforts !== null
+      ) {
+        expect(option.defaultReasoningEffort).not.toBeNull();
+        if (option.defaultReasoningEffort !== null) {
+          expect(option.reasoningEfforts).toContain(
+            option.defaultReasoningEffort,
+          );
+        }
+      } else {
+        expect(option.defaultReasoningEffort).toBeNull();
+      }
       if (option.provider === "bedrock" || option.provider === "mistral") {
         expect(option.reasoningEfforts).toBeNull();
       }
