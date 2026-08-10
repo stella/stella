@@ -496,7 +496,7 @@ const clearElements = (xml: string, names: readonly string[]): string => {
 const XML_NAMESPACE_DECLARATION_RE =
   /\bxmlns(?::(?<prefix>[A-Za-z_][\w.-]*))?\s*=\s*(?<quote>["'])(?<namespace>[^"']*)\k<quote>/gu;
 
-const qualifiedNames = (xml: string, element: XmlElement): string[] => 
+const qualifiedNames = (xml: string, element: XmlElement): string[] =>
   [...xml.matchAll(XML_NAMESPACE_DECLARATION_RE)]
     .filter(({ groups }) => groups?.["namespace"] === element.namespace)
     .map(({ groups }) => {
@@ -504,8 +504,7 @@ const qualifiedNames = (xml: string, element: XmlElement): string[] =>
       return prefix === undefined
         ? element.localName
         : `${prefix}:${element.localName}`;
-    })
-;
+    });
 
 const clearNamespacedElements = (
   xml: string,
