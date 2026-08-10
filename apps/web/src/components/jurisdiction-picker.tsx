@@ -12,7 +12,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -35,12 +35,13 @@ export const JurisdictionPicker = ({
   autoFocus = false,
 }: JurisdictionPickerProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const locale = useLocale();
   const [query, setQuery] = useState("");
   const selectedCodes = selected.map(
     (jurisdiction) => jurisdiction.countryCode,
   );
-  const countryOptions = createCountryOptions(locale);
+  const countryOptions = createCountryOptions(locale, format.displayName);
   const selectedSet = new Set(selectedCodes);
   const suggestedSet = new Set(suggestedCountryCodes);
 

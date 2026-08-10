@@ -11,7 +11,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import {
   COUNTRY_POINTS,
   countryName,
@@ -160,7 +160,7 @@ export const JurisdictionGlobePreview = ({
   onChange,
 }: JurisdictionGlobePreviewProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const markersRef = useRef<{ location: [number, number]; size: number }[]>([]);
   const targetPhiRef = useRef<number | null>(null);
@@ -298,7 +298,10 @@ export const JurisdictionGlobePreview = ({
 
       <div className="flex h-24 w-full max-w-[480px] flex-wrap content-start justify-center gap-2">
         {selected.map((jurisdiction) => {
-          const name = countryName(jurisdiction.countryCode, locale);
+          const name = countryName(
+            jurisdiction.countryCode,
+            format.displayName,
+          );
           return (
             <span
               className={cn(
