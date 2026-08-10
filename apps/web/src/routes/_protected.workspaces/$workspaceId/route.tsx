@@ -24,9 +24,8 @@ import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-w
 import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError } from "@/lib/errors/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
@@ -61,7 +60,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     }
     return <Navigate replace to="/workspaces" />;
   },
-  loader: async ({ context, params, cause }) => {
+  loader: async ({ context, params }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
 
@@ -73,24 +72,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
-    if (cause === "enter") {
-      detached(
-        (async () => {
-          try {
-            const response = await api
-              .workspaces({ workspaceId: wsId })
-              .active.post();
-            if (response.error) {
-              throw toAPIError(response.error);
-            }
-          } catch (error: unknown) {
-            onPrefetchError(error);
-          }
-        })(),
-        "loader",
-      );
-    }
-
     detached(
       prefetchRouteQuery(
         qc,
