@@ -1,7 +1,6 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
-    "rewriteRelativeImportExtensions": true,
     "lib": ["ESNext"],
     "module": "ESNext",
     "types": ["bun"]
