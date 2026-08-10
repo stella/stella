@@ -60,18 +60,26 @@ describe("web container platform boundary", () => {
     expect(crossPlatformCopies).toEqual([
       "deps-prod: COPY --from=install-inputs /json/ .",
       "runner: COPY --chown=stella:stella --from=pruner /app/out/json/ .",
+      ...runtimeWorkspacePaths.map(
+        (workspacePath) =>
+          `runner: COPY --chown=stella:stella --from=pruner /app/out/full/${workspacePath}/src ./${workspacePath}/src`,
+      ),
       "runner: COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js",
       "runner: COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist",
     ]);
   });
 
-  test("keeps workspace source out of the runtime image", () => {
+  test("ships only the workspace source required by external runtime packages", () => {
     const runner = stagesByName.get("runner");
-    // The pruned source tree (out/full) belongs to the build stages only; the
-    // runtime needs just workspace manifests, the server entry, and dist/.
-    expect(runner?.body).not.toContain("out/full");
+    expect(runner?.body).not.toContain("/app/out/full/ .");
     expect(runner?.body).toContain(
       "COPY --chown=stella:stella --from=pruner /app/out/json/ .",
+    );
+    expect(runner?.body).toContain(
+      'await import("@stll/folio-core/docx/xmlParser")',
+    );
+    expect(runner?.body).toContain(
+      'await import("@stll/folio-core/prosemirror/plugins/templateDirectives")',
     );
   });
 
@@ -108,6 +116,95 @@ function parseStages(source: string): DockerStage[] {
 
   return parsed;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const readDependencyNames = (manifest: unknown): string[] => {
+  if (!isRecord(manifest)) {
+    return [];
+  }
+
+  const dependencies = manifest["dependencies"];
+  return isRecord(dependencies) ? Object.keys(dependencies) : [];
+};
+
+type ResolvedPackage = {
+  dependencyNames: string[];
+  workspacePath: string | undefined;
+};
+
+const findExternalRuntimeWorkspacePaths = (source: unknown): string[] => {
+  if (!isRecord(source)) {
+    throw new TypeError("bun.lock must contain an object");
+  }
+
+  const packages = source["packages"];
+  const workspaces = source["workspaces"];
+  if (!isRecord(packages) || !isRecord(workspaces)) {
+    throw new TypeError("bun.lock must contain packages and workspaces maps");
+  }
+
+  const resolvePackage = (name: string): ResolvedPackage | undefined => {
+    const entry = packages[name];
+    if (!Array.isArray(entry)) {
+      return undefined;
+    }
+
+    const resolution = entry.at(0);
+    if (typeof resolution !== "string") {
+      throw new TypeError(`bun.lock package ${name} has no resolution`);
+    }
+
+    const workspaceMarker = "@workspace:";
+    const markerIndex = resolution.indexOf(workspaceMarker);
+    if (markerIndex !== -1) {
+      const workspacePath = resolution.slice(
+        markerIndex + workspaceMarker.length,
+      );
+      return {
+        dependencyNames: readDependencyNames(workspaces[workspacePath]),
+        workspacePath,
+      };
+    }
+
+    return {
+      dependencyNames: readDependencyNames(entry.at(2)),
+      workspacePath: undefined,
+    };
+  };
+
+  const webWorkspace = workspaces["apps/web"];
+  const queue = readDependencyNames(webWorkspace).filter(
+    (name) => resolvePackage(name)?.workspacePath === undefined,
+  );
+  const visited = new Set<string>();
+  const runtimeWorkspaces = new Set<string>();
+
+  while (queue.length > 0) {
+    const name = queue.shift();
+    if (name === undefined || visited.has(name)) {
+      continue;
+    }
+    visited.add(name);
+
+    const resolved = resolvePackage(name);
+    if (!resolved) {
+      continue;
+    }
+    if (resolved.workspacePath) {
+      runtimeWorkspaces.add(resolved.workspacePath);
+    }
+    queue.push(...resolved.dependencyNames);
+  }
+
+  return [...runtimeWorkspaces].sort();
+};
+
+const lockfilePath = new URL("../bun.lock", import.meta.url);
+const runtimeWorkspacePaths = findExternalRuntimeWorkspacePaths(
+  Bun.JSONC.parse(await Bun.file(lockfilePath).text()),
+);
 
 function resolvePlatform(stageName: string, seen = new Set<string>()): string {
   if (seen.has(stageName)) {
