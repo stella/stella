@@ -94,9 +94,6 @@ const probeObjectStorage = async (signal: AbortSignal): Promise<void> => {
 };
 
 const probeDocumentConverter = async (signal: AbortSignal): Promise<void> => {
-  // SAFETY: GOTENBERG_URL is operator-controlled deployment infrastructure,
-  // never request-derived; readiness must reach the configured private service.
-  // eslint-disable-next-line require-safe-outbound-target/require-safe-outbound-target
   const response = await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, {
     headers: {
       Authorization: basicAuthorizationHeader(
