@@ -223,6 +223,9 @@ type QueryDecisionsOptions = {
 /** CELEX numbers are alphanumeric with optional bracketed suffixes. */
 const CELEX = /^[0-9A-Z()]+$/u;
 
+/** Boundary check for callers that accept CELEX numbers as input. */
+export const isValidCelex = (value: string): boolean => CELEX.test(value);
+
 const queryDecisions = async ({
   dateFrom,
   dateTo,
@@ -310,6 +313,17 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
+    // A truncated targeted listing is never acceptable: a census or
+    // re-fetch keyed on it would classify the missing variants as never
+    // published. The date-window crawl keeps the warning shape it has
+    // always had; its per-day pages sit far below the cap.
+    if (celexFilter && celexFilter.length > 0) {
+      throw new AdapterFetchError({
+        message: `CJEU SPARQL listing truncated at ${SPARQL_LIMIT} bindings; use fewer CELEX numbers per query`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: dateFrom,
+      });
+    }
     logger.warn("case_law.ingestion.sparql_limit_hit", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       limit: SPARQL_LIMIT,
@@ -523,6 +537,55 @@ export const fetchDecisionsByCelex = async ({
     }
   }
   return decisions;
+};
+
+export type EcjCelexVariant = {
+  celex: string;
+  language: EcjLanguage;
+};
+
+type ListCelexVariantsOptions = {
+  celexNumbers: readonly string[];
+  signal: AbortSignal;
+};
+
+/**
+ * List which language variants Cellar holds as XHTML for the given CELEX
+ * numbers, without fetching any manifestation body.
+ *
+ * A stored variant absent from this listing was never published as XHTML:
+ * the census separating re-fetchable rows from phantom ones keys on exactly
+ * that. Same query, filters and language mapping as the crawl, so the
+ * listing cannot disagree with what a re-fetch would visit.
+ */
+export const listCelexVariants = async ({
+  celexNumbers,
+  signal,
+}: ListCelexVariantsOptions): Promise<EcjCelexVariant[]> => {
+  if (celexNumbers.length === 0) {
+    return [];
+  }
+  const bindings = await queryDecisions({
+    dateFrom: COURT_EPOCH,
+    dateTo: toIsoDate(new Date()),
+    celexFilter: celexNumbers,
+    signal,
+  });
+  const variants: EcjCelexVariant[] = [];
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    const language = toEcjLanguage(binding.language.value);
+    if (language === undefined) {
+      continue;
+    }
+    const key = `${binding.celex.value}:${language}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    variants.push({ celex: binding.celex.value, language });
+  }
+  return variants;
 };
 
 /** Historical media type whose string payload passed through normalization. */
