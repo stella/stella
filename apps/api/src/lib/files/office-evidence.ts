@@ -116,10 +116,11 @@ const decodeEvidenceRow = async (
   row: PersistedEvidenceRow,
   organizationId: SafeId<"organization">,
 ): Promise<OfficeEvidencePayload | null> => {
+  const { payloadCiphertext, payloadIv } = row;
   if (
     row.status !== OFFICE_EVIDENCE_STATUS.available ||
-    !row.payloadCiphertext ||
-    !row.payloadIv
+    !payloadCiphertext ||
+    !payloadIv
   ) {
     return null;
   }
@@ -128,8 +129,8 @@ const decodeEvidenceRow = async (
     try: async () =>
       await decryptContent(
         organizationId,
-        row.payloadCiphertext,
-        row.payloadIv,
+        payloadCiphertext,
+        payloadIv,
       ),
     catch: (cause) => cause,
   });
@@ -391,13 +392,14 @@ const createClaimedOfficeEvidence = async ({
     });
   }
 
+  const extractionValue = extraction.value;
   const encryptedResult =
-    extraction.value.status === OFFICE_EVIDENCE_STATUS.available
+    extractionValue.status === OFFICE_EVIDENCE_STATUS.available
       ? await Result.tryPromise({
           try: async () =>
             await encryptContent(
               organizationId,
-              JSON.stringify(extraction.value.payload),
+              JSON.stringify(extractionValue.payload),
             ),
           catch: (cause) => cause,
         })
@@ -423,7 +425,7 @@ const createClaimedOfficeEvidence = async ({
       return null;
     }
 
-    const value = extraction.value;
+    const value = extractionValue;
     const terminalValues = (() => {
       if (value.status === OFFICE_EVIDENCE_STATUS.unavailable) {
         return {

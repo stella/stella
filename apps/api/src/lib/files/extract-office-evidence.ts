@@ -49,7 +49,7 @@ export const extractOfficeEvidence = async (
   } catch (error) {
     return Result.err(
       new SubprocessError({
-        error,
+        cause: error,
         exitCode: 0,
         message: "Office evidence worker returned invalid JSON",
       }),

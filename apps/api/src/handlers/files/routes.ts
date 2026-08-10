@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia, { status, t } from "elysia";
+import Elysia, { t } from "elysia";
 
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -17,6 +17,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { findCurrentOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 
 const readFileEndpoint = createSafeHandler(
@@ -110,7 +111,12 @@ const readOfficeCitationEndpoint = createSafeHandler(
       ),
     );
     if (!evidence) {
-      return Result.ok(status(404));
+      return yield* Result.err(
+        new HandlerError({
+          message: "Office citation not found",
+          status: 404,
+        }),
+      );
     }
     return Result.ok({
       locator: evidence.block.locator,
