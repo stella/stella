@@ -93,6 +93,7 @@ type ResolveFileThreadMessagePage = {
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
   lastActivityAt: string | null;
+  usedAnonymization: boolean;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   model: string | null;
@@ -122,6 +123,7 @@ const emptyMessagePage = (
   olderCursor: null,
   contextMatterIds: [],
   lastActivityAt: null,
+  usedAnonymization: false,
   webSearchAvailable,
   webSearchEnabled: false,
   model: null,
@@ -264,6 +266,7 @@ const loadResolvedThreadMessagePage = async ({
     olderCursor: page.olderCursor,
     contextMatterIds,
     lastActivityAt: page.lastActivityAt,
+    usedAnonymization,
     webSearchAvailable,
     webSearchEnabled,
     model: chatModel,

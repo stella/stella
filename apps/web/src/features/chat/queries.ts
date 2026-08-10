@@ -385,6 +385,8 @@ type ThreadFetch = {
   threadRevision: string | null;
   /** Whether the requested thread row exists; false only for allowed drafts. */
   threadExists: boolean;
+  /** Whether any persisted turn in this thread used anonymization. */
+  usedAnonymization: boolean;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   /** Per-thread model override ("provider::modelId"); null uses the org
@@ -514,6 +516,7 @@ const fetchThreadMessages = async (
         lastActivityAt: null,
         threadRevision: null,
         threadExists: false,
+        usedAnonymization: false,
         webSearchAvailable: false,
         webSearchEnabled: false,
         model: null,
@@ -532,6 +535,7 @@ const fetchThreadMessages = async (
     lastActivityAt: response.data.lastActivityAt,
     threadRevision: response.data.threadRevision,
     threadExists: response.data.threadExists,
+    usedAnonymization: response.data.usedAnonymization,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
     model: response.data.model,
@@ -604,6 +608,7 @@ type FileChatThreadFetchResult = {
   lastActivityAt: string | null;
   threadRevision: string | null;
   threadExists: boolean;
+  usedAnonymization: boolean;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   model: string | null;
@@ -633,6 +638,7 @@ const fetchFileChatThread = async ({
     lastActivityAt: data.lastActivityAt,
     threadRevision: null,
     threadExists: true,
+    usedAnonymization: data.usedAnonymization,
     webSearchAvailable: data.webSearchAvailable,
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
@@ -1669,6 +1675,8 @@ export type ChatThreadFetched = {
   threadRevision: string | null;
   /** False only when an allow-missing query resolved an unpersisted draft. */
   threadExists: boolean;
+  /** True once any persisted turn in this thread used anonymization. */
+  usedAnonymization: boolean;
   webSearchAvailable: boolean;
   /**
    * Per-thread web-search opt-in. Mutated via PATCH /chat/threads/:id
@@ -1765,6 +1773,7 @@ export const fileChatThreadOptions = ({
           lastActivityAt: fetched.lastActivityAt,
           threadRevision: fetched.threadRevision,
           threadExists: fetched.threadExists,
+          usedAnonymization: fetched.usedAnonymization,
           webSearchAvailable: fetched.webSearchAvailable,
           webSearchEnabled: fetched.webSearchEnabled,
           model: fetched.model,
@@ -2655,12 +2664,10 @@ export const chatThreadTitleOptions = ({
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
-    // "all", not "inactive": the threads sheet keeps an always-mounted
-    // observer (15 min staleTime, no focus refetch), so an active entry
-    // marked stale has no later trigger and would render the pre-mutation
-    // list until remount — e.g. "No conversations yet" right after the
-    // first send, or a stale title after a rename.
-    refetchType: "all",
+    // Refetch mounted history surfaces immediately. Inactive search results
+    // become stale and refresh only if the user returns to them, avoiding a
+    // request fanout across every cached search after each completed turn.
+    refetchType: "active",
     // Match every cached `["chat", <orgId>, "threads", "grouped"]` entry —
     // we cannot reconstruct orgId here so we walk by structural shape.
     predicate: (query) => {

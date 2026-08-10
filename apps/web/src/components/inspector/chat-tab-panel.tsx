@@ -43,7 +43,10 @@ import {
   PromptBarPlaceholderContent,
   PromptBarShell,
 } from "@/components/ai-suggestions/host";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
@@ -71,6 +74,7 @@ import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context"
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -115,10 +119,6 @@ type ChatTabPanelProps = {
   matterColor?: string | null | undefined;
 };
 
-const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
-};
-
 export const ChatTabPanel = ({
   tab,
   onClose,
@@ -148,6 +148,19 @@ export const ChatTabPanel = ({
   const tabActiveSkill = tab.activeSkill;
   const getActiveSkill = useLatestCallback(() => tabActiveSkill);
   const t = useTranslations();
+  const capturePromptSubmitError = useCallback(
+    (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+    [t],
+  );
   const { ensureAIAvailable } = useAIKeyGate();
 
   // Read live tab state on every send. The Chat instance is created
@@ -440,7 +453,7 @@ export const ChatTabPanel = ({
     // Same disabled-wand states re-checked for the `/rename-chat` path: an
     // anonymized thread refuses suggestions (server-enforced 403), so open
     // the plain editor instead of firing a doomed request.
-    if (anonymized || !hasThreadMessages) {
+    if (data.usedAnonymization || !hasThreadMessages) {
       return;
     }
     detached(suggestTitleIntoLabel(), "ChatTabPanel");
@@ -474,6 +487,78 @@ export const ChatTabPanel = ({
     consumeRenameRequest();
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
   });
+
+  const handleComposerSubmit = useLatestCallback(
+    async ({
+      prompt,
+      files,
+    }: {
+      prompt: string;
+      files: ChatDraftAttachment[];
+    }) => {
+      const newThreadMessages: string[] = [];
+      const handledReserved = runReservedChatCommand(prompt, {
+        new: (args) => {
+          if (args.length > 0) {
+            newThreadMessages.push(args);
+            return;
+          }
+          stop();
+          resetChatTabId(tab.id, createChatThreadId());
+          editorController.setContent("");
+        },
+        "rename-chat": (args) => {
+          editorController.setContent("");
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.renameUnavailableEmptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          if (args.length > 0) {
+            renameThreadWithLabel(args);
+            return;
+          }
+          startLabelEditingWithSuggestion();
+        },
+      });
+      if (!handledReserved) {
+        await handlePromptSubmit({ prompt, files });
+        return;
+      }
+
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      const newThreadId = createChatThreadId();
+      const newThreadRef: ChatThreadRef =
+        tabWorkspaceId === undefined
+          ? { scope: "global", threadId: newThreadId }
+          : {
+              scope: "workspace",
+              threadId: newThreadId,
+              workspaceId: tabWorkspaceId,
+            };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
+      stop();
+      resetChatTabId(tab.id, newThreadId);
+    },
+  );
 
   return (
     <ChatMattersContext
@@ -520,12 +605,12 @@ export const ChatTabPanel = ({
             },
             action: (
               <ChatTitleSuggestButton
-                anonymized={anonymized}
                 hasMessages={hasThreadMessages}
                 isPending={isSuggestingTitle}
                 onTrigger={() => {
                   detached(suggestTitleIntoLabel(), "ChatTabPanel");
                 }}
+                usedAnonymization={data.usedAnonymization}
               />
             ),
           }}
@@ -618,42 +703,11 @@ export const ChatTabPanel = ({
             }
             layout="standalone"
             onFocusChange={setComposerFocused}
+            onSubmitError={capturePromptSubmitError}
             onStop={() => {
               stop();
             }}
-            onSubmit={({ prompt, files }) => {
-              const handledReserved = runReservedChatCommand(prompt, {
-                new: () => {
-                  // Abort any live stream first: rotating the tab id remounts
-                  // the panel onto a fresh thread while the old Chat would
-                  // keep streaming in the query cache.
-                  stop();
-                  resetChatTabId(tab.id, createChatThreadId());
-                  editorController.setContent("");
-                },
-                "rename-chat": (args) => {
-                  editorController.setContent("");
-                  if (!hasThreadMessages) {
-                    stellaToast.add({
-                      title: t("chat.renameUnavailableEmptyThread"),
-                      type: "info",
-                    });
-                    return;
-                  }
-                  // `/rename-chat <title>` commits directly; the bare form
-                  // opens the editor with a suggestion.
-                  if (args.length > 0) {
-                    renameThreadWithLabel(args);
-                    return;
-                  }
-                  startLabelEditingWithSuggestion();
-                },
-              });
-              if (handledReserved) {
-                return;
-              }
-              detached(handlePromptSubmit({ prompt, files }), "ChatTabPanel");
-            }}
+            onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}

@@ -66,7 +66,10 @@ import {
   summarizeOperation,
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
@@ -104,6 +107,7 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -141,6 +145,7 @@ import {
   useChatEditModeStore,
 } from "@/lib/chat-edit-mode-store";
 import {
+  createChatThreadId,
   getChatThreadKey,
   type ChatThreadId,
   type ChatThreadRef,
@@ -172,10 +177,6 @@ type ActiveExternal = {
   text?: string | undefined;
   title: string;
   url: string;
-};
-
-const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
 };
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
@@ -891,7 +892,7 @@ type FileChatOverlayProps = {
    * overlay UI. Owners should swap the `chatThreadId` they pass in
    * for a fresh value.
    */
-  onNewThread: () => void;
+  onNewThread: (threadId: ChatThreadId) => void;
   /** Called only after the server-persisted chat history proves this overlay
    * thread owns the active generated-document draft. */
   onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
@@ -1063,6 +1064,19 @@ const FileChatOverlayInner = ({
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const capturePromptSubmitError = useCallback(
+    (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+    [t],
+  );
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
@@ -2071,8 +2085,82 @@ const FileChatOverlayInner = ({
     stop();
     shouldFocusComposerAfterNewThreadRef.current = true;
     setPanelOpen(false);
-    onNewThread();
+    onNewThread(createChatThreadId());
   };
+  const handleComposerSubmit = useLatestCallback(
+    async ({
+      prompt,
+      files,
+    }: {
+      prompt: string;
+      files: ChatDraftAttachment[];
+    }) => {
+      const newThreadMessages: string[] = [];
+      const handledReserved = runReservedChatCommand(prompt, {
+        new: (args) => {
+          if (args.length > 0) {
+            newThreadMessages.push(args);
+            return;
+          }
+          startNewThread();
+          editorController.setContent("");
+        },
+        "rename-chat": (args) => {
+          editorController.setContent("");
+          if (!hasMessages) {
+            stellaToast.add({
+              title: t("chat.renameUnavailableEmptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          setPanelOpen(true);
+          useChatRenameCommandStore.getState().requestRename({
+            threadId: threadRef.threadId,
+            title: args.length > 0 ? args : null,
+          });
+        },
+      });
+      if (!handledReserved) {
+        await handlePromptSubmit({ prompt, files });
+        return;
+      }
+
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      const newThreadRef: ChatThreadRef =
+        workspaceId === undefined
+          ? { scope: "global", threadId: createChatThreadId() }
+          : {
+              scope: "workspace",
+              threadId: createChatThreadId(),
+              workspaceId,
+            };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
+      stop();
+      onNewThread(newThreadRef.threadId);
+    },
+  );
   // A new message (the user's send, or a fresh assistant turn) re-pins the
   // transcript to the bottom and jumps there, regardless of where the user had
   // scrolled.
@@ -2168,6 +2256,7 @@ const FileChatOverlayInner = ({
                 activeOrganizationId={activeOrganizationId}
                 hasMessages={hasMessages}
                 threadRef={threadRef}
+                usedAnonymization={data.usedAnonymization}
               />
             }
           >
@@ -2286,6 +2375,7 @@ const FileChatOverlayInner = ({
           }
           layout="floating"
           onFocusChange={setComposerFocused}
+          onSubmitError={capturePromptSubmitError}
           minimizedThreadAction={
             !panelOpen && hasThreadContent
               ? {
@@ -2297,41 +2387,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
-          onSubmit={({ prompt, files }) => {
-            const handledReserved = runReservedChatCommand(prompt, {
-              new: () => {
-                startNewThread();
-                editorController.setContent("");
-              },
-              "rename-chat": (args) => {
-                editorController.setContent("");
-                if (!hasMessages) {
-                  stellaToast.add({
-                    title: t("chat.renameUnavailableEmptyThread"),
-                    type: "info",
-                  });
-                  return;
-                }
-                // The floating card's title slot owns the rename editor; open
-                // the card (it may be collapsed) and hand the command over
-                // through the store. `/rename-chat <title>` commits that
-                // title directly; the bare form opens the editor with a
-                // suggestion.
-                setPanelOpen(true);
-                useChatRenameCommandStore.getState().requestRename({
-                  threadId: threadRef.threadId,
-                  title: args.length > 0 ? args : null,
-                });
-              },
-            });
-            if (handledReserved) {
-              return;
-            }
-            detached(
-              handlePromptSubmit({ prompt, files }),
-              "FileChatOverlayInner",
-            );
-          }}
+          onSubmit={handleComposerSubmit}
           pendingCount={0}
           queueWhileGenerating
           sendDisabledReason={sendDisabledReason}
@@ -2385,6 +2441,7 @@ type FileChatTitleSlotProps = {
   activeOrganizationId: string;
   hasMessages: boolean;
   threadRef: ChatThreadRef;
+  usedAnonymization: boolean;
 };
 
 // Title area of the floating thread card: resolves the persisted title with
@@ -2394,6 +2451,7 @@ const FileChatTitleSlot = ({
   activeOrganizationId,
   hasMessages,
   threadRef,
+  usedAnonymization,
 }: FileChatTitleSlotProps) => {
   const { data: byIdTitle } = useQuery(
     chatThreadTitleOptions({
@@ -2421,6 +2479,7 @@ const FileChatTitleSlot = ({
         ownsRenameCommand
         threadRef={threadRef}
         title={title}
+        usedAnonymization={usedAnonymization}
       />
     </span>
   );

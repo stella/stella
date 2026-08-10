@@ -47,7 +47,6 @@ import {
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { useChatAnonymized } from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
@@ -385,8 +384,6 @@ const ThreadRow = ({
   const committedTitle = isPlaceholderThreadTitle(thread.title)
     ? ""
     : thread.title;
-  const anonymized = useChatAnonymized(threadRef);
-
   return (
     <div
       className={cn(
@@ -442,16 +439,17 @@ const ThreadRow = ({
               </span>
             </Link>
             <ChatTitleSuggestButton
-              anonymized={anonymized}
               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               hasMessages
               isPending={isSuggesting}
               onTrigger={startEditingWithSuggestion}
+              usedAnonymization={thread.usedAnonymization}
             />
           </>
         )}
         threadRef={threadRef}
         title={committedTitle}
+        usedAnonymization={thread.usedAnonymization}
       />
       <DeleteThreadButton
         activeThreadRef={activeThreadRef}

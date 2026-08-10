@@ -21,7 +21,10 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -44,6 +47,7 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -67,6 +71,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
+  createChatThreadId,
   getChatThreadKey,
   resolveChatContextMatterIds,
   type ChatThreadRef,
@@ -461,8 +466,13 @@ export const ChatThreadPage = ({
   }, []);
 
   const handleSubmit = async (draft: ChatInputDraft) => {
+    const newThreadMessages: string[] = [];
     const handledReserved = runReservedChatCommand(draft.html, {
-      new: () => {
+      new: (args) => {
+        if (args.length > 0) {
+          newThreadMessages.push(args);
+          return;
+        }
         // Abort any live stream first: `chatThreadOptions` keeps the
         // in-flight Chat alive in the query cache, so navigating away
         // would leave it streaming against the abandoned thread.
@@ -506,6 +516,55 @@ export const ChatThreadPage = ({
       },
     });
     if (handledReserved) {
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      const newThreadRef: ChatThreadRef =
+        threadRef.scope === "workspace"
+          ? {
+              scope: "workspace",
+              threadId: createChatThreadId(),
+              workspaceId: threadRef.workspaceId,
+            }
+          : { scope: "global", threadId: createChatThreadId() };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getContextMatterIds: () => selectedContextMatterIds,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files: draft.files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
+      stop();
+      if (newThreadRef.scope === "workspace") {
+        await navigate({
+          params: {
+            threadId: newThreadRef.threadId,
+            workspaceId: newThreadRef.workspaceId,
+          },
+          replace: true,
+          to: "/chat/workspaces/$workspaceId/$threadId",
+        });
+      } else {
+        await navigate({
+          params: { threadId: newThreadRef.threadId },
+          replace: true,
+          to: "/chat/$threadId",
+        });
+      }
       return;
     }
     if (!(await ensureAIAvailable())) {

@@ -15,12 +15,12 @@ import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-comma
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useChatAnonymized } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type ChatTitleSuggestButtonProps = {
-  anonymized: boolean;
+  usedAnonymization: boolean;
   hasMessages: boolean;
   isPending: boolean;
   /**
@@ -40,7 +40,7 @@ type ChatTitleSuggestButtonProps = {
  * icon, pending spinner, and disabled explanations stay identical.
  */
 export const ChatTitleSuggestButton = ({
-  anonymized,
+  usedAnonymization,
   hasMessages,
   isPending,
   onTrigger,
@@ -52,7 +52,7 @@ export const ChatTitleSuggestButton = ({
   if (!hasMessages) {
     label = t("chat.renameUnavailableEmptyThread");
   }
-  if (anonymized) {
+  if (usedAnonymization) {
     label = t("chat.suggestTitleUnavailableAnonymized");
   }
   if (isPending) {
@@ -69,7 +69,7 @@ export const ChatTitleSuggestButton = ({
             "text-muted-foreground hover:text-foreground shrink-0",
             className,
           )}
-          disabled={anonymized || !hasMessages || isPending}
+          disabled={usedAnonymization || !hasMessages || isPending}
           onClick={onTrigger}
           onMouseDown={(event) => {
             event.preventDefault();
@@ -107,6 +107,8 @@ type ChatTitleRenameProps = {
    * cheapest source at hand (grouped-threads cache, list row, primed query).
    */
   title: string;
+  /** Whether any persisted turn in this thread used anonymization. */
+  usedAnonymization: boolean;
   /** Whether the thread has at least one persisted message; gates the wand. */
   hasMessages: boolean;
   /**
@@ -140,7 +142,19 @@ type ChatTitleRenameProps = {
  */
 export const ChatTitleRename = ({
   threadRef,
+  ...props
+}: ChatTitleRenameProps) => (
+  <ChatTitleRenameSession
+    key={getChatThreadKey(threadRef)}
+    threadRef={threadRef}
+    {...props}
+  />
+);
+
+const ChatTitleRenameSession = ({
+  threadRef,
   title,
+  usedAnonymization,
   hasMessages,
   ownsRenameCommand,
   renderView,
@@ -148,7 +162,6 @@ export const ChatTitleRename = ({
   editClassName,
 }: ChatTitleRenameProps) => {
   const t = useTranslations();
-  const anonymized = useChatAnonymized(threadRef);
   const rename = useRenameChatThread(threadRef);
   const { suggest, isPending: isSuggesting } =
     useSuggestChatThreadTitle(threadRef);
@@ -200,7 +213,7 @@ export const ChatTitleRename = ({
     // suggestions (server-enforced with a 403), and a message-less thread
     // has nothing to summarize. Open the plain editor instead of firing a
     // doomed request; the disabled wand inside it explains why.
-    if (anonymized || !hasMessages) {
+    if (usedAnonymization || !hasMessages) {
       return;
     }
     detached(suggestIntoDraft(), "ChatTitleRename");
@@ -236,12 +249,12 @@ export const ChatTitleRename = ({
       <InlineEdit
         action={
           <ChatTitleSuggestButton
-            anonymized={anonymized}
             hasMessages={hasMessages}
             isPending={isSuggesting}
             onTrigger={() => {
               detached(suggestIntoDraft(), "ChatTitleRename");
             }}
+            usedAnonymization={usedAnonymization}
           />
         }
         className={editClassName}

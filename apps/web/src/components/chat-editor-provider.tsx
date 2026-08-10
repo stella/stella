@@ -20,7 +20,7 @@ import Text from "@tiptap/extension-text";
 import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -121,6 +121,13 @@ export type ChatInputDraft = {
   files: ChatDraftAttachment[];
   html: string;
 };
+
+/** A submit gate intentionally kept the draft intact for the user to retry. */
+export class ChatSubmitPreservedError extends TaggedError(
+  "ChatSubmitPreservedError",
+)<{
+  message: string;
+}> {}
 
 export type ChatInputMentionSource = {
   id: string;

@@ -41,9 +41,9 @@ export const ChatBreadcrumb = ({
   const activeOrganizationId = protectedRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: groupedTitle } = useInfiniteQuery({
+  const { data: groupedThread } = useInfiniteQuery({
     ...groupedChatThreadsOptions({ activeOrganizationId }),
-    select: (data) => selectThreadTitle(data.pages, threadId),
+    select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
 
   // The route loader already primes this allow-missing query. Use its
@@ -66,29 +66,31 @@ export const ChatBreadcrumb = ({
   });
   const { data: threadData } = useQuery({
     ...threadOptions,
-    enabled: groupedTitle === null,
+    enabled: groupedThread === null,
   });
 
   // The grouped list only holds its first loaded pages, so an older thread that
-  // has scrolled out of that window is absent (`groupedTitle === null`). Fall
+  // has scrolled out of that window is absent (`groupedThread === null`). Fall
   // back to a bounded by-id title read, enabled only on that miss so a thread
   // already in the list never triggers a redundant fetch.
   const titleOptions = chatThreadTitleOptions({
     activeOrganizationId,
     enabled: shouldFetchChatThreadTitle({
-      groupedTitle,
+      groupedTitle: groupedThread?.title ?? null,
       threadExists: threadData?.threadExists,
     }),
     key: { threadId, workspaceId },
   });
   const { data: byIdTitle } = useQuery(titleOptions);
 
-  const title = groupedTitle ?? byIdTitle ?? null;
+  const title = groupedThread?.title ?? byIdTitle ?? null;
   const currentTitle = title && !isPlaceholderThreadTitle(title) ? title : "";
   // A title resolved from the server means the thread is persisted (threads
   // are created on first send); otherwise fall back to the primed existence
   // signal for a persisted thread that is still on its placeholder title.
   const hasMessages = title !== null || threadData?.threadExists === true;
+  const usedAnonymization =
+    groupedThread?.usedAnonymization ?? threadData?.usedAnonymization ?? false;
 
   return (
     <BreadcrumbItem className="min-w-0 shrink">
@@ -98,26 +100,37 @@ export const ChatBreadcrumb = ({
         ownsRenameCommand
         threadRef={threadRef}
         title={currentTitle}
+        usedAnonymization={usedAnonymization}
       />
     </BreadcrumbItem>
   );
 };
 
 type GroupedThreadsPages = Parameters<typeof mergeGroupedChatThreadPages>[0];
+type ThreadTitleSummary = Pick<
+  ReturnType<typeof mergeGroupedChatThreadPages>["global"][number],
+  "title" | "usedAnonymization"
+>;
 
-const selectThreadTitle = (
+const selectThreadTitleSummary = (
   pages: GroupedThreadsPages,
   threadId: string,
-): string | null => {
+): ThreadTitleSummary | null => {
   const { global, workspaces } = mergeGroupedChatThreadPages(pages);
   const globalMatch = global.find((thread) => thread.id === threadId);
   if (globalMatch) {
-    return globalMatch.title;
+    return {
+      title: globalMatch.title,
+      usedAnonymization: globalMatch.usedAnonymization,
+    };
   }
   for (const workspace of workspaces) {
     const match = workspace.threads.find((thread) => thread.id === threadId);
     if (match) {
-      return match.title;
+      return {
+        title: match.title,
+        usedAnonymization: match.usedAnonymization,
+      };
     }
   }
   return null;

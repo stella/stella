@@ -7,7 +7,10 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useChatComposerWiring } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatComposerWiring,
+} from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
@@ -145,6 +148,9 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
       getAnalytics().captureError(error);
       stellaToast.add({
         title: t("common.somethingWentWrong"),

@@ -160,7 +160,8 @@ type PromptBarProps = {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => void;
+  }) => Promise<void> | void;
+  onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
    * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
@@ -602,6 +603,7 @@ export const PromptBar = (props: PromptBarProps) => {
     pendingCount,
     canSubmitNow,
     onSubmit,
+    onSubmitError,
     presetScopeChooser,
     presets,
     threadHasMessages = false,
@@ -692,8 +694,8 @@ export const PromptBar = (props: PromptBarProps) => {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    (draft: ChatInputDraft) => {
-      onSubmit({ prompt: draft.html, files: draft.files });
+    async (draft: ChatInputDraft) => {
+      await onSubmit({ prompt: draft.html, files: draft.files });
     },
     [onSubmit],
   );
@@ -702,6 +704,7 @@ export const PromptBar = (props: PromptBarProps) => {
     controller: editorController,
     inputDisabled,
     onSubmit: handleComposerSubmit,
+    onSubmitError,
     onSubmitGuard: canSubmitNow,
     submitDisabled: composerSubmitDisabled,
   });
@@ -748,7 +751,12 @@ export const PromptBar = (props: PromptBarProps) => {
         presetScopeChooser.onSubmit(preset, "document");
         return;
       }
-      onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] });
+      detached(
+        Promise.resolve(
+          onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
+        ),
+        "PromptBar preset",
+      );
     },
     [canSubmitNow, onSubmit, presetScopeChooser],
   );

@@ -1,5 +1,6 @@
 import {
   QueryClient,
+  QueryObserver,
   queryOptions,
   replaceEqualDeep,
 } from "@tanstack/react-query";
@@ -20,6 +21,7 @@ import {
   chatThreadOptions,
   createChatRuntime,
   groupedChatThreadsOptions,
+  invalidateGroupedChatThreads,
   invalidateChatThreadLists,
   installChatRuntimeCleanup,
   listChatHistoryItems,
@@ -296,6 +298,7 @@ describe("mergeGroupedChatThreadPages", () => {
             id: "global-A",
             title: "Global A",
             updatedAt: date("2026-05-16T08:00:00.000Z"),
+            usedAnonymization: false,
           },
         ],
         nextCursor: "page-2",
@@ -309,6 +312,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 id: "workspace-thread-A",
                 title: "Workspace A",
                 updatedAt: date("2026-05-16T07:00:00.000Z"),
+                usedAnonymization: false,
               },
             ],
           },
@@ -321,12 +325,14 @@ describe("mergeGroupedChatThreadPages", () => {
             id: "global-A",
             title: "Global A duplicate",
             updatedAt: date("2026-05-16T08:00:00.000Z"),
+            usedAnonymization: false,
           },
           {
             createdAt: date("2026-05-16T06:00:00.000Z"),
             id: "global-B",
             title: "Global B",
             updatedAt: date("2026-05-16T06:00:00.000Z"),
+            usedAnonymization: false,
           },
         ],
         nextCursor: null,
@@ -340,12 +346,14 @@ describe("mergeGroupedChatThreadPages", () => {
                 id: "workspace-thread-A",
                 title: "Workspace A duplicate",
                 updatedAt: date("2026-05-16T07:00:00.000Z"),
+                usedAnonymization: false,
               },
               {
                 createdAt: date("2026-05-16T05:00:00.000Z"),
                 id: "workspace-thread-B",
                 title: "Workspace B",
                 updatedAt: date("2026-05-16T05:00:00.000Z"),
+                usedAnonymization: false,
               },
             ],
           },
@@ -358,12 +366,14 @@ describe("mergeGroupedChatThreadPages", () => {
                 id: "workspace-thread-D",
                 title: "Workspace D",
                 updatedAt: date("2026-05-16T06:00:00.000Z"),
+                usedAnonymization: false,
               },
               {
                 createdAt: date("2026-05-16T04:00:00.000Z"),
                 id: "workspace-thread-C",
                 title: "Workspace C",
                 updatedAt: date("2026-05-16T04:00:00.000Z"),
+                usedAnonymization: false,
               },
             ],
           },
@@ -454,6 +464,47 @@ describe("invalidateChatThreadLists", () => {
 
     expect(queryClient.getQueryState(groupedKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(activityKey)?.isInvalidated).toBe(true);
+  });
+
+  test("refetches the active history without fetching inactive searches", async () => {
+    const queryClient = new QueryClient();
+    const activeKey = chatKeys.groupedThreads({
+      activeOrganizationId: "organization-a",
+    });
+    const inactiveSearchKey = chatKeys.groupedThreads({
+      activeOrganizationId: "organization-a",
+      search: "nda",
+    });
+    let activeFetches = 0;
+    let inactiveFetches = 0;
+    const activeObserver = new QueryObserver(queryClient, {
+      queryKey: activeKey,
+      queryFn: async () => {
+        activeFetches += 1;
+        return { pages: [] };
+      },
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+    const unsubscribe = activeObserver.subscribe(() => undefined);
+
+    await activeObserver.refetch();
+    await queryClient.fetchQuery({
+      queryKey: inactiveSearchKey,
+      queryFn: async () => {
+        inactiveFetches += 1;
+        return { pages: [] };
+      },
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+
+    await invalidateGroupedChatThreads(queryClient);
+
+    expect(activeFetches).toBe(2);
+    expect(inactiveFetches).toBe(1);
+    expect(queryClient.getQueryState(inactiveSearchKey)?.isInvalidated).toBe(
+      true,
+    );
+    unsubscribe();
   });
 });
 
@@ -1780,6 +1831,7 @@ describe("acquireChatRuntime reconcile", () => {
     lastActivityAt: null,
     threadRevision: null,
     threadExists: true,
+    usedAnonymization: false,
     webSearchAvailable: false,
     webSearchEnabled: false,
     context: null,

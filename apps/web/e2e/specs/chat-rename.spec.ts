@@ -25,6 +25,7 @@ test("breadcrumb rename with suggestion propagates to the threads sheet", async 
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
     { timeout: 30_000 },
   );
+  const threadPath = new URL(page.url()).pathname;
   // "Copy" only renders under an assistant message with non-empty text, so
   // its presence pins the reply as painted (and the thread as persisted)
   // before the rename below.
@@ -40,22 +41,37 @@ test("breadcrumb rename with suggestion propagates to the threads sheet", async 
   const renameInput = breadcrumb.getByRole("textbox");
   await expect(renameInput).toBeVisible();
 
-  // The wand requests one suggestion into the draft. Wait for the visible
-  // completion state: the pending label clears and the control re-enables.
+  // Intercept the suggestion read so the assertion proves that its exact
+  // response reached the draft. This also keeps keyboard focus coverage
+  // deterministic regardless of mock-model output.
+  const suggestedTitle = "Suggested title from the e2e endpoint";
+  await page.route("**/chat/threads/*/title/suggest*", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ title: suggestedTitle }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
   const wand = breadcrumb.getByRole("button", { name: "Suggest a title" });
   await expect(wand).toBeEnabled();
-  await wand.click();
+  await renameInput.press("Tab");
+  await expect(wand).toBeFocused();
+  await wand.press("Enter");
   await expect(
     breadcrumb.getByRole("button", { name: "Suggesting a title…" }),
   ).toHaveCount(0, { timeout: 30_000 });
   await expect(wand).toBeEnabled({ timeout: 30_000 });
-  await expect(renameInput).not.toHaveValue("");
+  await expect(renameInput).toHaveValue(suggestedTitle);
 
   // Commit a deterministic title on top of the suggestion so the
   // propagation assertions below cannot depend on mock-model output.
   const committedTitle = "Renamed by the e2e wand spec";
   await renameInput.fill(committedTitle);
-  await breadcrumb.getByRole("button", { name: "Done" }).click();
+  await renameInput.press("Tab");
+  await wand.press("Tab");
+  const done = breadcrumb.getByRole("button", { name: "Done" });
+  await expect(done).toBeFocused();
+  await done.press("Enter");
 
   // Breadcrumb reflects the committed title (the editor is gone).
   await expect(breadcrumb.getByRole("textbox")).toHaveCount(0);
@@ -63,12 +79,12 @@ test("breadcrumb rename with suggestion propagates to the threads sheet", async 
     breadcrumb.getByRole("button", { name: committedTitle }),
   ).toBeVisible({ timeout: 30_000 });
 
-  // The threads sheet lists the same thread under the new title. `.first()`
-  // because reruns against a persistent local database accumulate threads
-  // carrying this same deterministic title; one visible match is the signal.
+  // The threads sheet lists this exact thread under the new title. Persistent
+  // test data may contain duplicate titles, so target the current route href.
   await page.getByRole("button", { name: "History" }).click();
   const sheet = page.getByRole("dialog");
-  await expect(sheet.getByText(committedTitle).first()).toBeVisible({
+  const currentThreadLink = sheet.locator(`a[href="${threadPath}"]`);
+  await expect(currentThreadLink).toContainText(committedTitle, {
     timeout: 30_000,
   });
 });

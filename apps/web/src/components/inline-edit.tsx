@@ -46,7 +46,19 @@ export const InlineEdit = ({
   const t = useTranslations();
 
   return (
-    <span className={cn("inline-flex items-center gap-1", className)}>
+    <span
+      className={cn("inline-flex items-center gap-1", className)}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (
+          nextTarget instanceof Node &&
+          event.currentTarget.contains(nextTarget)
+        ) {
+          return;
+        }
+        onCommit();
+      }}
+    >
       <input
         autoFocus
         className={cn(
@@ -55,13 +67,13 @@ export const InlineEdit = ({
           inputClassName,
         )}
         dir={contentDir(value)}
-        onBlur={onCommit}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Enter") {
-            e.currentTarget.blur();
+            e.preventDefault();
+            onCommit();
           }
           if (e.key === "Escape") {
             onCancel();
@@ -73,9 +85,9 @@ export const InlineEdit = ({
       {action}
       <Button
         className="h-6 shrink-0 gap-0.5 px-2 text-xs"
+        onClick={onCommit}
         onMouseDown={(e) => {
           e.preventDefault();
-          onCommit();
         }}
         size="xs"
         type="button"

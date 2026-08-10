@@ -65,11 +65,13 @@ afterAll(async () => {
 const SEEDED_TITLE = "New chat";
 
 const seedThread = async ({
+  dataWorkspaceIds = [],
   messageTexts = [],
   usedAnonymization = false,
   userId,
   workspaceId = null,
 }: {
+  dataWorkspaceIds?: SafeId<"workspace">[];
   messageTexts?: string[];
   usedAnonymization?: boolean;
   userId?: SafeId<"user">;
@@ -81,6 +83,7 @@ const seedThread = async ({
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId: ids.orgA,
+    dataWorkspaceIds,
     title: SEEDED_TITLE,
     usedAnonymization,
     userId: ownerId,
@@ -139,6 +142,10 @@ const readTitleState = async (threadId: SafeId<"chatThread">) => {
 };
 
 describe("suggest thread title", () => {
+  test("defers AI availability and usage checks until after thread gates", () => {
+    expect("requiresUsage" in suggestThreadTitle.config).toBe(false);
+  });
+
   test("returns a cleaned title and writes nothing", async () => {
     const threadId = await seedThread({
       messageTexts: ["Draft an NDA for Acme", "Here is a draft NDA…"],
@@ -158,6 +165,30 @@ describe("suggest thread title", () => {
       title: SEEDED_TITLE,
       titleSource: CHAT_TITLE_SOURCE.DEFAULT,
     });
+  });
+
+  test("passes the persisted data scope to the model-ingress boundary", async () => {
+    const workspaceId = ids.wsA1;
+    const threadId = await seedThread({
+      dataWorkspaceIds: [workspaceId],
+      messageTexts: [
+        `Draft a title for workspace ${workspaceId}`,
+        "Here is a draft.",
+      ],
+    });
+
+    generateTextMock.mockClear();
+    const result = await suggestThreadTitle.handler(
+      createContext({ threadId }),
+    );
+
+    expect(result).toEqual({ title: "Drafting an NDA" });
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining(workspaceId),
+        tenantWorkspaceIds: [workspaceId],
+      }),
+    );
   });
 
   test("refuses an anonymized thread with 403 and spends no model call", async () => {
@@ -219,10 +250,14 @@ describe("suggest thread title", () => {
       workspaceId: ids.wsA1,
     });
 
+    generateTextMock.mockClear();
     const result = await suggestThreadTitle.handler(
       createContext({ threadId, workspaceId: ids.wsA1 }),
     );
 
     expect(result).toEqual({ title: "Drafting an NDA" });
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantWorkspaceIds: [ids.wsA1] }),
+    );
   });
 });

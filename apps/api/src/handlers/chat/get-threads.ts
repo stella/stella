@@ -94,6 +94,7 @@ const getThreads = createSafeRootHandler(
             id: chatThreads.id,
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
+            usedAnonymization: chatThreads.usedAnonymization,
             updatedAtCursor:
               chatThreadListCursorCodec.cursorValue.as("updated_at_cursor"),
             workspaceId: chatThreads.workspaceId,
@@ -126,6 +127,7 @@ const getThreads = createSafeRootHandler(
       title: string;
       createdAt: Date;
       updatedAt: Date;
+      usedAnonymization: boolean;
     }[] = [];
 
     const groupedWorkspaceThreads = new Map<
@@ -138,6 +140,7 @@ const getThreads = createSafeRootHandler(
           title: string;
           createdAt: Date;
           updatedAt: Date;
+          usedAnonymization: boolean;
         }[];
       }
     >();
@@ -149,6 +152,7 @@ const getThreads = createSafeRootHandler(
           title: thread.title,
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
+          usedAnonymization: thread.usedAnonymization,
         });
         continue;
       }
@@ -162,6 +166,7 @@ const getThreads = createSafeRootHandler(
         title: thread.title,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
+        usedAnonymization: thread.usedAnonymization,
       };
 
       const existingGroup = groupedWorkspaceThreads.get(thread.workspaceId);

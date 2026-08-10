@@ -15,11 +15,15 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   // The other AI reads (recap, suggested prompts, improve-prompt) require
@@ -31,7 +35,6 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const SUGGEST_TITLE_TIMEOUT_MS = 15_000;
@@ -66,6 +69,7 @@ const suggestThreadTitle = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            dataWorkspaceIds: true,
             workspaceId: true,
             usedAnonymization: true,
           },
@@ -107,6 +111,27 @@ const suggestThreadTitle = createSafeRootHandler(
         }),
       );
     }
+
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
+
+    const preflightError = await assertUsageAvailableForHandler({
+      metering: { actionType: "chat", modelRole: "fast" },
+      organizationId: session.activeOrganizationId,
+      orgAIConfig,
+      workspaceId: persistedWorkspaceId,
+      userId: user.id,
+      safeDb,
+    });
+    if (preflightError) {
+      return Result.err(preflightError);
+    }
+
+    const tenantWorkspaceIds = persistedWorkspaceId
+      ? Array.from(new Set([persistedWorkspaceId, ...thread.dataWorkspaceIds]))
+      : thread.dataWorkspaceIds;
 
     const titleMessages = messageWindow.messages.map((row) => ({
       role: row.role,
@@ -151,9 +176,7 @@ const suggestThreadTitle = createSafeRootHandler(
             prompt: buildThreadTitlePrompt(titleMessages),
             role: "fast",
             serviceTier: "standard",
-            tenantWorkspaceIds: persistedWorkspaceId
-              ? [persistedWorkspaceId]
-              : [],
+            tenantWorkspaceIds,
           }),
         catch: (error) => {
           aiAnalytics.captureError(error);

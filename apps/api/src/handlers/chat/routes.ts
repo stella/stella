@@ -94,7 +94,6 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: suggestThreadTitle.config.params,
     permissions: suggestThreadTitle.config.permissions,
     query: suggestThreadTitle.config.query,
-    requiresUsage: suggestThreadTitle.config.requiresUsage,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,
