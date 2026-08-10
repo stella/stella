@@ -514,6 +514,7 @@
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
       "effortHelpDescription": "Určuje, koľko uvažovania model použije pred odpoveďou. Vyššie úrovne môžu pomôcť pri zložitej práci, ale zvyčajne trvajú dlhšie. Bodka označuje predvolenú úroveň poskytovateľa pre tento model.",
+      "effortHelpLabel": "O úrovni uvažovania",
       "effortLabel": "Úroveň uvažovania",
       "effortValues": {
         "high": "Vysoké",

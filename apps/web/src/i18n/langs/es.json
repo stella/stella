@@ -514,6 +514,7 @@
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
       "effortHelpDescription": "Controla cuánto razonamiento utiliza el modelo antes de responder. Los niveles más altos pueden ayudar con tareas complejas, pero suelen tardar más. El punto marca el nivel predeterminado del proveedor para este modelo.",
+      "effortHelpLabel": "Acerca del nivel de razonamiento",
       "effortLabel": "Nivel de razonamiento",
       "effortValues": {
         "high": "Alto",

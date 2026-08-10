@@ -514,6 +514,7 @@
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
       "effortHelpDescription": "Controla quanto raciocínio o modelo usa antes de responder. Níveis mais altos podem ajudar em tarefas complexas, mas geralmente levam mais tempo. O ponto marca o nível padrão do provedor para este modelo.",
+      "effortHelpLabel": "Sobre o nível de raciocínio",
       "effortLabel": "Nível de raciocínio",
       "effortValues": {
         "high": "Alto",

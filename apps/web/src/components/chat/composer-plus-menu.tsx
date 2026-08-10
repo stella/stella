@@ -63,7 +63,6 @@ import {
 } from "@/components/chat/composer-plus-menu.logic";
 import {
   ComposerSubmenuSearch,
-  focusSearchOnOpen,
   useFocusSearchOnOpen,
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
@@ -632,6 +631,7 @@ const ComposerContextMatterSub = ({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  useFocusSearchOnOpen(open, searchRef);
 
   const { data: views, isPending: isLoadingViews } = useQuery({
     ...viewsOptions(matter.id),
@@ -726,9 +726,7 @@ const ComposerContextMatterSub = ({
     <MenuSub
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
-        if (nextOpen) {
-          focusSearchOnOpen(searchRef);
-        } else {
+        if (!nextOpen) {
           setSearch("");
         }
       }}
@@ -792,8 +790,10 @@ const ComposerMcpSubmenu = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = mcp;
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  useFocusSearchOnOpen(open, searchRef);
   const { data: connectorsData, isPending: isLoadingConnectors } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled,
@@ -897,10 +897,9 @@ const ComposerMcpSubmenu = ({
 
   return (
     <MenuSub
-      onOpenChange={(open) => {
-        if (open) {
-          focusSearchOnOpen(searchRef);
-        } else {
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
           setSearch("");
         }
       }}

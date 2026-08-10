@@ -514,6 +514,7 @@
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
       "effortHelpDescription": "Określa, ile rozumowania model wykorzystuje przed udzieleniem odpowiedzi. Wyższe poziomy mogą pomóc w złożonych zadaniach, ale zwykle zajmują więcej czasu. Kropka oznacza domyślny poziom dostawcy dla tego modelu.",
+      "effortHelpLabel": "Informacje o poziomie rozumowania",
       "effortLabel": "Poziom rozumowania",
       "effortValues": {
         "high": "Wysoki",

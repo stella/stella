@@ -514,6 +514,7 @@
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
       "effortHelpDescription": "Legt fest, wie viel Denkaufwand das Modell vor der Antwort verwendet. Höhere Stufen können bei komplexen Aufgaben helfen, dauern aber meist länger. Der Punkt markiert die Standardeinstellung des Anbieters für dieses Modell.",
+      "effortHelpLabel": "Informationen zum Denkaufwand",
       "effortLabel": "Denkaufwand",
       "effortValues": {
         "high": "Hoch",

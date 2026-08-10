@@ -514,6 +514,7 @@
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "effortHelpDescription": "Nustato, kiek samprotavimo modelis naudoja prieš atsakydamas. Aukštesni lygiai gali padėti atliekant sudėtingas užduotis, tačiau paprastai užtrunka ilgiau. Taškas žymi šio modelio teikėjo numatytąjį lygį.",
+      "effortHelpLabel": "Apie samprotavimo lygį",
       "effortLabel": "Samprotavimo lygis",
       "effortValues": {
         "high": "Aukštas",

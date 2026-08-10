@@ -43,6 +43,10 @@ describe("parseOpenRouterReasoningDefaults", () => {
             },
             { id: "model-without-reasoning" },
             { id: 42, reasoning: { default_effort: "medium" } },
+            {
+              id: "model-with-invalid-effort",
+              reasoning: { default_effort: 42 },
+            },
           ],
         }),
       ),

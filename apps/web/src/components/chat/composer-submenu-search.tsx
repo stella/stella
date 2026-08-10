@@ -6,13 +6,11 @@ import {
   InputGroupInput,
 } from "@stll/ui/components/input-group";
 
+import {
+  isMenuNavigationKey,
+  scheduleSearchFocus,
+} from "@/components/chat/composer-submenu-search.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-
-const isMenuNavigationKey = (key: string): boolean =>
-  key === "Escape" ||
-  key === "ArrowDown" ||
-  key === "ArrowUp" ||
-  key === "Enter";
 
 type ComposerSubmenuSearchProps = {
   onChange: (value: string) => void;
@@ -33,6 +31,7 @@ export const ComposerSubmenuSearch = ({
         <SearchIcon />
       </InputGroupAddon>
       <InputGroupInput
+        aria-label={placeholder}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -50,12 +49,6 @@ export const ComposerSubmenuSearch = ({
   </div>
 );
 
-export const focusSearchOnOpen = (
-  ref: React.RefObject<HTMLInputElement | null>,
-) => {
-  setTimeout(() => ref.current?.focus(), 0);
-};
-
 export const useFocusSearchOnOpen = (
   open: boolean,
   ref: React.RefObject<HTMLInputElement | null>,
@@ -65,9 +58,6 @@ export const useFocusSearchOnOpen = (
       return undefined;
     }
 
-    const timeoutId = window.setTimeout(() => ref.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    return scheduleSearchFocus({ ref, scheduler: window });
   }, [open, ref]);
 };

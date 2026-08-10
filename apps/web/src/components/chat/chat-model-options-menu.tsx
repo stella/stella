@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { InfoIcon } from "lucide-react";
@@ -73,6 +73,8 @@ type ModelOption = {
   value: string;
 };
 
+const EMPTY_MODEL_OPTIONS: readonly ModelOption[] = [];
+
 type ChatModelOptionsMenuProps = {
   enabled: boolean;
   models: ComposerModelsMenuProps;
@@ -100,18 +102,16 @@ export const ChatModelOptionsMenu = ({
     enabled,
   });
 
-  const filteredOptions = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!data) {
-      return [];
-    }
-    if (!query) {
-      return data.options;
-    }
-    return data.options.filter((option) =>
+  const query = search.trim().toLowerCase();
+  let filteredOptions = EMPTY_MODEL_OPTIONS;
+  if (data) {
+    filteredOptions = data.options;
+  }
+  if (query) {
+    filteredOptions = filteredOptions.filter((option) =>
       option.displayName.toLowerCase().includes(query),
     );
-  }, [data, search]);
+  }
 
   const selectAuto = () => {
     if (selectedModel !== null) {
@@ -250,18 +250,19 @@ const ModelOptionRow = ({
           </span>
         </span>
       </MenuRadioItem>
-      {option.reasoningEfforts !== null && (
-        <>
-          <EffortHelp />
-          <EffortSubmenu
-            efforts={option.reasoningEfforts}
-            providerDefaultEffort={option.defaultReasoningEffort}
-            onSelect={onSelect}
-            selected={selected}
-            value={displayedEffort}
-          />
-        </>
-      )}
+      {option.reasoningEfforts !== null &&
+        option.reasoningEfforts.length > 0 && (
+          <>
+            <EffortHelp />
+            <EffortSubmenu
+              efforts={option.reasoningEfforts}
+              providerDefaultEffort={option.defaultReasoningEffort}
+              onSelect={onSelect}
+              selected={selected}
+              value={displayedEffort}
+            />
+          </>
+        )}
     </div>
   );
 };
@@ -280,6 +281,7 @@ const EffortSubmenu = ({
   value: ReasoningEffort | null;
 }) => {
   const t = useTranslations();
+  const descriptionId = useId();
   const groupedEfforts = groupReasoningEfforts(efforts);
   const displayedEffort = value ?? providerDefaultEffort;
   const selectedValue = value ?? providerDefaultEffort ?? "provider-default";
@@ -308,8 +310,11 @@ const EffortSubmenu = ({
 
   return (
     <MenuSub>
+      <span className="sr-only" id={descriptionId}>
+        {t("chat.modelSelector.effortLabel")}
+      </span>
       <MenuSubTrigger
-        aria-label={t("chat.modelSelector.effortLabel")}
+        aria-describedby={descriptionId}
         className="text-muted-foreground min-w-28 px-2 data-highlighted:bg-transparent [&>svg:last-child]:!ms-auto"
       >
         {displayedEffort === null
@@ -340,7 +345,7 @@ const EffortHelp = () => {
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={t("chat.modelSelector.effortLabel")}
+        aria-label={t("chat.modelSelector.effortHelpLabel")}
         className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 items-center justify-center rounded focus-visible:ring-2 focus-visible:outline-none"
       >
         <InfoIcon className="size-3.5" />
