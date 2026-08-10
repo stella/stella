@@ -1,8 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const hasCurrentTimerMatterAccess = async ({
@@ -16,41 +14,27 @@ export const hasCurrentTimerMatterAccess = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
-  const [access] = await tx
-    .select({
-      clientId: workspaces.clientId,
-      organizationRole: member.role,
-      workspaceMemberId: workspaceMembers.id,
-    })
-    .from(workspaces)
-    .leftJoin(
-      member,
-      and(
-        eq(member.organizationId, workspaces.organizationId),
-        eq(member.userId, userId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.workspaceId, workspaces.id),
-        eq(workspaceMembers.userId, userId),
-      ),
-    )
-    .where(
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
-      ),
-    )
-    .limit(1);
-  if (!access || access.organizationRole === null) {
-    return false;
-  }
-  const hasAdminBypass =
-    (access.organizationRole === "owner" ||
-      access.organizationRole === "admin") &&
-    access.clientId !== null;
-  return access.workspaceMemberId !== null || hasAdminBypass;
+  const [access] = await tx.execute(sql<{ hasAccess: boolean }>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM workspaces AS workspace
+      INNER JOIN member AS organization_member
+        ON organization_member.organization_id = workspace.organization_id
+        AND organization_member.user_id = ${userId}
+      LEFT JOIN workspace_members AS workspace_member
+        ON workspace_member.workspace_id = workspace.id
+        AND workspace_member.user_id = ${userId}
+      WHERE workspace.id = ${workspaceId}
+        AND workspace.organization_id = ${organizationId}
+        AND workspace.status = 'active'
+        AND (
+          workspace_member.id IS NOT NULL
+          OR (
+            organization_member.role IN ('owner', 'admin')
+            AND workspace.client_id IS NOT NULL
+          )
+        )
+    ) AS "hasAccess"
+  `);
+  return access?.hasAccess ?? false;
 };

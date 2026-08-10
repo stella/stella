@@ -23,6 +23,9 @@ const createContext = ({
     body: {
       timezoneId,
     },
+    request: new Request("https://stella.test/v1/time-entries/timer/start", {
+      method: "POST",
+    }),
     safeDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),
     memberRole: { role: "owner" },
