@@ -92,6 +92,7 @@
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
     "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
     "smoke:wasm-runtimes": "node scripts/smoke-wasm-runtimes.mjs",
+    "smoke:wasm-compiled": "node scripts/smoke-wasm-compiled.mjs",
     "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs",
     "format": "oxfmt ."
   },

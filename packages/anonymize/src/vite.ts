@@ -39,10 +39,11 @@ const NATIVE_DIR = "native";
  * anchor. `new URL(fileName, <anchor>)` resolves to `native/<fileName>` because
  * URL resolution replaces the anchor's last path segment. */
 const ANCHOR_FILE = "index.js";
-/** The exact `assetUrl` base expression emitted by the build (see wasm.ts).
- * Kept in sync with the compiled `wasm.mjs`; the transform fails loudly if the
- * dist shape drifts so this cannot silently ship broken asset paths. */
-const ASSET_URL_BASE = "`./${NATIVE_ASSET_DIR}/${fileName}`, import.meta.url";
+/** The exact default asset-base expression emitted by the build (see
+ * `assetBaseUrl` in wasm.ts). Kept in sync with the compiled `wasm.mjs`; the
+ * transform fails loudly if the dist shape drifts so this cannot silently
+ * ship broken asset paths. */
+const ASSET_URL_BASE = "new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url)";
 
 /** Prepared packages are named `native-pipeline.stlanonpkg` (the full-dictionary
  * default) and `native-pipeline.<language>.stlanonpkg` (scoped variants). */
@@ -184,9 +185,12 @@ export default function stllAnonymizeWasmVite(
         );
       }
       return {
+        // `assetUrl` resolves `new URL(fileName, <base>)`; pointing the base
+        // at the emitted anchor file keeps the last-path-segment replacement
+        // trick: `new URL(fileName, …/native/index.js)` -> `native/<fileName>`.
         code: code.replace(
           ASSET_URL_BASE,
-          `fileName, import.meta.ROLLUP_FILE_URL_${anchorRef}`,
+          `new URL(import.meta.ROLLUP_FILE_URL_${anchorRef})`,
         ),
         map: null,
       };

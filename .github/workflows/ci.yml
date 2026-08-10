@@ -378,6 +378,8 @@ jobs:
         run: bun run --cwd packages/anonymize smoke:dist
       - name: Smoke test wasm binding + package entry across runtimes
         run: bun run --cwd packages/anonymize smoke:wasm-runtimes
+      - name: Smoke test wasm entry inside a compiled single binary
+        run: bun run --cwd packages/anonymize smoke:wasm-compiled
       - name: Smoke test wasm browser path
         env:
           CHROME_BIN: /usr/bin/google-chrome-stable
