@@ -5,9 +5,12 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, desc, eq, gt, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
-import { session as authSession } from "@/api/db/auth-schema";
+import {
+  member as authMember,
+  session as authSession,
+} from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   entities,
@@ -40,10 +43,17 @@ const IV_BYTES = 12;
 const resolveTarget = async () => {
   const activeSessions = await rootDb
     .select({
-      organizationId: authSession.activeOrganizationId,
+      organizationId: authMember.organizationId,
       userId: authSession.userId,
     })
     .from(authSession)
+    .innerJoin(
+      authMember,
+      and(
+        eq(authMember.userId, authSession.userId),
+        eq(authMember.organizationId, authSession.activeOrganizationId),
+      ),
+    )
     .where(
       and(
         isNotNull(authSession.activeOrganizationId),
@@ -80,15 +90,18 @@ const resolveTarget = async () => {
       ),
     )
     .where(
-      explicitWorkspaceId
-        ? and(
-            eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),
-            eq(workspaces.organizationId, activeOrganizationId),
-          )
-        : and(
-            eq(workspaces.name, EMAIL_QA_MATTER_NAME),
-            eq(workspaces.organizationId, activeOrganizationId),
-          ),
+      and(
+        ne(workspaces.status, "deleting"),
+        explicitWorkspaceId
+          ? and(
+              eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),
+              eq(workspaces.organizationId, activeOrganizationId),
+            )
+          : and(
+              eq(workspaces.name, EMAIL_QA_MATTER_NAME),
+              eq(workspaces.organizationId, activeOrganizationId),
+            ),
+      ),
     )
     .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
     .limit(1);
@@ -105,7 +118,7 @@ const resolveTarget = async () => {
     name: EMAIL_QA_MATTER_NAME,
   };
   if (!existingWorkspace) {
-    await rootDb
+    const insertedWorkspaces = await rootDb
       .insert(workspaces)
       .values({
         id: workspace.id,
@@ -113,10 +126,11 @@ const resolveTarget = async () => {
         name: workspace.name,
         reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
       })
-      .onConflictDoUpdate({
-        target: workspaces.id,
-        set: { name: workspace.name },
-      });
+      .onConflictDoNothing()
+      .returning({ id: workspaces.id });
+    if (!insertedWorkspaces.at(0)) {
+      panic("The email QA matter already exists but is not an eligible target.");
+    }
     await rootDb
       .insert(workspaceMembers)
       .values({
@@ -166,7 +180,6 @@ const resolveTarget = async () => {
     (defaultView) =>
       !existingViews.some(
         (existingView) =>
-          existingView.name === defaultView.name &&
           existingView.layout.type === defaultView.layout.type,
       ),
   );

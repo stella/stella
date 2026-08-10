@@ -571,6 +571,9 @@ const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
   if (!frame || !bodyDocument || !body || !documentElement) {
     return;
   }
+  // Collapse the viewport before measuring so viewport-sized metrics cannot
+  // preserve the previous height after quoted history or a signature closes.
+  frame.style.height = "0px";
   const bodyStyle = bodyDocument.defaultView?.getComputedStyle(body);
   const marginBlockStart =
     Number.parseFloat(bodyStyle?.marginBlockStart ?? "0") || 0;

@@ -11,7 +11,7 @@
  * meta-refresh, javascript: URLs) are stripped before the browser sees
  * the document: email HTML is untrusted input.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { type Cheerio, load } from "cheerio";
 import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
@@ -380,10 +380,10 @@ const buildPostalMimeAttachmentCharsetLookup = (
 ): Map<unknown, EmailTextAttachmentCharset | null> => {
   const lookup = new Map<unknown, EmailTextAttachmentCharset | null>();
   // PostalMime omits attachment Content-Type parameters from its public
-  // result. Its parsed node retains them; guard every lookup so an upstream
-  // shape change degrades to BOM/UTF-8 decoding instead of breaking preview.
-  if (!isRecord(parser)) {
-    return lookup;
+  // result. Its parsed node retains them; fail if that internal contract
+  // drifts so non-UTF-8 attachments cannot silently render as corrupted text.
+  if (!isRecord(parser) || !isRecord(parser["root"])) {
+    return panic("PostalMime parser tree has an unexpected shape");
   }
 
   const visit = (node: unknown): void => {
@@ -430,6 +430,9 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     const bytes = attachmentContentToBytes(attachment.content);
     if (!bytes) {
       continue;
+    }
+    if (!attachmentCharsets.has(attachment.content)) {
+      panic("PostalMime attachment is missing from its parser tree");
     }
 
     attachments.push({
