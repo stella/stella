@@ -532,6 +532,7 @@
     "newChat": "Naujas pokalbis",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
+    "officeCitationUnavailable": "Ši citata nebepasiekiama.",
     "openCitation": "Atidaryti citatą {label}",
     "openThread": "Atidaryti pokalbį",
     "pageNumber": "{page} psl.",

@@ -532,6 +532,7 @@
     "newChat": "Jauna saruna",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
+    "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
     "openCitation": "Atvērt citātu {label}",
     "openThread": "Atvērt sarunu",
     "pageNumber": "{page}. lapa",

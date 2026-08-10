@@ -1,6 +1,9 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
+import {
+  isEntityActiveInMainRoute,
+  isFileActiveInMainRoute,
+} from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -8,6 +11,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
+import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -182,14 +186,19 @@ export const openEntityInInspector = async (
   }
 };
 
-export const openEmailCitationSource = ({
+const openFileCitationSource = ({
   source,
   workspaceId,
 }: {
-  source: EmailCitationSource;
+  source: EmailCitationSource | OfficeCitationSource;
   workspaceId: string;
 }): void => {
   const inspector = useInspectorTabsStore.getState();
+  const sameAsMainRoute = isFileActiveInMainRoute({
+    entityId: source.entityId,
+    fieldId: source.fieldId,
+    workspaceId,
+  });
   inspector.openFile({
     id: source.fieldId,
     entityId: source.entityId,
@@ -199,6 +208,17 @@ export const openEmailCitationSource = ({
     pdfFileId: source.pdfFileId,
     propertyId: source.propertyId,
     workspaceId,
+    ...(sameAsMainRoute ? { metadataLane: "expanded" as const } : {}),
   });
   inspector.setFileFacet(source.fieldId, "preview");
 };
+
+export const openEmailCitationSource = (options: {
+  source: EmailCitationSource;
+  workspaceId: string;
+}): void => openFileCitationSource(options);
+
+export const openOfficeCitationSource = (options: {
+  source: OfficeCitationSource;
+  workspaceId: string;
+}): void => openFileCitationSource(options);

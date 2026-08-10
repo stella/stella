@@ -600,7 +600,7 @@ export const getCorpusS3 = (): S3Client => {
 // The signed URL is consumed by the very next statement, so it only has to
 // outlive one read.
 const OBJECT_READ_PRESIGN_TTL_SECONDS = 300;
-const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
+export const OBJECT_READ_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Fetch an object body over a presigned URL.

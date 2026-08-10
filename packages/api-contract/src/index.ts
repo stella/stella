@@ -77,6 +77,15 @@ export type {
   EmailHeaderCitationId,
 } from "./email-citations";
 export {
+  isOfficeCitationBlockId,
+  OFFICE_CITATION_HREF_PREFIX,
+  parseOfficeCitationHref,
+} from "./office-citations";
+export type {
+  OfficeCitationHrefTarget,
+  OfficeCitationLocator,
+} from "./office-citations";
+export {
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,

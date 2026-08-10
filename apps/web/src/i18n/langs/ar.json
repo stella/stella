@@ -532,6 +532,7 @@
     "newChat": "محادثة جديدة",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
+    "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
     "openCitation": "فتح الاستشهاد {label}",
     "openThread": "فتح المحادثة",
     "pageNumber": "الصفحة {page}",

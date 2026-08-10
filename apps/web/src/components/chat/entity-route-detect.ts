@@ -33,3 +33,23 @@ export const isEntityActiveInMainRoute = (
   const entityParam = new URLSearchParams(location.search).get("entity");
   return entityParam === entityId;
 };
+
+export const isFileActiveInMainRoute = ({
+  entityId,
+  fieldId,
+  location = typeof window === "undefined" ? null : window.location,
+  workspaceId,
+}: {
+  entityId: string;
+  fieldId: string;
+  location?: LocationLike | null;
+  workspaceId: string;
+}): boolean => {
+  if (
+    location === null ||
+    !isEntityActiveInMainRoute(entityId, workspaceId, location)
+  ) {
+    return false;
+  }
+  return new URLSearchParams(location.search).get("field") === fieldId;
+};

@@ -532,6 +532,7 @@
     "newChat": "Neuer Chat",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
+    "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
     "pageNumber": "Seite {page}",

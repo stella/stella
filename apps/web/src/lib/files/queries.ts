@@ -5,7 +5,7 @@ import type { EmailTextAttachmentCharset } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type {
   EmailCitationBlock,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/files/file-metadata-query.logic";
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 
 type FileByFieldIdKey = FileMetadataQueryKey;
 
@@ -78,6 +79,24 @@ export const filesKeys = {
     "email-html",
     key.workspaceId,
     key.fieldId,
+  ],
+  officeCitation: ({
+    blockId,
+    entityId,
+    fieldId,
+    workspaceId,
+  }: {
+    blockId: string;
+    entityId: string;
+    fieldId: string;
+    workspaceId: string;
+  }) => [
+    ...filesKeys.all(),
+    "office-citation",
+    workspaceId,
+    entityId,
+    fieldId,
+    blockId,
   ],
   textByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),
@@ -143,6 +162,36 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         source: data.source,
       } satisfies EmailHtmlPreviewData;
     },
+  });
+
+export const officeCitationOptions = ({
+  blockId,
+  entityId,
+  fieldId,
+  workspaceId,
+}: {
+  blockId: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+}) =>
+  queryOptions({
+    queryKey: filesKeys.officeCitation({
+      blockId,
+      entityId,
+      fieldId,
+      workspaceId,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .files({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["office-citation"]({ entityId: toSafeId<"entity">(entityId) })({
+          fieldId: toSafeId<"field">(fieldId),
+        })({ blockId })
+        .get({ fetch: { signal } });
+      return unwrapEden(response);
+    },
+    retry: shouldRetryAPIRequest,
   });
 
 export const emailAttachmentPreviewUrl = ({

@@ -532,6 +532,7 @@
     "newChat": "Uus vestlus",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
+    "officeCitationUnavailable": "See viide pole enam saadaval.",
     "openCitation": "Ava viide {label}",
     "openThread": "Ava vestlus",
     "pageNumber": "Lehekülg {page}",

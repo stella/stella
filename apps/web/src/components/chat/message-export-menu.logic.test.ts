@@ -23,9 +23,21 @@ describe("message export menu", () => {
         },
       ],
     } satisfies PersistedChatMessage;
+    const officeCited = {
+      id: "office-cited",
+      role: "assistant",
+      parts: [
+        {
+          type: "text",
+          content:
+            "A supported [cell](#office:11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222:xlsx-0123456789abcdef).",
+        },
+      ],
+    } satisfies PersistedChatMessage;
 
     expect(hasMessageExportCitations(plain)).toBe(false);
     expect(hasMessageExportCitations(cited)).toBe(true);
+    expect(hasMessageExportCitations(officeCited)).toBe(true);
   });
 
   test("associates a created draft with the final answer in the same turn", () => {

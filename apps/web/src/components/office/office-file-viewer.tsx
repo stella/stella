@@ -23,15 +23,18 @@ import {
   registerOfficeEditIntentKeystroke,
 } from "@/components/office/office-edit-intent";
 import type {
+  OfficeViewerNavigationRequest,
   OfficeViewerFormat,
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";
 import { SilurusOfficeFileViewer } from "@/components/office/silurus-office-viewer";
 import { useTheme } from "@/components/theme-provider";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
 import "@/components/office/office-file-viewer.css";
 
@@ -60,12 +63,15 @@ export const OfficeFileViewer = ({
   const analytics = useAnalytics();
   const { resolvedTheme } = useTheme();
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
+  const navigationSequenceRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
   const [viewerStatus, setViewerStatus] = useState<OfficeViewerStatus>({
     type: "loading",
   });
   const [spreadsheetSelection, setSpreadsheetSelection] =
     useState<OfficeViewerSpreadsheetSelection | null>(null);
+  const [navigationRequest, setNavigationRequest] =
+    useState<OfficeViewerNavigationRequest | null>(null);
   const fileQuery = useQuery({
     ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
   });
@@ -86,6 +92,21 @@ export const OfficeFileViewer = ({
     },
     [analytics],
   );
+  const handleNavigationError = useCallback(
+    (error: Error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+    [analytics, t],
+  );
+  const handleNavigationApplied = useCallback((sequence: number) => {
+    setNavigationRequest((current) =>
+      current?.sequence === sequence ? null : current,
+    );
+  }, []);
   const handleEditIntentKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (
@@ -133,6 +154,22 @@ export const OfficeFileViewer = ({
       event.currentTarget.focus({ preventScroll: true });
     },
     [],
+  );
+
+  useExternalSyncEffect(
+    () =>
+      registerOfficeCitationNavigation({
+        entityId,
+        fieldId,
+        navigate: ({ locator }) => {
+          navigationSequenceRef.current += 1;
+          setNavigationRequest({
+            locator,
+            sequence: navigationSequenceRef.current,
+          });
+        },
+      }),
+    [entityId, fieldId],
   );
 
   if (fileQuery.error) {
@@ -203,6 +240,9 @@ export const OfficeFileViewer = ({
             documentBuffer={fileQuery.data.buffer}
             format={format}
             key={`${fieldId}:${String(attempt)}:${String(PRESENTATION_TRAILING_PADDING_PX)}`}
+            navigationRequest={navigationRequest}
+            onNavigationApplied={handleNavigationApplied}
+            onNavigationError={handleNavigationError}
             onError={handleViewerError}
             onSpreadsheetSelectionChange={setSpreadsheetSelection}
             onStatusChange={handleStatusChange}

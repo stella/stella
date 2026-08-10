@@ -53,6 +53,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "@opentelemetry/api-logs": "^0.221.0",
     "@react-email/render": "^2.1.0",
+    "@silurus/ooxml": "catalog:",
     "@sinclair/typebox": "^0.34.52",
     "@smithy/fetch-http-handler": "^5.6.11",
     "@stll/agent-engine": "workspace:*",
@@ -115,6 +116,7 @@
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
+    "ssf": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ const hasCitationLink = (content: string): boolean =>
   content.includes("http://") ||
   content.includes("https://") ||
   content.includes("](#folio") ||
+  content.includes("](#office:") ||
   content.includes("](#stella-");
 
 export const hasMessageExportCitations = (

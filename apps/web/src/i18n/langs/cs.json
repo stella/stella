@@ -532,6 +532,7 @@
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
+    "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
     "pageNumber": "Strana {page}",

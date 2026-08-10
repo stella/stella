@@ -75,6 +75,8 @@ jobs:
           # files or generated artifacts. The OCR exceptions below are limited
           # to reviewed packages; their upstream licenses and native components
           # are recorded in apps/ocr-service/THIRD-PARTY-NOTICES.md.
+          # @silurus/ooxml ships an Apache-2.0 LICENSE in its published package,
+          # but its package manifest omits the SPDX license field.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
           allow-dependencies-licenses: >-
@@ -97,6 +99,7 @@ jobs:
             pkg:npm/@aws-sdk/client-sesv2,
             pkg:npm/@aws-sdk/s3-request-presigner,
             pkg:npm/@pydantic/genai-prices,
+            pkg:npm/@silurus/ooxml,
             pkg:npm/@tanstack/react-router,
             pkg:npm/@tanstack/react-start,
             pkg:npm/@tiptap/core,

@@ -13,6 +13,7 @@ import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
+import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -186,6 +187,14 @@ export const filesRoute = new Elysia({
     params: readEmailHtmlPreviewEndpoint.config.params,
     permissions: readEmailHtmlPreviewEndpoint.config.permissions,
   })
+  .get(
+    "/office-citation/:entityId/:fieldId/:blockId",
+    officeCitationEndpoint.handler,
+    {
+      params: officeCitationEndpoint.config.params,
+      permissions: officeCitationEndpoint.config.permissions,
+    },
+  )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,

@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Cell, CellRange, Row } from "@silurus/ooxml/xlsx";
 import { panic } from "better-result";
 
+import type { OfficeCitationLocator } from "@stll/api-contract";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 
@@ -26,10 +29,18 @@ export type OfficeViewerSpreadsheetSelection = {
   value: string;
 };
 
+export type OfficeViewerNavigationRequest = {
+  locator: OfficeCitationLocator;
+  sequence: number;
+};
+
 type SilurusOfficeFileViewerProps = {
   className?: string;
   documentBuffer: ArrayBuffer;
   format: OfficeViewerFormat;
+  navigationRequest?: OfficeViewerNavigationRequest | null;
+  onNavigationApplied?: (sequence: number) => void;
+  onNavigationError?: (error: Error) => void;
   onError?: (error: Error) => void;
   onSpreadsheetSelectionChange?: (
     selection: OfficeViewerSpreadsheetSelection | null,
@@ -71,6 +82,9 @@ export const SilurusOfficeFileViewer = ({
   className,
   documentBuffer,
   format,
+  navigationRequest = null,
+  onNavigationApplied,
+  onNavigationError,
   onError,
   onSpreadsheetSelectionChange,
   onStatusChange,
@@ -80,6 +94,56 @@ export const SilurusOfficeFileViewer = ({
   workerTimeoutMs = DEFAULT_OFFICE_VIEWER_WORKER_TIMEOUT_MS,
 }: SilurusOfficeFileViewerProps) => {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const viewerRef = useRef<OfficeNavigationViewer | null>(null);
+  const viewerReadyRef = useRef(false);
+  const navigationGenerationRef = useRef(0);
+  const navigationQueueRef = useRef(Promise.resolve());
+  const enqueueNavigation = useLatestCallback(
+    (
+      viewer: OfficeNavigationViewer,
+      request: OfficeViewerNavigationRequest,
+    ) => {
+      navigationGenerationRef.current += 1;
+      const generation = navigationGenerationRef.current;
+      const previous = navigationQueueRef.current;
+      const navigation = previous.then(async () => {
+        if (generation !== navigationGenerationRef.current) {
+          return undefined;
+        }
+        const applied = await applyOfficeNavigation({
+          isCurrent: () => generation === navigationGenerationRef.current,
+          locator: request.locator,
+          target: viewer,
+        });
+        if (applied && generation === navigationGenerationRef.current) {
+          onNavigationApplied?.(request.sequence);
+        }
+        return undefined;
+      });
+      const observed = navigation.catch((error: unknown) => {
+        if (generation === navigationGenerationRef.current) {
+          onNavigationError?.(toError(error));
+        }
+      });
+      navigationQueueRef.current = observed;
+      detached(observed, "SilurusOfficeFileViewer.navigation");
+    },
+  );
+  const navigateToLatestRequest = useLatestCallback(
+    (viewer: OfficeNavigationViewer) => {
+      if (navigationRequest) {
+        enqueueNavigation(viewer, navigationRequest);
+      }
+    },
+  );
+
+  useExternalSyncEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !viewerReadyRef.current || !navigationRequest) {
+      return;
+    }
+    enqueueNavigation(viewer, navigationRequest);
+  }, [enqueueNavigation, navigationRequest]);
 
   useExternalSyncEffect(() => {
     if (!container) {
@@ -192,7 +256,7 @@ export const SilurusOfficeFileViewer = ({
           );
         };
 
-        viewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
+        const xlsxViewer = XlsxViewer.fromWorkbook(container, loadedWorkbook, {
           enableHyperlinks: false,
           onError: reportError,
           onSelectionChange: reportSelection,
@@ -209,6 +273,8 @@ export const SilurusOfficeFileViewer = ({
           resizable: true,
           showZoomSlider: true,
         });
+        viewer = xlsxViewer;
+        viewerRef.current = { format: "xlsx", viewer: xlsxViewer };
         if (spreadsheetFooterHeightPx !== undefined) {
           setSpreadsheetFooterHeight(container, spreadsheetFooterHeightPx);
         }
@@ -223,17 +289,24 @@ export const SilurusOfficeFileViewer = ({
           presentationViewerOptions,
         );
         viewer = pptxViewer;
+        viewerRef.current = { format: "pptx", viewer: pptxViewer };
         await pptxViewer.load(documentBuffer.slice(0));
       }
+      viewerReadyRef.current = true;
       reportReady();
+      navigateToLatestRequest(viewerRef.current);
     };
 
     detached(load().catch(reportError), "SilurusOfficeFileViewer.load");
 
     return () => {
       disposed = true;
+      viewerReadyRef.current = false;
+      navigationGenerationRef.current += 1;
+      navigationQueueRef.current = Promise.resolve();
       selectionRequest += 1;
       finishSpreadsheetLoad();
+      viewerRef.current = null;
       viewer?.destroy();
       workbook?.destroy();
       container.replaceChildren();
@@ -242,6 +315,8 @@ export const SilurusOfficeFileViewer = ({
     container,
     documentBuffer,
     format,
+    enqueueNavigation,
+    navigateToLatestRequest,
     onError,
     onSpreadsheetSelectionChange,
     onStatusChange,
@@ -252,6 +327,66 @@ export const SilurusOfficeFileViewer = ({
   ]);
 
   return <div className={className} dir="ltr" ref={setContainer} />;
+};
+
+type OfficeNavigationViewer =
+  | {
+      format: "pptx";
+      viewer: {
+        scrollToSlide: (
+          index: number,
+          options?: { behavior?: "auto" | "smooth" },
+        ) => void;
+      };
+    }
+  | {
+      format: "xlsx";
+      viewer: {
+        goToSheet: (index: number) => Promise<void>;
+        scrollToCell: (reference: string) => Promise<void>;
+        select: (reference: string) => void;
+      };
+    };
+
+const applyOfficeNavigation = async ({
+  isCurrent,
+  locator,
+  target,
+}: {
+  isCurrent: () => boolean;
+  locator: OfficeCitationLocator;
+  target: OfficeNavigationViewer;
+}): Promise<boolean> => {
+  if (!isCurrent()) {
+    return false;
+  }
+  if (target.format === "pptx" && locator.type === "pptx") {
+    const prefersReducedMotion = globalThis.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    target.viewer.scrollToSlide(locator.slideIndex, {
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+    return true;
+  }
+  if (target.format === "xlsx" && locator.type === "xlsx") {
+    await target.viewer.goToSheet(locator.sheetIndex);
+    if (!isCurrent()) {
+      return false;
+    }
+    target.viewer.select(locator.range);
+    const separatorIndex = locator.range.indexOf(":");
+    const anchor =
+      separatorIndex === -1
+        ? locator.range
+        : locator.range.slice(0, separatorIndex);
+    await target.viewer.scrollToCell(anchor);
+    return isCurrent();
+  }
+  throw new ClientOperationError({
+    action: "navigate Office citation",
+    message: `Office viewer format ${target.format} cannot navigate a ${locator.type} citation`,
+  });
 };
 
 const findWorksheetCell = (
