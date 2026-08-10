@@ -53,12 +53,15 @@ const resolveTarget = async () => {
     .orderBy(desc(authSession.updatedAt))
     .limit(1);
   const activeSession = activeSessions.at(0);
-  const activeOrganizationId = activeSession?.organizationId;
-  if (!activeSession || !activeOrganizationId) {
+  const activeOrganizationIdValue = activeSession?.organizationId;
+  if (!activeSession || !activeOrganizationIdValue) {
     panic(
       "No active local session found. Sign in to dev before seeding emails.",
     );
   }
+  const activeOrganizationId = toSafeId<"organization">(
+    activeOrganizationIdValue,
+  );
 
   const explicitWorkspaceId =
     process.env["STELLA_SEED_EMAIL_WORKSPACE_ID"]?.trim();
