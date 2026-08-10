@@ -15,6 +15,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
+import { omitSourceBoundValues } from "./ai-visible-values";
 import type { FieldMeta } from "./types";
 
 export type AiConditionDecider = (input: {
@@ -60,7 +61,7 @@ export const resolveAiConditions = async ({
     const value = await decide({
       prompt,
       fieldPath: field.path,
-      values: resolved,
+      values: omitSourceBoundValues({ values: resolved, fields }),
     });
     if (value !== undefined) {
       resolved[field.path] = value;

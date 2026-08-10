@@ -40,6 +40,37 @@ describe("resolveAiConditions", () => {
     expect(result["is_consumer"]).toBe(false);
   });
 
+  test("does not disclose source-bound values to the AI decider", async () => {
+    let seenValues: Record<string, unknown> | undefined;
+
+    const result = await resolveAiConditions({
+      values: {
+        "client.iban": "CZ6508000000192000145399",
+        "client.name": "ACME",
+      },
+      fields: [
+        {
+          path: "client.iban",
+          inputType: "text",
+          source: { kind: "contact", field: "iban" },
+        },
+        {
+          path: "is_consumer",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer?",
+        },
+      ],
+      decide: async ({ values }) => {
+        seenValues = values;
+        return true;
+      },
+    });
+
+    expect(seenValues).toEqual({ "client.name": "ACME" });
+    expect(result["client.iban"]).toBe("CZ6508000000192000145399");
+    expect(result["is_consumer"]).toBe(true);
+  });
+
   test("leaves the condition unset with no decider (block then excluded)", async () => {
     const result = await resolveAiConditions({
       values: {},
