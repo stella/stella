@@ -187,6 +187,36 @@ const decodeEvidenceRow = async (
   return parsed.output;
 };
 
+type FindEvidenceBlockOptions = {
+  blockId: string;
+  evidenceRows: readonly PersistedEvidenceRow[];
+  index?: number;
+  organizationId: SafeId<"organization">;
+};
+
+const findEvidenceBlock = async ({
+  blockId,
+  evidenceRows,
+  index = 0,
+  organizationId,
+}: FindEvidenceBlockOptions): Promise<OfficeEvidenceBlock | null> => {
+  const evidenceRow = evidenceRows.at(index);
+  if (!evidenceRow) {
+    return null;
+  }
+  const payload = await decodeEvidenceRow(evidenceRow, organizationId);
+  const block = payload?.blocks.find(({ id }) => id === blockId);
+  return (
+    block ??
+    findEvidenceBlock({
+      blockId,
+      evidenceRows,
+      index: index + 1,
+      organizationId,
+    })
+  );
+};
+
 const isCurrentSource = async (
   tx: Transaction,
   scope: OfficeEvidenceScope,
@@ -643,12 +673,10 @@ export const findOfficeEvidenceBlock = async ({
     return null;
   }
   const { evidenceRows, source } = resolved;
-  for (const evidenceRow of evidenceRows) {
-    const payload = await decodeEvidenceRow(evidenceRow, organizationId);
-    const block = payload?.blocks.find(({ id }) => id === blockId);
-    if (block) {
-      return { block, source };
-    }
-  }
-  return null;
+  const block = await findEvidenceBlock({
+    blockId,
+    evidenceRows,
+    organizationId,
+  });
+  return block ? { block, source } : null;
 };
