@@ -2,9 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 import * as v from "valibot";
 
 import type {
-  DocumentPropertiesResult,
+  AuthoredDocumentPropertyKey,
   EmailTextAttachmentCharset,
 } from "@stll/api-contract";
+import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -16,7 +17,6 @@ import type {
 } from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
-  documentPropertiesQueryKey,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -108,7 +108,6 @@ export const filesKeys = {
     key.workspaceId,
     key.fieldId,
   ],
-  documentPropertiesByFieldId: documentPropertiesQueryKey,
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
@@ -291,20 +290,64 @@ export const saveEmailAttachment = async ({
  * deliberately lazy: it runs when the metadata panel is on screen, and the
  * answer then stays cached for the session.
  */
-export const documentPropertiesOptions = (props: FileOptionsProps) =>
-  queryOptions({
-    gcTime: Number.POSITIVE_INFINITY,
-    queryKey: filesKeys.documentPropertiesByFieldId(props),
-    queryFn: async ({ signal }): Promise<DocumentPropertiesResult> => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        ["document-properties"]({ fieldId: props.fieldId })
-        .get({ fetch: { signal } });
+export const readDocumentProperties = async ({
+  workspaceId,
+  fieldId,
+  signal,
+}: FileOptionsProps & { signal: AbortSignal }) => {
+  const response = await fetchWithTimeout(
+    apiUrl(
+      `/files/${encodeURIComponent(workspaceId)}/document-properties/${encodeURIComponent(fieldId)}`,
+    ),
+    { credentials: "include", signal, timeoutMs: 30_000 },
+  );
+  if (!response.ok) {
+    throw new APIError({
+      status: response.status,
+      message: "Failed to read document properties",
+    });
+  }
+  const parsed = v.safeParse(
+    DOCUMENT_PROPERTIES_RESULT_SCHEMA,
+    await response.json(),
+  );
+  if (!parsed.success) {
+    throw new APIError({
+      status: 502,
+      message: "Invalid document properties response",
+    });
+  }
+  return parsed.output;
+};
 
-      return unwrapEden(response);
+export const updateDocumentProperty = async ({
+  workspaceId,
+  fieldId,
+  propertyKey,
+  value,
+}: FileOptionsProps & {
+  propertyKey: AuthoredDocumentPropertyKey;
+  value: string;
+}): Promise<void> => {
+  const response = await fetchWithTimeout(
+    apiUrl(
+      `/files/${encodeURIComponent(workspaceId)}/document-properties/${encodeURIComponent(fieldId)}`,
+    ),
+    {
+      body: JSON.stringify({ [propertyKey]: value }),
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
+      timeoutMs: 60_000,
     },
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  );
+  if (!response.ok) {
+    throw new APIError({
+      status: response.status,
+      message: "Failed to update document properties",
+    });
+  }
+};
 
 export const textFileOptions = (props: FileOptionsProps) =>
   queryOptions({

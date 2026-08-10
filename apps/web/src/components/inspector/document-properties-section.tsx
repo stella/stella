@@ -19,11 +19,12 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import { documentPropertiesQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { documentPropertiesOptions } from "@/lib/files/queries";
+import {
+  readDocumentProperties,
+  updateDocumentProperty,
+} from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
 /**
@@ -107,9 +108,20 @@ export const DocumentPropertiesSection = ({
   const t = useTranslations();
   const format = useFormatter();
   const [isAllOpen, setIsAllOpen] = useState(false);
-  const { data, isPending, isError } = useQuery(
-    documentPropertiesOptions({ workspaceId, fieldId: fileFieldId }),
-  );
+  const { data, isPending, isError } = useQuery({
+    gcTime: Number.POSITIVE_INFINITY,
+    queryKey: documentPropertiesQueryKey({
+      workspaceId,
+      fieldId: fileFieldId,
+    }),
+    queryFn: async ({ signal }) =>
+      await readDocumentProperties({
+        fieldId: fileFieldId,
+        signal,
+        workspaceId,
+      }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   if (isPending) {
     return <Message>{t("common.loading")}</Message>;
@@ -290,14 +302,12 @@ const EditablePropertyValue = ({
     }
     setSaving(true);
     const result = await Result.tryPromise(async () =>
-      unwrapEden(
-        await api
-          .files({ workspaceId })
-          ["document-properties"]({ fieldId: fileFieldId })
-          .patch({
-            [propertyKey]: draft,
-          }),
-      ),
+      updateDocumentProperty({
+        fieldId: fileFieldId,
+        propertyKey,
+        value: draft,
+        workspaceId,
+      }),
     );
     setSaving(false);
 

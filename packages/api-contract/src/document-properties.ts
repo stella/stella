@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 /**
  * The contract for a document's own embedded properties: what a DOCX, ODF or
  * PDF file records about itself (Author, Company, Producer, ...), as distinct
@@ -115,6 +117,31 @@ export type DocumentPropertiesResult =
   | { status: "password-protected" }
   | { status: "too-large" }
   | { status: "unreadable" };
+
+const DOCUMENT_PROPERTY_VALUE_SCHEMA = v.variant("type", [
+  v.object({ type: v.literal("text"), value: v.string() }),
+  v.object({ type: v.literal("date"), value: v.string() }),
+  v.object({ type: v.literal("count"), value: v.number() }),
+  v.object({ type: v.literal("minutes"), value: v.number() }),
+]);
+
+/** Runtime decoder for the UI-only fetch route excluded from Eden's type graph. */
+export const DOCUMENT_PROPERTIES_RESULT_SCHEMA = v.variant("status", [
+  v.object({
+    status: v.literal("available"),
+    properties: v.array(
+      v.object({
+        key: v.picklist(DOCUMENT_PROPERTY_KEYS),
+        value: DOCUMENT_PROPERTY_VALUE_SCHEMA,
+      }),
+    ),
+    editable: v.boolean(),
+  }),
+  v.object({ status: v.literal("unsupported-format") }),
+  v.object({ status: v.literal("password-protected") }),
+  v.object({ status: v.literal("too-large") }),
+  v.object({ status: v.literal("unreadable") }),
+]);
 
 /** The `status` values a caller must handle, for exhaustive label maps. */
 export type DocumentPropertiesStatus = DocumentPropertiesResult["status"];

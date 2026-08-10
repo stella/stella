@@ -335,30 +335,9 @@ export const filesRoute = new Elysia({
       permissions: officeCitationEndpoint.config.permissions,
     },
   )
-  .get(
-    "/document-properties/:fieldId",
-    readDocumentPropertiesEndpoint.handler,
-    {
-      params: readDocumentPropertiesEndpoint.config.params,
-      permissions: readDocumentPropertiesEndpoint.config.permissions,
-    },
-  )
-  .patch(
-    "/document-properties/:fieldId",
-    updateDocumentPropertiesEndpoint.handler,
-    {
-      body: updateDocumentPropertiesEndpoint.config.body,
-      params: updateDocumentPropertiesEndpoint.config.params,
-      permissions: updateDocumentPropertiesEndpoint.config.permissions,
-    },
-  )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,
-  })
-  .get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
-    params: scrubbedDownloadEndpoint.config.params,
-    permissions: scrubbedDownloadEndpoint.config.permissions,
   })
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,
@@ -373,6 +352,30 @@ export const filesRoute = new Elysia({
 
 // These UI-only endpoints intentionally stay outside the exported Eden
 // contract. Elysia still registers them with the same guards and macros above.
+filesRoute.get(
+  "/document-properties/:fieldId",
+  readDocumentPropertiesEndpoint.handler,
+  {
+    params: readDocumentPropertiesEndpoint.config.params,
+    permissions: readDocumentPropertiesEndpoint.config.permissions,
+  },
+);
+
+filesRoute.patch(
+  "/document-properties/:fieldId",
+  updateDocumentPropertiesEndpoint.handler,
+  {
+    body: updateDocumentPropertiesEndpoint.config.body,
+    params: updateDocumentPropertiesEndpoint.config.params,
+    permissions: updateDocumentPropertiesEndpoint.config.permissions,
+  },
+);
+
+filesRoute.get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
+  params: scrubbedDownloadEndpoint.config.params,
+  permissions: scrubbedDownloadEndpoint.config.permissions,
+});
+
 filesRoute.get(
   "/email-attachment/:fieldId/:attachmentId",
   emailAttachmentEndpoint.handler,
