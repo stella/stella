@@ -79,9 +79,7 @@ describe("timerStart (timezone validation)", () => {
     let callCount = 0;
     const safeDb = asTestRaw<TimerStartCtx["safeDb"]>(async () => {
       callCount += 1;
-      return callCount === 1
-        ? Result.ok(new Map())
-        : Result.err(databaseError);
+      return callCount === 1 ? Result.ok(new Map()) : Result.err(databaseError);
     });
 
     const result = await timerStart.handler(
