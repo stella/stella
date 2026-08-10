@@ -77,5 +77,13 @@ const SCHEDULER_TASKS = {
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
 
+/**
+ * Every task name this build can execute, as data: job registration retires
+ * persisted rows whose task no build code answers for anymore.
+ */
+export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(SCHEDULER_TASKS),
+);
+
 export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
   new Map<string, SchedulerTask>(Object.entries(SCHEDULER_TASKS));

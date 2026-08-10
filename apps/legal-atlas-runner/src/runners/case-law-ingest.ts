@@ -1365,6 +1365,12 @@ export const runCaseLawIngest = async (
   // the fetch gap is already the constraint and an outer interval could only
   // hold it below that. Gated: it is the one loop here that fetches from a
   // publisher outside an adapter crawl.
+  //
+  // Overlapping runner replicas each pace their own clock, so the aggregate
+  // fetch rate briefly multiplies during a rolling deployment. Accepted
+  // rather than leased: the queue's per-document claims keep the work
+  // correct and unduplicated, the service runs one task otherwise, and the
+  // overlap is bounded by the deployment window.
   const skDocumentLoop = (async () => {
     if (!LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled) {
       return;

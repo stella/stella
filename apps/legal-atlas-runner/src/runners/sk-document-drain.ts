@@ -93,6 +93,12 @@ export const SK_DOCUMENT_DRAIN_TIMING = {
   failureBackoffMaxMs: 60_000,
 } as const satisfies Omit<SkDocumentDrainTiming, "fetchDelayMs">;
 
+/**
+ * The longest slice a pacing wait sleeps before re-checking the drain flag.
+ * The idle ceiling is minutes; a SIGTERM must not wait it out.
+ */
+export const DRAIN_CHECK_SLICE_MS = 1000;
+
 export type SkDocumentDrainOptions = {
   queue: PendingDocumentQueue;
   fetchDocument: (
@@ -182,8 +188,16 @@ export const runSkDocumentDrain = async ({
       flushSummary();
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- the pacing itself: throughput is this gap, so the loop is sequential by design
-    await sleep(delayMs);
+    // The pacing itself: throughput is this gap, so the loop is sequential
+    // by design. Sliced so a drain request interrupts an idle ceiling of
+    // minutes within a second; a fetch gap under one slice sleeps once.
+    let remainingMs = delayMs;
+    while (remainingMs > 0 && !isDraining()) {
+      const sliceMs = Math.min(remainingMs, DRAIN_CHECK_SLICE_MS);
+      // oxlint-disable-next-line no-await-in-loop -- sequential pacing wait, sliced only to re-check the drain flag
+      await sleep(sliceMs);
+      remainingMs -= sliceMs;
+    }
   }
 
   // A deployment must not discard the window in hand: without this the

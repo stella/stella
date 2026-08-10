@@ -3,6 +3,9 @@
  * bursting looks like a healthy walk to everything except the publisher
  * being fetched from, and a loop that stops after the first failure
  * looks exactly like an empty queue. Both are pinned here.
+ *
+ * Pacing waits are sliced to stay interruptible, so assertions read the
+ * summed gap between queue polls or fetches, never individual sleeps.
  */
 
 import { panic } from "better-result";
@@ -21,6 +24,7 @@ import type {
 import { DOCUMENT_TIER } from "@/api/lib/legal-search/sk-document-queue";
 
 import {
+  DRAIN_CHECK_SLICE_MS,
   type SkDocumentDrainSummary,
   type SkDocumentDrainTiming,
   runSkDocumentDrain,
@@ -102,25 +106,30 @@ const queueOf = (caseNumbers: readonly string[]): PendingDocumentQueue => {
 };
 
 type DrainEvent =
+  | { type: "poll" }
   | { type: "fetch"; caseNumber: string }
   | { type: "sleep"; ms: number };
 
 type DrainRun = {
   events: DrainEvent[];
   summaries: SkDocumentDrainSummary[];
+  clock: number;
 };
 
 type RunDrainOptions = {
   queue: PendingDocumentQueue;
   /** Answers one fetch; throwing stands in for a transient failure. */
   respond: (decision: PendingDocument) => DecisionDocumentOutcome;
-  /** Iterations to let run before the walk is asked to drain. */
-  iterations: number;
+  /** Queue polls to allow before the walk is asked to drain. */
+  polls: number;
+  /** Additionally drain once the fake clock reaches this, mid-wait. */
+  drainAtClock?: number;
   timing?: SkDocumentDrainTiming;
 };
 
 const runDrain = async ({
-  iterations,
+  drainAtClock,
+  polls,
   queue,
   respond,
   timing = TIMING,
@@ -128,11 +137,18 @@ const runDrain = async ({
   const events: DrainEvent[] = [];
   const summaries: SkDocumentDrainSummary[] = [];
   let clock = 0;
-  let slept = 0;
+  let polled = 0;
   let draining = false;
 
   await runSkDocumentDrain({
-    queue,
+    queue: {
+      next: async () => {
+        events.push({ type: "poll" });
+        polled += 1;
+        draining ||= polled >= polls;
+        return await queue.next();
+      },
+    },
     fetchDocument: async (decision) => {
       events.push({ type: "fetch", caseNumber: decision.caseNumber });
       return await Promise.resolve(respond(decision));
@@ -145,30 +161,32 @@ const runDrain = async ({
     sleep: async (ms) => {
       events.push({ type: "sleep", ms });
       clock += ms;
-      slept += 1;
-      draining = slept >= iterations;
+      draining ||= drainAtClock !== undefined && clock >= drainAtClock;
       await Promise.resolve();
     },
     timing,
   });
 
-  return { events, summaries };
+  return { events, summaries, clock };
 };
 
-/** Sleeps recorded between one fetch and the next. */
-const gapsBetweenFetches = ({ events }: DrainRun): number[] => {
+/** Summed sleeps recorded between consecutive events of one type. */
+const gapsBetween = (
+  { events }: DrainRun,
+  boundary: DrainEvent["type"],
+): number[] => {
   const gaps: number[] = [];
-  let sinceFetch: number | undefined;
+  let sinceBoundary: number | undefined;
   for (const event of events) {
-    if (event.type === "fetch") {
-      if (sinceFetch !== undefined) {
-        gaps.push(sinceFetch);
+    if (event.type === boundary) {
+      if (sinceBoundary !== undefined) {
+        gaps.push(sinceBoundary);
       }
-      sinceFetch = 0;
+      sinceBoundary = 0;
       continue;
     }
-    if (sinceFetch !== undefined) {
-      sinceFetch += event.ms;
+    if (event.type === "sleep" && sinceBoundary !== undefined) {
+      sinceBoundary += event.ms;
     }
   }
   return gaps;
@@ -188,13 +206,13 @@ describe("sk document drain", () => {
       respond: ({ caseNumber }) =>
         outcomeByCaseNumber.get(caseNumber) ??
         panic(`no outcome scripted for ${caseNumber}`),
-      iterations: OUTCOME_STATUSES.length,
+      polls: OUTCOME_STATUSES.length,
     });
 
     expect(run.events.filter(({ type }) => type === "fetch")).toHaveLength(
       OUTCOME_STATUSES.length,
     );
-    expect(gapsBetweenFetches(run)).toEqual(
+    expect(gapsBetween(run, "fetch")).toEqual(
       Array.from(
         { length: OUTCOME_STATUSES.length - 1 },
         () => TIMING.fetchDelayMs,
@@ -211,7 +229,7 @@ describe("sk document drain", () => {
         }
         return OUTCOMES.filled;
       },
-      iterations: 3,
+      polls: 3,
     });
 
     // The walk carried on past the throw...
@@ -221,7 +239,9 @@ describe("sk document drain", () => {
       ),
     ).toEqual(["doc-1", "doc-2", "doc-3"]);
     // ...and paid for it, rather than retrying at full speed.
-    expect(gapsBetweenFetches(run).at(0)).toBeGreaterThan(TIMING.fetchDelayMs);
+    expect(gapsBetween(run, "fetch").at(0)).toBeGreaterThan(
+      TIMING.fetchDelayMs,
+    );
   });
 
   test("a run of failures backs off to the ceiling and no further", async () => {
@@ -230,32 +250,28 @@ describe("sk document drain", () => {
       respond: () => {
         throw new Error("unreachable");
       },
-      iterations: 12,
+      polls: 12,
     });
 
-    const sleeps = run.events.flatMap((event) =>
-      event.type === "sleep" ? [event.ms] : [],
-    );
-    const notIncreasing = sleeps.filter(
-      (ms, i) => i > 0 && ms < (sleeps[i - 1] ?? 0),
+    const gaps = gapsBetween(run, "poll");
+    const notIncreasing = gaps.filter(
+      (ms, i) => i > 0 && ms < (gaps[i - 1] ?? 0),
     );
 
     expect(notIncreasing).toEqual([]);
-    expect(sleeps.at(0)).toBe(TIMING.fetchDelayMs * 2);
-    expect(sleeps.at(-1)).toBe(TIMING.failureBackoffMaxMs);
+    expect(gaps.at(0)).toBe(TIMING.fetchDelayMs * 2);
+    expect(gaps.at(-1)).toBe(TIMING.failureBackoffMaxMs);
   });
 
   test("an empty queue backs off instead of polling at the fetch rate", async () => {
     const run = await runDrain({
       queue: queueOf([]),
       respond: () => OUTCOMES.filled,
-      iterations: 5,
+      polls: 5,
     });
 
     expect(run.events.filter(({ type }) => type === "fetch")).toEqual([]);
-    expect(
-      run.events.flatMap((event) => (event.type === "sleep" ? [event.ms] : [])),
-    ).toEqual([1000, 2000, 4000, 8000, 8000]);
+    expect(gapsBetween(run, "poll")).toEqual([1000, 2000, 4000, 8000]);
   });
 
   test("a document found resets the idle backoff", async () => {
@@ -278,12 +294,40 @@ describe("sk document drain", () => {
     const run = await runDrain({
       queue: emptyThenWork,
       respond: () => OUTCOMES.filled,
-      iterations: 4,
+      polls: 4,
     });
 
-    expect(
-      run.events.flatMap((event) => (event.type === "sleep" ? [event.ms] : [])),
-    ).toEqual([1000, 2000, TIMING.fetchDelayMs, TIMING.fetchDelayMs]);
+    expect(gapsBetween(run, "poll")).toEqual([1000, 2000, TIMING.fetchDelayMs]);
+  });
+
+  test("every pacing wait stays interruptible: no sleep exceeds one slice", async () => {
+    // The idle ceiling is minutes in production; a SIGTERM must interrupt
+    // it within a slice instead of waiting it out.
+    const run = await runDrain({
+      queue: queueOf([]),
+      respond: () => OUTCOMES.filled,
+      polls: 5,
+    });
+
+    const oversleeps = run.events.filter(
+      (event) => event.type === "sleep" && event.ms > DRAIN_CHECK_SLICE_MS,
+    );
+    expect(oversleeps).toEqual([]);
+  });
+
+  test("a drain request interrupts an idle wait mid-gap", async () => {
+    const run = await runDrain({
+      queue: queueOf([]),
+      respond: () => OUTCOMES.filled,
+      polls: Number.POSITIVE_INFINITY,
+      timing: { ...TIMING, idleSleepMs: 3500 },
+      drainAtClock: 1500,
+    });
+
+    // The 3500ms idle gap ended after two slices, not four: the walk
+    // noticed the drain request without waiting the gap out.
+    expect(run.clock).toBe(2000);
+    expect(run.events.filter(({ type }) => type === "poll")).toHaveLength(1);
   });
 
   test("the summary tallies the window and is emitted once per interval", async () => {
@@ -291,7 +335,7 @@ describe("sk document drain", () => {
       queue: queueOf(["doc-1", "doc-2", "doc-3"]),
       respond: ({ caseNumber }) =>
         caseNumber === "doc-2" ? OUTCOMES.unavailable : OUTCOMES.filled,
-      iterations: 3,
+      polls: 3,
     });
 
     // Three fetches at 500ms never reach the 10s interval, so the only
@@ -308,13 +352,32 @@ describe("sk document drain", () => {
     });
   });
 
+  test("a long window emits periodic summaries and resets the tally between them", async () => {
+    // Six documents at a 1s summary interval: the walk crosses the
+    // interval mid-run, so the tallies must arrive in windows rather
+    // than only at shutdown, and a window must not re-report its
+    // predecessor's counts.
+    const run = await runDrain({
+      queue: queueOf(Array.from({ length: 6 }, (_, i) => `doc-${i}`)),
+      respond: () => OUTCOMES.filled,
+      polls: 6,
+      timing: { ...TIMING, summaryIntervalMs: 1000 },
+    });
+
+    expect(run.summaries.length).toBeGreaterThan(1);
+    const attempted = run.summaries.map(({ attempted: count }) => count);
+    expect(attempted.reduce((sum, count) => sum + count, 0)).toBe(6);
+    // Every window carries only its own tally, so none reports all six.
+    expect(Math.max(...attempted)).toBeLessThan(6);
+  });
+
   test("an idle window reports nothing at all", async () => {
     // Progress and error rate are the signal; a stream of zero-rows
     // summaries would bury both. Liveness is the daemon's heartbeat.
     const run = await runDrain({
       queue: queueOf([]),
       respond: () => OUTCOMES.filled,
-      iterations: 30,
+      polls: 30,
     });
 
     expect(run.summaries).toEqual([]);
@@ -327,7 +390,7 @@ describe("sk document drain", () => {
       respond: () => {
         throw failure;
       },
-      iterations: 1,
+      polls: 1,
     });
 
     expect(run.summaries.at(0)).toMatchObject({

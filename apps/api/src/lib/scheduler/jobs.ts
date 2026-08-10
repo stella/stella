@@ -1,12 +1,16 @@
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  REGISTERED_SCHEDULER_TASK_NAMES,
+  type RegisteredSchedulerTaskName,
+} from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
@@ -276,5 +280,35 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
 
   if (missing.length > 0) {
     panic(`scheduler jobs declared but not registered: ${missing.join(", ")}`);
+  }
+
+  // A persisted job whose task this build cannot run is undrivable: the
+  // scheduler would keep claiming it and executing nothing, invisibly. Rows
+  // reach that state when a deployment removes a task, because the loop
+  // above only upserts declared jobs and never retires what an older build
+  // declared. The registry is the discriminator, not the declared list, so
+  // dynamically registered jobs (scheduled flows) are untouched. Disable
+  // rather than delete: the row remains as an audit record, and a
+  // rollback's own registration re-enables it (the upsert sets `enabled`).
+  const enabledRows = await rootDb
+    .select({ id: schedulerJobs.id, task: schedulerJobs.task })
+    .from(schedulerJobs)
+    .where(eq(schedulerJobs.enabled, true));
+  const undrivable = enabledRows.filter(
+    ({ task }) => !REGISTERED_SCHEDULER_TASK_NAMES.has(task),
+  );
+  if (undrivable.length > 0) {
+    await rootDb
+      .update(schedulerJobs)
+      .set({ enabled: false })
+      .where(
+        inArray(
+          schedulerJobs.id,
+          undrivable.map(({ id }) => id),
+        ),
+      );
+    for (const { id, task } of undrivable) {
+      logger.warn("scheduler.job_retired", { jobId: id, task });
+    }
   }
 };
