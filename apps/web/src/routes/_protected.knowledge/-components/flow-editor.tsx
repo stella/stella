@@ -177,10 +177,12 @@ type TriggerDraft = {
     dayOfMonth: number;
   };
   fileUpload: {
-    allWorkspaces: boolean;
-    workspaceIds: string[];
-    anyExtension: boolean;
-    extensions: string[];
+    workspaceScope:
+      | { type: "all"; previousWorkspaceIds: string[] }
+      | { type: "selected"; workspaceIds: string[] };
+    extensionScope:
+      | { type: "any"; previousExtensions: string[] }
+      | { type: "selected"; extensions: string[] };
   };
 };
 
@@ -194,10 +196,8 @@ const defaultTriggerDraft = (): TriggerDraft => ({
     dayOfMonth: 1,
   },
   fileUpload: {
-    allWorkspaces: true,
-    workspaceIds: [],
-    anyExtension: true,
-    extensions: [],
+    workspaceScope: { type: "all", previousWorkspaceIds: [] },
+    extensionScope: { type: "any", previousExtensions: [] },
   },
 });
 
@@ -214,10 +214,14 @@ const deriveTriggerDraft = (trigger: FlowTrigger): TriggerDraft => {
   }
   if (trigger.type === "file-upload") {
     draft.type = "file-upload";
-    draft.fileUpload.allWorkspaces = trigger.workspaceIds === null;
-    draft.fileUpload.workspaceIds = trigger.workspaceIds ?? [];
-    draft.fileUpload.anyExtension = trigger.fileExtensions === null;
-    draft.fileUpload.extensions = trigger.fileExtensions ?? [];
+    draft.fileUpload.workspaceScope =
+      trigger.workspaceIds === null
+        ? { type: "all", previousWorkspaceIds: [] }
+        : { type: "selected", workspaceIds: trigger.workspaceIds };
+    draft.fileUpload.extensionScope =
+      trigger.fileExtensions === null
+        ? { type: "any", previousExtensions: [] }
+        : { type: "selected", extensions: trigger.fileExtensions };
     return draft;
   }
   return draft;
@@ -241,14 +245,15 @@ const buildTrigger = (draft: TriggerDraft): FlowDefinitionBody["trigger"] => {
     };
   }
   if (draft.type === "file-upload") {
+    const { workspaceScope, extensionScope } = draft.fileUpload;
     return {
       type: "file-upload",
-      workspaceIds: draft.fileUpload.allWorkspaces
-        ? null
-        : draft.fileUpload.workspaceIds.map((id) => toSafeId<"workspace">(id)),
-      fileExtensions: draft.fileUpload.anyExtension
-        ? null
-        : draft.fileUpload.extensions,
+      workspaceIds:
+        workspaceScope.type === "all"
+          ? null
+          : workspaceScope.workspaceIds.map((id) => toSafeId<"workspace">(id)),
+      fileExtensions:
+        extensionScope.type === "any" ? null : extensionScope.extensions,
     };
   }
   return { type: "manual" };
@@ -841,10 +846,60 @@ const FileUploadConfig = ({
   const t = useTranslations();
 
   const toggleWorkspace = (id: string, checked: boolean) => {
+    if (fileUpload.workspaceScope.type !== "selected") {
+      return;
+    }
     const next = checked
-      ? [...fileUpload.workspaceIds, id]
-      : fileUpload.workspaceIds.filter((existing) => existing !== id);
-    onChange({ ...fileUpload, workspaceIds: next });
+      ? [...fileUpload.workspaceScope.workspaceIds, id]
+      : fileUpload.workspaceScope.workspaceIds.filter(
+          (existing) => existing !== id,
+        );
+    onChange({
+      workspaceScope: { type: "selected", workspaceIds: next },
+      extensionScope: fileUpload.extensionScope,
+    });
+  };
+
+  const toggleAllWorkspaces = (checked: boolean) => {
+    const workspaceScope = checked
+      ? {
+          type: "all" as const,
+          previousWorkspaceIds:
+            fileUpload.workspaceScope.type === "selected"
+              ? fileUpload.workspaceScope.workspaceIds
+              : fileUpload.workspaceScope.previousWorkspaceIds,
+        }
+      : {
+          type: "selected" as const,
+          workspaceIds:
+            fileUpload.workspaceScope.type === "all"
+              ? fileUpload.workspaceScope.previousWorkspaceIds
+              : fileUpload.workspaceScope.workspaceIds,
+        };
+    onChange({ workspaceScope, extensionScope: fileUpload.extensionScope });
+  };
+
+  const isWorkspaceSelected = (workspaceId: string) =>
+    fileUpload.workspaceScope.type === "selected" &&
+    fileUpload.workspaceScope.workspaceIds.includes(workspaceId);
+
+  const toggleAnyExtension = (checked: boolean) => {
+    const extensionScope = checked
+      ? {
+          type: "any" as const,
+          previousExtensions:
+            fileUpload.extensionScope.type === "selected"
+              ? fileUpload.extensionScope.extensions
+              : fileUpload.extensionScope.previousExtensions,
+        }
+      : {
+          type: "selected" as const,
+          extensions:
+            fileUpload.extensionScope.type === "any"
+              ? fileUpload.extensionScope.previousExtensions
+              : fileUpload.extensionScope.extensions,
+        };
+    onChange({ workspaceScope: fileUpload.workspaceScope, extensionScope });
   };
 
   return (
@@ -853,14 +908,12 @@ const FileUploadConfig = ({
         <Label>{t("common.matters")}</Label>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
-            checked={fileUpload.allWorkspaces}
-            onCheckedChange={(checked) =>
-              onChange({ ...fileUpload, allWorkspaces: checked })
-            }
+            checked={fileUpload.workspaceScope.type === "all"}
+            onCheckedChange={toggleAllWorkspaces}
           />
           {t("flows.fileUpload.allWorkspaces")}
         </label>
-        {!fileUpload.allWorkspaces && (
+        {fileUpload.workspaceScope.type === "selected" && (
           <div className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2">
             {workspaces.map((workspace) => (
               <label
@@ -868,7 +921,7 @@ const FileUploadConfig = ({
                 key={workspace.id}
               >
                 <Checkbox
-                  checked={fileUpload.workspaceIds.includes(workspace.id)}
+                  checked={isWorkspaceSelected(workspace.id)}
                   onCheckedChange={(checked) =>
                     toggleWorkspace(workspace.id, checked)
                   }
@@ -886,17 +939,20 @@ const FileUploadConfig = ({
         <Label>{t("flows.fileUpload.extensions")}</Label>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
-            checked={fileUpload.anyExtension}
-            onCheckedChange={(checked) =>
-              onChange({ ...fileUpload, anyExtension: checked })
-            }
+            checked={fileUpload.extensionScope.type === "any"}
+            onCheckedChange={toggleAnyExtension}
           />
           {t("flows.fileUpload.anyExtension")}
         </label>
-        {!fileUpload.anyExtension && (
+        {fileUpload.extensionScope.type === "selected" && (
           <FlowExtensionInput
-            extensions={fileUpload.extensions}
-            onChange={(extensions) => onChange({ ...fileUpload, extensions })}
+            extensions={fileUpload.extensionScope.extensions}
+            onChange={(extensions) =>
+              onChange({
+                workspaceScope: fileUpload.workspaceScope,
+                extensionScope: { type: "selected", extensions },
+              })
+            }
           />
         )}
       </div>
