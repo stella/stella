@@ -2,6 +2,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { EditorView } from "@tiptap/pm/view";
+import { panic } from "better-result";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 
@@ -27,6 +28,19 @@ const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 export const CHAT_ANON_DECORATIONS_PLUGIN_NAME = "stll-anon-decorations";
 export const CHAT_ANON_DECORATIONS_PLUGIN_KEY_PREFIX = `${CHAT_ANON_DECORATIONS_PLUGIN_NAME}$`;
+
+const isChatAnonPair = (value: unknown): value is ChatAnonPair =>
+  typeof value === "object" &&
+  value !== null &&
+  "label" in value &&
+  typeof value.label === "string" &&
+  "original" in value &&
+  typeof value.original === "string" &&
+  "placeholder" in value &&
+  typeof value.placeholder === "string";
+
+const isChatAnonPairs = (value: unknown): value is readonly ChatAnonPair[] =>
+  Array.isArray(value) && value.every(isChatAnonPair);
 
 // Pin the PluginKey to globalThis so Vite HMR re-evaluating this
 // module doesn't allocate a *new* PluginKey while the editor
@@ -109,12 +123,11 @@ const createPlugin = (): Plugin<PluginState> =>
     state: {
       init: () => ({ pairs: [], decorations: DecorationSet.empty }),
       apply(tr, prev) {
-        // ProseMirror types `getMeta` as `any`; `setChatAnon-
-        // DecorationPairs` is the sole writer for this meta key so
-        // the shape is guaranteed at runtime.
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- getMeta is typed any; setChatAnonDecorationPairs is the sole writer
-        const meta: readonly ChatAnonPair[] | undefined = tr.getMeta(META_KEY);
+        const meta: unknown = tr.getMeta(META_KEY);
         if (meta !== undefined) {
+          if (!isChatAnonPairs(meta)) {
+            panic("Invalid chat anonymization decoration metadata");
+          }
           return { pairs: meta, decorations: buildDecorations(tr.doc, meta) };
         }
         if (!tr.docChanged) {
