@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Skrýt předchozí zprávy",
     "hideSignature": "Skrýt podpis",
     "noSubject": "(Bez předmětu)",
+    "previewTruncated": "Náhled byl kvůli výkonu zkrácen.",
     "showQuotedHistory": "Zobrazit předchozí zprávy",
     "showSignature": "Zobrazit podpis",
     "to": "Příjemci",

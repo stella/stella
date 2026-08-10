@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Masquer les messages précédents",
     "hideSignature": "Masquer la signature",
     "noSubject": "(Sans objet)",
+    "previewTruncated": "L’aperçu a été abrégé pour des raisons de performance.",
     "showQuotedHistory": "Afficher les messages précédents",
     "showSignature": "Afficher la signature",
     "to": "Destinataires",

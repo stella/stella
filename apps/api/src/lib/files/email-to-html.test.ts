@@ -364,6 +364,7 @@ describe("renderEmailHtml", () => {
         },
         attachments: [
           {
+            charset: null,
             contentId: "attachment-id",
             fileName: "evidence.pdf",
             mimeType: "application/pdf",
@@ -381,6 +382,7 @@ describe("renderEmailHtml", () => {
       bcc: ["عائشة <aisha@example.ae>"],
       attachments: [
         {
+          charset: null,
           id: "attachment-0",
           fileName: "evidence.pdf",
           mimeType: "application/pdf",
@@ -390,6 +392,7 @@ describe("renderEmailHtml", () => {
       ],
     });
     expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
+      "charset",
       "id",
       "fileName",
       "mimeType",
@@ -446,6 +449,7 @@ describe("renderEmailHtml", () => {
         ],
         attachments: [
           {
+            charset: null,
             contentId: "evidence",
             fileName: "evidence.png",
             mimeType: "image/png",
@@ -457,6 +461,7 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        charset: null,
         id: "attachment-0",
         fileName: "evidence.png",
         mimeType: "image/png",
@@ -471,6 +476,7 @@ describe("renderEmailHtml", () => {
 
   test("caps descriptors after removing referenced inline parts", () => {
     const inlineAttachments = Array.from({ length: 100 }, (_, index) => ({
+      charset: null,
       contentId: `inline-${String(index)}`,
       fileName: `inline-${String(index)}.png`,
       mimeType: "image/png",
@@ -495,6 +501,7 @@ describe("renderEmailHtml", () => {
         attachments: [
           ...inlineAttachments,
           {
+            charset: null,
             contentId: null,
             fileName: "evidence.pdf",
             mimeType: "application/pdf",
@@ -506,6 +513,7 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        charset: null,
         id: "attachment-100",
         fileName: "evidence.pdf",
         mimeType: "application/pdf",
@@ -1006,6 +1014,7 @@ describe("emailToHtml (.eml)", () => {
     );
 
     expect(attachment?.mimeType).toBe("text/plain");
+    expect(attachment?.charset).toBe("utf-8");
     expect(attachment).toBeDefined();
     if (!attachment) {
       return;
@@ -1024,6 +1033,7 @@ describe("emailToHtml (.eml)", () => {
 
     expect(result.value.attachments).toEqual([
       {
+        charset: "utf-8",
         id: "attachment-1",
         fileName: "notes.txt",
         mimeType: "text/plain",
@@ -1031,6 +1041,7 @@ describe("emailToHtml (.eml)", () => {
         previewable: true,
       },
       {
+        charset: null,
         id: "attachment-2",
         fileName: "evidence.png",
         mimeType: "image/png",

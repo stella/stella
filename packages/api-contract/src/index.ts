@@ -222,6 +222,7 @@ export type {
 
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;
+export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const MCP_APP_SANDBOX_PATH = "/mcp-app-sandbox" as const;
 export const MCP_APP_FRAME_TITLE_HASH_PARAM = "frame-title" as const;
 export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;

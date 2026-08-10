@@ -4,7 +4,9 @@ import {
   buildExportReviewCitationSeeds,
   buildExportReviewDocumentText,
   buildExportReviewMetadata,
+  createSeedEmail,
   createMockDocx,
+  SEED_EMAIL_FILE_NAMES,
 } from "./seed-dev";
 
 // Reproduces the non-empty-block walk folio's DOCX extractor performs (see
@@ -63,6 +65,23 @@ describe("Export Review citation seeds", () => {
     for (const seed of citationSeeds) {
       const paragraphText = nonEmptyParagraphs.at(seed.blockIndex - 1);
       expect(paragraphText).toContain(seed.quote);
+    }
+  });
+});
+
+describe("email viewer seeds", () => {
+  test("nested MIME boundaries cannot prefix one another", () => {
+    for (const fileName of SEED_EMAIL_FILE_NAMES) {
+      const source = createSeedEmail(fileName).toString("utf8");
+      const boundaries = Array.from(
+        source.matchAll(/boundary="(?<value>[^"]+)"/gu),
+        (match) => match.groups?.["value"] ?? "",
+      );
+      expect(boundaries).toHaveLength(2);
+      const outer = boundaries.at(0) ?? "";
+      const inner = boundaries.at(1) ?? "";
+      expect(outer.startsWith(inner)).toBe(false);
+      expect(inner.startsWith(outer)).toBe(false);
     }
   });
 });

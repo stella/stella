@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  decodeEmailTextAttachment,
   EMAIL_ATTACHMENT_PREVIEW_KIND,
+  getEmailAttachmentActivationId,
   getEmailAttachmentPreviewId,
   getEmailAttachmentPreviewKind,
 } from "@/components/inspector/email-attachments-facet.logic";
@@ -15,6 +17,33 @@ describe("email attachment preview kind", () => {
         workspaceId: "workspace-1",
       }),
     ).toBe("email-attachment:workspace-1:field-1:attachment-2");
+  });
+
+  test("decodes declared and byte-order-marked text encodings", () => {
+    expect(
+      decodeEmailTextAttachment({
+        buffer: Uint8Array.from([0x47, 0x72, 0xfc, 0xdf, 0x65]).buffer,
+        charset: "windows-1252",
+      }),
+    ).toBe("Grüße");
+    expect(
+      decodeEmailTextAttachment({
+        buffer: Uint8Array.from([0xfe, 0xff, 0x00, 0x41]).buffer,
+        charset: null,
+      }),
+    ).toBe("A");
+  });
+
+  test("maps attachment activation to a preview id only when supported", () => {
+    expect(
+      getEmailAttachmentActivationId({ id: "attachment-2", previewable: true }),
+    ).toBe("attachment-2");
+    expect(
+      getEmailAttachmentActivationId({
+        id: "attachment-2",
+        previewable: false,
+      }),
+    ).toBeNull();
   });
 
   test("routes PDFs through the PDF viewer", () => {

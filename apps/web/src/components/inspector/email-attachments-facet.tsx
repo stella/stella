@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -30,16 +31,21 @@ import {
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
 import {
+  decodeEmailTextAttachment,
   EMAIL_ATTACHMENT_PREVIEW_KIND,
   getEmailAttachmentPreviewId,
   getEmailAttachmentPreviewKind,
 } from "@/components/inspector/email-attachments-facet.logic";
 import { EmailViewerWithAI } from "@/components/inspector/email-html-viewer";
-import type { EmailChatMode } from "@/components/inspector/email-html-viewer.logic";
+import {
+  EMAIL_CHAT_MODE,
+  type EmailChatMode,
+} from "@/components/inspector/email-html-viewer.logic";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import {
   MatterTargetPicker,
@@ -212,6 +218,7 @@ export const EmailAttachmentsFacet = ({
         onZoomIn={onZoomIn}
         onZoomOut={onZoomOut}
         scaleOffset={scaleOffset}
+        chatMode={chatMode}
         workspaceId={workspaceId}
       />
     ) : (
@@ -228,6 +235,7 @@ export const EmailAttachmentsFacet = ({
         }
         onSelect={onSelectedIdChange}
         saving={saving}
+        chatMode={chatMode}
       />
     );
 
@@ -291,6 +299,7 @@ export const EmailAttachmentsFacet = ({
 const AttachmentPreview = ({
   attachment,
   canSave,
+  chatMode,
   fieldId,
   onBack,
   onChooseMatter,
@@ -304,6 +313,7 @@ const AttachmentPreview = ({
 }: {
   attachment: EmailAttachmentDescriptor;
   canSave: boolean;
+  chatMode: EmailChatMode;
   fieldId: string;
   onBack: () => void;
   onChooseMatter: () => void;
@@ -393,8 +403,14 @@ const AttachmentPreview = ({
           />
         ) : null}
       </div>
-      <div className="bg-muted/30 flex min-h-0 flex-1 flex-col p-2">
+      <div
+        className={cn(
+          "bg-muted/30 flex min-h-0 flex-1 flex-col p-2",
+          chatMode === EMAIL_CHAT_MODE.contextual && "pb-40",
+        )}
+      >
         <AttachmentPreviewContent
+          charset={attachment.charset}
           fileName={fileName}
           imageAttempt={imageAttempt}
           imageFailed={imageFailed}
@@ -409,6 +425,10 @@ const AttachmentPreview = ({
           scaleOffset={scaleOffset}
           previewUrl={previewObjectUrl}
           previewError={attachmentQuery.isError}
+          previewTruncated={
+            previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.text &&
+            attachment.sizeBytes > MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES
+          }
         />
       </div>
     </div>
@@ -416,6 +436,7 @@ const AttachmentPreview = ({
 };
 
 const AttachmentPreviewContent = ({
+  charset,
   fileName,
   imageFailed,
   imageAttempt,
@@ -426,8 +447,10 @@ const AttachmentPreviewContent = ({
   previewId,
   previewUrl,
   previewError,
+  previewTruncated,
   scaleOffset,
 }: {
+  charset: string | null;
   fileName: string;
   imageFailed: boolean;
   imageAttempt: number;
@@ -438,6 +461,7 @@ const AttachmentPreviewContent = ({
   previewId: string;
   previewUrl: string | null;
   previewError: boolean;
+  previewTruncated: boolean;
   scaleOffset: number;
 }) => {
   const t = useTranslations();
@@ -492,12 +516,19 @@ const AttachmentPreviewContent = ({
   }
   if (previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.text) {
     return (
-      <pre
-        className="bg-background size-full overflow-auto rounded-sm p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap"
-        dir="auto"
-      >
-        {new TextDecoder().decode(previewBuffer)}
-      </pre>
+      <div className="bg-background flex size-full min-h-0 flex-col overflow-hidden rounded-sm">
+        {previewTruncated ? (
+          <p className="text-muted-foreground shrink-0 border-b px-4 py-2 text-xs">
+            {t("emailViewer.previewTruncated")}
+          </p>
+        ) : null}
+        <pre
+          className="min-h-0 flex-1 overflow-auto p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap"
+          dir="auto"
+        >
+          {decodeEmailTextAttachment({ buffer: previewBuffer, charset })}
+        </pre>
+      </div>
     );
   }
 
@@ -532,6 +563,7 @@ const AttachmentPreviewContent = ({
 const AttachmentList = ({
   attachments,
   canSave,
+  chatMode,
   fieldId,
   onChooseMatter,
   onSave,
@@ -540,6 +572,7 @@ const AttachmentList = ({
 }: {
   attachments: readonly EmailAttachmentDescriptor[];
   canSave: boolean;
+  chatMode: EmailChatMode;
   fieldId: string;
   onChooseMatter: (id: string) => void;
   onSave: (attachment: EmailAttachmentDescriptor) => void;
@@ -551,7 +584,10 @@ const AttachmentList = ({
   return (
     <section
       aria-labelledby={`${fieldId}-attachment-facet`}
-      className="min-h-0 flex-1 overflow-y-auto p-3"
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto p-3",
+        chatMode === EMAIL_CHAT_MODE.contextual && "pb-40",
+      )}
     >
       <h2
         className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium"

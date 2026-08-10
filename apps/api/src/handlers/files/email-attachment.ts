@@ -21,6 +21,10 @@ import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
   loadEmailAttachment,
 } from "./email-attachment-loader";
+import {
+  EMAIL_ATTACHMENT_RESPONSE_DISPOSITION,
+  getEmailAttachmentResponseBytes,
+} from "./email-attachment-preview";
 
 const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
@@ -92,6 +96,14 @@ export default createSafeHandler(
       disposition === "inline"
         ? (attachmentMimeType ?? "application/octet-stream")
         : "application/octet-stream";
+    const responseBytes = getEmailAttachmentResponseBytes({
+      bytes: attachment.bytes,
+      disposition:
+        disposition === "inline"
+          ? EMAIL_ATTACHMENT_RESPONSE_DISPOSITION.inline
+          : EMAIL_ATTACHMENT_RESPONSE_DISPOSITION.download,
+      mimeType: attachmentMimeType,
+    });
     const fileName = sanitizeFilename(attachment.fileName);
     const safeDisposition = contentDisposition(
       fileName,
@@ -119,12 +131,12 @@ export default createSafeHandler(
       );
     }
     return Result.ok(
-      new Response(new Uint8Array(attachment.bytes), {
+      new Response(new Uint8Array(responseBytes), {
         headers: {
           ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
           "Cache-Control": "private, no-store",
           "Content-Disposition": safeDisposition,
-          "Content-Length": String(attachment.bytes.byteLength),
+          "Content-Length": String(responseBytes.byteLength),
           "Content-Type": mimeType,
         },
       }),

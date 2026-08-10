@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "إخفاء الرسائل السابقة",
     "hideSignature": "إخفاء التوقيع",
     "noSubject": "(بلا موضوع)",
+    "previewTruncated": "تم اختصار المعاينة لتحسين الأداء.",
     "showQuotedHistory": "عرض الرسائل السابقة",
     "showSignature": "عرض التوقيع",
     "to": "المستلمون",

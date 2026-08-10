@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Vorherige Nachrichten ausblenden",
     "hideSignature": "Signatur ausblenden",
     "noSubject": "(Kein Betreff)",
+    "previewTruncated": "Die Vorschau wurde aus Leistungsgründen gekürzt.",
     "showQuotedHistory": "Vorherige Nachrichten anzeigen",
     "showSignature": "Signatur anzeigen",
     "to": "Empfänger",

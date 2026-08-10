@@ -33,3 +33,38 @@ export const getEmailAttachmentPreviewKind = (
   }
   return EMAIL_ATTACHMENT_PREVIEW_KIND.unsupported;
 };
+
+const getByteOrderMarkEncoding = (
+  bytes: Uint8Array,
+): "utf-16be" | "utf-16le" | "utf-8" | null => {
+  if (bytes.at(0) === 0xef && bytes.at(1) === 0xbb && bytes.at(2) === 0xbf) {
+    return "utf-8";
+  }
+  if (bytes.at(0) === 0xff && bytes.at(1) === 0xfe) {
+    return "utf-16le";
+  }
+  if (bytes.at(0) === 0xfe && bytes.at(1) === 0xff) {
+    return "utf-16be";
+  }
+  return null;
+};
+
+export const decodeEmailTextAttachment = ({
+  buffer,
+  charset,
+}: {
+  buffer: ArrayBuffer;
+  charset: string | null;
+}): string => {
+  const bytes = new Uint8Array(buffer);
+  const encoding = charset ?? getByteOrderMarkEncoding(bytes) ?? "utf-8";
+  return new TextDecoder(encoding).decode(bytes);
+};
+
+export const getEmailAttachmentActivationId = ({
+  id,
+  previewable,
+}: {
+  id: string;
+  previewable: boolean;
+}): string | null => (previewable ? id : null);

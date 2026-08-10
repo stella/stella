@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
+import { getEmailAttachmentActivationId } from "@/components/inspector/email-attachments-facet.logic";
 import {
   EMAIL_CHAT_MODE,
   EMAIL_VIEWER_LAYOUT,
@@ -375,7 +376,7 @@ export const EmailHtmlViewer = ({
                     className="bg-muted/50 hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
                     onClick={() => {
                       onOpenAttachment(
-                        attachment.previewable ? attachment.id : null,
+                        getEmailAttachmentActivationId(attachment),
                       );
                     }}
                     type="button"

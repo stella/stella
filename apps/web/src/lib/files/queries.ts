@@ -30,6 +30,7 @@ type FileData = {
 };
 
 export type EmailAttachmentDescriptor = {
+  charset: string | null;
   id: string;
   fileName: string | null;
   mimeType: string | null;

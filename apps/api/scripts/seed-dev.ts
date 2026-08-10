@@ -1372,8 +1372,9 @@ const createSeedEmailAttachment = (
 
 export const createSeedEmail = (fileName: SeedEmailFileName): Buffer => {
   const email = SEED_EMAILS[fileName];
-  const boundary = `stella-seed-${fileName.replaceAll(/[^a-z0-9]/giu, "-")}`;
-  const alternativeBoundary = `${boundary}-alternative`;
+  const slug = fileName.replaceAll(/[^a-z0-9]/giu, "-");
+  const boundary = `stella-seed-mixed-${slug}`;
+  const alternativeBoundary = `stella-seed-alt-${slug}`;
   const lines = [
     `From: ${email.from}`,
     `To: ${email.to.join(", ")}`,
@@ -5624,8 +5625,8 @@ export async function seed(organizationId?: string, userId?: string) {
           case "pdf":
             return createMockPdf(title, configuredDocText);
           default: {
-            const exhaustive: never = format;
-            return exhaustive;
+            format satisfies never;
+            return panic(`Unsupported seed file format for ${fileName}`);
           }
         }
       };
