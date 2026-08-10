@@ -357,7 +357,6 @@ const normalizeEmailAttachmentCharset = (
       return EMAIL_TEXT_ATTACHMENT_CHARSET.windows1252;
     case "us-ascii":
     case "utf-8":
-    case "utf8":
       return EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
     case "utf-16":
     case "utf-16le":

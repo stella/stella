@@ -33,7 +33,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
+import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
 import {
   decodeEmailTextAttachment,
@@ -75,7 +75,7 @@ type EmailAttachmentsFacetProps = {
   onSelectedIdChange: (attachmentId: string | null) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
-  overlayActivation: (typeof FILE_CHAT_OVERLAY_ACTIVATION)[keyof typeof FILE_CHAT_OVERLAY_ACTIVATION];
+  overlayActivation: FileChatOverlayActivation;
   scaleOffset: number;
   selectedId: string | null;
   workspaceId: string;

@@ -1366,7 +1366,7 @@ const createSeedEmailAttachment = (
 
   return {
     mimeType: "text/plain; charset=utf-8",
-    bytes: Buffer.from(attachment.bodyText, "utf8"),
+    bytes: Buffer.from(attachment.bodyText, "utf-8"),
   };
 };
 
@@ -1413,7 +1413,7 @@ export const createSeedEmail = (fileName: SeedEmailFileName): Buffer => {
   }
 
   lines.push(`--${boundary}--`, "");
-  return Buffer.from(lines.join("\r\n"), "utf8");
+  return Buffer.from(lines.join("\r\n"), "utf-8");
 };
 
 type SeedFileFormat =
@@ -5635,6 +5635,7 @@ export async function seed(organizationId?: string, userId?: string) {
       const docText =
         format.type === "email"
           ? parsedEmailToText(
+              // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
               await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
             )
           : configuredDocText;

@@ -72,7 +72,7 @@ describe("Export Review citation seeds", () => {
 describe("email viewer seeds", () => {
   test("nested MIME boundaries cannot prefix one another", () => {
     for (const fileName of SEED_EMAIL_FILE_NAMES) {
-      const source = createSeedEmail(fileName).toString("utf8");
+      const source = createSeedEmail(fileName).toString("utf-8");
       const boundaries = Array.from(
         source.matchAll(/boundary="(?<value>[^"]+)"/gu),
         (match) => match.groups?.["value"] ?? "",

@@ -53,7 +53,8 @@ const resolveTarget = async () => {
     .orderBy(desc(authSession.updatedAt))
     .limit(1);
   const activeSession = activeSessions.at(0);
-  if (!activeSession?.organizationId) {
+  const activeOrganizationId = activeSession?.organizationId;
+  if (!activeSession || !activeOrganizationId) {
     panic(
       "No active local session found. Sign in to dev before seeding emails.",
     );
@@ -72,11 +73,11 @@ const resolveTarget = async () => {
       explicitWorkspaceId
         ? and(
             eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),
-            eq(workspaces.organizationId, activeSession.organizationId),
+            eq(workspaces.organizationId, activeOrganizationId),
           )
         : and(
             eq(workspaces.name, EMAIL_QA_MATTER_NAME),
-            eq(workspaces.organizationId, activeSession.organizationId),
+            eq(workspaces.organizationId, activeOrganizationId),
           ),
     )
     .limit(1);
@@ -87,9 +88,9 @@ const resolveTarget = async () => {
 
   const workspace = existingWorkspace ?? {
     id: seedId<"workspace">(
-      `email-viewer-demo-${activeSession.organizationId}-workspace`,
+      `email-viewer-demo-${activeOrganizationId}-workspace`,
     ),
-    organizationId: activeSession.organizationId,
+    organizationId: activeOrganizationId,
     name: EMAIL_QA_MATTER_NAME,
   };
   if (!existingWorkspace) {
@@ -150,7 +151,7 @@ const resolveTarget = async () => {
 
   return {
     filePropertyId: fileProperty.id,
-    organizationId: workspace.organizationId,
+    organizationId: activeOrganizationId,
     userId: activeSession.userId,
     workspaceId: workspace.id,
     workspaceName: workspace.name,
@@ -249,6 +250,7 @@ const seedEmailViewerDemo = async () => {
       .onConflictDoUpdate({ target: fields.id, set: { content: fileContent } });
 
     const extractedText = parsedEmailToText(
+      // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
       await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
     );
     // oxlint-disable-next-line no-await-in-loop -- provenance points at the field inserted above
@@ -262,7 +264,7 @@ const seedEmailViewerDemo = async () => {
         sourceFieldId: fieldId,
         sourceFileId: fileId,
         sourceSha256Hex: sha256Hex,
-        ciphertext: Buffer.from(extractedText, "utf8"),
+        ciphertext: Buffer.from(extractedText, "utf-8"),
         iv: Buffer.alloc(IV_BYTES),
         charCount: extractedText.length,
         language: null,
@@ -275,7 +277,7 @@ const seedEmailViewerDemo = async () => {
           sourceFieldId: fieldId,
           sourceFileId: fileId,
           sourceSha256Hex: sha256Hex,
-          ciphertext: Buffer.from(extractedText, "utf8"),
+          ciphertext: Buffer.from(extractedText, "utf-8"),
           charCount: extractedText.length,
           extractedAt: new Date(),
         },

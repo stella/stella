@@ -435,7 +435,6 @@ export const EmailHtmlViewer = ({
           ref={bodyFrameRef}
           referrerPolicy="no-referrer"
           sandbox="allow-same-origin"
-          scrolling="no"
           srcDoc={bodyHtml}
           style={{ height: 0 }}
           title={t("emailViewer.bodyTitle")}
@@ -532,9 +531,9 @@ const scrollToEmailCitation = ({
   bodyTarget.dataset["stellaEmailCitationActive"] = "";
   resizeEmailBodyFrame(bodyFrame);
   const articleRect = article?.getBoundingClientRect();
-  const frameRect = bodyFrame?.getBoundingClientRect();
+  const frameRect = bodyFrame.getBoundingClientRect();
   const targetRect = bodyTarget.getBoundingClientRect();
-  if (!article || !articleRect || !frameRect) {
+  if (!article || !articleRect) {
     return;
   }
   const targetTop =

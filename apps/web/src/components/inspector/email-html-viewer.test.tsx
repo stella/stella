@@ -240,7 +240,7 @@ describe("email viewer", () => {
     expect(html).toContain("Kind regards");
     expect(html).not.toContain("href=");
     expect(html).toContain('<button class="bg-muted/50');
-    expect(html).toContain('scrolling="no"');
+    expect(html).not.toContain("scrolling=");
     expect(html).toContain("overflow-y-auto overscroll-contain");
     expect(html).not.toContain("max-h-[45%]");
   });
