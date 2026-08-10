@@ -12,8 +12,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
+const realSse = await import("@/api/lib/sse");
 
 void mock.module("@/api/lib/sse", () => ({
+  ...realSse,
   broadcast: mock(() => undefined),
   broadcastSessionEvent: mock(() => undefined),
   broadcastToOrganization: mock(() => undefined),

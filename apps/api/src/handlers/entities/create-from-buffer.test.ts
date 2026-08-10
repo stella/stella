@@ -29,6 +29,7 @@ let intentStatuses: string[] = [];
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
+const realSse = await import("@/api/lib/sse");
 
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
@@ -61,7 +62,10 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   initFileDerivativeWorker: mock(() => undefined),
 }));
 
-void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+void mock.module("@/api/lib/sse", () => ({
+  ...realSse,
+  broadcast: broadcastMock,
+}));
 
 const { createEntityFromBuffer } =
   await import("@/api/lib/entities/create-from-buffer");

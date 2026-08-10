@@ -23,6 +23,7 @@ let persistenceEvents: string[] = [];
 let intentStatuses: string[] = [];
 
 const realS3 = await import("@/api/lib/s3");
+const realSse = await import("@/api/lib/sse");
 
 void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
   writeFileVersion: writeFileVersionMock,
@@ -61,6 +62,7 @@ void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootScopedDb: () => mock(),
 }));
 void mock.module("@/api/lib/sse", () => ({
+  ...realSse,
   broadcast: broadcastMock,
   broadcastToOrganization: mock(),
 }));

@@ -30,6 +30,7 @@ let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
 const realS3 = await import("@/api/lib/s3");
+const realSse = await import("@/api/lib/sse");
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
@@ -56,7 +57,10 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
 void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
   computeVersionDiffStats: computeVersionDiffStatsMock,
 }));
-void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+void mock.module("@/api/lib/sse", () => ({
+  ...realSse,
+  broadcast: broadcastMock,
+}));
 void mock.module("@/api/lib/file-scan/scan", () => ({
   getScanWarnings: (scanResult: ScanResult) =>
     scanResult.verdict === "warn"

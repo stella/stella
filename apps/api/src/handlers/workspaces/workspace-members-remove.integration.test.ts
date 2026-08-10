@@ -44,12 +44,14 @@ const closeSessionConnectionsMock = mock(() => undefined);
 const broadcastMock = mock(() => undefined);
 const broadcastToOrganizationMock = mock(() => undefined);
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
+const realSse = await import("@/api/lib/sse");
 
 void mock.module("@/api/lib/desktop-edit-session-notifications", () => ({
   closeSessionConnections: closeSessionConnectionsMock,
   pushSessionEvent: pushSessionEventMock,
 }));
 void mock.module("@/api/lib/sse", () => ({
+  ...realSse,
   broadcast: broadcastMock,
   broadcastToOrganization: broadcastToOrganizationMock,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
