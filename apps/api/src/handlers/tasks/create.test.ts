@@ -3,10 +3,11 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { taskAssignees, workObligations } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { createTaskEntityHandler, createTaskForFeatures } from "./create";
+import { createTaskForFeatures } from "./create";
 
 const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,

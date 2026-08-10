@@ -28,15 +28,14 @@ import {
 } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { includes } from "@/api/lib/type-guards";
-import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
-import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
-
-import { validateAgendaFields } from "./agenda-fields";
+import { validateAgendaFields } from "@/api/lib/tasks/agenda-fields";
 import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
-} from "./deployment-features";
+} from "@/api/lib/tasks/deployment-features";
+import { includes } from "@/api/lib/type-guards";
+import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
+import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
 const agendaParticipantSchema = t.Object({
