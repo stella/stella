@@ -92,20 +92,27 @@ await probe("ocr pdf font", async () => {
 // import.meta.url at runtime, which a `bun build --compile` binary resolves
 // against its embedded filesystem only — the on-disk copy under $bunfs/root
 // is reachable by fs APIs but not by ESM import. Until the loader is fixed
-// upstream and the catalog bumped, this probe reports instead of failing;
-// flip it to a hard failure in the same change that bumps the fix.
-try {
-  const binding = await getBinding();
-  if (!isNativeAnonymizeBinding(binding)) {
+// upstream and the catalog bumped, a load failure reports instead of failing;
+// flip it to a hard failure in the same change that bumps the fix. Only the
+// load itself is tolerated: a loader that returns an unexpected binding
+// shape stays fatal.
+const anonymizeBinding = await getBinding().catch((error: unknown) => {
+  console.warn(
+    `image-smoke KNOWN FAILURE (tolerated): anonymize-wasm engine cannot load in the compiled binary — ${error instanceof Error ? error.message : String(error)}`,
+  );
+  return null;
+});
+if (anonymizeBinding !== null) {
+  if (!isNativeAnonymizeBinding(anonymizeBinding)) {
     panic("anonymize-wasm getBinding() returned an unexpected binding shape");
   }
   console.log(
     "image-smoke ok: anonymize-wasm native engine — loader fixed; make this probe fatal again",
   );
-} catch (error) {
-  console.warn(
-    `image-smoke KNOWN FAILURE (tolerated): anonymize-wasm engine cannot load in the compiled binary — ${error instanceof Error ? error.message : String(error)}`,
-  );
 }
 
-console.log("image-smoke ok: all runtime assets loadable");
+console.log(
+  anonymizeBinding === null
+    ? "image-smoke done: all probes passed except the tolerated known failure above"
+    : "image-smoke ok: all runtime assets loadable",
+);

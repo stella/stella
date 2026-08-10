@@ -28,27 +28,39 @@ const EXPECTED_REGISTRY_RESOLVED = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+// A lockfile key is a chain of package names joined by "/", where scoped
+// names contribute two segments ("@stll/web/@babel/core" is the @babel/core
+// copy scoped to the @stll/web consumer). The trailing name is the package
+// the entry resolves.
+const trailingPackageName = (key: string): string => {
+  const segments = key.split("/");
+  const last = segments.at(-1) ?? key;
+  const scope = segments.at(-2);
+  return scope?.startsWith("@") ? `${scope}/${last}` : last;
+};
+
 const registryResolvedStllPackages = (source: unknown): string[] => {
   if (!isRecord(source) || !isRecord(source["packages"])) {
     throw new TypeError("bun.lock must contain a packages map");
   }
 
-  return Object.entries(source["packages"])
-    // Top-level entries only: "@stll/name" has exactly the scope slash.
-    // Nested keys ("@stll/web/@babel/core") are per-consumer resolution
-    // contexts, not packages of their own.
-    .filter(
-      ([key]) =>
-        key.startsWith("@stll/") && !key.slice("@stll/".length).includes("/"),
-    )
-    .filter(([, entry]) => {
-      if (!Array.isArray(entry) || typeof entry.at(0) !== "string") {
-        throw new TypeError("bun.lock package entry has no resolution");
-      }
-      return !String(entry.at(0)).includes("@workspace:");
-    })
-    .map(([key]) => key)
-    .sort();
+  const names = new Set<string>();
+  for (const [key, entry] of Object.entries(source["packages"])) {
+    // Consumer-scoped keys included: a registry copy of an otherwise
+    // workspace-linked name can hide under "consumer/@stll/name" when one
+    // consumer's range stops matching the workspace version.
+    const name = trailingPackageName(key);
+    if (!name.startsWith("@stll/")) {
+      continue;
+    }
+    if (!Array.isArray(entry) || typeof entry.at(0) !== "string") {
+      throw new TypeError(`bun.lock package ${key} has no resolution`);
+    }
+    if (!String(entry.at(0)).includes("@workspace:")) {
+      names.add(name);
+    }
+  }
+  return [...names].sort();
 };
 
 describe("@stll dependency resolutions", () => {
