@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
@@ -290,25 +290,20 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   // dynamically registered jobs (scheduled flows) are untouched. Disable
   // rather than delete: the row remains as an audit record, and a
   // rollback's own registration re-enables it (the upsert sets `enabled`).
-  const enabledRows = await rootDb
-    .select({ id: schedulerJobs.id, task: schedulerJobs.task })
-    .from(schedulerJobs)
-    .where(eq(schedulerJobs.enabled, true));
-  const undrivable = enabledRows.filter(
-    ({ task }) => !REGISTERED_SCHEDULER_TASK_NAMES.has(task),
-  );
-  if (undrivable.length > 0) {
-    await rootDb
-      .update(schedulerJobs)
-      .set({ enabled: false })
-      .where(
-        inArray(
-          schedulerJobs.id,
-          undrivable.map(({ id }) => id),
-        ),
-      );
-    for (const { id, task } of undrivable) {
-      logger.warn("scheduler.job_retired", { jobId: id, task });
-    }
+  // One guarded update, so a concurrent change to a row's task or enabled
+  // state cannot be overwritten from a stale read; only rows the update
+  // actually changed are logged.
+  const retired = await rootDb
+    .update(schedulerJobs)
+    .set({ enabled: false })
+    .where(
+      and(
+        eq(schedulerJobs.enabled, true),
+        notInArray(schedulerJobs.task, [...REGISTERED_SCHEDULER_TASK_NAMES]),
+      ),
+    )
+    .returning({ id: schedulerJobs.id, task: schedulerJobs.task });
+  for (const { id, task } of retired) {
+    logger.warn("scheduler.job_retired", { jobId: id, task });
   }
 };
