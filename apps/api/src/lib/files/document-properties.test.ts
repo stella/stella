@@ -480,6 +480,59 @@ describe("writeDocumentProperties", () => {
     });
   });
 
+  it("creates the properties parts a document never carried", async () => {
+    // Plenty of generators emit no docProps at all. Skipping the write there
+    // reported success and changed nothing, so every edit to such a file was
+    // silently discarded.
+    const bare = await zipOf({
+      "[Content_Types].xml":
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        "</Types>",
+      "_rels/.rels":
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        "</Relationships>",
+      "word/document.xml": "<w:document/>",
+    });
+
+    const result = await writeDocumentProperties({
+      bytes: bare,
+      mimeType: DOCX_MIME_TYPE,
+      values: { author: "Petra Harbrook", company: "Harbrook & Partners" },
+    });
+    if (result.status !== "written") {
+      throw new Error(`expected written bytes, got ${result.status}`);
+    }
+    const written = toArrayBuffer(result.bytes);
+
+    const properties = await availableProperties(written, DOCX_MIME_TYPE);
+    expect(valueOf(properties, "author")).toEqual({
+      type: "text",
+      value: "Petra Harbrook",
+    });
+    expect(valueOf(properties, "company")).toEqual({
+      type: "text",
+      value: "Harbrook & Partners",
+    });
+
+    // A part no reader can find is the same as no part at all, so both
+    // manifests must declare it and the relationship id must not collide.
+    const archive = await JSZip.loadAsync(written);
+    const contentTypes = await archive
+      .file("[Content_Types].xml")
+      ?.async("string");
+    const rels = await archive.file("_rels/.rels")?.async("string");
+    expect(contentTypes).toContain("/docProps/core.xml");
+    expect(contentTypes).toContain("/docProps/app.xml");
+    expect(rels).toContain("docProps/core.xml");
+    expect(rels).toContain("docProps/app.xml");
+    expect(rels).toContain('Id="rId2"');
+    expect(rels).toContain('Id="rId3"');
+  });
+
   it("refuses a format it cannot write rather than returning the input unchanged", async () => {
     const result = await writeDocumentProperties({
       bytes: await zipOf({

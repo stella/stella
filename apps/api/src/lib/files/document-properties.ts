@@ -583,6 +583,109 @@ const OOXML_PART_ROOT = {
   app: "Properties",
 } as const;
 
+/**
+ * A package may carry no `docProps` at all — plenty of generators emit none —
+ * and then there is no element to edit and nothing to append to. Creating the
+ * part is not enough on its own: a part that is not declared in
+ * `[Content_Types].xml` and not related from `_rels/.rels` is invisible to
+ * Word, so all three go together or the edit is written into a void.
+ */
+const OOXML_EMPTY_PART = {
+  core:
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"' +
+    ' xmlns:dc="http://purl.org/dc/elements/1.1/"' +
+    ' xmlns:dcterms="http://purl.org/dc/terms/"' +
+    ' xmlns:dcmitype="http://purl.org/dc/dcmitype/"' +
+    ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"></cp:coreProperties>',
+  app:
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"' +
+    ' xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"></Properties>',
+} as const;
+
+const OOXML_PART_CONTENT_TYPE = {
+  core: "application/vnd.openxmlformats-package.core-properties+xml",
+  app: "application/vnd.openxmlformats-officedocument.extended-properties+xml",
+} as const;
+
+const OOXML_PART_RELATIONSHIP_TYPE = {
+  core: "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+  app: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
+} as const;
+
+const CONTENT_TYPES_PATH = "[Content_Types].xml";
+const PACKAGE_RELS_PATH = "_rels/.rels";
+
+/** Lowest relationship number not already taken. */
+const nextRelationshipId = (taken: ReadonlySet<number>): number => {
+  let candidate = 1;
+  while (taken.has(candidate)) {
+    candidate++;
+  }
+  return candidate;
+};
+
+type OoxmlPart = keyof typeof OOXML_PART_PATH;
+
+/**
+ * Declare freshly created parts in the package, so a reader can find them.
+ * Takes every part at once: both manifests are rewritten in a single pass, so
+ * the relationship ids cannot collide with each other.
+ *
+ * Returns false when either manifest is missing or malformed, which means the
+ * caller must not claim the properties were written.
+ */
+const declareOoxmlParts = async (
+  archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+  parts: readonly OoxmlPart[],
+): Promise<boolean> => {
+  const [contentTypes, rels] = await Promise.all([
+    archive.readEntryString(CONTENT_TYPES_PATH),
+    archive.readEntryString(PACKAGE_RELS_PATH),
+  ]);
+  if (contentTypes === null || rels === null) {
+    return false;
+  }
+  if (!/<\/Types>/u.test(contentTypes) || !/<\/Relationships>/u.test(rels)) {
+    return false;
+  }
+
+  const overrides = parts
+    .map(
+      (part) =>
+        `<Override PartName="/${OOXML_PART_PATH[part]}" ContentType="${OOXML_PART_CONTENT_TYPE[part]}"/>`,
+    )
+    .join("");
+
+  const taken = new Set(
+    [...rels.matchAll(/Id="rId(?<id>\d+)"/gu)].flatMap((match) => {
+      const id = Number(match.groups?.["id"]);
+      return Number.isInteger(id) ? [id] : [];
+    }),
+  );
+  const relationships = parts
+    .map((part) => {
+      const id = nextRelationshipId(taken);
+      taken.add(id);
+      return `<Relationship Id="rId${String(id)}" Type="${OOXML_PART_RELATIONSHIP_TYPE[part]}" Target="${OOXML_PART_PATH[part]}"/>`;
+    })
+    .join("");
+
+  archive.zip.file(
+    CONTENT_TYPES_PATH,
+    contentTypes.replace(/<\/Types>/u, () => `${overrides}</Types>`),
+  );
+  archive.zip.file(
+    PACKAGE_RELS_PATH,
+    rels.replace(
+      /<\/Relationships>/u,
+      () => `${relationships}</Relationships>`,
+    ),
+  );
+  return true;
+};
+
 const escapeXmlText = (value: string): string =>
   value
     .replaceAll("&", "&amp;")
@@ -679,11 +782,18 @@ export const writeDocumentProperties = async ({
         xml: await archive.readEntryString(OOXML_PART_PATH[part]),
       })),
     );
+    // Declared before anything is written: skipping a missing part instead
+    // would report a successful write that changed nothing, which is how a
+    // document carrying no docProps silently swallowed every edit.
+    const missing = read
+      .filter(({ xml }) => xml === null)
+      .map(({ part }) => part);
+    if (missing.length > 0 && !(await declareOoxmlParts(archive, missing))) {
+      return { status: "unreadable" };
+    }
+
     for (const { part, xml } of read) {
-      if (xml === null) {
-        continue;
-      }
-      let updated = xml;
+      let updated = xml ?? OOXML_EMPTY_PART[part];
       for (const edit of edits) {
         if (edit.part === part) {
           updated = setElement(
