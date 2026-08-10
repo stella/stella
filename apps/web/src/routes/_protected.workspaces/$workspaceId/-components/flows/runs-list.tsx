@@ -7,6 +7,7 @@ import {
   FlowStatusBadge,
   FlowTriggerBadge,
 } from "@/components/flows/flow-badges";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import type { FlowRunListItem } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
 
 type RunsListProps = {
@@ -64,10 +65,10 @@ const RunRow = ({
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <FlowTriggerBadge triggerType={run.triggerType} />
             <span className="tabular-nums">
-              {format.dateTime(new Date(timestamp), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              {format.dateTime(
+                new Date(timestamp),
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )}
             </span>
             <span className="tabular-nums">
               {t("flows.runs.stepProgress", {

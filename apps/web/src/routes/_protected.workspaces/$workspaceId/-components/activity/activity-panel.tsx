@@ -49,6 +49,10 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import {
+  FULL_DATE_LONG_TIME_FORMAT,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
+} from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   MatterActivityCategory,
@@ -636,10 +640,7 @@ const HorizontalMilestoneFrame = ({
           : null}
       </div>
       <Tooltip
-        content={format.dateTime(date, {
-          dateStyle: "full",
-          timeStyle: "long",
-        })}
+        content={format.dateTime(date, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
             className="text-muted-foreground mt-1 block h-4 pe-8 text-[11px] tabular-nums"
@@ -763,10 +764,7 @@ const TimelineEntry = ({
   return (
     <div className="group grid grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]">
       <Tooltip
-        content={format.dateTime(date, {
-          dateStyle: "full",
-          timeStyle: "long",
-        })}
+        content={format.dateTime(date, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
             className="text-muted-foreground flex items-start justify-end pe-1 pt-3 text-[11px] tabular-nums"
@@ -875,10 +873,10 @@ const ActivityList = ({
                   className="text-muted-foreground text-xs tabular-nums"
                   dateTime={item.activityAt}
                 >
-                  {format.dateTime(new Date(item.activityAt), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
+                  {format.dateTime(
+                    new Date(item.activityAt),
+                    MEDIUM_DATE_SHORT_TIME_FORMAT,
+                  )}
                 </time>
                 <span className="min-w-0 text-sm">
                   <Performer item={item} />
@@ -932,10 +930,10 @@ const ActivityDetailsSheet = ({
       label: t("workspaces.overview.activity.details.dateTime"),
       value: (
         <time dateTime={item.activityAt}>
-          {format.dateTime(new Date(item.activityAt), {
-            dateStyle: "full",
-            timeStyle: "long",
-          })}
+          {format.dateTime(
+            new Date(item.activityAt),
+            FULL_DATE_LONG_TIME_FORMAT,
+          )}
         </time>
       ),
     },
@@ -958,10 +956,10 @@ const ActivityDetailsSheet = ({
                         </BidiText>
                         <span className="text-muted-foreground mt-0.5 block text-xs leading-4 tabular-nums">
                           <time dateTime={batchItem.activityAt}>
-                            {format.dateTime(new Date(batchItem.activityAt), {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })}
+                            {format.dateTime(
+                              new Date(batchItem.activityAt),
+                              MEDIUM_DATE_SHORT_TIME_FORMAT,
+                            )}
                           </time>
                           <span aria-hidden="true"> · </span>
                           {t("workspaces.overview.activity.details.eventId")}:{" "}

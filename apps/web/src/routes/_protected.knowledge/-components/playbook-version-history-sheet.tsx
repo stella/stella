@@ -34,6 +34,7 @@ import {
   knowledgeKeys,
   playbookVersionsOptions,
 } from "@/lib/knowledge/queries";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 
 type PlaybookVersionHistorySheetProps = {
@@ -164,10 +165,10 @@ const VersionRow = ({
           {version.name}
         </p>
         <p className="text-muted-foreground text-xs">
-          {format.dateTime(new Date(version.createdAt), {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
+          {format.dateTime(
+            new Date(version.createdAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          )}
         </p>
       </div>
       {canRestore && (

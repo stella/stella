@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   REPORT_EXPORTS_PAGE_SIZE,
   reportExportsHistoryOptions,
@@ -135,10 +136,10 @@ export const ReportExportHistory = ({
               <p className="text-muted-foreground text-xs">
                 {t(REPORT_EXPORT_MODE_KEYS[reportExport.mode])}
                 {" · "}
-                {format.dateTime(new Date(reportExport.createdAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {format.dateTime(
+                  new Date(reportExport.createdAt),
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
               </p>
             </div>
             <ReportExportHistoryAction
