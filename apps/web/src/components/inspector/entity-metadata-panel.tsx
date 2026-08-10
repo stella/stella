@@ -365,18 +365,11 @@ const EntityMetadataContent = ({
     }
   }
 
-  // The three groups answer different questions and must not be mixed: what
-  // stella recorded, what the file says about itself, and what AI read out of
-  // it. Columns a person filled in are a fourth, editable, group.
-  const aiFields = visibleFields.filter(
-    (field) =>
-      visiblePropertyById.get(field.propertyId)?.tool.type === "ai-model",
-  );
-  const manualFields = visibleFields.filter(
-    (field) =>
-      visiblePropertyById.get(field.propertyId)?.tool.type !== "ai-model" &&
-      !isVerdictField(field),
-  );
+  // The groups answer different questions and must not be mixed: what stella
+  // recorded, what the file says about itself, and the matter's own columns.
+  // Whether AI or a person filled a column is not a different question — it is
+  // an attribute of the row — so both live in one list.
+  const columnFields = visibleFields.filter((field) => !isVerdictField(field));
 
   const renderField = (field: FieldInfoRow) => {
     const property = visiblePropertyById.get(field.propertyId);
@@ -411,6 +404,15 @@ const EntityMetadataContent = ({
             isPending && "opacity-60",
           )}
         >
+          {/* Carries what the AI section heading used to say, now per row:
+              which columns AI filled is a fact about the column, not a
+              separate kind of metadata. */}
+          {isAiField && (
+            <Sparkles
+              aria-label={t("inspector.metadata.aiExtractedHeading")}
+              className="text-primary size-3 shrink-0"
+            />
+          )}
           {property.name}
           {verdictField !== undefined && verdictProperty !== undefined && (
             <span className="normal-case">
@@ -526,28 +528,15 @@ const EntityMetadataContent = ({
           </>
         )}
 
-        {aiFields.length > 0 && (
-          <>
-            <SectionHeading
-              icon={
-                <Sparkles
-                  aria-hidden="true"
-                  className="text-primary size-3.5"
-                />
-              }
-            >
-              {t("inspector.metadata.aiExtractedHeading")}
-            </SectionHeading>
-            <div className="flex flex-col gap-px p-2 pt-0">
-              {aiFields.map(renderField)}
-            </div>
-          </>
-        )}
-
+        {/* One list, not an AI section beside a manual one: those named
+            different things — who produced the value, and what the value is —
+            so they read as alternatives when an AI-filled column is also a
+            column. Which ones AI filled is a property of the row, and the
+            sparkle already says it. */}
         <SectionHeading>
           {t("inspector.metadata.matterColumnsHeading")}
         </SectionHeading>
-        {manualFields.length === 0 ? (
+        {columnFields.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 px-6 py-6 text-center">
             <span className="text-muted-foreground text-sm">
               {t("inspector.metadata.noMatterColumns")}
@@ -555,7 +544,7 @@ const EntityMetadataContent = ({
           </div>
         ) : (
           <div className="flex flex-col gap-px p-2 pt-0">
-            {manualFields.map(renderField)}
+            {columnFields.map(renderField)}
           </div>
         )}
       </div>

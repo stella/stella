@@ -304,7 +304,6 @@
       "abstract": "Kokkuvõte",
       "citedBy": "Viidatud",
       "cites": "Viitab",
-      "keywords": "Märksõnad",
       "legalSentence": "Õiguslause",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
     "archive": "Arhiveeri",
+    "author": "Autor",
     "back": "Tagasi",
     "cancel": "Tühista",
     "caseLaw": "Kohtupraktika",
@@ -1914,16 +1914,15 @@
         "keys": {
           "application": "Rakendus",
           "applicationVersion": "Rakenduse versioon",
-          "author": "Dokumendi autor",
           "characters": "Märkide arv",
           "company": "Ettevõte",
           "contentStatus": "Sisu olek",
           "createdAt": "Loomise kuupäev",
           "editingMinutes": "Redigeerimise koguaeg",
-          "keywords": "Dokumendi märksõnad",
+          "keywords": "Märksõnad",
           "lastModifiedBy": "Viimati salvestas",
           "lastPrintedAt": "Viimati prinditud",
-          "manager": "Juhataja",
+          "manager": "Haldur",
           "modifiedAt": "Muutmise kuupäev",
           "pages": "Lehekülgede arv",
           "paragraphs": "Lõikude arv",
@@ -1931,7 +1930,7 @@
           "revision": "Redaktsiooni number",
           "slides": "Slaidide arv",
           "subject": "Teema",
-          "template": "Dokumendi mall",
+          "template": "Mall",
           "words": "Sõnade arv"
         },
         "passwordProtected": "Fail on parooliga kaitstud, seetõttu ei saa selle atribuute lugeda",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "Seda tüüpi fail ei sisalda dokumendi atribuute"
       },
       "lastUpdatedBy": "Viimati uuendas",
-      "matterColumnsHeading": "Toimiku veerud",
-      "noMatterColumns": "Selle dokumendi jaoks pole veel ühtegi toimiku veergu täidetud",
+      "matterColumnsHeading": "Toimiku andmed",
+      "noMatterColumns": "Selle dokumendi kohta pole veel midagi märgitud",
       "stellaHeading": "Salvestatud stellas",
       "updatedAt": "Uuendatud",
       "versionCurrent": "v{version} (praegune)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
     "catalogueDetailAbout": "Teave",
-    "catalogueDetailAuthor": "Autor",
     "catalogueDetailCost": "Kulu",
     "catalogueDetailJurisdictions": "Jurisdiktsioonid",
     "catalogueDetailLicense": "Litsents",
@@ -3508,7 +3506,6 @@
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",
       "scopeLoop": "Tsükkel",
-      "scopeTemplate": "Mall",
       "showOnlyIf": "Kuva ainult siis, kui…",
       "showOnlyIfHelp": "Lase sellel väljal dokumendis kuvada ainult siis, kui tingimus kehtib.",
       "showOnlyWhen": "See väli kuvatakse ainult siis, kui:",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "See PDF sisaldab XFA-vormi. Eelvaade ei pruugi korrektset kuvada."
     },
     "filesystem": {
-      "author": "Autor",
       "collapseAll": "Ahenda kõik kaustad",
       "expandAll": "Laienda kõik kaustad",
       "lastUpdated": "Viimati uuendatud",

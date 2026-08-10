@@ -307,7 +307,6 @@ type Messages = {
       "abstract": "Abstract";
       "citedBy": "Cited by";
       "cites": "Cites";
-      "keywords": "Keywords";
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
@@ -864,6 +863,7 @@ type Messages = {
       "taxIdentificationNumber": "Tax identification number";
     };
     "archive": "Archive";
+    "author": "Author";
     "back": "Back";
     "cancel": "Cancel";
     "caseLaw": "Case Law";
@@ -1917,13 +1917,12 @@ type Messages = {
         "keys": {
           "application": "Application";
           "applicationVersion": "Application version";
-          "author": "Document author";
           "characters": "Character count";
           "company": "Company";
           "contentStatus": "Content status";
           "createdAt": "Date created";
           "editingMinutes": "Total editing time";
-          "keywords": "Document keywords";
+          "keywords": "Keywords";
           "lastModifiedBy": "Last saved by";
           "lastPrintedAt": "Last printed";
           "manager": "Manager";
@@ -1934,7 +1933,7 @@ type Messages = {
           "revision": "Revision number";
           "slides": "Slide count";
           "subject": "Subject";
-          "template": "Document template";
+          "template": "Template";
           "words": "Word count";
         };
         "passwordProtected": "The file is password-protected, so its properties cannot be read";
@@ -1944,8 +1943,8 @@ type Messages = {
         "unsupportedFormat": "This file type does not carry document properties";
       };
       "lastUpdatedBy": "Last updated by";
-      "matterColumnsHeading": "Matter columns";
-      "noMatterColumns": "No matter columns are filled in for this document yet";
+      "matterColumnsHeading": "Matter information";
+      "noMatterColumns": "Nothing recorded about this document yet";
       "stellaHeading": "Stored in stella";
       "updatedAt": "Updated";
       "versionCurrent": "v{version} (current)";
@@ -2428,7 +2427,6 @@ type Messages = {
     "catalogueCommunityHeading": "Others";
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
     "catalogueDetailAbout": "About";
-    "catalogueDetailAuthor": "Author";
     "catalogueDetailCost": "Cost";
     "catalogueDetailJurisdictions": "Jurisdictions";
     "catalogueDetailLicense": "License";
@@ -3511,7 +3509,6 @@ type Messages = {
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
       "scopeLoop": "Loop";
-      "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
       "showOnlyIfHelp": "Make this field appear in the document only when a condition holds.";
       "showOnlyWhen": "This field shows only when:";
@@ -3738,7 +3735,6 @@ type Messages = {
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly.";
     };
     "filesystem": {
-      "author": "Author";
       "collapseAll": "Collapse all folders";
       "expandAll": "Expand all folders";
       "lastUpdated": "Last updated";

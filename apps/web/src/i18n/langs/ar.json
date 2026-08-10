@@ -304,7 +304,6 @@
       "abstract": "الملخّص",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
-      "keywords": "الكلمات المفتاحية",
       "legalSentence": "الجملة القانونية",
       "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "الرقم الضريبي"
     },
     "archive": "أرشفة",
+    "author": "الكاتب",
     "back": "رجوع",
     "cancel": "إلغاء",
     "caseLaw": "الاجتهاد القضائي",
@@ -1914,13 +1914,12 @@
         "keys": {
           "application": "التطبيق",
           "applicationVersion": "إصدار التطبيق",
-          "author": "مؤلف المستند",
           "characters": "عدد الأحرف",
           "company": "الشركة",
           "contentStatus": "حالة المحتوى",
           "createdAt": "تاريخ الإنشاء",
           "editingMinutes": "إجمالي وقت التحرير",
-          "keywords": "الكلمات المفتاحية للمستند",
+          "keywords": "الكلمات الأساسية",
           "lastModifiedBy": "آخر من حفظ الملف",
           "lastPrintedAt": "آخر طباعة",
           "manager": "المدير",
@@ -1931,7 +1930,7 @@
           "revision": "رقم المراجعة",
           "slides": "عدد الشرائح",
           "subject": "الموضوع",
-          "template": "قالب المستند",
+          "template": "القالب",
           "words": "عدد الكلمات"
         },
         "passwordProtected": "الملف محمي بكلمة مرور، لذا يتعذر قراءة خصائصه",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "لا يحتوي هذا النوع من الملفات على خصائص المستند"
       },
       "lastUpdatedBy": "آخر تحديث بواسطة",
-      "matterColumnsHeading": "أعمدة الملف القانوني",
-      "noMatterColumns": "لم تتم تعبئة أي أعمدة للملف القانوني لهذا المستند بعد",
+      "matterColumnsHeading": "بيانات الملف القانوني",
+      "noMatterColumns": "لم يُسجَّل أي شيء عن هذا المستند بعد",
       "stellaHeading": "مخزَّن في stella",
       "updatedAt": "آخر تحديث",
       "versionCurrent": "الإصدار {version} (الحالي)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
-    "catalogueDetailAuthor": "المؤلف",
     "catalogueDetailCost": "التكلفة",
     "catalogueDetailJurisdictions": "الولايات القضائية",
     "catalogueDetailLicense": "الترخيص",
@@ -3508,7 +3506,6 @@
       "scopeClause": "خانة بند",
       "scopeCondition": "شرط",
       "scopeLoop": "حلقة",
-      "scopeTemplate": "قالب",
       "showOnlyIf": "أظهِر فقط إذا…",
       "showOnlyIfHelp": "اجعل هذا الحقل يظهر في المستند فقط عند تحقّق شرط.",
       "showOnlyWhen": "يظهر هذا الحقل فقط عندما:",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "يحتوي هذا الملف بصيغة PDF على نموذج XFA. قد لا تُعرض المعاينة بشكل صحيح."
     },
     "filesystem": {
-      "author": "المؤلف",
       "collapseAll": "طي جميع المجلدات",
       "expandAll": "توسيع جميع المجلدات",
       "lastUpdated": "آخر تحديث",

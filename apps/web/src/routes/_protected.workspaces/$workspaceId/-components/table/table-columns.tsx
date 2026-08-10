@@ -190,7 +190,7 @@ export const useTableColumns = ({
       meta: { muted: true },
       header: createMetadataHeader({
         icon: UserIcon,
-        label: t("workspaces.filesystem.author"),
+        label: t("common.author"),
         sortHint: "text",
       }),
       cell: renderAuthorCell,

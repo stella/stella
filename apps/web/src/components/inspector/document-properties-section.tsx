@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 
 import {
   type AuthoredDocumentPropertyKey,
+  DOCUMENT_PROPERTY_KEYS,
   type DocumentPropertiesResult,
-  type DocumentProperty,
   type DocumentPropertyKey,
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
@@ -35,7 +35,7 @@ const PROPERTY_LABEL_KEYS = {
   keywords: "inspector.metadata.documentProperties.keys.keywords",
   category: "common.category",
   contentStatus: "inspector.metadata.documentProperties.keys.contentStatus",
-  author: "inspector.metadata.documentProperties.keys.author",
+  author: "common.author",
   lastModifiedBy: "inspector.metadata.documentProperties.keys.lastModifiedBy",
   company: "inspector.metadata.documentProperties.keys.company",
   manager: "inspector.metadata.documentProperties.keys.manager",
@@ -74,18 +74,19 @@ const UNAVAILABLE_MESSAGE_KEYS = {
   TranslationKey
 >;
 
-type AuthoredProperty = DocumentProperty & {
-  key: AuthoredDocumentPropertyKey;
-};
-
 /**
- * Narrows the property itself, not just its key: filtering on `property.key`
- * leaves the element typed over every key, so the editable row could be handed
- * a generated one.
+ * A rendered row, split by whether the reader can change it. Carrying that in
+ * the row rather than re-deriving it at render keeps one decision in one place:
+ * a generated fact like the total editing time has no writable home in the
+ * file, so it must never be handed to a text box that implies it does.
  */
-const isAuthoredProperty = (
-  property: DocumentProperty,
-): property is AuthoredProperty => isAuthoredDocumentPropertyKey(property.key);
+type PropertyRow =
+  | { kind: "editable"; key: AuthoredDocumentPropertyKey; value: string }
+  | {
+      kind: "readonly";
+      key: DocumentPropertyKey;
+      value: DocumentPropertyValue;
+    };
 
 type DocumentPropertiesSectionProps = {
   workspaceId: string;
@@ -115,7 +116,9 @@ export const DocumentPropertiesSection = ({
   if (data.status !== "available") {
     return <Message>{t(UNAVAILABLE_MESSAGE_KEYS[data.status])}</Message>;
   }
-  if (data.properties.length === 0) {
+  // A writable file with nothing filled in is not an empty state: the blank
+  // fields are the whole point, since they are the ones you came here to fill.
+  if (data.properties.length === 0 && !data.editable) {
     return (
       <Message>{t("inspector.metadata.documentProperties.empty")}</Message>
     );
@@ -142,12 +145,41 @@ export const DocumentPropertiesSection = ({
     }
   };
 
-  const headline = data.properties.filter(isHeadlineProperty);
-  const rest = data.properties.filter(
-    (property) => !isHeadlineProperty(property),
+  const valueByKey = new Map(
+    data.properties.map((property) => [property.key, property.value] as const),
   );
 
-  const row = (property: DocumentProperty) => (
+  const rows: PropertyRow[] = [];
+  for (const key of DOCUMENT_PROPERTY_KEYS) {
+    // Folded into `application` below: on its own, a build number is a row that
+    // answers a question nobody asked.
+    if (key === "applicationVersion") {
+      continue;
+    }
+    const value =
+      key === "application"
+        ? applicationWithVersion(valueByKey)
+        : valueByKey.get(key);
+
+    if (data.editable && isAuthoredDocumentPropertyKey(key)) {
+      // Authored fields render even when blank. An empty Author is exactly the
+      // case worth fixing, and a field you cannot see is a field you cannot fill.
+      rows.push({
+        kind: "editable",
+        key,
+        value: value?.type === "text" ? value.value : "",
+      });
+      continue;
+    }
+    if (value !== undefined) {
+      rows.push({ kind: "readonly", key, value });
+    }
+  }
+
+  const headline = rows.filter(isHeadlineRow);
+  const rest = rows.filter((candidate) => !isHeadlineRow(candidate));
+
+  const row = (property: PropertyRow) => (
     <div
       className="flex flex-col gap-1 rounded-md px-2 py-2"
       key={property.key}
@@ -155,13 +187,11 @@ export const DocumentPropertiesSection = ({
       <span className="text-muted-foreground text-xs font-medium">
         {t(PROPERTY_LABEL_KEYS[property.key])}
       </span>
-      {data.editable &&
-      property.value.type === "text" &&
-      isAuthoredProperty(property) ? (
+      {property.kind === "editable" ? (
         <EditablePropertyValue
           fileFieldId={fileFieldId}
           propertyKey={property.key}
-          value={property.value.value}
+          value={property.value}
           workspaceId={workspaceId}
         />
       ) : (
@@ -198,8 +228,26 @@ export const DocumentPropertiesSection = ({
  * "0 words" from a generator that never recomputed its counters is noise until
  * you deliberately go looking for it.
  */
-const isHeadlineProperty = (property: DocumentProperty): boolean =>
+const isHeadlineRow = (property: PropertyRow): boolean =>
   property.key === "author" || property.key === "company";
+
+/**
+ * Word writes one fact as two properties: `Application` ("Microsoft Office
+ * Word") and `AppVersion` ("16.0000"). Joined, the version qualifies the name
+ * it belongs to; split across two rows, it is a bare build number sitting under
+ * its own heading. Dropped entirely when the name is missing, since a version
+ * with nothing to version is noise.
+ */
+const applicationWithVersion = (
+  valueByKey: ReadonlyMap<DocumentPropertyKey, DocumentPropertyValue>,
+): DocumentPropertyValue | undefined => {
+  const application = valueByKey.get("application");
+  const version = valueByKey.get("applicationVersion");
+  if (application?.type !== "text" || version?.type !== "text") {
+    return application;
+  }
+  return { type: "text", value: `${application.value} ${version.value}` };
+};
 
 type EditablePropertyValueProps = {
   fileFieldId: string;

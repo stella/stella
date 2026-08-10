@@ -304,7 +304,6 @@
       "abstract": "Abstrakt",
       "citedBy": "Citováno v",
       "cites": "Cituje",
-      "keywords": "Hesla",
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "DIČ"
     },
     "archive": "Archivovat",
+    "author": "Autor",
     "back": "Zpět",
     "cancel": "Zrušit",
     "caseLaw": "Judikatura",
@@ -1914,16 +1914,15 @@
         "keys": {
           "application": "Aplikace",
           "applicationVersion": "Verze aplikace",
-          "author": "Autor dokumentu",
           "characters": "Počet znaků",
           "company": "Společnost",
           "contentStatus": "Stav obsahu",
           "createdAt": "Datum vytvoření",
           "editingMinutes": "Celkový čas úprav",
-          "keywords": "Klíčová slova dokumentu",
+          "keywords": "Klíčová slova",
           "lastModifiedBy": "Naposledy uložil(a)",
           "lastPrintedAt": "Naposledy vytištěno",
-          "manager": "Nadřízený",
+          "manager": "Manažer",
           "modifiedAt": "Datum změny",
           "pages": "Počet stránek",
           "paragraphs": "Počet odstavců",
@@ -1931,7 +1930,7 @@
           "revision": "Číslo revize",
           "slides": "Počet snímků",
           "subject": "Předmět",
-          "template": "Vzor dokumentu",
+          "template": "Vzor",
           "words": "Počet slov"
         },
         "passwordProtected": "Soubor je chráněný heslem, jeho vlastnosti proto nelze přečíst",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "Tento typ souboru neobsahuje vlastnosti dokumentu"
       },
       "lastUpdatedBy": "Naposledy upravil(a)",
-      "matterColumnsHeading": "Sloupce spisu",
-      "noMatterColumns": "Pro tento dokument zatím nejsou vyplněné žádné sloupce spisu",
+      "matterColumnsHeading": "Údaje ve spisu",
+      "noMatterColumns": "K tomuto dokumentu zatím nejsou vyplněné žádné údaje",
       "stellaHeading": "Uloženo ve stelle",
       "updatedAt": "Aktualizováno",
       "versionCurrent": "v{version} (aktuální)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "Ostatní",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovat s # nástrojem} few {Pokračovat se # nástroji} other {Pokračovat s # nástroji}}",
     "catalogueDetailAbout": "O nástroji",
-    "catalogueDetailAuthor": "Autor",
     "catalogueDetailCost": "Cena",
     "catalogueDetailJurisdictions": "Jurisdikce",
     "catalogueDetailLicense": "Licence",
@@ -3508,7 +3506,6 @@
       "scopeClause": "Vzorové ustanovení",
       "scopeCondition": "Podmínka",
       "scopeLoop": "Smyčka",
-      "scopeTemplate": "Vzor",
       "showOnlyIf": "Zobrazit, jen pokud…",
       "showOnlyIfHelp": "Toto pole se v dokumentu zobrazí, jen když platí podmínka.",
       "showOnlyWhen": "Toto pole se zobrazí, jen když:",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "Tento PDF obsahuje formulář XFA. Náhled nemusí zobrazit vše správně."
     },
     "filesystem": {
-      "author": "Autor",
       "collapseAll": "Sbalit všechny složky",
       "expandAll": "Rozbalit všechny složky",
       "lastUpdated": "Naposledy aktualizováno",

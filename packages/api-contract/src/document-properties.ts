@@ -30,10 +30,11 @@ export const AUTHORED_DOCUMENT_PROPERTY_KEYS = [
 
 /**
  * Facts the producing application generated about itself and about the bytes.
- * Kept in the contract because the scrubber has to find and clear them, but not
- * shown: they are unactionable, and worse, routinely stale. A generator that
- * never recomputes the statistics leaves "0 words" on a document full of text,
- * so rendering them tells the reader something false with total confidence.
+ * No authoring application offers a way to edit these, so neither does stella:
+ * they render read-only, below the authored fields and behind a disclosure.
+ * They are also routinely stale — a generator that never recomputes its
+ * statistics leaves "0 words" on a document full of text — which is the second
+ * reason they stay out of the way rather than leading the panel.
  */
 export const GENERATED_DOCUMENT_PROPERTY_KEYS = [
   "createdAt",

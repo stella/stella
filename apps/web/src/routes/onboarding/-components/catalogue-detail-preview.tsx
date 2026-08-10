@@ -99,7 +99,7 @@ export const CatalogueDetailPreview = ({
             <Section title={t("common.details")}>
               <div className="grid grid-cols-2 gap-3">
                 <AuthorField
-                  ariaLabel={t("onboarding.catalogueDetailAuthor")}
+                  ariaLabel={t("common.author")}
                   authorUrl={entry.authorUrl}
                   isFirstParty={isFirstParty}
                   value={isFirstParty ? "stella" : entry.author}

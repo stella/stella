@@ -304,7 +304,6 @@
       "abstract": "Kivonat",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
-      "keywords": "Kulcsszavak",
       "legalSentence": "Elvi bírósági határozat",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "Adóazonosító"
     },
     "archive": "Archiválás",
+    "author": "Szerző",
     "back": "Vissza",
     "cancel": "Mégse",
     "caseLaw": "Ítélkezési gyakorlat",
@@ -1914,13 +1914,12 @@
         "keys": {
           "application": "Alkalmazás",
           "applicationVersion": "Alkalmazás verziója",
-          "author": "Dokumentum szerzője",
           "characters": "Karakterek száma",
-          "company": "Cég",
+          "company": "Vállalat",
           "contentStatus": "Tartalom állapota",
           "createdAt": "Létrehozás dátuma",
           "editingMinutes": "Teljes szerkesztési idő",
-          "keywords": "Dokumentum kulcsszavai",
+          "keywords": "Kulcsszavak",
           "lastModifiedBy": "Utoljára mentette",
           "lastPrintedAt": "Utoljára nyomtatva",
           "manager": "Vezető",
@@ -1931,7 +1930,7 @@
           "revision": "Verziószám",
           "slides": "Diák száma",
           "subject": "Tárgy",
-          "template": "Dokumentumsablon",
+          "template": "Sablon",
           "words": "Szavak száma"
         },
         "passwordProtected": "A fájl jelszóval védett, ezért a tulajdonságai nem olvashatók",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "Ez a fájltípus nem tartalmaz dokumentumtulajdonságokat"
       },
       "lastUpdatedBy": "Utoljára frissítette",
-      "matterColumnsHeading": "Ügyoszlopok",
-      "noMatterColumns": "Ehhez a dokumentumhoz még nincs kitöltve ügyoszlop",
+      "matterColumnsHeading": "Ügyadatok",
+      "noMatterColumns": "Ehhez a dokumentumhoz még nincs rögzítve adat",
       "stellaHeading": "A stellában tárolva",
       "updatedAt": "Frissítve",
       "versionCurrent": "v{version} (aktuális)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "Egyéb",
     "catalogueContinueWithCount": "{count, plural, one {Folytatás # eszközzel} other {Folytatás # eszközzel}}",
     "catalogueDetailAbout": "Leírás",
-    "catalogueDetailAuthor": "Szerző",
     "catalogueDetailCost": "Költség",
     "catalogueDetailJurisdictions": "Joghatóságok",
     "catalogueDetailLicense": "Licenc",
@@ -3508,7 +3506,6 @@
       "scopeClause": "Kikötéshely",
       "scopeCondition": "Feltétel",
       "scopeLoop": "Ciklus",
-      "scopeTemplate": "Sablon",
       "showOnlyIf": "Csak akkor jelenjen meg, ha…",
       "showOnlyIfHelp": "A mező csak akkor jelenik meg a dokumentumban, ha egy feltétel teljesül.",
       "showOnlyWhen": "Ez a mező csak akkor jelenik meg, ha:",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "Ez a PDF XFA-űrlapot tartalmaz. Az előnézet esetleg nem jelenik meg megfelelően."
     },
     "filesystem": {
-      "author": "Szerző",
       "collapseAll": "Összes mappa összecsukása",
       "expandAll": "Összes mappa kinyitása",
       "lastUpdated": "Utoljára frissítve",

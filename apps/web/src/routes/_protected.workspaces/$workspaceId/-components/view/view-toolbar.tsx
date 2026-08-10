@@ -946,7 +946,7 @@ const GroupByControl = ({
       return t("common.kind");
     }
     if (resolvedId === getInternalPropertyId("created-by")) {
-      return t("workspaces.filesystem.author");
+      return t("common.author");
     }
     return (
       eligible.find((p) => p.id === resolvedId)?.name ??

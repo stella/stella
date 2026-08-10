@@ -337,16 +337,13 @@ export const VerdictBadge = ({
     selectJustificationByFieldId(s.justifications, field?.id),
   );
 
+  // The cell already spins in its top-right corner while the value recomputes,
+  // and the badge sits in the same cell: a second spinner beside the first
+  // reads as two things loading. Withhold the badge rather than duplicating the
+  // signal — showing the stale tier while its value is being regraded would be
+  // worse than showing nothing.
   if (loading) {
-    return (
-      <span
-        aria-label={t("common.loading")}
-        className="text-muted-foreground flex size-4 shrink-0 items-center justify-center self-center group-data-[expanded-cell]/cell-content:self-end"
-        role="img"
-      >
-        <RefreshCwIcon aria-hidden="true" className="size-3 animate-spin" />
-      </span>
-    );
+    return null;
   }
 
   const tier = verdictTier(field);

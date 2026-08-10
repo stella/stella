@@ -304,7 +304,6 @@
       "abstract": "Santrauka",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
-      "keywords": "Raktažodžiai",
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
     "archive": "Archyvuoti",
+    "author": "Autorius",
     "back": "Atgal",
     "cancel": "Atšaukti",
     "caseLaw": "Teismų praktika",
@@ -1914,13 +1914,12 @@
         "keys": {
           "application": "Programa",
           "applicationVersion": "Programos versija",
-          "author": "Dokumento autorius",
           "characters": "Simbolių skaičius",
           "company": "Įmonė",
           "contentStatus": "Turinio būsena",
           "createdAt": "Sukūrimo data",
           "editingMinutes": "Bendra redagavimo trukmė",
-          "keywords": "Dokumento reikšminiai žodžiai",
+          "keywords": "Raktažodžiai",
           "lastModifiedBy": "Paskutinį kartą įrašė",
           "lastPrintedAt": "Paskutinį kartą spausdinta",
           "manager": "Vadovas",
@@ -1931,7 +1930,7 @@
           "revision": "Redakcijos numeris",
           "slides": "Skaidrių skaičius",
           "subject": "Tema",
-          "template": "Dokumento šablonas",
+          "template": "Šablonas",
           "words": "Žodžių skaičius"
         },
         "passwordProtected": "Failas apsaugotas slaptažodžiu, todėl jo ypatybių perskaityti negalima",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "Šio tipo faile nėra dokumento ypatybių"
       },
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
-      "matterColumnsHeading": "Bylos stulpeliai",
-      "noMatterColumns": "Šiam dokumentui dar neužpildytas nė vienas bylos stulpelis",
+      "matterColumnsHeading": "Bylos duomenys",
+      "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
       "stellaHeading": "Saugoma Stelloje",
       "updatedAt": "Atnaujinta",
       "versionCurrent": "v{version} (dabartinė)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "Kiti",
     "catalogueContinueWithCount": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
     "catalogueDetailAbout": "Apie",
-    "catalogueDetailAuthor": "Autorius",
     "catalogueDetailCost": "Kaina",
     "catalogueDetailJurisdictions": "Jurisdikcijos",
     "catalogueDetailLicense": "Licencija",
@@ -3508,7 +3506,6 @@
       "scopeClause": "Sąlygos vieta",
       "scopeCondition": "Sąlyga",
       "scopeLoop": "Ciklas",
-      "scopeTemplate": "Šablonas",
       "showOnlyIf": "Rodyti tik jei…",
       "showOnlyIfHelp": "Šis laukas dokumente rodomas tik tada, kai galioja sąlyga.",
       "showOnlyWhen": "Šis laukas rodomas tik tada, kai:",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "Šis PDF yra XFA forma. Peržiūra gali būti neteisinga."
     },
     "filesystem": {
-      "author": "Autorius",
       "collapseAll": "Sutraukti visus aplankus",
       "expandAll": "Išskleisti visus aplankus",
       "lastUpdated": "Paskutinis atnaujinimas",

@@ -304,7 +304,6 @@
       "abstract": "Résumé",
       "citedBy": "Cité par",
       "cites": "Cite",
-      "keywords": "Mots-clés",
       "legalSentence": "Attendu",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
@@ -861,6 +860,7 @@
       "taxIdentificationNumber": "Numéro fiscal"
     },
     "archive": "Archiver",
+    "author": "Auteur",
     "back": "Retour",
     "cancel": "Annuler",
     "caseLaw": "Jurisprudence",
@@ -1914,13 +1914,12 @@
         "keys": {
           "application": "Logiciel",
           "applicationVersion": "Version de l’application",
-          "author": "Auteur du document",
           "characters": "Nombre de caractères",
           "company": "Société",
           "contentStatus": "État du contenu",
           "createdAt": "Date de création",
           "editingMinutes": "Temps total d’édition",
-          "keywords": "Mots-clés du document",
+          "keywords": "Mots clés",
           "lastModifiedBy": "Dernier enregistrement par",
           "lastPrintedAt": "Dernière impression",
           "manager": "Responsable",
@@ -1931,7 +1930,7 @@
           "revision": "Numéro de révision",
           "slides": "Nombre de diapositives",
           "subject": "Objet",
-          "template": "Modèle du document",
+          "template": "Modèle",
           "words": "Nombre de mots"
         },
         "passwordProtected": "Le fichier est protégé par mot de passe, ses propriétés ne peuvent donc pas être lues",
@@ -1941,8 +1940,8 @@
         "unsupportedFormat": "Ce type de fichier ne contient pas de propriétés de document"
       },
       "lastUpdatedBy": "Dernière mise à jour par",
-      "matterColumnsHeading": "Colonnes du dossier",
-      "noMatterColumns": "Aucune colonne du dossier n’est encore renseignée pour ce document",
+      "matterColumnsHeading": "Informations du dossier",
+      "noMatterColumns": "Rien n'est encore renseigné pour ce document",
       "stellaHeading": "Enregistré dans stella",
       "updatedAt": "Mis à jour",
       "versionCurrent": "v{version} (actuelle)"
@@ -2425,7 +2424,6 @@
     "catalogueCommunityHeading": "Autres",
     "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
     "catalogueDetailAbout": "À propos",
-    "catalogueDetailAuthor": "Auteur",
     "catalogueDetailCost": "Coût",
     "catalogueDetailJurisdictions": "Juridictions",
     "catalogueDetailLicense": "Licence",
@@ -3508,7 +3506,6 @@
       "scopeClause": "Emplacement de clause",
       "scopeCondition": "Condition",
       "scopeLoop": "Boucle",
-      "scopeTemplate": "Modèle",
       "showOnlyIf": "Afficher seulement si…",
       "showOnlyIfHelp": "Faites apparaître ce champ dans le document uniquement lorsqu’une condition est remplie.",
       "showOnlyWhen": "Ce champ s’affiche uniquement lorsque :",
@@ -3735,7 +3732,6 @@
       "xfaFormNotSupported": "Ce PDF contient un formulaire XFA. L'aperçu peut ne pas s'afficher correctement."
     },
     "filesystem": {
-      "author": "Auteur",
       "collapseAll": "Réduire tous les dossiers",
       "expandAll": "Développer tous les dossiers",
       "lastUpdated": "Dernière mise à jour",
