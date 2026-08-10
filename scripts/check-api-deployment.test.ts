@@ -115,7 +115,7 @@ describe("API deployment health receipt", () => {
     expect(webBuildJob).toContain(".releaseSha == $release_sha");
     expect(webBuildJob).toContain("stella-web.intoto.jsonl");
     expect(webBuildJob).toContain(
-      "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
+      "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
     );
     expect(webBuildJob).toContain(
       `candidate_tag="candidate-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"`,
