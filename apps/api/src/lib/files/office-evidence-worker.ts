@@ -8,6 +8,7 @@ import {
   materializeXlsxWorkbook,
 } from "@silurus/ooxml/node";
 
+import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 import {
   OFFICE_EVIDENCE_FORMAT,
   OFFICE_EVIDENCE_STATUS,
@@ -18,7 +19,6 @@ import {
   type PptxOfficeEvidenceBlock,
   type XlsxOfficeEvidenceBlock,
 } from "@/api/lib/files/office-evidence-types";
-import { LIMITS } from "@/api/lib/limits";
 
 const MEBIBYTE = 1024 * 1024;
 const RESOURCE_LIMITS = {
@@ -124,7 +124,7 @@ const extractXlsxBlocks = async (
       let chunkChars = 0;
 
       const flush = () => {
-        if (blocks.length >= LIMITS.officeCitationBlocksMax) {
+        if (blocks.length >= OFFICE_EVIDENCE_LIMITS.blocksMax) {
           return;
         }
         const first = chunk.at(0);
@@ -142,7 +142,7 @@ const extractXlsxBlocks = async (
         const text = chunk
           .map((entry) => entry.text)
           .join(" | ")
-          .slice(0, LIMITS.officeCitationBlockTextMaxChars);
+          .slice(0, OFFICE_EVIDENCE_LIMITS.blockTextMaxChars);
         blocks.push({
           id: createBlockId(
             OFFICE_EVIDENCE_FORMAT.xlsx,
@@ -166,7 +166,7 @@ const extractXlsxBlocks = async (
         if (
           chunk.length > 0 &&
           chunkChars + separatorChars + entry.text.length >
-            LIMITS.officeCitationBlockTextMaxChars
+            OFFICE_EVIDENCE_LIMITS.blockTextMaxChars
         ) {
           flush();
         }
@@ -175,7 +175,7 @@ const extractXlsxBlocks = async (
       }
       flush();
 
-      if (blocks.length >= LIMITS.officeCitationBlocksMax) {
+      if (blocks.length >= OFFICE_EVIDENCE_LIMITS.blocksMax) {
         return { blocks, format: OFFICE_EVIDENCE_FORMAT.xlsx, version: 1 };
       }
     }
@@ -238,7 +238,7 @@ const extractPptxBlocks = async (
   for (const [slideIndex, slide] of presentation.slides.entries()) {
     const text = slideText(slide).slice(
       0,
-      LIMITS.officeCitationBlockTextMaxChars,
+      OFFICE_EVIDENCE_LIMITS.blockTextMaxChars,
     );
     if (!text) {
       continue;
@@ -248,7 +248,7 @@ const extractPptxBlocks = async (
       locator: { type: "pptx", slideIndex },
       text,
     });
-    if (blocks.length >= LIMITS.officeCitationBlocksMax) {
+    if (blocks.length >= OFFICE_EVIDENCE_LIMITS.blocksMax) {
       break;
     }
   }

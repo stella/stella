@@ -4,12 +4,12 @@ import type { OfficeCitationLocator } from "@stll/api-contract";
 
 import {
   OFFICE_EVIDENCE_FORMAT,
+  OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUS,
   OFFICE_EVIDENCE_UNAVAILABLE_CODE,
   type OfficeEvidenceFormat,
   type OfficeEvidenceUnavailableCode,
 } from "@/api/lib/files/office-evidence-domain";
-import { LIMITS } from "@/api/lib/limits";
 
 export {
   OFFICE_EVIDENCE_FORMAT,
@@ -77,7 +77,7 @@ const pptxLocatorSchema = v.object({
 const blockTextSchema = v.pipe(
   v.string(),
   v.minLength(1),
-  v.maxLength(LIMITS.officeCitationBlockTextMaxChars),
+  v.maxLength(OFFICE_EVIDENCE_LIMITS.blockTextMaxChars),
 );
 
 const pptxBlockSchema = v.object({
@@ -96,7 +96,7 @@ export const officeEvidencePayloadSchema = v.variant("format", [
   v.object({
     blocks: v.pipe(
       v.array(pptxBlockSchema),
-      v.maxLength(LIMITS.officeCitationBlocksMax),
+      v.maxLength(OFFICE_EVIDENCE_LIMITS.blocksMax),
     ),
     format: v.literal(OFFICE_EVIDENCE_FORMAT.pptx),
     version: v.literal(1),
@@ -104,7 +104,7 @@ export const officeEvidencePayloadSchema = v.variant("format", [
   v.object({
     blocks: v.pipe(
       v.array(xlsxBlockSchema),
-      v.maxLength(LIMITS.officeCitationBlocksMax),
+      v.maxLength(OFFICE_EVIDENCE_LIMITS.blocksMax),
     ),
     format: v.literal(OFFICE_EVIDENCE_FORMAT.xlsx),
     version: v.literal(1),

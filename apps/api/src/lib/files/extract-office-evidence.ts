@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { SubprocessError } from "@/api/lib/errors/tagged-errors";
+import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 import {
   officeEvidenceWorkerResultSchema,
   type OfficeEvidenceFormat,
   type OfficeEvidenceWorkerResult,
 } from "@/api/lib/files/office-evidence-types";
-import { LIMITS } from "@/api/lib/limits";
 import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
@@ -23,9 +23,9 @@ export const extractOfficeEvidence = async (
 ): Promise<Result<OfficeEvidenceWorkerResult, SubprocessError>> => {
   const workerResult = await spawnBinaryWorker({
     args: [format],
-    maxOutputBytes: LIMITS.officeCitationWorkerOutputMaxBytes,
+    maxOutputBytes: OFFICE_EVIDENCE_LIMITS.workerOutputMaxBytes,
     stdin: new Blob([buffer]),
-    timeoutMs: LIMITS.officeCitationWorkerTimeoutMs,
+    timeoutMs: OFFICE_EVIDENCE_LIMITS.workerTimeoutMs,
     workerPath: WORKER_PATH,
   });
   if (Result.isError(workerResult)) {

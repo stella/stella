@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { extractOfficeEvidence } from "@/api/lib/files/extract-office-evidence";
-import { LIMITS } from "@/api/lib/limits";
+import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 
 const readFixture = async (fileName: string): Promise<ArrayBuffer> =>
   await Bun.file(
@@ -27,7 +27,7 @@ describe("Office evidence extraction", () => {
     expect(payload.format).toBe("xlsx");
     expect(payload.blocks.length).toBeGreaterThan(0);
     expect(payload.blocks.length).toBeLessThanOrEqual(
-      LIMITS.officeCitationBlocksMax,
+      OFFICE_EVIDENCE_LIMITS.blocksMax,
     );
     expect(payload.blocks.map(({ text }) => text).join("\n")).toContain(
       "Acme s.r.o.",
@@ -35,7 +35,7 @@ describe("Office evidence extraction", () => {
     for (const block of payload.blocks) {
       expect(block.id).toMatch(/^xlsx-[0-9a-f]{16}$/u);
       expect(block.text.length).toBeLessThanOrEqual(
-        LIMITS.officeCitationBlockTextMaxChars,
+        OFFICE_EVIDENCE_LIMITS.blockTextMaxChars,
       );
       expect(block.locator.type).toBe("xlsx");
       if (block.locator.type === "xlsx") {
