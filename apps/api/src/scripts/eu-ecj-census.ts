@@ -67,7 +67,9 @@ const positiveInteger = (
   if (raw === undefined) {
     return fallback;
   }
-  const parsed = DECIMAL_INTEGER.test(raw) ? Number.parseInt(raw, 10) : NaN;
+  const parsed = DECIMAL_INTEGER.test(raw)
+    ? Number.parseInt(raw, 10)
+    : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     console.error(`--${name} must be a positive integer, got: ${raw}`);
     process.exit(1);
@@ -119,12 +121,13 @@ type CensusRow = {
   celex: string | null;
 };
 
-const rows: CensusRow[] = [];
-let after: SafeId<"caseLawDecision"> | null = null;
-for (;;) {
-  const boundary = after;
-  // oxlint-disable-next-line no-await-in-loop -- keyset pagination is inherently sequential
-  const page = await ingestionDb((tx) =>
+// The explicit return type breaks the inference cycle the keyset loop
+// otherwise creates: the boundary feeds the query whose result feeds the
+// next boundary.
+const selectCensusPage = async (
+  boundary: SafeId<"caseLawDecision"> | null,
+): Promise<CensusRow[]> =>
+  await ingestionDb((tx) =>
     tx
       .select({
         id: caseLawDecisions.id,
@@ -143,6 +146,12 @@ for (;;) {
       .orderBy(caseLawDecisions.id)
       .limit(pageSize),
   );
+
+const rows: CensusRow[] = [];
+let after: SafeId<"caseLawDecision"> | null = null;
+for (;;) {
+  // oxlint-disable-next-line no-await-in-loop -- keyset pagination is inherently sequential
+  const page = await selectCensusPage(after);
   rows.push(...page);
   const last = page.at(-1);
   if (page.length < pageSize || !last) {

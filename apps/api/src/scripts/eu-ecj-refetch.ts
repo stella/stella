@@ -99,7 +99,9 @@ const positiveInteger = (
   if (raw === undefined) {
     return fallback;
   }
-  const parsed = DECIMAL_INTEGER.test(raw) ? Number.parseInt(raw, 10) : NaN;
+  const parsed = DECIMAL_INTEGER.test(raw)
+    ? Number.parseInt(raw, 10)
+    : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     console.error(`--${name} must be a positive integer, got: ${raw}`);
     process.exit(1);
