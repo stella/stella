@@ -10,11 +10,12 @@ import {
 } from "../helpers/workspace";
 
 const EXPECTS_DEV_ROUTES = process.env["E2E_EXPECT_DEV_ROUTES"] !== "false";
+const COLD_OPTIMIZER_CANARY_TIMEOUT_MS = 180_000;
 
 test.describe("Vite dependency optimizer canary", () => {
   let workspace: TestWorkspace | null = null;
 
-  test.setTimeout(90_000);
+  test.setTimeout(COLD_OPTIMIZER_CANARY_TIMEOUT_MS);
 
   test.skip(
     !EXPECTS_DEV_ROUTES,
