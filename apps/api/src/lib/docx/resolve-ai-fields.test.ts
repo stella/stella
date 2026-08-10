@@ -54,6 +54,32 @@ describe("resolveAiFields", () => {
     expect(result["company.scope"]).toBe("manually written scope");
   });
 
+  test("does not disclose source-bound values to the AI generator", async () => {
+    let seenValues: Record<string, unknown> | undefined;
+
+    const result = await resolveAiFields({
+      values: {
+        "client.taxId": "TAX-ID-SECRET-12345",
+        "client.name": "ACME",
+      },
+      fields: [
+        {
+          path: "client.taxId",
+          source: { kind: "contact", field: "taxId" },
+        },
+        { path: "summary", aiPrompt: "Draft a summary" },
+      ],
+      generate: async ({ values }) => {
+        seenValues = values;
+        return "safe draft";
+      },
+    });
+
+    expect(seenValues).toEqual({ "client.name": "ACME" });
+    expect(result["client.taxId"]).toBe("TAX-ID-SECRET-12345");
+    expect(result["summary"]).toBe("safe draft");
+  });
+
   test("leaves AI fields unfilled when no generator is supplied", async () => {
     const result = await resolveAiFields({
       values: {},
@@ -153,6 +179,40 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       ],
     });
     expect("contracts.summary" in result).toBe(false);
+  });
+
+  test("does not disclose source-bound row values to the AI generator", async () => {
+    const seenValues: Record<string, unknown>[] = [];
+    const result = await resolveAiFields({
+      values: {
+        contracts: [
+          {
+            name: "Alpha",
+            client: { taxId: "TAX-ID-SECRET-12345", name: "ACME" },
+          },
+        ],
+      },
+      fields: [
+        {
+          path: "contracts.client.taxId",
+          source: { kind: "contact", field: "taxId" },
+        },
+        { path: "contracts.summary", aiPrompt: "Summarize this contract" },
+      ],
+      generate: async ({ values }) => {
+        seenValues.push(values);
+        return "SAFE SUMMARY";
+      },
+    });
+
+    expect(seenValues).toEqual([{ name: "Alpha", client: { name: "ACME" } }]);
+    expect(result["contracts"]).toEqual([
+      {
+        name: "Alpha",
+        client: { taxId: "TAX-ID-SECRET-12345", name: "ACME" },
+        summary: "SAFE SUMMARY",
+      },
+    ]);
   });
 
   test("passes 1-based item index and total count per row", async () => {

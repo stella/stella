@@ -23,6 +23,7 @@ import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import { omitSourceBoundValues } from "./ai-visible-values";
 import type { FieldMeta } from "./types";
 
 export type AiFieldGenerator = (input: {
@@ -89,6 +90,8 @@ export const resolveAiFields = async ({
       // oxlint-disable-next-line no-await-in-loop -- awaited at its position to preserve declaration order; rows fan out internally
       await resolveArrayField({
         rows: boundary.rows,
+        fields,
+        scopePath: boundary.scopePath,
         remainder: boundary.remainder,
         fieldPath: field.path,
         prompt,
@@ -110,7 +113,7 @@ export const resolveAiFields = async ({
     const value = await generate({
       prompt,
       fieldPath: field.path,
-      values: resolved,
+      values: omitSourceBoundValues({ values: resolved, fields }),
       // Only opted-in fields pay the token cost of the document context; the
       // generator omits the section entirely when this is undefined.
       documentText: docText,
@@ -127,6 +130,8 @@ type ArrayBoundary = {
   rows: Record<string, unknown>[];
   /** Path segment(s) after the array, resolved against each row. */
   remainder: string;
+  /** Path to the array itself, used to make field paths row-relative. */
+  scopePath: string;
 };
 
 /**
@@ -151,6 +156,7 @@ const findArrayBoundary = (
     return {
       rows: value.filter(isRecord),
       remainder: segments.slice(i).join("."),
+      scopePath: segments.slice(0, i).join("."),
     };
   }
   return undefined;
@@ -206,6 +212,8 @@ const setNestedPath = (
  */
 const resolveArrayField = async ({
   rows,
+  fields,
+  scopePath,
   remainder,
   fieldPath,
   prompt,
@@ -213,6 +221,8 @@ const resolveArrayField = async ({
   generate,
 }: {
   rows: Record<string, unknown>[];
+  fields: readonly FieldMeta[];
+  scopePath: string;
   remainder: string;
   fieldPath: string;
   prompt: string;
@@ -250,6 +260,8 @@ const resolveArrayField = async ({
       // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency worker draining a shared queue; the pool runs in parallel
       const value = await draftRow({
         row: task.row,
+        fields,
+        scopePath,
         index: task.index,
         count,
         fieldPath,
@@ -269,6 +281,8 @@ const resolveArrayField = async ({
  *  unfilled draft (undefined) so it never aborts the sibling rows. */
 const draftRow = async ({
   row,
+  fields,
+  scopePath,
   index,
   count,
   fieldPath,
@@ -277,6 +291,8 @@ const draftRow = async ({
   generate,
 }: {
   row: Record<string, unknown>;
+  fields: readonly FieldMeta[];
+  scopePath: string;
   index: number;
   count: number;
   fieldPath: string;
@@ -288,7 +304,7 @@ const draftRow = async ({
     return await generate({
       prompt,
       fieldPath,
-      values: row,
+      values: omitSourceBoundValues({ values: row, fields, scopePath }),
       documentText,
       item: { index: index + 1, count },
     });
