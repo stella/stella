@@ -9,6 +9,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  assertPropertyDependencyReadWithinLimit,
+  propertyDependencyReadLimit,
+} from "@/api/lib/properties/dependency-limits";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
 import { collectTemplateProperties } from "@/api/lib/views/template-properties";
 import {
@@ -94,8 +98,6 @@ const createViewTemplate = createSafeHandler(
         });
 
         const workspaceDependencies =
-          // SAFETY: one workspace's property-dependency edges, bounded by its properties (<= LIMITS.propertiesCount per endpoint)
-          // eslint-disable-next-line require-query-limit/require-query-limit
           await tx.query.propertyDependencies.findMany({
             where: { workspaceId: { eq: workspaceId } },
             columns: {
@@ -103,7 +105,12 @@ const createViewTemplate = createSafeHandler(
               dependsOnPropertyId: true,
               condition: true,
             },
+            limit: propertyDependencyReadLimit("perWorkspace"),
           });
+        assertPropertyDependencyReadWithinLimit(
+          workspaceDependencies.length,
+          "perWorkspace",
+        );
         cleanStalePropertyIds(
           layout,
           workspaceProperties.map((property) => property.id),

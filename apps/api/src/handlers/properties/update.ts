@@ -30,6 +30,11 @@ import {
   isDocumentTypeClassifierProperty,
   isDocumentTypeClassifierShape,
 } from "@/api/lib/properties/create-schema";
+import {
+  assertPropertyDependencyReadWithinLimit,
+  PROPERTY_DEPENDENCY_LIMITS,
+  propertyDependencyReadLimit,
+} from "@/api/lib/properties/dependency-limits";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 type PropertyWithDeps = {
@@ -212,6 +217,7 @@ const updatePropertyBodySchema = t.Object({
             dependsOnPropertyId: tSafeId("property"),
             condition: t.Nullable(tConditionNode),
           }),
+          { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
         ),
       }),
     ]),
@@ -306,8 +312,6 @@ const updateProperty = createSafeHandler(
           };
         }
 
-        // SAFETY: one property's dependencies; each points to another workspace property, bounded by LIMITS.propertiesCount
-        // eslint-disable-next-line require-query-limit/require-query-limit
         const oldDependencies = await tx.query.propertyDependencies.findMany({
           where: {
             propertyId: { eq: propertyId },
@@ -317,7 +321,12 @@ const updateProperty = createSafeHandler(
             dependsOnPropertyId: true,
             condition: true,
           },
+          limit: propertyDependencyReadLimit("perProperty"),
         });
+        assertPropertyDependencyReadWithinLimit(
+          oldDependencies.length,
+          "perProperty",
+        );
 
         const isStale = comparePropertiesForStale({
           oldProperty: {

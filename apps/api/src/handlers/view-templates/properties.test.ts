@@ -27,6 +27,21 @@ const tableLayout = (propertyId: string): ViewLayout => ({
   columnPinning: [],
 });
 
+const createDependencyOwnerSelect = (
+  dependencies: readonly { propertyId: string }[] = [],
+) =>
+  mock(() => ({
+    from: mock(() => ({
+      where: mock(() => ({
+        limit: mock(async () =>
+          [...new Set(dependencies.map(({ propertyId }) => propertyId))].map(
+            (propertyId) => ({ propertyId }),
+          ),
+        ),
+      })),
+    })),
+  }));
+
 const createTemplatePropertyValidationTx = () => {
   const insertMock = mock(() => {
     throw new Error("Unexpected template property insert");
@@ -34,6 +49,7 @@ const createTemplatePropertyValidationTx = () => {
   const executeMock = mock(async () => undefined);
   const tx = {
     execute: executeMock,
+    selectDistinct: createDependencyOwnerSelect(),
     select: mock(() => ({
       from: mock(() => ({
         where: mock(() => ({
@@ -80,6 +96,7 @@ const createTemplateDependencyTx = () => {
   const executeMock = mock(async () => undefined);
   const tx = {
     execute: executeMock,
+    selectDistinct: createDependencyOwnerSelect(),
     select: mock(() => ({
       from: mock(() => ({
         where: mock(() => ({
@@ -151,6 +168,7 @@ const createTemplateReuseTx = (
   });
   const tx = {
     execute: mock(async () => undefined),
+    selectDistinct: createDependencyOwnerSelect(existingDependencies),
     query: {
       properties: {
         findMany: mock(async () => {
