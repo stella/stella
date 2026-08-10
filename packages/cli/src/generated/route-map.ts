@@ -40075,7 +40075,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         dependencies: {
-                          maxItems: 20,
+                          maxItems: 19,
                           type: "array",
                           items: {
                             type: "object",
@@ -43481,7 +43481,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               dependencies: {
-                                maxItems: 20,
+                                maxItems: 19,
                                 type: "array",
                                 items: {
                                   type: "object",
@@ -47475,6 +47475,7 @@ export const generatedRouteMap: RouteNode = {
                                   required: ["dependencies"],
                                   properties: {
                                     dependencies: {
+                                      maxItems: 19,
                                       type: "array",
                                       items: {
                                         type: "object",

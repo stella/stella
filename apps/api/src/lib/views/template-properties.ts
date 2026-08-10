@@ -1,4 +1,5 @@
 import { deepEquals } from "bun";
+import { eq } from "drizzle-orm";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -16,6 +17,10 @@ import {
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import {
+  assertPropertyDependencyReadWithinLimit,
+  propertyDependencyReadLimit,
+} from "@/api/lib/properties/dependency-limits";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -206,12 +211,15 @@ export const resolveTemplateProperties = async ({
 
   const existingProperties = await readExistingProperties(tx, workspaceId);
   const systemFileProperty = findSystemFileProperty(existingProperties);
-  // SAFETY: one workspace's property-dependency edges, bounded by its properties (<= LIMITS.propertiesCount per endpoint)
-  // eslint-disable-next-line require-query-limit/require-query-limit
-  const existingDependencyEdges = await tx.query.propertyDependencies.findMany({
-    where: { workspaceId: { eq: workspaceId } },
-    columns: { propertyId: true },
-  });
+  const existingDependencyEdges = await tx
+    .selectDistinct({ propertyId: propertyDependencies.propertyId })
+    .from(propertyDependencies)
+    .where(eq(propertyDependencies.workspaceId, workspaceId))
+    .limit(propertyDependencyReadLimit("ownersPerWorkspace"));
+  assertPropertyDependencyReadWithinLimit(
+    existingDependencyEdges.length,
+    "ownersPerWorkspace",
+  );
   const propertyIdsWithDependencies = new Set(
     existingDependencyEdges.map((edge) => edge.propertyId),
   );

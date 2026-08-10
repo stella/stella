@@ -35,12 +35,6 @@ const BANNED_IMPORTS = new Set([
 const ALLOWED_FILES = [
   // The component that owns the mapping.
   "apps/web/src/components/workspaces/entity-kind-icon.tsx",
-  // Global search keys a total `Record<GlobalSearchResultType, IconType>` off
-  // a union wider than EntityKind (contacts, case law, chat threads) and
-  // needs component references, not elements, so it cannot call
-  // `<EntityKindIcon>`. Unifying its glyphs with the rest of the app changes
-  // what search results look like: a product decision, tracked separately.
-  "apps/web/src/components/search-dialog.tsx",
 ];
 
 const filenameForContext = (context) =>
@@ -69,7 +63,7 @@ export default eslintCompatPlugin({
             return !ALLOWED_FILES.some((allowed) => filename.endsWith(allowed));
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== LUCIDE_MODULE) {
+            if (node.source.value !== LUCIDE_MODULE) {
               return;
             }
             if (!Array.isArray(node.specifiers)) {

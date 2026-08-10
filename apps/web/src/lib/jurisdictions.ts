@@ -67,36 +67,27 @@ const countryCodeFromEmailTld = (
   return COUNTRY_CODES.find((code) => code.toLowerCase() === emailTld);
 };
 
-// Region names only vary by locale; cache one Intl.DisplayNames instance per
-// locale instead of rebuilding it on every call.
-const regionDisplayNamesByLocale = new Map<string, Intl.DisplayNames>();
-const getRegionDisplayNames = (locale: string): Intl.DisplayNames => {
-  let displayNames = regionDisplayNamesByLocale.get(locale);
-  if (!displayNames) {
-    displayNames = new Intl.DisplayNames([locale], { type: "region" });
-    regionDisplayNamesByLocale.set(locale, displayNames);
-  }
-  return displayNames;
-};
+type DisplayNameFormatter = (
+  value: string,
+  options: Intl.DisplayNamesOptions,
+) => string | undefined;
 
-export const createCountryOptions = (locale: string): CountryOption[] => {
-  const names = getRegionDisplayNames(locale);
+export const createCountryOptions = (
+  locale: string,
+  formatDisplayName: DisplayNameFormatter,
+): CountryOption[] => {
   const compareName = compareByLocale(locale);
 
   return COUNTRY_CODES.map((code) => ({
     code,
-    name: names.of(code) ?? code,
+    name: countryName(code, formatDisplayName),
   })).sort((a, b) => compareName(a.name, b.name));
 };
 
 export const countryName = (
   countryCode: CountryCode,
-  locale: string,
-): string => {
-  const names = getRegionDisplayNames(locale);
-
-  return names.of(countryCode) ?? countryCode;
-};
+  formatDisplayName: DisplayNameFormatter,
+): string => formatDisplayName(countryCode, { type: "region" }) ?? countryCode;
 
 export const suggestedCountryCodes = ({
   email,

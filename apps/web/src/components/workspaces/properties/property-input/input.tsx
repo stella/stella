@@ -21,8 +21,7 @@ const getMentions = (editor: Editor): string[] => {
 
   editor.state.doc.descendants((node) => {
     if (node.type.name === "mention") {
-      // eslint-disable-next-line typescript/no-unsafe-assignment -- ProseMirror exposes attrs as any; runtime guard below narrows before use.
-      const mentionId = node.attrs["id"];
+      const mentionId: unknown = node.attrs["id"];
       if (typeof mentionId === "string") {
         mentions.add(mentionId);
       }

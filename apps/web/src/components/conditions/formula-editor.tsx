@@ -4,7 +4,10 @@ import { Result } from "better-result";
 import { FunctionSquareIcon, HashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { evaluateNumericExpression } from "@stll/template-conditions";
+import {
+  evaluateNumericExpression,
+  NUMERIC_FUNCTION_NAMES,
+} from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -13,6 +16,8 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
+
+import { includesValue } from "@/lib/utils";
 
 /** A numeric operand the formula may reference. `path` is the exact name the
  *  expression and the evaluator use (already row-relative when inside a loop);
@@ -37,19 +42,6 @@ type FormulaEditorProps = {
   autoFocus?: boolean;
 };
 
-// Built-in formula functions are not field references; mirror the evaluator's
-// identifier grammar (compute.ts) so the "not a field" check matches what the
-// engine will actually resolve.
-const FORMULA_FUNCTIONS: readonly string[] = Object.freeze([
-  "min",
-  "max",
-  "round",
-  "abs",
-  "floor",
-  "ceil",
-]);
-// Constant-time membership check for the loop below.
-const FORMULA_FUNCTION_SET: ReadonlySet<string> = new Set(FORMULA_FUNCTIONS);
 const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
 
 // Math tokens the toolbar can insert. The glyph is what the author sees; the
@@ -64,15 +56,6 @@ const FORMULA_OPERATOR_TOKENS: readonly { glyph: string; token: string }[] = [
   { glyph: "(", token: "(" },
   { glyph: ")", token: ")" },
 ];
-const FORMULA_FUNCTION_TOKENS: readonly string[] = [
-  "min(",
-  "max(",
-  "round(",
-  "abs(",
-  "floor(",
-  "ceil(",
-];
-
 /** Popover buttons act on the captured selection; preventing mousedown keeps
  *  focus (and the painted caret) in the input while clicking a chip/operator. */
 const keepEditorFocus = (event: { preventDefault: () => void }) => {
@@ -115,7 +98,7 @@ export const FormulaEditor = ({
   const referencedIds: string[] = [];
   for (const match of value.matchAll(FORMULA_IDENT_RE)) {
     const id = match[0];
-    if (!FORMULA_FUNCTION_SET.has(id)) {
+    if (!includesValue(NUMERIC_FUNCTION_NAMES, id)) {
       referencedIds.push(id);
     }
   }
@@ -252,17 +235,17 @@ export const FormulaEditor = ({
           </Button>
         ))}
         <span className="w-1 shrink-0" />
-        {FORMULA_FUNCTION_TOKENS.map((fn) => (
+        {NUMERIC_FUNCTION_NAMES.map((functionName) => (
           <Button
             className="shrink-0 font-mono"
-            key={fn}
-            onClick={() => insertAtCaret(fn)}
+            key={functionName}
+            onClick={() => insertAtCaret(`${functionName}(`)}
             onMouseDown={keepEditorFocus}
             size="xs"
             type="button"
             variant="outline"
           >
-            {fn}
+            {functionName}(
           </Button>
         ))}
       </div>

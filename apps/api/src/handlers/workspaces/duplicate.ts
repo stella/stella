@@ -39,6 +39,10 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
+import {
+  assertPropertyDependencyReadWithinLimit,
+  propertyDependencyReadLimit,
+} from "@/api/lib/properties/dependency-limits";
 import { getS3 } from "@/api/lib/s3";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -411,10 +415,9 @@ const duplicateWorkspace = createSafeHandler(
             orderBy: { createdAt: "asc" },
             limit: LIMITS.propertiesCount,
           }),
-          // SAFETY: one workspace's property dependencies, bounded by propertiesCount² via the unique (propertyId, dependsOnPropertyId) index
-          // eslint-disable-next-line require-query-limit/require-query-limit
           tx.query.propertyDependencies.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
+            limit: propertyDependencyReadLimit("perWorkspace"),
           }),
           tx.query.workspaceViews.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
@@ -451,6 +454,11 @@ const duplicateWorkspace = createSafeHandler(
               })
             : Promise.resolve([]),
         ]);
+
+        assertPropertyDependencyReadWithinLimit(
+          dependencies.length,
+          "perWorkspace",
+        );
 
         return {
           workspace,

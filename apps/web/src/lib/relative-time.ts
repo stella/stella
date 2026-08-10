@@ -1,4 +1,4 @@
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 
 const MINUTE = 60;
 const HOUR = 3600;
@@ -6,6 +6,16 @@ const DAY = 86_400;
 const WEEK = 604_800;
 const MONTH = 2_592_000;
 const YEAR = 31_536_000;
+
+export const MEDIUM_DATE_SHORT_TIME_FORMAT = {
+  dateStyle: "medium",
+  timeStyle: "short",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+export const FULL_DATE_LONG_TIME_FORMAT = {
+  dateStyle: "full",
+  timeStyle: "long",
+} as const satisfies Intl.DateTimeFormatOptions;
 
 const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
 
@@ -72,7 +82,7 @@ export const formatFullTimestamp = (date: Date | string): string => {
     return "";
   }
 
-  return resolvedDate.toLocaleString(getFormattingLocale(), {
+  return getFormatter().dateTime(resolvedDate, {
     dateStyle: "full",
     timeStyle: "medium",
   });

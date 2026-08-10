@@ -17,7 +17,6 @@ import {
 } from "@/api/handlers/entities/list-cursor";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
-import { createTaskEntityHandler } from "@/api/handlers/tasks/create";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
 import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delete";
 import { updateTaskHandler } from "@/api/handlers/tasks/update";
@@ -58,6 +57,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {

@@ -12,12 +12,12 @@
     "files": {}
   },
   "nullish-array-fallback": {
-    "count": 9,
+    "count": 7,
     "files": {
       "apps/api/src/handlers/lists/generation-candidates/create.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/list.ts": 2,
       "apps/api/src/handlers/lists/items/list.ts": 2,
-      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 3,
+      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 1
     }
   },
@@ -30,23 +30,17 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 9,
+    "count": 4,
     "files": {
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
-      "apps/web/src/components/conditions/formula-editor.tsx": 1,
       "apps/web/src/components/templates/template-field-manifest.ts": 1,
-      "apps/web/src/lib/jurisdictions.ts": 1,
-      "apps/web/src/lib/relative-time.ts": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/template-preview.tsx": 2,
-      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
+      "apps/web/src/lib/relative-time.ts": 1
     }
   },
   "entity-kind-glyph-adhoc": {
-    "count": 2,
-    "files": {
-      "apps/web/src/components/search-dialog.tsx": 2
-    }
+    "count": 0,
+    "files": {}
   },
   "hand-rolled-user-identity": {
     "count": 8,
@@ -69,14 +63,9 @@
     "files": {}
   },
   "ad-hoc-relative-time-formatting": {
-    "count": 10,
+    "count": 1,
     "files": {
-      "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 5,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 1
+      "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1
     }
   },
   "direct-audit-log-insert": {
@@ -100,7 +89,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 592,
+    "count": 584,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -124,7 +113,6 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/health-check.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 3,
-      "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts": 1,
@@ -178,7 +166,6 @@
       "apps/api/src/handlers/properties/create-batch.ts": 3,
       "apps/api/src/handlers/properties/delete.ts": 1,
       "apps/api/src/handlers/properties/suggest-prompt.ts": 1,
-      "apps/api/src/handlers/properties/update.ts": 1,
       "apps/api/src/handlers/properties/utils.ts": 1,
       "apps/api/src/handlers/reports/build-report-data.ts": 2,
       "apps/api/src/handlers/search/ai.ts": 3,
@@ -192,12 +179,11 @@
       "apps/api/src/handlers/uploads/delete.ts": 2,
       "apps/api/src/handlers/uploads/entity-create-tree.ts": 6,
       "apps/api/src/handlers/uploads/update.ts": 4,
-      "apps/api/src/handlers/view-templates/create.ts": 1,
       "apps/api/src/handlers/views/table-export.ts": 2,
       "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts": 1,
       "apps/api/src/handlers/workspaces/anonymization-terms/list.ts": 1,
       "apps/api/src/handlers/workspaces/delete.ts": 1,
-      "apps/api/src/handlers/workspaces/duplicate.ts": 7,
+      "apps/api/src/handlers/workspaces/duplicate.ts": 6,
       "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts": 1,
       "apps/api/src/handlers/workspaces/list.ts": 2,
       "apps/api/src/handlers/workspaces/read-overview-activity.ts": 1,
@@ -257,7 +243,7 @@
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
       "apps/api/src/lib/template-clause-links.ts": 3,
       "apps/api/src/lib/usage/usage-ledger.ts": 4,
-      "apps/api/src/lib/views/template-properties.ts": 3,
+      "apps/api/src/lib/views/template-properties.ts": 2,
       "apps/api/src/lib/workflow-queue.ts": 8,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
       "apps/api/src/lib/workflow/generate-batch-mock.ts": 5,
@@ -289,7 +275,7 @@
       "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 8,
       "apps/web/src/components/chat-mention-list.tsx": 2,
-      "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 2,
+      "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 5,
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
@@ -318,7 +304,6 @@
       "apps/web/src/components/templates/template-form.tsx": 3,
       "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
       "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts": 1,
-      "apps/web/src/components/workspaces/properties/property-input/input.tsx": 1,
       "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 2,
@@ -390,18 +375,14 @@
     }
   },
   "require-query-limit-suppressions": {
-    "count": 15,
+    "count": 11,
     "files": {
       "apps/api/src/handlers/case-law/ingestion/status.ts": 1,
       "apps/api/src/handlers/chat/history-window.ts": 5,
-      "apps/api/src/handlers/properties/update.ts": 1,
-      "apps/api/src/handlers/view-templates/create.ts": 1,
       "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts": 1,
       "apps/api/src/handlers/workspaces/anonymization-terms/list.ts": 1,
-      "apps/api/src/handlers/workspaces/duplicate.ts": 1,
       "apps/api/src/handlers/workspaces/list.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/lib/views/template-properties.ts": 1,
       "apps/api/src/scripts/adapter-health.ts": 1
     }
   },
@@ -414,10 +395,8 @@
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 1,
-    "files": {
-      "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "lib-to-handler-imports": {
     "count": 0,

@@ -9,13 +9,13 @@ import {
   legalListGenerationRuns,
   legalListItemSources,
 } from "@/api/db/schema";
-import { createTaskEntityHandler } from "@/api/handlers/tasks/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),

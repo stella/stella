@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
+import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -177,8 +178,10 @@ const parseSkDate = (raw: string | null | undefined): string | undefined => {
   }
   const result = parseCeDate(raw);
   if (!result) {
-    // eslint-disable-next-line no-console -- adapter diagnostic
-    console.warn("SK Courts adapter: unexpected date format", raw);
+    logger.warn("case_law.ingestion.unexpected_date_format", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      value: raw,
+    });
   }
   return result;
 };
@@ -199,8 +202,11 @@ const fetchDetail = async (
   });
 
   if (!response.ok) {
-    // eslint-disable-next-line no-console -- adapter diagnostic
-    console.warn(`SK Courts detail fetch failed: ${response.status}`, guid);
+    logger.warn("case_law.ingestion.detail_fetch_failed", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      guid,
+      httpStatus: response.status,
+    });
     return null;
   }
 

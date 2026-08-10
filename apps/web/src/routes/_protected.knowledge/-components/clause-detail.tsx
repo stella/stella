@@ -75,6 +75,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { clauseDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import {
   canReviewFlushReportResolved,
@@ -1791,10 +1792,10 @@ const VersionRow = ({
           })}
         </span>
         <span className="text-muted-foreground">
-          {format.dateTime(new Date(version.createdAt), {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
+          {format.dateTime(
+            new Date(version.createdAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          )}
         </span>
       </button>
       <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
