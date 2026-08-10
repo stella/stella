@@ -1668,6 +1668,18 @@ export const createCaseLawGenerationBackfill =
             : { indexed: 0, status: BACKFILL_STATUS.BUSY };
         }
 
+        return await reconcilePendingPage(guards);
+      };
+
+      // The pending queue is the live path: every newly ingested decision
+      // waits here, so it must be drainable on its own, without the
+      // source-first composition reconcilePending applies after a completed
+      // walk. A queued source repair can span the whole corpus of a source;
+      // routing the live drain behind it would recreate the wedge this
+      // ordering exists to prevent.
+      const reconcilePendingPage = async (
+        guards: ReturnType<typeof createLeaseGuards>,
+      ): Promise<CorpusIndexBackfillResult> => {
         const pendingPage = await selectGenerationPendingPage(scopedDb, {
           generation,
           limit: batchSize,
@@ -1753,6 +1765,27 @@ export const createCaseLawGenerationBackfill =
           ...terminalDeletes,
         ]);
         return { indexed, status: BACKFILL_STATUS.ADVANCED };
+      };
+
+      // Pending projections only: the running-arm drain. Source-eligibility
+      // revisions stay gated on a completed walk (their replay is
+      // authoritative over anything indexed here, so draining pending rows
+      // first cannot break that convergence).
+      const drainPendingProjections = async ({
+        checkpoint: ownedCheckpoint,
+        leaseToken,
+        status,
+      }: LeaseGuardOptions): Promise<CorpusIndexBackfillResult> => {
+        const guards = createLeaseGuards({
+          checkpoint: ownedCheckpoint,
+          leaseToken,
+          status,
+        });
+        await guards.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: async () => await Promise.resolve(),
+        });
+        return await reconcilePendingPage(guards);
       };
 
       if (
@@ -1851,6 +1884,66 @@ export const createCaseLawGenerationBackfill =
         effect: completeRemoteEffect,
         onLeaseLost: async () => await Promise.resolve(),
       });
+
+      const releaseRunningLease = async (): Promise<void> => {
+        await scopedDb(async (tx) => {
+          // audit: skip — releasing a failed lease preserves the durable cursor for replay
+          await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({ leaseExpiresAt: null, leaseToken: null })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                ownsUnexpiredLease({
+                  checkpoint: claimedCheckpoint,
+                  leaseToken,
+                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+                }),
+              ),
+            );
+        });
+      };
+
+      // Drain the pending queue before walking the snapshot. Pending
+      // projections are live decision traffic; the walk is a bounded rebuild
+      // of pre-snapshot rows, and a generation can sit at `running` for a long
+      // time (or forever, when its walk is wedged). Draining under RUNNING
+      // keeps newly ingested decisions searchable regardless of walk state,
+      // and draining first means a row that wedges the walk cannot also wedge
+      // live indexing. The pending_revision epoch converges these appends with
+      // walk pages that later reach the same rows.
+      let drainedIndexed = 0;
+      try {
+        const drained = await drainPendingProjections({
+          checkpoint: claimedCheckpoint,
+          leaseToken,
+          status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+        });
+        if (drained.status === BACKFILL_STATUS.BUSY) {
+          await releaseRunningLease();
+          return drained;
+        }
+        drainedIndexed = drained.indexed;
+      } catch (error) {
+        await releaseRunningLease();
+        throw error;
+      }
+      // Reports this invocation's total durable movement: rows the drain
+      // indexed count as ADVANCED even when the walk itself could not.
+      const withDrained = (
+        result: CorpusIndexBackfillResult,
+      ): CorpusIndexBackfillResult => {
+        if (drainedIndexed === 0) {
+          return result;
+        }
+        return result.status === BACKFILL_STATUS.ADVANCED
+          ? {
+              indexed: result.indexed + drainedIndexed,
+              status: BACKFILL_STATUS.ADVANCED,
+            }
+          : { indexed: drainedIndexed, status: BACKFILL_STATUS.ADVANCED };
+      };
+
       const page = await selectGenerationBackfillPage(scopedDb, {
         batchSize,
         checkpoint: claimedCheckpoint,
@@ -1878,7 +1971,7 @@ export const createCaseLawGenerationBackfill =
           return rows.at(0);
         });
         if (!completed) {
-          return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+          return withDrained({ indexed: 0, status: BACKFILL_STATUS.BUSY });
         }
         const completedCheckpoint: GenerationBackfillCheckpoint = {
           cursorCreatedAt: completed.cursorCreatedAt,
@@ -1888,11 +1981,13 @@ export const createCaseLawGenerationBackfill =
           snapshotAt: completed.snapshotAt,
         };
         try {
-          return await reconcilePending({
-            checkpoint: completedCheckpoint,
-            leaseToken,
-            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
-          });
+          return withDrained(
+            await reconcilePending({
+              checkpoint: completedCheckpoint,
+              leaseToken,
+              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+            }),
+          );
         } finally {
           await releaseLease({
             leaseToken,
@@ -1911,7 +2006,12 @@ export const createCaseLawGenerationBackfill =
       );
       let indexed: number;
       try {
-        indexed = await backfillRows(scopedDb, rows, generation, runningGuards);
+        // The drain above may have brought every row on this page current, so
+        // skip the indexer rather than hand it an empty batch.
+        indexed =
+          rows.length === 0
+            ? 0
+            : await backfillRows(scopedDb, rows, generation, runningGuards);
         if (indexed !== rows.length) {
           throw new CorpusIndexError({
             message: "generation backfill page did not reach a fixed point",
@@ -1929,23 +2029,7 @@ export const createCaseLawGenerationBackfill =
       } catch (error) {
         // Keep the cursor intact, but do not make a transient search/S3 failure
         // wait for a stale lease before its durable retry.
-        await scopedDb(async (tx) => {
-          // audit: skip — releasing a failed lease preserves the durable cursor for replay
-          const released = await tx
-            .update(caseLawCorpusIndexBackfills)
-            .set({ leaseExpiresAt: null, leaseToken: null })
-            .where(
-              and(
-                eq(caseLawCorpusIndexBackfills.generation, generation),
-                ownsUnexpiredLease({
-                  checkpoint: claimedCheckpoint,
-                  leaseToken,
-                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
-                }),
-              ),
-            );
-          return released;
-        });
+        await releaseRunningLease();
         throw error;
       }
 
@@ -1972,9 +2056,11 @@ export const createCaseLawGenerationBackfill =
           .returning({ generation: caseLawCorpusIndexBackfills.generation });
         return advancedRows.at(0);
       });
-      return advanced
-        ? { indexed, status: BACKFILL_STATUS.ADVANCED }
-        : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+      return withDrained(
+        advanced
+          ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+          : { indexed: 0, status: BACKFILL_STATUS.BUSY },
+      );
     } finally {
       await writerLease.release();
     }

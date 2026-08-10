@@ -1141,8 +1141,10 @@ test(
     });
     const completing = backfill(scopedDb, 100, generation);
     await reconciliationStartedPromise;
+    // The pending drain now runs under the running lease, before the walk
+    // observes its drained snapshot and completes.
     expect(await readCheckpoint(generation)).toMatchObject({
-      status: "complete",
+      status: "running",
     });
     expect((await readCheckpoint(generation))?.leaseToken).not.toBeNull();
     expect(await backfill(scopedDb, 100, generation)).toEqual({
@@ -2579,6 +2581,80 @@ test(
         .delete(caseLawCorpusIndexBackfills)
         .where(eq(caseLawCorpusIndexBackfills.generation, generation));
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "drains pending projections while the generation is still running",
+  async () => {
+    // The wedge this guards: with the drain tied to a completed walk, a
+    // generation stuck at `running` silently stopped indexing every newly
+    // ingested decision. The pending queue must drain on the same invocation
+    // that advances the walk, before the walk, and without completing it.
+    const generation = "case_law_v64";
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "running",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicLastId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "last",
+      pendingIndexIds: [corpusIndexId(generation, "CZE")],
+    });
+
+    const sent: SafeId<"caseLawDecision">[][] = [];
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        sent.push(rows.map((row) => row.id));
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(
+              eq(caseLawCorpusIndexProjections.generation, rebuildGeneration),
+            );
+        });
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000640",
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      // batchSize 1 leaves the walk pages away from its snapshot end, so the
+      // generation stays running; the queued row must index anyway, first.
+      expect(await backfill(scopedDb, 1, generation)).toEqual({
+        indexed: 2,
+        status: "advanced",
+      });
+      expect(sent.at(0)).toEqual([publicLastId]);
+      expect(await readCheckpoint(generation)).toMatchObject({
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: "running",
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.generation, generation)),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
     }
   },
   { timeout: 30_000 },

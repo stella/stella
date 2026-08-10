@@ -27,7 +27,10 @@ import {
   tryRecomputeCitationAuthorityForAll,
 } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
-import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
+import {
+  BACKFILL_STATUS,
+  backfillCorpusIndex,
+} from "@/api/handlers/case-law/corpus-index";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
@@ -54,6 +57,14 @@ import {
   loadCourtWeightEntries,
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
+import {
+  CORPUS_INDEX_STEP,
+  type CorpusIndexStepKind,
+  type CorpusIndexStreaks,
+  INITIAL_CORPUS_INDEX_STREAKS,
+  corpusIndexStallThreshold,
+  stepCorpusIndexProgress,
+} from "./corpus-index-progress";
 import {
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
@@ -1168,6 +1179,27 @@ export const runCaseLawIngest = async (
     }
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
+    // A leaked lease (every step BUSY) and a failing backend (every step
+    // throws) both look like idle silence in this loop unless counted.
+    let corpusStreaks: CorpusIndexStreaks = INITIAL_CORPUS_INDEX_STREAKS;
+    const stallThreshold = corpusIndexStallThreshold(CORPUS_INDEX_INTERVAL_MS);
+    const foldCorpusStep = (kind: CorpusIndexStepKind): void => {
+      const step = stepCorpusIndexProgress({
+        kind,
+        streaks: corpusStreaks,
+        threshold: stallThreshold,
+      });
+      corpusStreaks = step.streaks;
+      if (!step.stall) {
+        return;
+      }
+      logger.error(
+        step.stall.kind === "sustained_busy"
+          ? "case_law.corpus_index.sustained_busy"
+          : "case_law.corpus_index.sustained_failure",
+        { generation, steps: step.stall.steps },
+      );
+    };
     while (true) {
       if (isDraining()) {
         return;
@@ -1193,7 +1225,23 @@ export const runCaseLawIngest = async (
         if (result.indexed > 0) {
           logInfo(`[corpus-index] Indexed ${result.indexed} decisions`);
         }
+        switch (result.status) {
+          case BACKFILL_STATUS.ADVANCED:
+            foldCorpusStep(CORPUS_INDEX_STEP.ADVANCED);
+            break;
+          case BACKFILL_STATUS.BUSY:
+            foldCorpusStep(CORPUS_INDEX_STEP.BUSY);
+            break;
+          case BACKFILL_STATUS.COMPLETE:
+            foldCorpusStep(CORPUS_INDEX_STEP.COMPLETE);
+            break;
+          default: {
+            const unhandled: never = result;
+            panic(`Unhandled corpus index result: ${String(unhandled)}`);
+          }
+        }
       } catch (error) {
+        foldCorpusStep(CORPUS_INDEX_STEP.FAILED);
         const msg = error instanceof Error ? error.message : String(error);
         if (isTransientConnectionError(error)) {
           logError(`[corpus-index] DB connection error (will retry): ${msg}`);

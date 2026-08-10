@@ -461,6 +461,22 @@ the exact allowed origins in the adapter and reject everything else before any
 request. Redirect handling needs the same boundary; a trusted start URL is not
 enough if the client can follow it to an arbitrary origin.
 
+### 22. Live indexing must never wait on a rebuild
+
+A queue that only drains when some other walk completes inherits every
+failure mode of that walk: a generation rebuild wedged at `running`
+(spinning cursor, failing page, leaked lease, abandoned checkpoint)
+silently stopped indexing every newly ingested decision. The corpus-index
+pending queue therefore drains on every generation invocation — under
+`running`, before the snapshot walk — so a wedged walk degrades to "rebuild
+stalled", never "nothing new is searchable".
+
+Keep that shape for any new projection or index queue: give it a drain
+path that does not depend on a bounded rebuild reaching its end, and
+classify the driving loop's no-progress outcomes (busy, failed) into
+sustained-stall telemetry. A loop that only logs its successes makes a
+leaked lease indistinguishable from an idle system.
+
 ## DocumentAst Conventions
 
 ```typescript
