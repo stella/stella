@@ -13,11 +13,18 @@ import type {
 // bun:test has no DOM. Substitute the browser's `DOMParser` with a minimal
 // stand-in mirroring the two behaviours the matcher relies on — tag stripping
 // and entity decoding. Decoding itself is the platform's job in production;
-// these tests cover our matching over the decoded text.
+// these tests cover our matching over the decoded text. Tags are stripped to
+// a fixed point: the stub is not a sanitizer, but iterating keeps CodeQL's
+// incomplete-multi-character-sanitization check satisfied about the pattern.
 class DOMParserStub {
   parseFromString(html: string, _type: string) {
-    const textContent = html
-      .replaceAll(/<[^>]*>/gu, "")
+    let stripped = html;
+    let previous;
+    do {
+      previous = stripped;
+      stripped = stripped.replaceAll(/<[^>]*>/gu, "");
+    } while (stripped !== previous);
+    const textContent = stripped
       .replaceAll("&#x2F;", "/")
       .replaceAll("&nbsp;", " ")
       .replaceAll("&amp;", "&");
