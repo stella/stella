@@ -40,6 +40,7 @@ type SilurusOfficeFileViewerProps = {
   format: OfficeViewerFormat;
   navigationRequest?: OfficeViewerNavigationRequest | null;
   onNavigationApplied?: (sequence: number) => void;
+  onNavigationError?: (error: Error) => void;
   onError?: (error: Error) => void;
   onSpreadsheetSelectionChange?: (
     selection: OfficeViewerSpreadsheetSelection | null,
@@ -83,6 +84,7 @@ export const SilurusOfficeFileViewer = ({
   format,
   navigationRequest = null,
   onNavigationApplied,
+  onNavigationError,
   onError,
   onSpreadsheetSelectionChange,
   onStatusChange,
@@ -108,11 +110,11 @@ export const SilurusOfficeFileViewer = ({
         if (generation !== navigationGenerationRef.current) {
           return undefined;
         }
-        const applied = await applyOfficeNavigation(
-          viewer,
-          request.locator,
-          () => generation === navigationGenerationRef.current,
-        );
+        const applied = await applyOfficeNavigation({
+          isCurrent: () => generation === navigationGenerationRef.current,
+          locator: request.locator,
+          target: viewer,
+        });
         if (applied && generation === navigationGenerationRef.current) {
           onNavigationApplied?.(request.sequence);
         }
@@ -120,7 +122,7 @@ export const SilurusOfficeFileViewer = ({
       });
       const observed = navigation.catch((error: unknown) => {
         if (generation === navigationGenerationRef.current) {
-          onError?.(toError(error));
+          onNavigationError?.(toError(error));
         }
       });
       navigationQueueRef.current = observed;
@@ -346,16 +348,25 @@ type OfficeNavigationViewer =
       };
     };
 
-const applyOfficeNavigation = async (
-  target: OfficeNavigationViewer,
-  locator: OfficeCitationLocator,
-  isCurrent: () => boolean,
-): Promise<boolean> => {
+const applyOfficeNavigation = async ({
+  isCurrent,
+  locator,
+  target,
+}: {
+  isCurrent: () => boolean;
+  locator: OfficeCitationLocator;
+  target: OfficeNavigationViewer;
+}): Promise<boolean> => {
   if (!isCurrent()) {
     return false;
   }
   if (target.format === "pptx" && locator.type === "pptx") {
-    target.viewer.scrollToSlide(locator.slideIndex, { behavior: "smooth" });
+    const prefersReducedMotion = globalThis.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    target.viewer.scrollToSlide(locator.slideIndex, {
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
     return true;
   }
   if (target.format === "xlsx" && locator.type === "xlsx") {
@@ -364,10 +375,18 @@ const applyOfficeNavigation = async (
       return false;
     }
     target.viewer.select(locator.range);
-    await target.viewer.scrollToCell(locator.range);
+    const separatorIndex = locator.range.indexOf(":");
+    const anchor =
+      separatorIndex === -1
+        ? locator.range
+        : locator.range.slice(0, separatorIndex);
+    await target.viewer.scrollToCell(anchor);
     return isCurrent();
   }
-  return false;
+  throw new ClientOperationError({
+    action: "navigate Office citation",
+    message: `Office viewer format ${target.format} cannot navigate a ${locator.type} citation`,
+  });
 };
 
 const findWorksheetCell = (

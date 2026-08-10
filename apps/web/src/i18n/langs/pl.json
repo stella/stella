@@ -532,6 +532,7 @@
     "newChat": "Nowy czat",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
+    "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
     "pageNumber": "Strona {page}",

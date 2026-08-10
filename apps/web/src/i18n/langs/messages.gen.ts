@@ -535,6 +535,7 @@ type Messages = {
     "newChat": "New chat";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
+    "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
     "pageNumber": "Page {page}";

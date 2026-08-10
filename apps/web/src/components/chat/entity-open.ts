@@ -1,6 +1,9 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
+import {
+  isEntityActiveInMainRoute,
+  isFileActiveInMainRoute,
+} from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -191,10 +194,11 @@ const openFileCitationSource = ({
   workspaceId: string;
 }): void => {
   const inspector = useInspectorTabsStore.getState();
-  const sameAsMainRoute = isEntityActiveInMainRoute(
-    source.entityId,
+  const sameAsMainRoute = isFileActiveInMainRoute({
+    entityId: source.entityId,
+    fieldId: source.fieldId,
     workspaceId,
-  );
+  });
   inspector.openFile({
     id: source.fieldId,
     entityId: source.entityId,

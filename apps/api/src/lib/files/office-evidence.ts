@@ -17,6 +17,7 @@ import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { extractOfficeEvidence } from "@/api/lib/files/extract-office-evidence";
 import { createOfficeEvidenceAdmission } from "@/api/lib/files/office-evidence-admission";
 import {
+  OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUS,
   type OfficeEvidenceStatus,
 } from "@/api/lib/files/office-evidence-domain";
@@ -29,7 +30,7 @@ import {
   type OfficeEvidencePayload,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 type OfficeEvidenceSource = {
@@ -58,7 +59,11 @@ type PersistedEvidenceRow = {
   status: OfficeEvidenceStatus;
 };
 
-const OFFICE_EVIDENCE_CLAIM_MS = 5 * 60_000;
+const OFFICE_EVIDENCE_FINALIZATION_GRACE_MS = 60_000;
+const OFFICE_EVIDENCE_CLAIM_MS =
+  OBJECT_READ_TIMEOUT_MS +
+  OFFICE_EVIDENCE_LIMITS.workerTimeoutMs +
+  OFFICE_EVIDENCE_FINALIZATION_GRACE_MS;
 const officeEvidenceAdmission = createOfficeEvidenceAdmission(1);
 
 const evidenceRowSelection = {
@@ -105,12 +110,6 @@ const selectEvidenceRows = async (
     .from(officeFileEvidence)
     .where(evidenceSourceWhere(scope, source))
     .limit(1);
-
-const readEvidenceRows = async (
-  scopedDb: ScopedDb,
-  scope: OfficeEvidenceScope,
-  source: OfficeEvidenceSource,
-) => await scopedDb(async (tx) => await selectEvidenceRows(tx, scope, source));
 
 const parseJson = (value: string): unknown => JSON.parse(value);
 
@@ -524,21 +523,21 @@ export const loadOfficeEvidence = async ({
   }).finally(releaseAdmission);
 };
 
-type FindCurrentOfficeEvidenceBlockOptions = OfficeEvidenceScope & {
+type FindOfficeEvidenceBlockOptions = OfficeEvidenceScope & {
   blockId: string;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   scopedDb: ScopedDb;
 };
 
-export const findCurrentOfficeEvidenceBlock = async ({
+export const findOfficeEvidenceBlock = async ({
   blockId,
   entityId,
   fieldId,
   organizationId,
   scopedDb,
   workspaceId,
-}: FindCurrentOfficeEvidenceBlockOptions): Promise<{
+}: FindOfficeEvidenceBlockOptions): Promise<{
   block: OfficeEvidenceBlock;
   source: {
     entityId: SafeId<"entity">;
@@ -550,59 +549,58 @@ export const findCurrentOfficeEvidenceBlock = async ({
     propertyId: SafeId<"property">;
   };
 } | null> => {
-  const rows = await scopedDb((tx) =>
-    tx
+  const resolved = await scopedDb(async (tx) => {
+    const rows = await tx
       .select({
         content: fields.content,
         entityName: entities.name,
         entityVersionId: entityVersions.id,
         propertyId: fields.propertyId,
       })
-      .from(entities)
+      .from(fields)
+      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
       .innerJoin(
-        entityVersions,
+        entities,
         and(
-          eq(entityVersions.id, entities.currentVersionId),
-          isNull(entityVersions.deletedAt),
-        ),
-      )
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.entityVersionId, entityVersions.id),
-          eq(fields.id, fieldId),
+          eq(entityVersions.entityId, entities.id),
+          eq(entities.workspaceId, workspaceId),
         ),
       )
       .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+        and(
+          eq(fields.id, fieldId),
+          eq(fields.workspaceId, workspaceId),
+          eq(entityVersions.workspaceId, workspaceId),
+          eq(entities.id, entityId),
+          isNull(entityVersions.deletedAt),
+        ),
       )
-      .limit(1),
-  );
-  const current = rows.at(0);
-  if (!current || current.content.type !== "file") {
+      .limit(1);
+    const fieldSource = rows.at(0);
+    if (!fieldSource || fieldSource.content.type !== "file") {
+      return null;
+    }
+    const source = {
+      entityId,
+      entityVersionId: fieldSource.entityVersionId,
+      fieldId,
+      fileId: fieldSource.content.id,
+      fileName: fieldSource.content.fileName,
+      mimeType: fieldSource.content.mimeType,
+      sha256Hex: fieldSource.content.sha256Hex,
+    };
+    if (!resolveOfficeEvidenceFormat(source.mimeType)) {
+      return null;
+    }
+    const evidenceRow = (
+      await selectEvidenceRows(tx, { organizationId, workspaceId }, source)
+    ).at(0);
+    return evidenceRow ? { evidenceRow, fieldSource } : null;
+  });
+  if (!resolved) {
     return null;
   }
-  const source = {
-    entityId,
-    entityVersionId: current.entityVersionId,
-    fieldId,
-    fileId: current.content.id,
-    fileName: current.content.fileName,
-    mimeType: current.content.mimeType,
-    sha256Hex: current.content.sha256Hex,
-  };
-  if (!resolveOfficeEvidenceFormat(source.mimeType)) {
-    return null;
-  }
-  const evidenceRows = await readEvidenceRows(
-    scopedDb,
-    { organizationId, workspaceId },
-    source,
-  );
-  const evidenceRow = evidenceRows.at(0);
-  if (!evidenceRow) {
-    return null;
-  }
+  const { evidenceRow, fieldSource } = resolved;
   const payload = await decodeEvidenceRow(evidenceRow, organizationId);
   const block = payload?.blocks.find(({ id }) => id === blockId);
   if (!block) {
@@ -612,12 +610,12 @@ export const findCurrentOfficeEvidenceBlock = async ({
     block,
     source: {
       entityId,
-      entityName: current.entityName,
+      entityName: fieldSource.entityName,
       fieldId,
-      fileName: current.content.fileName,
-      mimeType: current.content.mimeType,
-      pdfFileId: current.content.pdfFileId,
-      propertyId: current.propertyId,
+      fileName: fieldSource.content.fileName,
+      mimeType: fieldSource.content.mimeType,
+      pdfFileId: fieldSource.content.pdfFileId,
+      propertyId: fieldSource.propertyId,
     },
   };
 };

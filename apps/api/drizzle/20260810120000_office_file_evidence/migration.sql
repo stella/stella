@@ -67,6 +67,11 @@ ALTER TABLE "office_file_evidence"
   FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id")
   ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "office_file_evidence"
+  ADD CONSTRAINT "office_file_evidence_workspace_organization_fk"
+  FOREIGN KEY ("workspace_id", "organization_id")
+  REFERENCES "workspaces"("id", "organization_id")
+  ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "office_file_evidence"
   ADD CONSTRAINT "office_file_evidence_entity_workspace_fk"
   FOREIGN KEY ("entity_id", "workspace_id")
   REFERENCES "entities"("id", "workspace_id") ON DELETE CASCADE;--> statement-breakpoint

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import {
   OFFICE_EVIDENCE_FORMATS,
+  OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUSES,
   OFFICE_EVIDENCE_STATUS,
   OFFICE_EVIDENCE_UNAVAILABLE_CODES,
@@ -73,6 +74,13 @@ export const officeFileEvidence = p.pgTable(
       ),
     p
       .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "office_file_evidence_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
@@ -103,7 +111,9 @@ export const officeFileEvidence = p.pgTable(
     ),
     p.check(
       "office_file_evidence_block_count_check",
-      sql`${table.blockCount} >= 0 AND ${table.blockCount} <= 160`,
+      sql`${table.blockCount} >= 0 AND ${table.blockCount} <= ${sql.raw(
+        String(OFFICE_EVIDENCE_LIMITS.blocksMax),
+      )}`,
     ),
     p.check(
       "office_file_evidence_source_hash_check",

@@ -532,6 +532,7 @@
     "newChat": "Nueva conversación",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
+    "officeCitationUnavailable": "Esta cita ya no está disponible.",
     "openCitation": "Abrir cita {label}",
     "openThread": "Abrir conversación",
     "pageNumber": "Página {page}",

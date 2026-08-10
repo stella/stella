@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 
 import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -45,6 +46,7 @@ import {
   requestEmailCitationScroll,
 } from "@/lib/files/email-citations";
 import {
+  beginOfficeCitationActivation,
   OFFICE_CITATION_HREF_PREFIX,
   requestOfficeCitationNavigation,
 } from "@/lib/files/office-citations";
@@ -719,10 +721,12 @@ const OfficeCitationChip = ({
   interactive: boolean;
   workspaceId: string | undefined;
 }) => {
+  const tChat = useTranslations("chat");
   const tCommon = useTranslations("common");
   const { target } = citation;
   const retryLabel = tCommon("retry");
   const handleActivate = (): void => {
+    const isCurrentActivation = beginOfficeCitationActivation();
     if (citation.type === "error") {
       detached(citation.retry(), "office-citation.retry");
       return;
@@ -733,7 +737,14 @@ const OfficeCitationChip = ({
     detached(
       (async () => {
         const verified = await citation.verify();
+        if (!isCurrentActivation()) {
+          return;
+        }
         if (!verified) {
+          stellaToast.add({
+            title: tChat("officeCitationUnavailable"),
+            type: "info",
+          });
           return;
         }
         openOfficeCitationSource({

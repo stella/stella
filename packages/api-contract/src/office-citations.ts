@@ -20,7 +20,7 @@ export type OfficeCitationLocator =
 
 const OFFICE_CITATION_BLOCK_ID_RE = /^(?:pptx|xlsx)-[0-9a-f]{16}$/u;
 const OFFICE_CITATION_HREF_RE =
-  /^#office:(?<entityId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>[^:]+)$/iu;
+  /^#office:(?<entityId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<fieldId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(?<blockId>[^:]+)$/u;
 
 export const isOfficeCitationBlockId = (value: string): boolean =>
   OFFICE_CITATION_BLOCK_ID_RE.test(value);

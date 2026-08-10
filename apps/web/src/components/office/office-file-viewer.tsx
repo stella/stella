@@ -92,6 +92,16 @@ export const OfficeFileViewer = ({
     },
     [analytics],
   );
+  const handleNavigationError = useCallback(
+    (error: Error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+    [analytics, t],
+  );
   const handleNavigationApplied = useCallback((sequence: number) => {
     setNavigationRequest((current) =>
       current?.sequence === sequence ? null : current,
@@ -232,6 +242,7 @@ export const OfficeFileViewer = ({
             key={`${fieldId}:${String(attempt)}:${String(PRESENTATION_TRAILING_PADDING_PX)}`}
             navigationRequest={navigationRequest}
             onNavigationApplied={handleNavigationApplied}
+            onNavigationError={handleNavigationError}
             onError={handleViewerError}
             onSpreadsheetSelectionChange={setSpreadsheetSelection}
             onStatusChange={handleStatusChange}

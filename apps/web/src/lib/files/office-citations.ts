@@ -30,6 +30,7 @@ type OfficeCitationRegistration = {
 
 let registrations: readonly OfficeCitationRegistration[] = [];
 let pendingNavigation: OfficeCitationNavigation | null = null;
+let latestActivation = 0;
 
 const citationSourceKey = ({
   entityId,
@@ -45,6 +46,12 @@ export const isVerifiedOfficeCitationTarget = ({
   target: OfficeCitationTarget;
 }): boolean =>
   source.entityId === target.entityId && source.fieldId === target.fieldId;
+
+export const beginOfficeCitationActivation = (): (() => boolean) => {
+  latestActivation += 1;
+  const activation = latestActivation;
+  return () => activation === latestActivation;
+};
 
 export const registerOfficeCitationNavigation = ({
   entityId,

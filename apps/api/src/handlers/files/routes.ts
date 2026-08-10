@@ -13,12 +13,11 @@ import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
+import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { findCurrentOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 
 const readFileEndpoint = createSafeHandler(
   {
@@ -75,53 +74,6 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
     );
 
     return Result.ok(response);
-  },
-);
-
-export const readOfficeCitationEndpoint = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "upload_mechanics" },
-    params: workspaceParams({
-      blockId: t.String({
-        maxLength: 64,
-        pattern: "^(?:pptx|xlsx)-[0-9a-f]{16}$",
-      }),
-      entityId: tSafeId("entity"),
-      fieldId: tSafeId("field"),
-    }),
-  } satisfies HandlerConfig,
-  async function* ({
-    params: { blockId, entityId, fieldId },
-    scopedDb,
-    session,
-    workspaceId,
-  }) {
-    const evidence = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await findCurrentOfficeEvidenceBlock({
-            blockId,
-            entityId,
-            fieldId,
-            organizationId: session.activeOrganizationId,
-            scopedDb,
-            workspaceId,
-          }),
-      ),
-    );
-    if (!evidence) {
-      return yield* Result.err(
-        new HandlerError({
-          message: "Office citation not found",
-          status: 404,
-        }),
-      );
-    }
-    return Result.ok({
-      locator: evidence.block.locator,
-      source: evidence.source,
-    });
   },
 );
 
@@ -237,10 +189,10 @@ export const filesRoute = new Elysia({
   })
   .get(
     "/office-citation/:entityId/:fieldId/:blockId",
-    readOfficeCitationEndpoint.handler,
+    officeCitationEndpoint.handler,
     {
-      params: readOfficeCitationEndpoint.config.params,
-      permissions: readOfficeCitationEndpoint.config.permissions,
+      params: officeCitationEndpoint.config.params,
+      permissions: officeCitationEndpoint.config.permissions,
     },
   )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {

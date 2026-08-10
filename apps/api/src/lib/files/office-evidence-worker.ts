@@ -19,6 +19,10 @@ import {
   type PptxOfficeEvidenceBlock,
   type XlsxOfficeEvidenceBlock,
 } from "@/api/lib/files/office-evidence-types";
+import {
+  buildSpreadsheetCellText,
+  toSpreadsheetCellReference,
+} from "@/api/lib/files/office-evidence-xlsx";
 
 const MEBIBYTE = 1024 * 1024;
 const RESOURCE_LIMITS = {
@@ -27,13 +31,9 @@ const RESOURCE_LIMITS = {
   maxTotalInflatedBytes: 192 * MEBIBYTE,
 } as const;
 
-type MaterializedWorkbook = Awaited<ReturnType<typeof materializeXlsxWorkbook>>;
 type MaterializedPresentation = Awaited<
   ReturnType<typeof materializePptxPresentation>
 >;
-type SpreadsheetCell =
-  MaterializedWorkbook["worksheets"][number]["rows"][number]["cells"][number];
-type SharedStrings = MaterializedWorkbook["workbookIndex"]["sharedStrings"];
 type PresentationTextBody = NonNullable<
   Extract<
     MaterializedPresentation["slides"][number]["elements"][number],
@@ -54,58 +54,6 @@ const createBlockId = (
     .digest("hex")
     .slice(0, 16)}`;
 
-const toSpreadsheetColumnName = (columnIndex: number): string => {
-  let current = columnIndex;
-  let name = "";
-  while (current > 0) {
-    const remainder = (current - 1) % 26;
-    name = String.fromCodePoint(65 + remainder) + name;
-    current = Math.floor((current - 1) / 26);
-  }
-  return name;
-};
-
-const cellValueText = (
-  cell: SpreadsheetCell,
-  sharedStrings: SharedStrings,
-): string => {
-  switch (cell.value.type) {
-    case "bool":
-      return cell.value.bool ? "TRUE" : "FALSE";
-    case "empty":
-      return "";
-    case "error":
-      return cell.value.error;
-    case "number":
-      return String(cell.value.number);
-    case "shared":
-      return sharedStrings.at(cell.value.si)?.text ?? "";
-    case "text":
-      return cell.value.text;
-    default: {
-      const exhaustive: never = cell.value;
-      return exhaustive;
-    }
-  }
-};
-
-const buildCellText = (
-  cell: SpreadsheetCell,
-  sharedStrings: SharedStrings,
-): string => {
-  const reference = `${toSpreadsheetColumnName(cell.col)}${String(cell.row)}`;
-  const value = normalizeText(cellValueText(cell, sharedStrings));
-  if (cell.formula) {
-    const formula = cell.formula.startsWith("=")
-      ? cell.formula
-      : `=${cell.formula}`;
-    return value
-      ? `${reference}: ${formula} → ${value}`
-      : `${reference}: ${formula}`;
-  }
-  return value ? `${reference}: ${value}` : "";
-};
-
 const extractXlsxBlocks = async (
   bytes: Uint8Array,
 ): Promise<OfficeEvidencePayload> => {
@@ -113,12 +61,20 @@ const extractXlsxBlocks = async (
     resourceLimits: RESOURCE_LIMITS,
   });
   const blocks: XlsxOfficeEvidenceBlock[] = [];
-  const { sharedStrings } = materialized.workbookIndex;
+  const { sharedStrings, styles } = materialized.workbookIndex;
 
   for (const [sheetIndex, worksheet] of materialized.worksheets.entries()) {
     for (const row of worksheet.rows) {
       const cells = row.cells
-        .map((cell) => ({ cell, text: buildCellText(cell, sharedStrings) }))
+        .map((cell) => ({
+          cell,
+          text: buildSpreadsheetCellText({
+            cell,
+            date1904: worksheet.date1904,
+            sharedStrings,
+            styles,
+          }),
+        }))
         .filter(({ text }) => text.length > 0);
       let chunk: typeof cells = [];
       let chunkChars = 0;
@@ -132,12 +88,8 @@ const extractXlsxBlocks = async (
         if (!first || !last) {
           return;
         }
-        const start = `${toSpreadsheetColumnName(first.cell.col)}${String(
-          first.cell.row,
-        )}`;
-        const end = `${toSpreadsheetColumnName(last.cell.col)}${String(
-          last.cell.row,
-        )}`;
+        const start = toSpreadsheetCellReference(first.cell);
+        const end = toSpreadsheetCellReference(last.cell);
         const range = start === end ? start : `${start}:${end}`;
         const text = chunk
           .map((entry) => entry.text)

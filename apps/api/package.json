@@ -116,6 +116,7 @@
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
+    "ssf": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

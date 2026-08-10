@@ -532,6 +532,7 @@
     "newChat": "Nouvelle conversation",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
+    "officeCitationUnavailable": "Cette citation n’est plus disponible.",
     "openCitation": "Ouvrir la citation {label}",
     "openThread": "Ouvrir la conversation",
     "pageNumber": "Page {page}",

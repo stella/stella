@@ -12,7 +12,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { openEmailCitationSource } from "@/components/chat/entity-open";
-import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
+import {
+  isEntityActiveInMainRoute,
+  isFileActiveInMainRoute,
+} from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 
 afterEach(() => {
@@ -98,6 +101,32 @@ describe("isEntityActiveInMainRoute", () => {
 
   test("returns false when no location is available (server-side render)", () => {
     expect(isEntityActiveInMainRoute("ent_1", "ws_1", null)).toBe(false);
+  });
+});
+
+describe("isFileActiveInMainRoute", () => {
+  test("matches only the file field rendered in the main route", () => {
+    const location = at(
+      "/workspaces/ws_1/all/document",
+      "?entity=ent_1&field=field_1",
+    );
+
+    expect(
+      isFileActiveInMainRoute({
+        entityId: "ent_1",
+        fieldId: "field_1",
+        location,
+        workspaceId: "ws_1",
+      }),
+    ).toBe(true);
+    expect(
+      isFileActiveInMainRoute({
+        entityId: "ent_1",
+        fieldId: "field_2",
+        location,
+        workspaceId: "ws_1",
+      }),
+    ).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import {
+  beginOfficeCitationActivation,
   isVerifiedOfficeCitationTarget,
   registerOfficeCitationNavigation,
   requestOfficeCitationNavigation,
@@ -41,6 +42,15 @@ describe("Office citation navigation", () => {
     expect(
       isVerifiedOfficeCitationTarget({
         source: {
+          entityId: "00000000-0000-4000-8000-000000000099",
+          fieldId: navigation.target.fieldId,
+        },
+        target: navigation.target,
+      }),
+    ).toBe(false);
+    expect(
+      isVerifiedOfficeCitationTarget({
+        source: {
           entityId: navigation.target.entityId,
           fieldId: navigation.target.fieldId,
         },
@@ -56,5 +66,13 @@ describe("Office citation navigation", () => {
         target: navigation.target,
       }),
     ).toBe(false);
+  });
+
+  test("keeps only the latest citation activation current", () => {
+    const first = beginOfficeCitationActivation();
+    const second = beginOfficeCitationActivation();
+
+    expect(first()).toBe(false);
+    expect(second()).toBe(true);
   });
 });
