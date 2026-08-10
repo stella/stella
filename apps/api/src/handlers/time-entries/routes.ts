@@ -44,11 +44,6 @@ export const timeEntriesRoute = new Elysia({
     permissions: readTimeEntrySummary.config.permissions,
     query: readTimeEntrySummary.config.query,
   })
-  .post("/polish-narrative", polishTimeEntryNarrative.handler, {
-    body: polishTimeEntryNarrative.config.body,
-    permissions: polishTimeEntryNarrative.config.permissions,
-    requiresUsage: polishTimeEntryNarrative.config.requiresUsage,
-  })
   .get("/:id", readTimeEntryById.handler, {
     params: readTimeEntryById.config.params,
     permissions: readTimeEntryById.config.permissions,
@@ -103,4 +98,9 @@ export const timeEntriesRoute = new Elysia({
   .get("/export/pdf", exportPdf.handler, {
     permissions: exportPdf.config.permissions,
     query: exportPdf.config.query,
+  })
+  .post("/polish-narrative", polishTimeEntryNarrative.handler, {
+    body: polishTimeEntryNarrative.config.body,
+    permissions: polishTimeEntryNarrative.config.permissions,
+    requiresUsage: polishTimeEntryNarrative.config.requiresUsage,
   });
