@@ -125,6 +125,20 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_SELFHOST="${VITE_SELFHOST}" \
     VITE_TERMS_URL="${VITE_TERMS_URL}" \
     bun --filter @stll/web build
+# Stage the workspace packages reached by externalized runtime dependencies
+# (closure derived from bun.lock) in their published dist shape. The runner
+# overlays this tree so it never resolves TypeScript source. Restore the
+# committed root manifest first: the out/full copy above overwrote it with
+# Turbo's pruned root package.json (an explicit workspace subset), and the
+# staging install resolving that subset against the committed lockfile fails
+# --frozen-lockfile. bun.lock is restored defensively alongside it: today
+# out/full carries no lockfile (Turbo emits its pruned one at out/bun.lock,
+# which no stage copies), so the committed one from the deps stage survives,
+# but this install must never depend on that staying true.
+COPY --from=install-inputs /json/bun.lock /json/package.json ./
+COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun scripts/stage-web-runtime.ts /app/web-runtime-stage --install-build-deps
 
 FROM deps-prod AS runner
 ENV NODE_ENV=production
@@ -133,16 +147,18 @@ ENV PORT=3002
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 # Bun links workspace dependencies into /app/packages. Folio remains external
-# to the SSR bundle and imports these source-exporting workspaces at runtime;
-# keep that exact dependency closure without restoring the full pruned tree.
+# to the SSR bundle and imports those workspaces at runtime; overlay the
+# staged dist-shaped closure (derived from bun.lock at build time) onto the
+# manifest tree so the runner never ships or resolves TypeScript source.
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
-COPY --chown=stella:stella --from=pruner /app/out/full/packages/conditions/src ./packages/conditions/src
-COPY --chown=stella:stella --from=pruner /app/out/full/packages/docx-utils/src ./packages/docx-utils/src
-COPY --chown=stella:stella --from=pruner /app/out/full/packages/template-conditions/src ./packages/template-conditions/src
+COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
-RUN bun -e 'await import("@stll/folio-core/docx/xmlParser"); await import("@stll/folio-core/prosemirror/plugins/templateDirectives")'
+# Prove the full production module graph resolves inside this filesystem
+# before the image can exist; a missing runtime dependency fails the build,
+# not the rollout.
+RUN bun start-runtime.js --smoke
 USER stella
 EXPOSE 3002
 CMD ["bun", "start-runtime.js"]
