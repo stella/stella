@@ -6,7 +6,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-ai.logic";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
   EmailFileViewer,
   EmailHtmlViewer,
