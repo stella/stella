@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+
 import {
   chatEntityRef,
   chatRef,
@@ -945,9 +947,14 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
 
 /**
  * list_time_entries, list branch: matter_id is schema-required, so it is
- * every row's workspace.
+ * every row's workspace. `visibility` is explicit because ordinary members
+ * and interns receive only their own entries, not the matter total.
  */
 export const LIST_TIME_ENTRIES_LIST_PROJECTION = v.strictObject({
+  visibility: v.picklist([
+    TIME_ENTRY_VISIBILITY.ALL_ENTRIES,
+    TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+  ]),
   entries: v.array(
     v.strictObject(timeEntryFieldEntries({ from: "inputParam" })),
   ),
@@ -958,9 +965,14 @@ export const LIST_TIME_ENTRIES_LIST_PROJECTION = v.strictObject({
 /**
  * list_time_entries, detail branch. Detail mode may be reached by
  * time_entry_id alone, so the entry carries its resolved owning workspace: a
- * matter ref, and the entity's workspace source.
+ * matter ref, and the entity's workspace source. `visibility` keeps the same
+ * access contract truthful for a single entry.
  */
 export const LIST_TIME_ENTRIES_DETAIL_PROJECTION = v.strictObject({
+  visibility: v.picklist([
+    TIME_ENTRY_VISIBILITY.ALL_ENTRIES,
+    TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+  ]),
   entry: v.strictObject({
     ...timeEntryFieldEntries({ from: "sibling" }),
     workspaceId: chatRef("matter"),

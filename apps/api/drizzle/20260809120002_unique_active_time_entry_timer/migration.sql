@@ -6,10 +6,10 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 
 -- Older timer starts were not serialized. Preserve the newest running draft
--- timer and close non-draft or older duplicate timers at the minimum valid
--- duration before enforcing the invariant.
--- stella-migration-safety: reviewed bulk-backfill - the update is bounded to running timers in inactive matters, non-draft running timers, and rows ranked after the newest active draft timer for the same user; normally there are none.
-WITH ranked_active_timers AS (
+-- timer with current matter access and close inaccessible, non-draft, or older
+-- duplicate timers at the minimum valid duration before enforcing the invariant.
+-- stella-migration-safety: reviewed bulk-backfill - the update is bounded to running timers whose owners lack current organization/matter access, timers in inactive matters, non-draft running timers, and rows ranked after the newest active draft timer for the same user; normally there are none.
+WITH active_timers_with_access AS (
   SELECT
     "entry"."id",
     "entry"."duration_minutes",
@@ -17,15 +17,27 @@ WITH ranked_active_timers AS (
     "entry"."timer_started_at",
     "entry"."timer_stopped_at",
     "entry"."workspace_id",
+    "entry"."status",
+    "entry"."user_id",
     "workspace"."status" AS "workspace_status",
-    ROW_NUMBER() OVER (
-      PARTITION BY "entry"."user_id"
-      ORDER BY
-        ("workspace"."status" = 'active') DESC,
-        ("entry"."status" = 'draft') DESC,
-        "entry"."timer_started_at" DESC,
-        "entry"."id" DESC
-    ) AS "timer_rank"
+    EXISTS (
+      SELECT 1
+      FROM "member" AS "org_member"
+      WHERE "org_member"."organization_id" = "workspace"."organization_id"
+        AND "org_member"."user_id" = "entry"."user_id"
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM "workspace_members" AS "workspace_member"
+            WHERE "workspace_member"."workspace_id" = "workspace"."id"
+              AND "workspace_member"."user_id" = "entry"."user_id"
+          )
+          OR (
+            "org_member"."role" IN ('owner', 'admin')
+            AND "workspace"."client_id" IS NOT NULL
+          )
+        )
+    ) AS "owner_has_access"
   FROM "time_entries" AS "entry"
   INNER JOIN "workspaces" AS "workspace"
     ON "workspace"."id" = "entry"."workspace_id"
@@ -33,13 +45,26 @@ WITH ranked_active_timers AS (
     AND "entry"."timer_stopped_at" IS NULL
     AND "entry"."user_id" IS NOT NULL
 ),
+ranked_active_timers AS (
+  SELECT
+    "active_timer".*,
+    ROW_NUMBER() OVER (
+      PARTITION BY "active_timer"."user_id"
+      ORDER BY
+        ("active_timer"."owner_has_access" AND "active_timer"."workspace_status" = 'active') DESC,
+        ("active_timer"."workspace_status" = 'active') DESC,
+        ("active_timer"."status" = 'draft') DESC,
+        "active_timer"."timer_started_at" DESC,
+        "active_timer"."id" DESC
+    ) AS "timer_rank"
+  FROM active_timers_with_access AS "active_timer"
+),
 timers_to_repair AS MATERIALIZED (
   SELECT ranked_active_timers.*
   FROM ranked_active_timers
-  INNER JOIN "time_entries" AS "entry"
-    ON "entry"."id" = ranked_active_timers."id"
-  WHERE "ranked_active_timers"."workspace_status" <> 'active'
-    OR "entry"."status" <> 'draft'
+  WHERE NOT "ranked_active_timers"."owner_has_access"
+    OR "ranked_active_timers"."workspace_status" <> 'active'
+    OR "ranked_active_timers"."status" <> 'draft'
     OR ranked_active_timers."timer_rank" > 1
 ),
 repaired_timers AS (

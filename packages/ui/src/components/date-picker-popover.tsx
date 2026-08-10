@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
@@ -240,6 +240,7 @@ const DatePickerPopover = ({
 }: DatePickerPopoverProps) => {
   const locale = localeProp ?? navigator.language;
   const value = normalizeDate(rawValue);
+  const displayValueId = useId();
   const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
   const firstDow = useMemo(() => getFirstDayOfWeek(locale), [locale]);
   const weekendDays = useMemo(() => getWeekendDays(locale), [locale]);
@@ -486,7 +487,9 @@ const DatePickerPopover = ({
         render={
           <button
             aria-label={!labelledBy && value ? displayLabel : undefined}
-            aria-labelledby={labelledBy}
+            aria-labelledby={
+              labelledBy ? `${labelledBy} ${displayValueId}` : undefined
+            }
             className={cn(
               "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
               "rounded-md px-1.5 text-sm",
@@ -507,7 +510,10 @@ const DatePickerPopover = ({
         }
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
-        <span className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis">
+        <span
+          className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis"
+          id={labelledBy ? displayValueId : undefined}
+        >
           {displayLabel}
         </span>
         {isOverdue && overdueLabel && (

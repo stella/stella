@@ -44,11 +44,13 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
 
 type PersonalTimesheetDayProps = {
+  canCreateTimeEntry: boolean;
   workspaceId: string;
   date: string;
 };
 
 export const PersonalTimesheetDay = ({
+  canCreateTimeEntry,
   workspaceId,
   date,
 }: PersonalTimesheetDayProps) => {
@@ -117,7 +119,11 @@ export const PersonalTimesheetDay = ({
           {formatMinutes(summary.totalMinutes)}
         </span>
         {canCreate && (
-          <Button onClick={() => setDialog({ type: "create" })} size="sm">
+          <Button
+            disabled={!canCreateTimeEntry}
+            onClick={() => setDialog({ type: "create" })}
+            size="sm"
+          >
             <PlusIcon className="size-4" />
             {tCommon("logTime")}
           </Button>
@@ -186,6 +192,7 @@ export const PersonalTimesheetDay = ({
           <span>{tBilling("noEntries")}</span>
           {canCreate && (
             <Button
+              disabled={!canCreateTimeEntry}
               onClick={() => setDialog({ type: "create" })}
               variant="outline"
             >

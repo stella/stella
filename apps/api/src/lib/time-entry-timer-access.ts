@@ -36,5 +36,5 @@ export const hasCurrentTimerMatterAccess = async ({
         )
     ) AS "hasAccess"
   `);
-  return access?.hasAccess ?? false;
+  return access?.["hasAccess"] === true;
 };

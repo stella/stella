@@ -12,6 +12,7 @@ import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveRate } from "@/api/lib/billing-rates";
+import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -310,7 +311,9 @@ export const BILLING_TOOL_DEFINITIONS = [
       "time was logged against), user_id, a date-worked range (date_from/" +
       "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
       "user, date, minutes, rate (minor currency units), currency, narrative, " +
-      "and status.",
+      "and status. The response includes visibility: all_entries for billing " +
+      "reviewers, or own_entries when the caller can see only their own time; " +
+      "own_entries is not a matter total.",
     inputSchema: {
       type: "object",
       properties: {
@@ -813,7 +816,12 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     );
     return {
       egress: "structured",
-      payload: { entry } satisfies v.InferInput<
+      payload: {
+        visibility: canReview
+          ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
+          : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+        entry,
+      } satisfies v.InferInput<
         typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION
       >,
       textFields,
@@ -928,9 +936,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
 
   return {
     egress: "structured",
-    payload: { entries, nextCursor: page.nextCursor } satisfies v.InferInput<
-      typeof LIST_TIME_ENTRIES_LIST_PROJECTION
-    >,
+    payload: {
+      visibility: canReview
+        ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
+        : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+      entries,
+      nextCursor: page.nextCursor,
+    } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_LIST_PROJECTION>,
     textFields,
   };
 };

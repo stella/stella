@@ -180,12 +180,12 @@ export const AIPromptInput = ({
             ? cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
                 "placeholder:text-foreground-placeholder min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-16",
+                aiEditAction !== undefined && "pe-24",
               )
             : cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
                 "bg-muted placeholder:text-foreground-placeholder min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-16",
+                aiEditAction !== undefined && "pe-24",
               ),
       },
       handleKeyDown: (_view, event) => {

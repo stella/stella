@@ -22,6 +22,10 @@ import {
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day";
+import {
+  getTimeEntryDateBounds,
+  isTimeEntryDateAllowed,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-date.logic";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
@@ -88,6 +92,8 @@ function TimesheetsPage() {
   });
   const [date, setDate] = useState(() => new Date());
   const dateValue = toISODate(date);
+  const dateBounds = getTimeEntryDateBounds();
+  const canLogTime = isTimeEntryDateAllowed(dateValue, dateBounds);
 
   const moveDay = (days: number) => {
     setDate((current) => {
@@ -138,6 +144,7 @@ function TimesheetsPage() {
       <div className="flex-1 overflow-auto p-4">
         <Suspense fallback={<TimesheetSkeleton />}>
           <PersonalTimesheetDay
+            canCreateTimeEntry={canLogTime}
             date={dateValue}
             key={dateValue}
             workspaceId={workspaceId}

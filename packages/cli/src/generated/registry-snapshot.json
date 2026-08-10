@@ -1905,7 +1905,7 @@
       "singleReadWhen": "time_entry_id"
     },
     "name": "list_time_entries",
-    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
     "inputSchema": {
       "type": "object",
       "properties": {

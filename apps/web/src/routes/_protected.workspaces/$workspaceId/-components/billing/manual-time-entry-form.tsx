@@ -7,10 +7,12 @@ import { Checkbox } from "@stll/ui/components/checkbox";
 import { Label } from "@stll/ui/components/label";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { addDays, parseIsoDateLocal } from "@/lib/dates";
 import { detached } from "@/lib/detached";
-import { localISODate } from "@/lib/local-iso-date";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import {
+  getTimeEntryDateBounds,
+  isTimeEntryDateAllowed,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-date.logic";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
 
 export type ManualTimeEntryValues = {
@@ -37,10 +39,7 @@ export const ManualTimeEntryForm = ({
 }: ManualTimeEntryFormProps) => {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
-  const today = localISODate();
-  const earliestDate = localISODate(
-    addDays(parseIsoDateLocal(today) ?? new Date(), -90),
-  );
+  const dateBounds = getTimeEntryDateBounds();
   const [dateWorked, setDateWorked] = useState(defaultValues.dateWorked);
   const [durationMinutes, setDurationMinutes] = useState(
     defaultValues.durationMinutes,
@@ -50,6 +49,7 @@ export const ManualTimeEntryForm = ({
 
   const valid =
     dateWorked.length > 0 &&
+    isTimeEntryDateAllowed(dateWorked, dateBounds) &&
     Number.isInteger(durationMinutes) &&
     durationMinutes > 0 &&
     narrative.trim().length > 0;
@@ -81,8 +81,8 @@ export const ManualTimeEntryForm = ({
           <DatePickerPopover
             id="time-entry-date"
             labelledBy="time-entry-date-label"
-            maxDate={today}
-            minDate={earliestDate}
+            maxDate={dateBounds.today}
+            minDate={dateBounds.earliestDate}
             onChange={(value) => setDateWorked(value ?? "")}
             value={dateWorked}
           />

@@ -4052,6 +4052,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      visibility: "all_entries",
       entries: [
         {
           id: "te_1",
