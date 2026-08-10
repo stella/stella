@@ -1,27 +1,16 @@
 import { panic } from "better-result";
 
-/**
- * Frontend mirror of `CHAT_EDIT_APPLY_MODE` / `DOCX_EDIT_REPRESENTATION` in
- * `apps/api/src/handlers/chat/chat-schema.ts`. Redefined locally (not
- * imported across the apps/api - apps/web boundary) the same way
- * `APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME` is redefined in
- * `-queries.ts` -- these are plain string literals with no shared runtime
- * logic, so a cross-package value import would only pull backend code into
- * the web bundle for no benefit.
- */
-export const CHAT_EDIT_APPLY_MODE = {
-  manual: "manual",
-  auto: "auto",
-} as const;
-export type ChatEditApplyMode =
-  (typeof CHAT_EDIT_APPLY_MODE)[keyof typeof CHAT_EDIT_APPLY_MODE];
+import {
+  CHAT_EDIT_APPLY_MODE,
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+  DOCX_EDIT_REPRESENTATION,
+  type ChatEditApplyMode,
+  type DocxEditRepresentation,
+} from "@stll/api-contract";
 
-export const DOCX_EDIT_REPRESENTATION = {
-  trackedChanges: "tracked-changes",
-  direct: "direct",
-} as const;
-export type DocxEditRepresentation =
-  (typeof DOCX_EDIT_REPRESENTATION)[keyof typeof DOCX_EDIT_REPRESENTATION];
+export { CHAT_EDIT_APPLY_MODE, DOCX_EDIT_REPRESENTATION };
+export type { ChatEditApplyMode, DocxEditRepresentation };
 
 /**
  * The three selectable options in the composer's edit-mode dropdown. A
@@ -56,17 +45,44 @@ export const CHAT_EDIT_MODE_OPTION_IDS = [
   CHAT_EDIT_MODE_OPTION_ID.manual,
 ] as const satisfies readonly ChatEditModeOptionId[];
 
-/** Matches `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto") /
- *  `DEFAULT_DOCX_EDIT_REPRESENTATION` ("tracked-changes") in chat-schema.ts. */
-export const DEFAULT_CHAT_EDIT_MODE_OPTION_ID: ChatEditModeOptionId =
-  CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges;
+type MissingChatEditModeOptionId = Exclude<
+  ChatEditModeOptionId,
+  (typeof CHAT_EDIT_MODE_OPTION_IDS)[number]
+>;
+
+true satisfies MissingChatEditModeOptionId extends never ? true : never;
+
+const resolveChatEditModeOptionId = (
+  applyMode: ChatEditApplyMode,
+  representation: DocxEditRepresentation,
+): ChatEditModeOptionId => {
+  switch (applyMode) {
+    case CHAT_EDIT_APPLY_MODE.manual:
+      return CHAT_EDIT_MODE_OPTION_ID.manual;
+    case CHAT_EDIT_APPLY_MODE.auto:
+      switch (representation) {
+        case DOCX_EDIT_REPRESENTATION.trackedChanges:
+          return CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges;
+        case DOCX_EDIT_REPRESENTATION.direct:
+          return CHAT_EDIT_MODE_OPTION_ID.autoDirect;
+        default:
+          return representation satisfies never;
+      }
+    default:
+      return applyMode satisfies never;
+  }
+};
+
+export const DEFAULT_CHAT_EDIT_MODE_OPTION_ID = resolveChatEditModeOptionId(
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+);
 
 export const isChatEditModeOptionId = (
   value: unknown,
 ): value is ChatEditModeOptionId =>
-  value === CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges ||
-  value === CHAT_EDIT_MODE_OPTION_ID.autoDirect ||
-  value === CHAT_EDIT_MODE_OPTION_ID.manual;
+  typeof value === "string" &&
+  CHAT_EDIT_MODE_OPTION_IDS.some((optionId) => optionId === value);
 
 export const chatEditModeSelectionForOptionId = (
   optionId: ChatEditModeOptionId,

@@ -1,30 +1,21 @@
+import {
+  MCP_ANONYMIZED_HTTP_PATH,
+  MCP_ANONYMIZED_RESOURCE_SCOPES,
+  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DOCUMENTS_HTTP_PATH,
+  MCP_HTTP_PATH,
+} from "@stll/api-contract";
+
 import { env } from "@/api/env";
 import { REQUEST_ID_HEADER } from "@/api/lib/observability/request-context";
 import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
 
-export const MCP_DEFAULT_RESOURCE_SCOPES = [
-  "stella:search",
-  "stella:read",
-  "stella:templates",
-  "stella:documents_write",
-  "stella:matters_write",
-  "stella:contacts_write",
-  "stella:chat",
-  "stella:knowledge_write",
-  "stella:billing_write",
-  "stella:admin_read",
-  "stella:admin_write",
-  "stella:onboarding",
-  "stella:skills",
-  "stella:external_mcps",
-  "stella:feedback",
-] as const;
-
-export const MCP_ANONYMIZED_RESOURCE_SCOPES = [
-  "stella:search_anonymized",
-  "stella:read_anonymized",
-  "stella:templates_anonymized",
-] as const;
+export {
+  MCP_ANONYMIZED_RESOURCE_SCOPES,
+  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+};
 
 /**
  * Least-privilege remote-host surface for document workflows. Hosted clients
@@ -46,7 +37,7 @@ export const MCP_ALL_RESOURCE_SCOPES = [
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
 ] as const;
 
-export const MCP_OAUTH_SCOPES = [
+export const MCP_OAUTH_PROTOCOL_SCOPES = [
   "openid",
   "profile",
   "email",
@@ -56,6 +47,10 @@ export const MCP_OAUTH_SCOPES = [
   // `oauthProvider({ scopes: ... })` in `lib/auth.ts` issue a refresh token
   // alongside the access token.
   "offline_access",
+] as const;
+
+export const MCP_OAUTH_SCOPES = [
+  ...MCP_OAUTH_PROTOCOL_SCOPES,
   ...MCP_ALL_RESOURCE_SCOPES,
 ] as const;
 
@@ -67,9 +62,7 @@ export const MCP_OAUTH_SCOPES = [
  */
 export type McpOAuthScope = (typeof MCP_OAUTH_SCOPES)[number];
 
-export const MCP_HTTP_PATH = "/mcp";
-export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents";
-export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
+export { MCP_ANONYMIZED_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH, MCP_HTTP_PATH };
 
 /**
  * What the stateless transport serves. `GET` opens a request-scoped
@@ -180,11 +173,17 @@ const MCP_MODE_CONFIG = {
 
 export type McpMode = keyof typeof MCP_MODE_CONFIG;
 
-export const MCP_MODES = [
+const MCP_MODE_VALUES = [
   "default",
   "documents",
   "anonymized",
 ] as const satisfies readonly McpMode[];
+
+type MissingMcpMode = Exclude<McpMode, (typeof MCP_MODE_VALUES)[number]>;
+
+true satisfies MissingMcpMode extends never ? true : never;
+
+export const MCP_MODES = MCP_MODE_VALUES;
 
 const getMcpModeConfig = (mode: McpMode) => MCP_MODE_CONFIG[mode];
 

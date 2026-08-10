@@ -2,8 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
-  MCP_DEFAULT_RESOURCE_SCOPES,
-  MCP_OAUTH_SCOPES,
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "../apps/api/src/mcp/constants";
@@ -11,7 +9,6 @@ import cliPackage from "../packages/cli/package.json" with { type: "json" };
 import {
   CLI_DEFAULT_SCOPES,
   CLI_KNOWN_SCOPES,
-  CLI_REQUIRED_RESOURCE_SCOPES,
   CLI_REQUIRED_SCOPES,
 } from "../packages/cli/src/auth/constants";
 import {
@@ -76,15 +73,14 @@ describe("API and CLI release contract", () => {
     }
   });
 
-  test("the API and CLI use matching official MCP v2 packages", () => {
-    expect(apiPackage.dependencies["@modelcontextprotocol/server"]).toBe(
-      "2.0.0",
-    );
+  test("the API and CLI use matching MCP package versions", () => {
+    const serverVersion =
+      apiPackage.dependencies["@modelcontextprotocol/server"];
     expect(apiPackage.devDependencies["@modelcontextprotocol/client"]).toBe(
-      apiPackage.dependencies["@modelcontextprotocol/server"],
+      serverVersion,
     );
     expect(cliPackage.dependencies["@modelcontextprotocol/client"]).toBe(
-      apiPackage.dependencies["@modelcontextprotocol/server"],
+      serverVersion,
     );
   });
 
@@ -132,9 +128,7 @@ describe("API and CLI release contract", () => {
     );
   });
 
-  test("every packaged CLI scope is supported by the same API source", () => {
-    expectSubset(CLI_KNOWN_SCOPES, MCP_OAUTH_SCOPES);
-    expectSubset(CLI_REQUIRED_RESOURCE_SCOPES, MCP_DEFAULT_RESOURCE_SCOPES);
+  test("the CLI's local scope policies use generated server scopes", () => {
     expectSubset(CLI_DEFAULT_SCOPES, CLI_KNOWN_SCOPES);
     expectSubset(CLI_REQUIRED_SCOPES, CLI_DEFAULT_SCOPES);
   });

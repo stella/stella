@@ -60,30 +60,27 @@ const noopTask: SchedulerTask = ({ logger }) => {
   logger.debug("scheduler.noop");
 };
 
+const SCHEDULER_TASKS = {
+  "scheduler.noop": noopTask,
+  "scheduler.dispatchBullMq": createBullMqDispatchTask(),
+  [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
+  [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [FLOW_RUN_TASK]: runScheduledFlow,
+  [BACKFILL_SK_DOCUMENTS_TASK]: backfillSkDocuments,
+  [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
+    backfillCaseLawRedactionTombstones,
+  [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
+    reconcileCaseLawCorpusUploadIntentsTask,
+  [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
+  [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
+  [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
+  [MEMORY_CURATOR_TASK]: curateAiMemories,
+  [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
+} as const satisfies Record<string, SchedulerTask>;
+
+export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
+
 export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
-  new Map<string, SchedulerTask>([
-    ["scheduler.noop", noopTask],
-    ["scheduler.dispatchBullMq", createBullMqDispatchTask()],
-    [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
-    [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
-    [DISPATCH_DOCUMENT_OCR_TASK, dispatchDocumentOcr],
-    [FLOW_RUN_TASK, runScheduledFlow],
-    [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
-    [
-      BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-      backfillCaseLawRedactionTombstones,
-    ],
-    [
-      RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
-      reconcileCaseLawCorpusUploadIntentsTask,
-    ],
-    [RECONCILE_BUFFER_INTENTS_TASK, reconcileBufferIntents],
-    [REPAIR_CHAT_SEARCH_INDEX_TASK, repairChatSearchIndex],
-    [BACKFILL_WORK_OBLIGATIONS_TASK, backfillWorkObligations],
-    [
-      REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
-      repairSearchSemanticTimestampsTask,
-    ],
-    [MEMORY_CURATOR_TASK, curateAiMemories],
-    [MEMORY_EXTRACTOR_TASK, extractMemoriesFromCompactions],
-  ]);
+  new Map<string, SchedulerTask>(Object.entries(SCHEDULER_TASKS));

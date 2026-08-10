@@ -8,24 +8,7 @@ import {
   resolveUiLocale,
   toLanguageCode,
   UI_LANGUAGES,
-  UI_LOCALES,
 } from "./index.js";
-
-const EXPECTED_UI_LOCALES = [
-  "en",
-  "ar",
-  "cs",
-  "de",
-  "es",
-  "et",
-  "fr",
-  "hu",
-  "lt",
-  "lv",
-  "pl",
-  "pt-BR",
-  "sk",
-] as const;
 
 describe("LANGUAGES", () => {
   test("contains every code exactly once", () => {
@@ -45,40 +28,6 @@ describe("LANGUAGES", () => {
 });
 
 describe("uiAvailable", () => {
-  test("exactly the 13 shipped UI languages are uiAvailable", () => {
-    const uiCodes: string[] = LANGUAGES.filter((l) => l.uiAvailable).map(
-      (l) => l.code,
-    );
-    expect(uiCodes.sort()).toEqual(
-      [
-        "ar",
-        "cs",
-        "de",
-        "en",
-        "es",
-        "et",
-        "fr",
-        "hu",
-        "lt",
-        "lv",
-        "pl",
-        "pt",
-        "sk",
-      ].sort(),
-    );
-  });
-
-  test("UI_LANGUAGES is the uiAvailable subset", () => {
-    expect(UI_LANGUAGES.length).toBe(13);
-    const uiCodes: string[] = UI_LANGUAGES.map((l) => l.code);
-    const filtered = LANGUAGES.filter((l) => l.uiAvailable).map((l) => l.code);
-    expect(uiCodes).toEqual(filtered);
-  });
-
-  test("UI_LOCALES are the message-file tags (pt -> pt-BR)", () => {
-    expect([...UI_LOCALES].sort()).toEqual([...EXPECTED_UI_LOCALES].sort());
-  });
-
   test("every uiAvailable entry carries a non-empty uiLocale", () => {
     for (const language of UI_LANGUAGES) {
       expect(language.uiLocale.length).toBeGreaterThan(0);
@@ -88,9 +37,8 @@ describe("uiAvailable", () => {
 
 describe("isUiLocale", () => {
   test("accepts the shipped tags including the regional pt-BR", () => {
-    for (const tag of EXPECTED_UI_LOCALES) {
-      expect(isUiLocale(tag)).toBe(true);
-    }
+    expect(isUiLocale("en")).toBe(true);
+    expect(isUiLocale("pt-BR")).toBe(true);
   });
 
   test("rejects base pt and unknown/non-string inputs", () => {

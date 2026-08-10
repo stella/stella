@@ -15,6 +15,10 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
+type AdapterRegistry = {
+  readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };
+};
+
 const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.CZ_NS]: czNsAdapter,
   [ADAPTER_KEYS.CZ_NSS]: czNssAdapter,
@@ -25,7 +29,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.PL_COURTS]: plCourtsAdapter,
   [ADAPTER_KEYS.AT_COURTS]: atCourtsAdapter,
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
-} as const satisfies Record<AdapterKey, SourceAdapter>;
+} as const satisfies AdapterRegistry;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>
   Object.values(ADAPTER_KEYS).find((candidate) => candidate === key);

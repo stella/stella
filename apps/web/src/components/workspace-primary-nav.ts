@@ -22,14 +22,7 @@ type WorkspacePrimaryRoute =
 
 type WorkspacePrimaryNavItem = {
   readonly icon: ComponentType<{ className?: string }>;
-  readonly id:
-    | "caseLaw"
-    | "chat"
-    | "contacts"
-    | "knowledge"
-    | "matters"
-    | "search"
-    | "tools";
+  readonly id: string;
   readonly labelKey: TranslationKey;
 } & (
   | {

@@ -1,12 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import type { InvoiceStatus } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
-
-/** Mirrors `INVOICE_STATUSES` in `apps/api/src/db/schema.ts`. */
-type InvoiceStatus = "draft" | "finalized" | "sent" | "paid" | "void";
 
 type InvoicesFilters = {
   limit?: number;

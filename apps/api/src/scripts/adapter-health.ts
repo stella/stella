@@ -136,6 +136,13 @@ const CHECKED_FIELDS = [
   "source_hash",
 ] as const satisfies readonly (keyof typeof FIELD_COLUMN_MAP)[];
 
+type MissingCheckedField = Exclude<
+  keyof typeof FIELD_COLUMN_MAP,
+  (typeof CHECKED_FIELDS)[number]
+>;
+
+true satisfies MissingCheckedField extends never ? true : never;
+
 /** Adapter is "stuck" if no growth in this many hours. */
 const STUCK_THRESHOLD_HOURS = 12;
 

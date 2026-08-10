@@ -6,6 +6,7 @@ import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
@@ -22,7 +23,7 @@ import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-o
 
 type SchedulerJobDefinition = {
   id: string;
-  task: string;
+  task: RegisteredSchedulerTaskName;
   description: string;
   schedule: SchedulerSchedule;
   payload?: SchedulerPayload | null;

@@ -5,9 +5,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
-import type { ChatComposerDockData } from "@/components/chat/chat-composer-dock-controls";
-import { resolveChatComposerDockControls } from "@/components/chat/chat-composer-dock-controls";
-import { ChatContextMeter } from "@/components/chat/chat-context-meter";
+import {
+  ChatContextMeter,
+  type ChatContextUsage,
+} from "@/components/chat/chat-context-meter";
 import { ChatModelSelector } from "@/components/chat/chat-model-selector";
 import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerStatusRow } from "@/components/chat/composer-status-row";
@@ -30,7 +31,11 @@ type ChatComposerDockProps = {
    * The dock reads only the fields that drive the row, so a surface
    * passes its whole `data` and cannot forget to wire a control.
    */
-  data: ChatComposerDockData;
+  data: {
+    webSearchAvailable: boolean;
+    webSearchEnabled: boolean;
+    context: ChatContextUsage | null;
+  };
   /**
    * Start a fresh thread — rendered as the row's new-chat icon just
    * before the meter, on every surface. Required (not optional) so a
@@ -81,8 +86,6 @@ export const ChatComposerDock = ({
   const t = useTranslations();
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
-  const { showWebSearch } = resolveChatComposerDockControls(data);
-
   return (
     <ComposerStatusRow
       className={className}
@@ -117,7 +120,7 @@ export const ChatComposerDock = ({
         // (muted text-xs, borderless controls), never a second toolbar.
         <div className="flex min-w-0 items-center gap-1">
           {leadingContext}
-          {showWebSearch && (
+          {data.webSearchAvailable && (
             <ChatWebSearchToggle
               enabled={data.webSearchEnabled}
               size="icon-xs"

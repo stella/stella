@@ -3,13 +3,10 @@
  * shared by the fill pipeline (api), the editor highlighter (folio), and the
  * read-only preview (web).
  *
- * Add a new directive in ONE place: append its `kind` to {@link DIRECTIVE_KINDS},
- * add a `MarkerMeta` member, and teach {@link classifyMarker} to recognize it.
- * Every scanner that uses {@link scanMarkers} / {@link classifyMarker} then sees
- * it automatically, and every exhaustive `switch` over a marker's kind (closed
- * with {@link assertNever}) fails to compile at any consumer that has not yet
- * handled it. That is what makes "added a directive server-side but a recognizer
- * elsewhere silently ignored it" a build error rather than a latent bug.
+ * Add a new directive to `MarkerMeta` and teach {@link classifyMarker} to
+ * recognize it. Compile-time totality checks then require its ordered runtime
+ * value and its block/inline disposition, while exhaustive consumer switches
+ * fail until they handle it.
  *
  * No consumer should define its own `{{...}}` regex. The low-level pattern
  * factories below exist so handlers that mutate raw XML/text reuse the exact
@@ -18,43 +15,7 @@
 
 import { panic } from "better-result";
 
-// ── Directive kinds ──────────────────────────────────────
-
-export const DIRECTIVE_KINDS = [
-  "placeholder",
-  "clause",
-  "num",
-  "ref",
-  "index",
-  "count",
-  "if",
-  "elseif",
-  "else",
-  "endif",
-  "each",
-  "endeach",
-] as const;
-
-export type DirectiveKind = (typeof DIRECTIVE_KINDS)[number];
-
-/** Directives that occupy their own paragraph (block-level), opener→closer. */
-export const BLOCK_DIRECTIVE_KINDS = [
-  "if",
-  "elseif",
-  "else",
-  "endif",
-  "each",
-  "endeach",
-] as const satisfies readonly DirectiveKind[];
-
-const BLOCK_KIND_SET: ReadonlySet<DirectiveKind> = new Set(
-  BLOCK_DIRECTIVE_KINDS,
-);
-
-export const isBlockDirectiveKind = (kind: DirectiveKind): boolean =>
-  BLOCK_KIND_SET.has(kind);
-
-// ── Parsed marker (discriminated union) ──────────────────
+// ── Parsed marker and directive kinds ────────────────────
 
 export type MarkerMeta =
   | { kind: "placeholder"; expr: string }
@@ -69,6 +30,78 @@ export type MarkerMeta =
   | { kind: "endif" }
   | { kind: "each"; expr: string }
   | { kind: "endeach" };
+
+export type DirectiveKind = MarkerMeta["kind"];
+
+const DIRECTIVE_KIND_VALUES = [
+  "placeholder",
+  "clause",
+  "num",
+  "ref",
+  "index",
+  "count",
+  "if",
+  "elseif",
+  "else",
+  "endif",
+  "each",
+  "endeach",
+] as const satisfies readonly DirectiveKind[];
+
+type MissingDirectiveKind = Exclude<
+  DirectiveKind,
+  (typeof DIRECTIVE_KIND_VALUES)[number]
+>;
+
+true satisfies MissingDirectiveKind extends never ? true : never;
+
+export const DIRECTIVE_KINDS = DIRECTIVE_KIND_VALUES;
+
+const DIRECTIVE_PLACEMENT = {
+  placeholder: "inline",
+  clause: "inline",
+  num: "inline",
+  ref: "inline",
+  index: "inline",
+  count: "inline",
+  if: "block",
+  elseif: "block",
+  else: "block",
+  endif: "block",
+  each: "block",
+  endeach: "block",
+} as const satisfies Record<DirectiveKind, "block" | "inline">;
+
+export type BlockDirectiveKind = {
+  [TKind in DirectiveKind]: (typeof DIRECTIVE_PLACEMENT)[TKind] extends "block"
+    ? TKind
+    : never;
+}[DirectiveKind];
+
+const BLOCK_DIRECTIVE_KIND_VALUES = [
+  "if",
+  "elseif",
+  "else",
+  "endif",
+  "each",
+  "endeach",
+] as const satisfies readonly BlockDirectiveKind[];
+
+type MissingBlockDirectiveKind = Exclude<
+  BlockDirectiveKind,
+  (typeof BLOCK_DIRECTIVE_KIND_VALUES)[number]
+>;
+
+true satisfies MissingBlockDirectiveKind extends never ? true : never;
+
+/** Directives that occupy their own paragraph, in canonical grammar order. */
+export const BLOCK_DIRECTIVE_KINDS = BLOCK_DIRECTIVE_KIND_VALUES;
+
+export const isBlockDirectiveKind = (
+  kind: unknown,
+): kind is BlockDirectiveKind =>
+  typeof kind === "string" &&
+  BLOCK_DIRECTIVE_KINDS.some((blockKind) => blockKind === kind);
 
 // ── Low-level pattern factories (the canonical literals) ──
 // Each returns a fresh RegExp so callers never share `lastIndex` state.

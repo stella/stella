@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
         },
-        "1": {
-          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Lasiet un meklējiet oficiālā tiesu praksē, tiesību avotos un uzņēmumu reģistros."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:tabular-review": {
+          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
+        },
+        "product:workspace": {
+          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        },
+        "product:agent": {
           "body": "Sarunājieties par lietām, failiem un pievienotajiem rīkiem, ar apstiprinājumiem un avotu priekšskatījumiem."
         },
-        "1": {
-          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:workspace": {
+          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Lietas, dokumenti, pārskatīšana un tērzēšana vienā darbvietā."
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
         },
-        "1": {
+        "product:agent": {
           "body": "Strādājiet ar lietām un pievienotajiem rīkiem, ar apstiprinājumiem un citātiem."
         },
-        "2": {
+        "product:templates": {
           "body": "Aizpildiet atkārtoti izmantojamus juridiskus dokumentus lietotnē, komandrindā vai pievienotajos rīkos."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:workspace": {
+          "body": "Lietas, dokumenti, pārskatīšana un tērzēšana vienā darbvietā."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Ieslēdziet izstrādātāja režīmu sadaļā Settings → Connectors → Advanced un pēc tam pievienojiet savienotāju ar iepriekš norādīto adresi."
           },
-          "1": {
+          "claude": {
             "body": "Sadaļā Settings → Connectors pievienojiet pielāgotu savienotāju ar iepriekš norādīto adresi."
           },
-          "2": {
-            "body": "Pievienojiet serveri un pierakstieties:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Serveri pievienosiet ar vienu komandu:"
+          },
+          "codex": {
+            "body": "Pievienojiet serveri un pierakstieties:"
           }
         },
         "heading": "Pievienojiet MI aģentu",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Apskatiet, kur lietas, dokumenti un rīki atrodas kopā."
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
         },
-        "1": {
-          "body": "Veidojiet atkārtoti izmantojamus Word dokumentus ar laukiem un nosacījuma klauzulām."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Izmēģiniet to pašu redaktoru atsevišķi: atveriet un rediģējiet .docx pārlūkā, konts nav vajadzīgs."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:templates": {
+          "body": "Veidojiet atkārtoti izmantojamus Word dokumentus ar laukiem un nosacījuma klauzulām."
+        },
+        "product:workspace": {
+          "body": "Apskatiet, kur lietas, dokumenti un rīki atrodas kopā."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Sagatavojiet sensitīvu materiālu AI, neatklājot identificējošu informāciju."
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
         },
-        "1": {
+        "product:agent": {
           "body": "Sarunājieties par lietām, failiem un avotiem, ar apstiprinājumiem un citātiem."
         },
-        "2": {
-          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
+        "product:anonymization": {
+          "body": "Sagatavojiet sensitīvu materiālu AI, neatklājot identificējošu informāciju."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:tabular-review": {
+          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        },
+        "product:agent": {
           "body": "Sarunājieties par lietām, failiem un pievienotajiem avotiem, ar apstiprinājumiem un avotu priekšskatījumiem."
         },
-        "1": {
-          "body": "Oficiāla tiesu prakse un uzņēmumu reģistri, ienesti tieši lietā."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Sagatavojiet sensitīvu materiālu AI, neatklājot identificējošu informāciju."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:public-data": {
+          "body": "Oficiāla tiesu prakse un uzņēmumu reģistri, ienesti tieši lietā."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Lietas, dokumenti un Word rediģēšana vienuviet."
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
         },
-        "1": {
-          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
-        },
-        "2": {
+        "product:agent": {
           "body": "Sarunājieties par lietām, failiem un avotiem, saņemot citātus."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:tabular-review": {
+          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
+        },
+        "product:workspace": {
+          "body": "Lietas, dokumenti un Word rediģēšana vienuviet."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Kā lietotnē stella darbojas veidnes?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Sagatavojiet dokumentu no veidnes, nevis sāciet no tukšas lapas",
             "1": "Izmantojiet vienas un tās pašas klauzulas dažādās veidnēs",
@@ -772,7 +772,7 @@
           },
           "heading": "Veidojiet no veidnēm un klauzulām"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Aizpildiet laukus no dokumenta, kas jau glabājas lietā",
             "1": "Pirms projekta sagatavošanas pārskatiet un pielāgojiet katru vērtību",
@@ -780,7 +780,7 @@
           },
           "heading": "Aizpildiet to ar lietas datiem"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Veidojiet un pielāgojiet veidnes redaktorā",
             "1": "Sagatavojiet projektu tieši lietā",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        },
+        "product:agent": {
           "body": "Sarunājieties par lietām, failiem un pievienotajiem rīkiem, ar apstiprinājumiem un avotu priekšskatījumiem."
         },
-        "1": {
-          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Piekļūstiet tām pašām lietām, dokumentiem un tiesu praksei no komandrindas un ar MCP saderīgiem rīkiem."
         },
-        "3": {
-          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        "product:tabular-review": {
+          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Kas ir lietotnes stella darbvieta?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumenti, kontakti, pārskatīšana un tērzēšana glabājas lietā",
             "1": "Rediģējiet Word .docx dokumentus, nepametot darbvietu",
@@ -870,7 +870,7 @@
           },
           "heading": "Visa lieta vienuviet"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Atveriet un rediģējiet Word .docx dokumentus tieši darbvietā",
             "1": "Labojumi paliek Word failā: bez pārveidošanas un bez kopijām",

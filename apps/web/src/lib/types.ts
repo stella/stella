@@ -1,4 +1,8 @@
-import type { EntityPriority, TaskStatus } from "@stll/api-contract";
+import type {
+  EntityPriority,
+  OcrExportStatus,
+  TaskStatus,
+} from "@stll/api-contract";
 import type { ListItemType } from "@stll/api-contract/entity-options";
 import type {
   BoundingBox,
@@ -156,8 +160,7 @@ export type WorkspacePropertyOption = {
   value: string;
 };
 
-/** Mirrors `OcrExportStatus` in apps/api/src/lib/entities/query-entities.ts. */
-export type OcrExportStatus = "text-and-pdf" | "text" | "unavailable";
+export type { OcrExportStatus };
 
 export type WorkspaceField = {
   entityId: EntityId;

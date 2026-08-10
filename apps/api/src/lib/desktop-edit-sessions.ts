@@ -109,7 +109,16 @@ export const DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE =
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
   "Desktop editing moved to another device. This local copy is preserved.";
 
-const ADMIN_BYPASS_ROLES = new Set<MemberRole>(["owner", "admin"]);
+const DESKTOP_EDIT_WORKSPACE_ACCESS = {
+  owner: "organization-wide",
+  admin: "organization-wide",
+  external: "workspace-membership-required",
+  member: "workspace-membership-required",
+  intern: "workspace-membership-required",
+} as const satisfies Record<
+  MemberRole,
+  "organization-wide" | "workspace-membership-required"
+>;
 
 export const canUseDesktopEditSession = ({
   organizationRole,
@@ -126,7 +135,8 @@ export const canUseDesktopEditSession = ({
     entity: ["update"],
   }).success;
   const hasWorkspaceAccess =
-    ADMIN_BYPASS_ROLES.has(organizationRole) || workspaceMemberId !== null;
+    DESKTOP_EDIT_WORKSPACE_ACCESS[organizationRole] === "organization-wide" ||
+    workspaceMemberId !== null;
 
   return hasEntityUpdate && hasWorkspaceAccess;
 };

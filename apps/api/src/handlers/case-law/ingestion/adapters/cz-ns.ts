@@ -6,11 +6,13 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -243,7 +245,7 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
   return result;
 };
 
-export const czNsAdapter: SourceAdapter = {
+export const czNsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NS,
   name: "Czech Supreme Court",
   country: "CZE",
@@ -490,4 +492,4 @@ export const czNsAdapter: SourceAdapter = {
       catch: adapterCatch(ADAPTER_KEYS.CZ_NS, cursor),
     });
   },
-};
+});

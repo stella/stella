@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { normalizeSearchText } from "@stll/text-normalize";
 
 import { contacts } from "@/api/db/schema";
+import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
@@ -12,7 +13,7 @@ const SEARCH_LIMIT = 20;
 
 const searchContactsQuerySchema = t.Object({
   q: t.String({ minLength: 1 }),
-  type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
+  type: t.Optional(contactTypeSchema),
 });
 
 const searchContacts = createSafeRootHandler(

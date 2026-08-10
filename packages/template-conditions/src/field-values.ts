@@ -24,12 +24,19 @@ import { resolvePath } from "./path.js";
 
 // ── Date ──────────────────────────────────────────────────
 
+export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
+
+export type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];
+
+/** Stable exemplar for date-format configuration previews. */
+export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
+
 /** Locale-aware date rendering config. "iso" leaves the submitted value as-is;
  *  the other styles map to `Intl.DateTimeFormat` `dateStyle`. */
 export type FieldDateFormat = {
   /** BCP-47 language tag of the document, e.g. "cs", "de", "pl". */
   locale: string;
-  style: "long" | "medium" | "short" | "iso";
+  style: DateFormatStyle;
 };
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;

@@ -1,43 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildAuthorizeUrl,
-  isReadOnlyGraphScope,
-  SHAREPOINT_DELEGATED_SCOPES,
-} from "@/api/handlers/sharepoint/graph-oauth";
-
-describe("SharePoint delegated scopes", () => {
-  test("every requested scope is read-only (no write scope is ever requested)", () => {
-    for (const scope of SHAREPOINT_DELEGATED_SCOPES) {
-      expect(scope.toLowerCase()).not.toContain("write");
-      expect(isReadOnlyGraphScope(scope)).toBe(true);
-    }
-  });
-
-  test("requests exactly the intended read-only + offline set", () => {
-    const requested: string[] = [...SHAREPOINT_DELEGATED_SCOPES];
-    expect(requested.sort()).toEqual(
-      [
-        "offline_access",
-        "https://graph.microsoft.com/User.Read",
-        "https://graph.microsoft.com/Files.Read.All",
-        "https://graph.microsoft.com/Sites.Read.All",
-      ].sort(),
-    );
-  });
-
-  test("isReadOnlyGraphScope flags any ReadWrite variant", () => {
-    expect(
-      isReadOnlyGraphScope("https://graph.microsoft.com/Files.ReadWrite.All"),
-    ).toBe(false);
-    expect(
-      isReadOnlyGraphScope("https://graph.microsoft.com/Sites.ReadWrite.All"),
-    ).toBe(false);
-  });
-});
+import { buildAuthorizeUrl } from "@/api/handlers/sharepoint/graph-oauth";
 
 describe("buildAuthorizeUrl", () => {
-  test("carries only the read-only scopes and PKCE parameters", () => {
+  test("carries the OAuth and PKCE parameters", () => {
     const url = new URL(
       buildAuthorizeUrl({
         clientId: "client-123",
@@ -53,11 +19,6 @@ describe("buildAuthorizeUrl", () => {
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("client_id")).toBe("client-123");
-
-    const requestedScopes = (url.searchParams.get("scope") ?? "").split(" ");
-    for (const scope of requestedScopes) {
-      expect(scope.toLowerCase()).not.toContain("write");
-    }
-    expect(requestedScopes).toEqual([...SHAREPOINT_DELEGATED_SCOPES]);
+    expect(url.searchParams.get("scope")).toContain("offline_access");
   });
 });

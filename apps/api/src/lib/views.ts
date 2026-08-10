@@ -1,3 +1,8 @@
+import {
+  isRequiredViewLayout,
+  REQUIRED_VIEW_LAYOUTS,
+  type RequiredViewLayoutType,
+} from "@stll/api-contract";
 import { conditionIncludesKind } from "@stll/conditions";
 
 import type { EntityKind } from "@/api/db/schema-validators";
@@ -11,12 +16,7 @@ import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
  * These views are created automatically on workspace creation
  * and cannot be deleted.
  */
-export const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = [
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-];
+export { isRequiredViewLayout, REQUIRED_VIEW_LAYOUTS };
 
 type DefaultViewTemplate = {
   nameKey: keyof typeof VIEW_NAMES.en;
@@ -24,9 +24,7 @@ type DefaultViewTemplate = {
   position: number;
 };
 
-const emptyLayout = (
-  type: "overview" | "table" | "filesystem" | "kanban",
-): ViewLayout => {
+const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
   const base: Pick<ViewLayout, "filters" | "sorts" | "hiddenProperties"> = {
     filters: [],
     sorts: [],

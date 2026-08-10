@@ -1,4 +1,5 @@
-import type { BlockDirectiveKind } from "@/api/lib/docx/types";
+import type { BlockDirectiveKind } from "@stll/template-conditions";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 export type ClauseRun = {
@@ -7,7 +8,8 @@ export type ClauseRun = {
   italic?: boolean;
 };
 
-export type ClauseListKind = "bullet" | "ordered";
+export const CLAUSE_LIST_KINDS = ["bullet", "ordered"] as const;
+export type ClauseListKind = (typeof CLAUSE_LIST_KINDS)[number];
 
 export type ClauseParagraph = {
   text: string;

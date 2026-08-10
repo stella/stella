@@ -1,16 +1,17 @@
-import type {
-  KrsAddress,
-  KrsEntity,
-  KrsEntityStatus,
-  KrsIdentifiers,
-  KrsLookupResponse,
-  KrsRawAdres,
-  KrsRawDzial6,
-  KrsRawKapital,
-  KrsRawOdpis,
-  KrsRawSiedziba,
-  KrsRegisterCode,
-  KrsRegisteredSeat,
+import {
+  KRS_REGISTER_CODES,
+  type KrsAddress,
+  type KrsEntity,
+  type KrsEntityStatus,
+  type KrsIdentifiers,
+  type KrsLookupResponse,
+  type KrsRawAdres,
+  type KrsRawDzial6,
+  type KrsRawKapital,
+  type KrsRawOdpis,
+  type KrsRawSiedziba,
+  type KrsRegisterCode,
+  type KrsRegisteredSeat,
 } from "./types.js";
 
 // KRS' public HTML viewer currently requires an opaque token that the
@@ -26,12 +27,11 @@ const KRS_API_BASE = "https://api-krs.ms.gov.pl/api/krs";
 const BANKRUPTCY_NAME_PATTERN = /\bW UPADŁOŚCI\b/iu;
 const LIQUIDATION_NAME_PATTERN = /\bW LIKWIDACJI\b/iu;
 
-const REGISTER_CODES: ReadonlySet<KrsRegisterCode> = new Set(["RejP", "RejS"]);
+const REGISTER_CODES: ReadonlySet<string> = new Set(KRS_REGISTER_CODES);
 
 const isKrsRegisterCode = (
   value: string | undefined,
-): value is KrsRegisterCode =>
-  value !== undefined && (REGISTER_CODES as ReadonlySet<string>).has(value);
+): value is KrsRegisterCode => value !== undefined && REGISTER_CODES.has(value);
 
 const trimToNull = (value: string | undefined): string | null => {
   const trimmed = value?.trim();

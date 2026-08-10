@@ -1,15 +1,12 @@
 // Shared literal constants for the `stella auth` flow (spec 051 Phase 2).
-//
-// Several of these intentionally duplicate values owned by `apps/api`
-// (`apps/api/src/mcp/constants.ts`, `apps/api/src/lib/auth.ts`). `packages/cli`
-// cannot import from `apps/api` (apps depend on packages, never the reverse),
-// and the MCP tool registry does not yet expose these as data the CLI could
-// fetch at runtime. This is the same hand-duplication already accepted for
-// `ToolScope` in `../route-types.ts`; keep both sides in sync by hand until a
-// shared package exists.
 
-/** Mirrors `apps/api/src/mcp/constants.ts`'s `MCP_HTTP_PATH`. */
-const MCP_HTTP_PATH = "/mcp";
+import {
+  CLI_KNOWN_SCOPES,
+  CLI_REQUIRED_RESOURCE_SCOPES,
+  MCP_HTTP_PATH,
+} from "../generated/mcp-contract.js";
+
+export { CLI_KNOWN_SCOPES, CLI_REQUIRED_RESOURCE_SCOPES };
 
 /**
  * The OAuth resource (`RFC 8707`) the CLI requests. Passing `resource` at the
@@ -68,33 +65,6 @@ export const CLI_DEFAULT_SCOPES = [
 
 /** Minimum scopes needed for the default CLI login to be useful. */
 export const CLI_REQUIRED_SCOPES = ["openid", "stella:read"] as const;
-
-/** Every OAuth scope `stella auth login --scopes` is documented to accept. */
-export const CLI_KNOWN_SCOPES = [
-  "openid",
-  "profile",
-  "email",
-  "offline_access",
-  "stella:search",
-  "stella:read",
-  "stella:templates",
-  "stella:contacts_write",
-  "stella:documents_write",
-  "stella:matters_write",
-  "stella:chat",
-  "stella:knowledge_write",
-  "stella:billing_write",
-  "stella:admin_read",
-  "stella:admin_write",
-  "stella:onboarding",
-  "stella:skills",
-  "stella:external_mcps",
-  "stella:feedback",
-] as const;
-
-/** Full resource scope surface the packaged CLI release expects its API to expose. */
-export const CLI_REQUIRED_RESOURCE_SCOPES: readonly string[] =
-  CLI_KNOWN_SCOPES.filter((scope) => scope.startsWith("stella:"));
 
 export const CLIENT_NAME = "stella-cli";
 

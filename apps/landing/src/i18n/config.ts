@@ -4,12 +4,18 @@
 // surfaces it here automatically (it then needs a message catalog, which the
 // i18n gate enforces).
 //
-// og:locale and writing direction are not part of @stll/locales, so they live
-// here keyed by Locale; a missing entry fails typecheck if the app adds a locale.
+// og:locale is landing-specific, so it lives here keyed by Locale; a missing
+// entry fails typecheck if the app adds a locale.
 
 import { panic } from "better-result";
 
-import { UI_LOCALES, displayLanguageName, type UiLocale } from "@stll/locales";
+import {
+  UI_LOCALES,
+  displayLanguageName,
+  getUiLocaleDirection,
+  type TextDirection,
+  type UiLocale,
+} from "@stll/locales";
 
 export const defaultLocale: UiLocale = "en";
 
@@ -25,7 +31,7 @@ export type LocaleConfig = {
   /** Open Graph locale (og:locale). */
   og: string;
   /** Writing direction for the <html dir> attribute. */
-  dir: "ltr" | "rtl";
+  dir: TextDirection;
 };
 
 const OG_LOCALE: Record<Locale, string> = {
@@ -44,8 +50,6 @@ const OG_LOCALE: Record<Locale, string> = {
   sk: "sk_SK",
 };
 
-const RTL_LOCALES = new Set<Locale>(["ar"]);
-
 const toPath = (tag: Locale): string =>
   tag === defaultLocale ? "" : tag.toLowerCase();
 
@@ -62,7 +66,7 @@ const buildLocales = (): Record<Locale, LocaleConfig> => {
       label: displayLanguageName(tag),
       hreflang: tag,
       og: OG_LOCALE[tag],
-      dir: RTL_LOCALES.has(tag) ? "rtl" : "ltr",
+      dir: getUiLocaleDirection(tag),
     };
   }
   if (!isCompleteLocaleRecord(result)) {

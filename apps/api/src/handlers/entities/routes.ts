@@ -58,6 +58,7 @@ import {
   workspaceResourceSetUpdates,
 } from "@/api/lib/resource-realtime-macro";
 import {
+  ENTITY_UPLOAD_ROUTE_PATHS,
   isTranslateRateLimitedPath,
   isUploadRateLimitedPath,
 } from "@/api/lib/upload-rate-limit";
@@ -121,16 +122,20 @@ export const entitiesRoute = new Elysia({
     resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createDocumentFromStyleSet.config.permissions,
   })
-  .post("/upload", uploadEntity.handler, {
+  .post(ENTITY_UPLOAD_ROUTE_PATHS.entity, uploadEntity.handler, {
     body: uploadEntity.config.body,
     resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: uploadEntity.config.permissions,
   })
-  .post("/upload-generated-document", uploadGeneratedDocument.handler, {
-    body: uploadGeneratedDocument.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
-    permissions: uploadGeneratedDocument.config.permissions,
-  })
+  .post(
+    ENTITY_UPLOAD_ROUTE_PATHS.generatedDocument,
+    uploadGeneratedDocument.handler,
+    {
+      body: uploadGeneratedDocument.config.body,
+      resourceSetUpdated: entityFileRealtimeUpdates,
+      permissions: uploadGeneratedDocument.config.permissions,
+    },
+  )
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
     body: openDesktopEditSession.config.body,
     permissions: openDesktopEditSession.config.permissions,
@@ -320,7 +325,7 @@ export const entitiesRoute = new Elysia({
     params: deleteVersion.config.params,
     permissions: deleteVersion.config.permissions,
   })
-  .post("/upload-version", uploadVersion.handler, {
+  .post(ENTITY_UPLOAD_ROUTE_PATHS.version, uploadVersion.handler, {
     body: uploadVersion.config.body,
     resourceSetUpdated: entityVersionRealtimeUpdates,
     permissions: uploadVersion.config.permissions,

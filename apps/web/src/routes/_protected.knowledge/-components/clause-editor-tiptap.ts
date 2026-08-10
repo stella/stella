@@ -1,5 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 
+import { isBlockDirectiveKind } from "@stll/template-conditions";
+
 import type {
   ClauseListKind,
   ClauseParagraph,
@@ -7,10 +9,7 @@ import type {
 } from "@/components/templates/clause-editor-types";
 import { optionalArray } from "@/lib/arrays";
 
-import {
-  CLAUSE_DIRECTIVE_NODE,
-  isBlockDirectiveKind,
-} from "./clause-directive-extension";
+import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { DELETION_MARK } from "./clause-tracked-change-marks";
 
 const listNodeType = (kind: ClauseListKind): "bulletList" | "orderedList" =>

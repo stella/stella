@@ -5,11 +5,12 @@ import {
 } from "../shared/http.js";
 import { KrsAPIError, KrsRequestError, KrsValidationError } from "./errors.js";
 import { parseEntity } from "./parse.js";
-import type {
-  KrsEntity,
-  KrsErrorResponse,
-  KrsLookupResponse,
-  KrsRegisterCode,
+import {
+  KRS_REGISTER_CODES,
+  type KrsEntity,
+  type KrsErrorResponse,
+  type KrsLookupResponse,
+  type KrsRegisterCode,
 } from "./types.js";
 import { normalizeKrsNumber, validateKrsNumber } from "./validation.js";
 
@@ -20,7 +21,7 @@ const BASE = "https://api-krs.ms.gov.pl/api/krs";
 // exactly one register, so the second probe runs only on a 404 from
 // the first. Honour the documented ~5 rps soft cap by issuing the
 // second probe sequentially rather than racing.
-const REGISTER_PROBE_ORDER: readonly KrsRegisterCode[] = ["RejP", "RejS"];
+const REGISTER_PROBE_ORDER: readonly KrsRegisterCode[] = KRS_REGISTER_CODES;
 
 const isKrsLookupResponse = (value: unknown): value is KrsLookupResponse =>
   isRecord(value) && (value["odpis"] === undefined || isRecord(value["odpis"]));

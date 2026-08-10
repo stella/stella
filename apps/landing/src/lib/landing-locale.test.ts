@@ -2,8 +2,6 @@ import { expect, test } from "bun:test";
 
 import { resolveLandingLocaleRedirect } from "./landing-locale";
 
-const baseLayoutPath = new URL("../layouts/Base.astro", import.meta.url);
-
 const localizedRoutes = [
   { locale: "en", path: "/product/agent" },
   { locale: "cs", path: "/cs/product/agent" },
@@ -74,12 +72,4 @@ test("matches regional browser tags to a supported language", () => {
       search: "",
     }),
   ).toBe("/pt-br/");
-});
-
-test("locale selection reruns after client-routed page loads", async () => {
-  const baseLayout = await Bun.file(baseLayoutPath).text();
-
-  expect(baseLayout).toContain(
-    'document.addEventListener("astro:page-load", initializeLandingLocale);',
-  );
 });

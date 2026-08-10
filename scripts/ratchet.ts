@@ -37,6 +37,8 @@ import path from "node:path";
 import { analyse } from "scslre";
 import ts from "typescript";
 
+import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "ratchet-baseline.json");
@@ -1048,22 +1050,16 @@ const countFileTransportSuppressed = (content: string): number => {
   }).length;
 };
 
-// The five write-only OAuth grants (mirrors WRITE_ONLY_SCOPES in
-// apps/api/scripts/lib/capability-catalog.ts; duplicated as a literal so this
-// whole-repo guard has no import into the api package). A READ capability that
-// requires one of these is unreachable by a read-only credential
+// A READ capability that requires a write-only OAuth grant is unreachable by a
+// read-only credential
 // (`stella:read` / `stella:admin_read`): the exporter's read-scope guard
 // prevents it, and this ratchet freezes the count at 0 over the committed
 // mirrors so a regression fails CI even if the exporter guard were bypassed
-// (e.g. a hand-edited JSON). Both mirrors are counted so drift between them
-// also shows up.
-const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
-  "stella:admin_write",
-  "stella:billing_write",
-  "stella:documents_write",
-  "stella:knowledge_write",
-  "stella:matters_write",
-]);
+// (e.g. a hand-edited JSON). The scope classification is shared with the
+// exporter, so the guard cannot omit a newly classified write-only scope.
+const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
+  MCP_WRITE_ONLY_RESOURCE_SCOPES,
+);
 
 const countReadCapabilitiesWithWriteScope = (content: string): number => {
   const parsed: unknown = JSON.parse(content);

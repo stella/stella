@@ -2,6 +2,10 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import {
+  VIEW_LAYOUT_TYPES,
+  type ViewLayoutType as ContractViewLayoutType,
+} from "@stll/api-contract";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 
 import {
@@ -12,15 +16,6 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
 const v1 = v.literal(1);
-
-const viewLayoutTypeValues = [
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-  "calendar",
-  "timeline",
-] as const;
 
 const strictObjectOptions = { additionalProperties: false } as const;
 
@@ -111,7 +106,22 @@ const layoutSchemas = [
 export const viewLayoutSchema = v.variant("type", layoutSchemas);
 
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
-export type ViewLayoutType = ViewLayout["type"];
+type SchemaViewLayoutType = ViewLayout["type"];
+
+true satisfies Exclude<
+  ContractViewLayoutType,
+  SchemaViewLayoutType
+> extends never
+  ? true
+  : never;
+true satisfies Exclude<
+  SchemaViewLayoutType,
+  ContractViewLayoutType
+> extends never
+  ? true
+  : never;
+
+export type ViewLayoutType = ContractViewLayoutType;
 
 const hasFiltersField = (value: unknown): value is { filters: unknown } =>
   typeof value === "object" && value !== null && "filters" in value;
@@ -313,7 +323,7 @@ export const updateViewInputSchema = v.strictObject({
 
 export type UpdateViewInput = v.InferInput<typeof updateViewInputSchema>;
 
-const viewLayoutTypeSchema = v.picklist(viewLayoutTypeValues);
+const viewLayoutTypeSchema = v.picklist(VIEW_LAYOUT_TYPES);
 
 export const convertViewInputSchema = v.strictObject({
   viewId: v.string(),

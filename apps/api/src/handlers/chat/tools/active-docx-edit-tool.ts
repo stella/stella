@@ -13,11 +13,11 @@ import {
 import type {
   FolioAIEditOperation,
   FolioAIEditSeverity,
-  FolioAIEditSkipReason,
 } from "@stll/folio-core/ai-edits";
 import { FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION } from "@stll/folio-core/server";
 
 import { normalizeActiveDocxEditToolInput } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
+import { FOLIO_AI_EDIT_SKIP_REASONS } from "@/api/handlers/chat/tools/folio-ai-edit-skip-reasons";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
@@ -566,23 +566,6 @@ const inputToolSchema: ActiveDocxEditInputToolSchema = {
 // and skip reasons stay typed against folio's ai-edits types so a folio
 // rename/removal fails typecheck here instead of silently drifting.
 // ---------------------------------------------------------------------------
-
-// Every skip reason folio's ai-edits engine can produce
-// (`FolioAIEditSkipReason` in `@stll/folio-core`). `satisfies` keeps each
-// entry checked against the folio union.
-const FOLIO_AI_EDIT_SKIP_REASONS = [
-  "missingBlock",
-  "changedBlock",
-  "ambiguousFind",
-  "missingFind",
-  "unsupportedBlock",
-  "unsupportedMode",
-  "atomicBatchRejected",
-  "preconditionFailed",
-  "staleRange",
-  "emptyOperation",
-  "noopOperation",
-] as const satisfies readonly FolioAIEditSkipReason[];
 
 const skippedOperationSchema = v.strictObject({
   id: v.string(),

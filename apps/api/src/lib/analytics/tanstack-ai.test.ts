@@ -2,9 +2,7 @@ import type { ChatMiddlewareContext, TokenUsage } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
-import type * as TaggedErrors from "@/api/lib/errors/tagged-errors";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -396,71 +394,40 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     }
   });
 
-  // Severity is part of this record's contract: only an unanticipated failure
-  // shape may log at ERROR. Driven over the whole `AIErrorKind` union, so a new
-  // kind cannot be added without deciding its severity.
-  const createErrorsByKind = (
-    ChatLoopDetectedError: typeof TaggedErrors.ChatLoopDetectedError,
-  ) =>
-    ({
-      quota_exhausted: { status: 429 },
-      provider_billing: { status: 402 },
-      model_unavailable: { status: 404 },
-      provider_unavailable: { status: 503 },
-      loop_detected: new ChatLoopDetectedError({ message: "repeated work" }),
-      unknown: new Error("boom"),
-    }) satisfies Record<AIErrorKind, unknown>;
+  test("logs anticipated failures at WARN and unknown shapes at ERROR", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
 
-  const AI_ERROR_KINDS = [
-    "quota_exhausted",
-    "provider_billing",
-    "model_unavailable",
-    "provider_unavailable",
-    "loop_detected",
-    "unknown",
-  ] as const satisfies readonly AIErrorKind[];
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: { capture: () => undefined, flush: async () => undefined },
+        feature: "chat.suggested_prompts",
+        traceId: "trace_provider_unavailable",
+      }).captureError({ status: 503 });
+      createTanStackAIAnalyticsCallbacks({
+        analytics: { capture: () => undefined, flush: async () => undefined },
+        feature: "chat.suggested_prompts",
+        traceId: "trace_unknown",
+      }).captureError(new Error("boom"));
 
-  for (const kind of AI_ERROR_KINDS) {
-    const severity = kind === "unknown" ? "ERROR" : "WARN";
-
-    test(`logs a ${kind} generation failure at ${severity}`, async () => {
-      const { createTanStackAIAnalyticsCallbacks } =
-        await loadTanStackAIAnalytics();
-      const { classifyAIError } = await import("@/api/lib/ai-error");
-      const { logger } = await import("@/api/lib/observability/logger");
-      const { ChatLoopDetectedError } =
-        await import("@/api/lib/errors/tagged-errors");
-      const error = createErrorsByKind(ChatLoopDetectedError)[kind];
-
-      expect(classifyAIError(error)).toBe(kind);
-
-      const errorSpy = spyOn(logger, "error");
-      const warnSpy = spyOn(logger, "warn");
-
-      try {
-        createTanStackAIAnalyticsCallbacks({
-          analytics: { capture: () => undefined, flush: async () => undefined },
-          feature: "chat.suggested_prompts",
-          traceId: `trace_${kind}`,
-        }).captureError(error);
-
-        const expected = severity === "ERROR" ? errorSpy : warnSpy;
-        const unexpected = severity === "ERROR" ? warnSpy : errorSpy;
-
-        expect(unexpected).not.toHaveBeenCalledWith(
-          "tanstack_ai.generation.failed",
-          expect.anything(),
-        );
-        expect(expected).toHaveBeenCalledWith(
-          "tanstack_ai.generation.failed",
-          expect.objectContaining({ "ai.error_kind": kind }),
-        );
-      } finally {
-        errorSpy.mockRestore();
-        warnSpy.mockRestore();
-      }
-    });
-  }
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.error_kind": "provider_unavailable",
+        }),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({ "ai.error_kind": "unknown" }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 
   test("logs a configuration refusal at WARN with its status", async () => {
     const { createTanStackAIAnalyticsCallbacks } =

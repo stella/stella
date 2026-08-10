@@ -1849,6 +1849,12 @@ const chatThreadIdentity = ({
 // Every context capability (getter/handler) that changes what a runtime
 // SENDS. `allowMissingThread` is excluded: it shapes the fetch, not the
 // send, and is already part of the query key.
+type ChatContextQueryOnlyKey = "allowMissingThread";
+type ChatContextCapabilityKey = Exclude<
+  keyof ChatThreadOptionsContext,
+  ChatContextQueryOnlyKey
+>;
+
 const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveDecision",
   "getActiveDraft",
@@ -1862,7 +1868,14 @@ const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getSendMode",
   "getUserContext",
   "handleActiveDocxEditToolCall",
-] as const satisfies readonly (keyof ChatThreadOptionsContext)[];
+] as const satisfies readonly ChatContextCapabilityKey[];
+
+type MissingChatContextCapabilityKey = Exclude<
+  ChatContextCapabilityKey,
+  (typeof CHAT_CONTEXT_CAPABILITY_KEYS)[number]
+>;
+
+true satisfies MissingChatContextCapabilityKey extends never ? true : never;
 
 /**
  * Deterministic encoding of WHICH capabilities a context carries (fixed

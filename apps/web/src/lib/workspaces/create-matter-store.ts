@@ -1,9 +1,11 @@
 import { create } from "zustand";
 
+import type { ContactType } from "@stll/api-contract";
+
 export type MatterDraftClient = {
   id: string;
   displayName: string;
-  type: "person" | "organization";
+  type: ContactType;
 };
 
 type CreateMatterState = {

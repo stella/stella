@@ -41,16 +41,6 @@ describe("chatEditModeSelectionForOptionId", () => {
 });
 
 describe("isChatEditModeOptionId", () => {
-  test("accepts every known option id", () => {
-    expect(
-      isChatEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges),
-    ).toBe(true);
-    expect(isChatEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.autoDirect)).toBe(
-      true,
-    );
-    expect(isChatEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.manual)).toBe(true);
-  });
-
   test("rejects unknown values (e.g. a legacy or corrupted persisted value)", () => {
     expect(isChatEditModeOptionId("suggested")).toBe(false);
     expect(isChatEditModeOptionId(undefined)).toBe(false);

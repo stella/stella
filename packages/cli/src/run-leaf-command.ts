@@ -26,7 +26,7 @@ import {
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
   mapHttpStatusExit,
-  MCP_ERROR_CODE_EXIT_MAP,
+  resolveMcpErrorCodeExit,
   type ExitCode,
 } from "./mcp-constants.js";
 import {
@@ -628,7 +628,7 @@ export const readRequestReceipt = (payload: unknown): string | undefined => {
 export const classifyToolError = (payload: unknown): ExitCode => {
   const envelope = errorEnvelope(payload);
   if (envelope !== null) {
-    const mapped = MCP_ERROR_CODE_EXIT_MAP[envelope.code];
+    const mapped = resolveMcpErrorCodeExit(envelope.code);
     if (mapped !== undefined) {
       return mapped;
     }

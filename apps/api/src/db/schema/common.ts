@@ -4,6 +4,16 @@ import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import {
+  BILLING_STATUS,
+  EXPENSE_CATEGORIES,
+  TIME_ENTRY_SOURCE,
+  TIME_ENTRY_SOURCES,
+  TIME_ENTRY_STATUSES,
+  type ExpenseCategory,
+  type TimeEntrySource,
+  type TimeEntryStatus,
+} from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 import type { CountryCode } from "@stll/country-codes";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
@@ -327,38 +337,14 @@ export type { ListItemType } from "@stll/api-contract/entity-options";
 
 export const TASK_ASSIGNEE_ROLES = ["assignee", "reviewer"] as const;
 
-export const TIME_ENTRY_STATUSES = [
-  "draft",
-  "approved",
-  "billed",
-  "written_off",
-] as const;
-export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
-/** Named constants for time entry and expense statuses
- *  (both tables share TIME_ENTRY_STATUSES). */
-export const BILLING_STATUS = {
-  DRAFT: "draft",
-  APPROVED: "approved",
-  BILLED: "billed",
-  WRITTEN_OFF: "written_off",
-} as const satisfies Record<string, TimeEntryStatus>;
-
-export const EXPENSE_CATEGORIES = [
-  "filing_fee",
-  "expert_witness",
-  "travel",
-  "printing",
-  "courier",
-  "other",
-] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
-
-export const TIME_ENTRY_SOURCES = ["manual", "timer"] as const;
-export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
-export const TIME_ENTRY_SOURCE = {
-  MANUAL: "manual",
-  TIMER: "timer",
-} as const satisfies Record<string, TimeEntrySource>;
+export {
+  BILLING_STATUS,
+  EXPENSE_CATEGORIES,
+  TIME_ENTRY_SOURCE,
+  TIME_ENTRY_SOURCES,
+  TIME_ENTRY_STATUSES,
+};
+export type { ExpenseCategory, TimeEntrySource, TimeEntryStatus };
 
 /**
  * Provenance of a chat thread's title. A three-state discriminator (not a

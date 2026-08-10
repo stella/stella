@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildSuggestPromptUserMessage,
-  SUGGEST_PROMPT_SYSTEM_PROMPT,
-} from "./suggest-prompt-message";
+import { buildSuggestPromptUserMessage } from "./suggest-prompt-message";
 
 describe("suggest prompt language", () => {
   test("uses the column name's language for a new prompt", () => {
@@ -33,11 +30,5 @@ describe("suggest prompt language", () => {
       "Output language: Match the current draft's language.",
     );
     expect(message).toContain("Requested adjustment: Make it concise.");
-  });
-
-  test("prevents the English instructions from becoming the output default", () => {
-    expect(SUGGEST_PROMPT_SYSTEM_PROMPT).toContain(
-      "English merely because these instructions are in English.",
-    );
   });
 });

@@ -1,6 +1,29 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 
+export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
+export { AI_ERROR_KINDS } from "./ai-errors";
+export type { AIErrorKind } from "./ai-errors";
+export {
+  BILLING_STATUS,
+  EXPENSE_CATEGORIES,
+  INVOICE_STATUS,
+  INVOICE_STATUSES,
+  TIME_ENTRY_SOURCE,
+  TIME_ENTRY_SOURCES,
+  TIME_ENTRY_STATUSES,
+} from "./billing";
+export type {
+  ExpenseCategory,
+  InvoiceStatus,
+  TimeEntrySource,
+  TimeEntryStatus,
+} from "./billing";
+export {
+  BUSINESS_REGISTRY_SLUGS,
+  isBusinessRegistrySlug,
+} from "./business-registries";
+export type { BusinessRegistrySlug } from "./business-registries";
 export { CHAT_RUN_MODE, CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "./chat";
 export type {
   ChatContinuation,
@@ -8,6 +31,29 @@ export type {
   ChatRunMode,
   ChatSendRequest,
 } from "./chat";
+export {
+  CHAT_EDIT_APPLY_MODE,
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+  DOCX_EDIT_REPRESENTATION,
+} from "./chat-edit";
+export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
+export {
+  CHAT_MENTION_CATEGORIES,
+  CHAT_MENTION_HREF_PREFIXES,
+  CHAT_REFERENCE_CATEGORIES,
+  CHAT_REFERENCE_HREF_PREFIXES,
+  isChatMentionCategory,
+  isChatReferenceCategory,
+} from "./chat-references";
+export type {
+  ChatMentionCategory,
+  ChatMentionHref,
+  ChatMentionHrefPrefix,
+  ChatMentionHrefPrefixMap,
+  ChatReferenceCategory,
+  ChatReferenceHrefPrefix,
+} from "./chat-references";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -63,8 +109,49 @@ export type {
   DocumentVersionUploadReservationInput,
   UploadLifecycleInput,
 } from "./document-version-upload";
-export { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
-export type { FlowRunStatus, FlowRunStepStatus } from "./flow-status";
+export {
+  FLOW_RUN_STATUSES,
+  FLOW_RUN_STEP_STATUSES,
+  FLOW_RUN_TERMINAL_STATUSES,
+  FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_KINDS,
+  FLOW_TRIGGER_TYPES,
+  isTerminalFlowRunStatus,
+} from "./flow-status";
+export type {
+  FlowRunStatus,
+  FlowRunStepStatus,
+  FlowScheduleFrequency,
+  FlowStepKind,
+  FlowTriggerType,
+  TerminalFlowRunStatus,
+} from "./flow-status";
+export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
+export type { GlobalSearchResultType } from "./search";
+export {
+  DEFAULT_MATTER_NUMBER_PADDING,
+  DEFAULT_MATTER_NUMBER_PATTERN,
+  matchesMatterReferencePattern,
+  MATTER_REFERENCE_TOKENS,
+  renderMatterReferencePattern,
+} from "./matter-reference";
+export type { MatterReferenceToken } from "./matter-reference";
+export {
+  MCP_ANONYMIZED_HTTP_PATH,
+  MCP_ANONYMIZED_RESOURCE_SCOPES,
+  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DOCUMENTS_HTTP_PATH,
+  MCP_HTTP_PATH,
+  MCP_WRITE_ONLY_RESOURCE_SCOPES,
+} from "./mcp";
+export type {
+  McpAnonymizedResourceScope,
+  McpDefaultResourceScope,
+  McpWriteOnlyResourceScope,
+} from "./mcp";
+export { OCR_EXPORT_STATUSES } from "./ocr-export";
+export type { OcrExportStatus } from "./ocr-export";
 export {
   MAX_RESOURCE_CHANGES_PER_EVENT,
   parseDesktopEditSessionRealtimeEvent,
@@ -82,6 +169,19 @@ export {
 export { encodeRfc3986Component } from "./rfc3986";
 export { isSafeIdValue, toSafeId } from "./safe-id";
 export type { SafeId } from "./safe-id";
+export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
+export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
+export {
+  DIRECTLY_CREATABLE_VIEW_LAYOUTS,
+  isRequiredViewLayout,
+  REQUIRED_VIEW_LAYOUTS,
+  VIEW_LAYOUT_TYPES,
+} from "./view-layout";
+export type {
+  DirectlyCreatableViewLayoutType,
+  RequiredViewLayoutType,
+  ViewLayoutType,
+} from "./view-layout";
 export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,

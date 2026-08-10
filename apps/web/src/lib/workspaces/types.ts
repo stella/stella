@@ -2,21 +2,27 @@ import type { WorkspacesData } from "@/lib/workspaces/queries";
 
 export type Workspace = WorkspacesData["workspaces"][number];
 
-export type MattersSortKey =
-  | "name"
-  | "reference"
-  | "entityCount"
-  | "lastActivityAt"
-  | "createdAt"
-  | "clientName";
+export const MATTERS_SORT_KEYS = [
+  "name",
+  "reference",
+  "entityCount",
+  "lastActivityAt",
+  "createdAt",
+  "clientName",
+] as const;
 
-export type MattersColumnId =
-  | "client"
-  | "reference"
-  | "entityCount"
-  | "lastActivityAt"
-  | "createdAt"
-  | "team";
+export type MattersSortKey = (typeof MATTERS_SORT_KEYS)[number];
+
+export const ALL_COLUMNS = [
+  "client",
+  "team",
+  "reference",
+  "entityCount",
+  "lastActivityAt",
+  "createdAt",
+] as const;
+
+export type MattersColumnId = (typeof ALL_COLUMNS)[number];
 
 export const PERSONAL_GROUP_ID = "personal";
 
@@ -34,15 +40,6 @@ export type WorkspaceGroup =
       groupId: typeof PERSONAL_GROUP_ID;
       workspaces: Workspace[];
     };
-
-export const ALL_COLUMNS = [
-  "client",
-  "team",
-  "reference",
-  "entityCount",
-  "lastActivityAt",
-  "createdAt",
-] as const satisfies readonly MattersColumnId[];
 
 export const DATE_FILTER_PRESETS = [
   "today",
@@ -85,15 +82,25 @@ export type MattersFilters = {
 /** Column ids that support a filter popover off their header.
  *  The Team header's popover also drives the Lead filter, since the
  *  lead is rendered inside the Team avatar stack. */
-export const FILTERABLE_COLUMN_IDS = [
-  "client",
-  "team",
-  "entityCount",
-  "lastActivityAt",
-  "createdAt",
-] as const satisfies readonly MattersColumnId[];
+const MATTERS_COLUMN_FILTERABILITY = {
+  client: "filterable",
+  team: "filterable",
+  reference: "not-filterable",
+  entityCount: "filterable",
+  lastActivityAt: "filterable",
+  createdAt: "filterable",
+} as const satisfies Record<MattersColumnId, "filterable" | "not-filterable">;
 
-export type FilterableColumnId = (typeof FILTERABLE_COLUMN_IDS)[number];
+export type FilterableColumnId = {
+  [TColumnId in MattersColumnId]: (typeof MATTERS_COLUMN_FILTERABILITY)[TColumnId] extends "filterable"
+    ? TColumnId
+    : never;
+}[MattersColumnId];
+
+export const FILTERABLE_COLUMN_IDS = ALL_COLUMNS.filter(
+  (columnId): columnId is FilterableColumnId =>
+    MATTERS_COLUMN_FILTERABILITY[columnId] === "filterable",
+);
 
 export const isFilterableColumnId = (id: string): id is FilterableColumnId =>
   FILTERABLE_COLUMN_IDS.some((columnId) => columnId === id);

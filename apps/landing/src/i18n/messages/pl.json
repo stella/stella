@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
         },
-        "1": {
-          "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Czytaj i przeszukuj oficjalne orzecznictwo, źródła prawa i rejestry firm."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:tabular-review": {
+          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
+        },
+        "product:workspace": {
+          "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        },
+        "product:agent": {
           "body": "Rozmawiaj o sprawach, plikach i podłączonych narzędziach, z zatwierdzeniami i podglądem źródeł."
         },
-        "1": {
-          "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:workspace": {
+          "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Sprawy, dokumenty, przegląd i czat w jednym obszarze roboczym."
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
         },
-        "1": {
+        "product:agent": {
           "body": "Pracuj na sprawach i podłączonych narzędziach, z zatwierdzeniami i cytowaniami."
         },
-        "2": {
+        "product:templates": {
           "body": "Wypełniaj powtarzalne dokumenty prawne z aplikacji, z CLI albo z podłączonych narzędzi."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:workspace": {
+          "body": "Sprawy, dokumenty, przegląd i czat w jednym obszarze roboczym."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Włącz tryb dewelopera w Settings → Connectors → Advanced, a potem dodaj konektor z adresem endpointu."
           },
-          "1": {
+          "claude": {
             "body": "W Settings → Connectors dodaj własny konektor z adresem endpointu."
           },
-          "2": {
-            "body": "Dodaj serwer i zaloguj się:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Dodaj serwer jednym poleceniem:"
+          },
+          "codex": {
+            "body": "Dodaj serwer i zaloguj się:"
           }
         },
         "heading": "Podłącz agenta AI",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Zobacz, gdzie sprawy, dokumenty i narzędzia spotykają się w jednym miejscu."
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
         },
-        "1": {
-          "body": "Twórz dokumenty Word wielokrotnego użytku, z polami i klauzulami warunkowymi."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Wypróbuj ten sam edytor osobno: otwórz i edytuj plik .docx w przeglądarce, bez zakładania konta."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:templates": {
+          "body": "Twórz dokumenty Word wielokrotnego użytku, z polami i klauzulami warunkowymi."
+        },
+        "product:workspace": {
+          "body": "Zobacz, gdzie sprawy, dokumenty i narzędzia spotykają się w jednym miejscu."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Przygotuj wrażliwe materiały dla AI bez ujawniania danych identyfikujących."
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
         },
-        "1": {
+        "product:agent": {
           "body": "Rozmawiaj o sprawach, plikach i źródłach, z zatwierdzeniami i cytowaniami."
         },
-        "2": {
-          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
+        "product:anonymization": {
+          "body": "Przygotuj wrażliwe materiały dla AI bez ujawniania danych identyfikujących."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:tabular-review": {
+          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        },
+        "product:agent": {
           "body": "Rozmawiaj o sprawach, plikach i podłączonych źródłach, z zatwierdzeniami i podglądem źródeł."
         },
-        "1": {
-          "body": "Oficjalne orzecznictwo i rejestry firm, dostępne wprost w sprawie."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Przygotuj wrażliwe materiały dla AI bez ujawniania danych identyfikujących."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:public-data": {
+          "body": "Oficjalne orzecznictwo i rejestry firm, dostępne wprost w sprawie."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Sprawy, dokumenty i edycja plików Word w jednym miejscu."
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
         },
-        "1": {
-          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
-        },
-        "2": {
+        "product:agent": {
           "body": "Rozmawiaj o sprawach, plikach i źródłach, z cytowaniami."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:tabular-review": {
+          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
+        },
+        "product:workspace": {
+          "body": "Sprawy, dokumenty i edycja plików Word w jednym miejscu."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Jak działają szablony w aplikacji stella?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Twórz dokumenty z szablonu, zamiast zaczynać od zera",
             "1": "Używaj tych samych klauzul w wielu szablonach",
@@ -772,7 +772,7 @@
           },
           "heading": "Buduj z szablonów i klauzul"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Wstępnie wypełnij pola z dokumentu, który już jest w sprawie",
             "1": "Sprawdź i popraw każdą wartość, zanim powstanie projekt",
@@ -780,7 +780,7 @@
           },
           "heading": "Wypełnij go danymi ze sprawy"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Twórz i dostosowuj szablony w edytorze",
             "1": "Utwórz projekt prosto w sprawie",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        },
+        "product:agent": {
           "body": "Rozmawiaj o sprawach, plikach i podłączonych narzędziach, z zatwierdzeniami i podglądem źródeł."
         },
-        "1": {
-          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Sięgaj po te same sprawy, dokumenty i orzecznictwo z CLI i z narzędzi zgodnych z MCP."
         },
-        "3": {
-          "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
+        "product:tabular-review": {
+          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Czym jest obszar roboczy aplikacji stella?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumenty, kontakty, przegląd i czat żyją w sprawie",
             "1": "Edytuj dokumenty Word .docx bez wychodzenia z obszaru roboczego",
@@ -870,7 +870,7 @@
           },
           "heading": "Cała sprawa w jednym miejscu"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Otwieraj i edytuj dokumenty Word .docx wprost w obszarze roboczym",
             "1": "Poprawki zostają plikiem Word: bez konwersji, bez kopii",

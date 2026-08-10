@@ -30,21 +30,13 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
   );
 };
 
-type ProviderName =
-  | "Gmail"
-  | "Outlook"
-  | "iCloud"
-  | "Yahoo"
-  | "Proton Mail"
-  | "Fastmail";
-
-type Provider = {
-  readonly name: ProviderName;
+type ProviderShape = {
+  readonly name: string;
   readonly url: string;
   readonly domains: readonly string[];
 };
 
-const PROVIDERS: readonly Provider[] = [
+const PROVIDERS = [
   {
     name: "Gmail",
     url: "https://mail.google.com/mail/u/0/#inbox",
@@ -75,7 +67,10 @@ const PROVIDERS: readonly Provider[] = [
     url: "https://app.fastmail.com/mail/Inbox",
     domains: ["fastmail.com", "fastmail.fm"],
   },
-];
+] as const satisfies readonly ProviderShape[];
+
+type ProviderName = (typeof PROVIDERS)[number]["name"];
+type Provider = Omit<ProviderShape, "name"> & { readonly name: ProviderName };
 
 // Most corporate domains run on Workspace or M365, so a generic email
 // from a custom domain gets the two best-guess buttons.
@@ -105,7 +100,9 @@ const ProviderIcon = ({ name }: { name: ProviderName }) => {
 
 const getProvidersForEmail = (email: string): readonly Provider[] => {
   const domain = email.split("@").at(1)?.toLowerCase() ?? "";
-  const exact = PROVIDERS.find((p) => p.domains.includes(domain));
+  const exact = PROVIDERS.find((provider) =>
+    provider.domains.some((providerDomain) => providerDomain === domain),
+  );
   if (exact) {
     return [exact];
   }

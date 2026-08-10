@@ -1,5 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
+import type { ContactType } from "@stll/api-contract";
+
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
@@ -55,7 +57,7 @@ type ContactMetadata = {
 
 type CreateContactVars = {
   id: SafeId<"contact">;
-  type: "person" | "organization";
+  type: ContactType;
   displayName: string;
   firstName?: string;
   lastName?: string;
@@ -97,7 +99,7 @@ export const useCreateContact = () => {
 type UpdateContactVars = {
   contactId: SafeId<"contact">;
   displayName?: string;
-  type?: "person" | "organization";
+  type?: ContactType;
   firstName?: string | null;
   lastName?: string | null;
   organizationName?: string | null;

@@ -1,20 +1,11 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
-import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
+import { isBlockDirectiveKind } from "@stll/template-conditions";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import { DirectiveLabel } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
-
-// Mirrors `isBlockDirectiveKind` in `clause-directive-extension.ts`. Kept
-// private and duplicated here (rather than imported) so this component
-// module has no dependency back on the extension module, which itself
-// imports this component for `addNodeView`.
-const isBlockDirectiveKind = (value: unknown): value is BlockDirectiveKind =>
-  typeof value === "string" &&
-  BLOCK_DIRECTIVE_KINDS.some((kind) => kind === value);
 
 export const ClauseDirectiveNodeView = ({ node }: NodeViewProps) => {
   const kind = isBlockDirectiveKind(node.attrs["kind"])

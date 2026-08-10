@@ -18,7 +18,7 @@
     "nav.products.templates.eyebrow",
     "nav.products.workspace.eyebrow",
     "nav.products.workspace.title",
-    "products.cli-mcp.adjacent.0.body",
+    "products.cli-mcp.adjacent.product:workspace.body",
     "products.workspace.capabilities.0.title",
     "story.agentEyebrow",
     "story.workspaceEyebrow"

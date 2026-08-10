@@ -27,32 +27,9 @@ export const SHOW_SHORTCUTS_KEY = "?";
 export const NAV_KEY: IndividualKey =
   detectPlatform() === "mac" ? "Control" : "Alt";
 
-export type ShortcutContext = "global" | "workspace" | "pdf";
+export const SHORTCUT_CONTEXTS = ["global", "workspace", "pdf"] as const;
 
-export const SHORTCUT_CONTEXTS: readonly ShortcutContext[] = [
-  "global",
-  "workspace",
-  "pdf",
-];
-
-/**
- * Stable identity for every registry entry. Closed union so the echo matcher
- * and the per-user override map can reference entries type-safely: adding an
- * entry to {@link SHORTCUT_GROUPS} without listing its id here fails typecheck,
- * and an override or echo can only ever name a real shortcut.
- */
-export type ShortcutId =
-  | "search"
-  | "toggleSidebar"
-  | "toggleChat"
-  | "newMatter"
-  | "newChat"
-  | "selectAll"
-  | "acceptSuggestion"
-  | "rejectSuggestion"
-  | "previousSuggestion"
-  | "nextSuggestion"
-  | "showShortcuts";
+export type ShortcutContext = (typeof SHORTCUT_CONTEXTS)[number];
 
 /**
  * How a shortcut is bound. `hotkey` maps to a @tanstack `Hotkey` (bound with
@@ -92,16 +69,16 @@ export type ShortcutLabelKey = Extract<
   | "docxReview.reject"
 >;
 
-export type ShortcutDescriptor = {
-  readonly id: ShortcutId;
+type ShortcutDescriptorShape = {
+  readonly id: string;
   readonly binding: ShortcutBinding;
   readonly labelKey: ShortcutLabelKey;
   readonly contexts: readonly ShortcutContext[];
 };
 
-export type ShortcutGroup = {
+type ShortcutGroupShape = {
   readonly categoryKey: ShortcutCategoryKey;
-  readonly shortcuts: readonly ShortcutDescriptor[];
+  readonly shortcuts: readonly ShortcutDescriptorShape[];
 };
 
 /**
@@ -199,7 +176,20 @@ export const SHORTCUT_GROUPS = [
       },
     ],
   },
-] as const satisfies readonly ShortcutGroup[];
+] as const satisfies readonly ShortcutGroupShape[];
+
+/** Stable identity derived from the only shortcut registry. */
+export type ShortcutId =
+  (typeof SHORTCUT_GROUPS)[number]["shortcuts"][number]["id"];
+
+export type ShortcutDescriptor = Omit<ShortcutDescriptorShape, "id"> & {
+  readonly id: ShortcutId;
+};
+
+export type ShortcutGroup = {
+  readonly categoryKey: ShortcutCategoryKey;
+  readonly shortcuts: readonly ShortcutDescriptor[];
+};
 
 /**
  * Format a shortcut's full, platform-correct key combo for display in the

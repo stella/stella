@@ -56,13 +56,6 @@ export const SHAREPOINT_DELEGATED_SCOPES = [
   readOnlyScope("https://graph.microsoft.com/Sites.Read.All"),
 ] as const;
 
-export type SharepointDelegatedScope =
-  (typeof SHAREPOINT_DELEGATED_SCOPES)[number];
-
-/** Runtime read-only predicate (the compile-time guard's mirror, for tests). */
-export const isReadOnlyGraphScope = (scope: string): boolean =>
-  !scope.toLowerCase().includes("write");
-
 type SharepointOAuthConfig = {
   clientId: string;
   clientSecret: string;

@@ -14,10 +14,7 @@ export const WORKFLOW_QUEUE_NAMES = {
   [WORKFLOW_QUEUE_CLASS.flex]: "workflow-flex",
 } as const satisfies Record<WorkflowQueueClass, string>;
 
-export const WORKFLOW_QUEUE_CLASSES = [
-  WORKFLOW_QUEUE_CLASS.standard,
-  WORKFLOW_QUEUE_CLASS.flex,
-] as const satisfies readonly WorkflowQueueClass[];
+export const WORKFLOW_QUEUE_CLASSES = Object.values(WORKFLOW_QUEUE_CLASS);
 
 // Rollout phase one only expands topology awareness. Keeping every producer on
 // the legacy queue means an older replica can still drain all admitted jobs;
@@ -37,16 +34,20 @@ export type WorkflowWorkerSpec = {
   concurrency: number;
 };
 
-export const WORKFLOW_WORKER_SPECS = [
-  {
+const WORKFLOW_WORKER_SPEC_BY_QUEUE_CLASS = {
+  [WORKFLOW_QUEUE_CLASS.standard]: {
     queueClass: WORKFLOW_QUEUE_CLASS.standard,
     concurrency: LIMITS.workflowStandardWorkerConcurrency,
   },
-  {
+  [WORKFLOW_QUEUE_CLASS.flex]: {
     queueClass: WORKFLOW_QUEUE_CLASS.flex,
     concurrency: LIMITS.workflowFlexWorkerConcurrency,
   },
-] as const satisfies readonly WorkflowWorkerSpec[];
+} as const satisfies Record<WorkflowQueueClass, WorkflowWorkerSpec>;
+
+export const WORKFLOW_WORKER_SPECS = Object.values(
+  WORKFLOW_WORKER_SPEC_BY_QUEUE_CLASS,
+);
 
 type WorkflowLiveJob = {
   data: {

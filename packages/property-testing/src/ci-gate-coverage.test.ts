@@ -19,9 +19,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  * file has no workflow that both sets its gate and runs it.
  *
  * Coverage is tracked per (gate, file), not per gate name alone: unrelated
- * suites elsewhere in the repo can reuse the same gate name (SMOKE_TEST also
- * gates the business-registries live-API suites) while never being invoked
- * by any job. Matching only the gate name would treat those as covered
+ * suites elsewhere in the repo can reuse the same gate name while never being
+ * invoked by any job. Matching only the gate name would treat those as covered
  * because a workflow happens to mention the same string for a different
  * file.
  *
@@ -48,26 +47,11 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  */
 const LOCAL_ONLY_GATES = new Set<string>();
 
-// Live-API SMOKE_TEST suites not wired into a workflow by this change. Each
-// hits a real upstream endpoint (court register, company registry); wiring
-// them into nightly CI is a separate decision from the CJEU drift canary
-// this change adds. Remove an entry here once its workflow job exists.
+// Live-API smoke suites not wired into a workflow. Remove an entry once its
+// workflow job exists; the test below rejects entries that no longer declare a
+// gate, so this policy list cannot silently retain stale paths.
 const UNWIRED_TEST_FILES = new Set<string>([
   "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.test.ts",
-  "packages/business-registries/src/ares/client.test.ts",
-  "packages/business-registries/src/brreg/client.test.ts",
-  "packages/business-registries/src/brreg/roles.test.ts",
-  "packages/business-registries/src/companies-house/client.test.ts",
-  "packages/business-registries/src/denue/client.test.ts",
-  "packages/business-registries/src/edgar/client.test.ts",
-  "packages/business-registries/src/gcis/client.test.ts",
-  "packages/business-registries/src/krs/client.test.ts",
-  "packages/business-registries/src/orsr/client.test.ts",
-  "packages/business-registries/src/prh/client.test.ts",
-  "packages/business-registries/src/recherche-entreprises/client.test.ts",
-  "packages/business-registries/src/sudreg/client.test.ts",
-  "packages/business-registries/src/vies/client.test.ts",
-  "packages/business-registries/src/zefix/client.test.ts",
 ]);
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";
@@ -738,6 +722,14 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
     expect(discoveredGates).toEqual(
       expect.arrayContaining(["SMOKE_TEST", "STELLA_RUN_POSTGRES_TESTS"]),
     );
+
+    const discoveredFiles = new Set(
+      declarations.map((declaration) => declaration.file),
+    );
+    const staleExemptions = [...UNWIRED_TEST_FILES]
+      .filter((file) => !discoveredFiles.has(file))
+      .sort();
+    expect(staleExemptions).toEqual([]);
 
     const uncovered = declarations
       .filter(

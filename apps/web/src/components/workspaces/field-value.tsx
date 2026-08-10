@@ -4,8 +4,8 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
 
-import { getClipFieldValueLabel } from "@/components/workspaces/field-value.logic";
 import {
   emptyColor,
   resolveOptionColor,

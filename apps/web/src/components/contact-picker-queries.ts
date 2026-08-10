@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import type { ContactType } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -10,7 +12,7 @@ type ContactPickerOrganizationKey = {
 
 type ContactPickerSearchKey = ContactPickerOrganizationKey & {
   q: string;
-  type?: "person" | "organization" | undefined;
+  type?: ContactType | undefined;
 };
 
 export const contactPickerKeys = {

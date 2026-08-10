@@ -1,7 +1,5 @@
 import type { TranslationKey } from "@/i18n/types";
 
-export type ReservedChatCommandId = "new";
-
 // Narrowed to the specific keys in use (still validated against the catalog via
 // `Extract`): a broad `TranslationKey` would force `t()`'s interpolation
 // overload, since some keys require values, and reject a single-argument call.
@@ -10,16 +8,17 @@ type ReservedChatCommandDescriptionKey = Extract<
   "chat.newChat"
 >;
 
-export type ReservedChatCommand = {
-  id: ReservedChatCommandId;
+const RESERVED_CHAT_COMMANDS = [
+  { id: "new", name: "new", command: "/new", descriptionKey: "chat.newChat" },
+] as const satisfies readonly {
+  id: string;
   name: string;
   command: string;
   descriptionKey: ReservedChatCommandDescriptionKey;
-};
+}[];
 
-const RESERVED_CHAT_COMMANDS: readonly ReservedChatCommand[] = [
-  { id: "new", name: "new", command: "/new", descriptionKey: "chat.newChat" },
-];
+export type ReservedChatCommand = (typeof RESERVED_CHAT_COMMANDS)[number];
+export type ReservedChatCommandId = ReservedChatCommand["id"];
 
 export const getReservedChatCommands = (): ReservedChatCommand[] => [
   ...RESERVED_CHAT_COMMANDS,

@@ -58,13 +58,15 @@ import {
   refPattern,
   resolvePath,
 } from "@stll/template-conditions";
-import type { NamedCondition } from "@stll/template-conditions";
+import type {
+  BlockDirectiveKind,
+  NamedCondition,
+} from "@stll/template-conditions";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
 import type {
   Block,
   BlockDirective,
-  BlockDirectiveKind,
   EachBlock,
   IfBlock,
   IfBranch,

@@ -4,7 +4,6 @@ import {
   advanceAfterStep,
   canCancelFlowRun,
   canReviewFlowRun,
-  isTerminalFlowRunStatus,
   resolveReviewGateTransition,
 } from "@/api/lib/flows/flow-run-transitions";
 
@@ -62,15 +61,6 @@ describe("resolveReviewGateTransition", () => {
 });
 
 describe("run-status guards", () => {
-  test("terminal statuses are recognized", () => {
-    for (const status of ["completed", "failed", "cancelled"] as const) {
-      expect(isTerminalFlowRunStatus(status)).toBe(true);
-    }
-    for (const status of ["pending", "running", "awaiting_review"] as const) {
-      expect(isTerminalFlowRunStatus(status)).toBe(false);
-    }
-  });
-
   test("cancel is allowed only while non-terminal", () => {
     expect(canCancelFlowRun("pending")).toBe(true);
     expect(canCancelFlowRun("running")).toBe(true);

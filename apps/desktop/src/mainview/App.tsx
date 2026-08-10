@@ -53,6 +53,13 @@ const NOTIFICATION_PREFERENCE_KEYS = [
   "revisionCreated",
 ] as const satisfies readonly NotificationPreferenceKey[];
 
+type MissingNotificationPreferenceKey = Exclude<
+  NotificationPreferenceKey,
+  (typeof NOTIFICATION_PREFERENCE_KEYS)[number]
+>;
+
+true satisfies MissingNotificationPreferenceKey extends never ? true : never;
+
 const isMacDesktop = navigator.userAgent.includes("Mac");
 
 const isPreferencesTab = (value: string | null): value is PreferencesTab =>

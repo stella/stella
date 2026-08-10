@@ -54,11 +54,12 @@ import {
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
-import type {
-  MatterActivityCategory,
-  MatterActivityItem,
+import {
+  MATTER_ACTIVITY_CATEGORIES,
+  overviewActivityOptions,
+  type MatterActivityCategory,
+  type MatterActivityItem,
 } from "@/lib/workspaces/queries";
-import { overviewActivityOptions } from "@/lib/workspaces/queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
 import {
@@ -91,16 +92,6 @@ const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
-
-const CATEGORIES: MatterActivityCategory[] = [
-  "all",
-  "documents",
-  "tasks",
-  "matter",
-  "team",
-  "court",
-  "automation",
-];
 
 const categoryLabelKeys = {
   all: "workspaces.overview.activity.filters.all",
@@ -160,7 +151,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
             </MenuTrigger>
             <MenuPopup align="end">
               <MenuRadioGroup value={category}>
-                {CATEGORIES.map((value) => (
+                {MATTER_ACTIVITY_CATEGORIES.map((value) => (
                   <MenuRadioItem
                     key={value}
                     onClick={() => {

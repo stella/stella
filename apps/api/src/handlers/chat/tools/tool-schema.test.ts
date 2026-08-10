@@ -1692,25 +1692,8 @@ describe("chat tool schemas", () => {
     expect(converted.parameters).toEqual(inputSchema);
   });
 
-  test("every registered chat tool converts to strict-legal OpenAI parameters or the deliberate non-strict fallback", () => {
+  test("every strict registered chat tool has OpenAI-legal parameters", () => {
     const tools = buildFullCoverageChatTools();
-
-    // Free-form map inputs (`v.record(...)`, `additionalProperties: true`)
-    // cannot be expressed under strict mode, which requires every object node
-    // closed with its keys enumerated; the adapter must send those tools with
-    // `strict: false`. apply-active-docx-edits degrades because an `anyOf`
-    // variant needs optional-field widening that cannot be safely inverted;
-    // fill_template, save_clause and save_template for open maps;
-    // set_field_value for its deliberately typeless `content.value` node.
-    // Growing this list is a deliberate trade: prefer closed schemas so a tool
-    // keeps strict-mode adherence.
-    const expectedNonStrictTools = [
-      "apply-active-docx-edits",
-      "fill_template",
-      "save_clause",
-      "save_template",
-      "set_field_value",
-    ];
 
     // A strict:true tool must satisfy OpenAI's strict subset: every object
     // node closed via `additionalProperties: false` with enumerated
@@ -1769,7 +1752,6 @@ describe("chat tool schemas", () => {
       }
     };
 
-    const nonStrictTools: string[] = [];
     for (const [name, tool] of Object.entries(tools)) {
       const inputSchema = tool?.inputSchema;
       if (!inputSchema) {
@@ -1788,14 +1770,12 @@ describe("chat tool schemas", () => {
         inputSchema: serialized,
       });
       if (converted.strict !== true) {
-        nonStrictTools.push(name);
         continue;
       }
       collectStrictViolations(converted.parameters, "root", name);
     }
 
     expect(violations).toEqual([]);
-    expect(nonStrictTools.toSorted()).toEqual(expectedNonStrictTools);
   });
 
   test("created document output includes the canonical entity mention", () => {

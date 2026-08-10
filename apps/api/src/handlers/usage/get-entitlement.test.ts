@@ -35,8 +35,6 @@ import getEntitlement from "./get-entitlement";
 
 setDefaultTimeout(120_000);
 
-// This record is deliberately exhaustive: adding a persisted lifecycle status
-// requires an explicit boundary decision before this test can typecheck.
 const STATUS_CONSUMABILITY = {
   active: true,
   trialing: true,
@@ -175,9 +173,8 @@ describe("usage entitlement gating boundary", () => {
     expect(result.error.reason).toBe("no_entitlement");
   });
 
-  // Every entitlement status the schema distinguishes gets the boundary case:
-  // consumable statuses reach the balance check, the rest block regardless of
-  // balance.
+  // Every persisted lifecycle status has a boundary decision: consumable
+  // statuses reach the balance check, while the others block despite balance.
   for (const status of USAGE_ENTITLEMENT_STATUSES) {
     test(`status "${status}": ${STATUS_CONSUMABILITY[status] ? "consumes" : "blocks"} against a full balance`, async () => {
       await setEntitlementStatus(status);
@@ -185,13 +182,13 @@ describe("usage entitlement gating boundary", () => {
         const result = await assertForOrgA(1);
         if (STATUS_CONSUMABILITY[status]) {
           expect(result).toEqual({ ok: true, available: ALLOCATED_UNITS });
-        } else {
-          expect(result.ok).toBe(false);
-          if (result.ok) {
-            throw new Error("expected rejection");
-          }
-          expect(result.error.reason).toBe("entitlement_inactive");
+          return;
         }
+        expect(result.ok).toBe(false);
+        if (result.ok) {
+          throw new Error("expected rejection");
+        }
+        expect(result.error.reason).toBe("entitlement_inactive");
       } finally {
         await setEntitlementStatus("active");
       }

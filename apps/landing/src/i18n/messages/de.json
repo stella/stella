@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         },
-        "1": {
-          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Offizielle Rechtsprechung, Rechtsquellen und Handelsregister lesen und durchsuchen."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:tabular-review": {
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
+        },
+        "product:workspace": {
+          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        },
+        "product:agent": {
           "body": "Chatten Sie über Akten, Dateien und angebundene Tools hinweg, mit Freigaben und Quellvorschauen."
         },
-        "1": {
-          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:workspace": {
+          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Akten, Dokumente, Prüfung und Chat in einem Arbeitsbereich."
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         },
-        "1": {
+        "product:agent": {
           "body": "Arbeiten Sie über Akten und angebundene Tools hinweg, mit Freigaben und Fundstellen."
         },
-        "2": {
+        "product:templates": {
           "body": "Füllen Sie wiederverwendbare juristische Dokumente über die App, die CLI oder angebundene Tools aus."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:workspace": {
+          "body": "Akten, Dokumente, Prüfung und Chat in einem Arbeitsbereich."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Aktivieren Sie den Entwicklermodus unter Settings → Connectors → Advanced und fügen Sie dann einen Connector mit der Endpunkt-Adresse hinzu."
           },
-          "1": {
+          "claude": {
             "body": "Fügen Sie unter Settings → Connectors einen eigenen Connector mit der Endpunkt-Adresse hinzu."
           },
-          "2": {
-            "body": "Fügen Sie den Server hinzu und melden Sie sich an:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Fügen Sie den Server mit einem Befehl hinzu:"
+          },
+          "codex": {
+            "body": "Fügen Sie den Server hinzu und melden Sie sich an:"
           }
         },
         "heading": "Einen KI-Agenten verbinden",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Sehen Sie, wo Akten, Dokumente und Werkzeuge zusammenkommen."
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         },
-        "1": {
-          "body": "Erstellen Sie wiederverwendbare Word-Dokumente mit Feldern und bedingten Klauseln."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Testen Sie denselben Editor eigenständig: eine .docx im Browser öffnen und bearbeiten, ganz ohne Konto."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:templates": {
+          "body": "Erstellen Sie wiederverwendbare Word-Dokumente mit Feldern und bedingten Klauseln."
+        },
+        "product:workspace": {
+          "body": "Sehen Sie, wo Akten, Dokumente und Werkzeuge zusammenkommen."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Bereiten Sie sensibles Material für KI auf, ohne identifizierende Angaben preiszugeben."
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         },
-        "1": {
+        "product:agent": {
           "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Freigaben und Fundstellen."
         },
-        "2": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
+        "product:anonymization": {
+          "body": "Bereiten Sie sensibles Material für KI auf, ohne identifizierende Angaben preiszugeben."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:tabular-review": {
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        },
+        "product:agent": {
           "body": "Chatten Sie über Akten, Dateien und angebundene Quellen hinweg, mit Freigaben und Quellvorschauen."
         },
-        "1": {
-          "body": "Offizielle Rechtsprechung und Handelsregister, direkt in der Akte."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Bereiten Sie sensibles Material für KI auf, ohne identifizierende Angaben preiszugeben."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:public-data": {
+          "body": "Offizielle Rechtsprechung und Handelsregister, direkt in der Akte."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Akten, Dokumente und Word-Bearbeitung an einem Ort."
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         },
-        "1": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
-        },
-        "2": {
+        "product:agent": {
           "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Fundstellen."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:tabular-review": {
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
+        },
+        "product:workspace": {
+          "body": "Akten, Dokumente und Word-Bearbeitung an einem Ort."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Wie funktionieren Vorlagen in stella?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Ein Dokument aus einer Vorlage erstellen, statt bei null zu beginnen",
             "1": "Klauseln über Vorlagen hinweg wiederverwenden",
@@ -772,7 +772,7 @@
           },
           "heading": "Aus Vorlagen und Klauseln bauen"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Felder aus einem Dokument vorbelegen, das schon in der Akte liegt",
             "1": "Jeden Wert prüfen und anpassen, bevor der Entwurf entsteht",
@@ -780,7 +780,7 @@
           },
           "heading": "Aus den Daten der Akte befüllen"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Vorlagen im Editor anlegen und anpassen",
             "1": "Den Entwurf direkt in der Akte erstellen",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        },
+        "product:agent": {
           "body": "Chatten Sie über Akten, Dateien und angebundene Tools hinweg, mit Freigaben und Quellvorschauen."
         },
-        "1": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Erreichen Sie dieselben Akten, Dokumente und dieselbe Rechtsprechung über die CLI und MCP-kompatible Werkzeuge."
         },
-        "3": {
-          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
+        "product:tabular-review": {
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Was ist der Arbeitsbereich von stella?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumente, Kontakte, Prüfung und Chat liegen in der Akte",
             "1": "Word-.docx-Dokumente bearbeiten, ohne den Arbeitsbereich zu verlassen",
@@ -870,7 +870,7 @@
           },
           "heading": "Die ganze Akte an einem Ort"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Word-.docx-Dokumente direkt im Arbeitsbereich öffnen und bearbeiten",
             "1": "Die Überarbeitung bleibt eine Word-Datei: keine Umwandlung, keine Kopien",

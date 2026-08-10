@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -62,11 +63,6 @@ import {
 } from "./skill-resource-path.logic";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
-
-// Mirrors apps/api/src/lib/agent-skills/resource-path.ts.
-// Keep the two in sync.
-const RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
 // Default name for a freshly created (still empty) folder. A path segment,
 // not user-facing copy: resource paths only allow lowercase ASCII, so a
@@ -591,7 +587,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   };
 
   const onCreateFile = (path: string, content: string) => {
-    if (!RESOURCE_PATH_PATTERN.test(path)) {
+    if (!SKILL_RESOURCE_PATH_PATTERN.test(path)) {
       stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
       return false;
     }
@@ -610,7 +606,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       setRenameValue("");
       return;
     }
-    if (!RESOURCE_PATH_PATTERN.test(trimmed)) {
+    if (!SKILL_RESOURCE_PATH_PATTERN.test(trimmed)) {
       stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
       return;
     }

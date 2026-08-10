@@ -17,6 +17,7 @@ import {
 } from "@/lib/workspaces/queries.logic";
 
 export {
+  MATTER_ACTIVITY_CATEGORIES,
   type MatterActivityCategory,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";

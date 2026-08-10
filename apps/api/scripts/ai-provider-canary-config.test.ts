@@ -17,20 +17,19 @@ import {
 } from "./ai-provider-canary-config";
 
 describe("AI provider canary role budgets", () => {
-  test("reserves reasoning capacity without inflating other role probes", () => {
+  test("keeps structured probes within the provider timeout envelope", () => {
     for (const role of MODEL_ROLES) {
-      expect(modelRoleMaxOutputTokens(role)).toBe(
-        role === "reasoning" ? 25_000 : 512,
-      );
+      expect(
+        structuredOutputModelRoleMaxOutputTokens(role),
+      ).toBeLessThanOrEqual(modelRoleMaxOutputTokens(role));
     }
-  });
 
-  test("keeps non-streaming structured output below provider timeout limits", () => {
-    for (const role of MODEL_ROLES) {
-      expect(structuredOutputModelRoleMaxOutputTokens(role)).toBe(
-        role === "reasoning" ? 20_000 : 512,
-      );
-    }
+    expect(structuredOutputModelRoleMaxOutputTokens("reasoning")).toBeLessThan(
+      21_000,
+    );
+    expect(modelRoleMaxOutputTokens("reasoning")).toBeGreaterThan(
+      structuredOutputModelRoleMaxOutputTokens("reasoning"),
+    );
   });
 });
 

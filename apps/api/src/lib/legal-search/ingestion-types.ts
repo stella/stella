@@ -255,3 +255,8 @@ export type SourceAdapter = {
    */
   getTotalCount?: (signal: AbortSignal) => Promise<number | null>;
 };
+
+/** Preserve an adapter's literal registry key while contextualizing its API. */
+export const defineSourceAdapter = <const TKey extends string>(
+  adapter: SourceAdapter & { readonly key: TKey },
+): SourceAdapter & { readonly key: TKey } => adapter;

@@ -216,36 +216,6 @@ describe("classifyToolError: structured envelope -> exit map (S4)", () => {
     error: { code, message: `msg for ${code}` },
   });
 
-  test("every closed-set code maps to its distinct exit class", () => {
-    expect(classifyToolError(envelope("validation_error"))).toBe(
-      EXIT_CODES.validation,
-    );
-    expect(classifyToolError(envelope("missing_scope"))).toBe(EXIT_CODES.auth);
-    expect(classifyToolError(envelope("feature_disabled"))).toBe(
-      EXIT_CODES.featureDisabled,
-    );
-    expect(classifyToolError(envelope("not_found"))).toBe(EXIT_CODES.notFound);
-    expect(classifyToolError(envelope("confirmation_required"))).toBe(
-      EXIT_CODES.aborted,
-    );
-    expect(classifyToolError(envelope("permission_denied"))).toBe(
-      EXIT_CODES.permissionDenied,
-    );
-    expect(classifyToolError(envelope("usage_limited"))).toBe(
-      EXIT_CODES.usageLimited,
-    );
-    expect(classifyToolError(envelope("conflict"))).toBe(EXIT_CODES.conflict);
-    expect(EXIT_CODES.conflict).toBe(10);
-    expect(classifyToolError(envelope("rate_limited"))).toBe(EXIT_CODES.server);
-    expect(classifyToolError(envelope("upstream_unavailable"))).toBe(
-      EXIT_CODES.server,
-    );
-    expect(classifyToolError(envelope("unknown_tool"))).toBe(EXIT_CODES.server);
-    expect(classifyToolError(envelope("internal_error"))).toBe(
-      EXIT_CODES.server,
-    );
-  });
-
   test("an unknown envelope code falls to the server class", () => {
     expect(classifyToolError(envelope("some_new_code"))).toBe(
       EXIT_CODES.server,

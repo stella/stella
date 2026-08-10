@@ -22,6 +22,7 @@
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "^3.5.15",
     "@stll/ai-catalog": "workspace:*",
+    "@stll/locales": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

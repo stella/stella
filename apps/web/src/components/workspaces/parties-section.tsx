@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { ContactType } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -70,10 +71,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
-  const handleCreateAndSetClient = (
-    name: string,
-    type: "person" | "organization",
-  ) => {
+  const handleCreateAndSetClient = (name: string, type: ContactType) => {
     const id = toSafeId<"contact">(crypto.randomUUID());
     createContact.mutate(
       { id, type, displayName: name },
@@ -224,7 +222,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 };
 
 type ChangeClientDialogProps = {
-  onCreate: (name: string, type: "person" | "organization") => void;
+  onCreate: (name: string, type: ContactType) => void;
   onSelect: (contact: { id: string; displayName: string }) => void;
 };
 
@@ -293,10 +291,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     setSelectedContact(null);
   };
 
-  const handleCreateContact = (
-    name: string,
-    type: "person" | "organization",
-  ) => {
+  const handleCreateContact = (name: string, type: ContactType) => {
     const id = toSafeId<"contact">(crypto.randomUUID());
     createContact.mutate(
       { id, type, displayName: name },

@@ -1,3 +1,5 @@
+import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+
 import type { AgentSkillResourceKind } from "@/api/db/schema";
 
 // Allowed shapes:
@@ -15,9 +17,9 @@ import type { AgentSkillResourceKind } from "@/api/db/schema";
 //
 // `update.ts` only enforces a length cap; this helper is used by
 // `create.ts` and `rename.ts` to reject paths that the file tree
-// would otherwise be unable to render correctly.
-export const RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
+// would otherwise be unable to render correctly. The browser-safe pattern is
+// shared with the editor through @stll/api-contract.
+export const RESOURCE_PATH_PATTERN = SKILL_RESOURCE_PATH_PATTERN;
 
 const REFERENCE_PREFIX = "references/";
 const PROMPT_PREFIX = "prompts/";

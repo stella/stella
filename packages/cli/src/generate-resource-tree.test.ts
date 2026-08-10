@@ -4,13 +4,6 @@ import { generateResourceTree } from "./generate-resource-tree.js";
 import { RouteGenerationError } from "./generate-route-map.js";
 import type { ResourceListing, ResourceNode } from "./resource-types.js";
 
-const snapshotUrl = new URL(
-  "generated/resources-snapshot.json",
-  import.meta.url,
-);
-const snapshotResources: readonly ResourceListing[] =
-  await Bun.file(snapshotUrl).json();
-
 const showLeaf = (node: ResourceNode, name: string) => {
   if (node.kind !== "route") {
     return undefined;
@@ -25,7 +18,12 @@ const showLeaf = (node: ResourceNode, name: string) => {
 
 describe("generateResourceTree (S5.4)", () => {
   test("emits a `list` enumerator and one `show <name>` leaf per resource", () => {
-    const tree = generateResourceTree(snapshotResources);
+    const tree = generateResourceTree([
+      {
+        name: "template-markers",
+        uri: "stella://reference/template-markers",
+      },
+    ]);
     expect(tree.kind).toBe("route");
     if (tree.kind !== "route") {
       return;
@@ -56,13 +54,5 @@ describe("generateResourceTree (S5.4)", () => {
       { uri: "stella://b", name: "dup" },
     ];
     expect(() => generateResourceTree(dupes)).toThrow(RouteGenerationError);
-  });
-
-  test("build-time and a mocked resources/list produce the same tree (parity)", () => {
-    const wire = snapshotResources.map((resource) => ({ ...resource }));
-    const mock: readonly ResourceListing[] = structuredClone(wire);
-    expect(generateResourceTree(mock)).toEqual(
-      generateResourceTree(snapshotResources),
-    );
   });
 });

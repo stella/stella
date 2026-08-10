@@ -9,6 +9,7 @@ import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ENTITY_KINDS } from "@stll/api-contract";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -87,7 +88,20 @@ const GROUP_EAGER_LOAD_COUNT = 3;
 // A grouped document table never lists folders or tasks as rows, matching the
 // flat window query; passed to the kanban-group endpoint so its rows (and the
 // group-counts) stay in sync.
-const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
+const GROUPED_TABLE_KIND_DISPOSITION = {
+  document: "included",
+  folder: "excluded",
+  task: "excluded",
+  message: "included",
+  link: "included",
+} as const satisfies Record<EntityKind, "excluded" | "included">;
+
+const isGroupedTableExcludedKind = (kind: EntityKind): boolean =>
+  GROUPED_TABLE_KIND_DISPOSITION[kind] === "excluded";
+
+const GROUPED_TABLE_EXCLUDED_KINDS = ENTITY_KINDS.filter(
+  isGroupedTableExcludedKind,
+);
 
 // Stable key for a group. The null (uncategorized) bucket and real string values
 // live in disjoint namespaces so an option literally named "uncategorized"

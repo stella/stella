@@ -6,9 +6,7 @@ import { type DirectiveKind, DIRECTIVE_KINDS } from "@stll/template-conditions";
  * {@link DIRECTIVE_KINDS} in `@stll/template-conditions`: the
  * {@link DIRECTIVE_DESCRIPTIONS} record below is keyed by {@link DirectiveKind},
  * so adding or removing a directive in `markers.ts` is a compile error here
- * until the prose is updated. The companion test additionally asserts every
- * kind's token appears in the rendered text, so the reference can never drift
- * from the canonical grammar.
+ * until the prose is updated.
  *
  * The wording is hand-written (the regex literals in `markers.ts` are not
  * user-facing), but the inventory it documents is derived, never duplicated.

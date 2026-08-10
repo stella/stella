@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { BLUEPRINT_IDS, BLUEPRINTS, getBlueprint } from "./blueprints";
+import { BLUEPRINTS } from "./blueprints";
 import { isAllowedResourcePath, parseSkillFile } from "./loader";
 
 // Frontmatter name rule the upload/import parser enforces (skill-package.ts).
@@ -15,12 +15,6 @@ const FILE_TREE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
 describe("skill blueprints", () => {
-  test("every advertised blueprint id resolves", () => {
-    for (const id of BLUEPRINT_IDS) {
-      expect(getBlueprint(id)?.id).toBe(id);
-    }
-  });
-
   for (const blueprint of BLUEPRINTS) {
     describe(blueprint.id, () => {
       const parsed = parseSkillFile(blueprint.source);

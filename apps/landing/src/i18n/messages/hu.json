@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         },
-        "1": {
-          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Olvassa és keresse a hivatalos ítélkezési gyakorlatot, a jogforrásokat és a cégnyilvántartásokat."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:tabular-review": {
+          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
+        },
+        "product:workspace": {
+          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        },
+        "product:agent": {
           "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott eszközökkel, jóváhagyással és forrás-előnézettel."
         },
-        "1": {
-          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:workspace": {
+          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Ügyek, dokumentumok, ellenőrzés és csevegés egyetlen munkaterületen."
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         },
-        "1": {
+        "product:agent": {
           "body": "Dolgozzon az ügyein és a csatlakoztatott eszközeivel, jóváhagyással és hivatkozásokkal."
         },
-        "2": {
+        "product:templates": {
           "body": "Töltsön ki újrafelhasználható jogi dokumentumokat az alkalmazásból, a CLI-ből vagy csatlakoztatott eszközökből."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:workspace": {
+          "body": "Ügyek, dokumentumok, ellenőrzés és csevegés egyetlen munkaterületen."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Kapcsolja be a fejlesztői módot a Settings → Connectors → Advanced alatt, majd adjon hozzá konnektort a végpont címével."
           },
-          "1": {
+          "claude": {
             "body": "A Settings → Connectors alatt adjon hozzá egyéni konnektort a végpont címével."
           },
-          "2": {
-            "body": "Adja hozzá a szervert, és jelentkezzen be:"
-          },
-          "3": {
+          "claude-code": {
             "body": "A szervert egyetlen paranccsal hozzáadhatja:"
+          },
+          "codex": {
+            "body": "Adja hozzá a szervert, és jelentkezzen be:"
           }
         },
         "heading": "AI-ügynök csatlakoztatása",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Nézze meg, hol van együtt az összes ügy, dokumentum és eszköz."
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         },
-        "1": {
-          "body": "Hozzon létre újrafelhasználható Word-dokumentumokat mezőkkel és feltételes kikötésekkel."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Próbálja ki ugyanezt a szerkesztőt önmagában: nyisson meg és szerkesszen egy .docx fájlt a böngészőben, fiók nélkül."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:templates": {
+          "body": "Hozzon létre újrafelhasználható Word-dokumentumokat mezőkkel és feltételes kikötésekkel."
+        },
+        "product:workspace": {
+          "body": "Nézze meg, hol van együtt az összes ügy, dokumentum és eszköz."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         },
-        "1": {
+        "product:agent": {
           "body": "Beszélgessen az ügyeivel, fájljaival és a forrásokkal, jóváhagyással és hivatkozásokkal."
         },
-        "2": {
-          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
+        "product:anonymization": {
+          "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:tabular-review": {
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        },
+        "product:agent": {
           "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott forrásokkal, jóváhagyással és forrás-előnézettel."
         },
-        "1": {
-          "body": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások, egyenesen az ügybe."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:public-data": {
+          "body": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások, egyenesen az ügybe."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Ügyek, dokumentumok és Word-szerkesztés egy helyen."
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         },
-        "1": {
-          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
-        },
-        "2": {
+        "product:agent": {
           "body": "Beszélgessen az ügyeivel, fájljaival és a forrásokkal, hivatkozásokkal alátámasztva."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:tabular-review": {
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
+        },
+        "product:workspace": {
+          "body": "Ügyek, dokumentumok és Word-szerkesztés egy helyen."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Hogyan működnek a sablonok a stella alkalmazásban?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Állítson össze dokumentumot sablonból ahelyett, hogy üresen kezdene",
             "1": "Használja újra a kikötéseket több sablonban",
@@ -772,7 +772,7 @@
           },
           "heading": "Építkezzen sablonokból és kikötésekből"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Mezők előtöltése az ügyben már tárolt dokumentumból",
             "1": "Minden értéket ellenőrizhet és módosíthat a piszkozat létrehozása előtt",
@@ -780,7 +780,7 @@
           },
           "heading": "Töltse ki az ügy adataiból"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Sablonok írása és igazítása a szerkesztőben",
             "1": "A piszkozat összeállítása közvetlenül az ügyben",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        },
+        "product:agent": {
           "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott eszközökkel, jóváhagyással és forrás-előnézettel."
         },
-        "1": {
-          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Érje el ugyanazokat az ügyeket, dokumentumokat és ítélkezési gyakorlatot a CLI-ből és MCP-kompatibilis eszközökből."
         },
-        "3": {
-          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
+        "product:tabular-review": {
+          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Mi a stella munkaterület?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "A dokumentumok, a kapcsolatok, az ellenőrzés és a csevegés az ügyön belül marad",
             "1": "Word .docx dokumentumok szerkesztése a munkaterület elhagyása nélkül",
@@ -870,7 +870,7 @@
           },
           "heading": "Minden, ami az ügyhöz kell, egy helyen"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Word .docx dokumentumok megnyitása és szerkesztése közvetlenül a munkaterületen",
             "1": "A javított változat Word-fájl marad: nincs átalakítás, nincsenek másolatok",

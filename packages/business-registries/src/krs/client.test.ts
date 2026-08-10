@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByKrsNumber } from "./client.js";
-import { KrsAPIError, KrsValidationError } from "./errors.js";
+import { KrsValidationError } from "./errors.js";
 import type { KrsLookupResponse } from "./types.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (name: string): Promise<KrsLookupResponse> => {
@@ -43,34 +41,6 @@ const installFetchStub = (
     globalThis.fetch = original;
   };
 };
-
-// ---------------------------------------------------------------------------
-// Live tests — opt-in. Mirror the prh / brreg pattern.
-//
-// KRS docs cite a soft ~5 rps cap; we make at most three sequential
-// calls in this block to stay well below it.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("lookupByKrsNumber live", () => {
-  test("returns CD Projekt SA", async () => {
-    const result = await lookupByKrsNumber("0000006865");
-    expect(result).not.toBeNull();
-    expect(result?.krsNumber).toBe("0000006865");
-    expect(result?.name.toUpperCase()).toContain("CD PROJEKT");
-    expect(result?.register).toBe("RejP");
-  });
-
-  test("falls back to the association register", async () => {
-    const result = await lookupByKrsNumber("0000198645");
-    expect(result).not.toBeNull();
-    expect(result?.register).toBe("RejS");
-    expect(result?.name.toUpperCase()).toContain("CARITAS");
-  });
-
-  test("returns null for a non-existent KRS number", async () => {
-    const result = await lookupByKrsNumber("0000000001");
-    expect(result).toBeNull();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Mocked fetch tests using captured upstream fixtures.
@@ -220,10 +190,4 @@ describe("lookupByKrsNumber validation", () => {
       KrsValidationError,
     );
   });
-});
-
-// Smoke: KrsAPIError export is reachable via barrel for consumers
-// that only import from the package root.
-test("exports KrsAPIError", () => {
-  expect(KrsAPIError).toBeDefined();
 });

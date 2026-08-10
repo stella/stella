@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -16,18 +18,6 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
-
-const WORKSPACE_CONTACT_ROLES = [
-  "opposing_party",
-  "opposing_counsel",
-  "co_counsel",
-  "witness",
-  "expert_witness",
-  "third_party",
-  "judge",
-  "mediator",
-  "other",
-] as const;
 
 const createWorkspaceContactBodySchema = t.Object({
   contactId: tSafeId("contact", {

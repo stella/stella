@@ -44,7 +44,7 @@ const getDependencyManifestPaths = (root: string): string[] => {
   return manifests;
 };
 
-export const findUndeclaredDocSourceDependencies = (
+const findUndeclaredDocSourceDependencies = (
   declaredDependencies: ReadonlySet<string>,
 ): string[] =>
   Object.entries(DOC_SOURCES)

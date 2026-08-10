@@ -113,6 +113,13 @@ const SEVERITIES = [
   "low",
 ] as const satisfies readonly PositionSeverity[];
 
+type MissingPositionSeverity = Exclude<
+  PositionSeverity,
+  (typeof SEVERITIES)[number]
+>;
+
+true satisfies MissingPositionSeverity extends never ? true : never;
+
 const SEVERITY_LABEL_KEYS = {
   blocker: "knowledge.playbooks.severity.blocker",
   high: "knowledge.playbooks.severity.high",

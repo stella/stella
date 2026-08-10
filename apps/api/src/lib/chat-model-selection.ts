@@ -125,19 +125,21 @@ const chatModelOptionsForProvider = (
     };
   });
 
-const USER_SELECTABLE_EFFORT_PROVIDERS = new Set<BYOKProvider>([
-  "google",
-  "anthropic",
-  "openai",
-  "openrouter",
-]);
+const CHAT_REASONING_EFFORT_EXPOSURE = {
+  google: "exposed",
+  anthropic: "exposed",
+  openai: "exposed",
+  openrouter: "exposed",
+  bedrock: "hidden",
+  mistral: "hidden",
+} as const satisfies Record<BYOKProvider, "exposed" | "hidden">;
 
 /** Effort values the active Stella adapter can actually forward. */
 export const getChatModelReasoningEfforts = ({
   provider,
   modelId,
 }: ChatModelSelection): readonly ReasoningEffort[] | null =>
-  USER_SELECTABLE_EFFORT_PROVIDERS.has(provider)
+  CHAT_REASONING_EFFORT_EXPOSURE[provider] === "exposed"
     ? getModelReasoningEfforts(modelId)
     : null;
 

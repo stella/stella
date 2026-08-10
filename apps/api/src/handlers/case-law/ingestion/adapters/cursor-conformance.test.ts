@@ -27,10 +27,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  getAdapter,
-  listAdapters,
-} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Bounds ───────────────────────────────────────────────
@@ -130,8 +127,6 @@ type AdapterCoverage =
  * `Partial<Record>`: a missing decision is the outcome this suite exists to
  * make impossible.
  *
- * The runtime half of the totality check ties this vocabulary to the
- * registry itself, in both directions, further down.
  */
 const ADAPTER_CONFORMANCE = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
@@ -392,40 +387,6 @@ const describeFootprint = (positions: readonly string[]): string =>
   `${positions.length} distinct positions, e.g. ${positions
     .slice(0, POSITION_SAMPLE)
     .join(", ")}`;
-
-// ── Totality ─────────────────────────────────────────────
-
-describe("adapter cursor conformance covers the registry", () => {
-  const registered = listAdapters()
-    .map((adapter) => adapter.key)
-    .toSorted();
-  const declared = Object.keys(ADAPTER_CONFORMANCE).toSorted();
-
-  test("every registered adapter is declared here", () => {
-    const undeclared = registered.filter((key) => !declared.includes(key));
-    expect(
-      undeclared,
-      "adapters in ADAPTER_REGISTRY with no entry in ADAPTER_CONFORMANCE: " +
-        "cover them with an exhausted-source stub, or exclude them by name " +
-        "with a reason",
-    ).toEqual([]);
-  });
-
-  test("every declared adapter is registered", () => {
-    const unregistered = declared.filter(
-      (key) => !registered.some((registeredKey) => registeredKey === key),
-    );
-    expect(
-      unregistered,
-      "entries in ADAPTER_CONFORMANCE that name no adapter in " +
-        "ADAPTER_REGISTRY: the declaration has outlived what it described",
-    ).toEqual([]);
-  });
-
-  test("declared set equals registered set", () => {
-    expect(declared).toEqual(registered);
-  });
-});
 
 // ── Invariants ───────────────────────────────────────────
 

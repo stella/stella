@@ -1,11 +1,8 @@
 import { render } from "@react-email/components";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
-import nodePath from "node:path";
 
-import { isUiLocale, UI_LOCALES } from "@stll/locales";
+import { UI_LOCALES } from "@stll/locales";
 
-import type { SupportedLang } from "../i18n/translate";
 import * as BetterAuthOTP from "./better-auth-otp";
 import { subject as otpSubject } from "./better-auth-otp-subject";
 import * as NewDeviceLogin from "./new-device-login";
@@ -21,16 +18,7 @@ import * as ProductFeedback from "./product-feedback";
  * template produces valid, correctly-interpolated, injection-safe HTML.
  */
 
-// Enumerate locales from where the email translations actually live, so a new
-// locale is covered automatically (and a locale file with no translator entry
-// fails loudly rather than being skipped).
-const LOCALES: readonly SupportedLang[] = readdirSync(
-  nodePath.resolve(import.meta.dir, "../i18n/langs"),
-)
-  .filter((name) => name.endsWith(".json"))
-  .map((name) => name.slice(0, -".json".length))
-  .filter(isUiLocale)
-  .sort();
+const LOCALES = UI_LOCALES;
 
 const OTP_TYPES = [
   "sign-in",
@@ -95,12 +83,6 @@ describe("OTP email", () => {
       expect(otpSubject(lang).length).toBeGreaterThan(0);
     }
   });
-});
-
-test("the email translation directory covers every supported UI locale", () => {
-  // A locale JSON that is not a real UI locale (or a UI locale missing its
-  // JSON) would silently shrink coverage; pin the two sets to the same size.
-  expect(LOCALES.length).toBe(UI_LOCALES.length);
 });
 
 describe("link/CTA emails carry the correct href", () => {

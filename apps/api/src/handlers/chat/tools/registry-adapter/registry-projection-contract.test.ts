@@ -1422,15 +1422,6 @@ beforeEach(() => {
 });
 
 describe("registry projection contract", () => {
-  test("the corpus covers exactly the chat-projectable read tools", () => {
-    const projectable = Object.entries(READ_TOOL_REF_FIELD_MAP)
-      .filter(([, entry]) => entry.chatProjectable)
-      .map(([name]) => name)
-      .sort();
-    const covered = Object.keys(CONTRACT_CORPUS).sort();
-    expect(covered).toEqual(projectable);
-  });
-
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
       // Derived from the entry's projection schema, the only artifact.

@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CYCLE_CADENCE,
-  CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
   CYCLE_PRODUCTIVITY,
   type CadenceStep,
@@ -206,12 +205,6 @@ describe("classifyCycleProductivity", () => {
 });
 
 describe("stepCadence", () => {
-  test("the delay map covers exactly the declared cadences", () => {
-    expect(Object.keys(CYCLE_CADENCE_DELAY_MS).toSorted()).toEqual(
-      Object.values(CYCLE_CADENCE).toSorted(),
-    );
-  });
-
   test("a sustained re-scan backs off and raises the signal", () => {
     const steps = runCycles(repeat(RESCAN_CYCLE, UNPRODUCTIVE_THRESHOLD));
     const tripped = steps.at(-1);
@@ -231,9 +224,6 @@ describe("stepCadence", () => {
       decisionsProcessed: RESCAN_CYCLE.skipped,
       decisionsWritten: 0,
     });
-    expect(CYCLE_CADENCE_DELAY_MS[CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]).toBe(
-      60 * 60 * 1000,
-    );
   });
 
   test("the signal keeps firing while the condition holds", () => {

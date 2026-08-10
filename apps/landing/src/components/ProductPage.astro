@@ -7,7 +7,7 @@ import McpProofSection from "./McpProofSection.astro";
 import LandingFooter from "./LandingFooter.astro";
 import SetupSnippet from "./SetupSnippet.astro";
 import { resolveProductLink } from "../data/products/links";
-import type { Product } from "../data/products/types";
+import type { AnyProduct } from "../data/products/types";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
 import { getCliMcpSetupCopy, getProductCopy } from "../i18n/product-copy";
 import { getTranslations, localizePath } from "../i18n/utils";
@@ -16,7 +16,7 @@ import { getTranslations, localizePath } from "../i18n/utils";
 // /<lang>/product/<slug> both mount this. All prose comes from the catalog
 // (English included, so the source copy cannot drift unseen); the registry
 // supplies media, section pairing, and link destinations.
-type Props = { product: Product };
+type Props = { product: AnyProduct };
 const { product } = Astro.props;
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
@@ -28,20 +28,24 @@ const eyebrow = t(`nav.products.${product.slug}.eyebrow`);
 const title = t(`nav.products.${product.slug}.title`);
 const summary = t(`nav.products.${product.slug}.blurb`);
 
-// Prose comes from the catalog, the screen beside it from the registry; they
-// are paired by position. Equal lengths are guaranteed upstream (the drift test
-// for en, `i18n:check` for every other locale), so a gap here is a broken
-// invariant, not a case to render around.
-const sections = copy.sections.map((section, index) => ({
-  bullets: section.bullets,
-  frameVariant: product.sections.at(index)?.frameVariant,
-  heading: section.heading,
-  media: product.sections.at(index)?.media,
-}));
+// Prose comes from the catalog; stable section IDs attach optional visual
+// treatments without coupling media to translated section order.
+const sections = copy.sections.map((section) => {
+  const presentation = Object.entries(
+    product.sectionPresentations ?? {},
+  ).find(([sectionId]) => sectionId === section.id)?.[1];
+
+  return {
+    bullets: section.bullets,
+    frameVariant: presentation?.frameVariant,
+    heading: section.heading,
+    media: presentation?.media,
+  };
+});
 
 // Agent-connection instructions: prose from the catalog, endpoint and code
-// snippets from the registry (code is not translated), paired by position
-// like the sections above.
+// snippets from the registry (code is not translated), paired with prose by
+// stable client ID.
 const copyLabel = t("common.copy");
 const copiedLabel = t("common.copied");
 const setupData = product.setup;
@@ -49,15 +53,20 @@ const setup = setupData
   ? (() => {
       const setupCopy = getCliMcpSetupCopy(locale);
       return {
-        clients: setupData.clients.map((client, index) => ({
-          body:
-            setupCopy.clientBodies.at(index) ??
-            panic(
-              `products.${product.slug}.setup.clients.${index}.body is missing`,
-            ),
-          name: client.name,
-          snippet: client.snippet,
-        })),
+        clients: Object.entries(setupData.clients).map(([id, client]) => {
+          const body = Object.entries(setupCopy.clients).find(
+            ([copyId]) => copyId === id,
+          )?.[1].body;
+          return {
+            body:
+              body ??
+              panic(
+                `products.${product.slug}.setup.clients.${id}.body is missing`,
+              ),
+            name: client.name,
+            snippet: client.snippet,
+          };
+        }),
         endpoint: setupData.endpoint,
         heading: setupCopy.heading,
         intro: setupCopy.intro,
@@ -67,12 +76,13 @@ const setup = setupData
     })()
   : null;
 
-const adjacent = product.adjacent.map((link, index) => {
+const adjacent = Object.entries(product.adjacent).map(([id, link]) => {
   const destination = resolveProductLink(link, locale);
+  const body = Object.entries(copy.adjacent).find(
+    ([copyId]) => copyId === id,
+  )?.[1].body;
   return {
-    body:
-      copy.adjacentBodies.at(index) ??
-      panic(`products.${product.slug}.adjacent.${index}.body is missing`),
+    body: body ?? panic(`products.${product.slug}.adjacent.${id}.body is missing`),
     href: destination.href,
     hreflang: destination.hreflang,
     titleKey: destination.titleKey,
@@ -477,7 +487,7 @@ const faqJsonLd = {
               style="--reveal-delay: 120ms; background: var(--primary); color: var(--primary-foreground)"
               class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90"
             >
-              {t(product.cta.label.key)}
+              {t(product.cta.label)}
             </a>
           </div>
         </div>

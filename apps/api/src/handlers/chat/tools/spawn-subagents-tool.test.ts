@@ -66,11 +66,8 @@ void mock.module("@/api/lib/usage/usage-ledger", () => ({
   },
 }));
 
-const {
-  createSpawnSubagentsTool,
-  MAX_SUBAGENTS_PER_CALL,
-  resolveValidatedSubagentModelId,
-} = await import("@/api/handlers/chat/tools/spawn-subagents-tool");
+const { createSpawnSubagentsTool, resolveValidatedSubagentModelId } =
+  await import("@/api/handlers/chat/tools/spawn-subagents-tool");
 
 describe("resolveValidatedSubagentModelId", () => {
   test("returns undefined when no override is supplied", () => {
@@ -304,10 +301,6 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       env.AI_PROVIDER = previousProvider;
       env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
-  });
-
-  test("caps the batch at MAX_SUBAGENTS_PER_CALL, matching the input schema's max", () => {
-    expect(MAX_SUBAGENTS_PER_CALL).toBe(8);
   });
 });
 

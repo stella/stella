@@ -3,7 +3,11 @@
 import * as v from "valibot";
 
 import {
+  type BlockDirectiveKind,
   type ConditionNode,
+  DATE_FORMAT_STYLES,
+  type DateFormatStyle,
+  type FieldDateFormat,
   conditionNodeSchema,
   isFieldPath,
 } from "@stll/template-conditions";
@@ -16,6 +20,8 @@ import {
 
 export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
 export { isFieldSource } from "@/api/lib/template-binding/binding-sources";
+export { DATE_FORMAT_STYLES };
+export type { DateFormatStyle, FieldDateFormat };
 
 // ── Common ────────────────────────────────────────────────
 
@@ -139,14 +145,6 @@ export type TemplateDataValue =
   | { [key: string]: TemplateDataValue };
 
 export type TemplateData = Record<string, TemplateDataValue>;
-
-export type BlockDirectiveKind =
-  | "if"
-  | "elseif"
-  | "else"
-  | "endif"
-  | "each"
-  | "endeach";
 
 export type BlockDirective = {
   kind: BlockDirectiveKind;
@@ -294,22 +292,6 @@ export const isFieldLookupFormat = (
   isLookupFormatKey(value["key"]) &&
   typeof value["template"] === "string" &&
   value["template"].length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH;
-
-export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
-
-export type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];
-
-/**
- * Locale-aware date rendering (see {@link FieldMeta.dateFormat}): the
- * submitted ISO date is formatted via `Intl.DateTimeFormat` in the document's
- * language at fill time (e.g. cs long → "13. června 2028"); "iso" leaves the
- * submitted value as-is.
- */
-export type FieldDateFormat = {
-  /** BCP-47 language tag of the document, e.g. "cs", "de", "pl". */
-  locale: string;
-  style: DateFormatStyle;
-};
 
 export type FieldValidation = {
   required?: boolean;

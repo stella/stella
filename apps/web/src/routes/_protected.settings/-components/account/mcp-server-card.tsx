@@ -1,15 +1,9 @@
 import { useTranslations } from "use-intl";
 
+import { MCP_ANONYMIZED_HTTP_PATH, MCP_HTTP_PATH } from "@stll/api-contract";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 
 import { CopyField } from "@/components/copy-field";
-
-// Mirrors `MCP_HTTP_PATH` / `MCP_ANONYMIZED_HTTP_PATH` in
-// `apps/api/src/mcp/constants.ts`. Not imported directly: that module pulls
-// in the server-only `@/api/env`, which is unsafe to bundle into the
-// browser build.
-const MCP_HTTP_PATH = "/mcp";
-const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
 
 type McpServerCardProps = {
   apiOrigin: string;

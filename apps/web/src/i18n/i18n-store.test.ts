@@ -1,14 +1,11 @@
 import { beforeEach, expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
 
-import { UI_LOCALES } from "@stll/locales";
-
 import {
   buildFormattingLocale,
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
-  getLangDir,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
@@ -155,48 +152,6 @@ test("cold boot in English latches the spinner off synchronously", async () => {
   const load = useI18nStore.getState().loadMessages("en");
   expect(useI18nStore.getState().hasLoadedOnce).toBe(true);
   await load;
-});
-
-test("every supported language resolves to a known writing direction", () => {
-  for (const lang of supportedLanguages) {
-    expect(["ltr", "rtl"]).toContain(getLangDir(lang));
-  }
-});
-
-test("prepaint-init.js locale sets match the i18n sources", async () => {
-  // public/prepaint-init.js runs before the bundle loads, so it cannot
-  // import UI_LOCALES or LANG_DIR and duplicates them instead. Adding a
-  // language without updating the script would make first-paint detection
-  // diverge from the application, so pin both sets to their sources here.
-  const source = await Bun.file(
-    new URL("../../public/prepaint-init.js", import.meta.url),
-  ).text();
-
-  const declaredUiLocales = /const UI_LOCALES = \[(.*?)\];/su.exec(source);
-  const declaredRtlLocales = /const RTL_LOCALES = \[(.*?)\];/su.exec(source);
-  expect(declaredUiLocales).not.toBeNull();
-  expect(declaredRtlLocales).not.toBeNull();
-
-  // Locale tags are ASCII identifiers, not user-facing text, so order them
-  // by code point rather than with a locale-aware collator.
-  const byCodePoint = (a: string, b: string) => (a < b ? -1 : Number(a > b));
-  const scriptUiLocales = [
-    ...(declaredUiLocales?.[1] ?? "").matchAll(/"([^"]+)"/gu),
-  ]
-    .map((match) => match[1] ?? "")
-    .sort(byCodePoint);
-  const scriptRtlLocales = [
-    ...(declaredRtlLocales?.[1] ?? "").matchAll(/"([^"]+)"/gu),
-  ]
-    .map((match) => match[1] ?? "")
-    .sort(byCodePoint);
-  const expectedUiLocales = [...UI_LOCALES].sort(byCodePoint);
-  const expectedRtlLocales = UI_LOCALES.filter(
-    (lang) => getLangDir(lang) === "rtl",
-  ).toSorted(byCodePoint);
-
-  expect(scriptUiLocales).toEqual(expectedUiLocales);
-  expect(scriptRtlLocales).toEqual(expectedRtlLocales);
 });
 
 test("prepaint-init.js uses the first supported browser locale", async () => {

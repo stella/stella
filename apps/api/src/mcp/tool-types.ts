@@ -5,7 +5,10 @@ import type {
 } from "@modelcontextprotocol/server";
 
 import type { env } from "@/api/env";
-import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import type {
+  MCP_ALL_RESOURCE_SCOPES,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+} from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
 
@@ -153,18 +156,39 @@ export type McpToolDefinition = {
   scope: ToolScope;
 };
 
-export type McpCliToolScope =
-  | "read"
-  | "matters_write"
-  | "documents_write"
-  | "knowledge_write"
-  | "search"
-  | "onboarding"
-  | "templates"
-  | "billing_write"
-  | "admin_read"
-  | "admin_write"
-  | "feedback";
+type DefaultMcpResourceScope = (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
+
+type BareMcpResourceScope<TScope extends `stella:${string}`> =
+  TScope extends `stella:${infer TName}` ? TName : never;
+
+const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
+  "stella:read": "read",
+  "stella:contacts_write": "contacts_write",
+  "stella:matters_write": "matters_write",
+  "stella:chat": "chat",
+  "stella:documents_write": "documents_write",
+  "stella:knowledge_write": "knowledge_write",
+  "stella:search": "search",
+  "stella:onboarding": "onboarding",
+  "stella:templates": "templates",
+  "stella:billing_write": "billing_write",
+  "stella:admin_read": "admin_read",
+  "stella:admin_write": "admin_write",
+  "stella:feedback": "feedback",
+  "stella:skills": null,
+  "stella:external_mcps": null,
+} as const satisfies {
+  [TScope in DefaultMcpResourceScope]: BareMcpResourceScope<TScope> | null;
+};
+
+export type McpCliToolScope = Exclude<
+  (typeof MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE)[DefaultMcpResourceScope],
+  null
+>;
+
+export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
+  MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE,
+).filter((scope): scope is McpCliToolScope => scope !== null);
 
 export type McpCliDiscriminatorSubcommand = {
   command: string;

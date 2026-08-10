@@ -160,17 +160,17 @@ type Messages = {
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Turn a document set into a table you can sort, filter, and trace back to the source.";
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
         };
-        "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace.";
-        };
-        "2": {
+        "product:public-data": {
           "body": "Read and search official case law, legal sources, and company registries.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:tabular-review": {
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source.";
+        };
+        "product:workspace": {
+          "body": "Matters, documents, .docx editing, review, and chat in one workspace.";
         };
       };
       "capabilities": {
@@ -251,17 +251,17 @@ type Messages = {
     };
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
+        };
+        "product:agent": {
           "body": "Chat across matters, files, and connected tools with approvals and source previews.";
         };
-        "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace.";
-        };
-        "2": {
+        "product:tabular-review": {
           "body": "Turn a document set into a table you can sort, filter, and trace back to the source.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:workspace": {
+          "body": "Matters, documents, .docx editing, review, and chat in one workspace.";
         };
       };
       "capabilities": {
@@ -322,17 +322,17 @@ type Messages = {
     };
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Matters, documents, review, and chat in one workspace.";
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
         };
-        "1": {
+        "product:agent": {
           "body": "Work across matters and connected tools with approvals and citations.";
         };
-        "2": {
+        "product:templates": {
           "body": "Fill reusable legal documents through the app, CLI, or connected tools.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:workspace": {
+          "body": "Matters, documents, review, and chat in one workspace.";
         };
       };
       "capabilities": {
@@ -404,17 +404,17 @@ type Messages = {
       };
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Turn on developer mode under Settings → Connectors → Advanced, then add a connector with the endpoint address.";
           };
-          "1": {
+          "claude": {
             "body": "In Settings → Connectors, add a custom connector with the endpoint address.";
           };
-          "2": {
-            "body": "Add the server and sign in:";
-          };
-          "3": {
+          "claude-code": {
             "body": "Add the server with one command:";
+          };
+          "codex": {
+            "body": "Add the server and sign in:";
           };
         };
         "heading": "Connect an AI agent";
@@ -424,17 +424,17 @@ type Messages = {
     };
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "See where matters, documents, and tools live together.";
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
         };
-        "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses.";
-        };
-        "2": {
+        "docx-editor": {
           "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:templates": {
+          "body": "Create reusable Word documents with fields and conditional clauses.";
+        };
+        "product:workspace": {
+          "body": "See where matters, documents, and tools live together.";
         };
       };
       "capabilities": {
@@ -522,17 +522,17 @@ type Messages = {
     };
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details.";
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
         };
-        "1": {
+        "product:agent": {
           "body": "Chat across matters, files, and sources with approvals and citations.";
         };
-        "2": {
-          "body": "Turn a document set into a review table in the matter.";
+        "product:anonymization": {
+          "body": "Prepare sensitive material for AI without exposing identifying details.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:tabular-review": {
+          "body": "Turn a document set into a review table in the matter.";
         };
       };
       "capabilities": {
@@ -613,17 +613,17 @@ type Messages = {
     };
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
+        };
+        "product:agent": {
           "body": "Chat across matters, files, and connected sources with approvals and source previews.";
         };
-        "1": {
-          "body": "Official case law and company registries, pulled into a matter.";
-        };
-        "2": {
+        "product:anonymization": {
           "body": "Prepare sensitive material for AI without exposing identifying details.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:public-data": {
+          "body": "Official case law and company registries, pulled into a matter.";
         };
       };
       "capabilities": {
@@ -704,17 +704,17 @@ type Messages = {
     };
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Matters, documents, and Word editing in one place.";
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
         };
-        "1": {
-          "body": "Turn a document set into a review table in the matter.";
-        };
-        "2": {
+        "product:agent": {
           "body": "Chat across matters, files, and sources with citations.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:tabular-review": {
+          "body": "Turn a document set into a review table in the matter.";
+        };
+        "product:workspace": {
+          "body": "Matters, documents, and Word editing in one place.";
         };
       };
       "capabilities": {
@@ -767,7 +767,7 @@ type Messages = {
         "question": "How do templates work in stella?";
       };
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Assemble a document from a template instead of starting blank";
             "1": "Reuse clauses across templates";
@@ -775,7 +775,7 @@ type Messages = {
           };
           "heading": "Build from templates and clauses";
         };
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Prefill fields from a document already stored in the matter";
             "1": "Review and adjust every value before producing the draft";
@@ -783,7 +783,7 @@ type Messages = {
           };
           "heading": "Fill it from the matter's data";
         };
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Author and adjust templates in the editor";
             "1": "Assemble the draft directly in the matter";
@@ -802,17 +802,17 @@ type Messages = {
     };
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella in machine-readable form for AI search engines.";
+        };
+        "product:agent": {
           "body": "Chat across matters, files, and connected tools with approvals and source previews.";
         };
-        "1": {
-          "body": "Turn a document set into a table you can sort, filter, and trace back to the source.";
-        };
-        "2": {
+        "product:cli-mcp": {
           "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools.";
         };
-        "3": {
-          "body": "stella in machine-readable form for AI search engines.";
+        "product:tabular-review": {
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source.";
         };
       };
       "capabilities": {
@@ -865,7 +865,7 @@ type Messages = {
         "question": "What is the stella workspace?";
       };
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Documents, contacts, review, and chat live inside the matter";
             "1": "Edit Word .docx documents without leaving the workspace";
@@ -873,7 +873,7 @@ type Messages = {
           };
           "heading": "Everything for a matter, in one place";
         };
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Open and edit Word .docx documents directly in the workspace";
             "1": "The redline stays a Word file: no conversion, no copies";

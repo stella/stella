@@ -73,15 +73,15 @@ import { getToolDetailPayload, toolDetailTabId } from "./tool-detail";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
-export type CatalogueBrowserFilterKind = "all" | "skill" | "mcp";
+const FILTERS = ["all", "skill", "mcp"] as const;
+
+export type CatalogueBrowserFilterKind = (typeof FILTERS)[number];
 
 const KIND_LABEL_KEY = {
   all: "common.all",
   skill: "catalogue.filter.skills",
   mcp: "catalogue.filter.mcps",
 } as const satisfies Record<CatalogueBrowserFilterKind, TranslationKey>;
-
-const FILTERS: readonly CatalogueBrowserFilterKind[] = ["all", "skill", "mcp"];
 
 type CatalogueBrowserProps = {
   organizationId: string;

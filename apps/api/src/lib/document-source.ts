@@ -19,14 +19,6 @@
 
 import * as v from "valibot";
 
-export const DOCUMENT_SOURCE_KINDS = [
-  "upload",
-  "desktop-edit",
-  "sharepoint",
-] as const;
-
-export type DocumentSourceKind = (typeof DOCUMENT_SOURCE_KINDS)[number];
-
 export const documentSourceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("upload") }),
   v.strictObject({ kind: v.literal("desktop-edit") }),
@@ -40,6 +32,7 @@ export const documentSourceSchema = v.variant("kind", [
 ]);
 
 export type DocumentSource = v.InferOutput<typeof documentSourceSchema>;
+export type DocumentSourceKind = DocumentSource["kind"];
 
 /** Constant upload provenance — the only branch produced by upload paths. */
 export const UPLOAD_DOCUMENT_SOURCE: DocumentSource = { kind: "upload" };
@@ -47,44 +40,4 @@ export const UPLOAD_DOCUMENT_SOURCE: DocumentSource = { kind: "upload" };
 /** Constant desktop-edit provenance — produced by edit round-trip paths. */
 export const DESKTOP_EDIT_DOCUMENT_SOURCE: DocumentSource = {
   kind: "desktop-edit",
-};
-
-/**
- * Stable machine label for the source kind. Read the union with a
- * `switch` plus a `never` exhaustiveness check so a newly added branch
- * fails to typecheck until it is handled here.
- */
-export const documentSourceKind = (
-  source: DocumentSource,
-): DocumentSourceKind => {
-  switch (source.kind) {
-    case "upload":
-      return "upload";
-    case "desktop-edit":
-      return "desktop-edit";
-    case "sharepoint":
-      return "sharepoint";
-    default: {
-      const exhaustive: never = source;
-      return exhaustive;
-    }
-  }
-};
-
-/**
- * Whether a version originated from an external import (vs. authored in
- * the workspace). Same exhaustive `switch`/`never` shape.
- */
-export const isImportedDocumentSource = (source: DocumentSource): boolean => {
-  switch (source.kind) {
-    case "sharepoint":
-      return true;
-    case "upload":
-    case "desktop-edit":
-      return false;
-    default: {
-      const exhaustive: never = source;
-      return exhaustive;
-    }
-  }
 };

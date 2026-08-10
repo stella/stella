@@ -21,16 +21,18 @@ import {
   type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
-import type {
-  CapabilityFlagSpec,
-  CapabilityLeafSpec,
-  CapabilityPart,
-  FlagSpec,
-  JsonSchema,
-  RegistryToolListing,
-  RouteNode,
-  ToolAnnotation,
-  ToolScope,
+import { MCP_CLI_TOOL_SCOPES } from "./generated/mcp-contract.js";
+import {
+  CAPABILITY_PARTS,
+  type CapabilityFlagSpec,
+  type CapabilityLeafSpec,
+  type CapabilityPart,
+  type FlagSpec,
+  type JsonSchema,
+  type RegistryToolListing,
+  type RouteNode,
+  type ToolAnnotation,
+  type ToolScope,
 } from "./route-types.js";
 
 /** The catalog entry fields the CLI codegen consumes (a subset of the export). */
@@ -63,9 +65,6 @@ export type CapabilityTreeStats = {
   flagCollisions: readonly { id: string; flag: string }[];
 };
 
-/** The three input parts, in the deterministic order flags are emitted. */
-const PARTS: readonly CapabilityPart[] = ["params", "body", "query"];
-
 /** The single root beneath which all generated capability commands live. */
 export const CAPABILITY_NAMESPACE = "capability";
 
@@ -79,21 +78,7 @@ export type FormattedCapabilityCommand =
   `stella ${typeof CAPABILITY_NAMESPACE} ${string} ${string}`;
 
 /** Valid `ToolScope` strings, for mapping a catalog `stella:*` scope to a precheck. */
-const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
-  "read",
-  "contacts_write",
-  "matters_write",
-  "chat",
-  "documents_write",
-  "knowledge_write",
-  "search",
-  "onboarding",
-  "templates",
-  "billing_write",
-  "admin_read",
-  "admin_write",
-  "feedback",
-]);
+const TOOL_SCOPES: ReadonlySet<string> = new Set(MCP_CLI_TOOL_SCOPES);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -459,7 +444,7 @@ export const deriveCapabilityLeaf = (
   const paramsProps = propertyMap(entry.inputSchema?.params);
   const injectWorkspace =
     entry.handlerKind === "workspace" && !("workspaceId" in paramsProps);
-  for (const part of PARTS) {
+  for (const part of CAPABILITY_PARTS) {
     const skip = new Set<string>();
     if (part === paginationPart) {
       skip.add("cursor");

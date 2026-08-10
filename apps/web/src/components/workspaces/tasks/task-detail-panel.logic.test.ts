@@ -1,22 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { TASK_STATUSES } from "@stll/api-contract";
-
 import {
   getTaskDetailInstanceKey,
   getTaskStatusUpdate,
 } from "./task-detail-panel.logic";
 
 describe("task detail compatibility updates", () => {
-  test("preserves every selected status in the task PATCH payload", () => {
-    for (const status of TASK_STATUSES) {
-      expect(getTaskStatusUpdate("task-1", status, "")).toEqual({
-        taskId: "task-1",
-        status,
-      });
-    }
-  });
-
   test("includes a trimmed workflow reason only when cancelling", () => {
     expect(
       getTaskStatusUpdate("task-1", "cancelled", "  No longer needed  "),

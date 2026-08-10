@@ -15,9 +15,6 @@ export type LoadedCatalogueSkillInstallPayload = {
 const skillInstallPayloads: readonly LoadedCatalogueSkillInstallPayload[] =
   GENERATED_SKILL_INSTALL_PAYLOADS;
 
-export const loadCatalogueSkillInstallPayloads =
-  (): readonly LoadedCatalogueSkillInstallPayload[] => skillInstallPayloads;
-
 export const findCatalogueSkillInstallPayload = (
   slug: string,
 ): LoadedCatalogueSkillInstallPayload | undefined =>

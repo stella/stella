@@ -32,6 +32,10 @@ const INVOKE_CAPABILITY_BUCKET = "mcp:invoke_capability";
 
 export type InvokeRateLimit = { windowMs: number; max: number };
 
+type InvokeRateLimitPolicy =
+  | { budget: "capability"; limit: InvokeRateLimit }
+  | { budget: "skill-source"; limit: InvokeRateLimit };
+
 /**
  * Default per-(organization, capability) invoke budget: 60 invocations per
  * minute. Generous enough for legitimate batch automation over a single
@@ -43,6 +47,11 @@ export const DEFAULT_INVOKE_RATE_LIMIT: InvokeRateLimit = {
   max: 60,
 };
 
+const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
+  budget: "capability",
+  limit: DEFAULT_INVOKE_RATE_LIMIT,
+} as const satisfies InvokeRateLimitPolicy;
+
 /**
  * Stricter per-capability budgets that mirror the explicit rate-limit
  * middleware the capability's REST route installs (see
@@ -50,48 +59,67 @@ export const DEFAULT_INVOKE_RATE_LIMIT: InvokeRateLimit = {
  * so the generic path and the REST route stay in lockstep. A capability absent
  * here uses `DEFAULT_INVOKE_RATE_LIMIT`.
  */
-export const INVOKE_RATE_LIMIT_OVERRIDES: Record<string, InvokeRateLimit> = {
+const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
+  Record<string, InvokeRateLimitPolicy>
+> = {
   // entities.translate: ships a full document to the external provider and
   // consumes the org's paid character quota (REST: translate limiter).
   "entities.translate": {
-    windowMs: API_RATE_LIMITS.translate.duration,
-    max: API_RATE_LIMITS.translate.max,
+    budget: "capability",
+    limit: {
+      windowMs: API_RATE_LIMITS.translate.duration,
+      max: API_RATE_LIMITS.translate.max,
+    },
   },
   // entities.upload / upload-version: the REST upload limiter (separate budget).
   "entities.upload": {
-    windowMs: API_RATE_LIMITS.upload.duration,
-    max: API_RATE_LIMITS.upload.max,
+    budget: "capability",
+    limit: {
+      windowMs: API_RATE_LIMITS.upload.duration,
+      max: API_RATE_LIMITS.upload.max,
+    },
   },
   "entities.upload-version": {
-    windowMs: API_RATE_LIMITS.upload.duration,
-    max: API_RATE_LIMITS.upload.max,
+    budget: "capability",
+    limit: {
+      windowMs: API_RATE_LIMITS.upload.duration,
+      max: API_RATE_LIMITS.upload.max,
+    },
   },
   // Skill discovery/import fetches third-party URLs. Their REST routes share
   // the dedicated source-fetch budget; generic capability invocation must not
   // fall back to the looser default budget and amplify outbound traffic.
   "skills.discover": {
-    windowMs: API_RATE_LIMITS.skillSource.duration,
-    max: API_RATE_LIMITS.skillSource.max,
+    budget: "skill-source",
+    limit: {
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+      max: API_RATE_LIMITS.skillSource.max,
+    },
   },
   "skills.import": {
-    windowMs: API_RATE_LIMITS.skillSource.duration,
-    max: API_RATE_LIMITS.skillSource.max,
+    budget: "skill-source",
+    limit: {
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+      max: API_RATE_LIMITS.skillSource.max,
+    },
   },
   "skills.import-url": {
-    windowMs: API_RATE_LIMITS.skillSource.duration,
-    max: API_RATE_LIMITS.skillSource.max,
+    budget: "skill-source",
+    limit: {
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+      max: API_RATE_LIMITS.skillSource.max,
+    },
   },
 };
 
-/** Capabilities whose REST routes consume one shared client-IP budget. */
-const SKILL_SOURCE_CAPABILITY_IDS = new Set([
-  "skills.discover",
-  "skills.import",
-  "skills.import-url",
-]);
+const resolveInvokeRateLimitPolicy = (
+  capabilityId: string,
+): InvokeRateLimitPolicy =>
+  INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY[capabilityId] ??
+  DEFAULT_INVOKE_RATE_LIMIT_POLICY;
 
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>
-  INVOKE_RATE_LIMIT_OVERRIDES[capabilityId] ?? DEFAULT_INVOKE_RATE_LIMIT;
+  resolveInvokeRateLimitPolicy(capabilityId).limit;
 
 /** Process-wide limiter instance; its own guards so it never shares counters. */
 const invokeCapabilityGuards = createFeedbackIntakeGuards();
@@ -120,15 +148,21 @@ export const consumeInvokeCapabilityRateLimit = async ({
     clientIp: string | null;
   }) => Promise<SkillSourceRateLimitResult>;
 }): Promise<InvokeRateLimitResult> => {
-  if (SKILL_SOURCE_CAPABILITY_IDS.has(capabilityId)) {
-    return await consumeSkillSource({ clientIp });
+  const policy = resolveInvokeRateLimitPolicy(capabilityId);
+  switch (policy.budget) {
+    case "skill-source":
+      return await consumeSkillSource({ clientIp });
+    case "capability": {
+      const { limit } = policy;
+      const ok = await guards.consumeCounter({
+        bucket: INVOKE_CAPABILITY_BUCKET,
+        key: `${organizationId}:${capabilityId}`,
+        windowMs: limit.windowMs,
+        max: limit.max,
+      });
+      return { ok, retryAfterSeconds: Math.ceil(limit.windowMs / 1000) };
+    }
+    default:
+      return policy satisfies never;
   }
-  const limit = resolveInvokeRateLimit(capabilityId);
-  const ok = await guards.consumeCounter({
-    bucket: INVOKE_CAPABILITY_BUCKET,
-    key: `${organizationId}:${capabilityId}`,
-    windowMs: limit.windowMs,
-    max: limit.max,
-  });
-  return { ok, retryAfterSeconds: Math.ceil(limit.windowMs / 1000) };
 };

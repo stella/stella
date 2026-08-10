@@ -10,10 +10,7 @@ import {
   FOLIO_DOCUMENT_OPERATION_JSON_SCHEMA,
   folioDocumentOperationBatchSchema,
 } from "@stll/folio-agents";
-import type {
-  FolioAIEditOperation,
-  FolioAIEditSkipReason,
-} from "@stll/folio-core/ai-edits";
+import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import {
   applyFolioAIEditsToBuffer,
   FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
@@ -24,6 +21,7 @@ import {
   DOCX_EDIT_REPRESENTATION,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
+import { FOLIO_AI_EDIT_SKIP_REASONS } from "@/api/handlers/chat/tools/folio-ai-edit-skip-reasons";
 import { resolveDocxEditAuthorName } from "@/api/handlers/chat/tools/resolve-docx-edit-author-name";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -423,20 +421,6 @@ const createInputToolSchema = (
 // so returning the id of the version this tool just wrote is no wider a
 // surface than that existing tool's accepted input.
 // ---------------------------------------------------------------------------
-
-const FOLIO_AI_EDIT_SKIP_REASONS = [
-  "missingBlock",
-  "changedBlock",
-  "ambiguousFind",
-  "missingFind",
-  "unsupportedBlock",
-  "unsupportedMode",
-  "atomicBatchRejected",
-  "preconditionFailed",
-  "staleRange",
-  "emptyOperation",
-  "noopOperation",
-] as const satisfies readonly FolioAIEditSkipReason[];
 
 const skippedOperationSchema = v.strictObject({
   id: v.string(),

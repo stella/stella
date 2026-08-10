@@ -5,7 +5,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   consumeInvokeCapabilityRateLimit,
   DEFAULT_INVOKE_RATE_LIMIT,
-  INVOKE_RATE_LIMIT_OVERRIDES,
   resolveInvokeRateLimit,
 } from "@/api/mcp/capability-rate-limit";
 
@@ -28,7 +27,6 @@ describe("resolveInvokeRateLimit", () => {
     expect(resolveInvokeRateLimit("time-entries.create")).toEqual(
       DEFAULT_INVOKE_RATE_LIMIT,
     );
-    expect(DEFAULT_INVOKE_RATE_LIMIT.max).toBe(60);
   });
 
   test("mirrors the stricter REST route limit for entities.translate", () => {
@@ -61,7 +59,7 @@ describe("resolveInvokeRateLimit", () => {
 describe("consumeInvokeCapabilityRateLimit", () => {
   test("allows up to the limit, then refuses", async () => {
     const guards = freshGuards();
-    const max = INVOKE_RATE_LIMIT_OVERRIDES["entities.translate"]?.max ?? 0;
+    const max = resolveInvokeRateLimit("entities.translate").max;
     expect(max).toBeGreaterThan(0);
     const input = {
       capabilityId: "entities.translate",
@@ -79,7 +77,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
 
   test("distinct capabilities share no budget", async () => {
     const guards = freshGuards();
-    const max = INVOKE_RATE_LIMIT_OVERRIDES["entities.translate"]?.max ?? 0;
+    const max = resolveInvokeRateLimit("entities.translate").max;
     const translate = {
       capabilityId: "entities.translate",
       organizationId: org("org_a"),
@@ -103,7 +101,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
   });
 
   test("skill source capabilities share one per-IP budget across organizations", async () => {
-    const max = INVOKE_RATE_LIMIT_OVERRIDES["skills.discover"]?.max ?? 0;
+    const max = resolveInvokeRateLimit("skills.discover").max;
     const counts = new Map<string, number>();
     const consumeSkillSource = async ({
       clientIp,
@@ -150,7 +148,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
 
   test("distinct organizations share no budget", async () => {
     const guards = freshGuards();
-    const max = INVOKE_RATE_LIMIT_OVERRIDES["entities.translate"]?.max ?? 0;
+    const max = resolveInvokeRateLimit("entities.translate").max;
     const orgA = {
       capabilityId: "entities.translate",
       organizationId: org("org_a"),

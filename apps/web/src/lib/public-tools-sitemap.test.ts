@@ -5,11 +5,8 @@ Object.assign(import.meta.env, {
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 });
 
-const {
-  createPublicToolsSitemapXml,
-  SITEMAP_XML_RESPONSE_HEADERS,
-  TOOLS_SITEMAP_PATH,
-} = await import("@/lib/public-tools-sitemap");
+const { createPublicToolsSitemapXml, TOOLS_SITEMAP_PATH } =
+  await import("@/lib/public-tools-sitemap");
 const { createPublicLawSitemapIndexXml } =
   await import("@/lib/public-law-sitemap");
 
@@ -48,13 +45,5 @@ describe("public tools sitemap", () => {
       publicToolsIndexingEnabled: false,
     });
     expect(withoutTools).not.toContain(TOOLS_SITEMAP_PATH);
-  });
-
-  test("tools sitemap responses reuse the shared cacheable headers", () => {
-    expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
-      "Cache-Control":
-        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
-      "Content-Type": "application/xml; charset=utf-8",
-    });
   });
 });

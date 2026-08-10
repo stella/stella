@@ -8,13 +8,13 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -657,7 +657,7 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
     },
   );
 
-export const czRegionalAdapter: SourceAdapter = {
+export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   name: "Czech Regional Courts",
   country: "CZE",
@@ -886,4 +886,4 @@ export const czRegionalAdapter: SourceAdapter = {
       catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),
     });
   },
-};
+});

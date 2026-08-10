@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import type { ContactType } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -222,10 +223,7 @@ const CreateMatterDialogBody = ({
     closeDialog();
   };
 
-  const handleCreateClient = async (
-    displayName: string,
-    type: "person" | "organization",
-  ) => {
+  const handleCreateClient = async (displayName: string, type: ContactType) => {
     const id = toSafeId<"contact">(crypto.randomUUID());
 
     const result = await Result.tryPromise(

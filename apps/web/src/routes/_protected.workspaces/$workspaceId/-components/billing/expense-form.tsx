@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
+import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
@@ -20,17 +21,6 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
-
-const EXPENSE_CATEGORIES = [
-  "filing_fee",
-  "expert_witness",
-  "travel",
-  "printing",
-  "courier",
-  "other",
-] as const;
-
-type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
 export type ExpenseFormValues = {
   matterId: string;

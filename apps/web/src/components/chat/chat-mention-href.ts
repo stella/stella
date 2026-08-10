@@ -21,6 +21,13 @@ const CHAT_MENTION_HREF_ENTRIES = [
   ["workspace", CHAT_MENTION_HREF_PREFIXES.workspace],
 ] as const satisfies readonly (readonly [MentionCategory, string])[];
 
+type MissingMentionCategory = Exclude<
+  MentionCategory,
+  (typeof CHAT_MENTION_HREF_ENTRIES)[number][0]
+>;
+
+true satisfies MissingMentionCategory extends never ? true : never;
+
 export const isMentionCategory = (value: string): value is MentionCategory => {
   for (const [category] of CHAT_MENTION_HREF_ENTRIES) {
     if (value === category) {

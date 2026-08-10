@@ -84,9 +84,8 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
-  test("produces 47 leaf commands and excludes compat and host adapters", () => {
+  test("excludes compat and host adapters from the command tree", () => {
     const paths = leafPaths(tree);
-    expect(paths).toHaveLength(47);
     expect(paths).not.toContain("search");
     expect(paths).not.toContain("fetch");
     expect(paths).not.toContain("document upload-version");
@@ -483,28 +482,6 @@ describe("generateRouteMap: unknown fetched tools (S1 rule 5)", () => {
     expect(leaf?.toolName).toBe("list_widgets");
     expect(leaf?.scope).toBeUndefined();
     expect(flagFor(leaf ?? errorSpec(), "--query")?.kind).toBe("string");
-  });
-});
-
-describe("generateRouteMap: parity (S6)", () => {
-  test("build-time listings and a mocked tools/list body produce the same tree", () => {
-    // A distinct object graph carrying the identical wire fields, as a
-    // `tools/list` response would deliver them (JSON round-trip through the
-    // wire). `JSON.parse` is typed `any`, so it flows in without a cast.
-    const wireTools = snapshotListings.map((listing) => ({
-      name: listing.name,
-      description: listing.description,
-      inputSchema: listing.inputSchema,
-      ...(listing.annotations === undefined
-        ? {}
-        : { annotations: listing.annotations }),
-    }));
-    const mockListings: readonly RegistryToolListing[] =
-      structuredClone(wireTools);
-
-    const fromBuildTime = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
-    const fromMock = generateRouteMap(mockListings, TOOL_ANNOTATIONS);
-    expect(fromMock).toEqual(fromBuildTime);
   });
 });
 

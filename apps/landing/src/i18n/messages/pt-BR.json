@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
         },
-        "1": {
-          "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Leia e pesquise jurisprudência oficial, fontes jurídicas e registros de empresas."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:tabular-review": {
+          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
+        },
+        "product:workspace": {
+          "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        },
+        "product:agent": {
           "body": "Converse sobre casos, arquivos e ferramentas conectadas, com aprovações e prévias da fonte."
         },
-        "1": {
-          "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:workspace": {
+          "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Casos, documentos, revisão e chat em um só espaço de trabalho."
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Trabalhe em todos os casos e ferramentas conectadas, com aprovações e citações."
         },
-        "2": {
+        "product:templates": {
           "body": "Preencha documentos jurídicos reutilizáveis pelo app, pela CLI ou por ferramentas conectadas."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:workspace": {
+          "body": "Casos, documentos, revisão e chat em um só espaço de trabalho."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Ative o modo de desenvolvedor em Settings → Connectors → Advanced e adicione um conector com o endereço do endpoint."
           },
-          "1": {
+          "claude": {
             "body": "Em Settings → Connectors, adicione um conector personalizado com o endereço do endpoint."
           },
-          "2": {
-            "body": "Adicione o servidor e faça login:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Adicione o servidor com um único comando:"
+          },
+          "codex": {
+            "body": "Adicione o servidor e faça login:"
           }
         },
         "heading": "Conecte um agente de IA",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Veja onde casos, documentos e ferramentas convivem."
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
         },
-        "1": {
-          "body": "Crie documentos do Word reutilizáveis, com campos e cláusulas condicionais."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Teste o mesmo editor sozinho: abra e edite um .docx no navegador, sem precisar de conta."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:templates": {
+          "body": "Crie documentos do Word reutilizáveis, com campos e cláusulas condicionais."
+        },
+        "product:workspace": {
+          "body": "Veja onde casos, documentos e ferramentas convivem."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Prepare material sensível para a IA sem expor dados identificadores."
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Converse sobre casos, arquivos e fontes, com aprovações e citações."
         },
-        "2": {
-          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
+        "product:anonymization": {
+          "body": "Prepare material sensível para a IA sem expor dados identificadores."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:tabular-review": {
+          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        },
+        "product:agent": {
           "body": "Converse sobre casos, arquivos e fontes conectadas, com aprovações e prévias da fonte."
         },
-        "1": {
-          "body": "Jurisprudência oficial e registros de empresas, trazidos para o caso."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Prepare material sensível para a IA sem expor dados identificadores."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:public-data": {
+          "body": "Jurisprudência oficial e registros de empresas, trazidos para o caso."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Casos, documentos e edição de Word em um só lugar."
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
         },
-        "1": {
-          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
-        },
-        "2": {
+        "product:agent": {
           "body": "Converse sobre casos, arquivos e fontes, com citações."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:tabular-review": {
+          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
+        },
+        "product:workspace": {
+          "body": "Casos, documentos e edição de Word em um só lugar."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Como funcionam os modelos na stella?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Monte um documento a partir de um modelo em vez de começar do zero",
             "1": "Reutilize cláusulas entre modelos",
@@ -772,7 +772,7 @@
           },
           "heading": "Monte a partir de modelos e cláusulas"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Preencha campos a partir de um documento já guardado no caso",
             "1": "Confira e ajuste cada valor antes de gerar a minuta",
@@ -780,7 +780,7 @@
           },
           "heading": "Preencha com os dados do caso"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Crie e ajuste os modelos no editor",
             "1": "Monte a minuta direto no caso",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        },
+        "product:agent": {
           "body": "Converse sobre casos, arquivos e ferramentas conectadas, com aprovações e prévias da fonte."
         },
-        "1": {
-          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Alcance os mesmos casos, documentos e jurisprudência pela CLI e por ferramentas compatíveis com MCP."
         },
-        "3": {
-          "body": "stella em formato legível por máquinas, para buscadores com IA."
+        "product:tabular-review": {
+          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "O que é o espaço de trabalho da stella?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Documentos, contatos, revisão e chat ficam dentro do caso",
             "1": "Edite documentos .docx do Word sem sair do espaço de trabalho",
@@ -870,7 +870,7 @@
           },
           "heading": "Tudo do caso, em um só lugar"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Abra e edite documentos .docx do Word direto no espaço de trabalho",
             "1": "A marcação continua em arquivo do Word: sem conversão, sem cópias",

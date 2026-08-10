@@ -8,22 +8,16 @@
  * adds the web-only quick-pick date helpers and the config-preview exemplar.
  */
 
-import { formatDate } from "@stll/template-conditions";
+import {
+  DATE_FORMAT_EXAMPLE_ISO,
+  DATE_FORMAT_STYLES,
+  formatDate,
+  type FieldDateFormat,
+} from "@stll/template-conditions";
 
-/** Mirrors `DATE_FORMAT_STYLES` from apps/api/src/lib/docx/types.ts. */
-export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
+export { DATE_FORMAT_EXAMPLE_ISO, DATE_FORMAT_STYLES };
 
-export type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];
-
-export type TemplateDateFormat = {
-  /** BCP-47 language tag of the document, e.g. "cs", "de", "pl". */
-  locale: string;
-  style: DateFormatStyle;
-};
-
-/** Exemplar date for configuration previews; day > 12 so day/month order is
- *  unambiguous in every locale. Mirrors `DATE_FORMAT_EXAMPLE_ISO`. */
-export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
+export type TemplateDateFormat = FieldDateFormat;
 
 /** Render the exemplar date in the given locale + style; the style picker
  *  shows this so each choice is self-describing. */

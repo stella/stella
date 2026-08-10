@@ -12,20 +12,13 @@
  * display label, so renaming a label never breaks a saved binding.
  */
 
-/** Non-client party roles on a matter (mirrors the `workspaceContacts.role`
- *  enum). The matter's client is `{ kind: "contact" }`, not a party. */
-export const WORKSPACE_CONTACT_ROLES = [
-  "opposing_party",
-  "opposing_counsel",
-  "co_counsel",
-  "witness",
-  "expert_witness",
-  "third_party",
-  "judge",
-  "mediator",
-  "other",
-] as const;
-export type WorkspaceContactRole = (typeof WORKSPACE_CONTACT_ROLES)[number];
+import {
+  WORKSPACE_CONTACT_ROLES,
+  type WorkspaceContactRole,
+} from "@stll/api-contract";
+
+export { WORKSPACE_CONTACT_ROLES };
+export type { WorkspaceContactRole };
 
 /** Which attorney on the matter an `attorney` binding resolves: the client's
  *  responsible/originating attorney, or the matter's lead. */

@@ -11,13 +11,6 @@ export const CHAT_TURN_STATUSES = [
 ] as const;
 export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
 
-export const CHAT_TURN_ACTIVE_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-] as const satisfies readonly ChatTurnStatus[];
-export type ChatTurnActiveStatus = (typeof CHAT_TURN_ACTIVE_STATUSES)[number];
-
 export const CHAT_TURN_INTERACTION_TYPES = ["ask-user", "approval"] as const;
 export type ChatTurnInteractionType =
   (typeof CHAT_TURN_INTERACTION_TYPES)[number];

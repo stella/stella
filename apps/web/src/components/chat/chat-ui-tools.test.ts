@@ -922,29 +922,33 @@ describe("isChatTurnInFlight", () => {
 });
 
 describe("isRunningToolPart", () => {
-  test("classifies every TanStack tool-call state", () => {
-    const expectedByState = {
-      "awaiting-input": true,
+  test("classifies every tool-call state", () => {
+    type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
+
+    const isRunningForState = (state: ToolCallState) =>
+      isRunningToolPart({
+        name: "web_search",
+        state,
+        type: "tool-call",
+      });
+
+    expect({
+      "approval-requested": isRunningForState("approval-requested"),
+      "approval-responded": isRunningForState("approval-responded"),
+      "awaiting-input": isRunningForState("awaiting-input"),
+      complete: isRunningForState("complete"),
+      error: isRunningForState("error"),
+      "input-complete": isRunningForState("input-complete"),
+      "input-streaming": isRunningForState("input-streaming"),
+    } satisfies Record<ToolCallState, boolean>).toEqual({
       "approval-requested": false,
       "approval-responded": false,
+      "awaiting-input": true,
       complete: false,
       error: false,
       "input-complete": true,
       "input-streaming": true,
-    } as const satisfies Record<
-      Extract<ChatPart, { type: "tool-call" }>["state"],
-      boolean
-    >;
-
-    for (const [state, expected] of Object.entries(expectedByState)) {
-      expect(
-        isRunningToolPart({
-          name: "web_search",
-          state,
-          type: "tool-call",
-        }),
-      ).toBe(expected);
-    }
+    } as const satisfies Record<ToolCallState, boolean>);
   });
 
   test("rejects unknown runtime states", () => {

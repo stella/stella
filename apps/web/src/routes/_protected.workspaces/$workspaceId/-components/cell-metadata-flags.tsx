@@ -43,20 +43,10 @@ import {
 
 const NO_MANUAL_FLAGS: readonly string[] = Object.freeze([]);
 
-const CELL_FLAG_IDS = [
-  "needs-review",
-  "important",
-  "follow-up",
-  "contradiction",
-  "verified",
-] as const;
-
-type CellFlagId = (typeof CELL_FLAG_IDS)[number];
-
 const VERIFIED_FLAG_ID = "verified";
 
-type CellFlagDefinition = {
-  id: CellFlagId;
+type CellFlagDefinitionShape = {
+  id: string;
   icon: LucideIcon;
   color: string;
   background: string;
@@ -67,7 +57,7 @@ const VERIFIED_CELL_FLAG = {
   icon: CheckCircle2Icon,
   color: "var(--option-emerald)",
   background: "var(--option-emerald-bg)",
-} as const satisfies CellFlagDefinition;
+} as const satisfies CellFlagDefinitionShape;
 
 const CELL_FLAGS = [
   {
@@ -95,7 +85,13 @@ const CELL_FLAGS = [
     background: "var(--option-red-bg)",
   },
   VERIFIED_CELL_FLAG,
-] as const satisfies readonly CellFlagDefinition[];
+] as const satisfies readonly CellFlagDefinitionShape[];
+
+type CellFlagId = (typeof CELL_FLAGS)[number]["id"];
+
+type CellFlagDefinition = Omit<CellFlagDefinitionShape, "id"> & {
+  id: CellFlagId;
+};
 
 export const getCellFlagById = (flagId: string) =>
   CELL_FLAGS.find((flag) => flag.id === flagId);
@@ -103,13 +99,17 @@ export const getCellFlagById = (flagId: string) =>
 // Determines which active flag colors the cell background tint when
 // several flags coexist. Verified wins (the desired final state),
 // then the most pressing review/issue flags.
-const TINT_PRIORITY: readonly CellFlagId[] = [
+const TINT_PRIORITY = [
   "verified",
   "contradiction",
   "follow-up",
   "needs-review",
   "important",
-];
+] as const satisfies readonly CellFlagId[];
+
+type MissingTintPriority = Exclude<CellFlagId, (typeof TINT_PRIORITY)[number]>;
+
+true satisfies MissingTintPriority extends never ? true : never;
 
 const FLAG_LABEL_KEYS = {
   "needs-review": "workspaces.table.flags.needsReview",

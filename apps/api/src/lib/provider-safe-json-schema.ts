@@ -1,4 +1,6 @@
-import { arrayOrEmpty } from "@/api/lib/array"; /**
+import { arrayOrEmpty } from "@/api/lib/array";
+
+/**
  * Provider-safe JSON Schema projection.
  *
  * Chat tool JSON Schemas are handed to model providers verbatim by the
@@ -49,20 +51,51 @@ export const PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS = [
   "example",
 ] as const;
 
+type ProviderSafeJsonSchemaKeyword =
+  (typeof PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS)[number];
+
 /**
- * Allowlisted keywords that constrain a value rather than describe its shape.
- * Dropped under `valueConstraintStrategy: "omit"`; the source Standard Schema
- * still enforces them locally. The `satisfies` keeps this a subset of the
- * allowlist, so a keyword can never be omitted here yet unreachable there.
+ * Allowlisted keywords dropped under `valueConstraintStrategy: "omit"`; the
+ * source Standard Schema still enforces them locally. Every allowlisted
+ * keyword has an explicit disposition, so adding one cannot silently choose a
+ * projection policy.
  */
-export const VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS = [
-  "minimum",
-  "maximum",
-  "minItems",
-  "maxItems",
-  "minLength",
-  "maxLength",
-] as const satisfies readonly (typeof PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS)[number][];
+const JSON_SCHEMA_KEYWORD_OMISSION_POLICY = {
+  type: "preserve",
+  format: "preserve",
+  title: "preserve",
+  description: "preserve",
+  nullable: "preserve",
+  enum: "preserve",
+  properties: "preserve",
+  required: "preserve",
+  items: "preserve",
+  anyOf: "preserve",
+  default: "preserve",
+  minimum: "omit",
+  maximum: "omit",
+  minItems: "omit",
+  maxItems: "omit",
+  minLength: "omit",
+  maxLength: "omit",
+  pattern: "preserve",
+  additionalProperties: "preserve",
+  example: "preserve",
+} as const satisfies Record<ProviderSafeJsonSchemaKeyword, "omit" | "preserve">;
+
+type ValueConstraintJsonSchemaKeyword = {
+  [TKeyword in ProviderSafeJsonSchemaKeyword]: (typeof JSON_SCHEMA_KEYWORD_OMISSION_POLICY)[TKeyword] extends "omit"
+    ? TKeyword
+    : never;
+}[ProviderSafeJsonSchemaKeyword];
+
+const isValueConstraintJsonSchemaKeyword = (
+  keyword: ProviderSafeJsonSchemaKeyword,
+): keyword is ValueConstraintJsonSchemaKeyword =>
+  JSON_SCHEMA_KEYWORD_OMISSION_POLICY[keyword] === "omit";
+
+export const VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS =
+  PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS.filter(isValueConstraintJsonSchemaKeyword);
 
 const ALLOWED_KEYWORDS = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
 const VALUE_CONSTRAINT_KEYWORDS = new Set<string>(

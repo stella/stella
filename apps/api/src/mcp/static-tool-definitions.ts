@@ -1,7 +1,13 @@
+import type { McpDefaultResourceScope } from "@stll/api-contract";
+
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
+import {
+  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+} from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
@@ -29,12 +35,11 @@ export const DEFAULT_MCP_TOOL_SETS = [
   CAPABILITY_TOOL_SET,
 ] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
 
-/**
- * The single MCP tool registry. Every mode-specific surface (default list,
- * anonymized projection, scopes) is derived from this one array, so adding a
- * tool without an anonymization decision is a compile error, not a review
- * catch.
- */
+// Keep this schema-sensitive projection as a literal tuple: flattening the
+// heterogeneous sets with Array.flatMap widens their definition types and
+// destroys the exact tool-name union used throughout chat. The bidirectional
+// compile check below makes the explicit projection unable to drift from the
+// canonical tool-set registry.
 export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_SET.definitions,
   ...STELLA_TOOL_SET.definitions,
@@ -47,6 +52,22 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...FEEDBACK_TOOL_SET.definitions,
   ...CAPABILITY_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
+
+export type AnonymizingMcpToolName = Extract<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  { anonymized: { exposure: "anonymize" } }
+>["name"];
+
+type RegisteredMcpToolName =
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number]["name"];
+type FlattenedMcpToolName =
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number]["name"];
+type MissingMcpToolName = Exclude<RegisteredMcpToolName, FlattenedMcpToolName>;
+type ExtraMcpToolName = Exclude<FlattenedMcpToolName, RegisteredMcpToolName>;
+
+true satisfies [MissingMcpToolName, ExtraMcpToolName] extends [never, never]
+  ? true
+  : never;
 
 /**
  * The closed set of curated static MCP tool names, derived from the single
@@ -67,21 +88,25 @@ export const MCP_STATIC_TOOL_NAMES = DEFAULT_MCP_TOOL_DEFINITIONS.map(
  * `stella:*_anonymized` scope so anonymized-mode tokens cannot reach the
  * default surface and vice versa.
  */
-// Annotated (not `as const satisfies`) on purpose: the wide `ToolScope` key
-// type is what lets the projection look a tool's scope up by value and get
-// `ToolScope | undefined` back, instead of erroring on an out-of-set key.
-const ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE: Partial<Record<ToolScope, ToolScope>> =
-  {
-    "stella:search": "stella:search_anonymized",
-    "stella:read": "stella:read_anonymized",
-    "stella:templates": "stella:templates_anonymized",
-  };
+const isMcpDefaultResourceScope = (
+  scope: ToolScope,
+): scope is McpDefaultResourceScope =>
+  MCP_DEFAULT_RESOURCE_SCOPES.some((candidate) => candidate === scope);
 
-const toAnonymizedScope = (toolName: string, scope: ToolScope): ToolScope =>
-  ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE[scope] ??
-  unreachable(
-    `Tool ${toolName} is exposed in anonymized mode but scope ${scope} has no anonymized pairing`,
+const toAnonymizedScope = (toolName: string, scope: ToolScope): ToolScope => {
+  if (!isMcpDefaultResourceScope(scope)) {
+    return unreachable(
+      `Tool ${toolName} is exposed in anonymized mode but scope ${scope} is not a default resource scope`,
+    );
+  }
+
+  return (
+    MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE[scope] ??
+    unreachable(
+      `Tool ${toolName} is exposed in anonymized mode but scope ${scope} has no anonymized pairing`,
+    )
   );
+};
 
 const toAnonymizedProjection = (
   tool: McpToolDefinition,
@@ -115,31 +140,25 @@ export const ANONYMIZED_MCP_TOOL_DEFINITIONS =
     return projected === null ? [] : [projected];
   }) satisfies readonly McpToolDefinition[];
 
-const DEFAULT_MCP_TOOL_DEFINITIONS_WIDE: readonly McpToolDefinition[] =
-  DEFAULT_MCP_TOOL_DEFINITIONS;
-
-const DOCUMENTS_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
-  ...DOCUMENT_TOOL_SET.definitions.map(({ name }) => name),
-  // The upload MCP App drives the canonical presign/PUT/finalize pipeline
-  // through this existing capability seam. tools.ts applies a mode-specific
-  // capability allowlist, so guessed non-upload capability IDs fail closed.
-  "invoke_capability",
-]);
+const invokeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
+  ({ name }) => name === "invoke_capability",
+);
+if (invokeCapabilityDefinition === undefined) {
+  unreachable("The documents MCP surface requires invoke_capability");
+}
+const DOCUMENT_MCP_TOOL_DEFINITION_SET: ReadonlySet<McpToolDefinition> =
+  new Set(DOCUMENT_TOOL_SET.definitions);
 
 /** Projection from the canonical registry; no host-specific tool copies. */
 export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
-  DEFAULT_MCP_TOOL_DEFINITIONS_WIDE.filter(({ name }) =>
-    DOCUMENTS_MCP_TOOL_NAMES.has(name),
+  DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool) =>
+      DOCUMENT_MCP_TOOL_DEFINITION_SET.has(tool) ||
+      // The upload MCP App drives the canonical presign/PUT/finalize pipeline
+      // through this existing capability seam. tools.ts applies a mode-specific
+      // capability allowlist, so guessed non-upload capability IDs fail closed.
+      tool === invokeCapabilityDefinition,
   ) satisfies readonly McpToolDefinition[];
-
-/**
- * Scopes actually used by the anonymized projection. A test cross-checks this
- * against `MCP_ANONYMIZED_RESOURCE_SCOPES` so no advertised scope is orphaned
- * and no projected scope goes unadvertised.
- */
-export const MCP_ANONYMIZED_PROJECTED_SCOPES: readonly ToolScope[] = [
-  ...new Set(ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
-];
 
 const MCP_TOOL_DEFINITION_MAPS = {
   default: new Map<string, McpToolDefinition>(

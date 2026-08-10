@@ -1,5 +1,7 @@
 import { and, count, eq, gt, ilike, or } from "drizzle-orm";
 
+import type { ContactType } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,7 +19,7 @@ type ListContactsQuery = {
   cursor?: string;
   limit?: number;
   q?: string;
-  type?: "person" | "organization";
+  type?: ContactType;
 };
 
 type DecodedCursor = {

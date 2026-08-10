@@ -62,8 +62,6 @@ const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
 const { synthesizeCapabilityContext } =
   await import("@/api/mcp/capability-context");
 const { ElysiaCustomStatusResponse } = await import("elysia");
-const { CAPABILITY_DISPATCH } =
-  await import("@/api/mcp/generated/capability-dispatch");
 const capabilityCatalog = (
   await import("@/api/mcp/generated/capability-catalog.json")
 ).default;
@@ -190,18 +188,7 @@ afterAll(() => {
   mock.restore();
 });
 
-// --- Generated-artifact drift -----------------------------------------------
-
-describe("capability dispatch <-> catalog parity", () => {
-  test("dispatch keys are exactly the catalog ids", () => {
-    const dispatchIds = Object.keys(CAPABILITY_DISPATCH).sort();
-    const catalogIds = capabilityCatalog
-      .map((entry) => entry.id)
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- capability ids are ASCII kebab-case identifiers matched against Object.keys(...).sort() codepoint order, not display text
-      .sort((a, b) => a.localeCompare(b));
-    expect(dispatchIds).toEqual(catalogIds);
-  });
-
+describe("generated capability catalog", () => {
   test("chat capabilities carry the dedicated stella:chat scope", () => {
     const chatEntries = capabilityCatalog.filter((entry) =>
       entry.id.startsWith("chat."),
