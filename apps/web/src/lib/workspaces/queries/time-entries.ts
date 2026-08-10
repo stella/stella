@@ -1,7 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { timeEntriesQueryRoot } from "@/lib/resource-query-roots.logic";
 import {
   fetchTimeEntries,
   fetchTimeEntrySummary,
