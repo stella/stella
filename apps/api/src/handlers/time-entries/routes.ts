@@ -1,5 +1,4 @@
 import Elysia from "elysia";
-import type { AnyElysia } from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -28,13 +27,7 @@ const timeEntryRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.TIME_ENTRY,
 );
 
-/**
- * Time-entry clients use the bounded `@stll/api-contract` transport instead of
- * the global Eden tree. Keep this plugin opaque at the server composition
- * boundary so its billing schemas are not recursively instantiated through
- * every route mounted after it.
- */
-export const timeEntriesRoute: AnyElysia = new Elysia({
+export const timeEntriesRoute = new Elysia({
   prefix: "/time-entries/:workspaceId",
 })
   .use(workspaceAccessMacro)
