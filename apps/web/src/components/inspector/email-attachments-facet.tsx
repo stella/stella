@@ -205,6 +205,7 @@ export const EmailAttachmentsFacet = ({
         attachment={selected}
         canSave={canSave}
         fieldId={fieldId}
+        key={selected.id}
         onBack={() => onSelectedIdChange(null)}
         onChooseMatter={() => openMatterPicker(selected.id)}
         onSave={() =>

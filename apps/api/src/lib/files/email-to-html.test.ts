@@ -1024,6 +1024,23 @@ describe("emailToHtml (.eml)", () => {
     );
   });
 
+  test("normalizes mixed-case attachment charset labels", async () => {
+    const parsed = await parseEmail(
+      toArrayBuffer(
+        eml.replace(
+          "Content-Type: text/plain; charset=utf-8",
+          "Content-Type: text/plain; charset=Windows-1252",
+        ),
+      ),
+      "message/rfc822",
+    );
+
+    expect(
+      parsed.attachments.find(({ fileName }) => fileName === "notes.txt")
+        ?.charset,
+    ).toBe("windows-1252");
+  });
+
   test("hides referenced inline images but preserves unreferenced CID attachments", async () => {
     const result = await emailToPreview(toArrayBuffer(eml), "message/rfc822");
     expect(Result.isOk(result)).toBe(true);

@@ -340,7 +340,8 @@ export const parsedEmailToText = (parsed: ParsedEmail): string => {
 const normalizeEmailAttachmentCharset = (
   value: unknown,
 ): EmailTextAttachmentCharset | null => {
-  const normalized = typeof value === "string" ? value.trim() : "";
+  const normalized =
+    typeof value === "string" ? value.trim().toLowerCase() : "";
   if (
     normalized.length === 0 ||
     normalized.length > 64 ||
@@ -383,50 +384,46 @@ const resolveEmailAttachmentCharset = (
   );
 };
 
-const findPostalMimeAttachmentCharset = (
+const buildPostalMimeAttachmentCharsetLookup = (
   parser: unknown,
-  attachmentContent: unknown,
-): EmailTextAttachmentCharset | null => {
+): Map<unknown, EmailTextAttachmentCharset | null> => {
+  const lookup = new Map<unknown, EmailTextAttachmentCharset | null>();
   // PostalMime omits attachment Content-Type parameters from its public
   // result. Its parsed node retains them; guard every lookup so an upstream
   // shape change degrades to BOM/UTF-8 decoding instead of breaking preview.
   if (!isRecord(parser)) {
-    return null;
+    return lookup;
   }
 
-  const visit = (node: unknown): EmailTextAttachmentCharset | null => {
+  const visit = (node: unknown): void => {
     if (!isRecord(node)) {
-      return null;
+      return;
     }
-    if (node["content"] === attachmentContent) {
+
+    const content = node["content"];
+    if (content !== undefined) {
       const contentType = node["contentType"];
-      if (!isRecord(contentType)) {
-        return null;
-      }
-      const parsed = contentType["parsed"];
-      if (!isRecord(parsed)) {
-        return null;
-      }
-      const params = parsed["params"];
-      return isRecord(params)
-        ? normalizeEmailAttachmentCharset(params["charset"])
-        : null;
+      const parsed = isRecord(contentType) ? contentType["parsed"] : null;
+      const params = isRecord(parsed) ? parsed["params"] : null;
+      lookup.set(
+        content,
+        isRecord(params)
+          ? normalizeEmailAttachmentCharset(params["charset"])
+          : null,
+      );
     }
 
     const childNodes = node["childNodes"];
     if (!Array.isArray(childNodes)) {
-      return null;
+      return;
     }
     for (const childNode of childNodes) {
-      const charset = visit(childNode);
-      if (charset) {
-        return charset;
-      }
+      visit(childNode);
     }
-    return null;
   };
 
-  return visit(parser["root"]);
+  visit(parser["root"]);
+  return lookup;
 };
 
 const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
@@ -434,6 +431,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     attachmentEncoding: "arraybuffer",
   });
   const email = await parser.parse(fileBuffer);
+  const attachmentCharsets = buildPostalMimeAttachmentCharsetLookup(parser);
 
   const inlineImages: InlineImage[] = [];
   const attachments: EmailAttachment[] = [];
@@ -444,7 +442,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     }
 
     attachments.push({
-      charset: findPostalMimeAttachmentCharset(parser, attachment.content),
+      charset: attachmentCharsets.get(attachment.content) ?? null,
       contentId: attachment.contentId
         ? stripAngleBrackets(attachment.contentId)
         : null,
