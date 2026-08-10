@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import Elysia, { status, t } from "elysia";
 
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -17,6 +17,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { findCurrentOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 
 const readFileEndpoint = createSafeHandler(
   {
@@ -73,6 +74,48 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
     );
 
     return Result.ok(response);
+  },
+);
+
+const readOfficeCitationEndpoint = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    params: workspaceParams({
+      blockId: t.String({
+        maxLength: 64,
+        pattern: "^(?:pptx|xlsx)-[0-9a-f]{16}$",
+      }),
+      entityId: tSafeId("entity"),
+      fieldId: tSafeId("field"),
+    }),
+  } satisfies HandlerConfig,
+  async function* ({
+    params: { blockId, entityId, fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+  }) {
+    const evidence = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await findCurrentOfficeEvidenceBlock({
+            blockId,
+            entityId,
+            fieldId,
+            organizationId: session.activeOrganizationId,
+            scopedDb,
+            workspaceId,
+          }),
+      ),
+    );
+    if (!evidence) {
+      return Result.ok(status(404));
+    }
+    return Result.ok({
+      locator: evidence.block.locator,
+      source: evidence.source,
+    });
   },
 );
 
@@ -186,6 +229,14 @@ export const filesRoute = new Elysia({
     params: readEmailHtmlPreviewEndpoint.config.params,
     permissions: readEmailHtmlPreviewEndpoint.config.permissions,
   })
+  .get(
+    "/office-citation/:entityId/:fieldId/:blockId",
+    readOfficeCitationEndpoint.handler,
+    {
+      params: readOfficeCitationEndpoint.config.params,
+      permissions: readOfficeCitationEndpoint.config.permissions,
+    },
+  )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,

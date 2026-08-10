@@ -1,11 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import * as v from "valibot";
 
-import type { EmailTextAttachmentCharset } from "@stll/api-contract";
+import type {
+  EmailTextAttachmentCharset,
+  OfficeCitationLocator,
+} from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type {
   EmailCitationBlock,
@@ -18,6 +21,7 @@ import {
   filesQueryRoot,
   type FileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
+import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
@@ -62,6 +66,35 @@ type TextFileData = {
   text: string;
 };
 
+const OFFICE_CITATION_DATA_SCHEMA = v.object({
+  locator: v.variant("type", [
+    v.object({
+      type: v.literal("pptx"),
+      slideIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+    v.object({
+      type: v.literal("xlsx"),
+      range: v.string(),
+      sheetIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      sheetName: v.string(),
+    }),
+  ]),
+  source: v.object({
+    entityId: v.string(),
+    entityName: v.nullable(v.string()),
+    fieldId: v.string(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    pdfFileId: v.nullable(v.string()),
+    propertyId: v.string(),
+  }),
+});
+
+export type OfficeCitationData = {
+  locator: OfficeCitationLocator;
+  source: OfficeCitationSource;
+};
+
 const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
   entityId: v.string(),
   fieldId: v.string(),
@@ -78,6 +111,24 @@ export const filesKeys = {
     "email-html",
     key.workspaceId,
     key.fieldId,
+  ],
+  officeCitation: ({
+    blockId,
+    entityId,
+    fieldId,
+    workspaceId,
+  }: {
+    blockId: string;
+    entityId: string;
+    fieldId: string;
+    workspaceId: string;
+  }) => [
+    ...filesKeys.all(),
+    "office-citation",
+    workspaceId,
+    entityId,
+    fieldId,
+    blockId,
   ],
   textByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),
@@ -143,6 +194,45 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         source: data.source,
       } satisfies EmailHtmlPreviewData;
     },
+  });
+
+export const officeCitationOptions = ({
+  blockId,
+  entityId,
+  fieldId,
+  workspaceId,
+}: {
+  blockId: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+}) =>
+  queryOptions({
+    queryKey: filesKeys.officeCitation({
+      blockId,
+      entityId,
+      fieldId,
+      workspaceId,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await fetchWithTimeout(
+        apiUrl(
+          `/files/${encodeURIComponent(workspaceId)}/office-citation/${encodeURIComponent(entityId)}/${encodeURIComponent(fieldId)}/${encodeURIComponent(blockId)}`,
+        ),
+        { credentials: "include", signal, timeoutMs: 30_000 },
+      );
+      if (!response.ok) {
+        throw new APIError({
+          message: "Failed to verify Office citation",
+          status: response.status,
+        });
+      }
+      return v.parse(
+        OFFICE_CITATION_DATA_SCHEMA,
+        await response.json(),
+      ) satisfies OfficeCitationData;
+    },
+    retry: shouldRetryAPIRequest,
   });
 
 export const emailAttachmentPreviewUrl = ({

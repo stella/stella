@@ -174,6 +174,35 @@ describe("styleDocumentCitations", () => {
     expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
   });
 
+  test("Office citations become unverified footnotes", () => {
+    const officeCitation =
+      "[revenue total](#office:11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222:xlsx-0123456789abcdef)";
+    const result = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument(officeCitation),
+      "footnotes",
+      options,
+    );
+
+    expect(result.citationCounts).toEqual({ unverified: 1, verified: 0 });
+    expect(
+      result.document.package.footnotes?.map(({ content }) =>
+        collectText(content),
+      ),
+    ).toEqual(["Unverified citation: revenue total"]);
+  });
+
+  test("malformed Office citation hrefs export as plain text", () => {
+    const result = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument("[claim](#office:bogus)"),
+      "footnotes",
+      options,
+    );
+
+    expect(collectText(result.document.package.document.content)).toBe("claim");
+    expect(result.document.package.footnotes).toEqual([]);
+    expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+  });
+
   test("marked search-summary links become verified citations", () => {
     const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(

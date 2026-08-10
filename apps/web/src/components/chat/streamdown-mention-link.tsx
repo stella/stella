@@ -4,9 +4,11 @@ import { Fragment, isValidElement, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
+  FileSpreadsheetIcon,
   GlobeIcon,
   LandmarkIcon,
   MailIcon,
+  PresentationIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -24,6 +26,7 @@ import { useEntityIconSource } from "@/components/chat/entity-icon-source";
 import {
   openEmailCitationSource,
   openEntityInInspector,
+  openOfficeCitationSource,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
@@ -34,12 +37,17 @@ import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
+import { useVerifiedOfficeCitationTarget } from "@/hooks/use-verified-office-citation-target";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   EMAIL_CITATION_HREF_PREFIX,
   requestEmailCitationScroll,
 } from "@/lib/files/email-citations";
+import {
+  OFFICE_CITATION_HREF_PREFIX,
+  requestOfficeCitationNavigation,
+} from "@/lib/files/office-citations";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -569,6 +577,18 @@ export const StreamdownMentionLink = ({
     );
   }
 
+  if (href.startsWith(OFFICE_CITATION_HREF_PREFIX)) {
+    return (
+      <OfficeCitationLink
+        href={href}
+        interactive={interactive}
+        workspaceId={workspaceId}
+      >
+        {children}
+      </OfficeCitationLink>
+    );
+  }
+
   const mentionChip =
     parseChatResourceHref(href) !== null ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
@@ -685,6 +705,100 @@ const EmailCitationChip = ({
     >
       {children}
     </InlinePill>
+  );
+};
+
+const OfficeCitationChip = ({
+  citation,
+  children,
+  interactive,
+  workspaceId,
+}: {
+  citation: NonNullable<ReturnType<typeof useVerifiedOfficeCitationTarget>>;
+  children: React.ReactNode;
+  interactive: boolean;
+  workspaceId: string | undefined;
+}) => {
+  const tCommon = useTranslations("common");
+  const { target } = citation;
+  const retryLabel = tCommon("retry");
+  const handleActivate = (): void => {
+    if (citation.type === "error") {
+      detached(citation.retry(), "office-citation.retry");
+      return;
+    }
+    if (!workspaceId) {
+      return;
+    }
+    detached(
+      (async () => {
+        const verified = await citation.verify();
+        if (!verified) {
+          return;
+        }
+        openOfficeCitationSource({
+          source: verified.source,
+          workspaceId,
+        });
+        requestOfficeCitationNavigation({
+          locator: verified.locator,
+          target,
+        });
+      })(),
+      "office-citation.verify",
+    );
+  };
+
+  return (
+    <InlinePill
+      {...(citation.type === "error" ? { ariaLabel: retryLabel } : {})}
+      {...(citation.type === "error" && interactive
+        ? { tooltip: retryLabel }
+        : {})}
+      data-block-id={target.blockId}
+      leadingIcon={
+        target.blockId.startsWith("xlsx-") ? (
+          <FileSpreadsheetIcon className="size-3 shrink-0" />
+        ) : (
+          <PresentationIcon className="size-3 shrink-0" />
+        )
+      }
+      onActivate={
+        interactive && (citation.type === "error" || Boolean(workspaceId))
+          ? handleActivate
+          : undefined
+      }
+      tone={citation.type === "error" ? "info" : "accent"}
+      truncate
+    >
+      {children}
+    </InlinePill>
+  );
+};
+
+const OfficeCitationLink = ({
+  children,
+  href,
+  interactive,
+  workspaceId,
+}: {
+  children: React.ReactNode;
+  href: string;
+  interactive: boolean;
+  workspaceId: string | undefined;
+}) => {
+  const citation = useVerifiedOfficeCitationTarget(href, workspaceId);
+  if (!citation) {
+    return <span>{children}</span>;
+  }
+  return (
+    <OfficeCitationChip
+      citation={citation}
+      interactive={interactive}
+      workspaceId={workspaceId}
+    >
+      {children}
+    </OfficeCitationChip>
   );
 };
 

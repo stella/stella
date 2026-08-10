@@ -89,7 +89,15 @@ RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
       --outfile /app/runtime-workers/ocr-searchable-pdf-worker.js \
-      apps/api/src/lib/ocr-searchable-pdf-worker.ts
+      apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
+    bun build \
+      --target bun \
+      --outfile /app/runtime-workers/office-evidence-worker.js \
+      apps/api/src/lib/files/office-evidence-worker.ts && \
+    cp node_modules/@silurus/ooxml/dist/xlsx_parser_bg.wasm \
+      /app/runtime-workers/xlsx_parser_bg.wasm && \
+    cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
+      /app/runtime-workers/pptx_parser_bg.wasm
 RUN bun --filter @stll/legal-atlas-runner build
 
 # Run the compiled API as non-root. Built from the bare base image: every

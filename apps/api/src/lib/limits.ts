@@ -258,6 +258,14 @@ export const LIMITS = {
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,
+  /** Locator blocks supplied to one active Office-file chat turn. */
+  officeCitationBlocksMax: 160,
+  /** Visible source text retained in one Office locator block. */
+  officeCitationBlockTextMaxChars: 500,
+  /** Bounded JSON returned by the isolated Office locator worker. */
+  officeCitationWorkerOutputMaxBytes: 512 * 1024,
+  /** Hard timeout for one on-demand Office locator extraction. */
+  officeCitationWorkerTimeoutMs: 30_000,
   /** Wall-clock ceiling for one document-processing object-storage read. */
   documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in

@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
+import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -182,11 +183,11 @@ export const openEntityInInspector = async (
   }
 };
 
-export const openEmailCitationSource = ({
+const openFileCitationSource = ({
   source,
   workspaceId,
 }: {
-  source: EmailCitationSource;
+  source: EmailCitationSource | OfficeCitationSource;
   workspaceId: string;
 }): void => {
   const inspector = useInspectorTabsStore.getState();
@@ -202,3 +203,13 @@ export const openEmailCitationSource = ({
   });
   inspector.setFileFacet(source.fieldId, "preview");
 };
+
+export const openEmailCitationSource = (options: {
+  source: EmailCitationSource;
+  workspaceId: string;
+}): void => openFileCitationSource(options);
+
+export const openOfficeCitationSource = (options: {
+  source: OfficeCitationSource;
+  workspaceId: string;
+}): void => openFileCitationSource(options);
