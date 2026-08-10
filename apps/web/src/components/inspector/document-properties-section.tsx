@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -18,6 +19,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { documentPropertiesQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { documentPropertiesOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
@@ -113,11 +115,7 @@ export const DocumentPropertiesSection = ({
   if (data.status !== "available") {
     return <Message>{t(UNAVAILABLE_MESSAGE_KEYS[data.status])}</Message>;
   }
-  // Generated facts (word counts, producer, template) are dropped rather than
-  // tucked below a disclosure: they are not actionable here, and a generator
-  // that never recomputed them reports "0 words" for a document full of text.
-  const authored = data.properties.filter(isAuthoredProperty);
-  if (authored.length === 0) {
+  if (data.properties.length === 0) {
     return (
       <Message>{t("inspector.metadata.documentProperties.empty")}</Message>
     );
@@ -144,33 +142,64 @@ export const DocumentPropertiesSection = ({
     }
   };
 
+  const headline = data.properties.filter(isHeadlineProperty);
+  const rest = data.properties.filter(
+    (property) => !isHeadlineProperty(property),
+  );
+
+  const row = (property: DocumentProperty) => (
+    <div
+      className="flex flex-col gap-1 rounded-md px-2 py-2"
+      key={property.key}
+    >
+      <span className="text-muted-foreground text-xs font-medium">
+        {t(PROPERTY_LABEL_KEYS[property.key])}
+      </span>
+      {data.editable &&
+      property.value.type === "text" &&
+      isAuthoredProperty(property) ? (
+        <EditablePropertyValue
+          fileFieldId={fileFieldId}
+          propertyKey={property.key}
+          value={property.value.value}
+          workspaceId={workspaceId}
+        />
+      ) : (
+        <span className="text-foreground text-sm break-words">
+          {renderValue(property.value)}
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-px px-2 pb-2">
-      {authored.map((property) => (
-        <div
-          className="flex flex-col gap-1 rounded-md px-2 py-2"
-          key={property.key}
-        >
-          <span className="text-muted-foreground text-xs font-medium">
-            {t(PROPERTY_LABEL_KEYS[property.key])}
-          </span>
-          {data.editable && property.value.type === "text" ? (
-            <EditablePropertyValue
-              fileFieldId={fileFieldId}
-              propertyKey={property.key}
-              value={property.value.value}
-              workspaceId={workspaceId}
+      {headline.map((property) => row(property))}
+      {rest.length > 0 && (
+        <details className="group/all">
+          <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1 rounded-md px-2 py-2 text-xs font-medium">
+            <ChevronRightIcon
+              aria-hidden="true"
+              className="size-3 shrink-0 transition-transform group-open/all:rotate-90"
             />
-          ) : (
-            <span className="text-foreground text-sm break-words">
-              {renderValue(property.value)}
-            </span>
-          )}
-        </div>
-      ))}
+            {t("common.showAll")}
+          </summary>
+          {rest.map((property) => row(property))}
+        </details>
+      )}
     </div>
   );
 };
+
+/**
+ * Shown without asking, because they are what someone opening the tab came for:
+ * who the document says wrote it and which organisation it says produced it.
+ * Everything else, including the generated facts, lives under the disclosure —
+ * "0 words" from a generator that never recomputed its counters is noise until
+ * you deliberately go looking for it.
+ */
+const isHeadlineProperty = (property: DocumentProperty): boolean =>
+  property.key === "author" || property.key === "company";
 
 type EditablePropertyValueProps = {
   fileFieldId: string;
@@ -200,10 +229,19 @@ const EditablePropertyValue = ({
       return;
     }
     setSaving(true);
+    // `queryKey` is required by the route's invalidateQuery macro, which tells
+    // every other client the document changed; without it the request is
+    // rejected at validation before the handler runs.
     const { error } = await api
       .files({ workspaceId })
       ["document-properties"]({ fieldId: fileFieldId })
-      .patch({ [propertyKey]: draft });
+      .patch({
+        queryKey: documentPropertiesQueryKey({
+          workspaceId,
+          fieldId: fileFieldId,
+        }),
+        [propertyKey]: draft,
+      });
     setSaving(false);
 
     if (error) {
