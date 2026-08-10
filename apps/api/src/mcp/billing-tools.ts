@@ -11,8 +11,8 @@ import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveRate } from "@/api/lib/billing-rates";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -821,9 +821,7 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
           ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
           : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
         entry,
-      } satisfies v.InferInput<
-        typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION
-      >,
+      } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION>,
       textFields,
     };
   }
