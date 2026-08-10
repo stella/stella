@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { evaluateNumericExpression } from "./compute.js";
+import {
+  evaluateNumericExpression,
+  NUMERIC_FUNCTION_NAMES,
+} from "./compute.js";
 
 const evalExpr = (expression: string, data: Record<string, unknown> = {}) =>
   evaluateNumericExpression(expression, data);
@@ -35,6 +38,10 @@ describe("evaluateNumericExpression — variables", () => {
 });
 
 describe("evaluateNumericExpression — functions", () => {
+  test("keeps the exported function allowlist immutable at runtime", () => {
+    expect(Object.isFrozen(NUMERIC_FUNCTION_NAMES)).toBeTrue();
+  });
+
   test("min / max / abs / floor / ceil", () => {
     expect(evalExpr("min(10, 4, 7)")).toBe(4);
     expect(evalExpr("max(10, 4, 7)")).toBe(10);

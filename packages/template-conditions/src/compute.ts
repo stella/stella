@@ -23,14 +23,14 @@
 
 import { resolvePath } from "./path.js";
 
-export const NUMERIC_FUNCTION_NAMES = [
+export const NUMERIC_FUNCTION_NAMES = Object.freeze([
   "min",
   "max",
   "round",
   "abs",
   "floor",
   "ceil",
-] as const;
+] as const);
 
 export type NumericFunctionName = (typeof NUMERIC_FUNCTION_NAMES)[number];
 
