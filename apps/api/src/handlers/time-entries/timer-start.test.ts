@@ -8,7 +8,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import timerStart from "./timer-start";
+import timerStart, { buildTimerBillingSnapshot } from "./timer-start";
 
 type TimerStartCtx = Parameters<typeof timerStart.handler>[0];
 
@@ -37,6 +37,21 @@ const createContext = ({
   });
 
 describe("timerStart (timezone validation)", () => {
+  test("keeps a timer non-billable until it has an effective rate", () => {
+    expect(buildTimerBillingSnapshot(null)).toEqual({
+      billable: false,
+      rateAtEntry: 0,
+      currency: "XXX",
+    });
+    expect(
+      buildTimerBillingSnapshot({ hourlyRate: 24_000, currency: "EUR" }),
+    ).toEqual({
+      billable: true,
+      rateAtEntry: 24_000,
+      currency: "EUR",
+    });
+  });
+
   test("rejects an invalid IANA timezone id with a 400 instead of throwing", async () => {
     const { getCallCount, safeDb } = createScopedDbMock({
       $count: () => {

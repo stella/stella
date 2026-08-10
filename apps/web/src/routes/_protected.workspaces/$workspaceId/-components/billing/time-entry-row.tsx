@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
+import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
 import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
 
@@ -141,33 +142,52 @@ export const TimeEntryRow = ({
 
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {/* Approval actions */}
-          {entry.status === "draft" && onStatusChange && canUpdateEntry && (
-            <Button
-              className="size-7"
-              onClick={() => onStatusChange(entry.id, "approved")}
-              size="icon"
-              title={t("billing.approve")}
-              variant="ghost"
-            >
-              <CheckCheckIcon className="size-3.5" />
-            </Button>
-          )}
-          {entry.status === "approved" && onStatusChange && canUpdateEntry && (
-            <Button
-              className="size-7"
-              onClick={() => onStatusChange(entry.id, "draft")}
-              size="icon"
-              title={t("billing.revertToDraft")}
-              variant="ghost"
-            >
-              <UndoIcon className="size-3.5" />
-            </Button>
-          )}
-
-          {/* Split */}
-          {(entry.status === "draft" || entry.status === "approved") &&
+          {!isActive &&
+            entry.status === "draft" &&
+            onStatusChange &&
             canUpdateEntry && (
               <Button
+                aria-label={timeEntryActionLabel(
+                  t("billing.approve"),
+                  entry.narrative,
+                )}
+                className="size-7"
+                onClick={() => onStatusChange(entry.id, "approved")}
+                size="icon"
+                title={t("billing.approve")}
+                variant="ghost"
+              >
+                <CheckCheckIcon className="size-3.5" />
+              </Button>
+            )}
+          {!isActive &&
+            entry.status === "approved" &&
+            onStatusChange &&
+            canUpdateEntry && (
+              <Button
+                aria-label={timeEntryActionLabel(
+                  t("billing.revertToDraft"),
+                  entry.narrative,
+                )}
+                className="size-7"
+                onClick={() => onStatusChange(entry.id, "draft")}
+                size="icon"
+                title={t("billing.revertToDraft")}
+                variant="ghost"
+              >
+                <UndoIcon className="size-3.5" />
+              </Button>
+            )}
+
+          {/* Split */}
+          {!isActive &&
+            (entry.status === "draft" || entry.status === "approved") &&
+            canUpdateEntry && (
+              <Button
+                aria-label={timeEntryActionLabel(
+                  t("billing.split.splitEntry"),
+                  entry.narrative,
+                )}
                 className="size-7"
                 onClick={() => setSplitOpen(true)}
                 size="icon"
@@ -178,9 +198,12 @@ export const TimeEntryRow = ({
               </Button>
             )}
 
-          {entry.status === "draft" && canUpdateEntry && (
+          {!isActive && entry.status === "draft" && canUpdateEntry && (
             <Button
-              aria-label={t("common.edit")}
+              aria-label={timeEntryActionLabel(
+                t("common.edit"),
+                entry.narrative,
+              )}
               className="size-7"
               onClick={() => onEdit(entry.id)}
               size="icon"
@@ -189,9 +212,12 @@ export const TimeEntryRow = ({
               <PencilIcon className="size-3.5" />
             </Button>
           )}
-          {entry.status === "draft" && canDeleteEntry && (
+          {!isActive && entry.status === "draft" && canDeleteEntry && (
             <Button
-              aria-label={t("common.delete")}
+              aria-label={timeEntryActionLabel(
+                t("common.delete"),
+                entry.narrative,
+              )}
               className="text-destructive size-7"
               onClick={() => onDelete(entry.id)}
               size="icon"

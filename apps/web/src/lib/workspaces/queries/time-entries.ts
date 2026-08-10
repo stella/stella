@@ -42,6 +42,7 @@ type PersonalTimeEntry = {
   id: string;
   narrative: string;
   status: TimeEntryStatus;
+  timerStartedAt: string | null;
 };
 
 type PersonalTimeEntryPage = {
@@ -144,13 +145,22 @@ const listPersonalTimeEntries = async ({
   });
   return {
     items: page.items.map(
-      ({ billable, dateWorked, durationMinutes, id, narrative, status }) => ({
+      ({
         billable,
         dateWorked,
         durationMinutes,
         id,
         narrative,
         status,
+        timerStartedAt,
+      }) => ({
+        billable,
+        dateWorked,
+        durationMinutes,
+        id,
+        narrative,
+        status,
+        timerStartedAt,
       }),
     ),
     nextCursor: page.nextCursor,

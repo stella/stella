@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -268,7 +268,24 @@ export const updateTimeEntryHandler = async function* ({
             eq(timeEntries.workspaceId, workspaceId),
             eq(timeEntries.status, existing.status),
             eq(timeEntries.dateWorked, existing.dateWorked),
+            eq(timeEntries.timezoneId, existing.timezoneId),
+            eq(timeEntries.durationMinutes, existing.durationMinutes),
+            eq(timeEntries.billedMinutes, existing.billedMinutes),
+            eq(timeEntries.narrative, existing.narrative),
+            existing.invoiceNarrative === null
+              ? isNull(timeEntries.invoiceNarrative)
+              : eq(timeEntries.invoiceNarrative, existing.invoiceNarrative),
             eq(timeEntries.billable, existing.billable),
+            eq(timeEntries.noCharge, existing.noCharge),
+            existing.workItemId === null
+              ? isNull(timeEntries.workItemId)
+              : eq(timeEntries.workItemId, existing.workItemId),
+            existing.taskCode === null
+              ? isNull(timeEntries.taskCode)
+              : eq(timeEntries.taskCode, existing.taskCode),
+            existing.activityCode === null
+              ? isNull(timeEntries.activityCode)
+              : eq(timeEntries.activityCode, existing.activityCode),
             eq(timeEntries.rateAtEntry, existing.rateAtEntry),
             eq(timeEntries.currency, existing.currency),
             canApproveTimeEntries(actor.memberRole)

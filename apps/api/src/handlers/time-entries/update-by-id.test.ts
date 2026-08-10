@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -47,6 +49,7 @@ describe("updateTimeEntryById", () => {
           findFirst: async () => ({
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-06-14",
+            timezoneId: "UTC",
             durationMinutes: 30,
             billedMinutes: 30,
             narrative: "Old client-sensitive narrative",
@@ -114,6 +117,7 @@ describe("updateTimeEntryById", () => {
           findFirst: async () => ({
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-06-14",
+            timezoneId: "UTC",
             durationMinutes: 30,
             billedMinutes: 30,
             narrative: "Original narrative",
@@ -225,5 +229,75 @@ describe("updateTimeEntryById", () => {
       dateWorked: "2026-08-08",
       timezoneId: "Europe/Prague",
     });
+  });
+
+  test("compares every mutable value before replacing an entry", async () => {
+    let compareAndSetParams: unknown[] = [];
+    const workItemId = toSafeId<"entity">("work_item_compare_test");
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        timeEntries: {
+          findFirst: async () => ({
+            status: BILLING_STATUS.DRAFT,
+            dateWorked: "2026-07-11",
+            timezoneId: "Europe/Vienna",
+            durationMinutes: 37,
+            billedMinutes: 42,
+            narrative: "Original concurrency narrative",
+            invoiceNarrative: "Original invoice concurrency narrative",
+            billable: true,
+            noCharge: true,
+            workItemId,
+            userId: toSafeId<"user">("user_test"),
+            taskCode: "L310",
+            activityCode: "A103",
+            rateAtEntry: 12_345,
+            currency: "CHF",
+          }),
+        },
+      },
+      update: () => ({
+        set: () => ({
+          where: (condition: SQL) => {
+            compareAndSetParams = new PgDialect().sqlToQuery(condition).params;
+            return {
+              returning: async () => [
+                { id: toSafeId<"timeEntry">("time_entry_test") },
+              ],
+            };
+          },
+        }),
+      }),
+    });
+
+    await updateTimeEntryById.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          id: toSafeId<"timeEntry">("time_entry_test"),
+          narrative: "Replacement narrative",
+        },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+
+    expect(compareAndSetParams).toEqual(
+      expect.arrayContaining([
+        BILLING_STATUS.DRAFT,
+        "2026-07-11",
+        "Europe/Vienna",
+        37,
+        42,
+        "Original concurrency narrative",
+        "Original invoice concurrency narrative",
+        true,
+        workItemId,
+        "L310",
+        "A103",
+        12_345,
+        "CHF",
+      ]),
+    );
   });
 });

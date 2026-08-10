@@ -38,6 +38,10 @@ import {
   type ManualTimeEntryValues,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/manual-time-entry-form";
 import {
+  timeEntryActionLabel,
+  timeEntryNarrativeExcerpt,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
+import {
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useUpdateTimeEntry,
@@ -150,29 +154,39 @@ export const PersonalTimesheetDay = ({
               <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
                 {formatMinutes(entry.durationMinutes)}
               </span>
-              {entry.status === "draft" && canUpdate && (
-                <Button
-                  aria-label={tCommon("edit")}
-                  className="size-11"
-                  onClick={() => setDialog({ type: "edit", id: entry.id })}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <PencilIcon className="size-4" />
-                </Button>
-              )}
-              {entry.status === "draft" && canDelete && (
-                <Button
-                  aria-label={tCommon("delete")}
-                  className="text-destructive size-11"
-                  disabled={deleteEntry.isPending}
-                  onClick={() => setDeletingId(entry.id)}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <TrashIcon className="size-4" />
-                </Button>
-              )}
+              {entry.status === "draft" &&
+                entry.timerStartedAt === null &&
+                canUpdate && (
+                  <Button
+                    aria-label={timeEntryActionLabel(
+                      tCommon("edit"),
+                      entry.narrative,
+                    )}
+                    className="size-11"
+                    onClick={() => setDialog({ type: "edit", id: entry.id })}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <PencilIcon className="size-4" />
+                  </Button>
+                )}
+              {entry.status === "draft" &&
+                entry.timerStartedAt === null &&
+                canDelete && (
+                  <Button
+                    aria-label={timeEntryActionLabel(
+                      tCommon("delete"),
+                      entry.narrative,
+                    )}
+                    className="text-destructive size-11"
+                    disabled={deleteEntry.isPending}
+                    onClick={() => setDeletingId(entry.id)}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <TrashIcon className="size-4" />
+                  </Button>
+                )}
             </div>
           ))}
           {entriesQuery.hasNextPage && (
@@ -246,7 +260,9 @@ export const PersonalTimesheetDay = ({
             <AlertDialogTitle>{tCommon("delete")}</AlertDialogTitle>
             <AlertDialogDescription>
               {tCommon("deleteConfirmDescription", {
-                name: deletingEntry?.narrative ?? "",
+                name: timeEntryNarrativeExcerpt(
+                  deletingEntry?.narrative ?? "",
+                ),
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

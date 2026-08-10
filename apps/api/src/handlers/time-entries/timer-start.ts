@@ -26,6 +26,14 @@ const timerStartBodySchema = t.Object({
   narrative: t.Optional(t.String({ maxLength: 10_000 })),
 });
 
+export const buildTimerBillingSnapshot = (
+  resolvedRate: { hourlyRate: number; currency: string } | null,
+) => ({
+  billable: resolvedRate !== null,
+  rateAtEntry: cents(resolvedRate?.hourlyRate ?? 0),
+  currency: resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY,
+});
+
 const timerStart = createSafeHandler(
   {
     permissions: { timeEntry: ["create"] },
@@ -77,8 +85,7 @@ const timerStart = createSafeHandler(
       userId: user.id,
       dateWorked: todayStr,
     });
-    const rateAtEntry = resolvedRate?.hourlyRate ?? 0;
-    const currency = resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY;
+    const billingSnapshot = buildTimerBillingSnapshot(resolvedRate);
 
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the workspace time entry limit.
@@ -129,8 +136,7 @@ const timerStart = createSafeHandler(
           timezoneId: body.timezoneId,
           durationMinutes: 0,
           billedMinutes: 0,
-          rateAtEntry: cents(rateAtEntry),
-          currency,
+          ...billingSnapshot,
           narrative: body.narrative ?? "",
           source: TIME_ENTRY_SOURCE.TIMER,
           status: BILLING_STATUS.DRAFT,
@@ -154,9 +160,10 @@ const timerStart = createSafeHandler(
                 dateWorked: todayStr,
                 source: TIME_ENTRY_SOURCE.TIMER,
                 status: BILLING_STATUS.DRAFT,
+                billable: billingSnapshot.billable,
                 timerStartedAt: now.toISOString(),
-                rateAtEntry: cents(rateAtEntry),
-                currency,
+                rateAtEntry: billingSnapshot.rateAtEntry,
+                currency: billingSnapshot.currency,
               },
             },
           },
