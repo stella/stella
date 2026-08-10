@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
+import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 type OfficeEvidenceSource = {
@@ -80,13 +81,14 @@ const evidenceRowSelection = {
 export const resolveOfficeEvidenceFormat = (
   mimeType: string,
 ): OfficeEvidenceFormat | null => {
-  if (mimeType === XLSX_MIME_TYPE) {
+  const normalized = normalizeMimeType(mimeType);
+  if (normalized === XLSX_MIME_TYPE) {
     return OFFICE_EVIDENCE_FORMAT.xlsx;
   }
-  return mimeType === PPTX_MIME_TYPE ? OFFICE_EVIDENCE_FORMAT.pptx : null;
+  return normalized === PPTX_MIME_TYPE ? OFFICE_EVIDENCE_FORMAT.pptx : null;
 };
 
-const evidenceSourceWhere = (
+const evidenceSourceIdentityWhere = (
   scope: OfficeEvidenceScope,
   source: OfficeEvidenceSource,
 ) =>
@@ -97,6 +99,14 @@ const evidenceSourceWhere = (
     eq(officeFileEvidence.fieldId, source.fieldId),
     eq(officeFileEvidence.sourceFileId, source.fileId),
     eq(officeFileEvidence.sourceSha256Hex, source.sha256Hex),
+  );
+
+const evidenceSourceWhere = (
+  scope: OfficeEvidenceScope,
+  source: OfficeEvidenceSource,
+) =>
+  and(
+    evidenceSourceIdentityWhere(scope, source),
     eq(officeFileEvidence.parserVersion, OFFICE_EVIDENCE_PARSER_VERSION),
   );
 
@@ -110,6 +120,23 @@ const selectEvidenceRows = async (
     .from(officeFileEvidence)
     .where(evidenceSourceWhere(scope, source))
     .limit(1);
+
+const selectEvidenceVersionRows = async (
+  tx: Transaction,
+  scope: OfficeEvidenceScope,
+  source: OfficeEvidenceSource,
+) =>
+  await tx
+    .select(evidenceRowSelection)
+    .from(officeFileEvidence)
+    .where(
+      and(
+        evidenceSourceIdentityWhere(scope, source),
+        eq(officeFileEvidence.status, OFFICE_EVIDENCE_STATUS.available),
+      ),
+    )
+    .orderBy(desc(officeFileEvidence.parserVersion))
+    .limit(OFFICE_EVIDENCE_LIMITS.verificationParserVersionsMax);
 
 const parseJson = (value: string): unknown => JSON.parse(value);
 
@@ -592,12 +619,14 @@ export const findOfficeEvidenceBlock = async ({
     if (!resolveOfficeEvidenceFormat(source.mimeType)) {
       return null;
     }
-    const evidenceRow = (
-      await selectEvidenceRows(tx, { organizationId, workspaceId }, source)
-    ).at(0);
-    return evidenceRow
+    const evidenceRows = await selectEvidenceVersionRows(
+      tx,
+      { organizationId, workspaceId },
+      source,
+    );
+    return evidenceRows.length > 0
       ? {
-          evidenceRow,
+          evidenceRows,
           source: {
             entityId,
             entityName: fieldSource.entityName,
@@ -613,14 +642,13 @@ export const findOfficeEvidenceBlock = async ({
   if (!resolved) {
     return null;
   }
-  const { evidenceRow, source } = resolved;
-  const payload = await decodeEvidenceRow(evidenceRow, organizationId);
-  const block = payload?.blocks.find(({ id }) => id === blockId);
-  if (!block) {
-    return null;
+  const { evidenceRows, source } = resolved;
+  for (const evidenceRow of evidenceRows) {
+    const payload = await decodeEvidenceRow(evidenceRow, organizationId);
+    const block = payload?.blocks.find(({ id }) => id === blockId);
+    if (block) {
+      return { block, source };
+    }
   }
-  return {
-    block,
-    source,
-  };
+  return null;
 };

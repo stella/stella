@@ -10,6 +10,7 @@ export type OfficeEvidenceFormat = (typeof OFFICE_EVIDENCE_FORMATS)[number];
 export const OFFICE_EVIDENCE_LIMITS = {
   blockTextMaxChars: 500,
   blocksMax: 160,
+  verificationParserVersionsMax: 8,
   workerOutputMaxBytes: 512 * 1024,
   workerTimeoutMs: 30_000,
 } as const;

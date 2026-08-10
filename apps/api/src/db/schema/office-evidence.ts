@@ -73,6 +73,18 @@ export const officeFileEvidence = p.pgTable(
         table.parserVersion,
       ),
     p
+      .index("office_file_evidence_workspace_organization_idx")
+      .on(table.workspaceId, table.organizationId),
+    p
+      .index("office_file_evidence_entity_workspace_idx")
+      .on(table.entityId, table.workspaceId),
+    p
+      .index("office_file_evidence_entity_version_idx")
+      .on(table.entityVersionId),
+    p
+      .index("office_file_evidence_field_workspace_idx")
+      .on(table.fieldId, table.workspaceId),
+    p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],

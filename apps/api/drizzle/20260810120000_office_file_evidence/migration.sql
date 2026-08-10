@@ -89,6 +89,14 @@ CREATE UNIQUE INDEX "office_file_evidence_source_uidx"
     "organization_id", "workspace_id", "entity_version_id", "field_id",
     "source_file_id", "source_sha256_hex", "parser_version"
   );--> statement-breakpoint
+CREATE INDEX "office_file_evidence_workspace_organization_idx"
+  ON "office_file_evidence" ("workspace_id", "organization_id");--> statement-breakpoint
+CREATE INDEX "office_file_evidence_entity_workspace_idx"
+  ON "office_file_evidence" ("entity_id", "workspace_id");--> statement-breakpoint
+CREATE INDEX "office_file_evidence_entity_version_idx"
+  ON "office_file_evidence" ("entity_version_id");--> statement-breakpoint
+CREATE INDEX "office_file_evidence_field_workspace_idx"
+  ON "office_file_evidence" ("field_id", "workspace_id");--> statement-breakpoint
 ALTER TABLE "office_file_evidence" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "office_file_evidence" TO stella;--> statement-breakpoint
 
