@@ -112,6 +112,8 @@ const readEvidenceRows = async (
   source: OfficeEvidenceSource,
 ) => await scopedDb((tx) => selectEvidenceRows(tx, scope, source));
 
+const parseJson = (value: string): unknown => JSON.parse(value);
+
 const decodeEvidenceRow = async (
   row: PersistedEvidenceRow,
   organizationId: SafeId<"organization">,
@@ -135,7 +137,7 @@ const decodeEvidenceRow = async (
     return null;
   }
   const jsonResult = Result.try({
-    try: () => JSON.parse(decryptResult.value) as unknown,
+    try: () => parseJson(decryptResult.value),
     catch: (cause) => cause,
   });
   if (Result.isError(jsonResult)) {

@@ -24,10 +24,11 @@ export type OfficeCitationNavigation = {
 };
 
 type OfficeCitationRegistration = {
+  key: string;
   navigate: (navigation: OfficeCitationNavigation) => void;
 };
 
-const registrations = new Map<string, OfficeCitationRegistration>();
+let registrations: readonly OfficeCitationRegistration[] = [];
 let pendingNavigation: OfficeCitationNavigation | null = null;
 
 const citationSourceKey = ({
@@ -55,16 +56,23 @@ export const registerOfficeCitationNavigation = ({
   navigate: (navigation: OfficeCitationNavigation) => void;
 }): (() => void) => {
   const key = citationSourceKey({ entityId, fieldId });
-  const registration = { navigate };
-  registrations.set(key, registration);
+  const registration = { key, navigate };
+  registrations = [
+    ...registrations.filter((candidate) => candidate.key !== key),
+    registration,
+  ];
   const pending = pendingNavigation;
   if (pending && citationSourceKey(pending.target) === key) {
     pendingNavigation = null;
     queueMicrotask(() => navigate(pending));
   }
   return () => {
-    if (registrations.get(key) === registration) {
-      registrations.delete(key);
+    if (
+      registrations.find((candidate) => candidate.key === key) === registration
+    ) {
+      registrations = registrations.filter(
+        (candidate) => candidate !== registration,
+      );
     }
   };
 };
@@ -73,7 +81,7 @@ export const requestOfficeCitationNavigation = (
   navigation: OfficeCitationNavigation,
 ): void => {
   const key = citationSourceKey(navigation.target);
-  const registration = registrations.get(key);
+  const registration = registrations.find((candidate) => candidate.key === key);
   if (registration) {
     registration.navigate(navigation);
     return;
