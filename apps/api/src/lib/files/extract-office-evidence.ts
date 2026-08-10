@@ -8,11 +8,14 @@ import {
   type OfficeEvidenceFormat,
   type OfficeEvidenceWorkerResult,
 } from "@/api/lib/files/office-evidence-types";
-import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
+import {
+  resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
+} from "@/api/lib/runtime-worker-path";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
-  outputFile: "office-evidence-worker.js",
+  outputFile: RUNTIME_WORKER_FILES.officeEvidence,
   sourceDir: import.meta.dir,
   sourceFile: "office-evidence-worker.ts",
 });

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
+import {
+  resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
+} from "@/api/lib/runtime-worker-path";
 
 const WORKER_DIR_ENV = "STELLA_WORKER_DIR";
 const originalWorkerDir = process.env[WORKER_DIR_ENV];
@@ -21,7 +24,7 @@ describe("runtime worker paths", () => {
 
     expect(
       resolveRuntimeWorkerPath({
-        outputFile: "worker.js",
+        outputFile: RUNTIME_WORKER_FILES.pdf,
         sourceDir: "/repo/apps/api/src/lib/search",
         sourceFile: "worker.ts",
       }),
@@ -33,10 +36,10 @@ describe("runtime worker paths", () => {
 
     expect(
       resolveRuntimeWorkerPath({
-        outputFile: "worker.js",
+        outputFile: RUNTIME_WORKER_FILES.pdf,
         sourceDir: "/repo/apps/api/src/lib/search",
         sourceFile: "worker.ts",
       }),
-    ).toBe(path.resolve("/runtime/workers", "worker.js"));
+    ).toBe(path.resolve("/runtime/workers", RUNTIME_WORKER_FILES.pdf));
   });
 });

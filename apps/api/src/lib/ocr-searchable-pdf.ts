@@ -7,11 +7,12 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   resolveOcrPdfFontPath,
   resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
 } from "@/api/lib/runtime-worker-path";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
-  outputFile: "ocr-searchable-pdf-worker.js",
+  outputFile: RUNTIME_WORKER_FILES.ocrSearchablePdf,
   sourceDir: import.meta.dir,
   sourceFile: "ocr-searchable-pdf-worker.ts",
 });

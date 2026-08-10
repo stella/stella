@@ -8,8 +8,15 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const YARA_DIR = path.join(import.meta.dir, "yara");
 
+const ruleFiles = [...new Bun.Glob("*.yar").scanSync(YARA_DIR)];
+
+// An empty rule directory compiles into a scanner that matches nothing, so a
+// missing rules deployment would pass silently. Exported for the image smoke
+// probe (scripts/image-smoke.ts), which asserts the count is non-zero.
+export const yaraRuleFileCount = ruleFiles.length;
+
 const compiled = compile(
-  [...new Bun.Glob("*.yar").scanSync(YARA_DIR)]
+  ruleFiles
     .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))
     .join("\n"),
 );
