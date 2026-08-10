@@ -82,14 +82,10 @@ export const decodeEmailTextAttachment = ({
     charset ??
     getByteOrderMarkEncoding(bytes) ??
     EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
-  switch (encoding) {
-    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le:
-      return new TextDecoder("utf-16").decode(bytes);
-    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be:
-      return decodeUtf16Be(bytes);
-    default:
-      return new TextDecoder(encoding).decode(bytes);
+  if (encoding === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be) {
+    return decodeUtf16Be(bytes);
   }
+  return new TextDecoder(encoding).decode(bytes);
 };
 
 export const getEmailAttachmentActivationId = ({

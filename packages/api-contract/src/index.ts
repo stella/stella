@@ -462,6 +462,7 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS = {
     "unicode11utf8",
     "unicode20utf8",
     "utf-8",
+    // eslint-disable-next-line unicorn/text-encoding-identifier-case -- exact WHATWG legacy label
     "utf8",
     "x-unicode20utf8",
   ],

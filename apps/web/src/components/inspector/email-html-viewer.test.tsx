@@ -6,6 +6,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-ai.logic";
 import {
   EmailFileViewer,
   EmailHtmlViewer,
@@ -153,6 +154,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
+        overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.active}
         workspaceId="workspace-1"
       >
         <EmailFileViewer

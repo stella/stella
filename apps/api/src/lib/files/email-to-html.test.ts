@@ -1034,11 +1034,12 @@ describe("emailToHtml (.eml)", () => {
       ["koi", "koi8-r"],
       ["utf-16", "utf-16"],
     ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- each declared charset needs an independently parsed MIME tree
       const parsed = await parseEmail(
         toArrayBuffer(
           eml.replace(
             "Content-Type: text/plain; charset=utf-8",
-            `Content-Type: text/plain; charset=${declaredCharset}`,
+            () => `Content-Type: text/plain; charset=${declaredCharset}`,
           ),
         ),
         "message/rfc822",
