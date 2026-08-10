@@ -110,7 +110,7 @@ const readEvidenceRows = async (
   scopedDb: ScopedDb,
   scope: OfficeEvidenceScope,
   source: OfficeEvidenceSource,
-) => await scopedDb((tx) => selectEvidenceRows(tx, scope, source));
+) => await scopedDb(async (tx) => await selectEvidenceRows(tx, scope, source));
 
 const parseJson = (value: string): unknown => JSON.parse(value);
 

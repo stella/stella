@@ -106,7 +106,7 @@ export const SilurusOfficeFileViewer = ({
       const previous = navigationQueueRef.current;
       const navigation = previous.then(async () => {
         if (generation !== navigationGenerationRef.current) {
-          return;
+          return undefined;
         }
         const applied = await applyOfficeNavigation(
           viewer,
@@ -116,8 +116,9 @@ export const SilurusOfficeFileViewer = ({
         if (applied && generation === navigationGenerationRef.current) {
           onNavigationApplied?.(request.sequence);
         }
+        return undefined;
       });
-      const observed = navigation.catch((error) => {
+      const observed = navigation.catch((error: unknown) => {
         if (generation === navigationGenerationRef.current) {
           onError?.(toError(error));
         }
@@ -291,10 +292,7 @@ export const SilurusOfficeFileViewer = ({
       }
       viewerReadyRef.current = true;
       reportReady();
-      const navigationViewer = viewerRef.current;
-      if (navigationViewer) {
-        navigateToLatestRequest(navigationViewer);
-      }
+      navigateToLatestRequest(viewerRef.current);
     };
 
     detached(load().catch(reportError), "SilurusOfficeFileViewer.load");
