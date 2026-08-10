@@ -12,6 +12,8 @@
  * unfilled (handled like a null client).
  */
 
+import type { ContactType } from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import type {
   BankAccount,
@@ -54,7 +56,7 @@ const CONTACT_SOURCE_COLUMNS = {
 
 /** A contact row projected through {@link CONTACT_SOURCE_COLUMNS}. */
 type ContactRow = {
-  type: "person" | "organization";
+  type: ContactType;
   displayName: string;
   firstName: string | null;
   lastName: string | null;

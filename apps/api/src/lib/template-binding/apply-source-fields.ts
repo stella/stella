@@ -14,6 +14,7 @@
  * database; {@link build-binding-context} maps the matter's records onto them.
  */
 
+import type { ContactType } from "@stll/api-contract";
 import { resolvePath } from "@stll/template-conditions";
 
 import type {
@@ -34,7 +35,7 @@ import type {
 
 /** The subset of contact columns a contact/party-sourced field resolves from. */
 export type ContactSourceRecord = {
-  type: "person" | "organization";
+  type: ContactType;
   displayName: string;
   firstName: string | null;
   lastName: string | null;

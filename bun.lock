@@ -507,7 +507,6 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
       },
     },
     "packages/cli": {
@@ -669,6 +668,7 @@
       "dependencies": {
         "@formatjs/icu-messageformat-parser": "^3.5.15",
         "@stll/ai-catalog": "workspace:*",
+        "@stll/locales": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -718,7 +718,6 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
       },
     },
     "packages/transactional": {

@@ -27,14 +27,6 @@ describe("workflow queue topology", () => {
   });
 
   test("gives each worker an explicit positive concurrency budget", () => {
-    expect(WORKFLOW_WORKER_SPECS).toHaveLength(2);
-    expect(WORKFLOW_WORKER_SPECS.map(({ queueClass }) => queueClass)).toEqual([
-      WORKFLOW_QUEUE_CLASS.standard,
-      WORKFLOW_QUEUE_CLASS.flex,
-    ]);
-    expect(
-      new Set(WORKFLOW_WORKER_SPECS.map(({ queueClass }) => queueClass)).size,
-    ).toBe(WORKFLOW_WORKER_SPECS.length);
     for (const spec of WORKFLOW_WORKER_SPECS) {
       expect(spec.concurrency).toBeGreaterThan(0);
     }

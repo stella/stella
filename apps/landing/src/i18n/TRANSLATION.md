@@ -100,8 +100,8 @@ claim:
 | render (a document)            | look, appear                                          |
 
 The tell for a new one: the word names how stella is built rather than what the
-reader gets. When you catch one, fix the `en` string **and** its twin in
-`data/products/<slug>.ts`; `menu-copy.test.ts` fails if you fix only one.
+reader gets. When you catch one, fix the `en` string; the catalog is the sole
+source for product prose.
 
 ## Register per locale
 
@@ -562,13 +562,11 @@ prints around that copy (`In short`, `Capabilities`, `FAQ`, `Explore more`) are
 `common.getCli` on the CLI & MCP page).
 
 The message format has no array form, so lists are numbered sibling keys:
-`products.editor.sections.0.bullets.3`. The numbers are positions in
-`data/products/<slug>.ts`, which stays the English source of truth and owns
-everything that is not prose (media, evidence, link destinations);
-`menu-copy.test.ts` compares the whole `en` subtree against it, so a dropped
-bullet or an extra FAQ fails there rather than rendering as a gap. Never add,
-drop, or reorder a numbered key in a translation: the count is the English
-structure, and `i18n:check` enforces it.
+`products.editor.sections.0.bullets.3`. The English catalog owns the prose and
+list structure; `data/products/<slug>.ts` owns media, evidence, link
+destinations, brand names, and code snippets. Never add, drop, or reorder a
+numbered key in a translation: the count is the English structure, and
+`i18n:check` enforces it.
 
 What a translated page owes the reader:
 

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
+import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -75,14 +76,6 @@ type BillingToolName =
   | "resolve_rate"
   | "list_invoices"
   | "get_usage";
-
-/** Statuses list_time_entries can filter on (the full time-entry lifecycle). */
-const TIME_ENTRY_STATUS_FILTERS = [
-  "draft",
-  "approved",
-  "billed",
-  "written_off",
-] as const;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -337,7 +330,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
         status: enumProp(
           "List only entries with this status",
-          TIME_ENTRY_STATUS_FILTERS,
+          TIME_ENTRY_STATUSES,
         ),
         limit: intProp("Max entries to return", {
           min: 1,
@@ -685,7 +678,7 @@ const listTimeEntriesArgsSchema = v.pipe(
     user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
     date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
-    status: v.optional(v.picklist(TIME_ENTRY_STATUS_FILTERS)),
+    status: v.optional(v.picklist(TIME_ENTRY_STATUSES)),
     limit: v.optional(
       v.pipe(
         v.number(),

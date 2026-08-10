@@ -29,22 +29,13 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
-import type { MattersColumnId, MattersSortKey } from "@/lib/workspaces/types";
-import { ALL_COLUMNS } from "@/lib/workspaces/types";
+import type { MattersColumnId } from "@/lib/workspaces/types";
+import { ALL_COLUMNS, MATTERS_SORT_KEYS } from "@/lib/workspaces/types";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import { useConfigStore } from "@/stores/config-store";
 
 const routeApi = getRouteApi("/_protected");
-
-const SORT_KEYS = [
-  "name",
-  "reference",
-  "entityCount",
-  "lastActivityAt",
-  "createdAt",
-  "clientName",
-] as const satisfies readonly MattersSortKey[];
 
 type MattersToolbarProps = {
   search: string;
@@ -104,7 +95,7 @@ export const MattersToolbar = ({
         <MenuPopup align="end">
           <MenuGroup>
             <MenuGroupLabel>{t("common.sort")}</MenuGroupLabel>
-            {SORT_KEYS.map((key) => (
+            {MATTERS_SORT_KEYS.map((key) => (
               <MenuItem
                 key={key}
                 onClick={() => {

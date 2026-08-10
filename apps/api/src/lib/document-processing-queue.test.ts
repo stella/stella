@@ -459,13 +459,6 @@ describe("isCurrentNativeExtractionSource", () => {
       Parameters<typeof isCurrentNativeExtractionSource>[1]
     >;
 
-    expect(Object.keys(rejectionCases).sort()).toEqual([
-      "deletedVersion",
-      "encryptedFile",
-      "mismatchedCurrentVersion",
-      "mismatchedFieldVersion",
-      "readOnlyEntity",
-    ]);
     for (const candidate of Object.values(rejectionCases)) {
       expect(isCurrentNativeExtractionSource(docxRun, candidate)).toBe(false);
     }

@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
         },
-        "1": {
-          "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Lisez et explorez la jurisprudence officielle, les sources juridiques et les registres d’entreprises."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:tabular-review": {
+          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
+        },
+        "product:workspace": {
+          "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        },
+        "product:agent": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos outils connectés, avec validation et aperçu des sources."
         },
-        "1": {
-          "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:workspace": {
+          "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Dossiers, documents, revue et chat au même endroit."
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Travaillez sur vos dossiers et vos outils connectés, avec validation et citations."
         },
-        "2": {
+        "product:templates": {
           "body": "Remplissez des documents juridiques réutilisables depuis l’application, la CLI ou vos outils connectés."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:workspace": {
+          "body": "Dossiers, documents, revue et chat au même endroit."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Activez le mode développeur dans Settings → Connectors → Advanced, puis ajoutez un connecteur avec l’adresse du point de terminaison."
           },
-          "1": {
+          "claude": {
             "body": "Dans Settings → Connectors, ajoutez un connecteur personnalisé avec l’adresse du point de terminaison."
           },
-          "2": {
-            "body": "Ajoutez le serveur, puis connectez-vous :"
-          },
-          "3": {
+          "claude-code": {
             "body": "Ajoutez le serveur en une commande :"
+          },
+          "codex": {
+            "body": "Ajoutez le serveur, puis connectez-vous :"
           }
         },
         "heading": "Connecter un agent IA",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Voyez où dossiers, documents et outils cohabitent."
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
         },
-        "1": {
-          "body": "Créez des documents Word réutilisables avec des champs et des clauses conditionnelles."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Essayez le même éditeur seul : ouvrez et modifiez un .docx dans le navigateur, sans compte."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:templates": {
+          "body": "Créez des documents Word réutilisables avec des champs et des clauses conditionnelles."
+        },
+        "product:workspace": {
+          "body": "Voyez où dossiers, documents et outils cohabitent."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Préparez les documents sensibles pour l’IA sans exposer les éléments identifiants."
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos sources, avec validation et citations."
         },
-        "2": {
-          "body": "Transformez un ensemble de documents en tableau de revue rattaché au dossier."
+        "product:anonymization": {
+          "body": "Préparez les documents sensibles pour l’IA sans exposer les éléments identifiants."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:tabular-review": {
+          "body": "Transformez un ensemble de documents en tableau de revue rattaché au dossier."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        },
+        "product:agent": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos sources connectées, avec validation et aperçu des sources."
         },
-        "1": {
-          "body": "Jurisprudence officielle et registres d’entreprises, versés au dossier."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Préparez les documents sensibles pour l’IA sans exposer les éléments identifiants."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:public-data": {
+          "body": "Jurisprudence officielle et registres d’entreprises, versés au dossier."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Dossiers, documents et édition Word au même endroit."
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
         },
-        "1": {
-          "body": "Transformez un ensemble de documents en tableau de revue rattaché au dossier."
-        },
-        "2": {
+        "product:agent": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos sources, avec citations à l’appui."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:tabular-review": {
+          "body": "Transformez un ensemble de documents en tableau de revue rattaché au dossier."
+        },
+        "product:workspace": {
+          "body": "Dossiers, documents et édition Word au même endroit."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Comment fonctionnent les modèles dans stella ?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Assemblez un document depuis un modèle plutôt que depuis une page blanche",
             "1": "Réutilisez les mêmes clauses dans plusieurs modèles",
@@ -772,7 +772,7 @@
           },
           "heading": "Construisez à partir de modèles et de clauses"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Préremplissez les champs depuis un document déjà présent au dossier",
             "1": "Vérifiez et ajustez chaque valeur avant de produire le brouillon",
@@ -780,7 +780,7 @@
           },
           "heading": "Remplissez-le avec les données du dossier"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Rédigez et ajustez vos modèles dans l’éditeur",
             "1": "Assemblez le brouillon directement dans le dossier",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        },
+        "product:agent": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos outils connectés, avec validation et aperçu des sources."
         },
-        "1": {
-          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Accédez aux mêmes dossiers, documents et jurisprudence depuis la CLI et les outils compatibles MCP."
         },
-        "3": {
-          "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
+        "product:tabular-review": {
+          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Qu’est-ce que l’espace de travail stella ?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Documents, contacts, revue et chat vivent dans le dossier",
             "1": "Modifiez les documents Word .docx sans quitter l’espace de travail",
@@ -870,7 +870,7 @@
           },
           "heading": "Tout le dossier, au même endroit"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Ouvrez et modifiez les documents Word .docx directement dans l’espace de travail",
             "1": "La version annotée reste un fichier Word : sans conversion, sans copies",

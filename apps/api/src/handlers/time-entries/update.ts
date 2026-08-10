@@ -3,8 +3,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { BILLING_STATUS } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
-import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { timeEntries } from "@/api/db/schema";
 import {
   canApproveTimeEntries,
   canManageTimeEntry,

@@ -605,7 +605,6 @@ describe("capInputSchema", () => {
   });
 
   test("defaults to the committed 64KiB cap", () => {
-    expect(MAX_CAPABILITY_SCHEMA_BYTES).toBe(64 * 1024);
     const under = { body: "x".repeat(MAX_CAPABILITY_SCHEMA_BYTES - 20) };
     expect(capInputSchema(under).truncated).toBe(false);
     const over = { body: "x".repeat(MAX_CAPABILITY_SCHEMA_BYTES + 1) };

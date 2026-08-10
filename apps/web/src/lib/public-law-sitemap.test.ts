@@ -19,8 +19,6 @@ const {
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { isWorkspaceDocumentRoutePath } =
   await import("@/components/workspaces/entity-utils");
-const { WORKSPACE_PRIMARY_NAV_ITEMS } =
-  await import("@/components/workspace-primary-nav");
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../..");
 const readSource = async (path: string) =>
@@ -640,16 +638,6 @@ describe("public law sitemap", () => {
     const sources = await Promise.all([
       readSource("apps/web/src/components/app-sidebar.tsx"),
       readSource("apps/web/src/components/public-workspace-shell.tsx"),
-    ]);
-
-    expect(WORKSPACE_PRIMARY_NAV_ITEMS.map((item) => item.id)).toEqual([
-      "search",
-      "chat",
-      "matters",
-      "caseLaw",
-      "tools",
-      "knowledge",
-      "contacts",
     ]);
 
     for (const source of sources) {

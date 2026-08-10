@@ -4,8 +4,8 @@
 // its handler module. `invoke_capability` loads the module on demand and calls
 // the module's `{ config, handler }` export, so the generic path reuses the
 // safe-handler wrapper (permission + usage gates) unchanged. Keys here are byte-
-// for-byte the catalog's ids; a drift guard (`--check`) and a registry test
-// both enforce that.
+// for-byte the catalog's ids; the exporter emits both artifacts from the same
+// records and its `--check` mode guards the committed output.
 
 export type CapabilityDispatchEntry = {
   /** Lazy module import; the endpoint definition is its default (or named) export. */

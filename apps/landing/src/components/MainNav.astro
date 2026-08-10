@@ -27,20 +27,15 @@ const t = getTranslations(locale);
 // catalog entries fails typecheck.
 // Built in pillar order like the list beside it, so every trigger has a pane.
 const previews = pillars.flatMap((pillar) =>
-  pillar.slugs.flatMap((slug) => {
-    const product = productBySlug.get(slug);
-    if (!product) {
-      return [];
-    }
-    return [
-      {
-        slug,
-        hero: product.hero,
-        href: productHref(slug, locale),
-        title: t(`nav.products.${slug}.title`),
-        blurb: t(`nav.products.${slug}.blurb`),
-      },
-    ];
+  pillar.slugs.map((slug) => {
+    const product = productBySlug[slug];
+    return {
+      slug,
+      hero: product.hero,
+      href: productHref(slug, locale),
+      title: t(`nav.products.${slug}.title`),
+      blurb: t(`nav.products.${slug}.blurb`),
+    };
   }),
 );
 
@@ -86,8 +81,7 @@ const compactMenus = [
                 <span class="nav-mega-grouplabel">{t(`nav.pillars.${pillar.id}`)}</span>
                 <ul>
                   {pillar.slugs.map((slug) => {
-                    const p = productBySlug.get(slug);
-                    if (!p) return null;
+                    const p = productBySlug[slug];
                     const first = pi === 0 && slug === pillar.slugs[0];
                     return (
                       <li>

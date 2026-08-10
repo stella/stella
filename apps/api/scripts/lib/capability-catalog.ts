@@ -11,6 +11,8 @@
 
 import { panic } from "better-result";
 
+import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "@stll/api-contract";
+
 import type { HandlerKind } from "./enumerate-safe-handlers";
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
@@ -735,8 +737,8 @@ export const serializeDispatchModule = (
 // its handler module. \`invoke_capability\` loads the module on demand and calls
 // the module's \`{ config, handler }\` export, so the generic path reuses the
 // safe-handler wrapper (permission + usage gates) unchanged. Keys here are byte-
-// for-byte the catalog's ids; a drift guard (\`--check\`) and a registry test
-// both enforce that.
+// for-byte the catalog's ids; the exporter emits both artifacts from the same
+// records and its \`--check\` mode guards the committed output.
 
 export type CapabilityDispatchEntry = {
   /** Lazy module import; the endpoint definition is its default (or named) export. */
@@ -1141,14 +1143,9 @@ export const compareScopeStrictness = ({
  * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
  * ratchet, so the class stays impossible even if the resolver is later changed.
  */
-export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
-  "stella:admin_write",
-  "stella:billing_write",
-  "stella:contacts_write",
-  "stella:documents_write",
-  "stella:knowledge_write",
-  "stella:matters_write",
-]);
+export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
+  MCP_WRITE_ONLY_RESOURCE_SCOPES,
+);
 
 /**
  * The read-tier scope a domain's write/consent scope downgrades to for a READ

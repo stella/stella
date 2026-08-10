@@ -31,11 +31,11 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import type {
-  EntityKind,
-  GlobalSearchHit,
-  GlobalSearchResultType,
-} from "@stll/api/types";
+import {
+  GLOBAL_SEARCH_RESULT_TYPES,
+  type GlobalSearchResultType,
+} from "@stll/api-contract";
+import type { EntityKind, GlobalSearchHit } from "@stll/api/types";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -206,18 +206,6 @@ const KIND_TRANSLATION_KEYS = {
   chat: "search.kinds.chat",
 } as const satisfies Record<GlobalSearchResultType, TranslationKey>;
 
-const SEARCH_KIND_TYPES = [
-  "matter",
-  "contact",
-  "case-law",
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-  "chat",
-] as const satisfies readonly GlobalSearchResultType[];
-
 const TIME_PRESET_TRANSLATION_KEYS = {
   day: "search.updatedWithinOptions.day",
   week: "search.updatedWithinOptions.week",
@@ -225,24 +213,8 @@ const TIME_PRESET_TRANSLATION_KEYS = {
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, TranslationKey>;
 
-const isSearchKindOption = (
-  value: string,
-): value is (typeof SEARCH_KIND_TYPES)[number] => {
-  switch (value) {
-    case "matter":
-    case "contact":
-    case "case-law":
-    case "document":
-    case "folder":
-    case "task":
-    case "message":
-    case "link":
-    case "chat":
-      return true;
-    default:
-      return false;
-  }
-};
+const isSearchKindOption = (value: string): value is GlobalSearchResultType =>
+  GLOBAL_SEARCH_RESULT_TYPES.some((type) => type === value);
 
 const compactMeta = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -380,7 +352,7 @@ export const SearchDialog = ({
     [filters.time, searchQuery],
   );
   const updatedTo = resolveUpdatedTo(filters.time);
-  const availableSearchTypes = SEARCH_KIND_TYPES.filter((type) =>
+  const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter((type) =>
     isAvailableSearchKind(type, publicLawPreviewEnabled),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);

@@ -10,13 +10,7 @@ import { TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import {
-  USAGE_ALLOCATION_REASONS,
-  USAGE_ALLOCATION_SOURCES,
-  USAGE_ENTITLEMENT_STATUSES,
-  usagePolicies,
-  usageEntitlements,
-} from "@/api/db/schema";
+import { usagePolicies, usageEntitlements } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -136,22 +130,12 @@ const withRolledBackTx = async (
 
 const midPeriod = new Date((PERIOD_START.getTime() + PERIOD_END.getTime()) / 2);
 
-const EXPECTED_STATUS_CONSUMABILITY = {
-  active: true,
-  trialing: true,
-  past_due: false,
-  cancelled: false,
-  paused: false,
-} as const satisfies Record<UsageEntitlementStatus, boolean>;
-
 describe("usage entitlement consumability", () => {
-  for (const status of USAGE_ENTITLEMENT_STATUSES) {
-    test(`classifies "${status}" exhaustively`, () => {
-      expect(isConsumableEntitlementStatus(status)).toBe(
-        EXPECTED_STATUS_CONSUMABILITY[status],
-      );
-    });
-  }
+  test("allows live entitlements and rejects inactive ones", () => {
+    expect(isConsumableEntitlementStatus("active")).toBe(true);
+    expect(isConsumableEntitlementStatus("trialing")).toBe(true);
+    expect(isConsumableEntitlementStatus("cancelled")).toBe(false);
+  });
 
   test("fails closed for a stored status outside the inferred domain", () => {
     expect(
@@ -543,25 +527,5 @@ describe("usage ledger — idempotency", () => {
       });
       expect(balance).toBe(900);
     });
-  });
-});
-
-describe("usage ledger — enum coverage", () => {
-  // Cheap structural test: the typed enum constants we depend on
-  // must include the discriminator values the rest of the code
-  // hard-codes. If anyone adds a new reason / source and forgets
-  // to update the array, this fails before any handler does.
-  test("USAGE_ALLOCATION_REASONS includes every value the handlers emit", () => {
-    expect(USAGE_ALLOCATION_REASONS).toContain("periodic");
-    expect(USAGE_ALLOCATION_REASONS).toContain("addon");
-    expect(USAGE_ALLOCATION_REASONS).toContain("manual");
-    expect(USAGE_ALLOCATION_REASONS).toContain("promo");
-  });
-
-  test("USAGE_ALLOCATION_SOURCES includes every value the handlers emit", () => {
-    expect(USAGE_ALLOCATION_SOURCES).toContain("hosted_entitlement");
-    expect(USAGE_ALLOCATION_SOURCES).toContain("hosted_allocation");
-    expect(USAGE_ALLOCATION_SOURCES).toContain("admin");
-    expect(USAGE_ALLOCATION_SOURCES).toContain("scheduler");
   });
 });

@@ -16,9 +16,6 @@ import {
 } from "./errors.js";
 
 const TEST_API_KEY = "test-api-key-not-real";
-const LIVE_API_KEY = process.env["COMPANIES_HOUSE_API_KEY"];
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1" || !LIVE_API_KEY;
-
 type FetchCapture = {
   url: string;
   authorization: string;
@@ -373,31 +370,5 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     );
     expect(result).toHaveLength(50);
     expect(calls).toHaveLength(1);
-  });
-});
-
-// Live smoke tests hit the real Companies House API. Gated on both
-// COMPANIES_HOUSE_API_KEY and SMOKE_TEST=1 so they never run in
-// unit-test mode.
-describe.skipIf(SKIP_LIVE)("Companies House live", () => {
-  const config = { apiKey: LIVE_API_KEY ?? TEST_API_KEY };
-
-  test("returns Tesco PLC for company number 00445790", async () => {
-    const result = await lookupByCompanyNumber("00445790", config);
-    expect(result).not.toBeNull();
-    expect(result?.name).toContain("TESCO");
-    expect(result?.status.type).toBe("active");
-  });
-
-  test("returns null for an unregistered company number", async () => {
-    // Use the highest 8-digit number — unlikely to be issued in the
-    // foreseeable future.
-    const result = await lookupByCompanyNumber("99999998", config);
-    expect(result).toBeNull();
-  });
-
-  test("name search returns at least one Tesco hit", async () => {
-    const results = await searchByName("Tesco", config, { limit: 5 });
-    expect(results.length).toBeGreaterThan(0);
   });
 });

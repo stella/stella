@@ -1,18 +1,13 @@
+import {
+  WORKSPACE_CONTACT_ROLES,
+  type WorkspaceContactRole,
+} from "@stll/api-contract";
+
 import type { TranslationKey } from "@/i18n/types";
 
-export const PARTY_ROLES = [
-  "opposing_party",
-  "opposing_counsel",
-  "co_counsel",
-  "witness",
-  "expert_witness",
-  "third_party",
-  "judge",
-  "mediator",
-  "other",
-] as const;
+export const PARTY_ROLES = WORKSPACE_CONTACT_ROLES;
 
-export type PartyRole = (typeof PARTY_ROLES)[number];
+export type PartyRole = WorkspaceContactRole;
 
 export const PARTY_ROLE_LABEL_KEYS = {
   opposing_party: "workspaces.parties.partyRoles.opposing_party",

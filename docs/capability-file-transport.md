@@ -178,7 +178,7 @@ apply on the generic path. These capabilities inherit
 ("never looser than the route it stands in for") holds without an override
 entry. At two invokes per file that caps generic-path bulk upload at ~30
 files/min; if that proves too tight, the fix is an explicit
-`INVOKE_RATE_LIMIT_OVERRIDES` entry, not removing the default.
+capability rate-limit policy entry, not removing the default.
 
 **Access classification.** The entries derive `access: "read"` from the
 route-level `{ workspace: ["read"] }` permission. That does not weaken the

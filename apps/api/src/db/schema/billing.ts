@@ -1,4 +1,10 @@
 import {
+  INVOICE_STATUS,
+  INVOICE_STATUSES,
+  type InvoiceStatus,
+} from "@stll/api-contract";
+
+import {
   EXPENSE_CATEGORIES,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
@@ -237,22 +243,8 @@ export const expenses = p.pgTable(
   ],
 );
 
-export const INVOICE_STATUSES = [
-  "draft",
-  "finalized",
-  "sent",
-  "paid",
-  "void",
-] as const;
-export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
-
-export const INVOICE_STATUS = {
-  DRAFT: "draft",
-  FINALIZED: "finalized",
-  SENT: "sent",
-  PAID: "paid",
-  VOID: "void",
-} as const satisfies Record<string, InvoiceStatus>;
+export { INVOICE_STATUS, INVOICE_STATUSES };
+export type { InvoiceStatus };
 
 export const invoices = p.pgTable(
   "invoices",

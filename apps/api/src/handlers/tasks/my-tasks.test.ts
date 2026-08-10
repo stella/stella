@@ -1,22 +1,10 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import {
-  MY_TASKS_STATUSES,
-  myTasksHandler,
-  myTasksStatusSchema,
-} from "./my-tasks";
-
-test("my-tasks status schema mirrors every non-cancelled canonical status", () => {
-  for (const status of MY_TASKS_STATUSES) {
-    expect(Value.Check(myTasksStatusSchema, status), status).toBe(true);
-  }
-  expect(Value.Check(myTasksStatusSchema, "cancelled")).toBe(false);
-});
+import { myTasksHandler } from "./my-tasks";
 
 const entityIds = [
   toSafeId<"entity">("00000000-0000-4000-8000-000000000001"),

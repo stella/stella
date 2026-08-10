@@ -561,9 +561,16 @@ export const getReviewApplyMode = (
   entityId: string,
 ): FolioAIEditApplyMode => state.applyMode[entityId] ?? "tracked-changes";
 
-export const SEVERITY_ORDER: readonly ReviewSeverityKey[] = [
+export const SEVERITY_ORDER = [
   "high",
   "medium",
   "low",
   "unspecified",
-] as const;
+] as const satisfies readonly ReviewSeverityKey[];
+
+type MissingReviewSeverity = Exclude<
+  ReviewSeverityKey,
+  (typeof SEVERITY_ORDER)[number]
+>;
+
+true satisfies MissingReviewSeverity extends never ? true : never;

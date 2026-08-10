@@ -19,7 +19,11 @@
  * Pure: no IO, no model/provider dependency.
  */
 
-import { formatDate, resolvePath } from "@stll/template-conditions";
+import {
+  DATE_FORMAT_EXAMPLE_ISO,
+  formatDate,
+  resolvePath,
+} from "@stll/template-conditions";
 
 import { replaceResolvedValue } from "./composite-fields";
 import {
@@ -45,9 +49,7 @@ export const formatIsoDate = (
   dateFormat: FieldDateFormat,
 ): string | null => formatDate(value, dateFormat);
 
-/** Exemplar date for configuration previews; day > 12 so day/month order is
- *  unambiguous in every locale. */
-export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
+export { DATE_FORMAT_EXAMPLE_ISO } from "@stll/template-conditions";
 
 /** Render the exemplar date in the given locale + style — the template
  *  config UI shows this as a live preview next to the style picker. */

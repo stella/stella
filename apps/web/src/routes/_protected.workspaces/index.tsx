@@ -65,7 +65,6 @@ import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/activ
 import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
-import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   compareWorkspacesByKey,
   groupByClient,
@@ -161,7 +160,7 @@ const MattersContent = ({
     if (!resetExternalState) {
       return;
     }
-    resetMatterVisibilityState(getMatterOrganizationResetPatch());
+    resetMatterVisibilityState({ collapsedGroups: [], filters: {} });
     detached(
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.list(activeOrganizationId),

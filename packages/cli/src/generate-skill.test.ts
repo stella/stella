@@ -12,7 +12,7 @@ const snapshotUrl = new URL(
 const listings: readonly RegistryToolListing[] =
   await Bun.file(snapshotUrl).json();
 
-const CAPABILITY = { commandCount: 237 } as const;
+const CAPABILITY = { commandCount: 2 } as const;
 
 describe("generateCliSkill (TanStack Intent)", () => {
   test("is deterministic across calls and input clones", () => {
@@ -39,7 +39,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
   test("documents the capability tree (count + discovery + dry-run)", () => {
     const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     expect(skill).toContain("## Capability commands (full surface)");
-    expect(skill).toContain("237");
+    expect(skill).toContain("generates 2\ncapability commands");
     expect(skill).toContain("stella capability list");
     expect(skill).toContain("stella capability describe");
     expect(skill).toContain(`stella ${CAPABILITY_NAMESPACE} <domain> <action>`);

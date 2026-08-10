@@ -16,8 +16,12 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import type { UiLocale } from "@stll/locales";
+
 // All 12 non-English locales.
-export const LOCALES = [
+export type Locale = Exclude<UiLocale, "en">;
+
+const LOCALE_VALUES = [
   "ar",
   "cs",
   "sk",
@@ -30,26 +34,44 @@ export const LOCALES = [
   "es",
   "fr",
   "pt-BR",
-] as const;
+] as const satisfies readonly Locale[];
 
-export type Locale = (typeof LOCALES)[number];
+type MissingLocale = Exclude<Locale, (typeof LOCALE_VALUES)[number]>;
+
+true satisfies MissingLocale extends never ? true : never;
+
+export const LOCALES = LOCALE_VALUES;
 
 const LOCALE_SET: ReadonlySet<string> = new Set(LOCALES);
 
 // Column groupings keep each Markdown table narrow enough to read.
-const GROUP_SLAVIC_BALTIC: Locale[] = [
-  "cs",
-  "sk",
-  "pl",
-  "de",
-  "et",
-  "hu",
-  "lt",
-  "lv",
-];
-const GROUP_ROMANCE: Locale[] = ["es", "fr", "pt-BR"];
+type LocaleGroup = "slavic-baltic" | "romance" | "arabic";
+
+const LOCALE_GROUP = {
+  ar: "arabic",
+  cs: "slavic-baltic",
+  sk: "slavic-baltic",
+  pl: "slavic-baltic",
+  de: "slavic-baltic",
+  et: "slavic-baltic",
+  hu: "slavic-baltic",
+  lt: "slavic-baltic",
+  lv: "slavic-baltic",
+  es: "romance",
+  fr: "romance",
+  "pt-BR": "romance",
+} as const satisfies Record<Locale, LocaleGroup>;
+
+const GROUP_SLAVIC_BALTIC = LOCALES.filter(
+  (locale) => LOCALE_GROUP[locale] === "slavic-baltic",
+);
+const GROUP_ROMANCE = LOCALES.filter(
+  (locale) => LOCALE_GROUP[locale] === "romance",
+);
 // Arabic is rendered in its own table: it is RTL and a different script.
-const GROUP_ARABIC: Locale[] = ["ar"];
+const GROUP_ARABIC = LOCALES.filter(
+  (locale) => LOCALE_GROUP[locale] === "arabic",
+);
 
 const LOCALE_LABEL: Record<Locale, string> = {
   ar: "Arabic",

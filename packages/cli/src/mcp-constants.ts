@@ -1,7 +1,11 @@
 // Shared constants for the domain-command runtime (spec 051).
 
-/** The MCP JSON-RPC endpoint path, mirroring the server's `MCP_HTTP_PATH`. */
-export const MCP_HTTP_PATH = "/mcp";
+import {
+  MCP_ERROR_CODES,
+  type McpErrorCode,
+} from "./generated/mcp-contract.js";
+
+export { MCP_HTTP_PATH } from "./generated/mcp-contract.js";
 
 /** `--all` cursor-following ceilings (spec 051 S4). Bounded, moved client-side. */
 export const MAX_ALL_PAGES = 50;
@@ -39,12 +43,14 @@ export const EXIT_CODES = {
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
 
 /**
- * Full map from a structured tool-error envelope `error.code` (the closed set in
- * `apps/api/src/mcp/error-codes.ts`) to the CLI exit class. Keyed by string (not
- * an imported server type) so `@stll/cli` stays free of any `apps/api` import;
- * an unknown/absent code falls through to the caller's server-error default.
+ * Full map from a structured tool-error envelope `error.code` to the CLI exit
+ * class. The generated error-code union makes a new server code a compile-time
+ * decision here. The npm-published CLI and API deploy independently within one
+ * protocol, so a code unknown to this CLI falls through to the caller's generic
+ * server-error class. Remove that fallback only if releases become lockstep or a
+ * protocol revision guarantees an exact error-code set.
  */
-export const MCP_ERROR_CODE_EXIT_MAP: Readonly<Record<string, ExitCode>> = {
+const MCP_ERROR_CODE_EXIT_MAP = {
   validation_error: EXIT_CODES.validation,
   missing_scope: EXIT_CODES.auth,
   feature_disabled: EXIT_CODES.featureDisabled,
@@ -57,7 +63,13 @@ export const MCP_ERROR_CODE_EXIT_MAP: Readonly<Record<string, ExitCode>> = {
   upstream_unavailable: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
-};
+} as const satisfies Record<McpErrorCode, ExitCode>;
+
+const isMcpErrorCode = (code: string): code is McpErrorCode =>
+  MCP_ERROR_CODES.some((candidate) => candidate === code);
+
+export const resolveMcpErrorCodeExit = (code: string): ExitCode | undefined =>
+  isMcpErrorCode(code) ? MCP_ERROR_CODE_EXIT_MAP[code] : undefined;
 
 /**
  * Maps a transport-level HTTP status (`McpClientError.httpStatus`) to the CLI

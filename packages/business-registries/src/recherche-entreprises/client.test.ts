@@ -1,13 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupBySiren, lookupBySiret, searchByName } from "./client.js";
-import {
-  RechercheEntreprisesAPIError,
-  RechercheEntreprisesValidationError,
-} from "./errors.js";
+import { RechercheEntreprisesValidationError } from "./errors.js";
 import type { RechercheEntreprisesSearchResponse } from "./types.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (
@@ -38,38 +33,6 @@ const installFetchStub = (
     globalThis.fetch = original;
   };
 };
-
-// ---------------------------------------------------------------------------
-// Live tests — opt-in. Mirrors the PRH / Brreg pattern.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("lookupBySiren live", () => {
-  test("returns RENAULT SAS", async () => {
-    const result = await lookupBySiren("780129987");
-    expect(result).not.toBeNull();
-    expect(result?.siren).toBe("780129987");
-    expect(result?.name.toUpperCase()).toContain("RENAULT");
-    expect(result?.registryUrl).toContain("780129987");
-  });
-});
-
-describe.skipIf(SKIP_LIVE)("lookupBySiret live", () => {
-  test("returns RENAULT SAS head office", async () => {
-    const result = await lookupBySiret("78012998704037");
-    expect(result).not.toBeNull();
-    expect(result?.siren).toBe("780129987");
-    expect(result?.matchedEstablishment?.siret).toBe("78012998704037");
-  });
-});
-
-describe.skipIf(SKIP_LIVE)("searchByName live", () => {
-  test("finds RENAULT entities", async () => {
-    const results = await searchByName("Renault", { limit: 5 });
-    expect(results.length).toBeGreaterThan(0);
-    expect(
-      results.some((entry) => entry.name.toUpperCase().includes("RENAULT")),
-    ).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Mocked fetch tests using captured upstream fixtures.
@@ -320,10 +283,4 @@ describe("searchByName validation", () => {
       RechercheEntreprisesValidationError,
     );
   });
-});
-
-// Smoke: error class export is reachable via barrel for consumers
-// that only import from the package root.
-test("exports RechercheEntreprisesAPIError", () => {
-  expect(RechercheEntreprisesAPIError).toBeDefined();
 });

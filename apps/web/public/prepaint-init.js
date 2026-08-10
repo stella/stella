@@ -3,9 +3,8 @@
  * scheme + palette (avoids a white flash for dark-mode users) and the
  * writing direction + language (avoids an LTR/English flash for RTL
  * users). Loaded synchronously (non-module) from index.html so it runs
- * before the SPA bundle. Storage keys and the UI locale sets are
- * duplicated from src/consts.ts and src/i18n/i18n-store.ts — keep them
- * in sync; i18n-store.test.ts guards the locale sets.
+ * before the SPA bundle. The locale metadata below is generated from
+ * @stll/locales because this classic script cannot import the package.
  *
  * Lives here (not inline in index.html) so the frontend CSP can
  * stay strict (script-src 'self') without needing 'unsafe-inline'
@@ -46,25 +45,26 @@
     el.classList.add(`palette-${palette}`);
   }
 
-  // Mirrors resolveUiLocale() and LANG_DIR. The pre-paint script cannot import
-  // them because it runs before the application bundle, so tests pin both sets
-  // to the canonical values used by the i18n store.
+  // <generated:ui-locales>
+  // Generated from @stll/locales. Run `bun run typegen` after changing
+  // the canonical UI locale contract.
   const UI_LOCALES = [
-    "en",
     "ar",
     "cs",
     "de",
-    "es",
+    "en",
     "et",
     "fr",
     "hu",
-    "lt",
     "lv",
+    "lt",
     "pl",
     "pt-BR",
     "sk",
+    "es",
   ];
   const RTL_LOCALES = ["ar"];
+  // </generated:ui-locales>
 
   const resolveUiLocale = (value) => {
     const normalized = String(value).replace("_", "-");

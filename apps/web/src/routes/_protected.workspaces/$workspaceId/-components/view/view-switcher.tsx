@@ -27,6 +27,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  DIRECTLY_CREATABLE_VIEW_LAYOUTS,
+  isRequiredViewLayout,
+  type RequiredViewLayoutType,
+} from "@stll/api-contract";
 import type { ViewLayout, ViewLayoutType } from "@stll/api/types";
 import {
   AlertDialog,
@@ -93,13 +98,6 @@ const resolveDropPosition = (
   direction: TextDirection,
 ) => toViewDropPosition(extractClosestEdge(data), direction);
 
-const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = Object.freeze([
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-]);
-
 const layoutIcons = {
   overview: LayoutDashboardIcon,
   table: TableIcon,
@@ -118,9 +116,7 @@ const LAYOUT_LABEL_KEYS = {
   timeline: "workspaces.views.layouts.timeline",
 } as const satisfies Record<ViewLayoutType, TranslationKey>;
 
-const emptyLayout = (
-  type: "overview" | "table" | "filesystem" | "kanban",
-): ViewLayout => {
+const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
   const base = {
     filters: [],
     sorts: [],
@@ -167,13 +163,7 @@ const defaultLayouts = {
   },
 } as const satisfies Record<ViewLayoutType, ViewLayout>;
 
-const LAYOUT_OPTIONS: ViewLayoutType[] = [
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-  "calendar",
-];
+const LAYOUT_OPTIONS = DIRECTLY_CREATABLE_VIEW_LAYOUTS;
 
 type ViewSwitcherProps = {
   workspaceId: string;
@@ -265,7 +255,7 @@ export const ViewSwitcher = ({
         <TabsList variant="underline">
           {views.map((view) => {
             const isLastOfLayout =
-              REQUIRED_VIEW_LAYOUTS.includes(view.layout.type) &&
+              isRequiredViewLayout(view.layout.type) &&
               views.filter((v) => v.layout.type === view.layout.type).length <=
                 1;
 

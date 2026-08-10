@@ -1,13 +1,13 @@
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 
-export type SlashSectionKey = "private" | "team" | "built-in";
+const SECTION_ORDER = ["private", "team", "built-in"] as const;
+
+export type SlashSectionKey = (typeof SECTION_ORDER)[number];
 
 export type SlashItemGroup = {
   section: SlashSectionKey;
   items: SlashItem[];
 };
-
-const SECTION_ORDER: SlashSectionKey[] = ["private", "team", "built-in"];
 
 const getSectionKey = (item: SlashItem): SlashSectionKey => {
   if (item.kind === "command") {

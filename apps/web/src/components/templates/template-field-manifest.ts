@@ -1,28 +1,14 @@
-/** Registries the lookup affordance offers; mirrors the manifest's supported
- *  set (`LOOKUP_REGISTRIES` in apps/api/src/lib/docx/types.ts, itself the
- *  full `BUSINESS_REGISTRY_SLUGS`). Eden exposes types only, so the slugs are
- *  mirrored here — extend together with the API. */
-const LOOKUP_REGISTRIES = [
-  "ares",
-  "brreg",
-  "companies-house",
-  "denue",
-  "edgar",
-  "gcis",
-  "krs",
-  "orsr",
-  "prh",
-  "recherche-entreprises",
-  "vies",
-] as const;
+import {
+  isBusinessRegistrySlug,
+  type BusinessRegistrySlug,
+} from "@stll/api-contract";
 
-export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
+export type LookupRegistry = BusinessRegistrySlug;
 
 /** Narrows a manifest's raw lookup registry to a supported slug, so the Studio
  *  restores lookups for every offered registry — not just KRS — on reopen. */
 export const isLookupRegistry = (value: unknown): value is LookupRegistry =>
-  typeof value === "string" &&
-  LOOKUP_REGISTRIES.some((registry) => registry === value);
+  isBusinessRegistrySlug(value);
 
 export const INPUT_TYPES = [
   "text",

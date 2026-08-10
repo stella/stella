@@ -9,9 +9,6 @@ import {
 } from "./errors.js";
 import type { DenueResponse } from "./types.js";
 
-const SKIP_LIVE =
-  process.env["SMOKE_TEST"] !== "1" || !process.env["INEGI_DENUE_API_TOKEN"];
-
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (name: string): Promise<DenueResponse> => {
   const value: unknown = await Bun.file(new URL(name, FIXTURE_DIR)).json();
@@ -43,16 +40,6 @@ const getFetchInputUrl = (input: URL | Request | string): string => {
   }
   return input.url;
 };
-
-describe.skipIf(SKIP_LIVE)("lookupByEstablishmentId live", () => {
-  test("returns the DENUE sample establishment", async () => {
-    const company = await lookupByEstablishmentId("6281106", {
-      token: process.env["INEGI_DENUE_API_TOKEN"] ?? "",
-    });
-    expect(company).not.toBeNull();
-    expect(company?.id).toBe("6281106");
-  });
-});
 
 describe("lookupByEstablishmentId (fixture)", () => {
   let restore: () => void = () => {

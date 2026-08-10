@@ -1,20 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import type { ExpenseCategory, TimeEntryStatus } from "@stll/api-contract";
+
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-type ExpenseCategory =
-  | "filing_fee"
-  | "expert_witness"
-  | "travel"
-  | "printing"
-  | "courier"
-  | "other";
-
-type ExpenseStatus = "draft" | "approved" | "billed" | "written_off";
+type ExpenseStatus = TimeEntryStatus;
 
 type ExpensesFilters = {
   userId?: string;

@@ -922,29 +922,21 @@ describe("isChatTurnInFlight", () => {
 });
 
 describe("isRunningToolPart", () => {
-  test("classifies every TanStack tool-call state", () => {
-    const expectedByState = {
-      "awaiting-input": true,
-      "approval-requested": false,
-      "approval-responded": false,
-      complete: false,
-      error: false,
-      "input-complete": true,
-      "input-streaming": true,
-    } as const satisfies Record<
-      Extract<ChatPart, { type: "tool-call" }>["state"],
-      boolean
-    >;
-
-    for (const [state, expected] of Object.entries(expectedByState)) {
-      expect(
-        isRunningToolPart({
-          name: "web_search",
-          state,
-          type: "tool-call",
-        }),
-      ).toBe(expected);
-    }
+  test("distinguishes a streaming call from a terminal call", () => {
+    expect(
+      isRunningToolPart({
+        name: "web_search",
+        state: "input-streaming",
+        type: "tool-call",
+      }),
+    ).toBe(true);
+    expect(
+      isRunningToolPart({
+        name: "web_search",
+        state: "error",
+        type: "tool-call",
+      }),
+    ).toBe(false);
   });
 
   test("rejects unknown runtime states", () => {

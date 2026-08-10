@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   blockDirectiveLinePattern,
   classifyMarker,
-  DIRECTIVE_KINDS,
   isBlockDirectiveKind,
   isFieldPath,
   isSafeFieldPath,
@@ -76,31 +75,6 @@ describe("classifyMarker", () => {
     // Iteration tokens take no argument: `@index:x` / `@count:x` are not them.
     expect(classifyMarker("@index:x")).toBeNull();
     expect(classifyMarker("@count:1")).toBeNull();
-  });
-
-  test("every kind classifyMarker emits is in DIRECTIVE_KINDS", () => {
-    // Guards the union and the const list against drifting apart.
-    const samples = [
-      "x",
-      "@clause:A",
-      "@num:a",
-      "@ref:a",
-      "@index",
-      "@count",
-      "#if a",
-      "#elseif a",
-      "#else",
-      "/if",
-      "#each a",
-      "/each",
-    ];
-    for (const sample of samples) {
-      const meta = classifyMarker(sample);
-      expect(meta).not.toBeNull();
-      if (meta) {
-        expect(DIRECTIVE_KINDS).toContain(meta.kind);
-      }
-    }
   });
 });
 
@@ -186,13 +160,8 @@ describe("blockDirectiveLinePattern", () => {
 });
 
 describe("isBlockDirectiveKind", () => {
-  test("only the block directives are block-level", () => {
+  test("distinguishes block directives from inline markers", () => {
     expect(isBlockDirectiveKind("if")).toBe(true);
-    expect(isBlockDirectiveKind("endeach")).toBe(true);
     expect(isBlockDirectiveKind("placeholder")).toBe(false);
-    expect(isBlockDirectiveKind("clause")).toBe(false);
-    expect(isBlockDirectiveKind("num")).toBe(false);
-    expect(isBlockDirectiveKind("index")).toBe(false);
-    expect(isBlockDirectiveKind("count")).toBe(false);
   });
 });

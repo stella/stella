@@ -69,7 +69,7 @@ export const DirectiveLabel = ({
       case "endeach":
         return t("directiveEndEach");
       default:
-        return kind;
+        return kind satisfies never;
     }
   })();
 

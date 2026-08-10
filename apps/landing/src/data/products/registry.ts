@@ -2,24 +2,30 @@ import { agent } from "./agent";
 import { anonymization } from "./anonymization";
 import { cliMcp } from "./cli-mcp";
 import { editor } from "./editor";
+import type { ProductSlug } from "./pillars";
 import { publicData } from "./public-data";
 import { tabularReview } from "./tabular-review";
 import { templates } from "./templates";
-import type { Product } from "./types";
+import type { AnyProduct, Product } from "./types";
 import { workspace } from "./workspace";
 
-// All product pages. Display order in the menu, homepage, and sections is
-// driven by pillars.ts (the README spine), not by this list. The [slug].astro
-// route and llms-full.txt feed read from here.
-export const products: readonly Product[] = [
-  publicData,
+type ProductRegistry = {
+  [TSlug in ProductSlug]: Product<TSlug>;
+};
+
+// The registry is total over the pillar slugs. Consumers can index it directly,
+// so a new pillar cannot silently disappear from a menu or route when its
+// product module is missing. Object declaration order is retained for generated
+// catalogue and metadata output; menu ordering still comes from pillars.ts.
+export const productBySlug = {
+  "public-data": publicData,
   anonymization,
-  tabularReview,
+  "tabular-review": tabularReview,
   agent,
   templates,
   editor,
   workspace,
-  cliMcp,
-];
+  "cli-mcp": cliMcp,
+} as const satisfies ProductRegistry;
 
-export const productBySlug = new Map(products.map((p) => [p.slug, p]));
+export const products: readonly AnyProduct[] = Object.values(productBySlug);

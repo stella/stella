@@ -28,10 +28,9 @@ export type PlaybookStarterCreated = {
   id: string;
 };
 
-// Mirrors the backend's closed `STARTER_PLAYBOOK_IDS` union
-// (apps/api/src/handlers/playbooks/starters.ts) so the mutation input stays a
-// literal union instead of widening to `string`.
-type StarterId = "nda" | "dpa" | "msa";
+type StarterId = Parameters<
+  (typeof api.playbooks)["from-starter"]["post"]
+>[0]["starterId"];
 
 type PlaybookStarterGallerySheetProps = {
   onCreated: (playbook: PlaybookStarterCreated) => void;

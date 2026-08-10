@@ -5,6 +5,7 @@ import {
   CONTACT_CURSOR_MAX_LENGTH,
   listContactsPage,
 } from "@/api/handlers/contacts/list-query";
+import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -12,7 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 const readContactsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.contactsPageSizeMax)),
   cursor: t.Optional(tPaginationCursor(CONTACT_CURSOR_MAX_LENGTH)),
-  type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
+  type: t.Optional(contactTypeSchema),
   q: t.Optional(t.String()),
 });
 

@@ -7,13 +7,13 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  defineSourceAdapter,
   EMPTY_AST,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -811,7 +811,7 @@ const addDays = (date: string, days: number): string => {
  */
 const ECJ_PAGE_TIMEOUT = 300_000;
 
-export const euEcjAdapter: SourceAdapter = {
+export const euEcjAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.EU_ECJ,
   name: "Court of Justice of the European Union",
   country: "EU",
@@ -957,4 +957,4 @@ WHERE {
       catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
     });
   },
-};
+});

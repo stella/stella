@@ -258,7 +258,10 @@ const PreviewParagraph = ({
   }
 
   return (
-    <div className="relative py-1" style={{ paddingLeft: depth * LINE_OFFSET }}>
+    <div
+      className="relative py-1"
+      style={{ paddingInlineStart: depth * LINE_OFFSET }}
+    >
       <ConnectorLines activeSpans={activeSpans} />
       <p className={fontClasses} style={fontStyle}>
         <HighlightedText text={paragraph.text} />

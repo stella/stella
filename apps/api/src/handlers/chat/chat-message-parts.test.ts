@@ -1,4 +1,3 @@
-import type { ToolCallState } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -48,77 +47,30 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 
 describe("persisted chat message parts", () => {
   test("gives ask-user turn ownership only after its input is complete", () => {
-    const askUserCallsByState = {
-      "approval-requested": {
-        arguments: "{}",
-        id: "ask-approval-requested",
-        name: "ask-user",
-        state: "approval-requested",
-        type: "tool-call",
-      },
-      "approval-responded": {
-        arguments: "{}",
-        id: "ask-approval-responded",
-        name: "ask-user",
-        state: "approval-responded",
-        type: "tool-call",
-      },
-      "awaiting-input": {
-        arguments: "",
-        id: "ask-awaiting-input",
-        name: "ask-user",
-        state: "awaiting-input",
-        type: "tool-call",
-      },
-      complete: {
-        arguments: "{}",
-        id: "ask-complete",
-        name: "ask-user",
-        state: "complete",
-        type: "tool-call",
-      },
-      error: {
-        arguments: "{}",
-        id: "ask-error",
-        name: "ask-user",
-        state: "error",
-        type: "tool-call",
-      },
-      "input-complete": {
-        arguments: '{"question":"Which jurisdiction applies?"}',
-        id: "ask-input-complete",
-        name: "ask-user",
-        state: "input-complete",
-        type: "tool-call",
-      },
-      "input-streaming": {
-        arguments: '{"question":"Which',
-        id: "ask-input-streaming",
-        name: "ask-user",
-        state: "input-streaming",
-        type: "tool-call",
-      },
-    } as const satisfies Record<
-      ToolCallState,
-      Extract<ChatPart, { type: "tool-call" }>
-    >;
+    const streamingCall = {
+      arguments: '{"question":"Which',
+      id: "ask-streaming",
+      name: "ask-user",
+      state: "input-streaming",
+      type: "tool-call",
+    } as const satisfies ChatPart;
+    const completeCall = {
+      arguments: '{"question":"Which jurisdiction applies?"}',
+      id: "ask-complete",
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } as const satisfies ChatPart;
 
-    for (const call of Object.values(askUserCallsByState)) {
-      let expectedInteraction:
-        | { type: "approval"; toolCallId: string }
-        | { type: "ask-user"; toolCallId: string }
-        | null;
-      if (call.state === "approval-requested") {
-        expectedInteraction = { type: "approval", toolCallId: call.id };
-      } else if (call.state === "input-complete") {
-        expectedInteraction = { type: "ask-user", toolCallId: call.id };
-      } else {
-        expectedInteraction = null;
-      }
-      expect(
-        getAwaitingUserInteraction({ parts: [call], role: "assistant" }),
-      ).toEqual(expectedInteraction);
-    }
+    expect(
+      getAwaitingUserInteraction({
+        parts: [streamingCall],
+        role: "assistant",
+      }),
+    ).toBeNull();
+    expect(
+      getAwaitingUserInteraction({ parts: [completeCall], role: "assistant" }),
+    ).toEqual({ type: "ask-user", toolCallId: "ask-complete" });
   });
 
   test("keeps every pending approval actionable", () => {

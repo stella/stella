@@ -3,9 +3,12 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { formatDate, renderComposite } from "./field-values";
+import {
+  DATE_FORMAT_STYLES,
+  formatDate,
+  renderComposite,
+} from "./field-values";
 
-const STYLES = ["long", "medium", "short", "iso"] as const;
 const LOCALES = ["cs", "de", "pl", "en", "ar"] as const;
 
 const pad = (value: number, length: number): string =>
@@ -75,7 +78,7 @@ describe("formatDate (properties)", () => {
       fc.property(
         invalidIsoDate,
         fc.constantFrom(...LOCALES),
-        fc.constantFrom(...STYLES),
+        fc.constantFrom(...DATE_FORMAT_STYLES),
         (value, locale, style) => {
           expect(formatDate(value, { locale, style })).toBeNull();
         },

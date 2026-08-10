@@ -16,6 +16,7 @@ import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { generateResourceTree } from "./generate-resource-tree.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
+import { MCP_CLI_TOOL_SCOPES } from "./generated/mcp-contract.js";
 import type { ResourceListing } from "./resource-types.js";
 import type {
   DiscriminatorSubcommand,
@@ -45,20 +46,6 @@ const annotationOutputUrl = new URL(
   import.meta.url,
 );
 
-const toolScopes = [
-  "read",
-  "matters_write",
-  "documents_write",
-  "knowledge_write",
-  "search",
-  "onboarding",
-  "templates",
-  "billing_write",
-  "admin_read",
-  "admin_write",
-  "feedback",
-] as const;
-
 const stringArraySchema = v.array(v.string());
 
 const discriminatorSubcommandSchema = v.looseObject({
@@ -70,12 +57,12 @@ const discriminatorSubcommandSchema = v.looseObject({
 
 const cliAnnotationSchema = v.looseObject({
   command: stringArraySchema,
-  additionalScopes: v.optional(v.array(v.picklist(toolScopes))),
+  additionalScopes: v.optional(v.array(v.picklist(MCP_CLI_TOOL_SCOPES))),
   requestTimeoutMs: v.optional(
     v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(600_000)),
   ),
   excluded: v.optional(v.literal(true)),
-  scope: v.optional(v.picklist(toolScopes)),
+  scope: v.optional(v.picklist(MCP_CLI_TOOL_SCOPES)),
   itemsKey: v.optional(v.string()),
   singleReadWhen: v.optional(v.string()),
   columns: v.optional(stringArraySchema),

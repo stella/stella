@@ -6,14 +6,20 @@ import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  CHAT_EDIT_APPLY_MODE,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+  DOCX_EDIT_REPRESENTATION,
   isSafeIdValue,
   parseResourceRef,
   resourceRef,
   RESOURCE_TYPE,
+  type ChatEditApplyMode,
   type ChatRunMode,
   toSafeId,
+  type DocxEditRepresentation,
 } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -47,8 +53,14 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
-export { CHAT_RUN_MODE };
-export type { ChatRunMode };
+export {
+  CHAT_EDIT_APPLY_MODE,
+  CHAT_RUN_MODE,
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+  DOCX_EDIT_REPRESENTATION,
+};
+export type { ChatEditApplyMode, ChatRunMode, DocxEditRepresentation };
 
 const rawMessageProperties = {
   id: tSafeId("chatMessage"),
@@ -148,53 +160,6 @@ export const activeSkillSchema = t.Object({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
-
-/**
- * Which of the two DOCX-edit review modes a chat turn uses -- they are
- * mutually exclusive tool surfaces, not independent toggles:
- * - `manual`: `apply-active-docx-edits` (client-executed). Operations are
- *   queued into the browser review panel; the user reviews and applies
- *   each suggestion themselves.
- * - `auto`: `edit_workspace_document` (server-executed). Operations are
- *   applied headlessly and written straight to a new entity version.
- * `getChatTools` registers exactly one of the two tools for a given mode,
- * never both, so the model is never handed a choice between them.
- */
-export const CHAT_EDIT_APPLY_MODE = {
-  manual: "manual",
-  auto: "auto",
-} as const;
-export type ChatEditApplyMode =
-  (typeof CHAT_EDIT_APPLY_MODE)[keyof typeof CHAT_EDIT_APPLY_MODE];
-
-/**
- * Default review mode: AI edits auto-apply as tracked changes (attributed
- * to the acting user's configured author name), writing a new version
- * directly. The user can switch to manual (queued) review or direct
- * (non-tracked) rewrite via the mode selectors. A single constant so the
- * default is easy to change later.
- */
-export const DEFAULT_CHAT_EDIT_APPLY_MODE: ChatEditApplyMode =
-  CHAT_EDIT_APPLY_MODE.auto;
-
-/**
- * The redline representation `edit_workspace_document` (the `auto` review
- * mode) writes operations with. Distinct from folio's own `mode` (the
- * `FolioAIEditApplyMode` the `@stll/folio-core` apply layer accepts) and
- * from the manual flow's per-suggestion `appliedMode` -- named separately so
- * the three never get confused at a call site. `suggested` is deliberately
- * excluded: that representation exists for the manual queued-review flow,
- * which this setting does not apply to.
- */
-export const DOCX_EDIT_REPRESENTATION = {
-  trackedChanges: "tracked-changes",
-  direct: "direct",
-} as const;
-export type DocxEditRepresentation =
-  (typeof DOCX_EDIT_REPRESENTATION)[keyof typeof DOCX_EDIT_REPRESENTATION];
-
-export const DEFAULT_DOCX_EDIT_REPRESENTATION: DocxEditRepresentation =
-  DOCX_EDIT_REPRESENTATION.trackedChanges;
 
 const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
 const agUiResumeSchema = t.Array(

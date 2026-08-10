@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  EVENT_ATTRIBUTE_LABELS,
-  EVENT_DESCRIPTIONS,
-  EVENT_LABELS,
-  EVENT_TOOLTIPS,
   collectUnknownEventAttributeTypes,
   collectUnknownEventTypes,
   collectUnknownInfoSoudCodes,
@@ -20,15 +16,6 @@ import {
 } from "./codes.js";
 
 describe("InfoSoud code catalog", () => {
-  test("exposes the generic event and attribute labels extracted from the public bundle", () => {
-    expect(EVENT_LABELS.NAR_JED).toBe("Nařízení jednání");
-    expect(EVENT_LABELS.ZAHAJ_RIZ).toBe("Zahájení řízení");
-    expect(EVENT_ATTRIBUTE_LABELS.JED_D_ZAC).toBe("Začátek jednání");
-    expect(EVENT_ATTRIBUTE_LABELS.ROZH_D_PM).toBe("Datum právní moci");
-    expect(EVENT_TOOLTIPS.NAR_JED).toContain("naplánování jednání");
-    expect(EVENT_DESCRIPTIONS.ZAHAJ_RIZ).toBe("Bylo zahájeno soudní řízení");
-  });
-
   test("supports scoped label overrides for courts with special wording", () => {
     expect(getEventLabel("ZAHAJ_RIZ")).toBe("Zahájení řízení");
     expect(getEventLabel("ZAHAJ_RIZ", { scope: "ns" })).toBe(

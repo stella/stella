@@ -1,7 +1,24 @@
 import * as v from "valibot";
 
-export { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
-export type { FlowRunStatus, FlowRunStepStatus } from "@stll/api-contract";
+import {
+  FLOW_SCHEDULE_FREQUENCIES,
+  type FlowScheduleFrequency,
+  type FlowStepKind,
+  type FlowTriggerType,
+} from "@stll/api-contract";
+
+export {
+  FLOW_RUN_STATUSES,
+  FLOW_RUN_STEP_STATUSES,
+  FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_KINDS,
+} from "@stll/api-contract";
+export type {
+  FlowRunStatus,
+  FlowRunStepStatus,
+  FlowScheduleFrequency,
+  FlowStepKind,
+} from "@stll/api-contract";
 
 /**
  * Shared types and boundary schemas for the Workflows feature.
@@ -38,13 +55,6 @@ export const FLOW_DOCUMENT_CONTEXT_CHAR_CAP = 60_000;
 
 // -- Step kinds --
 
-export const FLOW_STEP_KINDS = [
-  "ai",
-  "review-gate",
-  "create-document",
-] as const;
-export type FlowStepKind = (typeof FLOW_STEP_KINDS)[number];
-
 /**
  * One node in a definition's linear step list. `ai` runs a single
  * non-streaming text generation; `review-gate` pauses the run for a
@@ -56,14 +66,14 @@ export type FlowStep =
   | { kind: "review-gate"; name: string; instructions: string }
   | { kind: "create-document"; name: string; documentTitle: string };
 
-// -- Schedule frequency --
+type MissingFlowStepKind = Exclude<FlowStepKind, FlowStep["kind"]>;
+type ExtraFlowStepKind = Exclude<FlowStep["kind"], FlowStepKind>;
 
-export const FLOW_SCHEDULE_FREQUENCIES = [
-  "daily",
-  "weekly",
-  "monthly",
-] as const;
-export type FlowScheduleFrequency = (typeof FLOW_SCHEDULE_FREQUENCIES)[number];
+true satisfies [MissingFlowStepKind, ExtraFlowStepKind] extends [never, never]
+  ? true
+  : never;
+
+// -- Schedule frequency --
 
 /**
  * How a definition is kicked off. `manual` = start-run endpoint only;
@@ -92,11 +102,37 @@ export type FlowTrigger =
       fileExtensions: string[] | null;
     };
 
+type MissingFlowTriggerType = Exclude<FlowTriggerType, FlowTrigger["type"]>;
+type ExtraFlowTriggerType = Exclude<FlowTrigger["type"], FlowTriggerType>;
+
+true satisfies [MissingFlowTriggerType, ExtraFlowTriggerType] extends [
+  never,
+  never,
+]
+  ? true
+  : never;
+
 /** What actually initiated a given run (recorded on the run row). */
 export type FlowTriggerSource =
   | { type: "manual"; userId: string }
   | { type: "schedule" }
   | { type: "file-upload"; entityId: string };
+
+type MissingFlowTriggerSourceType = Exclude<
+  FlowTriggerType,
+  FlowTriggerSource["type"]
+>;
+type ExtraFlowTriggerSourceType = Exclude<
+  FlowTriggerSource["type"],
+  FlowTriggerType
+>;
+
+true satisfies [
+  MissingFlowTriggerSourceType,
+  ExtraFlowTriggerSourceType,
+] extends [never, never]
+  ? true
+  : never;
 
 // -- Review decisions --
 
@@ -113,6 +149,16 @@ export type FlowStepOutput =
       note: string | null;
     }
   | { kind: "create-document"; entityId: string };
+
+type MissingFlowStepOutputKind = Exclude<FlowStepKind, FlowStepOutput["kind"]>;
+type ExtraFlowStepOutputKind = Exclude<FlowStepOutput["kind"], FlowStepKind>;
+
+true satisfies [MissingFlowStepOutputKind, ExtraFlowStepOutputKind] extends [
+  never,
+  never,
+]
+  ? true
+  : never;
 
 /**
  * Frozen copy of the definition taken when a run starts. In-flight runs
@@ -158,6 +204,15 @@ export const flowStepSchema = v.variant("kind", [
   createDocumentFlowStepSchema,
 ]);
 
+type FlowStepSchemaOutput = v.InferOutput<typeof flowStepSchema>;
+
+true satisfies [FlowStepSchemaOutput, FlowStep] extends [
+  FlowStep,
+  FlowStepSchemaOutput,
+]
+  ? true
+  : never;
+
 const hourUtcSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -199,6 +254,15 @@ export const flowTriggerSchema = v.variant("type", [
     fileExtensions: v.nullable(v.array(fileExtensionSchema)),
   }),
 ]);
+
+type FlowTriggerSchemaOutput = v.InferOutput<typeof flowTriggerSchema>;
+
+true satisfies [FlowTriggerSchemaOutput, FlowTrigger] extends [
+  FlowTrigger,
+  FlowTriggerSchemaOutput,
+]
+  ? true
+  : never;
 
 /**
  * Boundary schema for creating/updating a definition. Enforces the

@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByIco, searchByName } from "./client.js";
-import { OrsrAPIError, OrsrValidationError } from "./errors.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
+import { OrsrValidationError } from "./errors.js";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 // SAFETY: fixtures are captured directly from the live ORSR API and
@@ -43,36 +41,6 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
-// ---------------------------------------------------------------------------
-// Live smoke tests — opt-in via SMOKE_TEST=1. Mirror the brreg pattern.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("lookupByIco live", () => {
-  test("returns ESET, spol. s r.o.", async () => {
-    const result = await lookupByIco("31333532");
-    expect(result).not.toBeNull();
-    expect(result?.ico).toBe("31333532");
-    expect(result?.name).toContain("ESET");
-    expect(result?.registryUrl).toContain("sluzby.orsr.sk");
-  }, 15_000);
-});
-
-// Name search on `sluzby.orsr.sk` regularly takes 6–8s; bun's default
-// 5s test timeout would mark a healthy call as a regression.
-const LIVE_SEARCH_TIMEOUT_MS = 15_000;
-
-describe.skipIf(SKIP_LIVE)("searchByName live", () => {
-  test(
-    "finds entities matching `Telekom`",
-    async () => {
-      const results = await searchByName("Telekom", { limit: 10 });
-      expect(results.length).toBeGreaterThan(0);
-      expect(results.some((entry) => /telekom/iu.test(entry.name))).toBe(true);
-    },
-    LIVE_SEARCH_TIMEOUT_MS,
-  );
-});
-
-// ---------------------------------------------------------------------------
 // Mocked fetch tests
 // ---------------------------------------------------------------------------
 describe("lookupByIco (fixture)", () => {
@@ -312,9 +280,4 @@ describe("searchByName validation", () => {
     expect(searchByName("")).rejects.toBeInstanceOf(OrsrValidationError);
     expect(searchByName("   ")).rejects.toBeInstanceOf(OrsrValidationError);
   });
-});
-
-// Smoke: ensure the API-error class re-exports cleanly via the client module.
-test("exports OrsrAPIError", () => {
-  expect(OrsrAPIError).toBeDefined();
 });

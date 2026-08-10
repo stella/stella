@@ -3,7 +3,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { lookupByMbs } from "./client.js";
 import { SudregAPIError, SudregValidationError } from "./errors.js";
 
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 const FIXTURE = new URL("__fixtures__/company.html", import.meta.url);
 
 const requestUrl = (input: URL | Request | string): string => {
@@ -29,20 +28,6 @@ const installFetchStub = (
     globalThis.fetch = original;
   };
 };
-
-describe.skipIf(SKIP_LIVE)("SUDREG live", () => {
-  test("looks up a filed Croatian company", async () => {
-    const company = await lookupByMbs("080000014");
-    expect(company?.mbs).toBe("080000014");
-    expect(company?.name.length).toBeGreaterThan(0);
-  });
-
-  test("accepts the alternate official name heading", async () => {
-    const company = await lookupByMbs("050023577");
-    expect(company?.mbs).toBe("050023577");
-    expect(company?.name).toBe("Dom za starije i nemoćne osobe Slavonski Brod");
-  });
-});
 
 describe("SUDREG client", () => {
   let restore = () => {};

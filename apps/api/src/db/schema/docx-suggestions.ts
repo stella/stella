@@ -1,3 +1,8 @@
+import type {
+  FolioAIEditApplyMode,
+  FolioAIEditSeverity,
+} from "@stll/folio-core/ai-edits";
+
 import { chatThreads } from "./chat";
 import {
   type AnyPgColumn,
@@ -28,27 +33,40 @@ export const DOCX_SUGGESTION_STATUSES = [
 export type DocxSuggestionStatus = (typeof DOCX_SUGGESTION_STATUSES)[number];
 
 /**
- * Severity the AI assigned. Mirrors folio's `FolioAIEditSeverity`
- * (`low | medium | high`) plus `unspecified` for the review store's
+ * Severity the AI assigned, plus `unspecified` for the review store's
  * legacy/unclassified rows.
  */
+export type DocxSuggestionSeverity = FolioAIEditSeverity | "unspecified";
+
 export const DOCX_SUGGESTION_SEVERITIES = [
   "low",
   "medium",
   "high",
   "unspecified",
-] as const;
-export type DocxSuggestionSeverity =
-  (typeof DOCX_SUGGESTION_SEVERITIES)[number];
+] as const satisfies readonly DocxSuggestionSeverity[];
 
-/** Mode a suggestion was applied in. Mirrors `FolioAIEditApplyMode`. */
+type MissingDocxSuggestionSeverity = Exclude<
+  DocxSuggestionSeverity,
+  (typeof DOCX_SUGGESTION_SEVERITIES)[number]
+>;
+
+true satisfies MissingDocxSuggestionSeverity extends never ? true : never;
+
+export type DocxSuggestionApplyMode = FolioAIEditApplyMode;
+
+/** Mode a suggestion was applied in. */
 export const DOCX_SUGGESTION_APPLY_MODES = [
   "tracked-changes",
   "direct",
   "suggested",
-] as const;
-export type DocxSuggestionApplyMode =
-  (typeof DOCX_SUGGESTION_APPLY_MODES)[number];
+] as const satisfies readonly DocxSuggestionApplyMode[];
+
+type MissingDocxSuggestionApplyMode = Exclude<
+  DocxSuggestionApplyMode,
+  (typeof DOCX_SUGGESTION_APPLY_MODES)[number]
+>;
+
+true satisfies MissingDocxSuggestionApplyMode extends never ? true : never;
 
 /**
  * Persisted AI DOCX review suggestions, so a review session survives a

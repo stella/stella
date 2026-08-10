@@ -3,9 +3,11 @@
  *
  * The `AIErrorKind` strings cross the network as the chat
  * stream's error message; the frontend maps them to i18n keys.
- * Renaming a kind is a wire-format change — update both sides
- * (and `chat-thread-messages.tsx`) together.
+ * The wire values live in @stll/api-contract so producers and consumers are
+ * checked against one source.
  */
+import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
+
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -16,16 +18,8 @@ import type {
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
 
-export const AI_ERROR_KINDS = [
-  "quota_exhausted",
-  "provider_billing",
-  "model_unavailable",
-  "provider_unavailable",
-  "loop_detected",
-  "unknown",
-] as const;
-
-export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
+export { AI_ERROR_KINDS };
+export type { AIErrorKind };
 
 const HTTP_STATUS_MIN = 100;
 const HTTP_STATUS_MAX = 599;

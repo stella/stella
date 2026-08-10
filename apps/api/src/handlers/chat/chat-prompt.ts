@@ -1601,16 +1601,7 @@ export const buildActiveSkillSection = (
   ].join("\n");
 };
 
-type AppendActiveFilePromptIfEntityExistsProps = {
-  activeFile: ActiveFilePromptContext;
-  entityExists: boolean;
-  prompt: string;
-  refRegistry: ChatRefRegistry;
-  toolAvailability?: ChatToolAvailability | undefined;
-  workspaceId: SafeId<"workspace">;
-};
-
-const buildActiveFileSection = ({
+export const buildActiveFileSection = ({
   activeFile,
   entityExists,
   refRegistry,
@@ -1631,30 +1622,6 @@ const buildActiveFileSection = ({
         workspaceId,
       })
     : "";
-
-/**
- * Back-compat wrapper for tests that exercise the active-file
- * prompt appendix directly. Production code calls
- * `buildActiveFileSection` inside the prompt assembler so the
- * appendix lands in `untrustedSuffix`.
- */
-export const appendActiveFilePromptIfEntityExists = ({
-  activeFile,
-  entityExists,
-  prompt,
-  refRegistry,
-  toolAvailability,
-  workspaceId,
-}: AppendActiveFilePromptIfEntityExistsProps): string => {
-  const section = buildActiveFileSection({
-    activeFile,
-    entityExists,
-    refRegistry,
-    toolAvailability,
-    workspaceId,
-  });
-  return section.length > 0 ? `${prompt}\n\n${section}` : prompt;
-};
 
 type BuildPromptProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];

@@ -20,26 +20,21 @@ import { cn } from "@stll/ui/lib/utils";
 import Tooltip from "@/components/tooltip";
 import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
-export type CreatableContentType =
-  | "text"
-  | "single-select"
-  | "multi-select"
-  | "date"
-  | "int";
+const CREATABLE_CONTENT_TYPES = [
+  "text",
+  "int",
+  "date",
+  "single-select",
+  "multi-select",
+] as const;
+
+export type CreatableContentType = (typeof CREATABLE_CONTENT_TYPES)[number];
 
 export type ChipDefinition = {
   type: CreatableContentType;
   icon: LucideIcon;
   label: string;
 };
-
-const CREATABLE_CONTENT_TYPES: readonly CreatableContentType[] = [
-  "text",
-  "int",
-  "date",
-  "single-select",
-  "multi-select",
-];
 
 // Icon + name come from the shared value-type registry so the property chips
 // and the template field types stay visually identical for overlapping kinds.

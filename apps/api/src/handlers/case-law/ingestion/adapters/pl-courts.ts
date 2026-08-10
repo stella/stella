@@ -3,11 +3,13 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
@@ -688,7 +690,7 @@ const parseItemWithDetail = async (
   };
 };
 
-export const plCourtsAdapter: SourceAdapter = {
+export const plCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.PL_COURTS,
   name: "Polish Courts (SAOS)",
   country: "POL",
@@ -761,4 +763,4 @@ export const plCourtsAdapter: SourceAdapter = {
 
     parseItem: parseItemWithDetail,
   }),
-};
+});

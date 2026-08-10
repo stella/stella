@@ -3,7 +3,11 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { getFolioMessages } from "@stll/folio-react/messages";
-import { isUiLocale, resolveUiLocale } from "@stll/locales";
+import {
+  getUiLocaleDirection,
+  isUiLocale,
+  resolveUiLocale,
+} from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 
 import { getStorageKey } from "@/consts";
@@ -12,6 +16,8 @@ import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+
+export type { TextDirection } from "@stll/locales";
 
 type LocalizedMessages<T> = {
   [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
@@ -35,6 +41,13 @@ export const supportedLanguages = [
   "pt-BR",
   "sk",
 ] as const satisfies readonly UiLocale[];
+
+type MissingSupportedLanguage = Exclude<
+  UiLocale,
+  (typeof supportedLanguages)[number]
+>;
+
+true satisfies MissingSupportedLanguage extends never ? true : never;
 
 export type SupportedLanguage = UiLocale;
 export type LocaleMessages = LocalizedMessages<Messages>;
@@ -72,28 +85,7 @@ export const LANG_ENDONYMS = {
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
-export type TextDirection = "ltr" | "rtl";
-
-// Per-locale base writing direction. The map is kept complete by `satisfies`,
-// so adding a right-to-left language (e.g. Arabic) is a single new row here.
-const LANG_DIR = {
-  en: "ltr",
-  ar: "rtl",
-  cs: "ltr",
-  de: "ltr",
-  es: "ltr",
-  et: "ltr",
-  fr: "ltr",
-  hu: "ltr",
-  lt: "ltr",
-  lv: "ltr",
-  pl: "ltr",
-  "pt-BR": "ltr",
-  sk: "ltr",
-} as const satisfies Record<SupportedLanguage, TextDirection>;
-
-export const getLangDir = (lang: SupportedLanguage): TextDirection =>
-  LANG_DIR[lang];
+export const getLangDir = getUiLocaleDirection;
 
 export const isSupportedLanguage = isUiLocale;
 

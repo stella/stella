@@ -27,6 +27,7 @@ import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { TranslationKey } from "@/i18n/types";
 
 export const ChatMentionList = ({
   items,
@@ -379,26 +380,29 @@ export const ChatMentionList = ({
   );
 };
 
-const CATEGORY_ORDER: ChatReferenceCategory[] = [
+const CATEGORY_LABEL_KEYS = {
+  entity: "chat.mention.category.entities",
+  workspace: "common.matters",
+  decision: "common.caseLaw",
+} as const satisfies Record<ChatReferenceCategory, TranslationKey>;
+
+const CATEGORY_ORDER = [
   "entity",
   "workspace",
   "decision",
-];
+] as const satisfies readonly ChatReferenceCategory[];
+
+type MissingCategory = Exclude<
+  ChatReferenceCategory,
+  (typeof CATEGORY_ORDER)[number]
+>;
+
+true satisfies MissingCategory extends never ? true : never;
 
 const useCategoryLabel = () => {
   const t = useTranslations();
-  return (category: ChatReferenceCategory): string => {
-    switch (category) {
-      case "entity":
-        return t("chat.mention.category.entities");
-      case "workspace":
-        return t("common.matters");
-      case "decision":
-        return t("common.caseLaw");
-      default:
-        return category;
-    }
-  };
+  return (category: ChatReferenceCategory): string =>
+    t(CATEGORY_LABEL_KEYS[category]);
 };
 
 /** Resolves the category/kind-appropriate glyph for a mention row. Exported

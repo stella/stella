@@ -11,8 +11,8 @@ import {
   CLI_REQUIRED_CAPABILITIES,
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "./generated/api-contract.js";
+import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "./generated/mcp-contract.js";
 
-const MCP_DISCOVERY_PATH = "/.well-known/oauth-protected-resource/mcp";
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
 const SEMVER_BUILD_PATTERN = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
@@ -301,7 +301,7 @@ const validateCompatibility = (
   }
 
   const expectedResource = new URL(
-    "/mcp",
+    MCP_HTTP_PATH,
     `${serverUrl.replace(/\/$/u, "")}/`,
   ).toString();
   if (metadata.resource !== expectedResource) {

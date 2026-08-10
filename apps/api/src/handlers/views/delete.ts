@@ -10,7 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
-import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
+import { isRequiredViewLayout } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
@@ -58,7 +58,7 @@ const deleteView = createSafeHandler(
     }
 
     const targetLayoutType = parseViewLayout(target.layoutType).type;
-    if (REQUIRED_VIEW_LAYOUTS.includes(targetLayoutType)) {
+    if (isRequiredViewLayout(targetLayoutType)) {
       const sameLayoutCount = allViews.filter(
         (v) => parseViewLayout(v.layoutType).type === targetLayoutType,
       ).length;

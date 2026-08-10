@@ -25,6 +25,12 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import type {
+  ExpenseCategory,
+  InvoiceStatus,
+  TimeEntryStatus,
+  WorkspaceContactRole,
+} from "@stll/api-contract";
 import { deriveBlockId } from "@stll/folio-core/server";
 
 import { rootDb } from "@/api/db/root";
@@ -3827,22 +3833,11 @@ const buildExportReviewJustifications = (
 
 // ─── Workspace contacts (parties) ───────────────────────
 
-type PartyRoleType =
-  | "opposing_party"
-  | "opposing_counsel"
-  | "co_counsel"
-  | "witness"
-  | "expert_witness"
-  | "third_party"
-  | "judge"
-  | "mediator"
-  | "other";
-
 type PartySeed = {
   id: WorkspaceContactId;
   workspaceId: WorkspaceId;
   contactId: ContactId;
-  role: PartyRoleType;
+  role: WorkspaceContactRole;
 };
 
 const seedParties: PartySeed[] = [
@@ -4078,7 +4073,7 @@ type ExtendedTimeEntrySeed = {
   currency: string;
   narrative: string;
   billable: boolean;
-  status: "draft" | "approved" | "billed" | "written_off";
+  status: TimeEntryStatus;
   taskCode: string;
   activityCode: string;
   invoiceId: InvoiceId | null;
@@ -4174,26 +4169,27 @@ type ExpenseSeed = {
   dateIncurred: string;
   amount: number;
   currency: string;
-  category:
-    | "filing_fee"
-    | "expert_witness"
-    | "travel"
-    | "printing"
-    | "courier"
-    | "other";
+  category: ExpenseCategory;
   description: string;
   billable: boolean;
-  status: "draft" | "approved" | "billed" | "written_off";
+  status: TimeEntryStatus;
 };
 
-const EXPENSE_CATEGORIES = [
+const SEED_EXPENSE_CATEGORIES = [
   "filing_fee",
   "travel",
   "expert_witness",
   "printing",
   "courier",
   "other",
-] as const;
+] as const satisfies readonly ExpenseCategory[];
+
+type MissingSeedExpenseCategory = Exclude<
+  ExpenseCategory,
+  (typeof SEED_EXPENSE_CATEGORIES)[number]
+>;
+
+true satisfies MissingSeedExpenseCategory extends never ? true : never;
 
 const EXPENSE_DESCRIPTIONS = [
   "Court filing fee",
@@ -4224,7 +4220,10 @@ const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
 
     // Amounts 500–50000 CZK
     const amount = 500 + ((i * 997) % 49_501);
-    const category = at(EXPENSE_CATEGORIES, i % EXPENSE_CATEGORIES.length);
+    const category = at(
+      SEED_EXPENSE_CATEGORIES,
+      i % SEED_EXPENSE_CATEGORIES.length,
+    );
     const description = at(
       EXPENSE_DESCRIPTIONS,
       i % EXPENSE_DESCRIPTIONS.length,
@@ -4263,7 +4262,7 @@ type InvoiceSeed = {
   id: InvoiceId;
   workspaceId: WorkspaceId;
   invoiceNumber: string;
-  status: "draft" | "finalized" | "sent" | "paid";
+  status: Exclude<InvoiceStatus, "void">;
   invoiceDate: string;
   dueDate: string;
   currency: string;

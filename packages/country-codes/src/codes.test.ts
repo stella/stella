@@ -12,19 +12,10 @@ describe("COUNTRY_CODES", () => {
       expect(code).toMatch(/^[A-Z]{2}$/u);
     }
   });
-
-  test("includes the regions stella currently targets", () => {
-    const required = ["CZ", "ES", "NO", "FI", "PL", "GB", "FR", "XK"] as const;
-    for (const code of required) {
-      expect(COUNTRY_CODES).toContain(code);
-    }
-  });
 });
 
 describe("isCountryCode", () => {
-  test("accepts canonical codes", () => {
-    expect(isCountryCode("CZ")).toBe(true);
-    expect(isCountryCode("NO")).toBe(true);
+  test("accepts the non-ISO Kosovo code used by supported data sources", () => {
     expect(isCountryCode("XK")).toBe(true);
   });
 

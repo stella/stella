@@ -8,13 +8,13 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -1244,7 +1244,7 @@ const fetchListedDecisions = async (
   return decisions;
 };
 
-export const czUsAdapter: SourceAdapter = {
+export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
   name: "Czech Constitutional Court",
   country: "CZE",
@@ -1432,4 +1432,4 @@ export const czUsAdapter: SourceAdapter = {
       catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),
     });
   },
-};
+});

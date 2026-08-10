@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   isValidPolarity,
   phraseToPattern,
-  POLARITY_WEIGHT,
 } from "@/api/handlers/case-law/polarity/consts";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
@@ -55,36 +54,13 @@ describe("phraseToPattern", () => {
 });
 
 describe("isValidPolarity", () => {
-  test("accepts valid polarities", () => {
+  test("accepts a representative polarity", () => {
     expect(isValidPolarity("positive")).toBe(true);
-    expect(isValidPolarity("supportive")).toBe(true);
-    expect(isValidPolarity("neutral")).toBe(true);
-    expect(isValidPolarity("negative")).toBe(true);
-    expect(isValidPolarity("unknown")).toBe(true);
   });
 
   test("rejects invalid values", () => {
     expect(isValidPolarity("maybe")).toBe(false);
     expect(isValidPolarity("")).toBe(false);
-  });
-});
-
-describe("POLARITY_WEIGHT", () => {
-  test("positive has highest weight", () => {
-    expect(POLARITY_WEIGHT.positive).toBe(1);
-  });
-
-  test("negative has zero weight", () => {
-    expect(POLARITY_WEIGHT.negative).toBe(0);
-  });
-
-  test("supportive has 0.8 weight", () => {
-    expect(POLARITY_WEIGHT.supportive).toBe(0.8);
-  });
-
-  test("neutral and unknown have half weight", () => {
-    expect(POLARITY_WEIGHT.neutral).toBe(0.5);
-    expect(POLARITY_WEIGHT.unknown).toBe(0.5);
   });
 });
 

@@ -87,6 +87,13 @@ const INSTANCE_PROVIDER_PREFERENCE = [
   "mistral",
 ] as const satisfies readonly TanStackTextProvider[];
 
+type MissingInstanceProvider = Exclude<
+  TanStackTextProvider,
+  (typeof INSTANCE_PROVIDER_PREFERENCE)[number]
+>;
+
+true satisfies MissingInstanceProvider extends never ? true : never;
+
 type AnthropicAdaptiveThinking = {
   type: "adaptive";
   display?: "omitted" | "summarized" | undefined;

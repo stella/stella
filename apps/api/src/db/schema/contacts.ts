@@ -1,3 +1,5 @@
+import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+
 import {
   centsColumn,
   isNotNull,
@@ -35,7 +37,7 @@ export const contacts = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    type: p.text({ enum: ["person", "organization"] }).notNull(),
+    type: p.text({ enum: CONTACT_TYPES }).notNull(),
 
     // Person fields (null for organizations)
     prefix: p.varchar({ length: 32 }),
@@ -274,17 +276,7 @@ export const workspaceContacts = p.pgTable(
       .references(() => contacts.id, { onDelete: "cascade" }),
     role: p
       .text({
-        enum: [
-          "opposing_party",
-          "opposing_counsel",
-          "co_counsel",
-          "witness",
-          "expert_witness",
-          "third_party",
-          "judge",
-          "mediator",
-          "other",
-        ],
+        enum: WORKSPACE_CONTACT_ROLES,
       })
       .notNull(),
     isPrimary: p.boolean("is_primary").notNull().default(false),

@@ -1,10 +1,15 @@
 import { Result, TaggedError } from "better-result";
 
+import {
+  MATTER_REFERENCE_TOKENS,
+  renderMatterReferencePattern,
+  type MatterReferenceToken,
+} from "@stll/api-contract";
+
 class PatternError extends TaggedError("PatternError")<{
   message: string;
 }> {}
 
-const RECOGNIZED_TOKENS = ["{SEQ}", "{YYYY}", "{YY}", "{MM}"] as const;
 const TOKEN_REGEX = /\{[^{}]+\}/gu;
 const FORBIDDEN_CHARS = /[<>&]/u;
 const BRACE_CHARS = /[{}]/u;
@@ -13,14 +18,19 @@ const MIN_PADDING = 1;
 const MAX_PADDING = 6;
 const MAX_REFERENCE_LENGTH = 64;
 
-const TOKEN_RENDERED_LENGTH: Record<string, number> = {
+const TOKEN_RENDERED_LENGTH = {
   "{YYYY}": 4,
   "{YY}": 2,
   "{MM}": 2,
-};
+} as const satisfies Record<Exclude<MatterReferenceToken, "{SEQ}">, number>;
 
-export const DEFAULT_MATTER_NUMBER_PATTERN = "{SEQ}";
-export const DEFAULT_MATTER_NUMBER_PADDING = 3;
+const isMatterReferenceToken = (token: string): token is MatterReferenceToken =>
+  MATTER_REFERENCE_TOKENS.some((recognized) => recognized === token);
+
+export {
+  DEFAULT_MATTER_NUMBER_PADDING,
+  DEFAULT_MATTER_NUMBER_PATTERN,
+} from "@stll/api-contract";
 
 /**
  * Validates a matter number pattern.
@@ -68,15 +78,18 @@ export const validatePattern = (
     );
   }
 
-  for (const token of tokens) {
-    if (!RECOGNIZED_TOKENS.some((t) => t === token)) {
-      return Result.err(
-        new PatternError({
-          message: `Unrecognized token: ${token}`,
-        }),
-      );
-    }
+  const unrecognizedToken = tokens.find(
+    (token) => !isMatterReferenceToken(token),
+  );
+  if (unrecognizedToken !== undefined) {
+    return Result.err(
+      new PatternError({
+        message: `Unrecognized token: ${unrecognizedToken}`,
+      }),
+    );
   }
+
+  const recognizedTokens = tokens.filter(isMatterReferenceToken);
 
   if (padding < MIN_PADDING || padding > MAX_PADDING) {
     return Result.err(
@@ -90,9 +103,9 @@ export const validatePattern = (
   // Use MAX_PADDING for {SEQ} since padStart only sets a minimum width;
   // actual sequences can exceed the padding value.
   let renderedLength = pattern.length;
-  for (const token of tokens) {
+  for (const token of recognizedTokens) {
     const outputLen =
-      token === "{SEQ}" ? MAX_PADDING : (TOKEN_RENDERED_LENGTH[token] ?? 0);
+      token === "{SEQ}" ? MAX_PADDING : TOKEN_RENDERED_LENGTH[token];
     renderedLength += outputLen - token.length;
   }
 
@@ -118,17 +131,8 @@ export const validatePattern = (
  * - "LIT-{SEQ}" -> "LIT-"
  * - "{SEQ}" -> ""
  */
-export const toScopeKey = (pattern: string, now: Date): string => {
-  const yyyy = String(now.getFullYear());
-  const yy = yyyy.slice(2);
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-
-  return pattern
-    .replaceAll("{YYYY}", () => yyyy)
-    .replaceAll("{YY}", () => yy)
-    .replaceAll("{MM}", () => mm)
-    .replaceAll("{SEQ}", "");
-};
+export const toScopeKey = (pattern: string, now: Date): string =>
+  renderMatterReferencePattern({ now, pattern, sequence: "" });
 
 /**
  * Renders a full reference by replacing all tokens in-place.
@@ -151,14 +155,6 @@ export const toReference = ({
   seq: number;
   padding: number;
 }): string => {
-  const yyyy = String(now.getFullYear());
-  const yy = yyyy.slice(2);
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
   const paddedSeq = String(seq).padStart(padding, "0");
-
-  return pattern
-    .replaceAll("{YYYY}", () => yyyy)
-    .replaceAll("{YY}", () => yy)
-    .replaceAll("{MM}", () => mm)
-    .replaceAll("{SEQ}", () => paddedSeq);
+  return renderMatterReferencePattern({ now, pattern, sequence: paddedSeq });
 };

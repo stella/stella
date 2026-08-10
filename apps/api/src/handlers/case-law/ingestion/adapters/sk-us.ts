@@ -34,11 +34,13 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -412,7 +414,7 @@ const executeSearchWithRetry = async ({
 
 // ── Adapter ──────────────────────────────────────────────
 
-export const skUsAdapter: SourceAdapter = {
+export const skUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_US,
   name: "ustavnysud.sk",
   country: "SVK",
@@ -520,4 +522,4 @@ export const skUsAdapter: SourceAdapter = {
       catch: adapterCatch(ADAPTER_KEYS.SK_US, cursor),
     });
   },
-};
+});

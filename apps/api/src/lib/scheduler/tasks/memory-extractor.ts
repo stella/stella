@@ -40,6 +40,7 @@ import {
   type QueuedMemoryCompaction,
 } from "@/api/lib/scheduler/tasks/memory-extractor-queue";
 import {
+  EXTRACTABLE_MEMORY_KINDS,
   resolveExtractedMemoryScope,
   type ExtractableMemoryKind,
 } from "@/api/lib/scheduler/tasks/memory-extractor-scope";
@@ -58,23 +59,11 @@ const SUMMARY_MAX_CHARS = 12_000;
 const MEMORY_MAX_OUTPUT_TOKENS = 1024;
 const MEMORY_EXTRACTOR_AUDIT_ACTOR = "system:memory-extractor";
 
-// Matter-specific kinds carry facts about one matter, so the DB rejects
-// them anywhere but scope='workspace'. The extractor mirrors that split:
-// these become workspace memories, everything else becomes user memories.
-const CANDIDATE_KINDS = [
-  "fact",
-  "decision",
-  "relationship",
-  "preference",
-  "instruction",
-] as const;
-type CandidateKind = ExtractableMemoryKind;
-
 // Suggested-first: the model proposes a kind and content; scope is then
 // derived from the kind (never trusted from the model) so a matter fact
 // can never be promoted to user/firm scope.
 const candidateSchema = v.strictObject({
-  kind: v.picklist(CANDIDATE_KINDS),
+  kind: v.picklist(EXTRACTABLE_MEMORY_KINDS),
   content: v.pipe(v.string(), v.trim(), v.minLength(1)),
 });
 
@@ -298,7 +287,7 @@ const settleMemoryExtractionBatch = async ({
 };
 
 type ExtractedCandidate = {
-  kind: CandidateKind;
+  kind: ExtractableMemoryKind;
   content: string;
 };
 
@@ -428,7 +417,7 @@ const hasCurrentExtractionConsent = async (
 };
 
 const normalizeCandidates = (
-  candidates: readonly { kind: CandidateKind; content: string }[],
+  candidates: readonly { kind: ExtractableMemoryKind; content: string }[],
 ): ExtractedCandidate[] => {
   const normalized: ExtractedCandidate[] = [];
   for (const candidate of candidates) {

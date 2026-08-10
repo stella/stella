@@ -6,14 +6,11 @@ import {
   toChatMentionResourceHref,
   toChatResourceHref,
   toSafeId,
+  isChatMentionCategory,
+  isChatReferenceCategory,
 } from "@stll/api-contract";
 
-import type {
-  ChatMention,
-  ChatMentionCategory,
-  ChatMentionHref,
-  ChatReferenceCategory,
-} from "@/api/lib/chat/references";
+import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 const ALLOWED_TAGS = new Set([
@@ -110,22 +107,11 @@ const sanitizeHtml = (html: string): string =>
     })
     .transform(html);
 
-const parseMentionCategory = (value: string): ChatMentionCategory | null => {
-  if (value === "entity" || value === "workspace") {
-    return value;
-  }
+const parseMentionCategory = (value: string) =>
+  isChatMentionCategory(value) ? value : null;
 
-  return null;
-};
-
-const parseReferenceCategory = (
-  value: string,
-): ChatReferenceCategory | null => {
-  if (value === "decision") {
-    return value;
-  }
-  return parseMentionCategory(value);
-};
+const parseReferenceCategory = (value: string) =>
+  isChatReferenceCategory(value) ? value : null;
 
 const toMentionHref = (mention: ChatMention): ChatMentionHref => {
   if (mention.category === "entity") {

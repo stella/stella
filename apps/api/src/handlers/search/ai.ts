@@ -16,7 +16,6 @@ import {
   chatMessages,
   chatThreads,
   contactSearchDocuments,
-  ENTITY_KINDS,
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
@@ -66,12 +65,49 @@ const SEARCH_SUMMARY_PROVENANCE = {
   type: "search-summary",
   version: 1,
 } as const;
-const CITABLE_SEARCH_RESULT_TYPES = [
-  "matter",
-  "contact",
-  "case-law",
-  ...ENTITY_KINDS,
-] as const satisfies readonly GlobalSearchResultType[];
+
+type SearchSummaryCitationPolicy = "cite" | "exclude";
+
+// This total map is the admission boundary for AI summary sources. A new
+// global result kind must make an explicit citation decision here; citable
+// kinds must also satisfy the exhaustive href switch below.
+const SEARCH_SUMMARY_CITATION_POLICY = {
+  matter: "cite",
+  contact: "cite",
+  "case-law": "cite",
+  document: "cite",
+  folder: "cite",
+  task: "cite",
+  message: "cite",
+  link: "cite",
+  chat: "exclude",
+} as const satisfies Record<
+  GlobalSearchResultType,
+  SearchSummaryCitationPolicy
+>;
+
+type CitableSearchResultType = {
+  [TType in GlobalSearchResultType]: (typeof SEARCH_SUMMARY_CITATION_POLICY)[TType] extends "exclude"
+    ? never
+    : TType;
+}[GlobalSearchResultType];
+
+type CitableSearchHit = Extract<
+  GlobalSearchHit,
+  { type: CitableSearchResultType }
+>;
+
+const isCitableSearchResultType = (
+  type: GlobalSearchResultType,
+): type is CitableSearchResultType =>
+  SEARCH_SUMMARY_CITATION_POLICY[type] !== "exclude";
+
+const isCitableSearchHit = (hit: GlobalSearchHit): hit is CitableSearchHit =>
+  isCitableSearchResultType(hit.type);
+
+const CITABLE_SEARCH_RESULT_TYPES = GLOBAL_SEARCH_RESULT_TYPES.filter(
+  isCitableSearchResultType,
+);
 
 export const refineSearchOutputSchema = v.strictObject({
   query: v.pipe(
@@ -171,12 +207,6 @@ type SearchSummaryContext = SearchAIContext & {
   accessibleWorkspaceIds: SafeId<"workspace">[];
 };
 
-// Chat threads are searchable but are not citable summary sources:
-// a conversation is not a document to excerpt. They are dropped from
-// the AI summary context, so everything downstream sees only the
-// citable hit variants.
-type CitableSearchHit = Exclude<GlobalSearchHit, { type: "chat" }>;
-
 type SearchResultContext = {
   id: string;
   number: number;
@@ -203,7 +233,7 @@ const citableSummaryTypes = (
     return CITABLE_SEARCH_RESULT_TYPES;
   }
 
-  return types.filter((type) => type !== "chat");
+  return types.filter(isCitableSearchResultType);
 };
 
 type SearchSummaryChatContext = {
@@ -808,32 +838,38 @@ const toModelSearchResultContext = (context: SearchResultContext) => ({
 
 const citationHref = (context: SearchResultContext): string | null => {
   const hit = context.hit;
-  if (hit.type === "case-law") {
-    return toChatResourceHref({
-      type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      resource: hit.resource,
-    });
-  }
-  if (hit.type === "matter") {
-    return toChatResourceHref({
-      type: RESOURCE_TYPE.WORKSPACE,
-      resource: hit.resource,
-    });
-  }
-  if (hit.type === "contact") {
-    return null;
-  }
-  return toChatResourceHref({
-    type: RESOURCE_TYPE.ENTITY,
-    resource: hit.resource,
-    location: {
-      type: "workspace",
-      workspace: resourceRef({
+  switch (hit.type) {
+    case "case-law":
+      return toChatResourceHref({
+        type: RESOURCE_TYPE.CASE_LAW_DECISION,
+        resource: hit.resource,
+      });
+    case "matter":
+      return toChatResourceHref({
         type: RESOURCE_TYPE.WORKSPACE,
-        id: brandPersistedWorkspaceId(hit.workspaceId),
-      }),
-    },
-  });
+        resource: hit.resource,
+      });
+    case "contact":
+      return null;
+    case "document":
+    case "folder":
+    case "task":
+    case "message":
+    case "link":
+      return toChatResourceHref({
+        type: RESOURCE_TYPE.ENTITY,
+        resource: hit.resource,
+        location: {
+          type: "workspace",
+          workspace: resourceRef({
+            type: RESOURCE_TYPE.WORKSPACE,
+            id: brandPersistedWorkspaceId(hit.workspaceId),
+          }),
+        },
+      });
+    default:
+      return hit;
+  }
 };
 
 const buildChatSummaryText = ({
@@ -918,9 +954,9 @@ const buildSearchResultContexts = async ({
       break;
     }
 
-    // Chat threads are not citable summary sources; skip them so the
-    // remaining work narrows to the citable variants.
-    if (hit.type === "chat") {
+    // The total citation policy excludes non-citable kinds and narrows the
+    // remaining work to hit variants with an explicit source disposition.
+    if (!isCitableSearchHit(hit)) {
       continue;
     }
 

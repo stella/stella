@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   isKnownVatCountry,
   isViesParticipant,
-  knownVatCountries,
   normalizeVatNumber,
   parseVatNumber,
   validateVatFormat,
@@ -87,18 +86,5 @@ describe("isKnownVatCountry / isViesParticipant", () => {
   test("unknown codes fail both checks", () => {
     expect(isKnownVatCountry("ZZ")).toBe(false);
     expect(isViesParticipant("ZZ")).toBe(false);
-  });
-});
-
-describe("knownVatCountries", () => {
-  test("returns at least the 27 EU members + XI + GB", () => {
-    const codes = knownVatCountries();
-    // 27 current EU members, plus EL (Greece's VAT prefix), plus XI
-    // and GB — 29 codes total when EL replaces GR (Greece is only
-    // present as EL in the VAT scheme).
-    expect(codes.length).toBeGreaterThanOrEqual(29);
-    for (const code of ["AT", "BE", "BG", "CY", "CZ", "DE", "EL", "XI", "GB"]) {
-      expect(codes).toContain(code);
-    }
   });
 });

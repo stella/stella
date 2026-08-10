@@ -169,11 +169,14 @@ export type { NumericFunctionName } from "./compute.js";
 // (composite, formula, date). Both the api fill engine and the web live
 // preview render through renderDeterministicFieldValue so they cannot drift.
 export {
+  DATE_FORMAT_EXAMPLE_ISO,
+  DATE_FORMAT_STYLES,
   formatDate,
   renderComposite,
   renderDeterministicFieldValue,
 } from "./field-values.js";
 export type {
+  DateFormatStyle,
   DeterministicFieldConfig,
   FieldDateFormat,
   PartConfig,
@@ -225,6 +228,7 @@ export {
   scanMarkers,
 } from "./markers.js";
 export type {
+  BlockDirectiveKind,
   DirectiveKind,
   InvalidMarker,
   MarkerMeta,

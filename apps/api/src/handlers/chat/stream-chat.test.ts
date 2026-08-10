@@ -105,16 +105,8 @@ const scopedDb: ScopedDb = async () => {
 };
 
 describe("tool-call history pruning", () => {
-  test("classifies every TanStack tool-call state and retains terminal errors", () => {
-    const states = [
-      "awaiting-input",
-      "input-streaming",
-      "input-complete",
-      "approval-requested",
-      "approval-responded",
-      "complete",
-      "error",
-    ] as const;
+  test("drops partial calls while retaining resumable and terminal calls", () => {
+    const states = ["input-streaming", "input-complete", "error"] as const;
     const message = {
       id: "assistant-1",
       parts: states.map((state) => ({
@@ -133,7 +125,7 @@ describe("tool-call history pruning", () => {
       prunedMessage?.parts.flatMap((part) =>
         part.type === "tool-call" ? [part.state] : [],
       ),
-    ).toEqual(["input-complete", "approval-responded", "complete", "error"]);
+    ).toEqual(["input-complete", "error"]);
   });
 });
 

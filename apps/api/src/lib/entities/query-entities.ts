@@ -13,6 +13,7 @@ import {
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import type { OcrExportStatus } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -89,7 +90,7 @@ type CellMetadataResult = Omit<
  * derivative that can still be retrying or permanently failed. One value keeps
  * the two from being reported as interchangeable.
  */
-export type OcrExportStatus = "text-and-pdf" | "text" | "unavailable";
+export type { OcrExportStatus };
 
 export type QueryEntityResult = {
   entityId: string;

@@ -3,11 +3,11 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   hashContent,
@@ -328,7 +328,7 @@ const listRequest = (
   init: { headers: { Accept: "application/json" } },
 });
 
-export const skCourtsAdapter: SourceAdapter = {
+export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
   name: "obcan.justice.sk",
   country: "SVK",
@@ -412,4 +412,4 @@ export const skCourtsAdapter: SourceAdapter = {
 
     parseItem: parseItemWithDetail,
   }),
-};
+});

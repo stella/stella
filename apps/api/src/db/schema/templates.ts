@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { CONTACT_TYPES } from "@stll/api-contract";
+
 import {
   ENTITY_KINDS,
   bytea,
@@ -296,7 +298,7 @@ export const contactSearchDocuments = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     contactType: p
       .text("contact_type", {
-        enum: ["person", "organization"],
+        enum: CONTACT_TYPES,
       })
       .notNull(),
     title: p.text().notNull().default(""),

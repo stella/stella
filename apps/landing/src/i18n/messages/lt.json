@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         },
-        "1": {
-          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Skaitykite ir ieškokite oficialioje teismų praktikoje, teisės šaltiniuose ir įmonių registruose."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:tabular-review": {
+          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
+        },
+        "product:workspace": {
+          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        },
+        "product:agent": {
           "body": "Bendraukite su bylomis, failais ir prijungtais įrankiais: su patvirtinimais ir šaltinių peržiūromis."
         },
-        "1": {
-          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:workspace": {
+          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Bylos, dokumentai, peržiūra ir pokalbiai vienoje darbo srityje."
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         },
-        "1": {
+        "product:agent": {
           "body": "Dirbkite su bylomis ir prijungtais įrankiais: su patvirtinimais ir citatomis."
         },
-        "2": {
+        "product:templates": {
           "body": "Pildykite pakartotinai naudojamus teisinius dokumentus programoje, per CLI ar prijungtus įrankius."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:workspace": {
+          "body": "Bylos, dokumentai, peržiūra ir pokalbiai vienoje darbo srityje."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Įjunkite kūrėjo režimą skiltyje Settings → Connectors → Advanced ir pridėkite jungtį su pirmiau nurodytu adresu."
           },
-          "1": {
+          "claude": {
             "body": "Skiltyje Settings → Connectors pridėkite savo jungtį su pirmiau nurodytu adresu."
           },
-          "2": {
-            "body": "Pridėkite serverį ir prisijunkite:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Serverį pridėsite viena komanda:"
+          },
+          "codex": {
+            "body": "Pridėkite serverį ir prisijunkite:"
           }
         },
         "heading": "Prijunkite DI agentą",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Pažiūrėkite, kur bylos, dokumentai ir įrankiai laikomi kartu."
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         },
-        "1": {
-          "body": "Kurkite pakartotinai naudojamus Word dokumentus su laukais ir pagal poreikį įtraukiamomis sąlygomis."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Išbandykite tą patį redaktorių atskirai: atverkite ir redaguokite .docx naršyklėje, paskyros nereikia."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:templates": {
+          "body": "Kurkite pakartotinai naudojamus Word dokumentus su laukais ir pagal poreikį įtraukiamomis sąlygomis."
+        },
+        "product:workspace": {
+          "body": "Pažiūrėkite, kur bylos, dokumentai ir įrankiai laikomi kartu."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Paruoškite jautrią medžiagą DI neatskleisdami identifikuojančių duomenų."
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         },
-        "1": {
+        "product:agent": {
           "body": "Bendraukite su bylomis, failais ir šaltiniais: su patvirtinimais ir citatomis."
         },
-        "2": {
-          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
+        "product:anonymization": {
+          "body": "Paruoškite jautrią medžiagą DI neatskleisdami identifikuojančių duomenų."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:tabular-review": {
+          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        },
+        "product:agent": {
           "body": "Bendraukite su bylomis, failais ir prijungtais šaltiniais: su patvirtinimais ir šaltinių peržiūromis."
         },
-        "1": {
-          "body": "Oficiali teismų praktika ir įmonių registrai, įtraukiami tiesiai į bylą."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Paruoškite jautrią medžiagą DI neatskleisdami identifikuojančių duomenų."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:public-data": {
+          "body": "Oficiali teismų praktika ir įmonių registrai, įtraukiami tiesiai į bylą."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Bylos, dokumentai ir Word redagavimas vienoje vietoje."
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         },
-        "1": {
-          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
-        },
-        "2": {
+        "product:agent": {
           "body": "Bendraukite su bylomis, failais ir šaltiniais, gaudami citatas."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:tabular-review": {
+          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
+        },
+        "product:workspace": {
+          "body": "Bylos, dokumentai ir Word redagavimas vienoje vietoje."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Kaip veikia šablonai programoje stella?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Dokumentą surinkite iš šablono, o ne pradėkite nuo tuščio lapo",
             "1": "Naudokite tas pačias sąlygas skirtinguose šablonuose",
@@ -772,7 +772,7 @@
           },
           "heading": "Kurkite iš šablonų ir sąlygų"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Iš anksto užpildykite laukus iš byloje jau esančio dokumento",
             "1": "Prieš rengdami projektą peržiūrėkite ir pakoreguokite kiekvieną reikšmę",
@@ -780,7 +780,7 @@
           },
           "heading": "Užpildykite jį bylos duomenimis"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Kurkite ir koreguokite šablonus redaktoriuje",
             "1": "Parenkite projektą tiesiai byloje",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        },
+        "product:agent": {
           "body": "Bendraukite su bylomis, failais ir prijungtais įrankiais: su patvirtinimais ir šaltinių peržiūromis."
         },
-        "1": {
-          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Pasiekite tas pačias bylas, dokumentus ir teismų praktiką iš CLI ir su MCP suderinamų įrankių."
         },
-        "3": {
-          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
+        "product:tabular-review": {
+          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Kas yra programos stella darbo sritis?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumentai, kontaktai, peržiūra ir pokalbiai laikomi byloje",
             "1": "Redaguokite Word .docx dokumentus neišeidami iš darbo srities",
@@ -870,7 +870,7 @@
           },
           "heading": "Visa byla vienoje vietoje"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Atverkite ir redaguokite Word .docx dokumentus tiesiai darbo srityje",
             "1": "Taisymai lieka Word faile: be konvertavimo ir be kopijų",

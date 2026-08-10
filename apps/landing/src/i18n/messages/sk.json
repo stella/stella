@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Premeňte sadu dokumentov na tabuľku, ktorú zoradíte, vyfiltrujete a dohľadáte až k zdroju."
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
         },
-        "1": {
-          "body": "Spisy, dokumenty, úpravy .docx, revízia aj chat v jednom pracovnom priestore."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Čítajte a prehľadávajte oficiálnu judikatúru, právne zdroje aj obchodné registre."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:tabular-review": {
+          "body": "Premeňte sadu dokumentov na tabuľku, ktorú zoradíte, vyfiltrujete a dohľadáte až k zdroju."
+        },
+        "product:workspace": {
+          "body": "Spisy, dokumenty, úpravy .docx, revízia aj chat v jednom pracovnom priestore."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        },
+        "product:agent": {
           "body": "Komunikujte naprieč spismi, súbormi aj pripojenými nástrojmi, so schvaľovaním a náhľadmi zdrojov."
         },
-        "1": {
-          "body": "Spisy, dokumenty, úpravy .docx, revízia aj chat v jednom pracovnom priestore."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Premeňte sadu dokumentov na tabuľku, ktorú zoradíte, vyfiltrujete a dohľadáte až k zdroju."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:workspace": {
+          "body": "Spisy, dokumenty, úpravy .docx, revízia aj chat v jednom pracovnom priestore."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
         },
-        "1": {
+        "product:agent": {
           "body": "Pracujte naprieč spismi a pripojenými nástrojmi, so schvaľovaním a citáciami."
         },
-        "2": {
+        "product:templates": {
           "body": "Vypĺňajte opakovane použiteľné právne dokumenty cez aplikáciu, CLI aj pripojené nástroje."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:workspace": {
+          "body": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Zapnite režim pre vývojárov v Settings → Connectors → Advanced a potom pridajte konektor s adresou endpointu."
           },
-          "1": {
+          "claude": {
             "body": "V Settings → Connectors pridajte vlastný konektor s adresou endpointu."
           },
-          "2": {
-            "body": "Pridajte server a prihláste sa:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Server pridáte jedným príkazom:"
+          },
+          "codex": {
+            "body": "Pridajte server a prihláste sa:"
           }
         },
         "heading": "Pripojte AI agenta",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Pozrite sa, kde sa spisy, dokumenty a nástroje stretávajú."
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
         },
-        "1": {
-          "body": "Vytvárajte opakovane použiteľné wordové dokumenty s poľami a podmienenými ustanoveniami."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Vyskúšajte ten istý editor samostatne: otvorte a upravte .docx v prehliadači, bez účtu."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:templates": {
+          "body": "Vytvárajte opakovane použiteľné wordové dokumenty s poľami a podmienenými ustanoveniami."
+        },
+        "product:workspace": {
+          "body": "Pozrite sa, kde sa spisy, dokumenty a nástroje stretávajú."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Pripravte citlivé podklady pre AI bez odhalenia identifikačných údajov."
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
         },
-        "1": {
+        "product:agent": {
           "body": "Komunikujte naprieč spismi, súbormi aj zdrojmi, so schvaľovaním a citáciami."
         },
-        "2": {
-          "body": "Premeňte sadu dokumentov na revíznu tabuľku priamo v spise."
+        "product:anonymization": {
+          "body": "Pripravte citlivé podklady pre AI bez odhalenia identifikačných údajov."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:tabular-review": {
+          "body": "Premeňte sadu dokumentov na revíznu tabuľku priamo v spise."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        },
+        "product:agent": {
           "body": "Komunikujte naprieč spismi, súbormi aj pripojenými zdrojmi, so schvaľovaním a náhľadmi zdrojov."
         },
-        "1": {
-          "body": "Oficiálna judikatúra a obchodné registre načítané do spisu."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Pripravte citlivé podklady pre AI bez odhalenia identifikačných údajov."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:public-data": {
+          "body": "Oficiálna judikatúra a obchodné registre načítané do spisu."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Spisy, dokumenty a úpravy Wordu na jednom mieste."
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
         },
-        "1": {
-          "body": "Premeňte sadu dokumentov na revíznu tabuľku priamo v spise."
-        },
-        "2": {
+        "product:agent": {
           "body": "Komunikujte naprieč spismi, súbormi aj zdrojmi, s citáciami."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:tabular-review": {
+          "body": "Premeňte sadu dokumentov na revíznu tabuľku priamo v spise."
+        },
+        "product:workspace": {
+          "body": "Spisy, dokumenty a úpravy Wordu na jednom mieste."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Ako vzory v aplikácii stella fungujú?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Zostavte dokument zo vzoru namiesto prázdnej strany",
             "1": "Používajte ustanovenia opakovane naprieč vzormi",
@@ -772,7 +772,7 @@
           },
           "heading": "Stavajte zo vzorov a ustanovení"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Predvyplňte polia z dokumentu, ktorý už v spise leží",
             "1": "Skôr než koncept vznikne, každú hodnotu skontrolujete a upravíte",
@@ -780,7 +780,7 @@
           },
           "heading": "Vyplňte ho z dát spisu"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Vzory píšte a upravujte v editore",
             "1": "Koncept zostavte priamo v spise",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        },
+        "product:agent": {
           "body": "Komunikujte naprieč spismi, súbormi aj pripojenými nástrojmi, so schvaľovaním a náhľadmi zdrojov."
         },
-        "1": {
-          "body": "Premeňte sadu dokumentov na tabuľku, ktorú zoradíte, vyfiltrujete a dohľadáte až k zdroju."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "K tým istým spisom, dokumentom aj judikatúre sa dostanete z CLI aj z nástrojov kompatibilných s MCP."
         },
-        "3": {
-          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        "product:tabular-review": {
+          "body": "Premeňte sadu dokumentov na tabuľku, ktorú zoradíte, vyfiltrujete a dohľadáte až k zdroju."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Čo je pracovný priestor v aplikácii stella?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumenty, kontakty, revízia aj chat sú priamo v spise",
             "1": "Upravujte dokumenty Word .docx bez toho, aby ste opustili pracovný priestor",
@@ -870,7 +870,7 @@
           },
           "heading": "Všetko k spisu na jednom mieste"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Otvorte a upravte dokumenty Word .docx priamo v pracovnom priestore",
             "1": "Revízia zostáva wordovým súborom: žiadne prevody, žiadne kópie",

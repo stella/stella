@@ -1,9 +1,13 @@
 import { panic } from "better-result";
 
-import { isEntityKind } from "@stll/api-contract";
-import type { ResourceName, ResourceRef } from "@stll/api-contract";
+import {
+  GLOBAL_SEARCH_RESULT_TYPES,
+  isEntityKind,
+  type GlobalSearchResultType,
+  type ResourceName,
+  type ResourceRef,
+} from "@stll/api-contract";
 
-import { ENTITY_KINDS } from "@/api/db/schema";
 import type { ContactType } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -166,18 +170,8 @@ export type SearchProvider = {
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;
 };
 
-export const GLOBAL_SEARCH_RESULT_TYPES = [
-  "matter",
-  "contact",
-  "case-law",
-  ...ENTITY_KINDS,
-  // Appended last on purpose: Elysia coerces an absent optional
-  // UnionEnum to the FIRST element, so new types must never take slot 0.
-  "chat",
-] as const;
-
-export type GlobalSearchResultType =
-  (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
+export { GLOBAL_SEARCH_RESULT_TYPES };
+export type { GlobalSearchResultType };
 
 export const parseGlobalSearchResultType = (
   value: unknown,

@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 
 const OPEN_TIMEOUT_MS = 5000;
 
-export const openCommandFor = (
+const openCommandFor = (
   platform: NodeJS.Platform,
 ): readonly string[] | undefined => {
   if (platform === "darwin") {

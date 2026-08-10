@@ -43,8 +43,8 @@ void mock.module("./loopback-listener.js", () => ({
 }));
 
 // Module mocks live for the whole process; spread the real module so only the
-// spawning function is replaced (keeps `browser-open.test.ts`'s coverage of
-// `openCommandFor` intact) and never let this file actually launch a browser.
+// spawning function is replaced and never let this file actually launch a
+// browser.
 const realBrowser = await import("./browser-open.js");
 let onBrowserOpen: (authorizeUrl: string) => void | Promise<void> = () => {};
 // Simulated launch outcome. `failed` models a machine with no usable browser

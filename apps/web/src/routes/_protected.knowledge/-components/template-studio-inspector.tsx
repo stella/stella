@@ -112,15 +112,10 @@ import {
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";
 
-type StudioFacet = "fields" | "guidance" | "history" | "fill";
-type TemplateStudioPayload = { templateId: string };
+const STUDIO_FACETS = ["fields", "guidance", "history", "fill"] as const;
 
-const STUDIO_FACETS: readonly StudioFacet[] = [
-  "fields",
-  "guidance",
-  "history",
-  "fill",
-];
+type StudioFacet = (typeof STUDIO_FACETS)[number];
+type TemplateStudioPayload = { templateId: string };
 
 export function TemplateStudioInspectorView({
   tab,

@@ -11,8 +11,8 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {
   appendAnonymizedModeHintToChatSafePrompt,
-  appendActiveFilePromptIfEntityExists,
   buildActiveDraftPrompt,
+  buildActiveFileSection,
   buildActiveSkillSection,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
@@ -330,7 +330,6 @@ describe("chat prompt builders", () => {
   });
 
   test("appends the active-file prompt only when the entity exists", () => {
-    const basePrompt = "Base prompt";
     const refRegistry = createChatRefRegistry();
     const activeFile = {
       entityId: toSafeId<"entity">("entity_active"),
@@ -338,19 +337,17 @@ describe("chat prompt builders", () => {
     };
 
     expect(
-      appendActiveFilePromptIfEntityExists({
+      buildActiveFileSection({
         activeFile,
         entityExists: false,
-        prompt: basePrompt,
         refRegistry,
         workspaceId: WORKSPACE_ID,
       }),
-    ).toBe(basePrompt);
+    ).toBe("");
 
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile,
       entityExists: true,
-      prompt: basePrompt,
       refRegistry,
       workspaceId: WORKSPACE_ID,
     });
@@ -363,7 +360,7 @@ describe("chat prompt builders", () => {
   test("grounds active email answers in source-bound citation blocks", () => {
     const entityId = toSafeId<"entity">("00000000-0000-4000-8000-000000000041");
     const fieldId = toSafeId<"field">("00000000-0000-4000-8000-000000000042");
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         emailCitationSnapshot: {
           blocks: [
@@ -380,7 +377,6 @@ describe("chat prompt builders", () => {
         fileName: "message.eml",
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       workspaceId: WORKSPACE_ID,
     });
@@ -397,7 +393,7 @@ describe("chat prompt builders", () => {
 
   test("preserves a full bounded supplementary-Unicode citation block", () => {
     const text = "😀".repeat(500);
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         emailCitationSnapshot: {
           blocks: [{ id: "body-0001", text }],
@@ -407,7 +403,6 @@ describe("chat prompt builders", () => {
         fileName: "message.eml",
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       workspaceId: WORKSPACE_ID,
     });
@@ -417,10 +412,9 @@ describe("chat prompt builders", () => {
   });
 
   test("instructs the model to use live DOCX edits when a snapshot is available", () => {
-    const basePrompt = "Base prompt";
     const refRegistry = createChatRefRegistry();
 
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         docxEditSnapshot: {
           blocks: [
@@ -438,7 +432,6 @@ describe("chat prompt builders", () => {
         supportsDocxEdits: true,
       },
       entityExists: true,
-      prompt: basePrompt,
       refRegistry,
       workspaceId: WORKSPACE_ID,
     });
@@ -465,10 +458,9 @@ describe("chat prompt builders", () => {
   });
 
   test("omits the folio-agents doc-tool guidance when those tools are not registered for this turn", () => {
-    const basePrompt = "Base prompt";
     const refRegistry = createChatRefRegistry();
 
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         docxEditSnapshot: {
           blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause text" }],
@@ -478,7 +470,6 @@ describe("chat prompt builders", () => {
         supportsDocxEdits: true,
       },
       entityExists: true,
-      prompt: basePrompt,
       refRegistry,
       toolAvailability: {
         ...FULL_TOOL_AVAILABILITY,
@@ -495,7 +486,7 @@ describe("chat prompt builders", () => {
   });
 
   test("aligns active DOCX guidance with the registered automatic edit tool", () => {
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         docxEditSnapshot: {
           blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause" }],
@@ -505,7 +496,6 @@ describe("chat prompt builders", () => {
         supportsDocxEdits: true,
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       toolAvailability: {
         ...FULL_TOOL_AVAILABILITY,
@@ -522,7 +512,7 @@ describe("chat prompt builders", () => {
   });
 
   test("names no DOCX edit tool when registration removed the capability", () => {
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         docxEditSnapshot: {
           blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause" }],
@@ -532,7 +522,6 @@ describe("chat prompt builders", () => {
         supportsDocxEdits: true,
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       toolAvailability: {
         ...FULL_TOOL_AVAILABILITY,

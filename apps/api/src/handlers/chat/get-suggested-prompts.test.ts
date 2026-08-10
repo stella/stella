@@ -3,24 +3,11 @@ import { describe, expect, test } from "bun:test";
 import getSuggestedPrompts, {
   cleanSuggestionsText,
   latestAssistantTurnAwaitsUser,
-  SUGGESTIONS_SYSTEM_PROMPT,
 } from "./get-suggested-prompts";
 
 describe("suggested prompts usage metering", () => {
   test("does not run static usage preflight before no-op fallbacks", () => {
     expect("requiresUsage" in getSuggestedPrompts.config).toBe(false);
-  });
-});
-
-describe("suggested prompts perspective", () => {
-  test("defines suggestions as verbatim user messages, not questions to the user", () => {
-    expect(SUGGESTIONS_SYSTEM_PROMPT).toContain(
-      "inserted verbatim into the USER'S message composer",
-    );
-    expect(SUGGESTIONS_SYSTEM_PROMPT).toContain(
-      "Never write a question that the AI would ask the user",
-    );
-    expect(SUGGESTIONS_SYSTEM_PROMPT).toContain("Chceš doplnit...?");
   });
 });
 

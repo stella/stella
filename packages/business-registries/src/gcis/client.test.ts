@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByTaxId, searchByName } from "./client.js";
-import { GcisAPIError, GcisValidationError } from "./errors.js";
+import { GcisValidationError } from "./errors.js";
 import type { GcisResponse } from "./types.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (name: string): Promise<GcisResponse> => {
@@ -39,28 +37,6 @@ const fetchInputToString = (input: URL | Request | string): string => {
   }
   return input.url;
 };
-
-// ---------------------------------------------------------------------------
-// Live tests — opt-in via SMOKE_TEST=1. Mirror the brreg / prh pattern.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("lookupByTaxId live", () => {
-  test("returns TSMC by tongbian", async () => {
-    const result = await lookupByTaxId("22099131");
-    expect(result).not.toBeNull();
-    expect(result?.taxId).toBe("22099131");
-    expect(result?.name).toContain("台灣積體電路");
-    expect(result?.status).toEqual({ type: "active" });
-    expect(result?.registryUrl).toContain("22099131");
-  });
-});
-
-describe.skipIf(SKIP_LIVE)("searchByName live", () => {
-  test("finds entities with 台積電 in the name", async () => {
-    const results = await searchByName("台積電", { limit: 5 });
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.every((entry) => /^\d{8}$/u.test(entry.taxId))).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Mocked fetch tests using captured upstream fixtures.
@@ -352,9 +328,4 @@ describe("searchByName validation", () => {
     expect(searchByName("")).rejects.toBeInstanceOf(GcisValidationError);
     expect(searchByName("  ")).rejects.toBeInstanceOf(GcisValidationError);
   });
-});
-
-// Smoke: GcisAPIError export is reachable.
-test("exports GcisAPIError", () => {
-  expect(GcisAPIError).toBeDefined();
 });

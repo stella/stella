@@ -1,17 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 
+import type { ExpenseCategory } from "@stll/api-contract";
+
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-
-type ExpenseCategory =
-  | "filing_fee"
-  | "expert_witness"
-  | "travel"
-  | "printing"
-  | "courier"
-  | "other";
 
 type CreateExpenseVars = {
   workspaceId: string;

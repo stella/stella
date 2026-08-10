@@ -14,6 +14,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -29,9 +30,7 @@ import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
-  type: t.UnionEnum(["person", "organization"], {
-    description: "Contact kind; required when creating",
-  }),
+  type: createContactTypeSchema,
   prefix: t.Optional(t.String({ maxLength: 32 })),
   firstName: t.Optional(t.String({ maxLength: 256 })),
   middleName: t.Optional(t.String({ maxLength: 256 })),

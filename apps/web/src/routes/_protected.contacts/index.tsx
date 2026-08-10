@@ -29,6 +29,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { CONTACT_TYPES, type ContactType } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import {
@@ -84,7 +85,7 @@ import { toFormErrors } from "@/lib/schema";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
 
-type ContactFilter = "all" | "person" | "organization";
+type ContactFilter = "all" | ContactType;
 
 export const Route = createFileRoute("/_protected/contacts/")({
   head: () => ({
@@ -210,7 +211,7 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
 
 type ContactItem = {
   id: string;
-  type: "person" | "organization";
+  type: ContactType;
   displayName: string;
   firstName: string | null;
   lastName: string | null;
@@ -579,7 +580,7 @@ const requiredTrimmedString = (maxLength: number, message: string) =>
 const createContactSchema = (requiredMessage: string) =>
   v.pipe(
     v.strictObject({
-      type: v.picklist(["person", "organization"]),
+      type: v.picklist(CONTACT_TYPES),
       displayName: requiredTrimmedString(512, requiredMessage),
       firstName: trimmedString(256),
       lastName: trimmedString(256),

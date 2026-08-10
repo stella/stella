@@ -1,8 +1,11 @@
-import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
+import {
+  BLOCK_DIRECTIVE_KINDS,
+  type BlockDirectiveKind,
+} from "@stll/template-conditions";
 
 // Block directives that wrap content (own paragraph). Derived from the shared
 // grammar so it cannot drift from the fill pipeline's directive kinds.
-export type BlockDirectiveKind = (typeof BLOCK_DIRECTIVE_KINDS)[number];
+export type { BlockDirectiveKind };
 
 export type BlockDirectiveFamily = "conditional" | "iteration";
 

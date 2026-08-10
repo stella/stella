@@ -1,6 +1,5 @@
 import type { TranslationKey } from "../i18n/utils";
 import { pillars, type ProductSlug } from "./products/pillars";
-import { productBySlug } from "./products/registry";
 
 type NavLabelKey = Extract<
   TranslationKey,
@@ -103,22 +102,16 @@ export type ProductNavEntry = {
 };
 
 // Product pages in pillar order (the README spine), so nav surfaces and the
-// footer share one ordering and cannot drift from pillars.ts. Registered
-// products only: `productBySlug` guards against a pillar naming a page that
-// does not exist. No `href`: every surface builds one with `productHref` from
+// footer share one ordering and cannot drift from pillars.ts. The product slug
+// union is backed by the total registry, so a pillar cannot name an unregistered
+// page. No `href`: every surface builds one with `productHref` from
 // `data/products/links.ts`, which carries the active locale's prefix.
 export const productNavEntries = pillars.flatMap((pillar) =>
-  pillar.slugs.flatMap((slug) =>
-    productBySlug.has(slug)
-      ? [
-          {
-            slug,
-            eyebrowKey: `nav.products.${slug}.eyebrow` as const,
-            footerLabel: productFooterLabels[slug],
-          },
-        ]
-      : [],
-  ),
+  pillar.slugs.map((slug) => ({
+    slug,
+    eyebrowKey: `nav.products.${slug}.eyebrow` as const,
+    footerLabel: productFooterLabels[slug],
+  })),
 ) satisfies readonly ProductNavEntry[];
 
 /**

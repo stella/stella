@@ -293,11 +293,14 @@ const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
   [STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT]: 0,
 });
 
-const PROBLEM_OUTCOMES = new Set<ReplayRowOutcome>([
-  REPLAY_ROW_OUTCOME.REJECTED,
-  REPLAY_ROW_OUTCOME.MISSING_PAYLOAD,
-  REPLAY_ROW_OUTCOME.RETRYABLE,
-]);
+const REPLAY_OUTCOME_DISPOSITION = {
+  [REPLAY_ROW_OUTCOME.APPLIED]: "ok",
+  [REPLAY_ROW_OUTCOME.UNCHANGED]: "ok",
+  [REPLAY_ROW_OUTCOME.WOULD_APPLY]: "ok",
+  [REPLAY_ROW_OUTCOME.REJECTED]: "problem",
+  [REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]: "problem",
+  [REPLAY_ROW_OUTCOME.RETRYABLE]: "problem",
+} as const satisfies Record<ReplayRowOutcome, "ok" | "problem">;
 
 const storedInputFor = (
   row: ReplayDecisionRow,
@@ -739,7 +742,7 @@ export const replayCaseLawSource = async ({
     if (rowReport.rejection !== undefined) {
       rejections[rowReport.rejection] += 1;
     }
-    if (PROBLEM_OUTCOMES.has(rowReport.outcome)) {
+    if (REPLAY_OUTCOME_DISPOSITION[rowReport.outcome] === "problem") {
       problems.push(rowReport);
     }
     cursor = row.id;

@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
         },
-        "1": {
-          "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Lee y consulta jurisprudencia oficial, fuentes jurídicas y registros mercantiles."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:tabular-review": {
+          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
+        },
+        "product:workspace": {
+          "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        },
+        "product:agent": {
           "body": "Conversa con tus asuntos, archivos y herramientas conectadas, con aprobaciones y vistas previas de la fuente."
         },
-        "1": {
-          "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:workspace": {
+          "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Asuntos, documentos, revisión y chat en un solo espacio de trabajo."
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Trabaja en tus asuntos y herramientas conectadas, con aprobaciones y citas."
         },
-        "2": {
+        "product:templates": {
           "body": "Rellena documentos jurídicos reutilizables desde la aplicación, la CLI o tus herramientas conectadas."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:workspace": {
+          "body": "Asuntos, documentos, revisión y chat en un solo espacio de trabajo."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Activa el modo de desarrollador en Settings → Connectors → Advanced y añade un conector con la dirección del endpoint."
           },
-          "1": {
+          "claude": {
             "body": "En Settings → Connectors, añade un conector personalizado con la dirección del endpoint."
           },
-          "2": {
-            "body": "Añade el servidor e inicia sesión:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Añade el servidor con un solo comando:"
+          },
+          "codex": {
+            "body": "Añade el servidor e inicia sesión:"
           }
         },
         "heading": "Conecta un agente de IA",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Mira dónde conviven asuntos, documentos y herramientas."
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
         },
-        "1": {
-          "body": "Crea documentos de Word reutilizables con campos y cláusulas condicionales."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Prueba el mismo editor por separado: abre y edita un .docx en el navegador, sin cuenta."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:templates": {
+          "body": "Crea documentos de Word reutilizables con campos y cláusulas condicionales."
+        },
+        "product:workspace": {
+          "body": "Mira dónde conviven asuntos, documentos y herramientas."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Prepara material sensible para la IA sin exponer datos identificativos."
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
         },
-        "1": {
+        "product:agent": {
           "body": "Conversa con tus asuntos, archivos y fuentes, con aprobaciones y citas."
         },
-        "2": {
-          "body": "Convierte un conjunto de documentos en una tabla de revisión dentro del asunto."
+        "product:anonymization": {
+          "body": "Prepara material sensible para la IA sin exponer datos identificativos."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:tabular-review": {
+          "body": "Convierte un conjunto de documentos en una tabla de revisión dentro del asunto."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        },
+        "product:agent": {
           "body": "Conversa con tus asuntos, archivos y fuentes conectadas, con aprobaciones y vistas previas de la fuente."
         },
-        "1": {
-          "body": "Jurisprudencia oficial y registros mercantiles, llevados a un asunto."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Prepara material sensible para la IA sin exponer datos identificativos."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:public-data": {
+          "body": "Jurisprudencia oficial y registros mercantiles, llevados a un asunto."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Asuntos, documentos y edición de Word en un solo lugar."
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
         },
-        "1": {
-          "body": "Convierte un conjunto de documentos en una tabla de revisión dentro del asunto."
-        },
-        "2": {
+        "product:agent": {
           "body": "Conversa con tus asuntos, archivos y fuentes, con citas."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:tabular-review": {
+          "body": "Convierte un conjunto de documentos en una tabla de revisión dentro del asunto."
+        },
+        "product:workspace": {
+          "body": "Asuntos, documentos y edición de Word en un solo lugar."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "¿Cómo funcionan las plantillas en stella?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Genera un documento desde una plantilla en vez de empezar en blanco",
             "1": "Reutiliza las mismas cláusulas en varias plantillas",
@@ -772,7 +772,7 @@
           },
           "heading": "Construye con plantillas y cláusulas"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Precarga los campos desde un documento ya guardado en el asunto",
             "1": "Revisa y ajusta cada valor antes de generar el borrador",
@@ -780,7 +780,7 @@
           },
           "heading": "Rellénala con los datos del asunto"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Crea y ajusta las plantillas en el editor",
             "1": "Genera el borrador directamente en el asunto",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        },
+        "product:agent": {
           "body": "Conversa con tus asuntos, archivos y herramientas conectadas, con aprobaciones y vistas previas de la fuente."
         },
-        "1": {
-          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Accede a los mismos asuntos, documentos y jurisprudencia desde la CLI y las herramientas compatibles con MCP."
         },
-        "3": {
-          "body": "stella en formato legible por máquinas, para los buscadores de IA."
+        "product:tabular-review": {
+          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "¿Qué es el espacio de trabajo de stella?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Documentos, contactos, revisión y chat viven dentro del asunto",
             "1": "Edita documentos .docx de Word sin salir del espacio de trabajo",
@@ -870,7 +870,7 @@
           },
           "heading": "Todo el asunto, en un solo lugar"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Abre y edita documentos .docx de Word directamente en el espacio de trabajo",
             "1": "El documento con cambios marcados sigue siendo un archivo de Word: sin conversión ni copias",

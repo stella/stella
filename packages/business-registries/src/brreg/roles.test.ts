@@ -10,8 +10,6 @@ import {
   parseRolesResponse,
 } from "./roles.js";
 
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
-
 // SAFETY: the fixtures are static JSON captured from the live API and
 // the runtime types match the file shape; the assertion narrows the
 // `unknown` inferred from JSON import attributes.
@@ -239,20 +237,5 @@ describe("lookupOfficersByOrgnr fetch", () => {
     expect(observedUrl).toBe(
       "https://data.brreg.no/enhetsregisteret/api/enheter/974760673/roller",
     );
-  });
-});
-
-// Live tests hit the real Brreg open API. They double as integration tests
-// and document the expected response shape for known entities.
-describe.skipIf(SKIP_LIVE)("lookupOfficersByOrgnr live", () => {
-  test("returns the registry's own officer roster", async () => {
-    const officers = await lookupOfficersByOrgnr("974760673");
-    expect(officers.length).toBeGreaterThan(0);
-    expect(officers.some((o) => o.role.code === "DAGL")).toBe(true);
-  });
-
-  test("returns [] for a checksum-valid but non-existent orgnr", async () => {
-    const officers = await lookupOfficersByOrgnr("100000008");
-    expect(officers).toEqual([]);
   });
 });

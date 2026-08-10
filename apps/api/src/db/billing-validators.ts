@@ -1,23 +1,20 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
 
-export const timeEntryStatusSchema = t.UnionEnum([
-  "draft",
-  "approved",
-  "billed",
-  "written_off",
-]);
-export type TimeEntryStatus = Static<typeof timeEntryStatusSchema>;
+import {
+  EXPENSE_CATEGORIES,
+  TIME_ENTRY_SOURCES,
+  TIME_ENTRY_STATUSES,
+} from "@stll/api-contract";
+import type {
+  ExpenseCategory,
+  TimeEntrySource,
+  TimeEntryStatus,
+} from "@stll/api-contract";
 
-export const timeEntrySourceSchema = t.UnionEnum(["manual", "timer"]);
-export type TimeEntrySource = Static<typeof timeEntrySourceSchema>;
+export const timeEntryStatusSchema = t.UnionEnum(TIME_ENTRY_STATUSES);
 
-export const expenseCategorySchema = t.UnionEnum([
-  "filing_fee",
-  "expert_witness",
-  "travel",
-  "printing",
-  "courier",
-  "other",
-]);
-export type ExpenseCategory = Static<typeof expenseCategorySchema>;
+export const timeEntrySourceSchema = t.UnionEnum(TIME_ENTRY_SOURCES);
+
+export const expenseCategorySchema = t.UnionEnum(EXPENSE_CATEGORIES);
+
+export type { ExpenseCategory, TimeEntrySource, TimeEntryStatus };

@@ -14,31 +14,20 @@
  */
 
 import type {
+  FlaggedPlaybookVerdict,
   PlaybookFinding,
   PlaybookSeverity,
   PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
-import { SEVERITY_ORDER } from "@/components/ai-suggestions/playbook-review-store";
+import {
+  isFlaggedPlaybookVerdict,
+  SEVERITY_ORDER,
+} from "@/components/ai-suggestions/playbook-review-store";
 
 export type OverallRisk = "critical" | "high" | "medium" | "low" | "none";
 
-// A compliant, not-applicable, or unset (extract-only positions carry no
-// verdict) finding has nothing worth raising with the counterparty; only these
-// three verdicts are ever "flagged". Frozen readonly array (not a `Set`) so the
-// membership check reads a widened `PlaybookVerdict`, matching the file's
-// original immutable-collection shape.
-const FLAGGED_VERDICTS: readonly PlaybookVerdict[] = Object.freeze([
-  "deviation",
-  "fallback",
-  "missing",
-]);
-
-// The flagged verdicts as a type. `not-applicable` is excluded alongside
-// `compliant`: neither is a flag.
-type FlaggedVerdict = Exclude<PlaybookVerdict, "compliant" | "not-applicable">;
-
 export type FlaggedPlaybookFinding = PlaybookFinding & {
-  verdict: FlaggedVerdict;
+  verdict: FlaggedPlaybookVerdict;
 };
 
 export type RiskVerdictCounts = Record<PlaybookVerdict, number>;
@@ -47,7 +36,7 @@ export type RiskTopIssue = {
   positionId: string;
   issue: string;
   severity: PlaybookSeverity;
-  verdict: FlaggedVerdict;
+  verdict: FlaggedPlaybookVerdict;
 };
 
 // A Met / Not-met / Not-applicable compliance score over the reviewed positions.
@@ -118,7 +107,7 @@ const TOP_ISSUES_LIMIT = 5;
 export const isFlaggedPlaybookFinding = (
   finding: PlaybookFinding,
 ): finding is FlaggedPlaybookFinding =>
-  finding.verdict !== null && FLAGGED_VERDICTS.includes(finding.verdict);
+  finding.verdict !== null && isFlaggedPlaybookVerdict(finding.verdict);
 
 export const computeRiskRollup = (
   findings: readonly PlaybookFinding[],

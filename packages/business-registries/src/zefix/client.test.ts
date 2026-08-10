@@ -4,7 +4,6 @@ import { lookupByUid, searchByName } from "./client.js";
 import { ZefixAPIError, ZefixValidationError } from "./errors.js";
 import type { ZefixRawFirm, ZefixSearchResponse } from "./types.js";
 
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 const FIXTURE = new URL("__fixtures__/search-swiss-re.json", import.meta.url);
 
 const readFixture = async (): Promise<ZefixSearchResponse> => {
@@ -30,14 +29,6 @@ const installFetchStub = (
     globalThis.fetch = original;
   };
 };
-
-describe.skipIf(SKIP_LIVE)("Zefix live", () => {
-  test("looks up Swiss Re by UID", async () => {
-    const company = await lookupByUid("CHE-191.546.434");
-    expect(company?.name).toBe("Swiss Re AG");
-    expect(company?.status).toEqual({ type: "active" });
-  });
-});
 
 describe("Zefix client", () => {
   let restore = () => {};

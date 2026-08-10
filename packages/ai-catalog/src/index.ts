@@ -61,6 +61,24 @@ export const AI_PROVIDERS = [
 
 export type AIProvider = (typeof AI_PROVIDERS)[number];
 
+const AI_PROVIDER_ADAPTER_KIND = {
+  google: "tanstack",
+  openrouter: "tanstack",
+  openai: "tanstack",
+  azure_foundry: "custom",
+  anthropic: "tanstack",
+  bedrock: "tanstack",
+  mistral: "tanstack",
+  openai_compatible: "custom",
+  huggingface: "custom",
+} as const satisfies Record<AIProvider, "custom" | "tanstack">;
+
+export type TanStackAIProvider = {
+  [TProvider in AIProvider]: (typeof AI_PROVIDER_ADAPTER_KIND)[TProvider] extends "tanstack"
+    ? TProvider
+    : never;
+}[AIProvider];
+
 export const TANSTACK_AI_PROVIDERS = [
   "google",
   "openrouter",
@@ -68,9 +86,14 @@ export const TANSTACK_AI_PROVIDERS = [
   "anthropic",
   "bedrock",
   "mistral",
-] as const satisfies readonly AIProvider[];
+] as const satisfies readonly TanStackAIProvider[];
 
-export type TanStackAIProvider = (typeof TANSTACK_AI_PROVIDERS)[number];
+type MissingTanStackAIProvider = Exclude<
+  TanStackAIProvider,
+  (typeof TANSTACK_AI_PROVIDERS)[number]
+>;
+
+true satisfies MissingTanStackAIProvider extends never ? true : never;
 
 export const MODEL_CATALOG_PROVIDER_KIND = {
   google: "first-party",
@@ -909,7 +932,7 @@ export const resolveModelRate = (
 // first-party model without a rate a compile error; the intersection
 // with `Record<string, ...>` keeps room for retired models that still
 // appear in historical ledger rows.
-export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
+export const MODEL_RATES = {
   "gemini-2.5-flash": {
     kind: "flat",
     inputPerMTok: 30_000,
@@ -1121,11 +1144,13 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
     inputPerMTok: 200_000,
     outputPerMTok: 600_000,
   },
-} satisfies Record<OfferedFirstPartyModelId, ModelRate> &
+} as const satisfies Record<OfferedFirstPartyModelId, ModelRate> &
   Record<string, ModelRate>;
 
+const MODEL_RATES_BY_ID: Readonly<Record<string, ModelRate>> = MODEL_RATES;
+
 export const getModelRate = (modelId: string): ModelRate | undefined =>
-  MODEL_RATES[normalizeModelCatalogId(modelId)];
+  MODEL_RATES_BY_ID[normalizeModelCatalogId(modelId)];
 
 /**
  * Documented input context-window sizes (in tokens) per model ID.
@@ -1144,7 +1169,7 @@ export const getModelRate = (modelId: string): ModelRate | undefined =>
  * validate this map, so an unknown model degrades to the conservative
  * default rather than failing CI.
  */
-export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
+export const CONTEXT_WINDOW_TOKENS = {
   // Google Gemini: 1M-token input window across the current lineup.
   "gemini-2.5-flash": 1_048_576,
   "gemini-2.5-pro": 1_048_576,
@@ -1203,7 +1228,17 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "openai.gpt-oss-120b-1:0": 128_000, // gpt-oss on Bedrock: 128K.
   "openai.gpt-oss-20b-1:0": 128_000,
   "us.deepseek.r1-v1:0": 128_000, // DeepSeek-R1: 128K.
-};
+} as const satisfies Readonly<Record<string, number>>;
+
+type ModelRateWithoutContextWindow = Exclude<
+  keyof typeof MODEL_RATES,
+  keyof typeof CONTEXT_WINDOW_TOKENS
+>;
+
+true satisfies ModelRateWithoutContextWindow extends never ? true : never;
+
+const CONTEXT_WINDOW_TOKENS_BY_ID: Readonly<Record<string, number>> =
+  CONTEXT_WINDOW_TOKENS;
 
 /**
  * Conservative window assumed for any model ID absent from
@@ -1218,5 +1253,5 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
  * `CONTEXT_WINDOW_TOKENS` directly.
  */
 export const getContextWindowTokens = (modelId: string): number =>
-  CONTEXT_WINDOW_TOKENS[normalizeModelCatalogId(modelId)] ??
+  CONTEXT_WINDOW_TOKENS_BY_ID[normalizeModelCatalogId(modelId)] ??
   DEFAULT_CONTEXT_WINDOW_TOKENS;

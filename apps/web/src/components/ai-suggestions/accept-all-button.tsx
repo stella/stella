@@ -26,9 +26,10 @@ import {
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 
-import type {
-  ReviewSeverityKey,
-  ReviewSuggestion,
+import {
+  SEVERITY_ORDER,
+  type ReviewSeverityKey,
+  type ReviewSuggestion,
 } from "@/components/ai-suggestions/review-store";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -42,13 +43,6 @@ const SEVERITY_COUNT_KEYS = {
   low: "docxReview.countLow",
   unspecified: "docxReview.countUnspecified",
 } as const satisfies Record<ReviewSeverityKey, TranslationKey>;
-
-const SEVERITY_ORDER: readonly ReviewSeverityKey[] = [
-  "high",
-  "medium",
-  "low",
-  "unspecified",
-];
 
 type ButtonProps = ComponentProps<typeof Button>;
 

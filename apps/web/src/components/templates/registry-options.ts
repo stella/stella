@@ -4,8 +4,8 @@
  * "Company ID" field configurator. One list so the two surfaces can never
  * drift: a registry offered for configuration is always offered for autofill.
  *
- * Slugs mirror `LOOKUP_REGISTRIES` (the full `BUSINESS_REGISTRY_SLUGS`); labels
- * are registry proper names (not translatable UI copy); `country` is the ISO
+ * The slug list is checked exhaustively against `BUSINESS_REGISTRY_SLUGS`;
+ * labels are registry proper names (not translatable UI copy); `country` is the ISO
  * 3166-1 alpha-2 region (or a pseudo-region like "EU"), used to order options
  * jurisdiction-first.
  *
@@ -25,7 +25,7 @@ export type LookupRegistryOption = {
   country: string;
 };
 
-export const LOOKUP_REGISTRY_OPTIONS: readonly LookupRegistryOption[] = [
+export const LOOKUP_REGISTRY_OPTIONS = [
   { slug: "ares", label: "Czechia — ARES", country: "CZ" },
   { slug: "orsr", label: "Slovakia — ORSR", country: "SK" },
   { slug: "krs", label: "Poland — KRS", country: "PL" },
@@ -41,4 +41,11 @@ export const LOOKUP_REGISTRY_OPTIONS: readonly LookupRegistryOption[] = [
   { slug: "edgar", label: "United States — SEC EDGAR", country: "US" },
   { slug: "gcis", label: "Taiwan — GCIS", country: "TW" },
   { slug: "vies", label: "European Union — VIES (VAT)", country: "EU" },
-];
+] as const satisfies readonly LookupRegistryOption[];
+
+type MissingLookupRegistryOption = Exclude<
+  LookupRegistry,
+  (typeof LOOKUP_REGISTRY_OPTIONS)[number]["slug"]
+>;
+
+true satisfies MissingLookupRegistryOption extends never ? true : never;

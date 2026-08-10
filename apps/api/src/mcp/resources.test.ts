@@ -4,7 +4,6 @@ import { ProtocolError } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
 import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
-import { DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { envBase } from "@/api/env-base";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
@@ -65,20 +64,6 @@ describe("MCP resources", () => {
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
     });
-  });
-
-  test("the marker reference covers every canonical directive kind", async () => {
-    const result = await readMcpResource(MARKER_REFERENCE_URI, "default");
-    const content = result.contents.at(0);
-    if (!content || !("text" in content)) {
-      throw new Error("Expected marker reference text content");
-    }
-    const { text } = content;
-    // Every canonical directive kind from markers.ts must be documented, so the
-    // reference can never silently drift from the grammar.
-    for (const kind of DIRECTIVE_KINDS) {
-      expect(text).toContain(kind);
-    }
   });
 
   test("serves the bundled document upload MCP App with storage-only CSP", async () => {

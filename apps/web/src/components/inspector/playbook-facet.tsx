@@ -40,6 +40,7 @@ import {
   useActiveDocxStore,
 } from "@/components/ai-suggestions/active-docx-store";
 import {
+  isNegotiablePlaybookVerdict,
   reviewSessionKey,
   SEVERITY_ORDER,
   usePlaybookReviewStore,
@@ -581,13 +582,20 @@ type RiskSummaryCardProps = {
   onScrollToBlock: (blockId: string) => void;
 };
 
-const RISK_BREAKDOWN_ORDER: readonly PlaybookVerdict[] = [
+const RISK_BREAKDOWN_ORDER = [
   "deviation",
   "missing",
   "fallback",
   "compliant",
   "not-applicable",
-];
+] as const satisfies readonly PlaybookVerdict[];
+
+type MissingRiskBreakdownVerdict = Exclude<
+  PlaybookVerdict,
+  (typeof RISK_BREAKDOWN_ORDER)[number]
+>;
+
+true satisfies MissingRiskBreakdownVerdict extends never ? true : never;
 
 const RiskSummaryCard = ({
   findings,
@@ -767,12 +775,6 @@ type FindingCardProps = {
   onAcceptFix: (positionId: string, revisionIds: readonly number[]) => void;
   onRejectFix: (positionId: string, revisionIds: readonly number[]) => void;
 };
-
-// Negotiation guidance only helps once a clause has actually been flagged: a
-// compliant/missing verdict has nothing to negotiate, so the block is gated
-// on the two verdicts a reviewer would actually raise with the counterparty.
-const NEGOTIABLE_VERDICTS: ReadonlySet<PlaybookVerdict> =
-  new Set<PlaybookVerdict>(["deviation", "fallback"]);
 
 const FindingCard = ({
   finding,
@@ -1004,7 +1006,7 @@ const NegotiationBlock = ({
   if (
     negotiation === undefined ||
     verdict === null ||
-    !NEGOTIABLE_VERDICTS.has(verdict)
+    !isNegotiablePlaybookVerdict(verdict)
   ) {
     return null;
   }

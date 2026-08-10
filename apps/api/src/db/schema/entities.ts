@@ -727,10 +727,32 @@ export const PENDING_UPLOAD_STATUSES = [
   "failed",
 ] as const;
 
-export const PENDING_UPLOAD_RECOVERABLE_STATUSES = [
-  "scanning",
-  "failed",
-] as const satisfies readonly (typeof PENDING_UPLOAD_STATUSES)[number][];
+export type PendingUploadStatus = (typeof PENDING_UPLOAD_STATUSES)[number];
+
+const PENDING_UPLOAD_RECOVERY_POLICY = {
+  pending: "not-recoverable",
+  scanning: "recoverable",
+  finalized: "not-recoverable",
+  rejected: "not-recoverable",
+  failed: "recoverable",
+} as const satisfies Record<
+  PendingUploadStatus,
+  "not-recoverable" | "recoverable"
+>;
+
+type RecoverablePendingUploadStatus = {
+  [TStatus in PendingUploadStatus]: (typeof PENDING_UPLOAD_RECOVERY_POLICY)[TStatus] extends "recoverable"
+    ? TStatus
+    : never;
+}[PendingUploadStatus];
+
+const isRecoverablePendingUploadStatus = (
+  status: PendingUploadStatus,
+): status is RecoverablePendingUploadStatus =>
+  PENDING_UPLOAD_RECOVERY_POLICY[status] === "recoverable";
+
+export const PENDING_UPLOAD_RECOVERABLE_STATUSES =
+  PENDING_UPLOAD_STATUSES.filter(isRecoverablePendingUploadStatus);
 
 /**
  * Each upload purpose drives a different finalize transaction (entity

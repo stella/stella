@@ -4,11 +4,7 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
-import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
-
-import { includesValue } from "@/lib/utils";
 import { ClauseDirectiveNodeView } from "@/routes/_protected.knowledge/-components/clause-directive-node";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 
 /**
  * A `{{#if}}`/`{{#each}}` block directive rendered as a real, atomic editor
@@ -19,11 +15,6 @@ import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-componen
  * author reorders or deletes it as a whole block.
  */
 export const CLAUSE_DIRECTIVE_NODE = "clauseDirective";
-
-export const isBlockDirectiveKind = (
-  value: unknown,
-): value is BlockDirectiveKind =>
-  typeof value === "string" && includesValue(BLOCK_DIRECTIVE_KINDS, value);
 
 export const ClauseDirectiveNode = Node.create({
   name: CLAUSE_DIRECTIVE_NODE,

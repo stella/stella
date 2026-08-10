@@ -94,40 +94,11 @@ export const TemplateCheckDialog = ({
 
 // ── Findings ─────────────────────────────────────────
 
-// Mirrors the API's TemplateCheckFinding union; only the fields this dialog
-// consumes are typed.
-type CheckFinding =
-  | {
-      code: "structureError";
-      severity: "error";
-      directive: string;
-      paragraphIndex: number;
-    }
-  | { code: "markerWithoutField"; severity: "warning"; path: string }
-  | { code: "unplacedField"; severity: "warning"; path: string }
-  | { code: "slotWithoutClause"; severity: "error"; slotName: string }
-  | { code: "linkWithoutSlot"; severity: "warning"; slotName: string }
-  | { code: "fieldMissingLabel"; severity: "warning"; path: string }
-  | { code: "fieldMissingInputType"; severity: "warning"; path: string }
-  | { code: "selectWithoutOptions"; severity: "error"; path: string }
-  | {
-      code: "formulaUnknownPath";
-      severity: "error";
-      path: string;
-      reference: string;
-    }
-  | {
-      code: "conditionUnknownPath";
-      severity: "error";
-      conditionName: string;
-      reference: string;
-    }
-  | {
-      code: "invalidMarker";
-      severity: "error";
-      marker: string;
-      paragraphIndex: number;
-    };
+type TemplateCheckQuery = NonNullable<
+  ReturnType<typeof templateCheckOptions>["queryFn"]
+>;
+type TemplateCheckResult = Awaited<ReturnType<TemplateCheckQuery>>;
+type CheckFinding = TemplateCheckResult["findings"][number];
 
 const FINDING_MESSAGE_KEY = {
   structureError: "templates.checkFindingStructureError",

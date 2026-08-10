@@ -6,6 +6,7 @@ import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import type { ContactType } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Combobox,
@@ -21,7 +22,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 type ContactResult = {
   id: string;
-  type: "person" | "organization";
+  type: ContactType;
   displayName: string;
   color: string | null;
 };
@@ -44,8 +45,8 @@ const CREATE_ORG_SENTINEL: ContactResult = {
 type ContactPickerProps = {
   onSelect: (contact: ContactResult) => void;
   /** Called when the user wants to create a new contact inline. */
-  onCreate?: (name: string, type: "person" | "organization") => void;
-  type?: "person" | "organization" | undefined;
+  onCreate?: (name: string, type: ContactType) => void;
+  type?: ContactType | undefined;
   placeholder?: string;
   autoFocus?: boolean;
   invalid?: boolean;

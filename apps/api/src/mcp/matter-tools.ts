@@ -2,7 +2,12 @@ import { Result } from "better-result";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  resourceRef,
+  RESOURCE_TYPE,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { entities, LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -105,32 +110,12 @@ type MatterToolName =
 /** Statuses a matter can be flipped to through save_matter. */
 const MATTER_STATUSES = ["active", "archived"] as const;
 
-/** Contact discriminator accepted by save_contact. */
-const CONTACT_TYPES = ["person", "organization"] as const;
-
 /**
  * Entity kinds save_task will link a task to. Mirrors link_entity_id's
  * advertised contract (document, folder, or another task) so the up-front
  * target check rejects a non-linkable kind before any mutation runs.
  */
 const LINKABLE_ENTITY_KINDS = ["document", "folder", "task"] as const;
-
-/**
- * Roles a contact can hold on a matter. Mirrors the closed set in
- * workspaces/workspace-contacts-create.ts; kept in sync so the MCP schema
- * advertises the same options the backing handler validates against.
- */
-const WORKSPACE_CONTACT_ROLES = [
-  "opposing_party",
-  "opposing_counsel",
-  "co_counsel",
-  "witness",
-  "expert_witness",
-  "third_party",
-  "judge",
-  "mediator",
-  "other",
-] as const;
 
 /**
  * System file-column name for a matter created via MCP. Mirrors the web

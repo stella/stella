@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -185,17 +185,10 @@ const shouldSearchType = (
   type: GlobalSearchResultType,
 ) => selected.size === 0 || selected.has(type);
 
-const NON_ENTITY_TYPES: ReadonlySet<GlobalSearchResultType> = new Set([
-  "matter",
-  "contact",
-  "case-law",
-  "chat",
-]);
 const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
 const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
-  selected.size === 0 ||
-  [...selected].some((type) => !NON_ENTITY_TYPES.has(type));
+  selected.size === 0 || [...selected].some(isEntityKind);
 
 const fileFieldJoin = (mimeTypes: readonly string[]) => {
   const mimeFilter =
@@ -469,9 +462,7 @@ const buildSearchFilterFragments = ({
   const normalizedUpdatedTo =
     updatedTo === undefined ? undefined : new Date(updatedTo).toISOString();
 
-  const entityTypes = [...selected].filter(
-    (type) => !NON_ENTITY_TYPES.has(type),
-  );
+  const entityTypes = [...selected].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>

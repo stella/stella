@@ -19,6 +19,15 @@ const assistantMessageId = toSafeId<"chatMessage">(
 const now = new Date("2026-08-03T10:00:00.000Z");
 const leaseExpiresAt = new Date("2026-08-03T10:10:00.000Z");
 
+const runningState = {
+  executionId: "55555555-5555-4555-8555-555555555555",
+  id,
+  leaseExpiresAt,
+  status: "running",
+  threadId,
+  userMessageId,
+} as const satisfies ChatTurnState;
+
 const states = {
   accepted: {
     id,
@@ -27,14 +36,7 @@ const states = {
     threadId,
     userMessageId,
   },
-  running: {
-    executionId: "55555555-5555-4555-8555-555555555555",
-    id,
-    leaseExpiresAt,
-    status: "running",
-    threadId,
-    userMessageId,
-  },
+  running: runningState,
   "awaiting-user": {
     assistantMessageId,
     id,
@@ -78,17 +80,28 @@ const states = {
   },
 } as const satisfies Record<(typeof CHAT_TURN_STATUSES)[number], ChatTurnState>;
 
+const awaitingUserState = {
+  assistantMessageId,
+  id,
+  interaction: { toolCallId: "ask-1", type: "ask-user" },
+  status: "awaiting-user",
+  threadId,
+  userMessageId,
+} as const satisfies ChatTurnState;
+
+const awaitUserTransition = {
+  assistantMessageId,
+  interaction: awaitingUserState.interaction,
+  type: "await-user",
+} as const satisfies ChatTurnTransition;
+
 const transitions = {
   start: {
     executionId: "55555555-5555-4555-8555-555555555555",
     leaseExpiresAt,
     type: "start",
   },
-  "await-user": {
-    assistantMessageId,
-    interaction: { toolCallId: "ask-1", type: "ask-user" },
-    type: "await-user",
-  },
+  "await-user": awaitUserTransition,
   complete: { assistantMessageId, completedAt: now, type: "complete" },
   fail: {
     assistantMessageId,
@@ -187,22 +200,48 @@ describe("chat turn lifecycle", () => {
   });
 
   test("removes execution ownership when the turn awaits a user", () => {
-    const result = planChatTurnTransition(
-      states.running,
-      transitions["await-user"],
-    );
+    expect(planChatTurnTransition(runningState, awaitUserTransition)).toEqual({
+      state: awaitingUserState,
+      type: "applied",
+    });
+  });
 
-    expect(result).toEqual({
-      state: states["awaiting-user"],
+  test("resuming user interaction establishes fresh execution ownership", () => {
+    const transition = {
+      executionId: "66666666-6666-4666-8666-666666666666",
+      leaseExpiresAt,
+      type: "resume",
+    } as const satisfies ChatTurnTransition;
+
+    expect(planChatTurnTransition(awaitingUserState, transition)).toEqual({
+      state: {
+        executionId: transition.executionId,
+        id,
+        leaseExpiresAt,
+        status: "running",
+        threadId,
+        userMessageId,
+      },
       type: "applied",
     });
   });
 
   test("keeps interruption distinct from failure and cancellation", () => {
-    expect(
-      planChatTurnTransition(states.running, transitions.interrupt),
-    ).toEqual({
-      state: states.interrupted,
+    const transition = {
+      interruptedAt: now,
+      reason: "timeout",
+      type: "interrupt",
+    } as const satisfies ChatTurnTransition;
+
+    expect(planChatTurnTransition(runningState, transition)).toEqual({
+      state: {
+        id,
+        interruptedAt: now,
+        reason: "timeout",
+        status: "interrupted",
+        threadId,
+        userMessageId,
+      },
       type: "applied",
     });
   });

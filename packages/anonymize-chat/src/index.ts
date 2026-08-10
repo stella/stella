@@ -4,6 +4,7 @@ import type {
   createNativePipelineFromConfig,
   createPipelineContext,
   deanonymise,
+  DefaultEntityLabel,
   getBinding,
   GazetteerEntry,
   NativePipelineEntity,
@@ -18,9 +19,10 @@ import type {
  * Keep this constant here, rather than importing the wasm package at
  * runtime, so browser code can use the shared chat config without
  * pulling the wasm module onto the main thread just for constants.
- * `index.test.ts` verifies parity with the wasm package export.
+ * The compile-time completeness check below preserves parity with the WASM
+ * package without loading the WASM module on the browser main thread.
  */
-export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
+const DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES = [
   "person",
   "organization",
   "phone number",
@@ -44,7 +46,17 @@ export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
   "monetary amount",
   "land parcel",
   "misc",
-] as const;
+] as const satisfies readonly DefaultEntityLabel[];
+
+type MissingDefaultChatAnonEntityLabel = Exclude<
+  DefaultEntityLabel,
+  (typeof DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES)[number]
+>;
+
+true satisfies MissingDefaultChatAnonEntityLabel extends never ? true : never;
+
+export const DEFAULT_CHAT_ANON_ENTITY_LABELS =
+  DEFAULT_CHAT_ANON_ENTITY_LABEL_VALUES;
 
 export type ChatAnonPair = {
   placeholder: string;
@@ -69,18 +81,16 @@ export type ChatAnonResult = {
   entityCount: number;
 };
 
+export const CHAT_SEND_MODES = ["anonymized", "rawOverride"] as const;
+
+export type ChatSendMode = (typeof CHAT_SEND_MODES)[number];
+
 export const CHAT_SEND_MODE = {
   anonymized: "anonymized",
   rawOverride: "rawOverride",
-} as const;
-
-export const CHAT_SEND_MODES = [
-  CHAT_SEND_MODE.anonymized,
-  CHAT_SEND_MODE.rawOverride,
-] as const;
+} as const satisfies { [TMode in ChatSendMode]: TMode };
 
 export const chatSendModeSchema = v.picklist(CHAT_SEND_MODES);
-export type ChatSendMode = v.InferOutput<typeof chatSendModeSchema>;
 
 export const isChatSendMode = (value: unknown): value is ChatSendMode =>
   v.safeParse(chatSendModeSchema, value).success;
@@ -92,16 +102,25 @@ export const CHAT_TRANSPORT_ERROR_CODE = {
   thirdPartyBoundaryRefusal: "third_party_boundary_refusal",
 } as const;
 
-export const CHAT_TRANSPORT_ERROR_CODES = [
+const CHAT_TRANSPORT_ERROR_CODE_VALUES = [
   CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
 ] as const;
+
+type ChatTransportErrorCodeValue =
+  (typeof CHAT_TRANSPORT_ERROR_CODE)[keyof typeof CHAT_TRANSPORT_ERROR_CODE];
+type MissingChatTransportErrorCode = Exclude<
+  ChatTransportErrorCodeValue,
+  (typeof CHAT_TRANSPORT_ERROR_CODE_VALUES)[number]
+>;
+
+true satisfies MissingChatTransportErrorCode extends never ? true : never;
+
+export const CHAT_TRANSPORT_ERROR_CODES = CHAT_TRANSPORT_ERROR_CODE_VALUES;
 
 export const chatTransportErrorCodeSchema = v.picklist(
   CHAT_TRANSPORT_ERROR_CODES,
 );
-export type ChatTransportErrorCode = v.InferOutput<
-  typeof chatTransportErrorCodeSchema
->;
+export type ChatTransportErrorCode = ChatTransportErrorCodeValue;
 
 export const chatTransportErrorPayloadSchema = v.strictObject({
   code: chatTransportErrorCodeSchema,

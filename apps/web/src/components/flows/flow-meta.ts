@@ -8,64 +8,40 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  FLOW_RUN_STATUSES,
+  FLOW_RUN_STEP_STATUSES,
+  FLOW_RUN_TERMINAL_STATUSES,
+  FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_KINDS,
+  FLOW_TRIGGER_TYPES,
+  isTerminalFlowRunStatus,
+  type FlowRunStatus,
+  type FlowRunStepStatus,
+  type FlowScheduleFrequency,
+  type FlowStepKind,
+  type FlowTriggerType,
+} from "@stll/api-contract";
+
 import type { TranslationKey } from "@/i18n/types";
 
-// Domain value unions for the Workflows (internal: "flow") feature. Kept as
-// local `as const` lists (no TS enums) so the presentational layer does not
-// depend on the workspace/knowledge route trees. They mirror the server unions
-// in `apps/api/src/lib/flows/flow-types.ts`.
+export {
+  FLOW_RUN_STATUSES,
+  FLOW_RUN_TERMINAL_STATUSES,
+  FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_KINDS,
+  FLOW_TRIGGER_TYPES,
+  isTerminalFlowRunStatus,
+};
+export type {
+  FlowRunStatus,
+  FlowScheduleFrequency,
+  FlowStepKind,
+  FlowTriggerType,
+};
 
-export const FLOW_STEP_KINDS = [
-  "ai",
-  "review-gate",
-  "create-document",
-] as const;
-export type FlowStepKind = (typeof FLOW_STEP_KINDS)[number];
-
-export const FLOW_TRIGGER_TYPES = [
-  "manual",
-  "schedule",
-  "file-upload",
-] as const;
-export type FlowTriggerType = (typeof FLOW_TRIGGER_TYPES)[number];
-
-export const FLOW_SCHEDULE_FREQUENCIES = [
-  "daily",
-  "weekly",
-  "monthly",
-] as const;
-export type FlowScheduleFrequency = (typeof FLOW_SCHEDULE_FREQUENCIES)[number];
-
-export const FLOW_RUN_STATUSES = [
-  "pending",
-  "running",
-  "awaiting_review",
-  "completed",
-  "failed",
-  "cancelled",
-] as const;
-export type FlowRunStatus = (typeof FLOW_RUN_STATUSES)[number];
-
-export const FLOW_STEP_STATUSES = [
-  "pending",
-  "running",
-  "awaiting_review",
-  "completed",
-  "failed",
-  "skipped",
-] as const;
-export type FlowStepStatus = (typeof FLOW_STEP_STATUSES)[number];
-
-// A run is terminal when no further transitions are possible; the runs list
-// polls only while at least one run is non-terminal.
-export const FLOW_RUN_TERMINAL_STATUSES = [
-  "completed",
-  "failed",
-  "cancelled",
-] as const;
-
-export const isTerminalFlowRunStatus = (status: FlowRunStatus): boolean =>
-  FLOW_RUN_TERMINAL_STATUSES.some((terminal) => terminal === status);
+export const FLOW_STEP_STATUSES = FLOW_RUN_STEP_STATUSES;
+export type FlowStepStatus = FlowRunStepStatus;
 
 // -- Label + icon maps (typed against TranslationKey so a stale key fails
 //    typecheck) --

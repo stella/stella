@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
+import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
 import { createClauseHandler } from "@/api/handlers/clauses/create";
@@ -26,8 +27,12 @@ import type {
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
 } from "@/api/lib/chat/projections";
-import type { ClauseBody, ClauseRun } from "@/api/lib/clauses/types";
-import { isClauseBody } from "@/api/lib/clauses/types";
+import {
+  CLAUSE_LIST_KINDS,
+  type ClauseBody,
+  type ClauseRun,
+  isClauseBody,
+} from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -71,19 +76,6 @@ type KnowledgeToolName =
   | "list_playbooks"
   | "run_playbook";
 
-/** List item kinds accepted on a clause paragraph. Mirrors ClauseListKind. */
-const CLAUSE_LIST_KINDS = ["bullet", "ordered"] as const;
-
-/** Block directive kinds accepted on a clause paragraph. Mirrors shared-schemas. */
-const CLAUSE_DIRECTIVE_KINDS = [
-  "if",
-  "elseif",
-  "else",
-  "endif",
-  "each",
-  "endeach",
-] as const;
-
 /** One inline formatting run inside a clause paragraph. */
 const clauseRunItemSchema = {
   type: "object",
@@ -119,7 +111,7 @@ const clauseParagraphItemSchema = {
     },
     directiveKind: enumProp(
       "Directive kind when isDirective is set",
-      CLAUSE_DIRECTIVE_KINDS,
+      BLOCK_DIRECTIVE_KINDS,
     ),
     directiveExpression: stringProp(
       "Directive expression for an if/each directive",
@@ -1113,7 +1105,7 @@ const clauseParagraphArgSchema = v.strictObject({
   listKind: v.optional(v.picklist(CLAUSE_LIST_KINDS)),
   listLevel: v.optional(v.pipe(v.number(), v.integer())),
   isDirective: v.optional(v.boolean()),
-  directiveKind: v.optional(v.picklist(CLAUSE_DIRECTIVE_KINDS)),
+  directiveKind: v.optional(v.picklist(BLOCK_DIRECTIVE_KINDS)),
   directiveExpression: v.optional(v.string()),
 });
 

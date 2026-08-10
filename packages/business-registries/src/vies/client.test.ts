@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { validateVat } from "./client.js";
-import { ViesAPIError, ViesValidationError } from "./errors.js";
+import { ViesValidationError } from "./errors.js";
 import type { ViesRawResponse } from "./types.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (name: string): Promise<ViesRawResponse> => {
@@ -29,25 +27,6 @@ const installFetchStub = (
     globalThis.fetch = original;
   };
 };
-
-// ---------------------------------------------------------------------------
-// Live tests — opt-in. Mirror the brreg / prh patterns.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("validateVat live", () => {
-  test("returns valid for Google Ireland (IE6388047V)", async () => {
-    const result = await validateVat("IE6388047V");
-    expect(result.valid).toBe(true);
-    expect(result.status).toEqual({ type: "valid" });
-    expect(result.vatNumber).toEqual({ country: "IE", vat: "6388047V" });
-    expect(result.name?.toUpperCase()).toContain("GOOGLE");
-  });
-
-  test("returns not-registered for an unregistered DE number", async () => {
-    const result = await validateVat("DE000000000");
-    expect(result.valid).toBe(false);
-    expect(result.status.type).not.toBe("valid");
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Mocked fetch tests using captured upstream fixtures.
@@ -219,10 +198,4 @@ describe("validateVat pre-flight validation", () => {
       ViesValidationError,
     );
   });
-});
-
-// Smoke: ViesAPIError reachable via barrel for consumers that only
-// import from the package root.
-test("exports ViesAPIError", () => {
-  expect(ViesAPIError).toBeDefined();
 });

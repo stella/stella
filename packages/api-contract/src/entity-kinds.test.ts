@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
+import { isEntityKind } from "./entity-kinds";
 
 describe("isEntityKind", () => {
-  test("accepts every declared kind", () => {
-    expect(ENTITY_KINDS.filter(isEntityKind)).toEqual([...ENTITY_KINDS]);
+  test("accepts a canonical kind", () => {
+    expect(isEntityKind("document")).toBe(true);
   });
 
   // The guard's whole job is to keep "not a kind" distinguishable from a

@@ -2,6 +2,7 @@
 // renders any Product, so a new page is a data file, not new markup.
 
 import type { ProductPreviewKey } from "../../components/react/previews/keys";
+import type Messages from "../../i18n/messages/messages.gen";
 import type { TranslationKey } from "../../i18n/utils";
 import type { ProductStorySceneId } from "../product-story";
 import type { ProductSlug } from "./pillars";
@@ -92,18 +93,11 @@ export const frameAccents = {
 
 export type FrameAccent = (typeof frameAccents)[keyof typeof frameAccents];
 
-export type ProductCapability = { title: string; body: string };
-
-export type ProductSection = {
-  heading: string;
-  bullets: readonly string[];
-  /** Optional: omit for a text-only section (heading + bullets, no screen). */
-  media?: ProductMedia;
+export type ProductSectionPresentation = {
+  media: ProductMedia;
   /** Frame recipe for this section's media frame; dormant, see `FrameVariant`. */
   frameVariant?: FrameVariant;
 };
-
-export type ProductFaq = { question: string; answer: string };
 
 /**
  * An "Explore more" card. The card's title is the destination's own name, so
@@ -115,20 +109,29 @@ export type ProductFaq = { question: string; answer: string };
  * `/ai-info` and `/docx-editor` pages are English-only.
  */
 export type ProductLink =
-  | { to: "product"; slug: ProductSlug; body: string }
-  | { to: "ai-info"; body: string }
-  | { to: "docx-editor"; body: string };
+  | { to: "product"; slug: ProductSlug }
+  | { to: "ai-info" }
+  | { to: "docx-editor" };
+
+type ProductLinkId =
+  | `product:${ProductSlug}`
+  | Exclude<ProductLink["to"], "product">;
+
+type ProductLinkForId<TId extends ProductLinkId> =
+  TId extends `product:${infer TSlug extends ProductSlug}`
+    ? { to: "product"; slug: TSlug }
+    : TId extends "ai-info"
+      ? { to: "ai-info" }
+      : { to: "docx-editor" };
 
 /**
- * CTA button labels. They are shared across pages (seven of eight say the same
- * thing), so they live in the catalog under `common.*` and are referenced by
- * key; `en` mirrors the catalog value so the data file still reads as the
- * English source, and menu-copy.test.ts keeps the pair honest.
+ * CTA button labels live in the catalog under `common.*`; product data stores
+ * only the translation key.
  */
 export const productCtaLabels = {
-  startFree: { key: "common.startFree", en: "Start free" },
-  getCli: { key: "common.getCli", en: "Get the CLI" },
-} as const satisfies Record<string, { key: TranslationKey; en: string }>;
+  startFree: "common.startFree",
+  getCli: "common.getCli",
+} as const satisfies Record<string, TranslationKey>;
 
 export type ProductCtaLabel =
   (typeof productCtaLabels)[keyof typeof productCtaLabels];
@@ -138,34 +141,52 @@ export type ProductEvidence =
   | { type: "source"; path: string; contains: readonly string[] };
 
 /**
- * Agent-connection instructions. Prose (heading, intro, bodies, outro) renders
- * from the catalog like every other product string; client names are
- * brand-constant literals and snippets are code, so both live only here.
+ * Agent-connection instructions. Prose renders from the catalog; client names
+ * are brand constants and snippets are code, so both live here.
  */
+type CliMcpSetupClientId =
+  keyof Messages["products"]["cli-mcp"]["setup"]["clients"];
+
+type NumericCliMcpSetupClientId = Extract<CliMcpSetupClientId, `${number}`>;
+
 export type ProductSetup = {
-  heading: string;
-  intro: string;
   endpoint: string;
-  clients: readonly { name: string; body: string; snippet?: string }[];
-  outro: string;
+  clients: NumericCliMcpSetupClientId extends never
+    ? Readonly<
+        Record<
+          CliMcpSetupClientId,
+          { readonly name: string; readonly snippet?: string }
+        >
+      >
+    : never;
   outroSnippet: string;
 };
 
-export type Product = {
-  slug: ProductSlug;
-  eyebrow: string;
-  title: string;
-  summary: string;
-  /**
-   * SERP title, topic-first with the brand suffix, kept at 60 characters or
-   * fewer.
-   */
-  metaTitle: string;
-  /**
-   * SERP description, 140-158 characters distilled from `summary` with the
-   * same claims.
-   */
-  metaDescription: string;
+type ProductSectionId<TSlug extends ProductSlug> = {
+  [TProductSlug in TSlug]: keyof Messages["products"][TProductSlug]["sections"];
+}[TSlug] &
+  string;
+
+type StableProductSectionId<TSlug extends ProductSlug> = Exclude<
+  ProductSectionId<TSlug>,
+  `${number}`
+>;
+
+type CatalogAdjacentId<TSlug extends ProductSlug> =
+  keyof Messages["products"][TSlug]["adjacent"] & string;
+
+type InvalidCatalogAdjacentId<TSlug extends ProductSlug> = Exclude<
+  CatalogAdjacentId<TSlug>,
+  ProductLinkId
+>;
+
+type ProductAdjacentLinks<TSlug extends ProductSlug> = {
+  readonly [TId in CatalogAdjacentId<TSlug> &
+    ProductLinkId]: ProductLinkForId<TId>;
+};
+
+export type Product<TSlug extends ProductSlug> = {
+  slug: TSlug;
   hero: ProductMedia;
   /** Frame recipe for the hero media frame; dormant, see `FrameVariant`. */
   heroFrameVariant?: FrameVariant;
@@ -174,12 +195,23 @@ export type Product = {
    * Dormant along with `FrameVariant`/`heroFrameVariant`/`frameVariant`.
    */
   frameAccent?: FrameAccent;
-  quickAnswer: ProductFaq;
-  capabilities: readonly ProductCapability[];
-  sections: readonly ProductSection[];
-  faqs: readonly ProductFaq[];
+  /**
+   * Optional visual treatments keyed by stable catalog section IDs. Numeric
+   * catalog keys are excluded so reordering copy cannot move media silently.
+   */
+  sectionPresentations?: StableProductSectionId<TSlug> extends never
+    ? never
+    : Readonly<
+        Record<StableProductSectionId<TSlug>, ProductSectionPresentation>
+      >;
   setup?: ProductSetup;
-  adjacent: readonly ProductLink[];
+  adjacent: InvalidCatalogAdjacentId<TSlug> extends never
+    ? ProductAdjacentLinks<TSlug>
+    : never;
   evidence: readonly ProductEvidence[];
-  cta: { heading: string; href: string; label: ProductCtaLabel };
+  cta: { href: string; label: ProductCtaLabel };
 };
+
+export type AnyProduct = {
+  [TSlug in ProductSlug]: Product<TSlug>;
+}[ProductSlug];

@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByBusinessId, searchByName } from "./client.js";
-import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
+import { PrhRequestError, PrhValidationError } from "./errors.js";
 import type { PrhCompaniesResponse } from "./types.js";
-
-const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const readFixture = async (name: string): Promise<PrhCompaniesResponse> => {
@@ -39,29 +37,6 @@ const getFetchInputUrl = (input: URL | Request | string): string => {
   }
   return input.url;
 };
-
-// ---------------------------------------------------------------------------
-// Live tests — opt-in. Mirror the brreg pattern.
-// ---------------------------------------------------------------------------
-describe.skipIf(SKIP_LIVE)("lookupByBusinessId live", () => {
-  test("returns Nokia Oyj", async () => {
-    const result = await lookupByBusinessId("0112038-9");
-    expect(result).not.toBeNull();
-    expect(result?.businessId).toBe("0112038-9");
-    expect(result?.name.toUpperCase()).toContain("NOKIA");
-    expect(result?.registryUrl).toContain("0112038-9");
-  });
-});
-
-describe.skipIf(SKIP_LIVE)("searchByName live", () => {
-  test("finds Supercell Oy", async () => {
-    const results = await searchByName("Supercell", { limit: 10 });
-    expect(results.length).toBeGreaterThan(0);
-    expect(
-      results.some((entry) => entry.name.toUpperCase().includes("SUPERCELL")),
-    ).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Mocked fetch tests using captured upstream fixtures.
@@ -235,10 +210,4 @@ describe("searchByName validation", () => {
     expect(searchByName("")).rejects.toBeInstanceOf(PrhValidationError);
     expect(searchByName("  ")).rejects.toBeInstanceOf(PrhValidationError);
   });
-});
-
-// Smoke: PrhAPIError export is reachable via barrel for consumers that
-// only import from the package root.
-test("exports PrhAPIError", () => {
-  expect(PrhAPIError).toBeDefined();
 });

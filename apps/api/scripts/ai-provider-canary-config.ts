@@ -27,15 +27,27 @@ export const CANARY_PROVIDERS = defineCanaryProviders([
 export type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 export type CanaryProviderSelection = "all" | CanaryProvider;
 
+// A provider addition must make an explicit decision here: silently treating a
+// new strict adapter as omission-preserving would make its canary prompt invalid.
+const CANARY_PROVIDER_NULL_WIDENING = {
+  google: false,
+  openrouter: false,
+  openai: true,
+  anthropic: false,
+  bedrock: false,
+  mistral: true,
+} as const satisfies Record<CanaryProvider, boolean>;
+
 // Providers whose strict/structured tool-calling mode forces every optional
 // property to be present, widening it to accept a synthetic `null` in place
 // of true omission. Both the flat round-trip probe and the weekly tool-shape
 // probes ask these providers for that null explicitly (deterministically)
 // instead of leaving them to guess omission vs. hallucination (#1194/#1196).
-export const NULL_WIDENING_CANARY_PROVIDERS = new Set<CanaryProvider>([
-  "mistral",
-  "openai",
-]);
+export const NULL_WIDENING_CANARY_PROVIDERS = new Set(
+  CANARY_PROVIDERS.filter(
+    (provider) => CANARY_PROVIDER_NULL_WIDENING[provider],
+  ),
+);
 
 // JSON Schema patterns have no regex flag channel. OpenAI strict Structured
 // Outputs supports `pattern`; `a^` cannot match any string. Used to make the

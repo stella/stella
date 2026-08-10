@@ -14,6 +14,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -31,7 +32,7 @@ import {
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
-  type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
+  type: t.Optional(contactTypeSchema),
   prefix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   firstName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   middleName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),

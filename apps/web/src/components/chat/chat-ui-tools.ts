@@ -13,6 +13,7 @@ import type {
   ChatPart,
   ChatUITools,
 } from "@stll/api/types";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -97,24 +98,16 @@ const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
 } as const satisfies Record<string, true>;
 
-// Mirrors the `@stll/folio-agents` tool names registered server-side in
-// `apps/api/src/handlers/chat/tools/folio-agent-tools.ts` (`READ_DOCUMENT_TOOL_NAME`
-// / `FIND_TEXT_TOOL_NAME`). Kept as local literals rather than a runtime import from
-// `@stll/api` — this file already follows that pattern for other built-in tool names.
-const READ_DOCUMENT_TOOL_NAME = "read_document";
-const FIND_TEXT_TOOL_NAME = "find_text";
-const READ_CHANGES_TOOL_NAME = "read_changes";
-const READ_COMMENTS_TOOL_NAME = "read_comments";
 // Read-only folio-agents tools the file overlay auto-runs against the live
 // editor bridge (no approval). The comment MUTATION tools (`add_comment`,
 // `reply_comment`, `resolve_comment`) are deliberately NOT here: they carry
 // `needsApproval` and are resolved through the approval flow, not this
 // auto-run watcher.
 const FOLIO_AGENT_DOC_TOOL_NAMES = {
-  [FIND_TEXT_TOOL_NAME]: true,
-  [READ_CHANGES_TOOL_NAME]: true,
-  [READ_COMMENTS_TOOL_NAME]: true,
-  [READ_DOCUMENT_TOOL_NAME]: true,
+  [FOLIO_AGENT_TOOL_NAMES.findText]: true,
+  [FOLIO_AGENT_TOOL_NAMES.readChanges]: true,
+  [FOLIO_AGENT_TOOL_NAMES.readComments]: true,
+  [FOLIO_AGENT_TOOL_NAMES.readDocument]: true,
 } as const satisfies Record<string, true>;
 
 const CHAT_TOOL_TITLE_KEYS = {

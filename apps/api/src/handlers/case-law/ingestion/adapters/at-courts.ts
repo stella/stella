@@ -3,11 +3,11 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   isArrayOf,
@@ -427,7 +427,7 @@ const parseRisItem = async (
   };
 };
 
-export const atCourtsAdapter: SourceAdapter = {
+export const atCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.AT_COURTS,
   name: "Austrian Courts (RIS)",
   country: "AUT",
@@ -520,4 +520,4 @@ export const atCourtsAdapter: SourceAdapter = {
 
     parseItem: parseRisItem,
   }),
-};
+});

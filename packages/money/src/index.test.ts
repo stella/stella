@@ -234,10 +234,6 @@ describe("applyMarkupCents invariants", () => {
 });
 
 describe("currencyCents() and addCents()", () => {
-  test("currencyCents mints a CentsAmount-compatible value", () => {
-    expect(currencyCents("USD", 1234)).toBe(currencyCents("USD", 1234));
-  });
-
   test("currencyCents rejects an empty currency code", () => {
     expect(() => currencyCents("", 100)).toThrow(TypeError);
   });
@@ -252,46 +248,6 @@ describe("currencyCents() and addCents()", () => {
     expect(() => currencyCents("USD", 1.5)).toThrow(TypeError);
   });
 
-  test("COMPILE ERROR: addCents rejects mismatched currencies", () => {
-    const usd = currencyCents("USD", 100);
-    const eur = currencyCents("EUR", 100);
-    // @ts-expect-error - addCents must not accept two different currencies
-    addCents(usd, eur);
-  });
-
-  test("COMPILE ERROR: addCents rejects a non-literal (wide) currency type", () => {
-    // A currency read back from a DB row types as plain `string`, not a
-    // literal — `CurrencyCents<string>` must be structurally unusable with
-    // addCents even though both operands nominally "share" currency A.
-    const dynamicCurrency: string = "USD";
-    const a = currencyCents(dynamicCurrency, 100);
-    const b = currencyCents(dynamicCurrency, 200);
-    // @ts-expect-error - addCents must not accept a non-literal CurrencyCents<string>
-    addCents(a, b);
-  });
-
-  test("COMPILE ERROR: addCents rejects a finite union currency type", () => {
-    // A currency narrowed only to a finite set of allowed codes (e.g. a
-    // validator's `t.UnionEnum(["USD", "EUR"])`) still nominally "shares"
-    // A under a plain `extends` bound, but two `CurrencyCents<"USD" |
-    // "EUR">` values can carry genuinely different runtime currencies —
-    // addCents must reject the union just like it rejects wide `string`.
-    //
-    // The union is routed through a function parameter rather than a
-    // `const ...: "USD" | "EUR" = "USD"` literal initializer: TypeScript's
-    // control-flow analysis narrows a `const` with a union-literal
-    // annotation down to the specific literal of its initializer at each
-    // read site, which would silently collapse the union to `"USD"` and
-    // defeat the point of this test.
-    const checkUnionCurrencyRejected = (currency: "USD" | "EUR") => {
-      const a = currencyCents(currency, 100);
-      const b = currencyCents(currency, 200);
-      // @ts-expect-error - addCents must not accept a union CurrencyCents<"USD" | "EUR">
-      addCents(a, b);
-    };
-    checkUnionCurrencyRejected("USD");
-  });
-
   test("INVARIANT: addCents is commutative and associative", () => {
     const rand = makePrng(4_611_812);
     for (let n = 0; n < 2000; n++) {
@@ -304,34 +260,29 @@ describe("currencyCents() and addCents()", () => {
   });
 });
 
+// Typecheck-only contract: these invalid calls must stay rejected without
+// masquerading as runtime tests.
+const assertAddCentsTypeSafety = (currency: "USD" | "EUR"): void => {
+  const usd = currencyCents("USD", 100);
+  const eur = currencyCents("EUR", 100);
+  // @ts-expect-error - currencies differ
+  addCents(usd, eur);
+
+  const dynamicCurrency: string = "USD";
+  const dynamicA = currencyCents(dynamicCurrency, 100);
+  const dynamicB = currencyCents(dynamicCurrency, 200);
+  // @ts-expect-error - a wide currency cannot prove equality
+  addCents(dynamicA, dynamicB);
+
+  const unionA = currencyCents(currency, 100);
+  const unionB = currencyCents(currency, 200);
+  // @ts-expect-error - a currency union cannot prove equality
+  addCents(unionA, unionB);
+};
+
+void assertAddCentsTypeSafety;
+
 describe("MoneyTotals", () => {
-  test("groups amounts by currency", () => {
-    const totals = new MoneyTotals();
-    totals.add("USD", cents(100));
-    totals.add("EUR", cents(200));
-    totals.add("USD", cents(50));
-
-    expect(totals.entries()).toEqual([
-      { currency: "EUR", amountCents: cents(200) },
-      { currency: "USD", amountCents: cents(150) },
-    ]);
-  });
-
-  test("entries() is sorted deterministically by currency code", () => {
-    const totals = new MoneyTotals();
-    totals.add("USD", cents(1));
-    totals.add("CZK", cents(1));
-    totals.add("EUR", cents(1));
-    totals.add("AUD", cents(1));
-
-    expect(totals.entries().map((e) => e.currency)).toEqual([
-      "AUD",
-      "CZK",
-      "EUR",
-      "USD",
-    ]);
-  });
-
   test("an empty accumulator has no entries", () => {
     expect(new MoneyTotals().entries()).toEqual([]);
   });

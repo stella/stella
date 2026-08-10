@@ -8,13 +8,9 @@ import {
   extractDocxText,
   type ExtractedDocxParagraph,
 } from "@stll/folio-core/server";
+import type { BlockDirectiveKind } from "@stll/template-conditions";
 
-import type {
-  BlockDirectiveKind,
-  ExtractedDocument,
-  ExtractedParagraph,
-  FieldMeta,
-} from "./types";
+import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
 // ── Directive detection ─────────────────────────────────
 

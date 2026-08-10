@@ -37,29 +37,15 @@ describe("contentDir", () => {
     expect(contentDir(undefined)).toBeUndefined();
   });
 
-  test("pure LTR text resolves to auto", () => {
-    expect(contentDir(LATIN)).toBe("auto");
-  });
-
-  test("pure RTL (Arabic) text resolves to auto", () => {
-    expect(contentDir(ARABIC)).toBe("auto");
-  });
-
-  test("LTR text with an Arabic quote resolves to auto", () => {
-    expect(contentDir(LTR_WITH_ARABIC)).toBe("auto");
-  });
-
-  test("RTL text with a Latin citation resolves to auto", () => {
-    expect(contentDir(RTL_WITH_LATIN)).toBe("auto");
-  });
-
-  test("digits inside an RTL run resolve to auto", () => {
-    expect(contentDir(RTL_WITH_NUMBERS)).toBe("auto");
-  });
-
   test("script never changes the outcome: all non-empty text is auto", () => {
     // The decision is content-presence, not script; the browser segments.
-    for (const value of [LATIN, ARABIC, LTR_WITH_ARABIC, RTL_WITH_LATIN]) {
+    for (const value of [
+      LATIN,
+      ARABIC,
+      LTR_WITH_ARABIC,
+      RTL_WITH_LATIN,
+      RTL_WITH_NUMBERS,
+    ]) {
       expect(contentDir(value)).toBe("auto");
     }
   });

@@ -70,8 +70,8 @@ projections where a domain model is available. Each optional normalized field is
 a discriminated value: it contains data when available, or records that the field
 was not loaded or is not supported by that adapter. These states cannot overlap.
 
-Live integration tests live in `*.test.ts` files guarded by
-`SMOKE_TEST=1` so the unit suite stays offline-safe.
+Tests use captured fixtures and mocked HTTP responses so the suite stays
+deterministic and offline-safe.
 
 ## License
 

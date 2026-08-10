@@ -1,14 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { TimeEntrySource, TimeEntryStatus } from "@stll/api-contract";
+
 import {
   fetchTimeEntries,
   fetchTimeEntrySummary,
 } from "@/lib/workspaces/time-entries-api";
-
-type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
-
-type TimeEntrySource = "manual" | "timer";
 
 type TimeEntriesFilters = {
   userId?: string;

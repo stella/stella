@@ -157,17 +157,17 @@
   "products": {
     "agent": {
       "adjacent": {
-        "0": {
-          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         },
-        "1": {
-          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
-        },
-        "2": {
+        "product:public-data": {
           "body": "Loe ja otsi ametlikku kohtupraktikat, õigusallikaid ja ettevõtete registreid."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:tabular-review": {
+          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
+        },
+        "product:workspace": {
+          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
         }
       },
       "capabilities": {
@@ -248,17 +248,17 @@
     },
     "anonymization": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        },
+        "product:agent": {
           "body": "Vestle toimikute, failide ja ühendatud tööriistadega, kinnituste ja allika eelvaadete toel."
         },
-        "1": {
-          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
-        },
-        "2": {
+        "product:tabular-review": {
           "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:workspace": {
+          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
         }
       },
       "capabilities": {
@@ -319,17 +319,17 @@
     },
     "cli-mcp": {
       "adjacent": {
-        "0": {
-          "body": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         },
-        "1": {
+        "product:agent": {
           "body": "Tööta toimikute ja ühendatud tööriistadega, kinnituste ja allikaviidete toel."
         },
-        "2": {
+        "product:templates": {
           "body": "Täida korduskasutatavaid õigusdokumente rakendusest, käsurealt või ühendatud tööriistadest."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:workspace": {
+          "body": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
         }
       },
       "capabilities": {
@@ -401,17 +401,17 @@
       },
       "setup": {
         "clients": {
-          "0": {
+          "chatgpt": {
             "body": "Lülita sisse arendajarežiim jaotises Settings → Connectors → Advanced ja lisa seejärel konnektor koos otspunkti aadressiga."
           },
-          "1": {
+          "claude": {
             "body": "Lisa jaotises Settings → Connectors kohandatud konnektor koos otspunkti aadressiga."
           },
-          "2": {
-            "body": "Lisa server ja logi sisse:"
-          },
-          "3": {
+          "claude-code": {
             "body": "Lisa server ühe käsuga:"
+          },
+          "codex": {
+            "body": "Lisa server ja logi sisse:"
           }
         },
         "heading": "Ühenda tehisintellekti agent",
@@ -421,17 +421,17 @@
     },
     "editor": {
       "adjacent": {
-        "0": {
-          "body": "Vaata, kus toimikud, dokumendid ja tööriistad kokku saavad."
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         },
-        "1": {
-          "body": "Loo korduskasutatavaid Wordi dokumente väljade ja tingimuslike klauslitega."
-        },
-        "2": {
+        "docx-editor": {
           "body": "Proovi sama redaktorit eraldi: ava ja muuda .docx-i brauseris, kontot pole vaja."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:templates": {
+          "body": "Loo korduskasutatavaid Wordi dokumente väljade ja tingimuslike klauslitega."
+        },
+        "product:workspace": {
+          "body": "Vaata, kus toimikud, dokumendid ja tööriistad kokku saavad."
         }
       },
       "capabilities": {
@@ -519,17 +519,17 @@
     },
     "public-data": {
       "adjacent": {
-        "0": {
-          "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         },
-        "1": {
+        "product:agent": {
           "body": "Vestle toimikute, failide ja allikatega, kinnituste ja allikaviidete toel."
         },
-        "2": {
-          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
+        "product:anonymization": {
+          "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:tabular-review": {
+          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
         }
       },
       "capabilities": {
@@ -610,17 +610,17 @@
     },
     "tabular-review": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        },
+        "product:agent": {
           "body": "Vestle toimikute, failide ja ühendatud allikatega, kinnituste ja allika eelvaadete toel."
         },
-        "1": {
-          "body": "Ametlik kohtupraktika ja ettevõtete registrid, tõmmatud otse toimikusse."
-        },
-        "2": {
+        "product:anonymization": {
           "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:public-data": {
+          "body": "Ametlik kohtupraktika ja ettevõtete registrid, tõmmatud otse toimikusse."
         }
       },
       "capabilities": {
@@ -701,17 +701,17 @@
     },
     "templates": {
       "adjacent": {
-        "0": {
-          "body": "Toimikud, dokumendid ja Wordi muutmine ühes kohas."
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         },
-        "1": {
-          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
-        },
-        "2": {
+        "product:agent": {
           "body": "Vestle toimikute, failide ja allikatega, allikaviidete toel."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:tabular-review": {
+          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
+        },
+        "product:workspace": {
+          "body": "Toimikud, dokumendid ja Wordi muutmine ühes kohas."
         }
       },
       "capabilities": {
@@ -764,7 +764,7 @@
         "question": "Kuidas mallid rakenduses stella töötavad?"
       },
       "sections": {
-        "0": {
+        "author-from-templates": {
           "bullets": {
             "0": "Pane dokument mallist kokku, selle asemel et tühjalt alustada",
             "1": "Taaskasuta klausleid eri mallides",
@@ -772,7 +772,7 @@
           },
           "heading": "Ehita mallidest ja klauslitest"
         },
-        "1": {
+        "fill-from-matter": {
           "bullets": {
             "0": "Eeltäida väljad dokumendist, mis on toimikus juba olemas",
             "1": "Vaata iga väärtus üle ja kohenda seda enne mustandi loomist",
@@ -780,7 +780,7 @@
           },
           "heading": "Täida see toimiku andmetest"
         },
-        "2": {
+        "finish-in-editor": {
           "bullets": {
             "0": "Kirjuta ja kohenda malle redaktoris",
             "1": "Pane mustand kokku otse toimikus",
@@ -799,17 +799,17 @@
     },
     "workspace": {
       "adjacent": {
-        "0": {
+        "ai-info": {
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        },
+        "product:agent": {
           "body": "Vestle toimikute, failide ja ühendatud tööriistadega, kinnituste ja allika eelvaadete toel."
         },
-        "1": {
-          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
-        },
-        "2": {
+        "product:cli-mcp": {
           "body": "Jõua samade toimikute, dokumentide ja kohtupraktikani CLI-st ja MCP-ga ühilduvatest tööriistadest."
         },
-        "3": {
-          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
+        "product:tabular-review": {
+          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
         }
       },
       "capabilities": {
@@ -862,7 +862,7 @@
         "question": "Mis on stella tööruum?"
       },
       "sections": {
-        "0": {
+        "matter-workspace": {
           "bullets": {
             "0": "Dokumendid, kontaktid, ülevaatus ja vestlus püsivad toimiku sees",
             "1": "Muuda Wordi .docx-dokumente tööruumist lahkumata",
@@ -870,7 +870,7 @@
           },
           "heading": "Kõik, mis toimikusse kuulub, ühes kohas"
         },
-        "1": {
+        "word-documents": {
           "bullets": {
             "0": "Ava ja muuda Wordi .docx-dokumente otse tööruumis",
             "1": "Parandustega versioon jääb Wordi failiks: ei mingit teisendust ega koopiaid",

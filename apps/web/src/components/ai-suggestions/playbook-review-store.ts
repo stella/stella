@@ -26,16 +26,50 @@ import { toSafeId } from "@/lib/safe-id";
 // stalled connection can't hang the panel forever.
 const REVIEW_CLIENT_TIMEOUT_MS = 130_000;
 
-export type PlaybookSeverity = "blocker" | "high" | "medium" | "low";
-export type PlaybookVerdict =
-  | "compliant"
-  | "fallback"
-  | "deviation"
-  | "missing"
+export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
+
+export type PlaybookSeverity = (typeof SEVERITY_ORDER)[number];
+
+const PLAYBOOK_VERDICT_POLICY = {
+  compliant: { risk: "clear", negotiation: "unavailable" },
+  fallback: { risk: "flagged", negotiation: "available" },
+  deviation: { risk: "flagged", negotiation: "available" },
+  missing: { risk: "flagged", negotiation: "unavailable" },
   // Outside the compliance ladder: the position does not pertain to this
-  // document, so it is neither a pass nor a flagged gap and is excluded from the
-  // compliance denominator (see `computeRiskRollup`).
-  | "not-applicable";
+  // document, so it is neither a pass nor a flagged gap and is excluded from
+  // the compliance denominator (see `computeRiskRollup`).
+  "not-applicable": { risk: "clear", negotiation: "unavailable" },
+} as const satisfies Record<
+  string,
+  {
+    risk: "clear" | "flagged";
+    negotiation: "available" | "unavailable";
+  }
+>;
+
+export type PlaybookVerdict = keyof typeof PLAYBOOK_VERDICT_POLICY;
+
+export type FlaggedPlaybookVerdict = {
+  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["risk"] extends "flagged"
+    ? TVerdict
+    : never;
+}[PlaybookVerdict];
+
+type NegotiablePlaybookVerdict = {
+  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["negotiation"] extends "available"
+    ? TVerdict
+    : never;
+}[PlaybookVerdict];
+
+export const isFlaggedPlaybookVerdict = (
+  verdict: PlaybookVerdict,
+): verdict is FlaggedPlaybookVerdict =>
+  PLAYBOOK_VERDICT_POLICY[verdict].risk === "flagged";
+
+export const isNegotiablePlaybookVerdict = (
+  verdict: PlaybookVerdict,
+): verdict is NegotiablePlaybookVerdict =>
+  PLAYBOOK_VERDICT_POLICY[verdict].negotiation === "available";
 
 export type PlaybookCitation = { blockId: string; text: string };
 export type PlaybookFindingFix = {
@@ -139,13 +173,6 @@ const EMPTY_SESSION: PlaybookReviewSession = {
   error: null,
   reviewedAt: null,
 };
-
-export const SEVERITY_ORDER: readonly PlaybookSeverity[] = [
-  "blocker",
-  "high",
-  "medium",
-  "low",
-] as const;
 
 export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
   sessions: {},

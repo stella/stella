@@ -1,24 +1,8 @@
 import { panic } from "better-result";
 
-export const RUNNER_NAMES = [
-  "case-law-ingest",
-  "case-law-corpus-storage-backfill",
-  "legal-corpus-storage-backfill",
-  "legal-corpus-index-backfill",
-  "statute-ingest",
-  "search-index",
-] as const;
-
-export type RunnerName = (typeof RUNNER_NAMES)[number];
 export type RunnerStatus = "reserved" | "implemented";
 
-export type RunnerDefinition = {
-  name: RunnerName;
-  status: RunnerStatus;
-  description: string;
-};
-
-const RUNNER_DEFINITIONS: readonly RunnerDefinition[] = [
+const RUNNER_DEFINITIONS = [
   {
     name: "case-law-ingest",
     status: "implemented",
@@ -50,7 +34,23 @@ const RUNNER_DEFINITIONS: readonly RunnerDefinition[] = [
     description:
       "corpus indexing projection into the configured search backend",
   },
-];
+] as const satisfies readonly {
+  description: string;
+  name: string;
+  status: RunnerStatus;
+}[];
+
+export type RunnerName = (typeof RUNNER_DEFINITIONS)[number]["name"];
+
+export type RunnerDefinition = {
+  name: RunnerName;
+  status: RunnerStatus;
+  description: string;
+};
+
+export const RUNNER_NAMES: readonly RunnerName[] = RUNNER_DEFINITIONS.map(
+  ({ name }) => name,
+);
 
 const RUNNER_NAME_SET: ReadonlySet<string> = new Set(RUNNER_NAMES);
 

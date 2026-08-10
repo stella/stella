@@ -5,24 +5,13 @@
 // are out of scope for this phase; see `src/generated/route-map.ts` for the
 // placeholder the real generator will replace.
 
+import type { McpCliToolScope } from "./generated/mcp-contract.js";
+
 /** A JSON Schema fragment, as emitted by the MCP tool registry's prop builders. */
 export type JsonSchema = Record<string, unknown>;
 
 /** The MCP scope strings a tool annotation can require (client-side precheck only). */
-export type ToolScope =
-  | "read"
-  | "contacts_write"
-  | "matters_write"
-  | "chat"
-  | "documents_write"
-  | "knowledge_write"
-  | "search"
-  | "onboarding"
-  | "templates"
-  | "billing_write"
-  | "admin_read"
-  | "admin_write"
-  | "feedback";
+export type ToolScope = McpCliToolScope;
 
 /** Wire fields from `tools/list` (build-time: projected from `DEFAULT_MCP_TOOL_DEFINITIONS`). */
 export type RegistryToolListing = {
@@ -125,7 +114,9 @@ export type LeafCommandSpec = {
 };
 
 /** Which part of a capability's input a generated flag routes into (spec 049). */
-export type CapabilityPart = "body" | "params" | "query";
+export const CAPABILITY_PARTS = ["params", "body", "query"] as const;
+
+export type CapabilityPart = (typeof CAPABILITY_PARTS)[number];
 
 /**
  * One generated flag on a capability leaf: a `FlagSpec` tagged with the input

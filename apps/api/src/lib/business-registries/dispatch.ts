@@ -9,6 +9,7 @@
 
 import { panic } from "better-result";
 
+import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   AresAPIError,
   type AresAddress,
@@ -127,6 +128,9 @@ import type { CountryCode } from "@stll/country-codes";
 import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+export type { BusinessRegistrySlug } from "@stll/api-contract";
+
 // ---------------------------------------------------------------------------
 // Jurisdiction codes
 //
@@ -144,21 +148,6 @@ export type RegistryJurisdictionCode =
 // ---------------------------------------------------------------------------
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
-
-export const BUSINESS_REGISTRY_SLUGS = [
-  "ares",
-  "brreg",
-  "companies-house",
-  "denue",
-  "edgar",
-  "gcis",
-  "krs",
-  "orsr",
-  "prh",
-  "recherche-entreprises",
-  "vies",
-] as const;
-export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 export type BusinessRegistryAddress = {
   line1: string | null;
@@ -206,6 +195,22 @@ export type BusinessRegistryHitDetails =
   | { registry: "prh"; company: PrhCompany }
   | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany }
   | { registry: "vies"; validation: ViesValidation };
+
+type MissingBusinessRegistryHitDetails = Exclude<
+  BusinessRegistrySlug,
+  BusinessRegistryHitDetails["registry"]
+>;
+type ExtraBusinessRegistryHitDetails = Exclude<
+  BusinessRegistryHitDetails["registry"],
+  BusinessRegistrySlug
+>;
+
+true satisfies [
+  MissingBusinessRegistryHitDetails,
+  ExtraBusinessRegistryHitDetails,
+] extends [never, never]
+  ? true
+  : never;
 
 export type RegistryLookupResponse =
   | {

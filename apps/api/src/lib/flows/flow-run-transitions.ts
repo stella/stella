@@ -1,3 +1,8 @@
+import {
+  FLOW_RUN_TERMINAL_STATUSES,
+  isTerminalFlowRunStatus,
+} from "@stll/api-contract";
+
 import type {
   FlowReviewDecision,
   FlowRunStatus,
@@ -11,15 +16,10 @@ import type {
  * state machine is unit-testable in isolation from BullMQ and Postgres.
  */
 
-/** Run statuses from which no further transition is possible. */
-export const FLOW_TERMINAL_RUN_STATUSES = [
-  "completed",
-  "failed",
-  "cancelled",
-] as const;
+export { isTerminalFlowRunStatus };
 
-export const isTerminalFlowRunStatus = (status: FlowRunStatus): boolean =>
-  FLOW_TERMINAL_RUN_STATUSES.some((terminal) => terminal === status);
+/** Run statuses from which no further transition is possible. */
+export const FLOW_TERMINAL_RUN_STATUSES = FLOW_RUN_TERMINAL_STATUSES;
 
 /**
  * What to do once a non-gate step (`ai` / `create-document`) completes, or

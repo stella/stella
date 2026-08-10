@@ -19,7 +19,9 @@
  * The same KRS number can only exist in one register, so the lookup
  * client probes `P` first and falls back to `S` on 404.
  */
-export type KrsRegisterCode = "RejP" | "RejS";
+export const KRS_REGISTER_CODES = ["RejP", "RejS"] as const;
+
+export type KrsRegisterCode = (typeof KRS_REGISTER_CODES)[number];
 
 export type KrsRawIdentifiers = {
   regon?: string;

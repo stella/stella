@@ -5,7 +5,8 @@
     "module": "ESNext",
     "types": ["bun"],
     "paths": {
-      "@stll/ai-catalog": ["../ai-catalog/src/index.ts"]
+      "@stll/ai-catalog": ["../ai-catalog/src/index.ts"],
+      "@stll/locales": ["../locales/src/index.ts"]
     }
   },
   "include": [".", "../../scripts/typecheck-coverage.ts"],

@@ -14,12 +14,12 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
-import type { AgentSkillOrigin } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
+import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -31,11 +31,6 @@ import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-searc
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
-const MANAGEABLE_CUSTOM_SKILL_ORIGINS = [
-  "authored",
-  "upload",
-  "url",
-] as const satisfies readonly AgentSkillOrigin[];
 const CUSTOM_SKILL_LIST_LIMIT =
   LIMITS.agentSkillsPerUser + LIMITS.agentSkillsTeamPerOrganization;
 
@@ -189,7 +184,7 @@ const listCatalogue = createSafeRootHandler(
           .where(
             and(
               eq(agentSkills.organizationId, session.activeOrganizationId),
-              inArray(agentSkills.origin, MANAGEABLE_CUSTOM_SKILL_ORIGINS),
+              inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
               or(
                 eq(agentSkills.scope, "team"),
                 eq(agentSkills.userId, user.id),

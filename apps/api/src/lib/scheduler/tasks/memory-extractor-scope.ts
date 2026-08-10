@@ -1,17 +1,22 @@
 import type { SafeId } from "@/api/lib/branded-types";
 
-export type ExtractableMemoryKind =
-  | "fact"
-  | "decision"
-  | "relationship"
-  | "preference"
-  | "instruction";
-
-const MATTER_KINDS: ReadonlySet<ExtractableMemoryKind> = new Set([
+export const EXTRACTABLE_MEMORY_KINDS = [
   "fact",
   "decision",
   "relationship",
-]);
+  "preference",
+  "instruction",
+] as const;
+
+export type ExtractableMemoryKind = (typeof EXTRACTABLE_MEMORY_KINDS)[number];
+
+const MEMORY_KIND_SCOPE = {
+  fact: "workspace",
+  decision: "workspace",
+  relationship: "workspace",
+  preference: "user",
+  instruction: "user",
+} as const satisfies Record<ExtractableMemoryKind, "user" | "workspace">;
 
 type ResolveExtractedMemoryScopeOptions = {
   kind: ExtractableMemoryKind;
@@ -46,32 +51,35 @@ export const resolveExtractedMemoryScope = ({
     sourceDataWorkspaceIds = [threadWorkspaceId];
   }
 
-  if (MATTER_KINDS.has(kind)) {
-    if (
-      !threadWorkspaceId ||
-      sourceDataWorkspaceIds.length !== 1 ||
-      sourceDataWorkspaceIds.at(0) !== threadWorkspaceId
-    ) {
-      return { type: "drop" };
-    }
-    return {
-      type: "workspace",
-      workspaceId: threadWorkspaceId,
-      userId: null,
-      sourceDataWorkspaceIds,
-    };
+  const scope = MEMORY_KIND_SCOPE[kind];
+  switch (scope) {
+    case "workspace":
+      if (
+        !threadWorkspaceId ||
+        sourceDataWorkspaceIds.length !== 1 ||
+        sourceDataWorkspaceIds.at(0) !== threadWorkspaceId
+      ) {
+        return { type: "drop" };
+      }
+      return {
+        type: "workspace",
+        workspaceId: threadWorkspaceId,
+        userId: null,
+        sourceDataWorkspaceIds,
+      };
+    case "user":
+      if (sourceDataWorkspaceIds.length > 0) {
+        // Preferences and instructions inferred from a matter-derived summary
+        // are not safely portable: the model may have mislabeled client facts.
+        return { type: "drop" };
+      }
+      return {
+        type: "user",
+        userId: threadUserId,
+        workspaceId: null,
+        sourceDataWorkspaceIds: [],
+      };
+    default:
+      return scope satisfies never;
   }
-
-  if (sourceDataWorkspaceIds.length > 0) {
-    // Preferences and instructions inferred from a matter-derived summary
-    // are not safely portable: the model may have mislabeled client facts.
-    return { type: "drop" };
-  }
-
-  return {
-    type: "user",
-    userId: threadUserId,
-    workspaceId: null,
-    sourceDataWorkspaceIds: [],
-  };
 };
