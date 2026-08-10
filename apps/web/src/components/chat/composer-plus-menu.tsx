@@ -14,27 +14,18 @@ import {
   CpuIcon,
   PaperclipIcon,
   PlusIcon,
-  SearchIcon,
   ServerIcon,
 } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/components/input-group";
 import {
   Menu,
   MenuCheckboxItem,
   MenuItem,
   MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
   MenuSub,
   MenuSubPopup,
@@ -44,8 +35,6 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { ProviderValue } from "@/components/ai-config-role-models.logic";
-import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -61,16 +50,25 @@ import {
 } from "@/components/chat-mention-helpers";
 import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import {
+  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
+  ChatModelOptionsMenu,
+  type ComposerModelsMenuProps,
+} from "@/components/chat/chat-model-options-menu";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import {
   COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,
   shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
+import {
+  ComposerSubmenuSearch,
+  focusSearchOnOpen,
+  useFocusSearchOnOpen,
+} from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
-import { modelOptionsOptions } from "@/features/chat/queries";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -88,24 +86,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-
-/** Enables and drives the Models submenu. Omit on surfaces without a model
- *  picker (the API expects a per-thread `PATCH .../model` target). */
-export type ComposerModelsMenuProps = {
-  activeOrganizationId: string;
-  threadRef: ChatThreadRef;
-  /** Current per-thread override ("provider::modelId"), or null when the
-   *  thread uses the org default. */
-  selectedModel: string | null;
-  selectedReasoningEffort: ReasoningEffort | null;
-  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
-   *  here: the caller's own send path is what awaits the outcome via
-   *  `awaitPendingSelection`, not this submenu. */
-  selectModel: (selection: {
-    model: string | null;
-    reasoningEffort: ReasoningEffort | null;
-  }) => void;
-};
 
 /** Enables and drives the Skills submenu. Reuses the same data source and
  *  chip content as the composer's `/` slash menu. */
@@ -304,85 +284,9 @@ export const ComposerPlusMenu = ({
   );
 };
 
-// Base UI's Menu intercepts keystrokes for typeahead and arrow-key
-// navigation, which would hijack typing in a nested search input. Every
-// submenu's search field stops propagation for all keys except the ones
-// the menu still needs: Escape to close, Up/Down to move the highlight,
-// Enter to activate the highlighted item.
-const isMenuNavigationKey = (key: string): boolean =>
-  key === "Escape" ||
-  key === "ArrowDown" ||
-  key === "ArrowUp" ||
-  key === "Enter";
-
-type ComposerSubmenuSearchProps = {
-  onChange: (value: string) => void;
-  placeholder: string;
-  ref: React.RefObject<HTMLInputElement | null>;
-  value: string;
-};
-
-const ComposerSubmenuSearch = ({
-  onChange,
-  placeholder,
-  ref,
-  value,
-}: ComposerSubmenuSearchProps) => (
-  <div className="px-2 pt-1.5 pb-2">
-    <InputGroup>
-      <InputGroupAddon>
-        <SearchIcon />
-      </InputGroupAddon>
-      <InputGroupInput
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (!isMenuNavigationKey(event.key)) {
-            event.stopPropagation();
-          }
-        }}
-        placeholder={placeholder}
-        ref={ref}
-        size="sm"
-        value={value}
-      />
-    </InputGroup>
-  </div>
-);
-
 const ComposerSubmenuEmpty = ({ children }: { children: React.ReactNode }) => (
   <p className="text-muted-foreground px-2.5 py-2 text-xs">{children}</p>
 );
-
-/** Deferred focus: Base UI's own focus-trap logic runs first when a
- *  submenu opens, so a plain `autoFocus` on the input loses the race. */
-const focusSearchOnOpen = (ref: React.RefObject<HTMLInputElement | null>) => {
-  setTimeout(() => ref.current?.focus(), 0);
-};
-
-const useFocusSearchOnOpen = (
-  open: boolean,
-  ref: React.RefObject<HTMLInputElement | null>,
-) => {
-  useExternalSyncEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => ref.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [open, ref]);
-};
-
-type ComposerModelRow = {
-  iconProvider: ProviderValue | null;
-  label: string;
-  reasoningEffort: ReasoningEffort | null;
-  value: string;
-};
 
 const ComposerModelsSubmenu = ({
   enabled,
@@ -394,123 +298,25 @@ const ComposerModelsSubmenu = ({
   models: ComposerModelsMenuProps;
 }) => {
   const t = useTranslations();
-  const { activeOrganizationId, selectedModel, selectModel } = models;
-  const [search, setSearch] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
-  const { data, isPending: isLoadingModels } = useQuery({
-    ...modelOptionsOptions(activeOrganizationId),
-    enabled,
-  });
-
-  const rows = useMemo(() => {
-    const allRows: ComposerModelRow[] = [
-      {
-        value: "",
-        label: t("chat.modelSelector.autoLabel"),
-        iconProvider: null,
-        reasoningEffort: null,
-      },
-    ];
-    if (data) {
-      for (const option of data.options) {
-        allRows.push({
-          value: option.value,
-          label: option.displayName,
-          iconProvider: option.iconProvider,
-          reasoningEffort: null,
-        });
-      }
-    }
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return allRows;
-    }
-    return allRows.filter((row) => row.label.toLowerCase().includes(query));
-  }, [data, search, t]);
-
-  const handleSelect = (value: string) => {
-    const row = rows.find((candidate) => candidate.value === value);
-    if (!row || value === selectedModel) {
-      return;
-    }
-    selectModel({
-      model: value === "" ? null : value,
-      reasoningEffort: row.reasoningEffort,
-    });
-  };
+  const [open, setOpen] = useState(false);
 
   return (
-    <MenuSub
-      onOpenChange={(open) => {
-        if (open) {
-          focusSearchOnOpen(searchRef);
-        } else {
-          setSearch("");
-        }
-      }}
-    >
+    <MenuSub onOpenChange={setOpen} open={open}>
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
       >
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
-        <ComposerSubmenuSearch
-          onChange={setSearch}
-          // Reuses the AI-config role-model picker's placeholder (same
-          // wording, same purpose) instead of adding a duplicate key.
-          placeholder={t("organization.aiConfig.modelIdPlaceholder")}
-          ref={searchRef}
-          value={search}
+      <MenuSubPopup className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}>
+        <ChatModelOptionsMenu
+          enabled={enabled && open}
+          key={open ? "open" : "closed"}
+          models={models}
+          open={open}
         />
-        {isLoadingModels ? (
-          <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
-        ) : (
-          <MenuRadioGroup value={selectedModel ?? ""}>
-            {rows.map((row) => (
-              <MenuRadioItem
-                // `minmax(0,1fr)` lets the label cell shrink and wrap; the
-                // default `1fr` track sizes to the longest model id and forces
-                // horizontal overflow.
-                className="grid-cols-[1rem_minmax(0,1fr)]"
-                key={row.value || "default"}
-                onClick={() => {
-                  handleSelect(row.value);
-                }}
-                value={row.value}
-              >
-                {/* Keep friendly product names complete; wrap only when the
-                    viewport cannot fit the wider popup. */}
-                <span className="flex min-w-0 items-center gap-2">
-                  <ComposerModelIcon provider={row.iconProvider} />
-                  <span className="block [overflow-wrap:anywhere] whitespace-normal">
-                    {row.label}
-                  </span>
-                </span>
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        )}
       </MenuSubPopup>
     </MenuSub>
-  );
-};
-
-const ComposerModelIcon = ({
-  provider,
-}: {
-  provider: ProviderValue | null;
-}) => {
-  if (provider === null) {
-    return null;
-  }
-  return (
-    <AIProviderIcon
-      aria-hidden="true"
-      className="size-4 shrink-0"
-      provider={provider}
-    />
   );
 };
 
@@ -647,7 +453,7 @@ const ComposerSkillsSubmenu = ({
           handleSelect(item);
         }}
       >
-        <BookOpenIcon className="self-start" />
+        <BookOpenIcon className="mt-0.5 self-start" />
         <span className="min-w-0 flex-1">
           <BidiText as="span" className="block truncate text-sm">
             {itemName(item)}

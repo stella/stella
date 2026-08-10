@@ -513,6 +513,7 @@
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
+      "effortHelpDescription": "Määrab, kui palju arutluskäiku mudel enne vastamist kasutab. Kõrgem tase võib keerukate ülesannete puhul aidata, kuid võtab tavaliselt kauem aega. Punkt tähistab teenusepakkuja selle mudeli vaiketaset.",
       "effortLabel": "Arutlustase",
       "effortValues": {
         "high": "Kõrge",
@@ -524,6 +525,7 @@
         "providerDefault": "Vaikimisi",
         "xhigh": "Väga kõrge"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Vali vestlusmudel",
       "viaProvider": "teenuse {provider} kaudu"
     },

@@ -513,6 +513,7 @@
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
+      "effortHelpDescription": "Określa, ile rozumowania model wykorzystuje przed udzieleniem odpowiedzi. Wyższe poziomy mogą pomóc w złożonych zadaniach, ale zwykle zajmują więcej czasu. Kropka oznacza domyślny poziom dostawcy dla tego modelu.",
       "effortLabel": "Poziom rozumowania",
       "effortValues": {
         "high": "Wysoki",
@@ -524,6 +525,7 @@
         "providerDefault": "Domyślny",
         "xhigh": "Bardzo wysoki"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Wybierz model czatu",
       "viaProvider": "przez {provider}"
     },

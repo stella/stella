@@ -51,7 +51,7 @@
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
-    "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
+    "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts && bun packages/scripts/src/model-catalog-capabilities-gen.ts --check",
     "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
     "canary:mcp": "bun --filter @stll/api canary:mcp",
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",

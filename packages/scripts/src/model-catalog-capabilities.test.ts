@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 
 import {
+  parseOpenRouterReasoningDefaults,
   parseUpstreamCapabilities,
   validateCapabilities,
 } from "./model-catalog-capabilities";
@@ -29,6 +30,30 @@ const DECLARED_TEMPERATURE_POLICIES: Record<string, TemperaturePolicy> = {
   "openai/gpt-5.5": "omit",
   "magistral-medium-latest": "emit",
 };
+
+describe("parseOpenRouterReasoningDefaults", () => {
+  test("extracts only concrete provider-default efforts", () => {
+    expect(
+      Object.fromEntries(
+        parseOpenRouterReasoningDefaults({
+          data: [
+            {
+              id: "anthropic/claude-opus-5",
+              reasoning: { default_effort: "high" },
+            },
+            { id: "model-without-reasoning" },
+            { id: 42, reasoning: { default_effort: "medium" } },
+          ],
+        }),
+      ),
+    ).toEqual({ "anthropic/claude-opus-5": "high" });
+  });
+
+  test("rejects malformed catalogue envelopes", () => {
+    expect(parseOpenRouterReasoningDefaults(null).size).toBe(0);
+    expect(parseOpenRouterReasoningDefaults({ data: {} }).size).toBe(0);
+  });
+});
 
 describe("parseUpstreamCapabilities", () => {
   test("extracts effort values and temperature support", () => {

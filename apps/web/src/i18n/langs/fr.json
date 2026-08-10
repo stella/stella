@@ -513,6 +513,7 @@
     "modelSelector": {
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
+      "effortHelpDescription": "Détermine l’effort de raisonnement utilisé par le modèle avant de répondre. Les niveaux élevés peuvent aider pour les tâches complexes, mais prennent généralement plus de temps. Le point indique le niveau par défaut du fournisseur pour ce modèle.",
       "effortLabel": "Niveau de raisonnement",
       "effortValues": {
         "high": "Élevé",
@@ -524,6 +525,7 @@
         "providerDefault": "Par défaut",
         "xhigh": "Très élevé"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Sélectionner le modèle de chat",
       "viaProvider": "par {provider}"
     },

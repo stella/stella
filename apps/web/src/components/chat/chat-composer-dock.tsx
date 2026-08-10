@@ -9,8 +9,8 @@ import {
   ChatContextMeter,
   type ChatContextUsage,
 } from "@/components/chat/chat-context-meter";
+import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatModelSelector } from "@/components/chat/chat-model-selector";
-import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";

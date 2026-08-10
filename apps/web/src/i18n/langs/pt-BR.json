@@ -513,6 +513,7 @@
     "modelSelector": {
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
+      "effortHelpDescription": "Controla quanto raciocínio o modelo usa antes de responder. Níveis mais altos podem ajudar em tarefas complexas, mas geralmente levam mais tempo. O ponto marca o nível padrão do provedor para este modelo.",
       "effortLabel": "Nível de raciocínio",
       "effortValues": {
         "high": "Alto",
@@ -524,6 +525,7 @@
         "providerDefault": "Padrão",
         "xhigh": "Muito alto"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
     },

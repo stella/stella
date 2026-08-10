@@ -14,11 +14,11 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,
-  type ComposerModelsMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { guideAnchor } from "@/features/guides/guide-anchor";

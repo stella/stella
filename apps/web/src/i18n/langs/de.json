@@ -513,6 +513,7 @@
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
+      "effortHelpDescription": "Legt fest, wie viel Denkaufwand das Modell vor der Antwort verwendet. Höhere Stufen können bei komplexen Aufgaben helfen, dauern aber meist länger. Der Punkt markiert die Standardeinstellung des Anbieters für dieses Modell.",
       "effortLabel": "Denkaufwand",
       "effortValues": {
         "high": "Hoch",
@@ -524,6 +525,7 @@
         "providerDefault": "Standard",
         "xhigh": "Sehr hoch"
       },
+      "selectionLabel": "{model} | {effort}",
       "title": "Chat-Modell auswählen",
       "viaProvider": "über {provider}"
     },

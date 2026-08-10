@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
+  BookOpenIcon,
   HistoryIcon,
   MessageSquareIcon,
   Minimize2Icon,
@@ -570,7 +571,7 @@ function ChatIndex() {
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
                 to="/knowledge/prompts"
               >
-                <SlashPromptIcon />
+                <BookOpenIcon className="size-4" />
                 {t("chat.landing.prompts")}
               </Link>
             }

@@ -2,9 +2,10 @@
 // Do not edit by hand: regenerate with
 // `bun --filter @stll/ai-catalog gen:capabilities`.
 //
-// Source: models.dev per-model `reasoning_options`, `temperature`, and
-// release dates (first-party, openrouter, and amazon-bedrock catalogs), plus
-// reviewed provider policies and dated entries from capabilities-overrides.ts.
+// Sources: models.dev per-model `reasoning_options`, `temperature`, and
+// release dates (first-party, openrouter, and amazon-bedrock catalogs);
+// OpenRouter's public per-model `default_effort`; plus reviewed provider
+// policies and dated entries from capabilities-overrides.ts.
 // The nightly `model-catalog-upstream` check fails CI on unsafe drift.
 import type {
   OfferedBYOKModelId,
@@ -71,6 +72,63 @@ export const MODEL_REASONING_EFFORTS = {
 } as const satisfies Record<
   OfferedBYOKModelId,
   readonly ReasoningEffort[] | null
+>;
+
+/**
+ * Concrete provider-default effort where the upstream catalogue publishes
+ * one. OpenRouter is the source today; null means the provider does not expose
+ * a truthful named default, so clients must retain a separate Default choice.
+ */
+export const MODEL_DEFAULT_REASONING_EFFORTS = {
+  "gemini-3.6-flash": null,
+  "gemini-3.5-flash-lite": null,
+  "gemini-3.1-pro-preview": null,
+  "gemini-3.5-flash": null,
+  "gemini-3.1-flash-lite": null,
+  "openai/gpt-5.6-luna": "medium",
+  "openai/gpt-5.6-terra": "medium",
+  "google/gemini-3.6-flash": "medium",
+  "google/gemini-3.5-flash-lite": "minimal",
+  "google/gemini-3.1-pro-preview": "medium",
+  "google/gemini-3.5-flash": "medium",
+  "google/gemini-3.1-flash-lite": "minimal",
+  "anthropic/claude-sonnet-5": "high",
+  "anthropic/claude-opus-5": "high",
+  "anthropic/claude-opus-4.8": "high",
+  "anthropic/claude-sonnet-4.6": "medium",
+  "openai/gpt-5.5": "medium",
+  "openai/gpt-5.4-mini": "medium",
+  "gpt-5.6": null,
+  "gpt-5.5": null,
+  "gpt-5.4": null,
+  "gpt-5.4-mini": null,
+  "gpt-5.4-nano": null,
+  "gpt-5.2": null,
+  "claude-sonnet-5": null,
+  "claude-fable-5": null,
+  "claude-opus-5": null,
+  "claude-opus-4-8": null,
+  "claude-opus-4-7": null,
+  "claude-sonnet-4-6": null,
+  "claude-opus-4-6": null,
+  "claude-haiku-4-5-20251001": null,
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
+  "us.amazon.nova-pro-v1:0": null,
+  "us.amazon.nova-lite-v1:0": null,
+  "us.amazon.nova-micro-v1:0": null,
+  "openai.gpt-oss-120b-1:0": null,
+  "openai.gpt-oss-20b-1:0": null,
+  "us.deepseek.r1-v1:0": null,
+  "mistral-large-latest": null,
+  "mistral-medium-latest": null,
+  "mistral-small-latest": null,
+  "magistral-medium-latest": null,
+  "magistral-small": null,
+  "pixtral-large-latest": null,
+} as const satisfies Record<
+  OfferedBYOKModelId,
+  ReasoningEffort | null
 >;
 
 /**

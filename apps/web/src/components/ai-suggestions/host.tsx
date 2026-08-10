@@ -56,12 +56,10 @@ import type {
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
-import type {
-  ComposerContextMenuProps,
-  ComposerModelsMenuProps,
-} from "@/components/chat/composer-plus-menu";
+import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
