@@ -62,6 +62,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       new QueryClient(),
@@ -131,6 +132,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-sibling"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       new QueryClient(),
@@ -149,6 +151,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         onRetryChatResolution={() => undefined}
         workspaceId="workspace-1"
       />,
@@ -162,7 +165,7 @@ describe("email viewer", () => {
     expect(html).not.toContain("pb-40");
   });
 
-  test("renders native metadata and keeps attachments informational", () => {
+  test("renders native metadata with directly accessible attachments", () => {
     const queryClient = new QueryClient();
     const options = emailHtmlPreviewOptions({
       fieldId: "field-1",
@@ -207,6 +210,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         layout={EMAIL_VIEWER_LAYOUT.contextualChat}
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       queryClient,
@@ -234,7 +238,10 @@ describe("email viewer", () => {
     expect(html).toContain("Hide signature");
     expect(html).toContain("Kind regards");
     expect(html).not.toContain("href=");
-    expect(html).not.toContain("<button");
+    expect(html).toContain('<button class="bg-muted/50');
+    expect(html).toContain('scrolling="no"');
+    expect(html).toContain("overflow-y-auto overscroll-contain");
+    expect(html).not.toContain("max-h-[45%]");
   });
 
   test("renders the scoped loading state", () => {
@@ -242,6 +249,7 @@ describe("email viewer", () => {
       <EmailHtmlViewer
         entityId="entity-2"
         fieldId="field-2"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-2"
       />,
       new QueryClient(),
@@ -286,6 +294,7 @@ describe("email viewer", () => {
       <EmailHtmlViewer
         entityId="entity-3"
         fieldId="field-3"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-3"
       />,
       queryClient,

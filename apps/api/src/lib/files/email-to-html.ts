@@ -48,6 +48,7 @@ const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
   pdf: "application/pdf",
   png: "image/png",
+  txt: "text/plain",
   webp: "image/webp",
 };
 
@@ -267,6 +268,7 @@ export const isEmailAttachmentPreviewable = (
   const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
   return (
     normalized === "application/pdf" ||
+    normalized === "text/plain" ||
     /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
   );
 };

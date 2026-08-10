@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, PaperclipIcon } from "lucide-react";
@@ -24,10 +24,11 @@ import {
   localizeEmailBodyHtml,
   parseEmailDate,
   type EmailBodyFoldLabels,
+  type EmailChatMode,
   type EmailResolvedChatMode,
   type EmailViewerLayout,
 } from "@/components/inspector/email-html-viewer.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
@@ -44,12 +45,14 @@ type EmailHtmlViewerProps = {
   entityId: string;
   fieldId: string;
   layout?: EmailViewerLayout;
+  onOpenAttachment: (attachmentId: string | null) => void;
   workspaceId: string;
 };
 
 type EmailFileViewerBaseProps = EmailHtmlViewerProps & {
   entityId: string;
   fileName: string;
+  overlayActivation?: (typeof FILE_CHAT_OVERLAY_ACTIVATION)[keyof typeof FILE_CHAT_OVERLAY_ACTIVATION];
 };
 
 type EmailFileViewerProps = EmailFileViewerBaseProps &
@@ -65,26 +68,24 @@ type EmailFileViewerProps = EmailFileViewerBaseProps &
 
 export const EmailFileViewer = (props: EmailFileViewerProps) => {
   const t = useTranslations();
-  const { chatMode, entityId, fieldId, fileName, workspaceId } = props;
+  const {
+    chatMode,
+    entityId,
+    fieldId,
+    fileName,
+    onOpenAttachment,
+    overlayActivation = FILE_CHAT_OVERLAY_ACTIVATION.active,
+    workspaceId,
+  } = props;
   const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
-  const fileChatContext = isContextual
-    ? getEmailFileChatContext({
-        entityId,
-        fieldId,
-        fileName,
-        workspaceId,
-      })
-    : { activeFile: undefined, workspaceId };
-
   return (
-    <FileViewerWithAI
-      {...fileChatContext}
-      className="flex min-h-0 flex-1 flex-col"
-      overlayActivation={
-        isContextual
-          ? FILE_CHAT_OVERLAY_ACTIVATION.active
-          : FILE_CHAT_OVERLAY_ACTIVATION.deferred
-      }
+    <EmailViewerWithAI
+      chatMode={chatMode}
+      entityId={entityId}
+      fieldId={fieldId}
+      fileName={fileName}
+      overlayActivation={overlayActivation}
+      workspaceId={workspaceId}
     >
       <EmailHtmlViewer
         entityId={entityId}
@@ -94,6 +95,7 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
             ? EMAIL_VIEWER_LAYOUT.contextualChat
             : EMAIL_VIEWER_LAYOUT.standard
         }
+        onOpenAttachment={onOpenAttachment}
         workspaceId={workspaceId}
       />
       {chatMode === EMAIL_CHAT_MODE.resolutionError ? (
@@ -113,6 +115,46 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
           </Button>
         </div>
       ) : null}
+    </EmailViewerWithAI>
+  );
+};
+
+export const EmailViewerWithAI = ({
+  chatMode,
+  children,
+  entityId,
+  fieldId,
+  fileName,
+  overlayActivation,
+  workspaceId,
+}: {
+  chatMode: EmailChatMode;
+  children: ReactNode;
+  entityId: string;
+  fieldId: string;
+  fileName: string;
+  overlayActivation: (typeof FILE_CHAT_OVERLAY_ACTIVATION)[keyof typeof FILE_CHAT_OVERLAY_ACTIVATION];
+  workspaceId: string;
+}) => {
+  const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
+  const fileChatContext = isContextual
+    ? getEmailFileChatContext({
+        entityId,
+        fieldId,
+        fileName,
+        workspaceId,
+      })
+    : { activeFile: undefined, workspaceId };
+
+  return (
+    <FileViewerWithAI
+      {...fileChatContext}
+      className="flex min-h-0 flex-1 flex-col"
+      overlayActivation={
+        isContextual ? overlayActivation : FILE_CHAT_OVERLAY_ACTIVATION.deferred
+      }
+    >
+      {children}
     </FileViewerWithAI>
   );
 };
@@ -121,12 +163,14 @@ export const EmailHtmlViewer = ({
   entityId,
   fieldId,
   layout = EMAIL_VIEWER_LAYOUT.standard,
+  onOpenAttachment,
   workspaceId,
 }: EmailHtmlViewerProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const articleRef = useRef<HTMLElement>(null);
   const bodyFrameRef = useRef<HTMLIFrameElement>(null);
+  const bodyResizeObserverRef = useRef<ResizeObserver | null>(null);
   const [activeCitationBlockId, setActiveCitationBlockId] = useState<
     string | null
   >(null);
@@ -134,6 +178,10 @@ export const EmailHtmlViewer = ({
   const previewQuery = useQuery(
     emailHtmlPreviewOptions({ workspaceId, fieldId }),
   );
+
+  useMountEffect(() => () => {
+    bodyResizeObserverRef.current?.disconnect();
+  });
 
   useExternalSyncEffect(() => {
     if (!previewQuery.data) {
@@ -235,12 +283,12 @@ export const EmailHtmlViewer = ({
   return (
     <article
       className={cn(
-        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain",
         layout === EMAIL_VIEWER_LAYOUT.contextualChat && "pb-40",
       )}
       ref={articleRef}
     >
-      <header className="bg-background max-h-[45%] shrink-0 overflow-y-auto overscroll-contain border-b px-4 py-3">
+      <header className="bg-background shrink-0 border-b px-4 py-3">
         <h1
           className={cn(
             "text-foreground text-base font-semibold text-balance",
@@ -321,34 +369,59 @@ export const EmailHtmlViewer = ({
             <ul className="flex flex-wrap gap-1.5">
               {preview.attachments.map((attachment) => (
                 <li
-                  className="bg-muted/50 inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs"
                   key={getAttachmentKey(attachment, attachmentKeyOccurrences)}
                 >
-                  <DocumentIcon
-                    className="text-muted-foreground size-4 shrink-0"
-                    fileName={
-                      attachment.fileName ?? t("emailViewer.unnamedAttachment")
-                    }
-                    mimeType={attachment.mimeType ?? "application/octet-stream"}
-                  />
-                  <BidiText as="span" className="max-w-48 min-w-0 truncate">
-                    {attachment.fileName ?? t("emailViewer.unnamedAttachment")}
-                  </BidiText>
-                  {attachment.sizeBytes > 0 ? (
-                    <span className="text-muted-foreground shrink-0">
-                      {formatAttachmentSize(attachment.sizeBytes, format)}
-                    </span>
-                  ) : null}
+                  <button
+                    className="bg-muted/50 hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
+                    onClick={() => {
+                      onOpenAttachment(
+                        attachment.previewable ? attachment.id : null,
+                      );
+                    }}
+                    type="button"
+                  >
+                    <DocumentIcon
+                      className="text-muted-foreground size-4 shrink-0"
+                      fileName={
+                        attachment.fileName ??
+                        t("emailViewer.unnamedAttachment")
+                      }
+                      mimeType={
+                        attachment.mimeType ?? "application/octet-stream"
+                      }
+                    />
+                    <BidiText as="span" className="max-w-48 min-w-0 truncate">
+                      {attachment.fileName ??
+                        t("emailViewer.unnamedAttachment")}
+                    </BidiText>
+                    {attachment.sizeBytes > 0 ? (
+                      <span className="text-muted-foreground shrink-0">
+                        {formatAttachmentSize(attachment.sizeBytes, format)}
+                      </span>
+                    ) : null}
+                  </button>
                 </li>
               ))}
             </ul>
           </section>
         ) : null}
       </header>
-      <div className="bg-muted/30 min-h-0 min-w-0 flex-1 overflow-hidden p-2">
+      <div className="bg-muted/30 min-w-0 shrink-0 p-2">
         <iframe
-          className="bg-background size-full border-0"
-          onLoad={() => {
+          className="bg-background w-full border-0"
+          onLoad={(event) => {
+            bodyResizeObserverRef.current?.disconnect();
+            const frame = event.currentTarget;
+            resizeEmailBodyFrame(frame);
+            const bodyDocument = frame.contentDocument;
+            if (bodyDocument) {
+              const resizeObserver = new ResizeObserver(() => {
+                resizeEmailBodyFrame(frame);
+              });
+              resizeObserver.observe(bodyDocument.documentElement);
+              resizeObserver.observe(bodyDocument.body);
+              bodyResizeObserverRef.current = resizeObserver;
+            }
             if (!activeCitationBlockId) {
               return;
             }
@@ -361,7 +434,9 @@ export const EmailHtmlViewer = ({
           ref={bodyFrameRef}
           referrerPolicy="no-referrer"
           sandbox="allow-same-origin"
+          scrolling="no"
           srcDoc={bodyHtml}
+          style={{ height: 0 }}
           title={t("emailViewer.bodyTitle")}
         />
       </div>
@@ -454,7 +529,42 @@ const scrollToEmailCitation = ({
   }
   openAncestorDetails(bodyTarget);
   bodyTarget.dataset["stellaEmailCitationActive"] = "";
-  bodyTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+  resizeEmailBodyFrame(bodyFrame);
+  const articleRect = article?.getBoundingClientRect();
+  const frameRect = bodyFrame?.getBoundingClientRect();
+  const targetRect = bodyTarget.getBoundingClientRect();
+  if (!article || !articleRect || !frameRect) {
+    return;
+  }
+  const targetTop =
+    article.scrollTop +
+    frameRect.top -
+    articleRect.top +
+    targetRect.top -
+    article.clientHeight / 2 +
+    targetRect.height / 2;
+  article.scrollTo({
+    behavior: "smooth",
+    top: Math.max(0, targetTop),
+  });
+};
+
+const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
+  const bodyDocument = frame?.contentDocument;
+  const body = bodyDocument?.body;
+  if (!frame || !bodyDocument || !body) {
+    return;
+  }
+  const bodyStyle = bodyDocument.defaultView?.getComputedStyle(body);
+  const marginBlockStart =
+    Number.parseFloat(bodyStyle?.marginBlockStart ?? "0") || 0;
+  const marginBlockEnd =
+    Number.parseFloat(bodyStyle?.marginBlockEnd ?? "0") || 0;
+  const bodyHeight = body.getBoundingClientRect().height;
+  frame.style.height = `${Math.max(
+    1,
+    Math.ceil(bodyHeight + marginBlockStart + marginBlockEnd),
+  )}px`;
 };
 
 const openAncestorDetails = (target: HTMLElement): void => {

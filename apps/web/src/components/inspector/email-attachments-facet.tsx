@@ -31,11 +31,21 @@ import {
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
+import {
+  EMAIL_ATTACHMENT_PREVIEW_KIND,
+  getEmailAttachmentPreviewId,
+  getEmailAttachmentPreviewKind,
+} from "@/components/inspector/email-attachments-facet.logic";
+import { EmailViewerWithAI } from "@/components/inspector/email-html-viewer";
+import type { EmailChatMode } from "@/components/inspector/email-html-viewer.logic";
+import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import {
   MatterTargetPicker,
   type MatterTarget,
 } from "@/components/matter-target-picker";
+import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
@@ -45,11 +55,23 @@ import {
   saveEmailAttachment,
   type EmailAttachmentDescriptor,
 } from "@/lib/files/queries";
+import { PDFPage } from "@/lib/pdf/pdf-page";
+import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type EmailAttachmentsFacetProps = {
+  chatMode: EmailChatMode;
+  entityId: string;
   fieldId: string;
+  fileName: string;
+  onResetZoom: () => void;
+  onSelectedIdChange: (attachmentId: string | null) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  overlayActivation: (typeof FILE_CHAT_OVERLAY_ACTIVATION)[keyof typeof FILE_CHAT_OVERLAY_ACTIVATION];
+  scaleOffset: number;
+  selectedId: string | null;
   workspaceId: string;
 };
 
@@ -69,13 +91,22 @@ const createInitialSaveState = (): EmailAttachmentSaveState => ({
 });
 
 export const EmailAttachmentsFacet = ({
+  chatMode,
+  entityId,
   fieldId,
+  fileName,
+  onResetZoom,
+  onSelectedIdChange,
+  onZoomIn,
+  onZoomOut,
+  overlayActivation,
+  scaleOffset,
+  selectedId,
   workspaceId,
 }: EmailAttachmentsFacetProps) => {
   const t = useTranslations();
   const canSave = usePermissions({ entity: ["create"] });
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
   const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
   const [saveState, setSaveState] = useState(createInitialSaveState);
@@ -99,14 +130,6 @@ export const EmailAttachmentsFacet = ({
   const selected = previewQuery.data.attachments.find(
     ({ id }) => id === selectedId,
   );
-  if (selectedId !== null && selected === undefined) {
-    return (
-      <FacetMessage
-        icon={<AlertTriangleIcon aria-hidden="true" className="size-5" />}
-        message={t("common.somethingWentWrong")}
-      />
-    );
-  }
   const saveTargetAttachment = previewQuery.data.attachments.find(
     ({ id }) => id === saveTargetId,
   );
@@ -176,7 +199,7 @@ export const EmailAttachmentsFacet = ({
         attachment={selected}
         canSave={canSave}
         fieldId={fieldId}
-        onBack={() => setSelectedId(null)}
+        onBack={() => onSelectedIdChange(null)}
         onChooseMatter={() => openMatterPicker(selected.id)}
         onSave={() =>
           saveAttachment({
@@ -185,6 +208,10 @@ export const EmailAttachmentsFacet = ({
           })
         }
         saving={saving}
+        onResetZoom={onResetZoom}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        scaleOffset={scaleOffset}
         workspaceId={workspaceId}
       />
     ) : (
@@ -199,13 +226,20 @@ export const EmailAttachmentsFacet = ({
             destination: { workspaceId, parentId: null },
           })
         }
-        onSelect={setSelectedId}
+        onSelect={onSelectedIdChange}
         saving={saving}
       />
     );
 
   return (
-    <>
+    <EmailViewerWithAI
+      chatMode={chatMode}
+      entityId={entityId}
+      fieldId={fieldId}
+      fileName={fileName}
+      overlayActivation={overlayActivation}
+      workspaceId={workspaceId}
+    >
       {content}
       <Dialog
         onOpenChange={(open) => {
@@ -250,7 +284,7 @@ export const EmailAttachmentsFacet = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-    </>
+    </EmailViewerWithAI>
   );
 };
 
@@ -260,7 +294,11 @@ const AttachmentPreview = ({
   fieldId,
   onBack,
   onChooseMatter,
+  onResetZoom,
   onSave,
+  onZoomIn,
+  onZoomOut,
+  scaleOffset,
   saving,
   workspaceId,
 }: {
@@ -269,7 +307,11 @@ const AttachmentPreview = ({
   fieldId: string;
   onBack: () => void;
   onChooseMatter: () => void;
+  onResetZoom: () => void;
   onSave: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  scaleOffset: number;
   saving: boolean;
   workspaceId: string;
 }) => {
@@ -286,9 +328,18 @@ const AttachmentPreview = ({
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
+  const previewKind = getEmailAttachmentPreviewKind(attachment.mimeType);
+  const previewId = getEmailAttachmentPreviewId({
+    attachmentId: attachment.id,
+    fieldId,
+    workspaceId,
+  });
 
   useExternalSyncEffect(() => {
-    if (!attachmentQuery.data) {
+    if (
+      !attachmentQuery.data ||
+      previewKind !== EMAIL_ATTACHMENT_PREVIEW_KIND.image
+    ) {
       setPreviewObjectUrl(null);
       return undefined;
     }
@@ -301,7 +352,7 @@ const AttachmentPreview = ({
     return () => {
       URL.revokeObjectURL(objectUrl);
     };
-  }, [attachment.mimeType, attachmentQuery.data]);
+  }, [attachment.mimeType, attachmentQuery.data, previewKind]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -321,6 +372,17 @@ const AttachmentPreview = ({
         >
           {fileName}
         </BidiText>
+        {previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.pdf ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <PeekPdfControls
+              canResetZoom={scaleOffset !== 0}
+              onResetZoom={onResetZoom}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              scaleOffset={scaleOffset}
+            />
+          </div>
+        ) : null}
         {canSave ? (
           <AttachmentSaveControls
             compact={false}
@@ -331,7 +393,7 @@ const AttachmentPreview = ({
           />
         ) : null}
       </div>
-      <div className="bg-muted/30 flex min-h-0 flex-1 items-center justify-center p-2">
+      <div className="bg-muted/30 flex min-h-0 flex-1 flex-col p-2">
         <AttachmentPreviewContent
           fileName={fileName}
           imageAttempt={imageAttempt}
@@ -342,6 +404,9 @@ const AttachmentPreview = ({
             setImageFailed(false);
             setImageAttempt((attempt) => attempt + 1);
           }}
+          previewBuffer={attachmentQuery.data}
+          previewId={previewId}
+          scaleOffset={scaleOffset}
           previewUrl={previewObjectUrl}
           previewError={attachmentQuery.isError}
         />
@@ -357,8 +422,11 @@ const AttachmentPreviewContent = ({
   mimeType,
   onImageError,
   onRetryImage,
+  previewBuffer,
+  previewId,
   previewUrl,
   previewError,
+  scaleOffset,
 }: {
   fileName: string;
   imageFailed: boolean;
@@ -366,10 +434,14 @@ const AttachmentPreviewContent = ({
   mimeType: string | null;
   onImageError: () => void;
   onRetryImage: () => void;
+  previewBuffer: ArrayBuffer | undefined;
+  previewId: string;
   previewUrl: string | null;
   previewError: boolean;
+  scaleOffset: number;
 }) => {
   const t = useTranslations();
+  const previewKind = getEmailAttachmentPreviewKind(mimeType);
   if (previewError) {
     return (
       <FacetMessage
@@ -378,27 +450,36 @@ const AttachmentPreviewContent = ({
       />
     );
   }
-  if (imageFailed) {
+  if (
+    previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.unsupported ||
+    imageFailed
+  ) {
     return (
       <FacetMessage
         action={
-          <Button onClick={onRetryImage} size="sm" variant="outline">
-            {t("common.tryAgain")}
-          </Button>
+          imageFailed ? (
+            <Button onClick={onRetryImage} size="sm" variant="outline">
+              {t("common.tryAgain")}
+            </Button>
+          ) : undefined
         }
         icon={<AlertTriangleIcon aria-hidden="true" className="size-5" />}
-        message={t("common.somethingWentWrong")}
+        message={
+          imageFailed
+            ? t("common.somethingWentWrong")
+            : t("search.previewUnavailable")
+        }
       />
     );
   }
-  if (previewUrl === null) {
-    return <Skeleton className="size-full rounded-sm" />;
-  }
-  if (mimeType?.toLowerCase().startsWith("image/") === true) {
+  if (previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.image) {
+    if (previewUrl === null) {
+      return <Skeleton className="size-full rounded-sm" />;
+    }
     return (
       <img
         alt={fileName}
-        className="max-h-full max-w-full object-contain"
+        className="m-auto max-h-full max-w-full object-contain"
         key={imageAttempt}
         onError={onImageError}
         referrerPolicy="no-referrer"
@@ -406,15 +487,45 @@ const AttachmentPreviewContent = ({
       />
     );
   }
+  if (previewBuffer === undefined) {
+    return <Skeleton className="size-full rounded-sm" />;
+  }
+  if (previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.text) {
+    return (
+      <pre
+        className="bg-background size-full overflow-auto rounded-sm p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap"
+        dir="auto"
+      >
+        {new TextDecoder().decode(previewBuffer)}
+      </pre>
+    );
+  }
 
   return (
-    <iframe
-      className="bg-background size-full border-0"
-      referrerPolicy="no-referrer"
-      sandbox=""
-      src={previewUrl}
-      title={fileName}
-    />
+    <MeasuredPdfProvider
+      active
+      fallback={{
+        error: (
+          <FacetMessage
+            icon={<AlertTriangleIcon aria-hidden="true" className="size-5" />}
+            message={t("search.previewUnavailable")}
+          />
+        ),
+        suspense: <Skeleton className="size-full rounded-sm" />,
+      }}
+      fieldId={previewId}
+      initialScaleOffset={scaleOffset}
+      key={previewId}
+    >
+      <PDFViewport
+        buffer={previewBuffer}
+        className="document-preview-surface h-full w-full"
+        contentClassName="relative space-y-2 px-2 pt-2"
+        fileId={previewId}
+        renderPage={(props) => <PDFPage {...props} />}
+        scaleOffset={scaleOffset}
+      />
+    </MeasuredPdfProvider>
   );
 };
 

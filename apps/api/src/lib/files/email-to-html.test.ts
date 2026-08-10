@@ -67,9 +67,12 @@ describe("resolveEmailMimeType", () => {
 });
 
 describe("email attachment preview policy", () => {
-  test("allows passive image and PDF types but not active or unknown content", () => {
+  test("allows passive document types but not active or unknown content", () => {
     expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
     expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
+    expect(isEmailAttachmentPreviewable("text/plain; charset=utf-8")).toBe(
+      true,
+    );
     expect(isEmailAttachmentPreviewable("image/bmp")).toBe(false);
     expect(isEmailAttachmentPreviewable("image/tiff")).toBe(false);
     expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
@@ -90,6 +93,12 @@ describe("email attachment preview policy", () => {
         mimeType: null,
       }),
     ).toBe("image/png");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "NOTES.TXT",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("text/plain");
     expect(
       resolveEmailAttachmentMimeType({
         fileName: "payload.SVG",
@@ -1019,7 +1028,7 @@ describe("emailToHtml (.eml)", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 16,
-        previewable: false,
+        previewable: true,
       },
       {
         id: "attachment-2",
