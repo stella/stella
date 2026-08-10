@@ -72,7 +72,6 @@ type EmailFileViewerProps = EmailFileViewerBaseProps &
   );
 
 export const EmailFileViewer = (props: EmailFileViewerProps) => {
-  const t = useTranslations();
   const {
     chatMode,
     entityId,
@@ -98,21 +97,7 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
         workspaceId={workspaceId}
       />
       {chatMode === EMAIL_CHAT_MODE.resolutionError ? (
-        <div
-          className="bg-background flex shrink-0 items-center justify-center gap-2 border-t p-2"
-          role="alert"
-        >
-          <span className="text-muted-foreground text-sm">
-            {t("common.somethingWentWrong")}
-          </span>
-          <Button
-            onClick={props.onRetryChatResolution}
-            size="sm"
-            variant="outline"
-          >
-            {t("common.tryAgain")}
-          </Button>
-        </div>
+        <EmailChatResolutionAlert onRetry={props.onRetryChatResolution} />
       ) : null}
     </>
   );
@@ -132,6 +117,27 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
     >
       {content}
     </EmailViewerWithAI>
+  );
+};
+
+export const EmailChatResolutionAlert = ({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div
+      className="bg-background flex shrink-0 items-center justify-center gap-2 border-t p-2"
+      role="alert"
+    >
+      <span className="text-muted-foreground text-sm">
+        {t("common.somethingWentWrong")}
+      </span>
+      <Button onClick={onRetry} size="sm" variant="outline">
+        {t("common.tryAgain")}
+      </Button>
+    </div>
   );
 };
 

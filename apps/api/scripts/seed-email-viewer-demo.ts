@@ -118,31 +118,33 @@ const resolveTarget = async () => {
     name: EMAIL_QA_MATTER_NAME,
   };
   if (!existingWorkspace) {
-    const insertedWorkspaces = await rootDb
-      .insert(workspaces)
-      .values({
-        id: workspace.id,
-        organizationId: workspace.organizationId,
-        name: workspace.name,
-        reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
-      })
-      .onConflictDoNothing()
-      .returning({ id: workspaces.id });
-    if (!insertedWorkspaces.at(0)) {
-      panic(
-        "The email QA matter already exists but is not an eligible target.",
-      );
-    }
-    await rootDb
-      .insert(workspaceMembers)
-      .values({
-        id: seedId<"workspaceMember">(
-          `email-viewer-demo-${workspace.id}-${activeSession.userId}-member`,
-        ),
-        workspaceId: workspace.id,
-        userId: activeSession.userId,
-      })
-      .onConflictDoNothing();
+    await rootDb.transaction(async (tx) => {
+      const insertedWorkspaces = await tx
+        .insert(workspaces)
+        .values({
+          id: workspace.id,
+          organizationId: workspace.organizationId,
+          name: workspace.name,
+          reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
+        })
+        .onConflictDoNothing()
+        .returning({ id: workspaces.id });
+      if (!insertedWorkspaces.at(0)) {
+        panic(
+          "The email QA matter already exists but is not an eligible target.",
+        );
+      }
+      await tx
+        .insert(workspaceMembers)
+        .values({
+          id: seedId<"workspaceMember">(
+            `email-viewer-demo-${workspace.id}-${activeSession.userId}-member`,
+          ),
+          workspaceId: workspace.id,
+          userId: activeSession.userId,
+        })
+        .onConflictDoNothing();
+    });
   }
 
   const filePropertyRows = await rootDb

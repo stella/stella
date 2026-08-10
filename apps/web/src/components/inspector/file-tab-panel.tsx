@@ -29,6 +29,7 @@ import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-b
 import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
 import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
 import {
+  EmailChatResolutionAlert,
   EmailFileViewer,
   EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
@@ -51,6 +52,7 @@ import {
   FULLVIEW_FACETS,
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
@@ -1276,6 +1278,17 @@ export const FileTabPanel = ({
       workspaceId={tab.workspaceId}
     >
       {sidepeekBody}
+      {shouldSurfaceEmailResolutionAlert({
+        isEmailDisplay,
+        isPreviewVisible,
+        resolutionFailed: shouldSurfaceEmailResolutionError,
+      }) ? (
+        <EmailChatResolutionAlert
+          onRetry={() => {
+            detached(entityQuery.refetch(), "FileTabPanel");
+          }}
+        />
+      ) : null}
     </EmailViewerWithAI>
   ) : (
     sidepeekBody
