@@ -35,6 +35,7 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
+import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
@@ -173,8 +174,7 @@ export const PropertyPopover = ({
   // Verdict columns are system-computed (read-only), so they are not
   // editable via the composer either.
   const canEditViaComposer =
-    property.content.type !== "file" &&
-    property.tool.type !== "playbook-verdict";
+    property.content.type !== "file" && !isPlaybookVerdictProperty(property);
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest

@@ -37,6 +37,10 @@ import {
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import {
+  isGradableProperty,
+  isPlaybookVerdictProperty,
+} from "@/lib/workspaces/playbook-verdicts";
+import {
   entitiesKeys,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
@@ -174,7 +178,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   // Verdict tiers are system-computed; card moves and uploads into a verdict
   // column must not overwrite the graded value.
   const isReadOnlyVerdictGrouping =
-    groupByProperty?.tool.type === "playbook-verdict";
+    groupByProperty !== null && isPlaybookVerdictProperty(groupByProperty);
 
   // Fields to show on each card: all properties minus hidden ones.
   const allPropertyIds = properties.map((p) => p.id);
@@ -425,7 +429,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their colors are not user-editable.
-        if (groupByProperty.tool.type === "playbook-verdict") {
+        if (!isGradableProperty(groupByProperty)) {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -461,7 +465,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their labels are not user-editable.
-        if (groupByProperty.tool.type === "playbook-verdict") {
+        if (!isGradableProperty(groupByProperty)) {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -510,7 +514,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         groupByProperty.content.type === "multi-select")
     ) {
       // Verdict tiers are system-defined; their order is not user-editable.
-      if (groupByProperty.tool.type === "playbook-verdict") {
+      if (!isGradableProperty(groupByProperty)) {
         return;
       }
       const opts = [...groupByProperty.content.options];

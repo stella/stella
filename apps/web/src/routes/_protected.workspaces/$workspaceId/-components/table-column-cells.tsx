@@ -28,6 +28,7 @@ import type {
   WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
+import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import {
   selectJustificationByFieldId,
   useWorkspaceStore,
@@ -152,7 +153,7 @@ export const PropertyCell = ({
   // fallback / deviation / missing). Read-only — render the colored chip via
   // EditableField display mode, and surface the grading rationale through the
   // provenance card when a justification exists.
-  if (property.tool.type === "playbook-verdict") {
+  if (isPlaybookVerdictProperty(property)) {
     const verdictCell = (
       <span className="flex min-w-0 items-center gap-1.5">
         <CellMetadataFlags

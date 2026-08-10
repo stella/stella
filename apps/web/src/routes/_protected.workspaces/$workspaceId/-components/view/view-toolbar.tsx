@@ -74,6 +74,7 @@ import type {
   WorkspaceView,
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
+import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -924,13 +925,12 @@ const GroupByControl = ({
   // The playbook verdict groupings are collected into their own section below so
   // they don't drown the important choices.
   const documentTypeProp = resolveDocumentTypeClassifier(eligible);
-  const verdictProps = eligible.filter(
-    (property) => property.tool.type === "playbook-verdict",
+  const verdictProps = eligible.filter((property) =>
+    isPlaybookVerdictProperty(property),
   );
   const basicProps = eligible.filter(
     (property) =>
-      property !== documentTypeProp &&
-      property.tool.type !== "playbook-verdict",
+      property !== documentTypeProp && !isPlaybookVerdictProperty(property),
   );
 
   const resolvedId =

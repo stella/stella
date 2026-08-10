@@ -36,6 +36,10 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
+import {
+  isPlaybookVerdictProperty,
+  playbookVerdictByAskId,
+} from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -342,6 +346,25 @@ const EntityMetadataContent = ({
     : null;
   const updatedAtIso = currentVersion?.createdAt ?? null;
 
+  // A verdict is one fact with the value it grades, so it is never listed on
+  // its own. `playbook-verdicts` owns that rule for every surface; this panel
+  // used to rediscover it and got it wrong, rendering each grade as a row
+  // stranded from its answer.
+  const verdictPropertyByAskId = playbookVerdictByAskId(optimisticProperties);
+  const isVerdictField = (field: FieldInfoRow) => {
+    const property = visiblePropertyById.get(field.propertyId);
+    return property !== undefined && isPlaybookVerdictProperty(property);
+  };
+
+  /** The verdict row grading a given ASK property, if this entity has one. */
+  const verdictFieldByAskId = new Map<string, FieldInfoRow>();
+  for (const field of visibleFields) {
+    const property = visiblePropertyById.get(field.propertyId);
+    if (property !== undefined && isPlaybookVerdictProperty(property)) {
+      verdictFieldByAskId.set(property.tool.askPropertyId, field);
+    }
+  }
+
   // The three groups answer different questions and must not be mixed: what
   // stella recorded, what the file says about itself, and what AI read out of
   // it. Columns a person filled in are a fourth, editable, group.
@@ -351,7 +374,8 @@ const EntityMetadataContent = ({
   );
   const manualFields = visibleFields.filter(
     (field) =>
-      visiblePropertyById.get(field.propertyId)?.tool.type !== "ai-model",
+      visiblePropertyById.get(field.propertyId)?.tool.type !== "ai-model" &&
+      !isVerdictField(field),
   );
 
   const renderField = (field: FieldInfoRow) => {
@@ -375,6 +399,10 @@ const EntityMetadataContent = ({
             propertyId: field.propertyId,
           })
       : undefined;
+    // The grade belongs beside the value it grades, not in a row of its own:
+    // "missing" means nothing without the answer it was reached from.
+    const verdictField = verdictFieldByAskId.get(property.id);
+    const verdictProperty = verdictPropertyByAskId.get(property.id);
     const fieldBody = (
       <>
         <span
@@ -384,6 +412,19 @@ const EntityMetadataContent = ({
           )}
         >
           {property.name}
+          {verdictField !== undefined && verdictProperty !== undefined && (
+            <span className="normal-case">
+              <EditableField
+                content={verdictField.content}
+                entityId={entity.entityId}
+                entityKind={entity.kind}
+                property={verdictProperty}
+                propertyId={verdictField.propertyId}
+                readonly
+                workspaceId={workspaceId}
+              />
+            </span>
+          )}
         </span>
         <div className="text-foreground text-sm leading-snug">
           <EditableField
