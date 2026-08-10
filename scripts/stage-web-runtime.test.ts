@@ -34,17 +34,31 @@ describe("external runtime workspace closure", () => {
           { dependencies: { "@x/ws": "^1.0.0" } },
         ],
         "@x/opt-native": ["@x/opt-native@workspace:packages/opt-native"],
+        "@x/web/dual": [
+          "dual@2.0.0",
+          "",
+          { dependencies: { "@x/web-scoped-ws": "^1.0.0" } },
+        ],
+        "@x/web-scoped-ws": [
+          "@x/web-scoped-ws@workspace:packages/web-scoped-ws",
+        ],
         "@x/ws": ["@x/ws@workspace:packages/ws"],
+        dual: ["dual@1.0.0", "", { dependencies: {} }],
         shared: ["shared@1.0.0", "", { dependencies: {} }],
       },
       workspaces: {
-        "apps/web": { dependencies: { "@x/external": "^1.0.0" } },
+        "apps/web": {
+          dependencies: { "@x/external": "^1.0.0", dual: "^2.0.0" },
+          name: "@x/web",
+        },
         "packages/opt-native": { name: "@x/opt-native" },
+        "packages/web-scoped-ws": { name: "@x/web-scoped-ws" },
         "packages/ws": { name: "@x/ws" },
       },
     };
     expect(findExternalRuntimeWorkspacePaths(lock)).toEqual([
       "packages/opt-native",
+      "packages/web-scoped-ws",
       "packages/ws",
     ]);
   });

@@ -115,18 +115,25 @@ export const findExternalRuntimeWorkspacePaths = (
 
   // Seed with the web app's external dependencies only: @stll/web's own
   // workspace dependencies are bundled into dist by Vite, so their sources
-  // never need to exist in the runner.
+  // never need to exist in the runner. Seeds resolve in the web consumer
+  // context too — Bun can store a web dependency under "<web name>/<dep>"
+  // when its resolution differs from the hoisted copy.
+  const webWorkspace = workspaces["apps/web"];
+  if (!isRecord(webWorkspace) || typeof webWorkspace["name"] !== "string") {
+    throw new TypeError("bun.lock apps/web workspace must have a name");
+  }
+  const webChain = [webWorkspace["name"]];
   const isWorkspaceResolved = (name: string): boolean => {
-    const entry = packages[name];
+    const entry = packages[entryKeyFor(name, webChain)];
     return (
       Array.isArray(entry) &&
       typeof entry.at(0) === "string" &&
       String(entry.at(0)).includes("@workspace:")
     );
   };
-  for (const name of readDependencyNames(workspaces["apps/web"])) {
+  for (const name of readDependencyNames(webWorkspace)) {
     if (!isWorkspaceResolved(name)) {
-      visit(name, []);
+      visit(name, webChain);
     }
   }
 
