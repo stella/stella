@@ -383,6 +383,49 @@ export default defineConfig(({ mode }) => {
         "jszip",
         "fast-xml-parser",
         "marked",
+        // 4. Editor, chat, table, and drag-and-drop deps reached only through
+        //    lazy route splits, so the cold crawl misses every one of them.
+        //    Observed in a dev session as three optimize passes (and three
+        //    full-page reloads) inside one minute while navigating between the
+        //    chat, inspector, and document routes. Vite already pre-bundles all
+        //    of these on discovery; listing them only moves that work into the
+        //    cold pass.
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer",
+        "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
+        "@atlaskit/pragmatic-drag-and-drop/external/adapter",
+        "@atlaskit/pragmatic-drag-and-drop/external/file",
+        "@base-ui/react/context-menu",
+        "@base-ui/react/preview-card",
+        "@base-ui/react/tabs",
+        "@hocuspocus/provider",
+        "@libpdf/core",
+        "@stll/anonymize-data",
+        "@stll/folio-agents",
+        "@stll/folio-core",
+        "@stll/folio-core/ai-edits",
+        "@stll/folio-core/docx/documentParser",
+        "@stll/folio-core/docx/serializer/paragraphSerializer",
+        "@stll/folio-core/prosemirror/commands/comments",
+        "@stll/folio-core/prosemirror/findReplaceSelection",
+        "@stll/folio-core/utils/findReplace",
+        "@streamdown/cjk",
+        "@streamdown/math",
+        "@streamdown/mermaid",
+        "@tanstack/react-table",
+        "@tanstack/react-table/static-functions",
+        "@tiptap/extension-heading",
+        "@tiptap/extension-italic",
+        "@tiptap/extension-list",
+        "diff",
+        "y-prosemirror",
+        "yjs",
+        // pdfjs-dist/build/pdf.worker.mjs is deliberately left out: it is a
+        // worker entrypoint, and pre-bundling those rewrites the worker URL
+        // into .vite/deps (the same failure the exclude list below guards
+        // against). It costs one reload the first time a PDF opens.
       ],
       // @stll/*-wasm packages and @silurus/ooxml load their .wasm binaries via
       // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
