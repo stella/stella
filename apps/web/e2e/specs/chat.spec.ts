@@ -1,5 +1,32 @@
 import { expect, test } from "../helpers/test";
 
+test("prompt improvement menu uses task strategies", async ({ page }) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+
+  const composer = page.getByRole("textbox", {
+    name: /type your question/iu,
+  });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.fill("Review this agreement and identify the material risks.");
+
+  await page
+    .getByRole("button", { name: "Prompt improvement options" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Structure the request/iu }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Specify the output/iu }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Break into steps/iu }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Add verification criteria/iu }),
+  ).toBeVisible();
+  await expect(page.getByText("Use a more formal tone")).toHaveCount(0);
+});
+
 // The seeded e2e user (test@stella.dev) is an org owner whose org has NO
 // usage_entitlements row — the dark-launch default every production org
 // starts in. We deliberately do not create an entitlement here: regressions

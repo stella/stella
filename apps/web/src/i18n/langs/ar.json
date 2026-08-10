@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "إلغاء الرسالة المُدرجة في قائمة الانتظار",
     "caseLawGreeting": "اسأل عن هذا القرار — نصّه الكامل متاح هنا.",
     "chatAbout": "تحدّث عن هذا",
+    "choosePromptImprovementStrategy": "خيارات تحسين الطلب",
     "composerMenu": {
       "context": "السياق",
       "mcpServers": "خوادم MCP",
@@ -546,6 +547,24 @@
       "fromPromptFallback": "مهارة"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "يحوّل العمل المعقد إلى مهام فرعية مرتبة.",
+        "label": "تقسيمه إلى خطوات"
+      },
+      "specifyOutput": {
+        "description": "يوضح الجمهور والنطاق والتنسيق والطول ومعايير النجاح.",
+        "label": "تحديد المخرج"
+      },
+      "structure": {
+        "description": "يرتب الهدف والسياق والقيود والمخرج المطلوب.",
+        "label": "تنظيم الطلب"
+      },
+      "verify": {
+        "description": "يطلب التحقق من المصادر والافتراضات والتناقضات ومواطن عدم اليقين.",
+        "label": "إضافة معايير للتحقق"
+      }
+    },
     "prompts": {
       "noResults": "لا توجد مهارات مطابقة",
       "noShortcuts": "لا توجد مهارات بعد. أضف بعضها في المعرفة ← المهارات.",

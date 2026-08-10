@@ -413,6 +413,7 @@
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
+    "choosePromptImprovementStrategy": "Možnosti vylepšenia zadania",
     "composerMenu": {
       "context": "Kontext",
       "mcpServers": "MCP servery",
@@ -546,6 +547,24 @@
       "fromPromptFallback": "Zručnosť"
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
+    "promptImprovementStrategies": {
+      "decompose": {
+        "description": "Rozdelí zložitú úlohu na zoradené čiastkové kroky.",
+        "label": "Rozdeliť do krokov"
+      },
+      "specifyOutput": {
+        "description": "Výslovne uvedie publikum, rozsah, formát, dĺžku a kritériá úspechu.",
+        "label": "Spresniť výstup"
+      },
+      "structure": {
+        "description": "Usporiada cieľ, kontext, obmedzenia a požadovaný výstup.",
+        "label": "Štruktúrovať zadanie"
+      },
+      "verify": {
+        "description": "Vyžiada kontrolu zdrojov, predpokladov, rozporov a neistôt.",
+        "label": "Pridať kritériá overenia"
+      }
+    },
     "prompts": {
       "noResults": "Žiadne zhodné zručnosti",
       "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
