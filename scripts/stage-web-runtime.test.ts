@@ -13,6 +13,42 @@ const runtimeWorkspacePaths = findExternalRuntimeWorkspacePaths(
 );
 
 describe("external runtime workspace closure", () => {
+  // Bun stores a dependency under a consumer-scoped key ("parent/name") when
+  // its resolution differs from the hoisted copy, and platform bindings ride
+  // optionalDependencies. Both must feed the walk: following the hoisted
+  // copy's dependency list here would miss packages/ws entirely.
+  test("follows consumer-scoped entries and optional dependencies", () => {
+    const lock = {
+      packages: {
+        "@x/external": [
+          "@x/external@1.0.0",
+          "",
+          {
+            dependencies: { shared: "^2.0.0" },
+            optionalDependencies: { "@x/opt-native": "^1.0.0" },
+          },
+        ],
+        "@x/external/shared": [
+          "shared@2.0.0",
+          "",
+          { dependencies: { "@x/ws": "^1.0.0" } },
+        ],
+        "@x/opt-native": ["@x/opt-native@workspace:packages/opt-native"],
+        "@x/ws": ["@x/ws@workspace:packages/ws"],
+        shared: ["shared@1.0.0", "", { dependencies: {} }],
+      },
+      workspaces: {
+        "apps/web": { dependencies: { "@x/external": "^1.0.0" } },
+        "packages/opt-native": { name: "@x/opt-native" },
+        "packages/ws": { name: "@x/ws" },
+      },
+    };
+    expect(findExternalRuntimeWorkspacePaths(lock)).toEqual([
+      "packages/opt-native",
+      "packages/ws",
+    ]);
+  });
+
   // The closure is derived, not declared, so its exact members may change
   // with the dependency graph. Pin @stll/folio-core's currently known
   // workspace-linked runtime deps: the derivation regressing to miss them —
@@ -65,10 +101,12 @@ describe("stageWorkspacePackage", () => {
     await symlink(target, path.join(scopeDir, "stage-fixture"), "dir");
   };
 
-  let workDir: string;
+  let workDir: string | undefined;
 
   afterAll(async () => {
-    await rm(workDir, { force: true, recursive: true });
+    if (workDir !== undefined) {
+      await rm(workDir, { force: true, recursive: true });
+    }
   });
 
   test("manifest-only tree fails to import; staged tree succeeds", async () => {

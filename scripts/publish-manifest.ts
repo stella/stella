@@ -41,7 +41,11 @@ export const sourceExportTargets = (
 
   const targets: Record<string, string> = {};
   for (const [subpath, target] of Object.entries(exportsField)) {
-    if (typeof target !== "string" || !target.startsWith("./src/")) {
+    if (
+      typeof target !== "string" ||
+      !target.startsWith("./src/") ||
+      !target.endsWith(".ts")
+    ) {
       panic(
         `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.ts string, got ${JSON.stringify(target)}`,
       );

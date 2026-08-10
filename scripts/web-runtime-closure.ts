@@ -11,18 +11,23 @@
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+// Production install graph: dependencies plus optionalDependencies (platform
+// binding packages ride the optional field). devDependencies never install in
+// the runner; peerDependencies of an externalized package resolve against a
+// consumer instance that is reachable through its own dependency edge.
 const readDependencyNames = (manifest: unknown): string[] => {
   if (!isRecord(manifest)) {
     return [];
   }
 
-  const dependencies = manifest["dependencies"];
-  return isRecord(dependencies) ? Object.keys(dependencies) : [];
-};
-
-type ResolvedPackage = {
-  dependencyNames: string[];
-  workspacePath: string | undefined;
+  const names: string[] = [];
+  for (const field of ["dependencies", "optionalDependencies"]) {
+    const value = manifest[field];
+    if (isRecord(value)) {
+      names.push(...Object.keys(value));
+    }
+  }
+  return names;
 };
 
 export const findExternalRuntimeWorkspacePaths = (
@@ -38,16 +43,57 @@ export const findExternalRuntimeWorkspacePaths = (
     throw new TypeError("bun.lock must contain packages and workspaces maps");
   }
 
-  const resolvePackage = (name: string): ResolvedPackage | undefined => {
-    const entry = packages[name];
-    if (!Array.isArray(entry)) {
-      return undefined;
-    }
+  const visited = new Set<string>();
+  const runtimeWorkspaces = new Set<string>();
 
+  // Bun stores a dependency at a consumer-scoped key ("parent/name", chained
+  // for deeper conflicts) when its resolution differs from the hoisted one.
+  // Resolve the deepest matching key for this consumer chain first, so the
+  // walk follows the copy this consumer actually gets, not the hoisted one.
+  const entryKeyFor = (name: string, parentChain: string[]): string => {
+    for (let index = 0; index < parentChain.length; index += 1) {
+      const candidate = [...parentChain.slice(index), name].join("/");
+      if (candidate in packages) {
+        return candidate;
+      }
+    }
+    return name;
+  };
+
+  const chainFromKey = (
+    entryKey: string,
+    name: string,
+    parentChain: string[],
+  ): string[] => {
+    for (let index = 0; index < parentChain.length; index += 1) {
+      const candidate = [...parentChain.slice(index), name];
+      if (candidate.join("/") === entryKey) {
+        return candidate;
+      }
+    }
+    return [name];
+  };
+
+  const visit = (name: string, parentChain: string[]): void => {
+    const entryKey = entryKeyFor(name, parentChain);
+    if (visited.has(entryKey)) {
+      return;
+    }
+    visited.add(entryKey);
+
+    const entry = packages[entryKey];
+    if (!Array.isArray(entry)) {
+      return;
+    }
     const resolution = entry.at(0);
     if (typeof resolution !== "string") {
-      throw new TypeError(`bun.lock package ${name} has no resolution`);
+      throw new TypeError(`bun.lock package ${entryKey} has no resolution`);
     }
+
+    // The chain that reproduces this entry's key, so children resolve their
+    // own consumer-scoped copies beneath it.
+    const childChain =
+      entryKey === name ? [name] : chainFromKey(entryKey, name, parentChain);
 
     const workspaceMarker = "@workspace:";
     const markerIndex = resolution.indexOf(workspaceMarker);
@@ -55,40 +101,33 @@ export const findExternalRuntimeWorkspacePaths = (
       const workspacePath = resolution.slice(
         markerIndex + workspaceMarker.length,
       );
-      return {
-        dependencyNames: readDependencyNames(workspaces[workspacePath]),
-        workspacePath,
-      };
+      runtimeWorkspaces.add(workspacePath);
+      for (const child of readDependencyNames(workspaces[workspacePath])) {
+        visit(child, childChain);
+      }
+      return;
     }
 
-    return {
-      dependencyNames: readDependencyNames(entry.at(2)),
-      workspacePath: undefined,
-    };
+    for (const child of readDependencyNames(entry.at(2))) {
+      visit(child, childChain);
+    }
   };
 
-  const webWorkspace = workspaces["apps/web"];
-  const queue = readDependencyNames(webWorkspace).filter(
-    (name) => resolvePackage(name)?.workspacePath === undefined,
-  );
-  const visited = new Set<string>();
-  const runtimeWorkspaces = new Set<string>();
-
-  while (queue.length > 0) {
-    const name = queue.shift();
-    if (name === undefined || visited.has(name)) {
-      continue;
+  // Seed with the web app's external dependencies only: @stll/web's own
+  // workspace dependencies are bundled into dist by Vite, so their sources
+  // never need to exist in the runner.
+  const isWorkspaceResolved = (name: string): boolean => {
+    const entry = packages[name];
+    return (
+      Array.isArray(entry) &&
+      typeof entry.at(0) === "string" &&
+      String(entry.at(0)).includes("@workspace:")
+    );
+  };
+  for (const name of readDependencyNames(workspaces["apps/web"])) {
+    if (!isWorkspaceResolved(name)) {
+      visit(name, []);
     }
-    visited.add(name);
-
-    const resolved = resolvePackage(name);
-    if (!resolved) {
-      continue;
-    }
-    if (resolved.workspacePath) {
-      runtimeWorkspaces.add(resolved.workspacePath);
-    }
-    queue.push(...resolved.dependencyNames);
   }
 
   return [...runtimeWorkspaces].sort();

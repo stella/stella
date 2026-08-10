@@ -202,9 +202,13 @@ jobs:
                 ;;
             esac
             # The runner-image filesystem boundary: anything that changes what
-            # the image ships or how its runtime closure is staged.
+            # the image ships or how its runtime closure is staged. Workspace
+            # manifests shape staging (exports maps, build scripts) and
+            # vite.config.ts decides what stays external to the SSR bundle;
+            # ordinary app-source changes are covered by web-build's cheaper
+            # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              apps/web/Dockerfile|apps/web/start-runtime.js|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              apps/web/Dockerfile|apps/web/start-runtime.js|apps/web/vite.config.ts|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac

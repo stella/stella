@@ -47,13 +47,17 @@ const SERVER_DIST_URL = new URL("dist/server/", import.meta.url);
 
 /**
  * @param {unknown} error Import failure.
- * @returns {boolean} Whether the failure is a module-resolution error.
+ * @returns {boolean} Whether the failure broke module resolution or linking.
  */
-const isResolutionError = (error) =>
+const isModuleGraphError = (error) =>
   typeof error === "object" &&
   error !== null &&
   (("name" in error && error.name === "ResolveMessage") ||
-    ("code" in error && error.code === "ERR_MODULE_NOT_FOUND"));
+    ("code" in error && error.code === "ERR_MODULE_NOT_FOUND") ||
+    // Linking failures (e.g. an import binding the resolved file does not
+    // export) surface as SyntaxError, never from evaluating browser-only
+    // code — evaluation happens after the whole subtree linked.
+    error instanceof SyntaxError);
 
 /**
  * Import the entire server module graph before accepting traffic.
@@ -65,10 +69,10 @@ const isResolutionError = (error) =>
  * a boot failure: the rollout never becomes healthy and the previous release
  * keeps serving.
  *
- * Only resolution failures are fatal. Some route chunks are browser-only and
- * throw on evaluation outside a browser (e.g. module-scope `window` reads);
- * ESM links the full static subtree before evaluating, so tolerating those
- * cannot hide a resolution failure.
+ * Only resolution and linking failures are fatal. Some route chunks are
+ * browser-only and throw on evaluation outside a browser (e.g. module-scope
+ * `window` reads); ESM links the full static subtree before evaluating, so
+ * tolerating those cannot hide a broken module graph.
  *
  * @returns {Promise<number>} Number of server modules resolved.
  */
@@ -92,17 +96,18 @@ const loadServerModuleGraph = async () => {
     }),
   );
   const failures = results.filter((result) => result !== null);
+  /** @param {{ chunkPath: string, error: unknown }} failure Failed chunk import. */
   const describe = ({ chunkPath, error }) =>
     `dist/server/${chunkPath}: ${error instanceof Error ? error.message : String(error)}`;
   for (const failure of failures.filter(
-    ({ error }) => !isResolutionError(error),
+    ({ error }) => !isModuleGraphError(error),
   )) {
     // eslint-disable-next-line no-console -- boot boundary; the wrapper has no logger and this must reach container logs
     console.warn(
       `server chunk threw on evaluation (browser-only chunk, tolerated) — ${describe(failure)}`,
     );
   }
-  const fatal = failures.filter(({ error }) => isResolutionError(error));
+  const fatal = failures.filter(({ error }) => isModuleGraphError(error));
   if (fatal.length > 0) {
     throw new Error(
       `server module graph failed to resolve:\n${fatal.map(describe).join("\n")}`,
