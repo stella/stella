@@ -12,10 +12,6 @@ import {
   backfillCaseLawRedactionTombstones,
 } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import {
-  BACKFILL_SK_DOCUMENTS_TASK,
-  backfillSkDocuments,
-} from "@/api/lib/scheduler/tasks/case-law-sk-documents";
-import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -67,7 +63,6 @@ const SCHEDULER_TASKS = {
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [FLOW_RUN_TASK]: runScheduledFlow,
-  [BACKFILL_SK_DOCUMENTS_TASK]: backfillSkDocuments,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
@@ -81,6 +76,14 @@ const SCHEDULER_TASKS = {
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
+
+/**
+ * Every task name this build can execute, as data: job registration retires
+ * persisted rows whose task no build code answers for anymore.
+ */
+export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(SCHEDULER_TASKS),
+);
 
 export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
   new Map<string, SchedulerTask>(Object.entries(SCHEDULER_TASKS));

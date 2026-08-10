@@ -1,17 +1,20 @@
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  REGISTERED_SCHEDULER_TASK_NAMES,
+  type RegisteredSchedulerTaskName,
+} from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
-import { BACKFILL_SK_DOCUMENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -218,15 +221,6 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   },
   {
-    // Every 15 minutes rather than nightly: the queue grows with each
-    // ingested page, and a decision sitting in it has no readable text.
-    description: "Fetch and parse PDFs for Slovak court decisions",
-    id: "caseLaw.backfillSkDocuments.quarterHourly",
-    mode: "recurring",
-    schedule: { type: "interval", everyMs: 15 * 60 * 1000 },
-    task: BACKFILL_SK_DOCUMENTS_TASK,
-  },
-  {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
     enabled: env.FEATURE_AI_MEMORY,
@@ -286,5 +280,30 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
 
   if (missing.length > 0) {
     panic(`scheduler jobs declared but not registered: ${missing.join(", ")}`);
+  }
+
+  // A persisted job whose task this build cannot run is undrivable: the
+  // scheduler would keep claiming it and executing nothing, invisibly. Rows
+  // reach that state when a deployment removes a task, because the loop
+  // above only upserts declared jobs and never retires what an older build
+  // declared. The registry is the discriminator, not the declared list, so
+  // dynamically registered jobs (scheduled flows) are untouched. Disable
+  // rather than delete: the row remains as an audit record, and a
+  // rollback's own registration re-enables it (the upsert sets `enabled`).
+  // One guarded update, so a concurrent change to a row's task or enabled
+  // state cannot be overwritten from a stale read; only rows the update
+  // actually changed are logged.
+  const retired = await rootDb
+    .update(schedulerJobs)
+    .set({ enabled: false })
+    .where(
+      and(
+        eq(schedulerJobs.enabled, true),
+        notInArray(schedulerJobs.task, [...REGISTERED_SCHEDULER_TASK_NAMES]),
+      ),
+    )
+    .returning({ id: schedulerJobs.id, task: schedulerJobs.task });
+  for (const { id, task } of retired) {
+    logger.warn("scheduler.job_retired", { jobId: id, task });
   }
 };
