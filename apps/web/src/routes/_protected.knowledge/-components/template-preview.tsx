@@ -7,8 +7,11 @@ import { TextSeparator } from "@stll/ui/components/separator";
 
 import { optionalArray } from "@/lib/arrays";
 import { templatePreviewOptions } from "@/lib/knowledge/queries";
-import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
+import { BLOCK_DIRECTIVE_LAYOUT } from "@/routes/_protected.knowledge/-components/directive-kinds";
+import type {
+  BlockDirectiveFamily,
+  BlockDirectiveKind,
+} from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
   DirectiveLabel,
   HighlightedText,
@@ -45,11 +48,8 @@ type BlockSpan = {
   startIdx: number;
   endIdx: number;
   depth: number;
-  isConditional: boolean;
+  family: BlockDirectiveFamily;
 };
-
-const OPENERS: ReadonlySet<BlockDirectiveKind> = new Set(["if", "each"]);
-const CLOSERS: ReadonlySet<BlockDirectiveKind> = new Set(["endif", "endeach"]);
 
 /**
  * Compute per-paragraph depths and block spans (for
@@ -60,7 +60,11 @@ const computeLayout = (
 ): { depths: number[]; blockSpans: BlockSpan[] } => {
   const depths: number[] = [];
   const blockSpans: BlockSpan[] = [];
-  const stack: { idx: number; depth: number; conditional: boolean }[] = [];
+  const stack: {
+    idx: number;
+    depth: number;
+    family: BlockDirectiveFamily;
+  }[] = [];
   let depth = 0;
 
   for (const [i, p] of paragraphs.entries()) {
@@ -70,31 +74,39 @@ const computeLayout = (
     }
 
     const kind = p.directiveKind;
+    if (!kind) {
+      depths.push(depth);
+      continue;
+    }
 
-    if (kind && OPENERS.has(kind)) {
-      depths.push(depth);
-      stack.push({
-        idx: i,
-        depth,
-        conditional: kind === "if",
-      });
-      depth = Math.min(depth + 1, MAX_DEPTH);
-    } else if (kind === "elseif" || kind === "else") {
-      depths.push(Math.max(depth - 1, 0));
-    } else if (kind && CLOSERS.has(kind)) {
-      depth = Math.max(depth - 1, 0);
-      depths.push(depth);
-      const open = stack.pop();
-      if (open) {
-        blockSpans.push({
-          startIdx: open.idx,
-          endIdx: i,
-          depth: open.depth,
-          isConditional: open.conditional,
-        });
+    const layout = BLOCK_DIRECTIVE_LAYOUT[kind];
+    switch (layout.type) {
+      case "opener":
+        depths.push(depth);
+        stack.push({ idx: i, depth, family: layout.family });
+        depth = Math.min(depth + 1, MAX_DEPTH);
+        break;
+      case "branch":
+        depths.push(Math.max(depth - 1, 0));
+        break;
+      case "closer": {
+        depth = Math.max(depth - 1, 0);
+        depths.push(depth);
+        const open = stack.pop();
+        if (open) {
+          blockSpans.push({
+            startIdx: open.idx,
+            endIdx: i,
+            depth: open.depth,
+            family: open.family,
+          });
+        }
+        break;
       }
-    } else {
-      depths.push(depth);
+      default: {
+        const exhaustive: never = layout;
+        return exhaustive;
+      }
     }
   }
 
@@ -168,7 +180,7 @@ const ConnectorLines = ({
     {activeSpans.map((span) => (
       <div
         className={`absolute top-0 bottom-0 w-px ${
-          span.isConditional
+          span.family === "conditional"
             ? "bg-foreground/30 dark:bg-foreground-strong-muted"
             : "bg-success/30 dark:bg-success/50"
         }`}
@@ -197,7 +209,8 @@ const PreviewParagraph = ({
     : undefined;
 
   if (paragraph.isDirective && paragraph.directiveKind) {
-    const isConditional = CONDITIONAL_KINDS.includes(paragraph.directiveKind);
+    const isConditional =
+      BLOCK_DIRECTIVE_LAYOUT[paragraph.directiveKind].family === "conditional";
 
     return (
       <div className="relative">
