@@ -2,17 +2,24 @@ import * as v from "valibot";
 
 import type { OfficeCitationLocator } from "@stll/api-contract";
 
+import {
+  OFFICE_EVIDENCE_FORMAT,
+  OFFICE_EVIDENCE_STATUS,
+  OFFICE_EVIDENCE_UNAVAILABLE_CODE,
+  type OfficeEvidenceFormat,
+  type OfficeEvidenceUnavailableCode,
+} from "@/api/lib/files/office-evidence-domain";
 import { LIMITS } from "@/api/lib/limits";
 
+export {
+  OFFICE_EVIDENCE_FORMAT,
+  OFFICE_EVIDENCE_STATUS,
+  OFFICE_EVIDENCE_UNAVAILABLE_CODE,
+  type OfficeEvidenceFormat,
+  type OfficeEvidenceUnavailableCode,
+};
+
 export const OFFICE_EVIDENCE_PARSER_VERSION = 1;
-
-export const OFFICE_EVIDENCE_FORMAT = {
-  pptx: "pptx",
-  xlsx: "xlsx",
-} as const;
-
-export type OfficeEvidenceFormat =
-  (typeof OFFICE_EVIDENCE_FORMAT)[keyof typeof OFFICE_EVIDENCE_FORMAT];
 
 export type OfficeEvidenceBlock =
   | PptxOfficeEvidenceBlock
@@ -31,20 +38,26 @@ export type XlsxOfficeEvidenceBlock = {
 };
 
 export type OfficeEvidencePayload =
-  | { blocks: PptxOfficeEvidenceBlock[]; format: "pptx"; version: 1 }
-  | { blocks: XlsxOfficeEvidenceBlock[]; format: "xlsx"; version: 1 };
-
-export const OFFICE_EVIDENCE_UNAVAILABLE_CODE = {
-  parseFailed: "parse_failed",
-  resourceLimit: "resource_limit",
-} as const;
-
-export type OfficeEvidenceUnavailableCode =
-  (typeof OFFICE_EVIDENCE_UNAVAILABLE_CODE)[keyof typeof OFFICE_EVIDENCE_UNAVAILABLE_CODE];
+  | {
+      blocks: PptxOfficeEvidenceBlock[];
+      format: typeof OFFICE_EVIDENCE_FORMAT.pptx;
+      version: 1;
+    }
+  | {
+      blocks: XlsxOfficeEvidenceBlock[];
+      format: typeof OFFICE_EVIDENCE_FORMAT.xlsx;
+      version: 1;
+    };
 
 export type OfficeEvidenceWorkerResult =
-  | { payload: OfficeEvidencePayload; status: "available" }
-  | { errorCode: OfficeEvidenceUnavailableCode; status: "unavailable" };
+  | {
+      payload: OfficeEvidencePayload;
+      status: typeof OFFICE_EVIDENCE_STATUS.available;
+    }
+  | {
+      errorCode: OfficeEvidenceUnavailableCode;
+      status: typeof OFFICE_EVIDENCE_STATUS.unavailable;
+    };
 
 const pptxBlockIdSchema = v.pipe(v.string(), v.regex(/^pptx-[0-9a-f]{16}$/u));
 const xlsxBlockIdSchema = v.pipe(v.string(), v.regex(/^xlsx-[0-9a-f]{16}$/u));
@@ -85,7 +98,7 @@ export const officeEvidencePayloadSchema = v.variant("format", [
       v.array(pptxBlockSchema),
       v.maxLength(LIMITS.officeCitationBlocksMax),
     ),
-    format: v.literal("pptx"),
+    format: v.literal(OFFICE_EVIDENCE_FORMAT.pptx),
     version: v.literal(1),
   }),
   v.object({
@@ -93,7 +106,7 @@ export const officeEvidencePayloadSchema = v.variant("format", [
       v.array(xlsxBlockSchema),
       v.maxLength(LIMITS.officeCitationBlocksMax),
     ),
-    format: v.literal("xlsx"),
+    format: v.literal(OFFICE_EVIDENCE_FORMAT.xlsx),
     version: v.literal(1),
   }),
 ]);
@@ -103,12 +116,12 @@ const unavailableResultSchema = v.object({
     v.literal(OFFICE_EVIDENCE_UNAVAILABLE_CODE.parseFailed),
     v.literal(OFFICE_EVIDENCE_UNAVAILABLE_CODE.resourceLimit),
   ]),
-  status: v.literal("unavailable"),
+  status: v.literal(OFFICE_EVIDENCE_STATUS.unavailable),
 });
 
 const availableResultSchema = v.object({
   payload: officeEvidencePayloadSchema,
-  status: v.literal("available"),
+  status: v.literal(OFFICE_EVIDENCE_STATUS.available),
 });
 
 export const officeEvidenceWorkerResultSchema = v.variant("status", [

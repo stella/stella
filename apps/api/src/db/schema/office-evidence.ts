@@ -1,6 +1,13 @@
 import { sql } from "drizzle-orm";
 
 import {
+  OFFICE_EVIDENCE_FORMATS,
+  OFFICE_EVIDENCE_STATUSES,
+  OFFICE_EVIDENCE_STATUS,
+  OFFICE_EVIDENCE_UNAVAILABLE_CODES,
+} from "@/api/lib/files/office-evidence-domain";
+
+import {
   bytea,
   organization,
   p,
@@ -13,11 +20,15 @@ import {
 import { workspaces } from "./contacts";
 import { entities, entityVersions, fields } from "./entities";
 
-export const OFFICE_FILE_EVIDENCE_FORMATS = ["xlsx", "pptx"] as const;
-export const OFFICE_FILE_EVIDENCE_STATUSES = [
-  "available",
-  "unavailable",
-] as const;
+const unavailableCodeSql = sql.join(
+  OFFICE_EVIDENCE_UNAVAILABLE_CODES.map((code) => sql.raw(`'${code}'`)),
+  sql.raw(","),
+);
+const processingStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.processing}'`);
+const availableStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.available}'`);
+const unavailableStatusSql = sql.raw(
+  `'${OFFICE_EVIDENCE_STATUS.unavailable}'`,
+);
 
 export const officeFileEvidence = p.pgTable(
   "office_file_evidence",
@@ -35,9 +46,11 @@ export const officeFileEvidence = p.pgTable(
     fieldId: safeUuid<"field">("field_id").notNull(),
     sourceFileId: p.uuid("source_file_id").notNull(),
     sourceSha256Hex: p.varchar("source_sha256_hex", { length: 64 }).notNull(),
-    format: p.text("format", { enum: OFFICE_FILE_EVIDENCE_FORMATS }).notNull(),
+    format: p.text("format", { enum: OFFICE_EVIDENCE_FORMATS }).notNull(),
     parserVersion: p.integer("parser_version").notNull(),
-    status: p.text("status", { enum: OFFICE_FILE_EVIDENCE_STATUSES }).notNull(),
+    status: p.text("status", { enum: OFFICE_EVIDENCE_STATUSES }).notNull(),
+    claimToken: p.uuid("claim_token"),
+    claimExpiresAt: timestamptz("claim_expires_at"),
     payloadCiphertext: bytea("payload_ciphertext"),
     payloadIv: bytea("payload_iv"),
     blockCount: p.integer("block_count").notNull(),
@@ -74,11 +87,17 @@ export const officeFileEvidence = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "office_file_evidence_format_check",
-      sql`${table.format} IN ('xlsx', 'pptx')`,
+      sql`${table.format} IN (${sql.join(
+        OFFICE_EVIDENCE_FORMATS.map((format) => sql.raw(`'${format}'`)),
+        sql.raw(","),
+      )})`,
     ),
     p.check(
       "office_file_evidence_status_check",
-      sql`${table.status} IN ('available', 'unavailable')`,
+      sql`${table.status} IN (${sql.join(
+        OFFICE_EVIDENCE_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql.raw(","),
+      )})`,
     ),
     p.check(
       "office_file_evidence_parser_version_check",
@@ -95,16 +114,28 @@ export const officeFileEvidence = p.pgTable(
     p.check(
       "office_file_evidence_payload_state_check",
       sql`(
-        ${table.status} = 'available'
+        ${table.status} = ${processingStatusSql}
+        AND ${table.claimToken} IS NOT NULL
+        AND ${table.claimExpiresAt} IS NOT NULL
+        AND ${table.payloadCiphertext} IS NULL
+        AND ${table.payloadIv} IS NULL
+        AND ${table.blockCount} = 0
+        AND ${table.errorCode} IS NULL
+      ) OR (
+        ${table.status} = ${availableStatusSql}
+        AND ${table.claimToken} IS NULL
+        AND ${table.claimExpiresAt} IS NULL
         AND ${table.payloadCiphertext} IS NOT NULL
         AND ${table.payloadIv} IS NOT NULL
         AND ${table.errorCode} IS NULL
       ) OR (
-        ${table.status} = 'unavailable'
+        ${table.status} = ${unavailableStatusSql}
+        AND ${table.claimToken} IS NULL
+        AND ${table.claimExpiresAt} IS NULL
         AND ${table.payloadCiphertext} IS NULL
         AND ${table.payloadIv} IS NULL
         AND ${table.blockCount} = 0
-        AND ${table.errorCode} IN ('parse_failed', 'resource_limit')
+        AND ${table.errorCode} IN (${unavailableCodeSql})
       )`,
     ),
     ...wsOrganizationPolicies("office_file_evidence"),

@@ -10,6 +10,7 @@ import {
 
 import {
   OFFICE_EVIDENCE_FORMAT,
+  OFFICE_EVIDENCE_STATUS,
   OFFICE_EVIDENCE_UNAVAILABLE_CODE,
   type OfficeEvidenceFormat,
   type OfficeEvidencePayload,
@@ -143,7 +144,11 @@ const extractXlsxBlocks = async (
           .join(" | ")
           .slice(0, LIMITS.officeCitationBlockTextMaxChars);
         blocks.push({
-          id: createBlockId("xlsx", `${String(sheetIndex)}:${range}`, text),
+          id: createBlockId(
+            OFFICE_EVIDENCE_FORMAT.xlsx,
+            `${String(sheetIndex)}:${range}`,
+            text,
+          ),
           locator: {
             type: "xlsx",
             range,
@@ -171,12 +176,12 @@ const extractXlsxBlocks = async (
       flush();
 
       if (blocks.length >= LIMITS.officeCitationBlocksMax) {
-        return { blocks, format: "xlsx", version: 1 };
+        return { blocks, format: OFFICE_EVIDENCE_FORMAT.xlsx, version: 1 };
       }
     }
   }
 
-  return { blocks, format: "xlsx", version: 1 };
+  return { blocks, format: OFFICE_EVIDENCE_FORMAT.xlsx, version: 1 };
 };
 
 const textBodyText = (textBody: PresentationTextBody): string =>
@@ -220,9 +225,6 @@ const slideText = (
       }
     }
   }
-  if (slide.notes) {
-    parts.push(slide.notes);
-  }
   return normalizeText(parts.join("\n"));
 };
 
@@ -242,7 +244,11 @@ const extractPptxBlocks = async (
       continue;
     }
     blocks.push({
-      id: createBlockId("pptx", String(slideIndex), text),
+      id: createBlockId(
+        OFFICE_EVIDENCE_FORMAT.pptx,
+        String(slideIndex),
+        text,
+      ),
       locator: { type: "pptx", slideIndex },
       text,
     });
@@ -250,7 +256,7 @@ const extractPptxBlocks = async (
       break;
     }
   }
-  return { blocks, format: "pptx", version: 1 };
+  return { blocks, format: OFFICE_EVIDENCE_FORMAT.pptx, version: 1 };
 };
 
 const classifyFailure = (error: unknown) => {
@@ -283,13 +289,13 @@ const main = async (): Promise<void> => {
         : await extractPptxBlocks(bytes);
     const result = {
       payload,
-      status: "available",
+      status: OFFICE_EVIDENCE_STATUS.available,
     } as const satisfies OfficeEvidenceWorkerResult;
     process.stdout.write(JSON.stringify(result));
   } catch (error) {
     const result = {
       errorCode: classifyFailure(error),
-      status: "unavailable",
+      status: OFFICE_EVIDENCE_STATUS.unavailable,
     } as const satisfies OfficeEvidenceWorkerResult;
     process.stdout.write(JSON.stringify(result));
   }

@@ -12,6 +12,8 @@ CREATE TABLE "office_file_evidence" (
   "format" text NOT NULL,
   "parser_version" integer NOT NULL,
   "status" text NOT NULL,
+  "claim_token" uuid,
+  "claim_expires_at" timestamptz,
   "payload_ciphertext" bytea,
   "payload_iv" bytea,
   "block_count" integer NOT NULL,
@@ -21,7 +23,7 @@ CREATE TABLE "office_file_evidence" (
   CONSTRAINT "office_file_evidence_format_check"
     CHECK ("format" IN ('xlsx', 'pptx')),
   CONSTRAINT "office_file_evidence_status_check"
-    CHECK ("status" IN ('available', 'unavailable')),
+    CHECK ("status" IN ('processing', 'available', 'unavailable')),
   CONSTRAINT "office_file_evidence_parser_version_check"
     CHECK ("parser_version" > 0),
   CONSTRAINT "office_file_evidence_block_count_check"
@@ -30,12 +32,24 @@ CREATE TABLE "office_file_evidence" (
     CHECK ("source_sha256_hex" ~ '^[0-9a-f]{64}$'),
   CONSTRAINT "office_file_evidence_payload_state_check" CHECK (
     (
+      "status" = 'processing'
+      AND "claim_token" IS NOT NULL
+      AND "claim_expires_at" IS NOT NULL
+      AND "payload_ciphertext" IS NULL
+      AND "payload_iv" IS NULL
+      AND "block_count" = 0
+      AND "error_code" IS NULL
+    ) OR (
       "status" = 'available'
+      AND "claim_token" IS NULL
+      AND "claim_expires_at" IS NULL
       AND "payload_ciphertext" IS NOT NULL
       AND "payload_iv" IS NOT NULL
       AND "error_code" IS NULL
     ) OR (
       "status" = 'unavailable'
+      AND "claim_token" IS NULL
+      AND "claim_expires_at" IS NULL
       AND "payload_ciphertext" IS NULL
       AND "payload_iv" IS NULL
       AND "block_count" = 0

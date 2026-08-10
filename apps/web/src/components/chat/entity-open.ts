@@ -191,6 +191,10 @@ const openFileCitationSource = ({
   workspaceId: string;
 }): void => {
   const inspector = useInspectorTabsStore.getState();
+  const sameAsMainRoute = isEntityActiveInMainRoute(
+    source.entityId,
+    workspaceId,
+  );
   inspector.openFile({
     id: source.fieldId,
     entityId: source.entityId,
@@ -200,6 +204,7 @@ const openFileCitationSource = ({
     pdfFileId: source.pdfFileId,
     propertyId: source.propertyId,
     workspaceId,
+    ...(sameAsMainRoute ? { metadataLane: "expanded" as const } : {}),
   });
   inspector.setFileFacet(source.fieldId, "preview");
 };

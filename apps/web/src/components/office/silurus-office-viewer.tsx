@@ -93,27 +93,54 @@ export const SilurusOfficeFileViewer = ({
 }: SilurusOfficeFileViewerProps) => {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const viewerRef = useRef<OfficeNavigationViewer | null>(null);
+  const viewerReadyRef = useRef(false);
+  const navigationGenerationRef = useRef(0);
+  const navigationQueueRef = useRef(Promise.resolve());
+  const enqueueNavigation = useLatestCallback(
+    (
+      viewer: OfficeNavigationViewer,
+      request: OfficeViewerNavigationRequest,
+    ) => {
+      navigationGenerationRef.current += 1;
+      const generation = navigationGenerationRef.current;
+      const previous = navigationQueueRef.current;
+      const navigation = previous.then(async () => {
+        if (generation !== navigationGenerationRef.current) {
+          return;
+        }
+        const applied = await applyOfficeNavigation(
+          viewer,
+          request.locator,
+          () => generation === navigationGenerationRef.current,
+        );
+        if (applied && generation === navigationGenerationRef.current) {
+          onNavigationApplied?.(request.sequence);
+        }
+      });
+      const observed = navigation.catch((error) => {
+        if (generation === navigationGenerationRef.current) {
+          onError?.(toError(error));
+        }
+      });
+      navigationQueueRef.current = observed;
+      detached(observed, "SilurusOfficeFileViewer.navigation");
+    },
+  );
   const navigateToLatestRequest = useLatestCallback(
-    async (viewer: OfficeNavigationViewer) => {
+    (viewer: OfficeNavigationViewer) => {
       if (navigationRequest) {
-        await applyOfficeNavigation(viewer, navigationRequest.locator);
-        onNavigationApplied?.(navigationRequest.sequence);
+        enqueueNavigation(viewer, navigationRequest);
       }
     },
   );
 
   useExternalSyncEffect(() => {
     const viewer = viewerRef.current;
-    if (!viewer || !navigationRequest) {
+    if (!viewer || !viewerReadyRef.current || !navigationRequest) {
       return;
     }
-    detached(
-      applyOfficeNavigation(viewer, navigationRequest.locator)
-        .then(() => onNavigationApplied?.(navigationRequest.sequence))
-        .catch((error) => onError?.(toError(error))),
-      "SilurusOfficeFileViewer.navigation",
-    );
-  }, [navigationRequest, onError, onNavigationApplied]);
+    enqueueNavigation(viewer, navigationRequest);
+  }, [enqueueNavigation, navigationRequest]);
 
   useExternalSyncEffect(() => {
     if (!container) {
@@ -262,10 +289,11 @@ export const SilurusOfficeFileViewer = ({
         viewerRef.current = { format: "pptx", viewer: pptxViewer };
         await pptxViewer.load(documentBuffer.slice(0));
       }
+      viewerReadyRef.current = true;
       reportReady();
       const navigationViewer = viewerRef.current;
       if (navigationViewer) {
-        await navigateToLatestRequest(navigationViewer);
+        navigateToLatestRequest(navigationViewer);
       }
     };
 
@@ -273,6 +301,9 @@ export const SilurusOfficeFileViewer = ({
 
     return () => {
       disposed = true;
+      viewerReadyRef.current = false;
+      navigationGenerationRef.current += 1;
+      navigationQueueRef.current = Promise.resolve();
       selectionRequest += 1;
       finishSpreadsheetLoad();
       viewerRef.current = null;
@@ -284,9 +315,9 @@ export const SilurusOfficeFileViewer = ({
     container,
     documentBuffer,
     format,
+    enqueueNavigation,
     navigateToLatestRequest,
     onError,
-    onNavigationApplied,
     onSpreadsheetSelectionChange,
     onStatusChange,
     presentationPaddingBottomPx,
@@ -320,16 +351,25 @@ type OfficeNavigationViewer =
 const applyOfficeNavigation = async (
   target: OfficeNavigationViewer,
   locator: OfficeCitationLocator,
-): Promise<void> => {
+  isCurrent: () => boolean,
+): Promise<boolean> => {
+  if (!isCurrent()) {
+    return false;
+  }
   if (target.format === "pptx" && locator.type === "pptx") {
     target.viewer.scrollToSlide(locator.slideIndex, { behavior: "smooth" });
-    return;
+    return true;
   }
   if (target.format === "xlsx" && locator.type === "xlsx") {
     await target.viewer.goToSheet(locator.sheetIndex);
+    if (!isCurrent()) {
+      return false;
+    }
     target.viewer.select(locator.range);
     await target.viewer.scrollToCell(locator.range);
+    return isCurrent();
   }
+  return false;
 };
 
 const findWorksheetCell = (

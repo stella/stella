@@ -1163,9 +1163,8 @@ const buildActiveOfficeCitationPrompt = (
     return "";
   }
 
-  const blocks = snapshot.blocks.map(({ id, locator, text }) => ({
+  const blocks = snapshot.blocks.map(({ id, text }) => ({
     blockId: id,
-    locator,
     text: sanitizePromptBlock({
       maxLength: 1000,
       text,
