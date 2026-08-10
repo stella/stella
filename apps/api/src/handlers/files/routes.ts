@@ -3,9 +3,9 @@ import Elysia, { t } from "elysia";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 
+import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
-import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -23,6 +23,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const readFileEndpoint = createSafeHandler(
   {
@@ -149,6 +150,7 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({
+    memberRole,
     params: { fieldId },
     scopedDb,
     session,
@@ -159,6 +161,9 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
       Result.tryPromise(
         async () =>
           await readDocumentProperties({
+            canUpdateEntity: hasMemberPermission(memberRole, {
+              entity: ["update"],
+            }),
             fieldId,
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
@@ -348,7 +353,6 @@ export const filesRoute = new Elysia({
     updateDocumentPropertiesEndpoint.handler,
     {
       body: updateDocumentPropertiesEndpoint.config.body,
-      invalidateQuery: true,
       params: updateDocumentPropertiesEndpoint.config.params,
       permissions: updateDocumentPropertiesEndpoint.config.permissions,
     },

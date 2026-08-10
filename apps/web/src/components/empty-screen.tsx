@@ -52,6 +52,9 @@ export const EmptyScreen = ({
   const sizeClass = hasMedia
     ? "min-h-[520px] flex-1 px-6 py-12"
     : "min-h-0 px-4 py-12 sm:py-16";
+  const helpBarPaddingClass = showHelpBar
+    ? "[@media(min-height:820px)]:pb-28"
+    : undefined;
   let layoutClass = "items-center justify-center";
 
   if (hasMedia && isBottomMedia) {
@@ -111,6 +114,7 @@ export const EmptyScreen = ({
         "relative flex flex-col overflow-hidden",
         sizeClass,
         layoutClass,
+        helpBarPaddingClass,
         className,
       )}
     >

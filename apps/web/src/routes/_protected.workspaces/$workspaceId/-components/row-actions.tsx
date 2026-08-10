@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { hasDocumentProperties } from "@stll/api-contract";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -114,6 +113,7 @@ import {
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
+  canDownloadScrubbed,
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFileName,
@@ -341,8 +341,7 @@ export const RowActions = ({
   }
   // Only formats whose embedded metadata the API can actually strip; offering
   // the action on a file it would refuse is worse than not offering it.
-  const canScrub =
-    !isBulk && file !== null && hasDocumentProperties(file.mimeType);
+  const canScrub = !isBulk && file !== null && canDownloadScrubbed(file);
   const hasDownloadVariants =
     !isBulk &&
     (hasPdfConversion || canScrub || exportableOcrSources.length > 0);

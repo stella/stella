@@ -3,6 +3,7 @@ import { status } from "elysia";
 
 import {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
+  DOCUMENT_PROPERTIES_MAX_BYTES,
   documentContainerFormat,
 } from "@stll/api-contract";
 import type { AuthoredDocumentPropertyKey } from "@stll/api-contract";
@@ -12,10 +13,7 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
-import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
-  writeDocumentProperties,
-} from "@/api/lib/files/document-properties";
+import { writeDocumentProperties } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -80,7 +78,11 @@ export const updateDocumentProperties = async ({
 
   const rows = await scopedDb((tx) =>
     tx
-      .select({ content: fields.content, entityId: entities.id })
+      .select({
+        content: fields.content,
+        entityId: entities.id,
+        entityVersionId: entityVersions.id,
+      })
       .from(fields)
       .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
       .innerJoin(
@@ -92,7 +94,13 @@ export const updateDocumentProperties = async ({
       )
       // Matches the read path: a tombstoned version's bytes are retained under
       // legal hold but must stay unreachable, and unwritable.
-      .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
+      .where(
+        and(
+          eq(fields.id, fieldId),
+          eq(fields.entityVersionId, entities.currentVersionId),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
       .limit(1),
   );
 
@@ -114,7 +122,7 @@ export const updateDocumentProperties = async ({
   }
 
   const bytes = await withTimeout(
-    async () =>
+    async (signal) =>
       await readS3ArrayBuffer(
         createFileKey({
           organizationId,
@@ -122,6 +130,7 @@ export const updateDocumentProperties = async ({
           fileId: content.id,
           mimeType: content.mimeType,
         }),
+        signal,
       ),
     {
       label: "Document properties storage read",
@@ -150,12 +159,13 @@ export const updateDocumentProperties = async ({
     recordAuditEvent,
     safeDb,
     source: null,
+    scanWarnings: content.scanWarnings,
     userId,
     workspaceId,
-    // Not `automatic-docx-edit`: that policy fences an AI edit against the
-    // version it was computed from. This rewrites the current file's own
-    // properties, so replacing whatever is current is the correct semantics.
-    writePolicy: { type: "replace-current-file" },
+    writePolicy: {
+      type: "replace-current-file-from-version",
+      expectedCurrentVersionId: row.entityVersionId,
+    },
   });
 
   if (result.isErr()) {

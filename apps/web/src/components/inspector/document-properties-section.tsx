@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -12,6 +13,7 @@ import {
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
 } from "@stll/api-contract";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -19,6 +21,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import { documentPropertiesQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { documentPropertiesOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
@@ -103,6 +106,7 @@ export const DocumentPropertiesSection = ({
 }: DocumentPropertiesSectionProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const [isAllOpen, setIsAllOpen] = useState(false);
   const { data, isPending, isError } = useQuery(
     documentPropertiesOptions({ workspaceId, fieldId: fileFieldId }),
   );
@@ -190,6 +194,7 @@ export const DocumentPropertiesSection = ({
       {property.kind === "editable" ? (
         <EditablePropertyValue
           fileFieldId={fileFieldId}
+          label={t(PROPERTY_LABEL_KEYS[property.key])}
           propertyKey={property.key}
           value={property.value}
           workspaceId={workspaceId}
@@ -206,11 +211,16 @@ export const DocumentPropertiesSection = ({
     <div className="flex flex-col gap-px px-2 pb-2">
       {headline.map((property) => row(property))}
       {rest.length > 0 && (
-        <details className="group/all">
+        <details
+          className="group/all"
+          onToggle={(event) => setIsAllOpen(event.currentTarget.open)}
+          open={isAllOpen}
+        >
           <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1 rounded-md px-2 py-2 text-xs font-medium">
-            <ChevronRightIcon
-              aria-hidden="true"
+            <DirectionalIcon
               className="size-3 shrink-0 transition-transform group-open/all:rotate-90"
+              flip={!isAllOpen}
+              icon={ChevronRightIcon}
             />
             {t("common.showAll")}
           </summary>
@@ -251,6 +261,7 @@ const applicationWithVersion = (
 
 type EditablePropertyValueProps = {
   fileFieldId: string;
+  label: string;
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
   workspaceId: string;
@@ -263,6 +274,7 @@ type EditablePropertyValueProps = {
  */
 const EditablePropertyValue = ({
   fileFieldId,
+  label,
   propertyKey,
   value,
   workspaceId,
@@ -277,22 +289,19 @@ const EditablePropertyValue = ({
       return;
     }
     setSaving(true);
-    // `queryKey` is required by the route's invalidateQuery macro, which tells
-    // every other client the document changed; without it the request is
-    // rejected at validation before the handler runs.
-    const { error } = await api
-      .files({ workspaceId })
-      ["document-properties"]({ fieldId: fileFieldId })
-      .patch({
-        queryKey: documentPropertiesQueryKey({
-          workspaceId,
-          fieldId: fileFieldId,
-        }),
-        [propertyKey]: draft,
-      });
+    const result = await Result.tryPromise(async () =>
+      unwrapEden(
+        await api
+          .files({ workspaceId })
+          ["document-properties"]({ fieldId: fileFieldId })
+          .patch({
+            [propertyKey]: draft,
+          }),
+      ),
+    );
     setSaving(false);
 
-    if (error) {
+    if (Result.isError(result)) {
       setDraft(value);
       stellaToast.add({
         title: t("inspector.metadata.documentProperties.saveFailed"),
@@ -300,11 +309,18 @@ const EditablePropertyValue = ({
       });
       return;
     }
-    await queryClient.invalidateQueries();
+    await queryClient.invalidateQueries({
+      exact: true,
+      queryKey: documentPropertiesQueryKey({
+        workspaceId,
+        fieldId: fileFieldId,
+      }),
+    });
   };
 
   return (
     <Input
+      aria-label={label}
       className="h-7 text-sm"
       disabled={saving}
       onBlur={() => {

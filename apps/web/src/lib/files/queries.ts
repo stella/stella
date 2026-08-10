@@ -1,9 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import * as v from "valibot";
 
-import type { EmailTextAttachmentCharset } from "@stll/api-contract";
-
-import type { DocumentPropertiesResult } from "@stll/api-contract";
+import type {
+  DocumentPropertiesResult,
+  EmailTextAttachmentCharset,
+} from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -292,6 +293,7 @@ export const saveEmailAttachment = async ({
  */
 export const documentPropertiesOptions = (props: FileOptionsProps) =>
   queryOptions({
+    gcTime: Number.POSITIVE_INFINITY,
     queryKey: filesKeys.documentPropertiesByFieldId(props),
     queryFn: async ({ signal }): Promise<DocumentPropertiesResult> => {
       const response = await api
@@ -301,6 +303,7 @@ export const documentPropertiesOptions = (props: FileOptionsProps) =>
 
       return unwrapEden(response);
     },
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
 export const textFileOptions = (props: FileOptionsProps) =>

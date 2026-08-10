@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
+  canDownloadScrubbed,
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFormats,
@@ -11,6 +14,39 @@ import {
   hasOcrExport,
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+
+describe("scrubbed download eligibility", () => {
+  test("rejects files the server cannot scrub", () => {
+    expect(
+      canDownloadScrubbed({
+        encrypted: false,
+        mimeType: "application/pdf",
+        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES,
+      }),
+    ).toBe(true);
+    expect(
+      canDownloadScrubbed({
+        encrypted: true,
+        mimeType: "application/pdf",
+        sizeBytes: 1,
+      }),
+    ).toBe(false);
+    expect(
+      canDownloadScrubbed({
+        encrypted: false,
+        mimeType: "application/pdf",
+        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES + 1,
+      }),
+    ).toBe(false);
+    expect(
+      canDownloadScrubbed({
+        encrypted: false,
+        mimeType: "text/plain",
+        sizeBytes: 1,
+      }),
+    ).toBe(false);
+  });
+});
 
 const firstPropertyId = toSafeId<"property">("property-first");
 const selectedPropertyId = toSafeId<"property">("property-selected");

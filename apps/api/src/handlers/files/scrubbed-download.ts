@@ -1,7 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
-import { hasDocumentProperties } from "@stll/api-contract";
+import {
+  DOCUMENT_PROPERTIES_MAX_BYTES,
+  hasDocumentProperties,
+} from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -9,10 +12,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
-  scrubDocumentProperties,
-} from "@/api/lib/files/document-properties";
+import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
@@ -78,7 +78,7 @@ export const readScrubbedDownload = async ({
   }
 
   const bytes = await withTimeout(
-    async () =>
+    async (signal) =>
       await readS3ArrayBuffer(
         createFileKey({
           organizationId,
@@ -86,6 +86,7 @@ export const readScrubbedDownload = async ({
           fileId: content.id,
           mimeType: content.mimeType,
         }),
+        signal,
       ),
     {
       label: "Scrubbed download storage read",

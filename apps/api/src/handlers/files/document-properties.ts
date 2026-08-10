@@ -1,7 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
-import { hasDocumentProperties } from "@stll/api-contract";
+import {
+  DOCUMENT_PROPERTIES_MAX_BYTES,
+  hasDocumentProperties,
+} from "@stll/api-contract";
 import type { DocumentPropertiesResult } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -10,7 +13,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
+  constrainDocumentPropertiesEditability,
   extractDocumentProperties,
 } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -20,6 +23,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 const DOCUMENT_PROPERTIES_READ_TIMEOUT_MS = 30 * 1000;
 
 type ReadDocumentPropertiesOptions = {
+  canUpdateEntity: boolean;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
@@ -37,6 +41,7 @@ type ReadDocumentPropertiesOptions = {
  * them is opened rarely and the client caches the answer for its session.
  */
 export const readDocumentProperties = async ({
+  canUpdateEntity,
   fieldId,
   organizationId,
   recordAuditEvent,
@@ -84,7 +89,7 @@ export const readDocumentProperties = async ({
   }
 
   const bytes = await withTimeout(
-    async () =>
+    async (signal) =>
       await readS3ArrayBuffer(
         createFileKey({
           organizationId,
@@ -92,6 +97,7 @@ export const readDocumentProperties = async ({
           fileId: content.id,
           mimeType: content.mimeType,
         }),
+        signal,
       ),
     {
       label: "Document properties storage read",
@@ -99,10 +105,13 @@ export const readDocumentProperties = async ({
     },
   );
 
-  const result = await extractDocumentProperties({
-    bytes,
-    mimeType: content.mimeType,
-  });
+  const result = constrainDocumentPropertiesEditability(
+    await extractDocumentProperties({
+      bytes,
+      mimeType: content.mimeType,
+    }),
+    canUpdateEntity,
+  );
 
   // Reading the properties reads the object, so it belongs in the trail
   // alongside downloads and previews.

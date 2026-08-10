@@ -122,6 +122,7 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
         mimeType: field.content.mimeType,
         encrypted: field.content.encrypted,
         pdfFileId: field.content.pdfFileId,
+        sizeBytes: field.content.sizeBytes,
       };
     }
   }

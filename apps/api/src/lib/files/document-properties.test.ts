@@ -6,6 +6,7 @@ import { DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 import type { DocumentProperty } from "@stll/api-contract";
 
 import {
+  constrainDocumentPropertiesEditability,
   extractDocumentProperties,
   scrubDocumentProperties,
   writeDocumentProperties,
@@ -24,6 +25,17 @@ const toArrayBuffer = (source: Uint8Array): ArrayBuffer => {
 
 const zipOf = async (entries: Record<string, string>): Promise<ArrayBuffer> => {
   const zip = new JSZip();
+  for (const [path, body] of Object.entries(entries)) {
+    zip.file(path, body);
+  }
+  return toArrayBuffer(await zip.generateAsync({ type: "uint8array" }));
+};
+
+const odfZipOf = async (
+  entries: Record<string, string>,
+): Promise<ArrayBuffer> => {
+  const zip = new JSZip();
+  zip.file("mimetype", ODT_MIME_TYPE, { compression: "STORE" });
   for (const [path, body] of Object.entries(entries)) {
     zip.file(path, body);
   }
@@ -139,6 +151,22 @@ describe("extractDocumentProperties (OOXML)", () => {
     );
 
     expect(properties).toEqual([]);
+  });
+
+  it("does not apply property-size limits to unrelated document content", async () => {
+    const properties = await availableProperties(
+      await zipOf({
+        "docProps/core.xml": CORE_XML,
+        "docProps/app.xml": APP_XML,
+        "word/document.xml": "x".repeat(2 * 1024 * 1024 + 1),
+      }),
+      DOCX_MIME_TYPE,
+    );
+
+    expect(valueOf(properties, "author")).toEqual({
+      type: "text",
+      value: "Jane Novak & Co.",
+    });
   });
 });
 
@@ -265,12 +293,14 @@ describe("scrubDocumentProperties", () => {
     });
   });
 
-  it("leaves docProps/custom.xml alone so stella's own stamp survives", async () => {
+  it("preserves only stella provenance properties in custom.xml", async () => {
     const custom =
-      '<?xml version="1.0"?><Properties><property name="stella_dms_ref">' +
-      "<vt:lpwstr>2026/001/015.v3</vt:lpwstr></property></Properties>";
+      '<?xml version="1.0"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">' +
+      '<property name="stella-ref"><vt:lpwstr>2026/001/015.v3</vt:lpwstr></property>' +
+      '<property name="client"><vt:lpwstr>Secret Client</vt:lpwstr></property></Properties>';
     const source = await zipOf({
       "docProps/core.xml": CORE_XML,
+      "docProps/app.xml": APP_XML,
       "docProps/custom.xml": custom,
     });
 
@@ -282,12 +312,55 @@ describe("scrubDocumentProperties", () => {
       .file("docProps/custom.xml")
       ?.async("string");
     expect(preserved).toContain("2026/001/015.v3");
+    expect(preserved).not.toContain("Secret Client");
+  });
+
+  it("scrubs property elements through their namespace URI, regardless of prefix", async () => {
+    const core = CORE_XML.replaceAll("dc:", "d:").replace(
+      'xmlns:dc="http://purl.org/dc/elements/1.1/"',
+      'xmlns:d="http://purl.org/dc/elements/1.1/"',
+    );
+    const app = APP_XML.replaceAll("<Company>", "<ep:Company>")
+      .replaceAll("</Company>", "</ep:Company>")
+      .replace(
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">',
+        '<ep:Properties xmlns:ep="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">',
+      )
+      .replace("</Properties>", "</ep:Properties>");
+
+    const result = await scrubbed(
+      await zipOf({
+        "docProps/core.xml": core,
+        "docProps/app.xml": app,
+      }),
+      DOCX_MIME_TYPE,
+    );
+
+    assertNoTrace(result, ["Jane Novak", "Nov&#225;k Legal"]);
+  });
+
+  it("scrubs collaboration authors and dates across Word XML parts", async () => {
+    const comments =
+      '<x:comments xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<x:comment x:author="Jane Novak" x:initials="JN" x:date="2024-01-01T00:00:00Z"/></x:comments>';
+    const result = await scrubbed(
+      await zipOf({
+        "docProps/core.xml": CORE_XML,
+        "docProps/app.xml": APP_XML,
+        "word/comments.xml": comments,
+      }),
+      DOCX_MIME_TYPE,
+    );
+
+    assertNoTrace(result, ["Jane Novak", "JN", "2024-01-01T00:00:00Z"]);
   });
 
   it("clears the OpenDocument meta part, statistics included", async () => {
     const meta = [
       '<?xml version="1.0"?>',
-      "<office:document-meta><office:meta>",
+      '<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"',
+      ' xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"',
+      ' xmlns:dc="http://purl.org/dc/elements/1.1/"><office:meta>',
       "<meta:initial-creator>Jana Dvorak</meta:initial-creator>",
       "<dc:creator>Petr Sova</dc:creator>",
       "<meta:editing-duration>PT1H23M30S</meta:editing-duration>",
@@ -296,7 +369,7 @@ describe("scrubDocumentProperties", () => {
     ].join("");
 
     const result = await scrubbed(
-      await zipOf({ "meta.xml": meta }),
+      await odfZipOf({ "meta.xml": meta }),
       ODT_MIME_TYPE,
     );
 
@@ -304,6 +377,74 @@ describe("scrubDocumentProperties", () => {
     expect(
       await availableProperties(toArrayBuffer(result), ODT_MIME_TYPE),
     ).toEqual([]);
+  });
+
+  it("removes ODF user-defined metadata and preserves the stored first mimetype entry", async () => {
+    const meta =
+      '<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ' +
+      'xmlns:m="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"><office:meta>' +
+      '<m:user-defined m:name="matter">Secret Matter</m:user-defined>' +
+      "</office:meta></office:document-meta>";
+    const result = await scrubbed(
+      await odfZipOf({ "meta.xml": meta }),
+      ODT_MIME_TYPE,
+    );
+
+    assertNoTrace(result, ["Secret Matter"]);
+    const view = new DataView(
+      result.buffer,
+      result.byteOffset,
+      result.byteLength,
+    );
+    expect(view.getUint32(0, true)).toBe(0x04_03_4b_50);
+    expect(view.getUint16(8, true)).toBe(0);
+    const nameLength = view.getUint16(26, true);
+    const firstName = new TextDecoder().decode(
+      result.slice(30, 30 + nameLength),
+    );
+    expect(firstName).toBe("mimetype");
+  });
+
+  it("refuses signed ZIP-based documents", async () => {
+    const signedCases = [
+      [
+        DOCX_MIME_TYPE,
+        "_xmlsignatures/sig1.xml",
+        { "docProps/core.xml": CORE_XML, "docProps/app.xml": APP_XML },
+      ],
+      [
+        ODT_MIME_TYPE,
+        "META-INF/documentsignatures.xml",
+        { "meta.xml": "<meta/>" },
+      ],
+    ] as const;
+    const results = await Promise.all(
+      signedCases.map(async ([mimeType, signaturePath, entries]) => {
+        const source =
+          mimeType === ODT_MIME_TYPE
+            ? await odfZipOf({ ...entries, [signaturePath]: "<signature/>" })
+            : await zipOf({ ...entries, [signaturePath]: "<signature/>" });
+        return await scrubDocumentProperties({ bytes: source, mimeType });
+      }),
+    );
+    expect(results.map(({ status }) => status)).toEqual(["signed", "signed"]);
+  });
+
+  it("reports missing or malformed required OOXML property parts as unreadable", async () => {
+    const missing = await scrubDocumentProperties({
+      bytes: await zipOf({ "docProps/core.xml": CORE_XML }),
+      mimeType: DOCX_MIME_TYPE,
+    });
+    const malformed = await scrubDocumentProperties({
+      bytes: await zipOf({
+        "docProps/core.xml": "<wrong/>",
+        "docProps/app.xml": APP_XML,
+      }),
+      mimeType: DOCX_MIME_TYPE,
+    });
+
+    expect(missing.status).toBe("unreadable");
+    expect(malformed.status).toBe("unreadable");
   });
 
   it("removes PDF Info and the XMP packet that duplicates it", async () => {
@@ -376,6 +517,23 @@ describe("extractDocumentProperties (failure modes)", () => {
     });
 
     expect(result).toEqual({ status: "unreadable" });
+  });
+});
+
+describe("document property editability", () => {
+  it("cannot grant editability when the caller lacks update permission", () => {
+    expect(
+      constrainDocumentPropertiesEditability(
+        { status: "available", properties: [], editable: true },
+        false,
+      ),
+    ).toEqual({ status: "available", properties: [], editable: false });
+    expect(
+      constrainDocumentPropertiesEditability(
+        { status: "available", properties: [], editable: false },
+        true,
+      ),
+    ).toEqual({ status: "available", properties: [], editable: false });
   });
 });
 
@@ -549,6 +707,29 @@ describe("writeDocumentProperties", () => {
   it("reports bytes that are not the archive their MIME type claims", async () => {
     const result = await writeDocumentProperties({
       bytes: toArrayBuffer(new TextEncoder().encode("not a zip at all")),
+      mimeType: DOCX_MIME_TYPE,
+      values: { author: "Petra" },
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+  });
+
+  it("rejects XML 1.0-forbidden control characters", async () => {
+    const result = await writeDocumentProperties({
+      bytes: await source(),
+      mimeType: DOCX_MIME_TYPE,
+      values: { author: "Petra\u0000Harbrook" },
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+  });
+
+  it("rejects a property part whose required root is missing", async () => {
+    const result = await writeDocumentProperties({
+      bytes: await zipOf({
+        "docProps/core.xml": "<wrong/>",
+        "docProps/app.xml": APP_XML,
+      }),
       mimeType: DOCX_MIME_TYPE,
       values: { author: "Petra" },
     });

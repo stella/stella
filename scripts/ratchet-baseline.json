@@ -63,10 +63,8 @@
     "files": {}
   },
   "ad-hoc-relative-time-formatting": {
-    "count": 1,
-    "files": {
-      "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "direct-audit-log-insert": {
     "count": 0,

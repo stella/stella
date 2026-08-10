@@ -56,6 +56,7 @@ const CHAT_MODELS: { value: string; label: string }[] = [
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
+const FIRM_KNOWLEDGE_MAX_POLLS = 15 * 60;
 
 const sleep = async (ms: number) =>
   await new Promise<void>((resolve) => {
@@ -80,6 +81,7 @@ type PollSeedJobOptions = {
   onFailed: (message: string | undefined) => void;
   /** Still running when the poll budget ran out. */
   onPending: () => void;
+  maxPolls?: number;
 };
 
 /**
@@ -93,8 +95,9 @@ const pollSeedJob = async ({
   onSucceeded,
   onFailed,
   onPending,
+  maxPolls = SEED_STATUS_MAX_POLLS,
 }: PollSeedJobOptions) => {
-  for (let attempt = 0; attempt < SEED_STATUS_MAX_POLLS; attempt++) {
+  for (let attempt = 0; attempt < maxPolls; attempt++) {
     // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
     const status = await poll();
     if (status === null) {
@@ -187,6 +190,7 @@ export const DevSidebarGroup = () => {
     }
 
     await pollSeedJob({
+      maxPolls: FIRM_KNOWLEDGE_MAX_POLLS,
       poll: async () => {
         const { data, error } = await api.dev["seed-firm-knowledge"].get();
         if (error !== null) {

@@ -16,8 +16,10 @@
  * Processing is queued, so it continues after this exits.
  *
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
+ *   [--replace-incomplete]
  */
 
+import { TaggedError } from "better-result";
 import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -42,6 +44,7 @@ const RATE_LIMIT_STATUS = 429;
 const RATE_LIMIT_MAX_RETRIES = 8;
 const RATE_LIMIT_BASE_DELAY_MS = 1000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+const WORKSPACES_QUERY_KEY = ["workspaces"] as const;
 
 /** What the web client names a new matter's file property. */
 const FILE_PROPERTY_NAME = "Documents";
@@ -152,12 +155,18 @@ const discoverApiOrigin = async (): Promise<string> => {
   );
 };
 
+class FirmKnowledgeSeedError extends TaggedError("FirmKnowledgeSeedError")<{
+  message: string;
+}> {}
+
 // Annotated on the variable, not just the arrow: TypeScript only narrows past
 // a never-returning call when the binding itself declares it.
 const fail: (message: string) => never = (message) => {
-  console.error(message);
-  process.exit(1);
+  throw new FirmKnowledgeSeedError({ message });
 };
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Seed failed";
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -169,7 +178,36 @@ const parseArgs = () => {
   if (!Number.isInteger(matters) || matters < 1) {
     fail(`--matters must be a positive integer, got '${matters}'.`);
   }
-  return { apiOrigin: read("--api"), matters };
+  return {
+    apiOrigin: read("--api"),
+    matters,
+    replaceIncomplete: args.includes("--replace-incomplete"),
+  };
+};
+
+type CommandOptions = {
+  cwd?: string;
+  timeoutMs?: number;
+};
+
+const runCommand = async (command: string[], options: CommandOptions = {}) => {
+  const subprocess = Bun.spawn(command, {
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    subprocess.kill();
+  }, options.timeoutMs ?? GIT_TIMEOUT_MS);
+  const [exitCode, stdout, stderr] = await Promise.all([
+    subprocess.exited,
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+  ]);
+  clearTimeout(timeout);
+  return { exitCode, stderr, stdout, timedOut };
 };
 
 /** Blobless sparse clone: only the seeded matters are materialised. */
@@ -183,7 +221,7 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   if (!cloned) {
     console.log(`Cloning ${CORPUS_REPOSITORY} into ${CACHE_DIRECTORY} ...`);
     // No --depth: a shallow tip cannot be moved to an arbitrary commit later.
-    const clone = Bun.spawnSync(
+    const clone = await runCommand(
       [
         "git",
         "clone",
@@ -193,35 +231,42 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
         CORPUS_REPOSITORY,
         cache,
       ],
-      { timeout: GIT_TIMEOUT_MS },
+      { timeoutMs: GIT_TIMEOUT_MS },
     );
     if (clone.exitCode !== 0) {
-      fail(`Corpus clone failed: ${clone.stderr.toString()}`);
+      fail(
+        clone.timedOut
+          ? "Corpus clone timed out."
+          : `Corpus clone failed: ${clone.stderr}`,
+      );
     }
   }
 
   // A cache left at an older pin needs the new commit fetched before checkout.
-  const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: cache });
-  if (head.stdout.toString().trim() !== CORPUS_COMMIT) {
-    const fetched = Bun.spawnSync(
+  const head = await runCommand(["git", "rev-parse", "HEAD"], { cwd: cache });
+  if (head.stdout.trim() !== CORPUS_COMMIT) {
+    const fetched = await runCommand(
       ["git", "fetch", "--filter=blob:none", "origin", CORPUS_COMMIT],
-      { cwd: cache, timeout: GIT_TIMEOUT_MS },
+      { cwd: cache, timeoutMs: GIT_TIMEOUT_MS },
     );
     if (fetched.exitCode !== 0) {
-      fail(`Could not fetch corpus commit: ${fetched.stderr.toString()}`);
+      fail(
+        fetched.timedOut
+          ? "Fetching the corpus commit timed out."
+          : `Could not fetch corpus commit: ${fetched.stderr}`,
+      );
     }
   }
 
   // ls-tree reads the manifest without materialising anything.
-  const list = Bun.spawnSync(
+  const list = await runCommand(
     ["git", "ls-tree", "--name-only", CORPUS_COMMIT, `${CORPUS_SUBPATH}/`],
     { cwd: cache },
   );
   if (list.exitCode !== 0) {
-    fail(`Could not list corpus matters: ${list.stderr.toString()}`);
+    fail(`Could not list corpus matters: ${list.stderr}`);
   }
   const matters = list.stdout
-    .toString()
     .split("\n")
     .filter(Boolean)
     .map((entry) => path.basename(entry))
@@ -232,7 +277,7 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
     fail("Corpus listing returned no matters.");
   }
 
-  const sparse = Bun.spawnSync(
+  const sparse = await runCommand(
     [
       "git",
       "sparse-checkout",
@@ -242,17 +287,17 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
     { cwd: cache },
   );
   if (sparse.exitCode !== 0) {
-    fail(`Sparse checkout failed: ${sparse.stderr.toString()}`);
+    fail(`Sparse checkout failed: ${sparse.stderr}`);
   }
 
   // After the patterns, never before: the clone uses --no-checkout, so this is
   // what creates the working tree, and it also re-pins a stale cache.
-  const checkout = Bun.spawnSync(
+  const checkout = await runCommand(
     ["git", "checkout", "--force", CORPUS_COMMIT],
     { cwd: cache },
   );
   if (checkout.exitCode !== 0) {
-    fail(`Could not check out corpus commit: ${checkout.stderr.toString()}`);
+    fail(`Could not check out corpus commit: ${checkout.stderr}`);
   }
 
   console.log(`Corpus ready: ${matters.length} matters in ${CACHE_DIRECTORY}`);
@@ -407,6 +452,8 @@ export type SeedFirmKnowledgeOptions = {
   /** Session cookie header sent with every request; decides the owning org. */
   cookie: string;
   matters: number;
+  /** Explicit CLI authorization to replace incomplete same-name matters. */
+  replaceIncomplete?: boolean;
   /** Progress sink. The CLI prints; the dev endpoint collects. */
   log?: (message: string) => void;
 };
@@ -431,6 +478,7 @@ export const seedFirmKnowledge = async ({
   apiOrigin,
   cookie,
   matters: matterCount,
+  replaceIncomplete = false,
   log = () => undefined,
 }: SeedFirmKnowledgeOptions): Promise<SeedFirmKnowledgeResult> => {
   const api = createApiClient(apiOrigin, cookie);
@@ -480,11 +528,17 @@ export const seedFirmKnowledge = async ({
       // because the API suffixes duplicate names. Grafting only the missing
       // files onto the existing folders is not expressible either: the tree
       // endpoint creates its own directories and cannot target existing ones.
-      // So replace the matter outright. Safe precisely because it is a partial
-      // seed of a public synthetic corpus. The lookup is by the generated
-      // name, so a matter someone renamed — one they have adopted and worked
-      // in — is never found here and never deleted; it just gets a fresh
-      // matter alongside it.
+      // A generated display name and entity count are not seed provenance.
+      // The browser path therefore skips the matter; only the CLI's explicit
+      // destructive flag authorizes replacing a same-name workspace.
+      if (!replaceIncomplete) {
+        skipped += 1;
+        log(
+          `${manifest.reference}: incomplete ` +
+            `(${String(present.entityCount)}/${String(expectedEntities)} entities), skipped because seed provenance cannot be verified.`,
+        );
+        continue;
+      }
       reseeded.push(manifest.reference);
       log(
         `${manifest.reference}: incomplete ` +
@@ -585,13 +639,14 @@ export const seedFirmKnowledge = async ({
 
 /** CLI entry: resolves the origin and session itself, then runs the core. */
 const main = async () => {
-  const { apiOrigin: explicitOrigin, matters } = parseArgs();
+  const { apiOrigin: explicitOrigin, matters, replaceIncomplete } = parseArgs();
   const apiOrigin = explicitOrigin ?? (await discoverApiOrigin());
   const cookie = await readSessionCookie(apiOrigin);
   await seedFirmKnowledge({
     apiOrigin,
     cookie,
     matters,
+    replaceIncomplete,
     log: (message) => console.log(message),
   });
 };
@@ -599,5 +654,8 @@ const main = async () => {
 // `import.meta.main` is false when the dev endpoint imports this for
 // `seedFirmKnowledge`, so importing the module never starts a run.
 if (import.meta.main) {
-  await main();
+  await main().catch((error: unknown) => {
+    console.error(getErrorMessage(error));
+    process.exitCode = 1;
+  });
 }

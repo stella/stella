@@ -122,6 +122,9 @@ export type DocumentPropertiesStatus = DocumentPropertiesResult["status"];
 /** Container layout a format's properties live in. */
 export type DocumentContainerFormat = "ooxml" | "odf" | "pdf";
 
+/** Largest file the document-properties endpoints will load into memory. */
+export const DOCUMENT_PROPERTIES_MAX_BYTES = 100 * 1024 * 1024;
+
 /**
  * Formats whose embedded properties can be read and removed. Declared here
  * rather than in the API so the client deciding whether to offer the action and

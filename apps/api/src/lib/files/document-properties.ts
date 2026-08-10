@@ -10,6 +10,7 @@
  * bytes that leave do not.
  */
 import { PDF } from "@libpdf/core";
+import { TaggedError } from "better-result";
 
 import {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -26,15 +27,46 @@ import type {
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
-/**
- * Largest file whose properties are read inline. The whole object is fetched
- * to reach a few kilobytes of XML at the end of a zip's central directory, so
- * the cap keeps one metadata tab from pulling an arbitrarily large object.
- */
-export const DOCUMENT_PROPERTIES_MAX_BYTES = 100 * 1024 * 1024;
+class DocumentPropertiesParseError extends TaggedError(
+  "DocumentPropertiesParseError",
+)<{ message: string }> {}
 
 /** Property XML is a few kilobytes; a hostile archive declaring more is not read. */
 const PROPERTY_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
+
+const readPropertyEntry = async (
+  archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+  path: string,
+): Promise<string | null> => {
+  const entry = archive.zip.file(path);
+  if (entry === null) {
+    return null;
+  }
+  const bytes = await new Promise<Buffer>((resolve, reject) => {
+    const stream = entry.nodeStream("nodebuffer");
+    const chunks: Buffer[] = [];
+    let size = 0;
+    stream.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > PROPERTY_ENTRY_MAX_BYTES) {
+        const destroy: unknown = Reflect.get(stream, "destroy");
+        if (typeof destroy === "function") {
+          Reflect.apply(destroy, stream, []);
+        }
+        reject(
+          new DocumentPropertiesParseError({
+            message: `Property entry ${path} is too large`,
+          }),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    });
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+  return bytes.toString("utf-8");
+};
 
 // ── Value builders ──────────────────────────────────────
 
@@ -203,12 +235,11 @@ const durationToMinutes = (raw: string | null): number | null => {
 const readOoxmlProperties = async (
   bytes: ArrayBuffer,
 ): Promise<DocumentProperty[]> => {
-  const archive = await loadDocxArchive(bytes, {
-    maxEntryBytes: PROPERTY_ENTRY_MAX_BYTES,
-    maxTotalBytes: PROPERTY_ENTRY_MAX_BYTES * 2,
-  });
-  const core = (await archive.readEntryString("docProps/core.xml")) ?? "";
-  const app = (await archive.readEntryString("docProps/app.xml")) ?? "";
+  // The archive remains globally bounded by the shared DOCX limits, while
+  // readPropertyEntry applies the much smaller limit only to metadata parts.
+  const archive = await loadDocxArchive(bytes);
+  const core = (await readPropertyEntry(archive, "docProps/core.xml")) ?? "";
+  const app = (await readPropertyEntry(archive, "docProps/app.xml")) ?? "";
 
   const out = collector();
   out.text("title", elementText(core, "dc:title"));
@@ -249,11 +280,9 @@ const readOoxmlProperties = async (
 const readOdfProperties = async (
   bytes: ArrayBuffer,
 ): Promise<DocumentProperty[]> => {
-  const archive = await loadDocxArchive(bytes, {
-    maxEntryBytes: PROPERTY_ENTRY_MAX_BYTES,
-    maxTotalBytes: PROPERTY_ENTRY_MAX_BYTES * 2,
-  });
-  const meta = (await archive.readEntryString("meta.xml")) ?? "";
+  // See readOoxmlProperties: unrelated document content is not metadata.
+  const archive = await loadDocxArchive(bytes);
+  const meta = (await readPropertyEntry(archive, "meta.xml")) ?? "";
 
   const out = collector();
   out.text("title", elementText(meta, "dc:title"));
@@ -323,6 +352,14 @@ type ExtractDocumentPropertiesOptions = {
   mimeType: string;
 };
 
+export const constrainDocumentPropertiesEditability = (
+  result: DocumentPropertiesResult,
+  authorized: boolean,
+): DocumentPropertiesResult =>
+  result.status === "available"
+    ? { ...result, editable: result.editable && authorized }
+    : result;
+
 /**
  * Read the embedded properties of one file. Never throws: a malformed or
  * unexpectedly shaped document is reported as `unreadable`, because a metadata
@@ -382,38 +419,55 @@ export type ScrubDocumentPropertiesResult =
  * history. Counts and the producing application stay: they identify nobody, and
  * a file stripped of them looks tampered with rather than cleaned.
  */
+const DC_NS = "http://purl.org/dc/elements/1.1/";
+const DCTERMS_NS = "http://purl.org/dc/terms/";
+const OOXML_CORE_NS =
+  "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+const OOXML_APP_NS =
+  "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+const OOXML_CUSTOM_NS =
+  "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+const ODF_META_NS = "urn:oasis:names:tc:opendocument:xmlns:meta:1.0";
+const WORD_MAIN_NS =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const WORD_2012_NS = "http://schemas.microsoft.com/office/word/2012/wordml";
+
+type XmlElement = { namespace: string; localName: string };
+
 const OOXML_CORE_CLEARED = [
-  "dc:title",
-  "dc:subject",
-  "dc:creator",
-  "dc:description",
-  "cp:keywords",
-  "cp:category",
-  "cp:contentStatus",
-  "cp:lastModifiedBy",
-  "cp:revision",
-  "cp:lastPrinted",
-  "dcterms:created",
-  "dcterms:modified",
-] as const;
+  { namespace: DC_NS, localName: "title" },
+  { namespace: DC_NS, localName: "subject" },
+  { namespace: DC_NS, localName: "creator" },
+  { namespace: DC_NS, localName: "description" },
+  { namespace: OOXML_CORE_NS, localName: "keywords" },
+  { namespace: OOXML_CORE_NS, localName: "category" },
+  { namespace: OOXML_CORE_NS, localName: "contentStatus" },
+  { namespace: OOXML_CORE_NS, localName: "lastModifiedBy" },
+  { namespace: OOXML_CORE_NS, localName: "revision" },
+  { namespace: OOXML_CORE_NS, localName: "lastPrinted" },
+  { namespace: DCTERMS_NS, localName: "created" },
+  { namespace: DCTERMS_NS, localName: "modified" },
+] as const satisfies readonly XmlElement[];
 
 /** Extended properties naming the firm, the supervisor or the time spent. */
-const OOXML_APP_CLEARED = ["Company", "Manager", "Template"] as const;
+const OOXML_APP_CLEARED = ["Company", "Manager", "Template"].map(
+  (localName) => ({ namespace: OOXML_APP_NS, localName }),
+);
 
 const ODF_META_CLEARED = [
-  "dc:title",
-  "dc:subject",
-  "dc:description",
-  "meta:keyword",
-  "meta:initial-creator",
-  "dc:creator",
-  "meta:printed-by",
-  "meta:creation-date",
-  "dc:date",
-  "meta:print-date",
-  "meta:editing-cycles",
-  "meta:editing-duration",
-] as const;
+  { namespace: DC_NS, localName: "title" },
+  { namespace: DC_NS, localName: "subject" },
+  { namespace: DC_NS, localName: "description" },
+  { namespace: ODF_META_NS, localName: "keyword" },
+  { namespace: ODF_META_NS, localName: "initial-creator" },
+  { namespace: DC_NS, localName: "creator" },
+  { namespace: ODF_META_NS, localName: "printed-by" },
+  { namespace: ODF_META_NS, localName: "creation-date" },
+  { namespace: DC_NS, localName: "date" },
+  { namespace: ODF_META_NS, localName: "print-date" },
+  { namespace: ODF_META_NS, localName: "editing-cycles" },
+  { namespace: ODF_META_NS, localName: "editing-duration" },
+] as const satisfies readonly XmlElement[];
 
 const clearRegexCache = new Map<string, RegExp>();
 
@@ -439,60 +493,248 @@ const clearElements = (xml: string, names: readonly string[]): string => {
   return cleared;
 };
 
+const REGEX_META_RE = /[.*+?^${}()|[\]\\]/gu;
+
+const qualifiedNames = (xml: string, element: XmlElement): string[] => {
+  const namespace = element.namespace.replace(REGEX_META_RE, "\\$&");
+  const declarations = new RegExp(
+    `xmlns(?::(?<prefix>[A-Za-z_][\\w.-]*))?\\s*=\\s*["']${namespace}["']`,
+    "gu",
+  );
+  return [...xml.matchAll(declarations)].map(({ groups }) => {
+    const prefix = groups?.["prefix"];
+    return prefix === undefined
+      ? element.localName
+      : `${prefix}:${element.localName}`;
+  });
+};
+
+const clearNamespacedElements = (
+  xml: string,
+  elements: readonly XmlElement[],
+): string =>
+  clearElements(
+    xml,
+    elements.flatMap((element) => qualifiedNames(xml, element)),
+  );
+
+const hasNamespacedElement = (xml: string, element: XmlElement): boolean =>
+  qualifiedNames(xml, element).some((name) =>
+    new RegExp(`<${name}(?:\\s|>)`, "u").test(xml),
+  );
+
+const removeNamespacedElements = (
+  xml: string,
+  element: XmlElement,
+  keep?: (openTag: string) => boolean,
+): string => {
+  let result = xml;
+  for (const name of qualifiedNames(xml, element)) {
+    const regex = new RegExp(
+      `<${name}(?<attributes>\\s[^>]*)?(?:/>|>[\\s\\S]*?</${name}>)`,
+      "gu",
+    );
+    result = result.replace(regex, (match) =>
+      keep?.(match) === true ? match : "",
+    );
+  }
+  return result;
+};
+
 /** `<TotalTime>` is numeric: blanking it yields invalid OOXML, so zero it. */
-const ZERO_TOTAL_TIME_RE = /(<TotalTime(?:\s[^>]*)?>)[\s\S]*?(<\/TotalTime>)/gu;
+const zeroNamespacedElement = (xml: string, element: XmlElement): string => {
+  let result = xml;
+  for (const name of qualifiedNames(xml, element)) {
+    const regex = new RegExp(
+      `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
+      "gu",
+    );
+    result = result.replace(regex, "$10$2");
+  }
+  return result;
+};
+
+const isSignedZipArchive = (
+  archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+): boolean =>
+  Object.keys(archive.zip.files).some((path) => {
+    const normalized = path.toLowerCase();
+    return (
+      normalized.startsWith("_xmlsignatures/") ||
+      normalized === "meta-inf/documentsignatures.xml" ||
+      normalized === "meta-inf/macrosignatures.xml" ||
+      normalized === "meta-inf/packagesignatures.xml"
+    );
+  });
+
+type ZipPart = {
+  path: string;
+  clear: (xml: string) => string;
+  propertyEntry?: boolean;
+  required?: boolean;
+};
 
 const scrubZipArchive = async (
   bytes: ArrayBuffer,
-  parts: { path: string; clear: (xml: string) => string }[],
-): Promise<Uint8Array> => {
+  parts: ZipPart[],
+  prepare?: (
+    archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+  ) => Promise<void>,
+): Promise<ScrubDocumentPropertiesResult> => {
   const archive = await loadDocxArchive(bytes);
+  if (isSignedZipArchive(archive)) {
+    return { status: "signed" };
+  }
   // Read every part first, then write: the reads are independent, and writing
   // into the archive while another read is in flight would race the same zip.
   const read = await Promise.all(
     parts.map(async (part) => ({
       part,
-      xml: await archive.readEntryString(part.path),
+      xml: part.propertyEntry
+        ? await readPropertyEntry(archive, part.path)
+        : await archive.readEntryString(part.path),
     })),
   );
   for (const { part, xml } of read) {
-    if (xml !== null) {
-      archive.zip.file(part.path, part.clear(xml));
+    if (xml === null) {
+      if (part.required === true) {
+        return { status: "unreadable" };
+      }
+      continue;
     }
+    archive.zip.file(part.path, part.clear(xml));
   }
-  return await archive.zip.generateAsync({ type: "uint8array" });
+  await prepare?.(archive);
+  return {
+    status: "scrubbed",
+    bytes: await archive.zip.generateAsync({ type: "uint8array" }),
+  };
 };
 
-/**
- * `docProps/custom.xml` is deliberately untouched: that part carries stella's
- * own provenance stamp, which the user opted into and which is not a leak.
- */
-const scrubOoxml = async (bytes: ArrayBuffer): Promise<Uint8Array> =>
-  await scrubZipArchive(bytes, [
+const STELLA_CUSTOM_PROPERTY_NAMES = new Set(["stella-ref", "stella-code"]);
+const CUSTOM_PROPERTY_NAME_RE = /\bname\s*=\s*["'](?<name>[^"']*)["']/u;
+
+const scrubCustomProperties = (xml: string): string =>
+  removeNamespacedElements(
+    xml,
+    { namespace: OOXML_CUSTOM_NS, localName: "property" },
+    (element) => {
+      const name = CUSTOM_PROPERTY_NAME_RE.exec(element)?.groups?.["name"];
+      return name !== undefined && STELLA_CUSTOM_PROPERTY_NAMES.has(name);
+    },
+  );
+
+const scrubCollaborationAttributes = (xml: string): string => {
+  let scrubbed = xml;
+  const attributeNames = ["author", "date", "initials", "userId", "providerId"];
+  for (const namespace of [WORD_MAIN_NS, WORD_2012_NS]) {
+    for (const localName of attributeNames) {
+      for (const name of qualifiedNames(xml, { namespace, localName })) {
+        const regex = new RegExp(
+          `(?<prefix>\\s${name}\\s*=\\s*)(?<quote>["'])[^"']*\\k<quote>`,
+          "gu",
+        );
+        scrubbed = scrubbed.replace(regex, '$<prefix>""');
+      }
+    }
+  }
+  return scrubbed;
+};
+
+const scrubOoxml = async (
+  bytes: ArrayBuffer,
+): Promise<ScrubDocumentPropertiesResult> => {
+  const archive = await loadDocxArchive(bytes);
+  const collaborationParts = Object.keys(archive.zip.files)
+    .filter((path) => /^word\/.*\.xml$/iu.test(path))
+    .map((path) => ({ path, clear: scrubCollaborationAttributes }));
+  return await scrubZipArchive(bytes, [
     {
       path: "docProps/core.xml",
-      clear: (xml) => clearElements(xml, OOXML_CORE_CLEARED),
+      clear: (xml) => {
+        if (
+          !hasNamespacedElement(xml, {
+            namespace: OOXML_CORE_NS,
+            localName: "coreProperties",
+          })
+        ) {
+          throw new DocumentPropertiesParseError({
+            message: "Invalid OOXML core properties root",
+          });
+        }
+        return clearNamespacedElements(xml, OOXML_CORE_CLEARED);
+      },
+      propertyEntry: true,
+      required: true,
     },
     {
       path: "docProps/app.xml",
-      clear: (xml) =>
-        clearElements(xml, OOXML_APP_CLEARED).replace(
-          ZERO_TOTAL_TIME_RE,
-          "$10$2",
-        ),
+      clear: (xml) => {
+        if (
+          !hasNamespacedElement(xml, {
+            namespace: OOXML_APP_NS,
+            localName: "Properties",
+          })
+        ) {
+          throw new DocumentPropertiesParseError({
+            message: "Invalid OOXML extended properties root",
+          });
+        }
+        return zeroNamespacedElement(
+          clearNamespacedElements(xml, OOXML_APP_CLEARED),
+          { namespace: OOXML_APP_NS, localName: "TotalTime" },
+        );
+      },
+      propertyEntry: true,
+      required: true,
     },
-  ]);
-
-const ODF_STATISTIC_RE = /<meta:document-statistic\b[^>]*\/>/gu;
-
-const scrubOdf = async (bytes: ArrayBuffer): Promise<Uint8Array> =>
-  await scrubZipArchive(bytes, [
     {
-      path: "meta.xml",
-      clear: (xml) =>
-        clearElements(xml, ODF_META_CLEARED).replace(ODF_STATISTIC_RE, ""),
+      path: "docProps/custom.xml",
+      clear: scrubCustomProperties,
+      propertyEntry: true,
     },
+    ...collaborationParts,
   ]);
+};
+
+const removeOdfStatisticsAndUserProperties = (xml: string): string => {
+  const withoutStatistics = removeNamespacedElements(xml, {
+    namespace: ODF_META_NS,
+    localName: "document-statistic",
+  });
+  return removeNamespacedElements(withoutStatistics, {
+    namespace: ODF_META_NS,
+    localName: "user-defined",
+  });
+};
+
+const scrubOdf = async (
+  bytes: ArrayBuffer,
+): Promise<ScrubDocumentPropertiesResult> =>
+  await scrubZipArchive(
+    bytes,
+    [
+      {
+        path: "meta.xml",
+        clear: (xml) =>
+          removeOdfStatisticsAndUserProperties(
+            clearNamespacedElements(xml, ODF_META_CLEARED),
+          ),
+        propertyEntry: true,
+        required: true,
+      },
+    ],
+    async (archive) => {
+      const firstPath = Object.keys(archive.zip.files).at(0);
+      const mimetype = await readPropertyEntry(archive, "mimetype");
+      if (firstPath !== "mimetype" || mimetype === null) {
+        throw new DocumentPropertiesParseError({
+          message: "ODF mimetype must be the first ZIP entry",
+        });
+      }
+      archive.zip.file("mimetype", mimetype, { compression: "STORE" });
+    },
+  );
 
 const scrubPdf = async (
   bytes: ArrayBuffer,
@@ -582,6 +824,11 @@ const OOXML_PART_ROOT = {
   core: "cp:coreProperties",
   app: "Properties",
 } as const;
+
+const OOXML_PART_ROOT_NAMESPACE = {
+  core: { namespace: OOXML_CORE_NS, localName: "coreProperties" },
+  app: { namespace: OOXML_APP_NS, localName: "Properties" },
+} as const satisfies Record<"core" | "app", XmlElement>;
 
 /**
  * A package may carry no `docProps` at all — plenty of generators emit none —
@@ -692,6 +939,10 @@ const escapeXmlText = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
+// XML 1.0 permits tab, LF and CR from the C0 range and nothing else.
+// oxlint-disable-next-line no-control-regex -- XML defines this codepoint set
+const XML_1_FORBIDDEN_CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u;
+
 /**
  * Set `<name>` to `value`, replacing its content in place. A property the
  * document never carried has no element to replace, so append one before the
@@ -755,6 +1006,14 @@ export const writeDocumentProperties = async ({
     return { status: "unsupported-format" };
   }
 
+  if (
+    Object.values(values).some((value) =>
+      XML_1_FORBIDDEN_CONTROL_RE.test(value),
+    )
+  ) {
+    return { status: "unreadable" };
+  }
+
   // Driven by the contract's key list rather than the caller's object keys, so
   // an unknown key cannot reach the archive and no cast is needed to narrow it.
   const edits = AUTHORED_DOCUMENT_PROPERTY_KEYS.flatMap((key) => {
@@ -794,6 +1053,9 @@ export const writeDocumentProperties = async ({
 
     for (const { part, xml } of read) {
       let updated = xml ?? OOXML_EMPTY_PART[part];
+      if (!hasNamespacedElement(updated, OOXML_PART_ROOT_NAMESPACE[part])) {
+        return { status: "unreadable" };
+      }
       for (const edit of edits) {
         if (edit.part === part) {
           updated = setElement(
@@ -828,9 +1090,9 @@ export const scrubDocumentProperties = async ({
   try {
     switch (format) {
       case "ooxml":
-        return { status: "scrubbed", bytes: await scrubOoxml(bytes) };
+        return await scrubOoxml(bytes);
       case "odf":
-        return { status: "scrubbed", bytes: await scrubOdf(bytes) };
+        return await scrubOdf(bytes);
       case "pdf":
         return await scrubPdf(bytes, scrubbedAt);
       default:
