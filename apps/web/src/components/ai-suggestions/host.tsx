@@ -67,6 +67,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
@@ -159,7 +160,8 @@ type PromptBarProps = {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => void;
+  }) => Promise<void> | void;
+  onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
    * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
@@ -259,7 +261,11 @@ type PromptBarProps = {
    */
   models?: ComposerModelsMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
-  reservedCommands?: boolean | undefined;
+  /**
+   * Reserved-command availability for this bar's slash menu. Omit on
+   * surfaces whose submit path has no reserved-command dispatch.
+   */
+  reservedCommands?: ReservedChatCommandContext | undefined;
   context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
   mcpOrganizationId?: string | undefined;
   /**
@@ -462,6 +468,12 @@ type ChatThreadCardProps = {
    * review bar is present so the card clears it.
    */
   bottomOffsetClass?: string | undefined;
+  /**
+   * Optional title area at the start of the header row (e.g. the thread's
+   * rename affordance). Optional because Template Studio renders this card
+   * without a header beyond the collapse control.
+   */
+  titleSlot?: ReactNode | undefined;
   children: ReactNode;
 };
 
@@ -477,6 +489,7 @@ export const ChatThreadCard = ({
   scrollRef,
   onCollapse,
   bottomOffsetClass,
+  titleSlot,
   children,
 }: ChatThreadCardProps) => {
   const t = useTranslations();
@@ -500,7 +513,12 @@ export const ChatThreadCard = ({
       {/* Collapse control lives in its own non-scrolling header row so the
           transcript's scrollbar runs *below* it — the two no longer clash at
           the top-end corner. */}
-      <div className="flex shrink-0 justify-end px-1.5 pt-1.5">
+      <div className="flex shrink-0 items-center justify-end gap-2 px-1.5 pt-1.5">
+        {titleSlot !== undefined && (
+          <div className="flex min-w-0 flex-1 items-center ps-1.5">
+            {titleSlot}
+          </div>
+        )}
         <ThreadCardCollapseButton onCollapse={onCollapse} />
       </div>
       {/* Plain scroll container — bypasses the legacy Conversation's
@@ -585,6 +603,7 @@ export const PromptBar = (props: PromptBarProps) => {
     pendingCount,
     canSubmitNow,
     onSubmit,
+    onSubmitError,
     presetScopeChooser,
     presets,
     threadHasMessages = false,
@@ -675,8 +694,8 @@ export const PromptBar = (props: PromptBarProps) => {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    (draft: ChatInputDraft) => {
-      onSubmit({ prompt: draft.html, files: draft.files });
+    async (draft: ChatInputDraft) => {
+      await onSubmit({ prompt: draft.html, files: draft.files });
     },
     [onSubmit],
   );
@@ -685,6 +704,7 @@ export const PromptBar = (props: PromptBarProps) => {
     controller: editorController,
     inputDisabled,
     onSubmit: handleComposerSubmit,
+    onSubmitError,
     onSubmitGuard: canSubmitNow,
     submitDisabled: composerSubmitDisabled,
   });
@@ -731,7 +751,12 @@ export const PromptBar = (props: PromptBarProps) => {
         presetScopeChooser.onSubmit(preset, "document");
         return;
       }
-      onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] });
+      detached(
+        Promise.resolve(
+          onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
+        ),
+        "PromptBar preset",
+      );
     },
     [canSubmitNow, onSubmit, presetScopeChooser],
   );
@@ -937,7 +962,7 @@ export const PromptBar = (props: PromptBarProps) => {
                     ? {
                         activeOrganizationId: skillsOrganizationId,
                         editor,
-                        includeReservedCommands: reservedCommands,
+                        reservedCommands,
                       }
                     : undefined
                 }

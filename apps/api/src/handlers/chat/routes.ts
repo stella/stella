@@ -15,6 +15,7 @@ import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
+import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import updateThread from "@/api/handlers/chat/update-thread";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -88,6 +89,11 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getThreadTitle.config.params,
     permissions: getThreadTitle.config.permissions,
     query: getThreadTitle.config.query,
+  })
+  .post("/threads/:threadId/title/suggest", suggestThreadTitle.handler, {
+    params: suggestThreadTitle.config.params,
+    permissions: suggestThreadTitle.config.permissions,
+    query: suggestThreadTitle.config.query,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,

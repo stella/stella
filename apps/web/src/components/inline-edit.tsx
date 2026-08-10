@@ -11,8 +11,16 @@ type InlineEditProps = {
   onCancel: () => void;
   /** Extra content after the input (e.g. file extension). */
   suffix?: React.ReactNode;
-  className?: string;
-  inputClassName?: string;
+  /**
+   * Action button(s) between the input and Done (e.g. a suggest wand).
+   * Buttons placed here must call `preventDefault()` in `onMouseDown` and
+   * trigger on `onClick`: the input commits on blur, so an unprevented
+   * press's focus steal would close the editor before the action's result
+   * could land in the draft, while the prevented press still emits `click`.
+   */
+  action?: React.ReactNode | undefined;
+  className?: string | undefined;
+  inputClassName?: string | undefined;
 };
 
 /**
@@ -31,13 +39,26 @@ export const InlineEdit = ({
   onCommit,
   onCancel,
   suffix,
+  action,
   className,
   inputClassName,
 }: InlineEditProps) => {
   const t = useTranslations();
 
   return (
-    <span className={cn("inline-flex items-center gap-1", className)}>
+    <span
+      className={cn("inline-flex items-center gap-1", className)}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (
+          nextTarget instanceof Node &&
+          event.currentTarget.contains(nextTarget)
+        ) {
+          return;
+        }
+        onCommit();
+      }}
+    >
       <input
         autoFocus
         className={cn(
@@ -46,13 +67,13 @@ export const InlineEdit = ({
           inputClassName,
         )}
         dir={contentDir(value)}
-        onBlur={onCommit}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Enter") {
-            e.currentTarget.blur();
+            e.preventDefault();
+            onCommit();
           }
           if (e.key === "Escape") {
             onCancel();
@@ -61,11 +82,12 @@ export const InlineEdit = ({
         value={value}
       />
       {suffix}
+      {action}
       <Button
         className="h-6 shrink-0 gap-0.5 px-2 text-xs"
+        onClick={onCommit}
         onMouseDown={(e) => {
           e.preventDefault();
-          onCommit();
         }}
         size="xs"
         type="button"

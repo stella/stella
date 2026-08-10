@@ -577,6 +577,7 @@
     "recapLoading": "Sarunas apkopošana…",
     "removeSuggestion": "(noņemt)",
     "renameThread": "Pārdēvēt sarunu",
+    "renameUnavailableEmptyThread": "Vispirms nosūtiet ziņu, pēc tam sarunu varēs pārdēvēt.",
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
+    "suggestTitle": "Ieteikt nosaukumu",
+    "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
     "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
+    "suggestingTitle": "Notiek nosaukuma ieteikšana…",
     "suggestionSeverity": {
       "style": "Stils",
       "substantive": "Pēc būtības",

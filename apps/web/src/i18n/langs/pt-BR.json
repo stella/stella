@@ -577,6 +577,7 @@
     "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
     "renameThread": "Renomear conversa",
+    "renameUnavailableEmptyThread": "Envie uma mensagem primeiro; depois será possível renomear a conversa.",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "richContentLoading": "Carregando conteúdo interativo…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Parar",
     "stopped": "Interrompido",
+    "suggestTitle": "Sugerir um título",
+    "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
     "suggestedFollowupsLabel": "Sugestões de perguntas de acompanhamento",
+    "suggestingTitle": "Sugerindo um título…",
     "suggestionSeverity": {
       "style": "Estilo",
       "substantive": "Substancial",

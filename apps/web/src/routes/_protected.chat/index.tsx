@@ -27,9 +27,13 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
@@ -43,6 +47,7 @@ import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   acquireChatRuntime,
   applyChatModelChange,
@@ -73,7 +78,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -334,11 +339,59 @@ function ChatIndex() {
   };
 
   const handleSubmit = async (draft: ChatInputDraft) => {
-    const reservedCommand = matchReservedChatCommand(draft.html);
-    if (reservedCommand?.id === "new") {
-      controller.setContent("");
-      threadIdRef.current = createChatThreadId();
-      rotateDraftThread((value) => value + 1);
+    const newThreadMessages: string[] = [];
+    const handledReserved = runReservedChatCommand(draft.html, {
+      new: (args) => {
+        if (args.length > 0) {
+          newThreadMessages.push(args);
+          return;
+        }
+        controller.setContent("");
+        threadIdRef.current = createChatThreadId();
+        rotateDraftThread((value) => value + 1);
+      },
+      "rename-chat": () => {
+        // Nothing persisted to rename yet: this composer only ever holds an
+        // unsent draft thread. Explain instead of silently no-oping.
+        controller.setContent("");
+        stellaToast.add({
+          title: t("chat.renameUnavailableEmptyThread"),
+          type: "info",
+        });
+      },
+    });
+    if (handledReserved) {
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      const chatThreadContext = {
+        allowMissingThread: true,
+        getUserContext,
+        getContextMatterIds,
+        getSendMode,
+      };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: chatThreadContext,
+        files: draft.files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef,
+      });
+      await navigate({
+        to: "/chat/$threadId",
+        params: { threadId: threadRef.threadId },
+      });
+      detached(invalidateGroupedChatThreads(queryClient), "ChatIndex");
       return;
     }
     if (!(await ensureAIAvailable())) {
@@ -462,6 +515,7 @@ function ChatIndex() {
                 selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
                 selectModel: modelSelection.selectModel,
               }}
+              reservedCommands={{ hasPersistedThread: false }}
               skillsOrganizationId={activeOrganizationId}
               dock={
                 <ChatComposerDock

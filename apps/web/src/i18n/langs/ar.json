@@ -577,6 +577,7 @@
     "recapLoading": "جارٍ تلخيص المحادثة…",
     "removeSuggestion": "(إزالة)",
     "renameThread": "إعادة تسمية المحادثة",
+    "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "suggestTitle": "اقتراح عنوان",
+    "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
+    "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
       "substantive": "جوهري",

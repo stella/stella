@@ -66,7 +66,10 @@ import {
   summarizeOperation,
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
@@ -97,11 +100,14 @@ import { useChatModelSelection } from "@/components/chat/use-chat-model-selectio
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -114,6 +120,7 @@ import {
   applyChatModelChange,
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
+  chatThreadTitleOptions,
   fileChatThreadOptions,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -138,13 +145,15 @@ import {
   useChatEditModeStore,
 } from "@/lib/chat-edit-mode-store";
 import {
+  createChatThreadId,
   getChatThreadKey,
   type ChatThreadId,
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
 type ActiveFile = {
@@ -168,10 +177,6 @@ type ActiveExternal = {
   text?: string | undefined;
   title: string;
   url: string;
-};
-
-const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
 };
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
@@ -887,7 +892,7 @@ type FileChatOverlayProps = {
    * overlay UI. Owners should swap the `chatThreadId` they pass in
    * for a fresh value.
    */
-  onNewThread: () => void;
+  onNewThread: (threadId: ChatThreadId) => void;
   /** Called only after the server-persisted chat history proves this overlay
    * thread owns the active generated-document draft. */
   onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
@@ -1059,6 +1064,19 @@ const FileChatOverlayInner = ({
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const capturePromptSubmitError = useCallback(
+    (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+    [t],
+  );
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
@@ -2067,8 +2085,82 @@ const FileChatOverlayInner = ({
     stop();
     shouldFocusComposerAfterNewThreadRef.current = true;
     setPanelOpen(false);
-    onNewThread();
+    onNewThread(createChatThreadId());
   };
+  const handleComposerSubmit = useLatestCallback(
+    async ({
+      prompt,
+      files,
+    }: {
+      prompt: string;
+      files: ChatDraftAttachment[];
+    }) => {
+      const newThreadMessages: string[] = [];
+      const handledReserved = runReservedChatCommand(prompt, {
+        new: (args) => {
+          if (args.length > 0) {
+            newThreadMessages.push(args);
+            return;
+          }
+          startNewThread();
+          editorController.setContent("");
+        },
+        "rename-chat": (args) => {
+          editorController.setContent("");
+          if (!hasMessages) {
+            stellaToast.add({
+              title: t("chat.renameUnavailableEmptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          setPanelOpen(true);
+          useChatRenameCommandStore.getState().requestRename({
+            threadId: threadRef.threadId,
+            title: args.length > 0 ? args : null,
+          });
+        },
+      });
+      if (!handledReserved) {
+        await handlePromptSubmit({ prompt, files });
+        return;
+      }
+
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      const newThreadRef: ChatThreadRef =
+        workspaceId === undefined
+          ? { scope: "global", threadId: createChatThreadId() }
+          : {
+              scope: "workspace",
+              threadId: createChatThreadId(),
+              workspaceId,
+            };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
+      stop();
+      onNewThread(newThreadRef.threadId);
+    },
+  );
   // A new message (the user's send, or a fresh assistant turn) re-pins the
   // transcript to the bottom and jumps there, regardless of where the user had
   // scrolled.
@@ -2159,6 +2251,14 @@ const FileChatOverlayInner = ({
             }
             onCollapse={() => setPanelOpen(false)}
             scrollRef={threadScrollRef}
+            titleSlot={
+              <FileChatTitleSlot
+                activeOrganizationId={activeOrganizationId}
+                hasMessages={hasMessages}
+                threadRef={threadRef}
+                usedAnonymization={data.usedAnonymization}
+              />
+            }
           >
             <ChatThreadMessages
               activeFileName={activeFile?.fileName}
@@ -2255,7 +2355,7 @@ const FileChatOverlayInner = ({
             selectedReasoningEffort: data.reasoningEffort,
             selectModel: modelSelection.selectModel,
           }}
-          reservedCommands
+          reservedCommands={{ hasPersistedThread: hasMessages }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
             (activeFile || activeDraft || activeExternal) &&
@@ -2275,6 +2375,7 @@ const FileChatOverlayInner = ({
           }
           layout="floating"
           onFocusChange={setComposerFocused}
+          onSubmitError={capturePromptSubmitError}
           minimizedThreadAction={
             !panelOpen && hasThreadContent
               ? {
@@ -2286,18 +2387,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
-          onSubmit={({ prompt, files }) => {
-            const reservedCommand = matchReservedChatCommand(prompt);
-            if (reservedCommand?.id === "new") {
-              startNewThread();
-              editorController.setContent("");
-              return;
-            }
-            detached(
-              handlePromptSubmit({ prompt, files }),
-              "FileChatOverlayInner",
-            );
-          }}
+          onSubmit={handleComposerSubmit}
           pendingCount={0}
           queueWhileGenerating
           sendDisabledReason={sendDisabledReason}
@@ -2344,5 +2434,53 @@ const FileChatOverlayInner = ({
         />
       </ChatApprovalContext>
     </ChatMattersContext>
+  );
+};
+
+type FileChatTitleSlotProps = {
+  activeOrganizationId: string;
+  hasMessages: boolean;
+  threadRef: ChatThreadRef;
+  usedAnonymization: boolean;
+};
+
+// Title area of the floating thread card: resolves the persisted title with
+// the bounded by-id read (file threads are not guaranteed to be in the
+// grouped-threads window) and mounts the shared rename affordance on it.
+const FileChatTitleSlot = ({
+  activeOrganizationId,
+  hasMessages,
+  threadRef,
+  usedAnonymization,
+}: FileChatTitleSlotProps) => {
+  const { data: byIdTitle } = useQuery(
+    chatThreadTitleOptions({
+      activeOrganizationId,
+      // A message-less thread has no server row yet; issuing GET /title for
+      // it would produce an expected but noisy 404.
+      enabled: hasMessages,
+      key: {
+        threadId: threadRef.threadId,
+        workspaceId:
+          threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
+      },
+    }),
+  );
+  const title =
+    byIdTitle !== undefined && !isPlaceholderThreadTitle(byIdTitle)
+      ? byIdTitle
+      : "";
+
+  return (
+    <span className="flex min-w-0 items-center text-xs font-medium">
+      <ChatTitleRename
+        hasMessages={hasMessages}
+        inputClassName="w-44 text-xs"
+        ownsRenameCommand
+        threadRef={threadRef}
+        title={title}
+        usedAnonymization={usedAnonymization}
+      />
+    </span>
   );
 };

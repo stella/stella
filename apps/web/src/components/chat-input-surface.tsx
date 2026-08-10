@@ -7,7 +7,10 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useChatComposerWiring } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatComposerWiring,
+} from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
@@ -26,6 +29,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -77,6 +81,12 @@ type ChatInputSurfaceProps = {
    */
   skillsOrganizationId?: string | undefined;
   /**
+   * Reserved-command availability for this composer's slash menu. Required:
+   * every chat composer must declare its context so command availability is
+   * decided centrally (`getReservedChatCommands`), never per surface.
+   */
+  reservedCommands: ReservedChatCommandContext;
+  /**
    * When provided, the (+) menu gains a Context submenu (mention a matter
    * or one of its files), wired to this surface's own editor. Omit on
    * surfaces without mention insertion.
@@ -104,6 +114,7 @@ export const ChatInputSurface = ({
   dock,
   models,
   skillsOrganizationId,
+  reservedCommands,
   context,
   mcpOrganizationId,
 }: ChatInputSurfaceProps) => {
@@ -137,6 +148,9 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
       getAnalytics().captureError(error);
       stellaToast.add({
         title: t("common.somethingWentWrong"),
@@ -287,7 +301,7 @@ export const ChatInputSurface = ({
                     ? {
                         activeOrganizationId: skillsOrganizationId,
                         editor,
-                        includeReservedCommands: true,
+                        reservedCommands,
                       }
                     : undefined
                 }

@@ -577,6 +577,7 @@
     "recapLoading": "A beszélgetés összefoglalása…",
     "removeSuggestion": "(eltávolítás)",
     "renameThread": "Beszélgetés átnevezése",
+    "renameUnavailableEmptyThread": "Először küldjön egy üzenetet, utána a beszélgetés átnevezhető.",
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "richContentLoading": "Interaktív tartalom betöltése…",
@@ -603,7 +604,10 @@
     },
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "suggestTitle": "Cím javaslata",
+    "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestedFollowupsLabel": "Javasolt követő kérdések",
+    "suggestingTitle": "Cím javaslása…",
     "suggestionSeverity": {
       "style": "Stílus",
       "substantive": "Érdemi",

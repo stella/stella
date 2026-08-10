@@ -29,7 +29,7 @@ import {
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
-import { createChatThreadId, type ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
@@ -255,7 +255,7 @@ export const FileChatOverlayHost = ({
     activeDraft === undefined
       ? { status: "idle" }
       : getCreateDocumentDraftPersistence(activeDraft.toolCallId);
-  const handleNewThread = () => {
+  const handleNewThread = (threadId: ChatThreadId) => {
     // The current runtime state is read again at the interaction boundary.
     // This closes the small interval before React commits the saving payload:
     // a click cannot rotate the thread after the save captured its binding.
@@ -283,7 +283,7 @@ export const FileChatOverlayHost = ({
     // instead of unmounting back to the Suspense spinner. The fresh
     // thread snaps in atomically once its (empty) state is ready.
     startTransition(() => {
-      onChatThreadIdChange(createChatThreadId());
+      onChatThreadIdChange(threadId);
     });
   };
 

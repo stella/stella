@@ -27,6 +27,39 @@ test("prompt improvement menu uses task strategies", async ({ page }) => {
   await expect(page.getByText("Use a more formal tone")).toHaveCount(0);
 });
 
+test("/new with trailing text sends that text on a fresh thread", async ({
+  page,
+}) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.fill("Create the first conversation.");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  const firstThreadPath = new URL(page.url()).pathname;
+  await expect(
+    page.getByRole("log").getByRole("button", { name: "Copy" }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  const firstMessage = "Draft a mutual NDA for Acme.";
+  const routedComposer = page.getByRole("textbox", {
+    name: /type your question|to ask:/iu,
+  });
+  await routedComposer.fill(`/new ${firstMessage}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
+    .not.toBe(firstThreadPath);
+  await expect(page.getByRole("log").getByText(firstMessage)).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByRole("log").getByText(`/new ${firstMessage}`),
+  ).toHaveCount(0);
+});
+
 // The seeded e2e user (test@stella.dev) is an org owner whose org has NO
 // usage_entitlements row — the dark-launch default every production org
 // starts in. We deliberately do not create an entitlement here: regressions

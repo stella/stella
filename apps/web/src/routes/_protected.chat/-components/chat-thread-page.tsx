@@ -14,13 +14,17 @@ import { useTranslations } from "use-intl";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { buttonVariants } from "@stll/ui/components/button-variants";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -42,6 +46,8 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -65,6 +71,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
+  createChatThreadId,
   getChatThreadKey,
   resolveChatContextMatterIds,
   type ChatThreadRef,
@@ -76,7 +83,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { managementRoles } from "@/lib/organization/consts";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
@@ -459,30 +466,104 @@ export const ChatThreadPage = ({
   }, []);
 
   const handleSubmit = async (draft: ChatInputDraft) => {
-    const reservedCommand = matchReservedChatCommand(draft.html);
-    if (reservedCommand?.id === "new") {
-      // Abort any live stream first: `chatThreadOptions` keeps the
-      // in-flight Chat alive in the query cache, so navigating away
-      // would leave it streaming against the abandoned thread.
+    const newThreadMessages: string[] = [];
+    const handledReserved = runReservedChatCommand(draft.html, {
+      new: (args) => {
+        if (args.length > 0) {
+          newThreadMessages.push(args);
+          return;
+        }
+        // Abort any live stream first: `chatThreadOptions` keeps the
+        // in-flight Chat alive in the query cache, so navigating away
+        // would leave it streaming against the abandoned thread.
+        stop();
+        controller.setContent("");
+        if (threadRef.scope === "workspace") {
+          detached(
+            navigate({
+              to: "/chat/workspaces/$workspaceId/new",
+              params: { workspaceId: threadRef.workspaceId },
+              replace: true,
+            }),
+            "ChatThreadPage",
+          );
+        } else {
+          detached(
+            navigate({
+              to: "/chat/new",
+              replace: true,
+            }),
+            "ChatThreadPage",
+          );
+        }
+      },
+      "rename-chat": (args) => {
+        controller.setContent("");
+        if (messages.length === 0) {
+          stellaToast.add({
+            title: t("chat.renameUnavailableEmptyThread"),
+            type: "info",
+          });
+          return;
+        }
+        // The breadcrumb owns this route's rename editor; hand the command
+        // over through the store. `/rename-chat <title>` commits that title
+        // directly; the bare form opens the editor with a suggestion.
+        useChatRenameCommandStore.getState().requestRename({
+          threadId: threadRef.threadId,
+          title: args.length > 0 ? args : null,
+        });
+      },
+    });
+    if (handledReserved) {
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        throw new ChatSubmitPreservedError({
+          message: "Model selection failed",
+        });
+      }
+      const newThreadRef: ChatThreadRef =
+        threadRef.scope === "workspace"
+          ? {
+              scope: "workspace",
+              threadId: createChatThreadId(),
+              workspaceId: threadRef.workspaceId,
+            }
+          : { scope: "global", threadId: createChatThreadId() };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getContextMatterIds: () => selectedContextMatterIds,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files: draft.files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
       stop();
-      controller.setContent("");
-      if (threadRef.scope === "workspace") {
-        detached(
-          navigate({
-            to: "/chat/workspaces/$workspaceId/new",
-            params: { workspaceId: threadRef.workspaceId },
-            replace: true,
-          }),
-          "ChatThreadPage",
-        );
+      if (newThreadRef.scope === "workspace") {
+        await navigate({
+          params: {
+            threadId: newThreadRef.threadId,
+            workspaceId: newThreadRef.workspaceId,
+          },
+          replace: true,
+          to: "/chat/workspaces/$workspaceId/$threadId",
+        });
       } else {
-        detached(
-          navigate({
-            to: "/chat/new",
-            replace: true,
-          }),
-          "ChatThreadPage",
-        );
+        await navigate({
+          params: { threadId: newThreadRef.threadId },
+          replace: true,
+          to: "/chat/$threadId",
+        });
       }
       return;
     }
@@ -688,6 +769,9 @@ export const ChatThreadPage = ({
                     selectedModel: data.model,
                     selectedReasoningEffort: data.reasoningEffort,
                     selectModel: modelSelection.selectModel,
+                  }}
+                  reservedCommands={{
+                    hasPersistedThread: messages.length > 0,
                   }}
                   skillsOrganizationId={activeOrganizationId}
                   dock={

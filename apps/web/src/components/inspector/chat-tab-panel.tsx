@@ -15,7 +15,7 @@
  *   - render the shared `PromptBar` for the composer
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -30,6 +30,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import {
   Conversation,
@@ -42,7 +43,10 @@ import {
   PromptBarPlaceholderContent,
   PromptBarShell,
 } from "@/components/ai-suggestions/host";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  ChatSubmitPreservedError,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
@@ -62,11 +66,15 @@ import {
 } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { ChatTitleSuggestButton } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
+import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -95,7 +103,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
-import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -109,10 +117,6 @@ type ChatTabPanelProps = {
    * picks up the same breadcrumb tint as the rest of the matter.
    */
   matterColor?: string | null | undefined;
-};
-
-const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
 };
 
 export const ChatTabPanel = ({
@@ -144,6 +148,19 @@ export const ChatTabPanel = ({
   const tabActiveSkill = tab.activeSkill;
   const getActiveSkill = useLatestCallback(() => tabActiveSkill);
   const t = useTranslations();
+  const capturePromptSubmitError = useCallback(
+    (error: unknown): void => {
+      if (ChatSubmitPreservedError.is(error)) {
+        return;
+      }
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+    [t],
+  );
   const { ensureAIAvailable } = useAIKeyGate();
 
   // Read live tab state on every send. The Chat instance is created
@@ -371,13 +388,76 @@ export const ChatTabPanel = ({
     editorController.focus();
   };
 
-  // Inline rename — same UX as file tabs.
+  // Inline rename — same UX as file tabs, plus a write-through to the
+  // persisted conversation title once the thread has messages. Without the
+  // write-through, renaming a docked chat would change only the local tab
+  // label while the real conversation title stayed stale on every other
+  // surface. Pre-first-message renames stay label-only, as before.
+  const renameThread = useRenameChatThread(threadRef);
+  const hasThreadMessages = messages.length > 0;
+  // The optimistic label write needs its own rollback: the mutation's
+  // onError restores the query caches but cannot reach this local tabs
+  // store, and a failed PATCH must not leave the tab showing a title the
+  // server rejected.
+  const renameThreadWithLabel = (value: string) => {
+    const previousLabel = tab.label;
+    updateLabel(tab.id, value);
+    renameThread.mutate(value, {
+      onError: () => {
+        updateLabel(tab.id, previousLabel);
+      },
+    });
+  };
   const labelRename = useInlineRename({
     initial: tab.label,
     onCommit: (value) => {
+      if (hasThreadMessages) {
+        renameThreadWithLabel(value);
+        return;
+      }
       updateLabel(tab.id, value);
     },
   });
+
+  // Mirrors of the label edit session, maintained at the handlers below, so
+  // the async title suggestion can tell whether the user typed, cancelled,
+  // or committed while the request was in flight (same stale-draft guard as
+  // `ChatTitleRename`).
+  const labelDraftRef = useRef<string | null>(null);
+  const labelSessionRef = useRef(0);
+  const startLabelEditing = () => {
+    labelSessionRef.current += 1;
+    labelDraftRef.current = tab.label;
+    labelRename.startEditing();
+  };
+  const { suggest: suggestTitle, isPending: isSuggestingTitle } =
+    useSuggestChatThreadTitle(threadRef);
+  const suggestTitleIntoLabel = async () => {
+    const session = labelSessionRef.current;
+    const baseline = labelDraftRef.current;
+    const suggestion = await suggestTitle();
+    if (suggestion === null) {
+      return;
+    }
+    if (
+      labelSessionRef.current !== session ||
+      labelDraftRef.current !== baseline
+    ) {
+      return;
+    }
+    labelDraftRef.current = suggestion;
+    labelRename.setDraft(suggestion);
+  };
+  const startLabelEditingWithSuggestion = () => {
+    startLabelEditing();
+    // Same disabled-wand states re-checked for the `/rename-chat` path: an
+    // anonymized thread refuses suggestions (server-enforced 403), so open
+    // the plain editor instead of firing a doomed request.
+    if (data.usedAnonymization || !hasThreadMessages) {
+      return;
+    }
+    detached(suggestTitleIntoLabel(), "ChatTabPanel");
+  };
 
   // New-chat lives in the composer's status row (the dock), not the
   // pane header: opens a fresh tab with the same scope + context.
@@ -396,11 +476,10 @@ export const ChatTabPanel = ({
   // ribbon label) dispatches `requestRename(tabId)` to the store.
   // PDF tabs read that flag in InspectorPanel; chat tabs own their
   // rename state locally so they consume the flag here.
-  const startRenameFromStore = labelRename.startEditing;
   const consumeRenameRequest = useLatestCallback(() => {
     const store = useInspectorCommandStore.getState();
     if (store.pendingRenameTabId === tab.id) {
-      startRenameFromStore();
+      startLabelEditing();
       store.clearRenameRequest();
     }
   });
@@ -408,6 +487,78 @@ export const ChatTabPanel = ({
     consumeRenameRequest();
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
   });
+
+  const handleComposerSubmit = useLatestCallback(
+    async ({
+      prompt,
+      files,
+    }: {
+      prompt: string;
+      files: ChatDraftAttachment[];
+    }) => {
+      const newThreadMessages: string[] = [];
+      const handledReserved = runReservedChatCommand(prompt, {
+        new: (args) => {
+          if (args.length > 0) {
+            newThreadMessages.push(args);
+            return;
+          }
+          stop();
+          resetChatTabId(tab.id, createChatThreadId());
+          editorController.setContent("");
+        },
+        "rename-chat": (args) => {
+          editorController.setContent("");
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.renameUnavailableEmptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          if (args.length > 0) {
+            renameThreadWithLabel(args);
+            return;
+          }
+          startLabelEditingWithSuggestion();
+        },
+      });
+      if (!handledReserved) {
+        await handlePromptSubmit({ prompt, files });
+        return;
+      }
+
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return;
+      }
+      if (!(await ensureAIAvailable())) {
+        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      }
+      const newThreadId = createChatThreadId();
+      const newThreadRef: ChatThreadRef =
+        tabWorkspaceId === undefined
+          ? { scope: "global", threadId: newThreadId }
+          : {
+              scope: "workspace",
+              threadId: newThreadId,
+              workspaceId: tabWorkspaceId,
+            };
+      await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: {
+          ...chatThreadContext,
+          getSendMode: () => getChatSendMode(newThreadRef),
+        },
+        files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef: newThreadRef,
+      });
+      stop();
+      resetChatTabId(tab.id, newThreadId);
+    },
+  );
 
   return (
     <ChatMattersContext
@@ -433,16 +584,35 @@ export const ChatTabPanel = ({
           onClose={onClose}
           onLabelContextMenu={onLabelContextMenu}
           onMoveToMain={moveToMain}
-          onStartRename={() => labelRename.startEditing()}
+          onStartRename={startLabelEditing}
           rename={{
             active: labelRename.state.mode === "edit",
             value:
               labelRename.state.mode === "edit" ? labelRename.state.draft : "",
-            onChange: labelRename.setDraft,
+            onChange: (value) => {
+              labelDraftRef.current = value;
+              labelRename.setDraft(value);
+            },
             onCommit: () => {
+              labelSessionRef.current += 1;
+              labelDraftRef.current = null;
               detached(labelRename.commit(), "onCommit");
             },
-            onCancel: labelRename.cancel,
+            onCancel: () => {
+              labelSessionRef.current += 1;
+              labelDraftRef.current = null;
+              labelRename.cancel();
+            },
+            action: (
+              <ChatTitleSuggestButton
+                hasMessages={hasThreadMessages}
+                isPending={isSuggestingTitle}
+                onTrigger={() => {
+                  detached(suggestTitleIntoLabel(), "ChatTabPanel");
+                }}
+                usedAnonymization={data.usedAnonymization}
+              />
+            ),
           }}
           tab={tab}
         >
@@ -533,25 +703,14 @@ export const ChatTabPanel = ({
             }
             layout="standalone"
             onFocusChange={setComposerFocused}
+            onSubmitError={capturePromptSubmitError}
             onStop={() => {
               stop();
             }}
-            onSubmit={({ prompt, files }) => {
-              const reservedCommand = matchReservedChatCommand(prompt);
-              if (reservedCommand?.id === "new") {
-                // Abort any live stream first: rotating the tab id remounts the
-                // panel onto a fresh thread while the old Chat would keep
-                // streaming in the query cache.
-                stop();
-                resetChatTabId(tab.id, createChatThreadId());
-                editorController.setContent("");
-                return;
-              }
-              detached(handlePromptSubmit({ prompt, files }), "ChatTabPanel");
-            }}
+            onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating
-            reservedCommands
+            reservedCommands={{ hasPersistedThread: hasThreadMessages }}
             skillsOrganizationId={activeOrganizationId}
             status={isGenerating ? "generating" : "idle"}
             dock={
@@ -635,6 +794,7 @@ type ChatTabPanelChromeProps = {
     onChange: (value: string) => void;
     onCommit: () => void;
     onCancel: () => void;
+    action?: React.ReactNode;
   };
   onMoveToMain?: (() => void) | undefined;
   matterColor?: string | null | undefined;

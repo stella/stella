@@ -4,6 +4,11 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
+import {
+  buildThreadTitlePrompt,
+  cleanGeneratedTitle,
+  TITLE_MAX_OUTPUT_TOKENS,
+} from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -14,9 +19,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
-const TITLE_MAX_LENGTH = 60;
-const TITLE_CONTEXT_MAX_LENGTH = 500;
-const TITLE_MAX_OUTPUT_TOKENS = 32;
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
 type GenerateThreadTitleProps = {
@@ -61,10 +63,6 @@ export const generateThreadTitle = async ({
   });
 
   try {
-    const [userMessage, assistantMessage] = messages;
-    const userText = extractTitleContext(userMessage);
-    const assistantText = extractTitleContext(assistantMessage);
-
     const text = await generateTanStackTextForRole({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
@@ -79,10 +77,7 @@ export const generateThreadTitle = async ({
         scopeKey: threadId,
       }),
       tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
-      prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
-
-User: ${userText}
-Assistant: ${assistantText}`,
+      prompt: buildThreadTitlePrompt(messages),
     });
 
     const title = cleanGeneratedTitle(text);
@@ -170,44 +165,3 @@ Assistant: ${assistantText}`,
     captureError(error, { threadId });
   }
 };
-
-const extractTitleContext = (message: ChatMessage): string =>
-  message.parts
-    .map((part) => (part.type === "text" ? part.content : ""))
-    .join(" ")
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .slice(0, TITLE_CONTEXT_MAX_LENGTH);
-
-const isWrappingQuote = (char: string): boolean => char === '"' || char === "'";
-
-const trimWrappingQuotes = (value: string): string => {
-  let start = 0;
-  let end = value.length;
-
-  while (start < end && isWrappingQuote(value.charAt(start))) {
-    start += 1;
-  }
-  while (end > start && isWrappingQuote(value.charAt(end - 1))) {
-    end -= 1;
-  }
-
-  return value.slice(start, end);
-};
-
-const stripTitlePrefix = (value: string): string => {
-  const prefix = "title:";
-  if (value.slice(0, prefix.length).toLowerCase() !== prefix) {
-    return value;
-  }
-
-  return value.slice(prefix.length).trimStart();
-};
-
-const stripTitleWrapper = (value: string): string => {
-  const unquoted = trimWrappingQuotes(value.trim()).trim();
-  return trimWrappingQuotes(stripTitlePrefix(unquoted).trim()).trim();
-};
-
-const cleanGeneratedTitle = (text: string): string =>
-  stripTitleWrapper(text).slice(0, TITLE_MAX_LENGTH);

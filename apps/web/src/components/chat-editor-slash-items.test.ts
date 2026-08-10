@@ -14,7 +14,7 @@ describe("buildChatSlashItems", () => {
     const withReserved = buildChatSlashItems({
       shortcuts: [],
       skillPages: [],
-      includeReservedCommands: true,
+      reservedCommands: { hasPersistedThread: true },
     });
 
     expect(withoutReserved).toEqual([]);
@@ -28,7 +28,28 @@ describe("buildChatSlashItems", () => {
           name: "new",
         },
       },
+      {
+        kind: "command",
+        command: {
+          command: "/rename-chat",
+          descriptionKey: "chat.renameThread",
+          id: "rename-chat",
+          name: "rename-chat",
+        },
+      },
     ]);
+  });
+
+  test("offers /rename-chat only when the composer has a persisted thread", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [],
+      reservedCommands: { hasPersistedThread: false },
+    });
+
+    expect(
+      items.map((item) => (item.kind === "command" ? item.command.id : "")),
+    ).toEqual(["new"]);
   });
 
   test("includes built-in skills when no installed skill shadows them", () => {
