@@ -1668,6 +1668,18 @@ export const createCaseLawGenerationBackfill =
             : { indexed: 0, status: BACKFILL_STATUS.BUSY };
         }
 
+        return await reconcilePendingPage(guards);
+      };
+
+      // The pending queue is the live path: every newly ingested decision
+      // waits here, so it must be drainable on its own, without the
+      // source-first composition reconcilePending applies after a completed
+      // walk. A queued source repair can span the whole corpus of a source;
+      // routing the live drain behind it would recreate the wedge this
+      // ordering exists to prevent.
+      const reconcilePendingPage = async (
+        guards: ReturnType<typeof createLeaseGuards>,
+      ): Promise<CorpusIndexBackfillResult> => {
         const pendingPage = await selectGenerationPendingPage(scopedDb, {
           generation,
           limit: batchSize,
@@ -1753,6 +1765,27 @@ export const createCaseLawGenerationBackfill =
           ...terminalDeletes,
         ]);
         return { indexed, status: BACKFILL_STATUS.ADVANCED };
+      };
+
+      // Pending projections only: the running-arm drain. Source-eligibility
+      // revisions stay gated on a completed walk (their replay is
+      // authoritative over anything indexed here, so draining pending rows
+      // first cannot break that convergence).
+      const drainPendingProjections = async ({
+        checkpoint: ownedCheckpoint,
+        leaseToken,
+        status,
+      }: LeaseGuardOptions): Promise<CorpusIndexBackfillResult> => {
+        const guards = createLeaseGuards({
+          checkpoint: ownedCheckpoint,
+          leaseToken,
+          status,
+        });
+        await guards.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: async () => await Promise.resolve(),
+        });
+        return await reconcilePendingPage(guards);
       };
 
       if (
@@ -1881,7 +1914,7 @@ export const createCaseLawGenerationBackfill =
       // walk pages that later reach the same rows.
       let drainedIndexed = 0;
       try {
-        const drained = await reconcilePending({
+        const drained = await drainPendingProjections({
           checkpoint: claimedCheckpoint,
           leaseToken,
           status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,

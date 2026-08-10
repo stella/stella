@@ -62,6 +62,7 @@ import {
   type CorpusIndexStepKind,
   type CorpusIndexStreaks,
   INITIAL_CORPUS_INDEX_STREAKS,
+  corpusIndexStallThreshold,
   stepCorpusIndexProgress,
 } from "./corpus-index-progress";
 import {
@@ -1181,8 +1182,13 @@ export const runCaseLawIngest = async (
     // A leaked lease (every step BUSY) and a failing backend (every step
     // throws) both look like idle silence in this loop unless counted.
     let corpusStreaks: CorpusIndexStreaks = INITIAL_CORPUS_INDEX_STREAKS;
+    const stallThreshold = corpusIndexStallThreshold(CORPUS_INDEX_INTERVAL_MS);
     const foldCorpusStep = (kind: CorpusIndexStepKind): void => {
-      const step = stepCorpusIndexProgress(corpusStreaks, kind);
+      const step = stepCorpusIndexProgress({
+        kind,
+        streaks: corpusStreaks,
+        threshold: stallThreshold,
+      });
       corpusStreaks = step.streaks;
       if (!step.stall) {
         return;

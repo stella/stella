@@ -36,12 +36,25 @@ export const INITIAL_CORPUS_INDEX_STREAKS = {
 } as const satisfies CorpusIndexStreaks;
 
 /**
- * Consecutive steps of a kind before the condition is reported. At the
- * loop's 15s interval this is five minutes of unbroken BUSY or failure —
- * long enough to skip lease handoffs and transient backend blips, short
- * enough to name a leaked lease well before its 30-minute expiry.
+ * How long a condition must hold before it is reported: long enough to skip
+ * lease handoffs and transient backend blips, short enough to name a leaked
+ * lease well before its 30-minute expiry.
  */
-export const CORPUS_INDEX_STALL_THRESHOLD = 20;
+export const CORPUS_INDEX_STALL_WINDOW_MS = 5 * 60_000;
+
+/**
+ * The window expressed as consecutive steps of the loop's configured
+ * interval, which spans 250ms to 5 minutes. A fixed step count would report
+ * after five seconds at the fast end and after 100 minutes at the slow end.
+ * The floor of two keeps a single step from reporting at intervals at or
+ * beyond the window, where one BUSY poll can still be a benign lease
+ * handoff.
+ */
+export const corpusIndexStallThreshold = (intervalMs: number): number =>
+  Math.max(
+    2,
+    Math.ceil(CORPUS_INDEX_STALL_WINDOW_MS / Math.max(1, intervalMs)),
+  );
 
 export type CorpusIndexStallSignal = {
   kind: "sustained_busy" | "sustained_failure";
@@ -59,6 +72,13 @@ export type CorpusIndexProgressStep = {
   stall: CorpusIndexStallSignal | null;
 };
 
+type CorpusIndexProgressOptions = {
+  kind: CorpusIndexStepKind;
+  streaks: CorpusIndexStreaks;
+  /** From corpusIndexStallThreshold(intervalMs), computed once per loop. */
+  threshold: number;
+};
+
 /**
  * Fold one step into the loop's stall state.
  *
@@ -68,17 +88,18 @@ export type CorpusIndexProgressStep = {
  * that proves the subsystem live — rows indexed, or a clean caught-up
  * probe — clears both.
  */
-export const stepCorpusIndexProgress = (
-  streaks: CorpusIndexStreaks,
-  kind: CorpusIndexStepKind,
-): CorpusIndexProgressStep => {
+export const stepCorpusIndexProgress = ({
+  kind,
+  streaks,
+  threshold,
+}: CorpusIndexProgressOptions): CorpusIndexProgressStep => {
   switch (kind) {
     case CORPUS_INDEX_STEP.ADVANCED:
     case CORPUS_INDEX_STEP.COMPLETE:
       return { streaks: INITIAL_CORPUS_INDEX_STREAKS, stall: null };
     case CORPUS_INDEX_STEP.BUSY: {
       const busySteps = streaks.busySteps + 1;
-      if (busySteps < CORPUS_INDEX_STALL_THRESHOLD) {
+      if (busySteps < threshold) {
         return { streaks: { ...streaks, busySteps }, stall: null };
       }
       return {
@@ -88,7 +109,7 @@ export const stepCorpusIndexProgress = (
     }
     case CORPUS_INDEX_STEP.FAILED: {
       const failedSteps = streaks.failedSteps + 1;
-      if (failedSteps < CORPUS_INDEX_STALL_THRESHOLD) {
+      if (failedSteps < threshold) {
         return { streaks: { ...streaks, failedSteps }, stall: null };
       }
       return {
