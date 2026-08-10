@@ -1421,9 +1421,11 @@ jobs:
 
           # Vite serves HTML before its initial optimizer finishes. Starting
           # the timed canary then makes compiler load consume the test budget,
-          # so wait for the atomically published optimizer metadata first.
+          # so wait until metadata exists and no optimizer working directory
+          # remains. An older metadata file can coexist with an active rebuild.
           for i in {1..180}; do
-            if [[ -f apps/web/node_modules/.vite/deps/_metadata.json ]]; then
+            if [[ -f apps/web/node_modules/.vite/deps/_metadata.json ]] &&
+              ! compgen -G 'apps/web/node_modules/.vite/deps_temp_*' > /dev/null; then
               echo "Initial dependency optimization finished after ${i}s"
               exit 0
             fi
