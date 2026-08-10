@@ -481,7 +481,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.1",
@@ -513,7 +513,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "0.4.3",
+      "version": "0.5.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -531,7 +531,7 @@
     },
     "packages/conditions": {
       "name": "@stll/conditions",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
         "valibot": "catalog:",
@@ -554,7 +554,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "jszip": "catalog:",
       },
@@ -694,7 +694,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
