@@ -18,13 +18,16 @@ import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-v
 import { DocumentIcon } from "@/components/document-icon";
 import { getEmailAttachmentActivationId } from "@/components/inspector/email-attachments-facet.logic";
 import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   EMAIL_VIEWER_LAYOUT,
   getEmailAttachmentSize,
+  getEmailBodyFrameHeight,
   getEmailFileChatContext,
   localizeEmailBodyHtml,
   parseEmailDate,
   type EmailBodyFoldLabels,
+  type EmailChatHost,
   type EmailChatMode,
   type EmailResolvedChatMode,
   type EmailViewerLayout,
@@ -54,6 +57,7 @@ type EmailFileViewerBaseProps = EmailHtmlViewerProps & {
   entityId: string;
   fileName: string;
   overlayActivation?: (typeof FILE_CHAT_OVERLAY_ACTIVATION)[keyof typeof FILE_CHAT_OVERLAY_ACTIVATION];
+  chatHost?: EmailChatHost;
 };
 
 type EmailFileViewerProps = EmailFileViewerBaseProps &
@@ -76,18 +80,12 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
     fileName,
     onOpenAttachment,
     overlayActivation = FILE_CHAT_OVERLAY_ACTIVATION.active,
+    chatHost = EMAIL_CHAT_HOST.self,
     workspaceId,
   } = props;
   const isContextual = chatMode === EMAIL_CHAT_MODE.contextual;
-  return (
-    <EmailViewerWithAI
-      chatMode={chatMode}
-      entityId={entityId}
-      fieldId={fieldId}
-      fileName={fileName}
-      overlayActivation={overlayActivation}
-      workspaceId={workspaceId}
-    >
+  const content = (
+    <>
       <EmailHtmlViewer
         entityId={entityId}
         fieldId={fieldId}
@@ -116,6 +114,23 @@ export const EmailFileViewer = (props: EmailFileViewerProps) => {
           </Button>
         </div>
       ) : null}
+    </>
+  );
+
+  if (chatHost === EMAIL_CHAT_HOST.parent) {
+    return content;
+  }
+
+  return (
+    <EmailViewerWithAI
+      chatMode={chatMode}
+      entityId={entityId}
+      fieldId={fieldId}
+      fileName={fileName}
+      overlayActivation={overlayActivation}
+      workspaceId={workspaceId}
+    >
+      {content}
     </EmailViewerWithAI>
   );
 };
@@ -552,7 +567,8 @@ const scrollToEmailCitation = ({
 const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
   const bodyDocument = frame?.contentDocument;
   const body = bodyDocument?.body;
-  if (!frame || !bodyDocument || !body) {
+  const documentElement = bodyDocument?.documentElement;
+  if (!frame || !bodyDocument || !body || !documentElement) {
     return;
   }
   const bodyStyle = bodyDocument.defaultView?.getComputedStyle(body);
@@ -560,11 +576,23 @@ const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
     Number.parseFloat(bodyStyle?.marginBlockStart ?? "0") || 0;
   const marginBlockEnd =
     Number.parseFloat(bodyStyle?.marginBlockEnd ?? "0") || 0;
-  const bodyHeight = body.getBoundingClientRect().height;
-  frame.style.height = `${Math.max(
-    1,
-    Math.ceil(bodyHeight + marginBlockStart + marginBlockEnd),
-  )}px`;
+  frame.style.height = `${getEmailBodyFrameHeight({
+    body: {
+      clientHeight: body.clientHeight,
+      offsetHeight: body.offsetHeight,
+      renderedHeight: body.getBoundingClientRect().height,
+      scrollHeight: body.scrollHeight,
+      scrollWidth: body.scrollWidth,
+    },
+    documentElement: {
+      clientHeight: documentElement.clientHeight,
+      offsetHeight: documentElement.offsetHeight,
+      scrollHeight: documentElement.scrollHeight,
+      scrollWidth: documentElement.scrollWidth,
+    },
+    marginBlockEnd,
+    marginBlockStart,
+  })}px`;
 };
 
 const openAncestorDetails = (target: HTMLElement): void => {

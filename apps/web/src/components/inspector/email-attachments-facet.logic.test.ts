@@ -34,6 +34,29 @@ describe("email attachment preview kind", () => {
     ).toBe("A");
   });
 
+  test("preserves generic UTF-16 byte order and legacy text encodings", () => {
+    expect(
+      decodeEmailTextAttachment({
+        buffer: Uint8Array.from([0xfe, 0xff, 0x01, 0x7d]).buffer,
+        charset: "utf-16",
+      }),
+    ).toBe("Ž");
+
+    for (const [charset, bytes, text] of [
+      ["windows-1250", [0x50, 0xf8, 0xed, 0x6c, 0x69, 0x9a], "Příliš"],
+      ["iso-8859-2", [0xa3, 0xf3, 0x64, 0xbc], "Łódź"],
+      ["shift_jis", [0x82, 0xa0], "あ"],
+      ["gbk", [0xd6, 0xd0], "中"],
+    ] as const) {
+      expect(
+        decodeEmailTextAttachment({
+          buffer: Uint8Array.from(bytes).buffer,
+          charset,
+        }),
+      ).toBe(text);
+    }
+  });
+
   test("maps attachment activation to a preview id only when supported", () => {
     expect(
       getEmailAttachmentActivationId({ id: "attachment-2", previewable: true }),

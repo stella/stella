@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import {
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   type EmailTextAttachmentCharset,
@@ -74,22 +72,23 @@ export const decodeEmailTextAttachment = ({
   charset: EmailTextAttachmentCharset | null;
 }): string => {
   const bytes = new Uint8Array(buffer);
+  if (charset === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16) {
+    const byteOrder = getByteOrderMarkEncoding(bytes);
+    return byteOrder === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be
+      ? decodeUtf16Be(bytes)
+      : new TextDecoder("utf-16").decode(bytes);
+  }
   const encoding =
     charset ??
     getByteOrderMarkEncoding(bytes) ??
     EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
   switch (encoding) {
-    case EMAIL_TEXT_ATTACHMENT_CHARSET.utf8:
-      return new TextDecoder().decode(bytes);
-    case EMAIL_TEXT_ATTACHMENT_CHARSET.windows1252:
-      return new TextDecoder("windows-1252").decode(bytes);
     case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le:
       return new TextDecoder("utf-16").decode(bytes);
     case EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be:
       return decodeUtf16Be(bytes);
     default:
-      encoding satisfies never;
-      return panic("Unsupported email attachment charset");
+      return new TextDecoder(encoding).decode(bytes);
   }
 };
 

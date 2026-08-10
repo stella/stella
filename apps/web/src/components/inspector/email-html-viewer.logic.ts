@@ -11,6 +11,11 @@ export const EMAIL_CHAT_MODE = {
   resolutionError: "resolution-error",
 } as const;
 
+export const EMAIL_CHAT_HOST = {
+  parent: "parent",
+  self: "self",
+} as const;
+
 export const EMAIL_VIEWER_LAYOUT = {
   contextualChat: "contextual-chat",
   standard: "standard",
@@ -18,6 +23,8 @@ export const EMAIL_VIEWER_LAYOUT = {
 
 export type EmailChatMode =
   (typeof EMAIL_CHAT_MODE)[keyof typeof EMAIL_CHAT_MODE];
+export type EmailChatHost =
+  (typeof EMAIL_CHAT_HOST)[keyof typeof EMAIL_CHAT_HOST];
 export type EmailResolvedChatMode = Exclude<
   EmailChatMode,
   typeof EMAIL_CHAT_MODE.resolutionError
@@ -106,6 +113,56 @@ export const getEmailAttachmentSize = (
   }
 
   return { unit: "gigabyte", value: sizeBytes / (1000 * 1000 * 1000) };
+};
+
+type EmailBodyFrameHeightMetrics = {
+  body: {
+    clientHeight: number;
+    offsetHeight: number;
+    renderedHeight: number;
+    scrollHeight: number;
+    scrollWidth: number;
+  };
+  documentElement: {
+    clientHeight: number;
+    offsetHeight: number;
+    scrollHeight: number;
+    scrollWidth: number;
+  };
+  marginBlockEnd: number;
+  marginBlockStart: number;
+};
+
+/**
+ * Email HTML often relies on legacy floats. Floats can extend below the
+ * body's rendered box, but remain part of its vertical scroll extent. Keep
+ * the iframe sized to every vertical measurement; horizontal overflow stays
+ * inside the iframe and must not affect its height.
+ */
+export const getEmailBodyFrameHeight = ({
+  body,
+  documentElement,
+  marginBlockEnd,
+  marginBlockStart,
+}: EmailBodyFrameHeightMetrics): number => {
+  const bodyHeight = Math.max(
+    body.clientHeight,
+    body.offsetHeight,
+    body.renderedHeight,
+    body.scrollHeight,
+  );
+  const documentHeight = Math.max(
+    documentElement.clientHeight,
+    documentElement.offsetHeight,
+    documentElement.scrollHeight,
+  );
+
+  return Math.max(
+    1,
+    Math.ceil(
+      Math.max(bodyHeight + marginBlockStart + marginBlockEnd, documentHeight),
+    ),
+  );
 };
 
 export type EmailBodyFoldLabels = Record<

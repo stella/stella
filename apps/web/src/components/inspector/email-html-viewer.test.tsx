@@ -9,8 +9,10 @@ import { IntlProvider } from "use-intl";
 import {
   EmailFileViewer,
   EmailHtmlViewer,
+  EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
 import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   EMAIL_EXTRACTION_POLL_INTERVAL_MS,
   EMAIL_VIEWER_LAYOUT,
@@ -142,6 +144,32 @@ describe("email viewer", () => {
     expect(html).toContain('data-file-viewer-root="true"');
     expect(html).not.toContain("pb-40");
     expect(html).toContain('role="status"');
+  });
+
+  test("lets the persistent facet shell own the contextual chat runtime", () => {
+    const html = renderWithProviders(
+      <EmailViewerWithAI
+        chatMode={EMAIL_CHAT_MODE.contextual}
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        workspaceId="workspace-1"
+      >
+        <EmailFileViewer
+          chatMode={EMAIL_CHAT_MODE.contextual}
+          entityId="entity-1"
+          fieldId="field-1"
+          fileName="message.eml"
+          onOpenAttachment={() => undefined}
+          chatHost={EMAIL_CHAT_HOST.parent}
+          workspaceId="workspace-1"
+        />
+      </EmailViewerWithAI>,
+      new QueryClient(),
+    );
+
+    expect(html.match(/data-file-viewer-ai="true"/gu)).toHaveLength(1);
+    expect(html.match(/data-file-viewer-root="true"/gu)).toHaveLength(1);
   });
 
   test("surfaces contextual chat resolution failures with retry", () => {

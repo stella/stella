@@ -43,7 +43,9 @@ import {
 } from "@/components/inspector/email-attachments-facet.logic";
 import { EmailViewerWithAI } from "@/components/inspector/email-html-viewer";
 import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
+  type EmailChatHost,
   type EmailChatMode,
 } from "@/components/inspector/email-html-viewer.logic";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -78,6 +80,7 @@ type EmailAttachmentsFacetProps = {
   overlayActivation: FileChatOverlayActivation;
   scaleOffset: number;
   selectedId: string | null;
+  chatHost?: EmailChatHost;
   workspaceId: string;
 };
 
@@ -108,6 +111,7 @@ export const EmailAttachmentsFacet = ({
   overlayActivation,
   scaleOffset,
   selectedId,
+  chatHost = EMAIL_CHAT_HOST.self,
   workspaceId,
 }: EmailAttachmentsFacetProps) => {
   const t = useTranslations();
@@ -240,15 +244,8 @@ export const EmailAttachmentsFacet = ({
       />
     );
 
-  return (
-    <EmailViewerWithAI
-      chatMode={chatMode}
-      entityId={entityId}
-      fieldId={fieldId}
-      fileName={fileName}
-      overlayActivation={overlayActivation}
-      workspaceId={workspaceId}
-    >
+  const facet = (
+    <>
       {content}
       <Dialog
         onOpenChange={(open) => {
@@ -293,6 +290,23 @@ export const EmailAttachmentsFacet = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+    </>
+  );
+
+  if (chatHost === EMAIL_CHAT_HOST.parent) {
+    return facet;
+  }
+
+  return (
+    <EmailViewerWithAI
+      chatMode={chatMode}
+      entityId={entityId}
+      fieldId={fieldId}
+      fileName={fileName}
+      overlayActivation={overlayActivation}
+      workspaceId={workspaceId}
+    >
+      {facet}
     </EmailViewerWithAI>
   );
 };

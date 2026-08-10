@@ -5,7 +5,7 @@
  */
 
 import { panic } from "better-result";
-import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull } from "drizzle-orm";
 
 import { session as authSession } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -72,6 +72,13 @@ const resolveTarget = async () => {
       name: workspaces.name,
     })
     .from(workspaces)
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, workspaces.id),
+        eq(workspaceMembers.userId, activeSession.userId),
+      ),
+    )
     .where(
       explicitWorkspaceId
         ? and(
@@ -83,6 +90,7 @@ const resolveTarget = async () => {
             eq(workspaces.organizationId, activeOrganizationId),
           ),
     )
+    .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
     .limit(1);
   const existingWorkspace = workspaceRows.at(0);
   if (!existingWorkspace && explicitWorkspaceId) {
@@ -91,7 +99,7 @@ const resolveTarget = async () => {
 
   const workspace = existingWorkspace ?? {
     id: seedId<"workspace">(
-      `email-viewer-demo-${activeOrganizationId}-workspace`,
+      `email-viewer-demo-${activeOrganizationId}-${activeSession.userId}-workspace`,
     ),
     organizationId: activeOrganizationId,
     name: EMAIL_QA_MATTER_NAME,
@@ -103,7 +111,7 @@ const resolveTarget = async () => {
         id: workspace.id,
         organizationId: workspace.organizationId,
         name: workspace.name,
-        reference: EMAIL_QA_MATTER_REFERENCE,
+        reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
       })
       .onConflictDoUpdate({
         target: workspaces.id,
@@ -144,12 +152,26 @@ const resolveTarget = async () => {
       system: true,
       kinds: ["document"],
     });
-    await rootDb.insert(workspaceViews).values(
-      buildDefaultViewRows({
-        workspaceId: workspace.id,
-        filePropertyId: fileProperty.id,
-      }),
-    );
+  }
+
+  const defaultViews = buildDefaultViewRows({
+    workspaceId: workspace.id,
+    filePropertyId: fileProperty.id,
+  });
+  const existingViews = await rootDb
+    .select({ name: workspaceViews.name, layout: workspaceViews.layout })
+    .from(workspaceViews)
+    .where(eq(workspaceViews.workspaceId, workspace.id));
+  const missingDefaultViews = defaultViews.filter(
+    (defaultView) =>
+      !existingViews.some(
+        (existingView) =>
+          existingView.name === defaultView.name &&
+          existingView.layout.type === defaultView.layout.type,
+      ),
+  );
+  if (missingDefaultViews.length > 0) {
+    await rootDb.insert(workspaceViews).values(missingDefaultViews);
   }
 
   return {
@@ -256,6 +278,10 @@ const seedEmailViewerDemo = async () => {
       // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
       await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
     );
+    const extractionEnvelope = {
+      ciphertext: Buffer.from(extractedText, "utf-8"),
+      iv: Buffer.alloc(IV_BYTES),
+    };
     // oxlint-disable-next-line no-await-in-loop -- provenance points at the field inserted above
     await rootDb
       .insert(extractedContent)
@@ -267,8 +293,8 @@ const seedEmailViewerDemo = async () => {
         sourceFieldId: fieldId,
         sourceFileId: fileId,
         sourceSha256Hex: sha256Hex,
-        ciphertext: Buffer.from(extractedText, "utf-8"),
-        iv: Buffer.alloc(IV_BYTES),
+        ciphertext: extractionEnvelope.ciphertext,
+        iv: extractionEnvelope.iv,
         charCount: extractedText.length,
         language: null,
         extractedAt: new Date(),
@@ -280,7 +306,8 @@ const seedEmailViewerDemo = async () => {
           sourceFieldId: fieldId,
           sourceFileId: fileId,
           sourceSha256Hex: sha256Hex,
-          ciphertext: Buffer.from(extractedText, "utf-8"),
+          ciphertext: extractionEnvelope.ciphertext,
+          iv: extractionEnvelope.iv,
           charCount: extractedText.length,
           extractedAt: new Date(),
         },

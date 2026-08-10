@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getEmailAttachmentSize,
+  getEmailBodyFrameHeight,
   localizeEmailBodyHtml,
   parseEmailDate,
 } from "@/components/inspector/email-html-viewer.logic";
@@ -37,6 +38,50 @@ describe("email viewer metadata", () => {
       unit: "megabyte",
       value: 1,
     });
+  });
+
+  test("uses vertical scroll extents to size legacy float layouts", () => {
+    expect(
+      getEmailBodyFrameHeight({
+        body: {
+          clientHeight: 120,
+          offsetHeight: 120,
+          renderedHeight: 120,
+          scrollHeight: 480,
+          scrollWidth: 120,
+        },
+        documentElement: {
+          clientHeight: 120,
+          offsetHeight: 120,
+          scrollHeight: 480,
+          scrollWidth: 120,
+        },
+        marginBlockEnd: 12,
+        marginBlockStart: 8,
+      }),
+    ).toBe(500);
+  });
+
+  test("does not let horizontal overflow change the iframe height", () => {
+    expect(
+      getEmailBodyFrameHeight({
+        body: {
+          clientHeight: 140,
+          offsetHeight: 140,
+          renderedHeight: 140,
+          scrollHeight: 140,
+          scrollWidth: 12_000,
+        },
+        documentElement: {
+          clientHeight: 140,
+          offsetHeight: 140,
+          scrollHeight: 140,
+          scrollWidth: 12_000,
+        },
+        marginBlockEnd: 0,
+        marginBlockStart: 0,
+      }),
+    ).toBe(140);
   });
 });
 

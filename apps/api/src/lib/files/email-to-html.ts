@@ -19,6 +19,7 @@ import PostalMime, { type Address } from "postal-mime";
 import {
   EMAIL_HEADER_CITATION_ID,
   EMAIL_TEXT_ATTACHMENT_CHARSET,
+  EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
   type EmailTextAttachmentCharset,
 } from "@stll/api-contract";
 
@@ -350,23 +351,13 @@ const normalizeEmailAttachmentCharset = (
     return null;
   }
 
-  switch (normalized) {
-    case "cp1252":
-    case "iso-8859-1":
-    case "latin1":
-    case "windows-1252":
-      return EMAIL_TEXT_ATTACHMENT_CHARSET.windows1252;
-    case "us-ascii":
-    case "utf-8":
-      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
-    case "utf-16":
-    case "utf-16le":
-      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le;
-    case "utf-16be":
-      return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be;
-    default:
-      return null;
-  }
+  return (
+    Object.values(EMAIL_TEXT_ATTACHMENT_CHARSET).find((charset) =>
+      EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS[charset].some(
+        (label) => label === normalized,
+      ),
+    ) ?? null
+  );
 };
 
 const resolveEmailAttachmentCharset = (

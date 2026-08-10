@@ -28,8 +28,12 @@ import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
 import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
-import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import {
+  EmailFileViewer,
+  EmailViewerWithAI,
+} from "@/components/inspector/email-html-viewer";
+import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   getEmailChatMode,
   getEmailExtractionRefetchInterval,
@@ -256,6 +260,11 @@ export const FileTabPanel = ({
       : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
   const emailAttachmentOverlayActivation =
     isActive && tab.facet === "attachments"
+      ? FILE_CHAT_OVERLAY_ACTIVATION.active
+      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
+  const emailSidepeekOverlayActivation =
+    isActive &&
+    ((tab.facet ?? "preview") === "preview" || tab.facet === "attachments")
       ? FILE_CHAT_OVERLAY_ACTIVATION.active
       : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
   const openEmailAttachment = (attachmentId: string | null) => {
@@ -860,6 +869,7 @@ export const FileTabPanel = ({
             onRetryChatResolution={() => {
               detached(entityQuery.refetch(), "FileTabPanel");
             }}
+            chatHost={EMAIL_CHAT_HOST.parent}
             workspaceId={tab.workspaceId}
           />
         );
@@ -872,6 +882,7 @@ export const FileTabPanel = ({
           fileName={tab.fileName}
           onOpenAttachment={openEmailAttachment}
           overlayActivation={emailPreviewOverlayActivation}
+          chatHost={EMAIL_CHAT_HOST.parent}
           workspaceId={tab.workspaceId}
         />
       );
@@ -1151,6 +1162,7 @@ export const FileTabPanel = ({
               overlayActivation={emailAttachmentOverlayActivation}
               scaleOffset={emailAttachmentScaleOffset}
               selectedId={selectedEmailAttachmentId}
+              chatHost={EMAIL_CHAT_HOST.parent}
               workspaceId={tab.workspaceId}
             />
           )}
@@ -1254,6 +1266,20 @@ export const FileTabPanel = ({
       )}
     </>
   );
+  const sidepeekContent = isEmailDisplay ? (
+    <EmailViewerWithAI
+      chatMode={emailChatMode}
+      entityId={tab.entityId}
+      fieldId={tab.id}
+      fileName={tab.fileName}
+      overlayActivation={emailSidepeekOverlayActivation}
+      workspaceId={tab.workspaceId}
+    >
+      {sidepeekBody}
+    </EmailViewerWithAI>
+  ) : (
+    sidepeekBody
+  );
   return (
     <div
       className={cn(
@@ -1267,7 +1293,7 @@ export const FileTabPanel = ({
         <>
           {contextBar}
           {facetBar}
-          {sidepeekBody}
+          {sidepeekContent}
         </>
       ) : (
         <MeasuredPdfProvider
@@ -1288,7 +1314,7 @@ export const FileTabPanel = ({
         >
           {contextBar}
           {facetBar}
-          {sidepeekBody}
+          {sidepeekContent}
         </MeasuredPdfProvider>
       )}
     </div>
