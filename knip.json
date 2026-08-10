@@ -21,6 +21,7 @@
       "entry": [
         "src/server.ts!",
         "src/lib/files/pdf-worker.ts!",
+        "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
