@@ -320,6 +320,7 @@ while (true) {
     break;
   }
 
+  // oxlint-disable-next-line no-await-in-loop -- sequential keyset pages: the next page's cursor depends on this one completing
   await trimInChunks(rows);
 
   scanned += rows.length;
