@@ -78,7 +78,7 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-const readOfficeCitationEndpoint = createSafeHandler(
+export const readOfficeCitationEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
