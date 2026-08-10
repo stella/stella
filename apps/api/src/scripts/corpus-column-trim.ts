@@ -30,6 +30,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -76,7 +77,7 @@ if (parsed.type === "invalid") {
   console.error(parsed.message);
   process.exit(2);
 }
-const { limit, dryRun, force } = parsed.args;
+const { limit, after, dryRun, force } = parsed.args;
 
 const gate = columnTrimGate({ mode: corpusStorageMode, force });
 if (gate.type === "refused") {
@@ -96,7 +97,12 @@ const runLabel = [
 
 console.log(`=== CORPUS COLUMN TRIM (${runLabel}) ===`);
 
-let lastId: SafeId<"caseLawDecision"> | null = null;
+// Resuming from --after keeps a restart's first page from re-skipping the
+// whole trimmed prefix of the id space, a scan that stops fitting a
+// statement timeout once enough rows are trimmed. The cursor rides on every
+// progress line, so a supervisor can pass the last one back in.
+let lastId: SafeId<"caseLawDecision"> | null =
+  after === null ? null : toSafeId<"caseLawDecision">(after);
 let trimmed = 0;
 let skipped = 0;
 let failed = 0;
@@ -307,7 +313,9 @@ while (true) {
 
   scanned += rows.length;
   lastId = rows.at(-1)?.id ?? lastId;
-  console.log(`  trimmed=${trimmed} skipped=${skipped} failed=${failed}`);
+  console.log(
+    `  trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastId}`,
+  );
 }
 
 console.log(

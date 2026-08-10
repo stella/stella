@@ -177,6 +177,13 @@ export const columnTrimGate = ({
 export type ColumnTrimArgs = {
   /** null = no cap; process every candidate row. */
   limit: number | null;
+  /**
+   * Resume the keyset walk strictly after this decision id. A restart
+   * without it re-skips every already-trimmed row from the start of the
+   * id space, and once enough rows are trimmed that scan no longer fits a
+   * statement timeout: the run dies on its first page forever.
+   */
+  after: string | null;
   dryRun: boolean;
   force: boolean;
 };
@@ -193,10 +200,13 @@ const parseLimit = (raw: string | undefined): number | null => {
   return parsed > 0 ? parsed : null;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
 export const parseColumnTrimArgs = (
   argv: readonly string[],
 ): ParsedColumnTrimArgs => {
   let limit: number | null = null;
+  let after: string | null = null;
   let dryRun = false;
   let force = false;
 
@@ -227,8 +237,21 @@ export const parseColumnTrimArgs = (
       limit = parsed;
       continue;
     }
+    if (argument === "--after" || argument.startsWith("--after=")) {
+      const raw = argument.startsWith("--after=")
+        ? argument.slice("--after=".length)
+        : argv[++i];
+      if (raw === undefined || !UUID.test(raw)) {
+        return {
+          type: "invalid",
+          message: "--after requires a decision id (UUID)",
+        };
+      }
+      after = raw;
+      continue;
+    }
     return { type: "invalid", message: `Unknown argument: ${argument}` };
   }
 
-  return { type: "parsed", args: { limit, dryRun, force } };
+  return { type: "parsed", args: { limit, after, dryRun, force } };
 };
