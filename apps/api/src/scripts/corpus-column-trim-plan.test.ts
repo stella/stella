@@ -213,22 +213,40 @@ describe("columnTrimGate", () => {
 });
 
 describe("parseColumnTrimArgs", () => {
-  test("defaults to an uncapped, mutating, gated run", () => {
+  test("defaults to an uncapped, mutating, gated run from the start", () => {
     expect(parseColumnTrimArgs([])).toEqual({
       type: "parsed",
-      args: { limit: null, dryRun: false, force: false },
+      args: { limit: null, after: null, dryRun: false, force: false },
     });
   });
 
   test("accepts both --limit forms alongside the flags", () => {
     expect(parseColumnTrimArgs(["--limit", "25", "--dry-run"])).toEqual({
       type: "parsed",
-      args: { limit: 25, dryRun: true, force: false },
+      args: { limit: 25, after: null, dryRun: true, force: false },
     });
     expect(parseColumnTrimArgs(["--limit=25", "--force"])).toEqual({
       type: "parsed",
-      args: { limit: 25, dryRun: false, force: true },
+      args: { limit: 25, after: null, dryRun: false, force: true },
     });
+  });
+
+  test("accepts both --after forms and requires a UUID", () => {
+    const id = "019dd0c5-f3bc-7000-84b2-cf5f7a95ce5f";
+    expect(parseColumnTrimArgs(["--after", id])).toEqual({
+      type: "parsed",
+      args: { limit: null, after: id, dryRun: false, force: false },
+    });
+    expect(parseColumnTrimArgs([`--after=${id}`, "--dry-run"])).toEqual({
+      type: "parsed",
+      args: { limit: null, after: id, dryRun: true, force: false },
+    });
+    for (const argv of [["--after"], ["--after", "not-a-uuid"]]) {
+      expect(parseColumnTrimArgs(argv)).toEqual({
+        type: "invalid",
+        message: "--after requires a decision id (UUID)",
+      });
+    }
   });
 
   test("rejects a non-positive, non-numeric, or absent limit", () => {
