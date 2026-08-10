@@ -29,9 +29,9 @@ import { formatFullTimestamp } from "@/lib/relative-time";
  * instead of rendering as a blank row.
  */
 const PROPERTY_LABEL_KEYS = {
-  title: "common.documentTitle",
+  title: "inspector.metadata.documentProperties.keys.title",
   subject: "inspector.metadata.documentProperties.keys.subject",
-  description: "common.description",
+  description: "inspector.metadata.documentProperties.keys.description",
   keywords: "inspector.metadata.documentProperties.keys.keywords",
   category: "common.category",
   contentStatus: "inspector.metadata.documentProperties.keys.contentStatus",

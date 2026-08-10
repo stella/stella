@@ -90,6 +90,7 @@
     "chat.toolCall.field",
     "clauses.body",
     "clauses.deleteClause",
+    "clauses.titleLabel",
     "clauses.versionRestored",
     "consent.error",
     "contacts.customFields.value",
@@ -130,6 +131,7 @@
     "flows.status.skipped",
     "flows.steps.createDocument",
     "flows.trigger.manual",
+    "folio.comments.visibility",
     "folio.deleted",
     "guides.action.start",
     "guides.status.skipped",
@@ -140,6 +142,9 @@
     "inspector.facet.anonymization",
     "inspector.matterPicker.allMatters",
     "inspector.metadata.author",
+    "inspector.metadata.documentProperties.keys.createdAt",
+    "inspector.metadata.documentProperties.keys.description",
+    "inspector.metadata.documentProperties.keys.title",
     "inspector.metadata.updatedAt",
     "knowledge.agentSkills.enabled",
     "knowledge.agentSkills.newFolder",
@@ -263,6 +268,7 @@
     "workspaces.newDocument",
     "workspaces.newFolder",
     "workspaces.overview.activity.actorActions.cancelled",
+    "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.ownerType.personal",
@@ -594,6 +600,12 @@
     ],
     "inspector.metadata.documentProperties.keys.manager": [
       "de"
+    ],
+    "inspector.metadata.documentProperties.keys.pages": [
+      "fr"
+    ],
+    "inspector.metadata.documentProperties.keys.slides": [
+      "pt-BR"
     ],
     "knowledge.agentSkills.formDescription": [
       "fr"

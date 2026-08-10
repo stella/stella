@@ -649,7 +649,7 @@
     {
       "id": "template",
       "en": "Template",
-      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
+      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens. The document-property labels under inspector.metadata.documentProperties are exempt: they name fields another application wrote, and must read as that application names them.",
       "forbidden": {
         "ar": ["نموذج"],
         "cs": [
@@ -679,7 +679,8 @@
         "es": "Plantilla",
         "fr": "Modèle",
         "pt-BR": "Modelo"
-      }
+      },
+      "keyExempt": ["inspector.metadata.documentProperties"]
     },
     {
       "id": "view",

@@ -296,6 +296,74 @@ describe("terminology", () => {
   });
 });
 
+describe("terminology: keyExempt", () => {
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [
+          {
+            id: "template",
+            en: "Template",
+            forbidden: { cs: ["šablona"] },
+            forbiddenAlways: { cs: ["šablonovač"] },
+            keyExempt: ["documentProperties"],
+            translations: fill("x"),
+          },
+        ],
+        nouns: [],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test("still flags the rendering on a key outside the exemption", () => {
+    expect(
+      findForbiddenTerms(
+        "Template",
+        "Šablona",
+        "cs",
+        rules,
+        "templates.studio.heading",
+      ),
+    ).toEqual(["šablona"]);
+  });
+
+  test("allows the rendering on an exempt key", () => {
+    expect(
+      findForbiddenTerms(
+        "Template",
+        "Šablona",
+        "cs",
+        rules,
+        "inspector.metadata.documentProperties.keys.template",
+      ),
+    ).toEqual([]);
+  });
+
+  test("exempts the ungated bans too, since the whole concept is exempt", () => {
+    expect(
+      findForbiddenTerms(
+        "Something else entirely",
+        "Šablonovač",
+        "cs",
+        rules,
+        "inspector.metadata.documentProperties.keys.template",
+      ),
+    ).toEqual([]);
+  });
+
+  test("cannot exempt a check that passes no key", () => {
+    // Source-only callers have no key to match, so the ban still applies:
+    // an exemption must never widen into "off everywhere" by omission.
+    expect(findForbiddenTerms("Template", "Šablona", "cs", rules)).toEqual([
+      "šablona",
+    ]);
+  });
+});
+
 describe("terminology: forbiddenAlways", () => {
   const fill = (value: string): Record<string, string> =>
     Object.fromEntries(LOCALES.map((locale) => [locale, value]));

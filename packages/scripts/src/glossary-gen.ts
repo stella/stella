@@ -117,6 +117,12 @@ export type Term = {
   // banned wording is caught even where English never names the concept (e.g.
   // a `*.scopeTeam` label written as "...organisation").
   keyTriggers?: string[];
+  // Substrings matched against the flattened translation key. When a key
+  // matches, this concept's bans do not apply to it. For keys that echo an
+  // outside vocabulary stella does not own — a label naming a field Microsoft
+  // Word wrote, say — where the house rendering would misname the thing the
+  // user is looking at in the other application.
+  keyExempt?: string[];
   translations: Record<Locale, string>;
 };
 
@@ -234,6 +240,15 @@ const parseTerm = (value: unknown, where: string): Term => {
   );
   if (keyTriggers) {
     term.keyTriggers = keyTriggers;
+  }
+  const keyExempt = parseStringArray(
+    value["keyExempt"],
+    "keyExempt",
+    where,
+    id,
+  );
+  if (keyExempt) {
+    term.keyExempt = keyExempt;
   }
   const sourceExempt = parseStringArray(
     value["sourceExempt"],
