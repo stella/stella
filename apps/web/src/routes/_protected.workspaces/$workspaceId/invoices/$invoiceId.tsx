@@ -114,9 +114,9 @@ function InvoiceDetailPage() {
 // Stable keys so skeleton rows/cells never fall back to array-index keys.
 const INFO_CELL_KEYS = ["a", "b", "c", "d"] as const;
 const ENTRY_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
-// Plain `<table>` (not TanStack) with: matter, date, narrative, hours, amount.
+// Plain `<table>` (not TanStack) with: context, date, narrative, hours, amount.
 const ENTRY_COLUMN_KEYS = [
-  "matter",
+  "context",
   "date",
   "narrative",
   "hours",
@@ -400,7 +400,7 @@ const InvoiceDetail = ({
               <thead>
                 <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
-                    {t("common.matter")}
+                    {t("chat.composerMenu.context")}
                   </th>
                   <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
@@ -420,7 +420,9 @@ const InvoiceDetail = ({
               <tbody>
                 {invoice.timeEntries.map((entry) => (
                   <tr className="border-b last:border-0" key={entry.id}>
-                    <td className="px-4 py-2">{entry.matter?.name ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      {entry.workItem?.name ?? t("common.matter")}
+                    </td>
                     <td className="px-4 py-2 tabular-nums">
                       {entry.dateWorked}
                     </td>

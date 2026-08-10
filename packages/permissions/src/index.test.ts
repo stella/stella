@@ -181,7 +181,10 @@ describe("role grant boundaries", () => {
     }
   });
 
-  test("external is read-only; intern may log its own time", () => {
+  test("time entry and rate permissions separate timekeepers from reviewers", () => {
+    expect(roles.external.authorize({ timeEntry: ["read"] }).success).toBe(
+      false,
+    );
     expect(roles.external.authorize({ timeEntry: ["create"] }).success).toBe(
       false,
     );
@@ -191,5 +194,13 @@ describe("role grant boundaries", () => {
     expect(roles.intern.authorize({ timeEntry: ["create"] }).success).toBe(
       true,
     );
+    expect(roles.member.authorize({ timeEntry: ["approve"] }).success).toBe(
+      false,
+    );
+    expect(roles.admin.authorize({ timeEntry: ["approve"] }).success).toBe(
+      true,
+    );
+    expect(roles.member.authorize({ rate: ["read"] }).success).toBe(false);
+    expect(roles.owner.authorize({ rate: ["read"] }).success).toBe(true);
   });
 });

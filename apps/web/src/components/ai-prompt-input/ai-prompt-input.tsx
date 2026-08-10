@@ -9,13 +9,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
-import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 
 import "@/components/workspaces/properties/property-input/tiptap.css";
-import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -57,7 +56,7 @@ type AIPromptEditAction = {
   disabled: boolean;
   isPending: boolean;
   label: string;
-  onClick: () => void;
+  onClick: (instruction: string) => void;
 };
 
 type AIPromptInputProps = {
@@ -181,12 +180,12 @@ export const AIPromptInput = ({
             ? cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
                 "placeholder:text-foreground-placeholder min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-10",
+                aiEditAction !== undefined && "pe-24",
               )
             : cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
                 "bg-muted placeholder:text-foreground-placeholder min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-10",
+                aiEditAction !== undefined && "pe-24",
               ),
       },
       handleKeyDown: (_view, event) => {
@@ -249,28 +248,16 @@ export const AIPromptInput = ({
         </ScrollArea>
       )}
       {aiEditAction !== undefined && (
-        <Button
-          aria-label={aiEditAction.label}
+        <AiRewriteControl
           className={cn(
-            "text-muted-foreground hover:text-foreground absolute end-0 top-0 size-7",
+            "text-muted-foreground hover:text-foreground absolute end-0 top-0",
             variant === "filled" && "end-1 top-1",
           )}
           disabled={aiEditAction.disabled}
-          onClick={aiEditAction.onClick}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          size="icon-sm"
-          title={aiEditAction.label}
-          type="button"
-          variant="ghost"
-        >
-          {aiEditAction.isPending ? (
-            <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
-          ) : (
-            <WandSparklesIcon aria-hidden className="size-3.5" />
-          )}
-        </Button>
+          isPending={aiEditAction.isPending}
+          label={aiEditAction.label}
+          onRewrite={aiEditAction.onClick}
+        />
       )}
     </div>
   );

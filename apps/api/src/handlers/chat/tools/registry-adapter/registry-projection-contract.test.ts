@@ -1001,6 +1001,33 @@ const CONTRACT_CORPUS = {
       expectRefPaths: ["entries[].entityId"],
     },
     {
+      mode: "list",
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
+      tx: () => ({
+        select: selectQueue([
+          [
+            {
+              id: uid(44),
+              entityId: null,
+              userId: null,
+              dateWorked: "2026-01-02",
+              durationMinutes: 30,
+              billedMinutes: 30,
+              rateAtEntry: 0,
+              currency: "XXX",
+              narrative: "Unassigned internal work",
+              invoiceNarrative: null,
+              billable: false,
+              noCharge: false,
+              status: "draft",
+            },
+          ],
+          [],
+        ]),
+      }),
+      expectRefPaths: [],
+    },
+    {
       mode: "detail",
       buildArgs: () => ({ time_entry_id: uid(40) }),
       tx: () => ({
@@ -1029,25 +1056,6 @@ const CONTRACT_CORPUS = {
         ]),
       }),
       expectRefPaths: ["entry.entityId", "entry.workspaceId"],
-    },
-  ],
-  resolve_rate: [
-    {
-      mode: "resolve",
-      buildArgs: (refRegistry) => ({
-        matter_id: matterRef(refRegistry),
-        user_id: uid(43),
-        date: "2026-01-01",
-      }),
-      tx: () => ({
-        select: selectQueue([[{ userId: uid(43) }], [{ hourlyRate: 100 }]]),
-        query: {
-          rateTables: {
-            findFirst: async () => ({ id: uid(44), currency: "EUR" }),
-          },
-        },
-      }),
-      expectRefPaths: [],
     },
   ],
   list_invoices: [
@@ -1096,7 +1104,7 @@ const CONTRACT_CORPUS = {
               timeEntries: [
                 {
                   id: uid(47),
-                  matterId: uid(48),
+                  workItemId: uid(48),
                   dateWorked: "2026-02-01",
                   billedMinutes: 60,
                   rateAtEntry: 100,
@@ -1104,7 +1112,7 @@ const CONTRACT_CORPUS = {
                   narrative: "Drafted the NDA",
                   invoiceNarrative: null,
                   status: "invoiced",
-                  matter: { id: uid(48), name: "NDA draft" },
+                  workItem: { id: uid(48), name: "NDA draft" },
                 },
               ],
               expenses: [

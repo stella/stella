@@ -141,6 +141,14 @@ export type McpToolDefinition = {
    */
   feature?: McpToolFeatureFlag;
   inputSchema: McpToolInputSchema;
+  /**
+   * Optional session-member visibility predicate, enforced centrally for both
+   * discovery and dispatch. Internal registry metadata; never projected onto
+   * the MCP wire shape.
+   */
+  isVisibleToMemberRole?: (
+    memberRole: McpRequestContext["memberRole"],
+  ) => boolean;
   name: string;
   scope: ToolScope;
 };

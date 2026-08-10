@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analizar con IA",
+    "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
     "keyRequired": {
       "cta": "Abrir ajustes de IA",
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
       "title": "Conectar proveedor de IA"
     },
-    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?"
+    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
+    "rewriteDraftChanged": "El borrador cambió, por lo que no se aplicó la reescritura.",
+    "rewritePresets": {
+      "clarify": "Mejorar la claridad",
+      "concise": "Hacer más conciso",
+      "formal": "Usar un tono más formal",
+      "polish": "Mejorar la redacción"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Marcar como facturable",
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
+    "minutes": "Minutos",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",

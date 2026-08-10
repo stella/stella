@@ -16,8 +16,11 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
@@ -35,9 +38,11 @@ import {
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import {
+  timeEntrySummaryOptions,
+  timeEntryTeamSummaryOptions,
+} from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -97,6 +102,23 @@ export const Route = createFileRoute(
 
       await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
 
+      if (!isTimeBillingRouteEnabled()) {
+        return;
+      }
+
+      const role = await ensureRouteQueryData(queryClient, roleOptions);
+      const canReadTimeEntries = authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["read"] },
+      });
+      if (!canReadTimeEntries) {
+        return;
+      }
+      const canReviewTimeEntries = authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["approve"] },
+      });
+
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
@@ -105,36 +127,45 @@ export const Route = createFileRoute(
       const prevWeekEnd = new Date(weekStart);
       prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
+      if (canReviewTimeEntries) {
+        detached(
+          prefetchRouteQuery(
+            queryClient,
+            timeEntryTeamSummaryOptions(
+              workspaceId,
+              toISODate(weekStart),
+              toISODate(weekEnd),
+            ),
+            (error: unknown) => {
+              getAnalytics().captureError(error);
+            },
+          ),
+          "loader",
+        );
+      } else {
+        detached(
+          prefetchRouteQuery(
+            queryClient,
+            timeEntrySummaryOptions(
+              workspaceId,
+              toISODate(weekStart),
+              toISODate(weekEnd),
+            ),
+            (error: unknown) => {
+              getAnalytics().captureError(error);
+            },
+          ),
+          "loader",
+        );
+      }
       detached(
         prefetchRouteQuery(
           queryClient,
-          timeEntriesOptions(workspaceId, {
-            dateFrom: toISODate(weekStart),
-            dateTo: toISODate(weekEnd),
-          }),
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        ),
-        "loader",
-      );
-      detached(
-        prefetchRouteQuery(
-          queryClient,
-          timeEntriesOptions(workspaceId, {
-            dateFrom: toISODate(prevWeekStart),
-            dateTo: toISODate(prevWeekEnd),
-          }),
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        ),
-        "loader",
-      );
-      detached(
-        prefetchRouteQuery(
-          queryClient,
-          workspaceMembersOptions(workspaceId),
+          timeEntrySummaryOptions(
+            workspaceId,
+            toISODate(prevWeekStart),
+            toISODate(prevWeekEnd),
+          ),
           (error: unknown) => {
             getAnalytics().captureError(error);
           },

@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuoti su DI",
+    "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
       "cta": "Atidaryti AI nustatymus",
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
       "title": "Prijungti AI teikėją"
     },
-    "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?"
+    "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
+    "rewriteDraftChanged": "Juodraštis pasikeitė, todėl perrašymas nebuvo pritaikytas.",
+    "rewritePresets": {
+      "clarify": "Pagerinti aiškumą",
+      "concise": "Sutrumpinti",
+      "formal": "Naudoti oficialesnį toną",
+      "polish": "Patobulinti formuluotę"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Pažymėti kaip apmokestinamus",
     "markNonBillableSelected": "Pažymėti kaip neapmokestinamus",
     "matterRequired": "Pasirinkite bylą",
+    "minutes": "Minutės",
     "narrative": "Aprašas",
     "narrativePlaceholder": "Aprašykite atliktą darbą...",
     "noActiveTimer": "Nėra aktyvaus laikmačio",

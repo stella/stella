@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
   auditLogs,
   desktopEditSessions,
+  timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -22,7 +24,7 @@ void mock.module("@/api/lib/sse", () => ({
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
 }));
 
-const { default: removeWorkspaceMember } =
+const { default: removeWorkspaceMember, removeWorkspaceMemberHandler } =
   await import("./workspace-members-remove");
 
 type RemoveMemberCtx = Parameters<typeof removeWorkspaceMember.handler>[0];
@@ -62,6 +64,61 @@ const createContext = ({
 };
 
 describe("removeWorkspaceMember", () => {
+  test("rejects removal while the member has an active timer", async () => {
+    const workspaceId = toSafeId<"workspace">("ws_timer_test");
+    const userId = toSafeId<"user">("user_timer_test");
+    const actorUserId = toSafeId<"user">("user_actor_test");
+    let deleteCalled = false;
+
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: () => ({
+              for: async () =>
+                table === timeEntries ? [{ id: "timer_test" }] : [],
+            }),
+            for: async () => {
+              if (table === workspaces) {
+                return [{ leadUserId: null }];
+              }
+              if (table === workspaceMembers) {
+                return [
+                  { id: "wm_timer", userId },
+                  { id: "wm_other", userId: "user_other_test" },
+                ];
+              }
+              return [];
+            },
+          }),
+        }),
+      }),
+      delete: () => {
+        deleteCalled = true;
+        return {};
+      },
+    });
+
+    const result = await Result.gen(() =>
+      removeWorkspaceMemberHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        actorUserId,
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(result).toMatchObject({
+      error: {
+        status: 409,
+        message: "Stop the member's active timer before removing them",
+      },
+    });
+    expect(deleteCalled).toBe(false);
+  });
+
   test("clears the workspace lead when removing that member", async () => {
     const deletedWorkspaceMemberId = toSafeId<"workspaceMember">("wm_lead");
     const updates: { table: unknown; value: unknown }[] = [];

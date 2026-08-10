@@ -1,15 +1,13 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
-import Tooltip from "@/components/tooltip";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -29,7 +27,7 @@ export const ChatPromptImproveButton = ({
   const t = useTranslations();
   const [isPending, setIsPending] = useState(false);
 
-  const improvePrompt = async () => {
+  const improvePrompt = async (instruction: string) => {
     const { editor } = controller;
     if (!editor || editor.isDestroyed || !isPlainTextDraft(editor)) {
       stellaToast.add({
@@ -48,6 +46,7 @@ export const ChatPromptImproveButton = ({
     const result = await Result.tryPromise(async () => {
       const response = await api.chat["improve-prompt"].post({
         prompt,
+        instruction,
         sendMode: anonymized
           ? CHAT_SEND_MODE.anonymized
           : CHAT_SEND_MODE.rawOverride,
@@ -85,27 +84,17 @@ export const ChatPromptImproveButton = ({
   }
 
   return (
-    <Tooltip
-      content={label}
-      render={
-        <Button
-          aria-label={label}
-          className="text-muted-foreground hover:text-foreground relative before:absolute before:-inset-2"
-          disabled={anonymized || disabled || isPending}
-          onClick={() => {
-            detached(improvePrompt(), "ChatPromptImproveButton");
-          }}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          {isPending ? (
-            <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
-          ) : (
-            <WandSparklesIcon aria-hidden="true" className="size-3.5" />
-          )}
-        </Button>
-      }
+    <AiRewriteControl
+      className="text-muted-foreground hover:text-foreground"
+      disabled={anonymized || disabled}
+      isPending={isPending}
+      label={label}
+      onRewrite={(instruction) => {
+        detached(
+          improvePrompt(instruction),
+          "ChatPromptImproveButton.improvePrompt",
+        );
+      }}
     />
   );
 };

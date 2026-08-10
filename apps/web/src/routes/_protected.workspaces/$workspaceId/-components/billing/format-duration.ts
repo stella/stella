@@ -1,15 +1,29 @@
 import { getFormatter } from "@/i18n/i18n-store";
 
 export const formatMinutes = (minutes: number): string => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h > 0 && m > 0) {
-    return `${h}h ${m}m`;
+  const formatter = getFormatter();
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const parts: string[] = [];
+  if (hours > 0) {
+    parts.push(
+      formatter.number(hours, {
+        style: "unit",
+        unit: "hour",
+        unitDisplay: "short",
+      }),
+    );
   }
-  if (h > 0) {
-    return `${h}h`;
+  if (remainingMinutes > 0 || parts.length === 0) {
+    parts.push(
+      formatter.number(remainingMinutes, {
+        style: "unit",
+        unit: "minute",
+        unitDisplay: "short",
+      }),
+    );
   }
-  return `${m}m`;
+  return parts.join(" ");
 };
 
 export const formatDecimalHours = (minutes: number): string =>

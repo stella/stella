@@ -88,7 +88,9 @@ type GenerateTanStackBaseOptions = {
 };
 
 type GenerateTanStackTextForRoleOptions = GenerateTanStackBaseOptions &
-  GenerateTanStackInputOptions;
+  GenerateTanStackInputOptions & {
+    finishPolicy?: "allow-incomplete" | "require-complete" | undefined;
+  };
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
   GenerateTanStackTextForRoleOptions & {
@@ -117,6 +119,13 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
+type TanStackTextFinishReason =
+  | "stop"
+  | "length"
+  | "content_filter"
+  | "tool_calls"
+  | null;
+
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
@@ -130,6 +139,9 @@ export const generateTanStackTextForRole = async (
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
+  const state: { finishReason: TanStackTextFinishReason } = {
+    finishReason: null,
+  };
   let output = "";
 
   for await (const delta of streamTanStackTextDeltas({
@@ -142,8 +154,21 @@ export const generateTanStackTextForRole = async (
     serviceTier: options.serviceTier,
     system: guardedSystemPrompt(options),
     temperature: options.temperature,
+    onFinishReason: (value) => {
+      state.finishReason = value;
+    },
   })) {
     output += delta;
+  }
+
+  if (
+    options.finishPolicy === "require-complete" &&
+    state.finishReason !== "stop"
+  ) {
+    throw new HandlerError({
+      status: 502,
+      message: "AI generation did not complete",
+    });
   }
 
   return output;
@@ -181,6 +206,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier,
   system,
   temperature,
+  onFinishReason,
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
@@ -191,6 +217,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
+  onFinishReason?: ((reason: TanStackTextFinishReason) => void) | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
     model,
@@ -211,6 +238,10 @@ const streamTanStackTextDeltas = async function* ({
         ...(abortController ? { abortController } : {}),
       }),
     onChunk: (chunk) => {
+      if (chunk.type === EventType.RUN_FINISHED) {
+        onFinishReason?.(chunk.finishReason ?? null);
+        return undefined;
+      }
       if (
         chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
         chunk.delta.length > 0

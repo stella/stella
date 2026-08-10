@@ -16,6 +16,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { resolveRate } from "@/api/lib/billing-rates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -31,7 +32,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import resolveRateHandler, { resolveRate } from "./resolve";
+import resolveRateHandler from "./resolve";
 
 setDefaultTimeout(120_000);
 

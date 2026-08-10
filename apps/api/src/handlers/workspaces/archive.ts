@@ -1,9 +1,13 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
-import { documentProcessingRuns, workspaces } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  timeEntries,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -31,6 +35,13 @@ export const archiveWorkspaceHandler = async function* ({
 }: ArchiveWorkspaceHandlerProps) {
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      // Timer starts take this advisory lock before inserting. Acquire it
+      // before the workspace row lock to keep lock ordering acyclic, then hold
+      // it through the active-timer check so archive cannot strand a timer
+      // that starts concurrently.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
       // Lock the workspace before inspecting dispatches. OCR takes this same
       // lock immediately before it claims a run, so archive cannot race a
       // provider dispatch after the workspace becomes read-only.
@@ -54,6 +65,20 @@ export const archiveWorkspaceHandler = async function* ({
           .limit(1);
         if (runningOcrRuns.at(0)) {
           return "document_processing_running" as const;
+        }
+
+        const runningTimers = await tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              isNotNull(timeEntries.timerStartedAt),
+            ),
+          )
+          .limit(1);
+        if (runningTimers.at(0)) {
+          return "timer_running" as const;
         }
       }
 
@@ -91,6 +116,15 @@ export const archiveWorkspaceHandler = async function* ({
       new HandlerError({
         status: 409,
         message: "Wait for document processing to finish before archiving",
+      }),
+    );
+  }
+
+  if (outcome === "timer_running") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Stop active timers before archiving this matter",
       }),
     );
   }

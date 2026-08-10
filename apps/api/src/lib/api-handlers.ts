@@ -158,6 +158,8 @@ export type McpCapabilityReason =
  *   reason.
  * - `native_tool_ui`: native-tool helper endpoints whose agent surface is a
  *   chat/native integration rather than the static MCP registry.
+ * - `billing_ui`: billing UI helpers that transform draft input without
+ *   reading or persisting ledger records; agents use the billing capabilities.
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
@@ -183,6 +185,7 @@ export type McpInternalReason =
   | "search_ui"
   | "document_processing"
   | "native_tool_ui"
+  | "billing_ui"
   | "compound_consent";
 
 /**

@@ -205,7 +205,7 @@ export const ChatInputSurface = ({
         <div
           className={cn(
             variant === "compact" &&
-              "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-1.5",
+              "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-px",
           )}
         >
           <div

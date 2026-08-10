@@ -25,7 +25,7 @@ const readInvoiceById = createSafeHandler(
             timeEntries: {
               columns: {
                 id: true,
-                matterId: true,
+                workItemId: true,
                 dateWorked: true,
                 billedMinutes: true,
                 rateAtEntry: true,
@@ -35,7 +35,7 @@ const readInvoiceById = createSafeHandler(
                 status: true,
               },
               with: {
-                matter: {
+                workItem: {
                   columns: {
                     id: true,
                     name: true,

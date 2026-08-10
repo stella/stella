@@ -39,7 +39,11 @@ export {
   TASK_STATUSES,
 } from "./entity-options";
 export type { EntityPriority, TaskStatus } from "./entity-options";
-export { API_VALIDATION_ERROR_CODE, normalizeApiError } from "./error";
+export {
+  API_VALIDATION_ERROR_CODE,
+  normalizeApiError,
+  parseApiErrorValue,
+} from "./error";
 export type {
   ApiErrorInput,
   ApiErrorObjectValue,

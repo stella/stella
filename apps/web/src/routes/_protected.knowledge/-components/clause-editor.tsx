@@ -46,6 +46,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type {
   ClauseBody,
   ClauseParagraph,
@@ -465,6 +466,13 @@ export const ClauseEditor = ({
     detached(runRewrite(aiEdit.instruction, baseline), "submitAiEdit");
   };
 
+  const startAiEdit = (instruction: string) => {
+    if (aiEdit.status !== "idle") {
+      return;
+    }
+    detached(runRewrite(instruction, getLiveBody()), "startAiEdit");
+  };
+
   const runResolveCommand = (command: PMCommand) => {
     if (!isUsableEditor(editor)) {
       return;
@@ -708,18 +716,12 @@ export const ClauseEditor = ({
           <ListOrderedIcon className="size-3.5" />
         </Button>
 
-        <Button
-          aria-label={t("ai.editWithAI")}
+        <AiRewriteControl
           className={cn("ms-auto", aiActive && "bg-muted")}
-          disabled={!editorReady || aiEdit.status === "generating"}
-          onClick={toggleAiEdit}
-          size="icon-xs"
-          title={t("ai.editWithAI")}
-          type="button"
-          variant="ghost"
-        >
-          <WandSparklesIcon className="size-3.5" />
-        </Button>
+          disabled={!editorReady || aiActive}
+          isPending={aiEdit.status === "generating"}
+          onRewrite={startAiEdit}
+        />
       </div>
 
       <EditorContent editor={editor} />

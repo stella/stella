@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analyser avec l’IA",
+    "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
       "cta": "Ouvrir les paramètres IA",
       "description": "Ajoutez les identifiants d’un fournisseur pour commencer à utiliser les fonctions IA.",
       "title": "Connecter un fournisseur IA"
     },
-    "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?"
+    "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?",
+    "rewriteDraftChanged": "Le brouillon a changé, la réécriture n’a donc pas été appliquée.",
+    "rewritePresets": {
+      "clarify": "Améliorer la clarté",
+      "concise": "Rendre plus concis",
+      "formal": "Adopter un ton plus formel",
+      "polish": "Améliorer la formulation"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Marquer facturable",
     "markNonBillableSelected": "Marquer non facturable",
     "matterRequired": "Veuillez sélectionner un dossier",
+    "minutes": "min",
     "narrative": "Description",
     "narrativePlaceholder": "Décrivez le travail effectué...",
     "noActiveTimer": "Aucun chronomètre actif",

@@ -12,11 +12,15 @@ import {
   sql,
   unsafeCents,
   user,
+  wsOrganizationPolicies,
   wsPolicies,
   timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
+
+export const ACTIVE_TIMER_INDEX_NAME =
+  "time_entries_one_active_timer_per_user_idx";
 
 export const timeEntries = p.pgTable(
   "time_entries",
@@ -31,9 +35,9 @@ export const timeEntries = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    matterId: safeUuid<"entity">("matter_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "restrict" }),
+    // A workspace is the legal matter. This optional foreign key records only
+    // the document, folder, task, or other work item that provided context.
+    workItemId: safeUuid<"entity">("work_item_id"),
     dateWorked: p.date("date_worked").notNull(),
     timezoneId: p.text("timezone_id").notNull(),
     durationMinutes: p.integer("duration_minutes").notNull(),
@@ -65,13 +69,31 @@ export const timeEntries = p.pgTable(
   },
   (table) => [
     p
+      .foreignKey({
+        columns: [table.workItemId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "time_entries_work_item_workspace_fk",
+      })
+      .onDelete("restrict"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "time_entries_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
       .index("time_entries_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateWorked),
     p
-      .index("time_entries_ws_matter_status_idx")
-      .on(table.workspaceId, table.matterId, table.status),
+      .index("time_entries_ws_work_item_status_idx")
+      .on(table.workspaceId, table.workItemId, table.status),
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
     p.index("time_entries_invoice_idx").on(table.invoiceId),
+    p
+      .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
+      .on(table.userId)
+      .where(sql`${table.timerStartedAt} IS NOT NULL`),
     p.check(
       "time_entries_duration_or_timer_check",
       sql`${table.durationMinutes} > 0 OR ${table.timerStartedAt} IS NOT NULL`,
@@ -80,7 +102,7 @@ export const timeEntries = p.pgTable(
       "time_entries_billed_minutes_check",
       sql`${table.billedMinutes} >= 0`,
     ),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("time_entries"),
   ],
 );
 

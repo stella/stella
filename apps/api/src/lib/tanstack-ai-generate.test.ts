@@ -571,6 +571,27 @@ describe("TanStack AI model-ingress guard", () => {
 });
 
 describe("TanStack AI text generation", () => {
+  test("rejects incomplete output when complete generation is required", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createTextStream(["partial"], "length");
+
+    const caught = await generateTanStackTextForRole({
+      caching: noCaching,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+  });
+
   test("collects text through the error-aware streaming boundary", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["hello", " world"]);
@@ -705,11 +726,20 @@ const createStructuredOutputStream = async function* ({
   };
 };
 
-const createTextStream = async function* (deltas: string[]) {
+const createTextStream = async function* (
+  deltas: string[],
+  finishReason?: "stop" | "length",
+) {
   for (const delta of deltas) {
     yield {
       delta,
       type: realTanStackAI.EventType.TEXT_MESSAGE_CONTENT,
+    };
+  }
+  if (finishReason) {
+    yield {
+      type: realTanStackAI.EventType.RUN_FINISHED,
+      finishReason,
     };
   }
 };

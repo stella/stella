@@ -11,7 +11,7 @@ import {
 const entry = (
   overrides: Partial<TimesheetTotalEntry> = {},
 ): TimesheetTotalEntry => ({
-  matterId: "m1",
+  workItemId: "m1",
   currency: "USD",
   billable: true,
   billedMinutes: 60,
@@ -53,9 +53,9 @@ describe("summarizeBillableAmountByCurrency", () => {
 describe("summarizeBillableAmountByMatterAndCurrency", () => {
   test("maps each matter to its own currency subtotal", () => {
     const map = summarizeBillableAmountByMatterAndCurrency([
-      entry({ matterId: "m1", currency: "USD" }),
-      entry({ matterId: "m2", currency: "EUR" }),
-      entry({ matterId: "m1", currency: "USD" }),
+      entry({ workItemId: "m1", currency: "USD" }),
+      entry({ workItemId: "m2", currency: "EUR" }),
+      entry({ workItemId: "m1", currency: "USD" }),
     ]);
     expect(map.get("m1")).toEqual([{ currency: "USD", amount: 20_000 }]);
     expect(map.get("m2")).toEqual([{ currency: "EUR", amount: 10_000 }]);
@@ -63,16 +63,16 @@ describe("summarizeBillableAmountByMatterAndCurrency", () => {
 
   test("ignores non-billable entries when deriving charged row subtotals", () => {
     const map = summarizeBillableAmountByMatterAndCurrency([
-      entry({ matterId: "m1", currency: "EUR", billable: false }),
-      entry({ matterId: "m1", currency: "USD", billable: true }),
+      entry({ workItemId: "m1", currency: "EUR", billable: false }),
+      entry({ workItemId: "m1", currency: "USD", billable: true }),
     ]);
     expect(map.get("m1")).toEqual([{ currency: "USD", amount: 10_000 }]);
   });
 
   test("keeps same-matter mixed currencies as separate row subtotals", () => {
     const map = summarizeBillableAmountByMatterAndCurrency([
-      entry({ matterId: "m1", currency: "USD" }),
-      entry({ matterId: "m1", currency: "EUR", rateAtEntry: cents(20_000) }),
+      entry({ workItemId: "m1", currency: "USD" }),
+      entry({ workItemId: "m1", currency: "EUR", rateAtEntry: cents(20_000) }),
     ]);
     expect(map.get("m1")).toEqual([
       { currency: "EUR", amount: 20_000 },
@@ -82,7 +82,7 @@ describe("summarizeBillableAmountByMatterAndCurrency", () => {
 
   test("omits matters with no billable amount", () => {
     const map = summarizeBillableAmountByMatterAndCurrency([
-      entry({ matterId: "m1", currency: "EUR", billable: false }),
+      entry({ workItemId: "m1", currency: "EUR", billable: false }),
     ]);
     expect(map.has("m1")).toBe(false);
   });

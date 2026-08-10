@@ -179,7 +179,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   {
     template: "/workspaces/$workspaceId/timesheets",
     path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
-    expectation: { kind: "redirectsTo", to: "" },
   },
   {
     template: "/workspaces/$workspaceId/workflows",

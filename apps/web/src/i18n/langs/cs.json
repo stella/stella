@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analyzovat pomocí AI",
+    "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
       "cta": "Otevřít nastavení AI",
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
       "title": "Připojit poskytovatele AI"
     },
-    "refinePlaceholder": "Jak má AI upravit znění?"
+    "refinePlaceholder": "Jak má AI upravit znění?",
+    "rewriteDraftChanged": "Text se změnil, takže úprava nebyla použita.",
+    "rewritePresets": {
+      "clarify": "Vyjasnit znění",
+      "concise": "Zkrátit",
+      "formal": "Použít formálnější tón",
+      "polish": "Vylepšit znění"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -149,7 +157,7 @@
     },
     "decimalHours": "({hours} h)",
     "deleteSelected": "Smazat vybrané",
-    "duration": "Doba trvání",
+    "duration": "Trvání",
     "editEntry": "Upravit záznam",
     "elapsed": "Uběhlý čas",
     "expenses": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Označit jako fakturovatelné",
     "markNonBillableSelected": "Označit jako nefakturovatelné",
     "matterRequired": "Vyberte prosím spis",
+    "minutes": "Minuty",
     "narrative": "Popis",
     "narrativePlaceholder": "Popište provedenou práci...",
     "noActiveTimer": "Žádný aktivní časovač",

@@ -9,7 +9,7 @@ import { exportPdfHandler } from "./export-pdf";
 const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   id: toSafeId<"timeEntry">("te_1"),
   userId: "user_1",
-  matterId: toSafeId<"entity">("ent_1"),
+  workItemId: toSafeId<"entity">("ent_1"),
   dateWorked: "2026-06-14",
   durationMinutes: 120,
   billedMinutes: 60,

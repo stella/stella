@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analyzovať pomocou AI",
+    "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
       "title": "Pripojiť poskytovateľa AI"
     },
-    "refinePlaceholder": "Ako má AI upraviť znenie?"
+    "refinePlaceholder": "Ako má AI upraviť znenie?",
+    "rewriteDraftChanged": "Text sa zmenil, takže úprava nebola použitá.",
+    "rewritePresets": {
+      "clarify": "Vyjasniť znenie",
+      "concise": "Skrátiť",
+      "formal": "Použiť formálnejší tón",
+      "polish": "Vylepšiť znenie"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Označiť ako fakturovateľné",
     "markNonBillableSelected": "Označiť ako nefakturovateľné",
     "matterRequired": "Vyberte spis",
+    "minutes": "Minúty",
     "narrative": "Popis",
     "narrativePlaceholder": "Opíšte vykonanú prácu...",
     "noActiveTimer": "Žiadny aktívny časovač",

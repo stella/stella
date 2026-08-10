@@ -18,6 +18,7 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
+import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId, withDescription } from "@/api/lib/custom-schema";
@@ -30,7 +31,11 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedTimeEntryId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(
@@ -44,11 +49,15 @@ const readTimeEntriesQuerySchema = t.Object({
   userId: t.Optional(
     withDescription(tUserId, "List only entries recorded by this user"),
   ),
-  matterId: t.Optional(
+  scope: t.Optional(
+    t.Literal("me", {
+      description: "List only entries recorded by the signed-in user",
+    }),
+  ),
+  workItemId: t.Optional(
     tSafeId("entity", {
       description:
-        "List only entries logged against this entity (document, folder, " +
-        "or task the time is billed to)",
+        "List only entries carrying this optional document, folder, or task context",
     }),
   ),
   dateFrom: t.Optional(
@@ -99,26 +108,70 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 const readTimeEntries = createSafeHandler(
   {
     description:
-      "List time entries in a matter, optionally filtered by matterId " +
-      "(the item the time was logged against), userId, a date-worked " +
-      "range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
+      "List time entries in a matter, optionally filtered by workItemId " +
+      "(the document, folder, or task providing context), userId or scope=me, " +
+      "a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
       "entry's id, entity, user, date, minutes, rate (minor currency " +
       "units), currency, narrative, and status.",
-    permissions: { workspace: ["read"] },
+    permissions: { timeEntry: ["read"] },
     mcp: { type: "tool", name: "list_time_entries" },
     access: "read",
     query: readTimeEntriesQuerySchema,
   },
-  async function* ({ safeDb, session, workspaceId, query }) {
+  async function* ({
+    memberRole,
+    safeDb,
+    session,
+    user: currentUser,
+    workspaceId,
+    query,
+  }) {
     const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const canReviewMatterEntries = canApproveTimeEntries(memberRole);
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
 
-    if (query.userId) {
-      conditions.push(eq(timeEntries.userId, query.userId));
+    const requestedUserId = query.userId;
+    if (query.scope === "me" && requestedUserId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "scope and userId cannot be combined",
+        }),
+      );
     }
-    if (query.matterId) {
-      conditions.push(eq(timeEntries.matterId, query.matterId));
+
+    if (query.scope === "me") {
+      conditions.push(eq(timeEntries.userId, currentUser.id));
+    } else if (requestedUserId) {
+      if (!canReviewMatterEntries && requestedUserId !== currentUser.id) {
+        return Result.err(
+          new HandlerError({ status: 403, message: "Forbidden" }),
+        );
+      }
+
+      const validatedUserId = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await validateOrgUserId(
+              tx,
+              brandPersistedUserId(requestedUserId),
+              session.activeOrganizationId,
+            ),
+        ),
+      );
+      if (!validatedUserId) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "User not found" }),
+        );
+      }
+      conditions.push(eq(timeEntries.userId, validatedUserId));
+    } else if (!canReviewMatterEntries) {
+      conditions.push(eq(timeEntries.userId, currentUser.id));
+    }
+
+    if (query.workItemId) {
+      conditions.push(eq(timeEntries.workItemId, query.workItemId));
     }
     if (query.dateFrom) {
       conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
@@ -166,7 +219,7 @@ const readTimeEntries = createSafeHandler(
           .select({
             id: timeEntries.id,
             userId: timeEntries.userId,
-            matterId: timeEntries.matterId,
+            workItemId: timeEntries.workItemId,
             dateWorked: timeEntries.dateWorked,
             timezoneId: timeEntries.timezoneId,
             durationMinutes: timeEntries.durationMinutes,
@@ -233,7 +286,7 @@ const readTimeEntries = createSafeHandler(
       items: page.items.map((row) => ({
         id: row.id,
         userId: row.userId,
-        matterId: row.matterId,
+        workItemId: row.workItemId,
         dateWorked: row.dateWorked,
         timezoneId: row.timezoneId,
         durationMinutes: row.durationMinutes,

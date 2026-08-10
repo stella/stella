@@ -15,6 +15,7 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -177,6 +178,7 @@ const addEntries = createSafeHandler(
         (entry) =>
           entry.status !== BILLING_STATUS.APPROVED ||
           !entry.billable ||
+          entry.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
           entry.invoiceId !== null,
       );
       if (invalid) {

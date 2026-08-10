@@ -95,7 +95,7 @@ describe("invoice transition integration", () => {
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       userId: ids.userA1,
-      matterId: ids.entityA1,
+      workItemId: ids.entityA1,
       dateWorked: "2026-06-23",
       timezoneId: "UTC",
       durationMinutes: 30,

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
+import { canManageTimeEntry } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -13,19 +14,26 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 
 const readTimeEntryById = createSafeHandler(
   {
-    permissions: { workspace: ["read"] },
+    permissions: { timeEntry: ["read"] },
     mcp: { type: "covered", by: "list_time_entries" },
     access: "read",
     params: readTimeEntryByIdParamsSchema,
   },
-  async function* ({ safeDb, session, workspaceId, params }) {
+  async function* ({
+    memberRole,
+    safeDb,
+    session,
+    user: currentUser,
+    workspaceId,
+    params,
+  }) {
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
           .select({
             id: timeEntries.id,
             userId: timeEntries.userId,
-            matterId: timeEntries.matterId,
+            workItemId: timeEntries.workItemId,
             dateWorked: timeEntries.dateWorked,
             timezoneId: timeEntries.timezoneId,
             durationMinutes: timeEntries.durationMinutes,
@@ -57,6 +65,18 @@ const readTimeEntryById = createSafeHandler(
     const row = rows.at(0);
 
     if (!row) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Time entry not found" }),
+      );
+    }
+
+    if (
+      !canManageTimeEntry({
+        memberRole,
+        currentUserId: currentUser.id,
+        entryUserId: row.userId,
+      })
+    ) {
       return Result.err(
         new HandlerError({ status: 404, message: "Time entry not found" }),
       );

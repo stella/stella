@@ -63,6 +63,17 @@ const externalMcpToolAccess = (
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 
+const isStaticToolVisibleToRole = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+): boolean => {
+  if (definition.isVisibleToMemberRole === undefined) {
+    return true;
+  }
+
+  return definition.isVisibleToMemberRole(context.memberRole);
+};
+
 /**
  * Narrow the `lookup_business_registry` tool's `registry` enum to the
  * registries this org can actually reach (`context.enabledRegistrySlugs`,
@@ -130,7 +141,8 @@ export const listGatewayMcpToolDefinitions = async ({
   const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
     (definition) =>
       hasGrantedScope(scopes, definition.scope) &&
-      isMcpToolFeatureEnabled(definition.feature),
+      isMcpToolFeatureEnabled(definition.feature) &&
+      isStaticToolVisibleToRole(context, definition),
   );
   // Every restricted surface is a pure static projection. Per-org registry
   // narrowing and dynamic connector/skill discovery run only on the default
@@ -199,8 +211,13 @@ export const getGatewayMcpToolDefinition = async ({
   toolName: string;
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
-  if (staticTool || mode !== "default") {
-    return staticTool;
+  if (staticTool) {
+    return isStaticToolVisibleToRole(context, staticTool)
+      ? staticTool
+      : undefined;
+  }
+  if (mode !== "default") {
+    return undefined;
   }
 
   if (isExternalMcpToolName(toolName)) {

@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Mit KI analysieren",
+    "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
       "cta": "AI-Einstellungen öffnen",
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
     },
-    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?"
+    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
+    "rewriteDraftChanged": "Der Entwurf wurde geändert, daher wurde die Überarbeitung nicht angewendet.",
+    "rewritePresets": {
+      "clarify": "Verständlichkeit verbessern",
+      "concise": "Kürzer formulieren",
+      "formal": "Formeller formulieren",
+      "polish": "Formulierung verbessern"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Als abrechenbar markieren",
     "markNonBillableSelected": "Als nicht abrechenbar markieren",
     "matterRequired": "Bitte wählen Sie eine Akte aus",
+    "minutes": "Minuten",
     "narrative": "Beschreibungstext",
     "narrativePlaceholder": "Beschreiben Sie die durchgeführte Arbeit...",
     "noActiveTimer": "Kein aktiver Timer",

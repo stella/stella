@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
+  timeEntries,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -61,6 +62,13 @@ export const removeWorkspaceMemberHandler = async function* ({
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
+      // Timer starts take this lock before inserting. Hold it through the
+      // active-timer check and member deletion so removal cannot strand a
+      // timer that starts concurrently.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+
       const workspaceRows = await tx
         .select({ leadUserId: workspaces.leadUserId })
         .from(workspaces)
@@ -89,6 +97,24 @@ export const removeWorkspaceMemberHandler = async function* ({
 
       if (lockedRows.length <= 1) {
         return { ok: false as const, reason: "last-member" as const };
+      }
+
+      const activeTimers = await tx
+        .select({ id: timeEntries.id })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspaceId),
+            eq(timeEntries.userId, userId),
+            isNotNull(timeEntries.timerStartedAt),
+            isNull(timeEntries.timerStoppedAt),
+          ),
+        )
+        .limit(1)
+        .for("update");
+
+      if (activeTimers.at(0)) {
+        return { ok: false as const, reason: "timer-running" as const };
       }
 
       const ownedWork = await tx
@@ -253,6 +279,14 @@ export const removeWorkspaceMemberHandler = async function* ({
   );
 
   if (!txResult.ok) {
+    if (txResult.reason === "timer-running") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Stop the member's active timer before removing them",
+        }),
+      );
+    }
     if (txResult.reason === "owned-work-limit") {
       return Result.err(
         new HandlerError({

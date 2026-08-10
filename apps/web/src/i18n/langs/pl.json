@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analizuj z AI",
+    "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
       "title": "Połącz dostawcę AI"
     },
-    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?"
+    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
+    "rewriteDraftChanged": "Wersja robocza zmieniła się, więc przeredagowanie nie zostało zastosowane.",
+    "rewritePresets": {
+      "clarify": "Popraw jasność",
+      "concise": "Skróć",
+      "formal": "Użyj bardziej formalnego tonu",
+      "polish": "Popraw sformułowanie"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Oznacz jako rozliczalne",
     "markNonBillableSelected": "Oznacz jako nierozliczalne",
     "matterRequired": "Wybierz sprawę",
+    "minutes": "Minuty",
     "narrative": "Opis",
     "narrativePlaceholder": "Opisz wykonaną pracę...",
     "noActiveTimer": "Brak aktywnego timera",

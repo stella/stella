@@ -29,13 +29,21 @@
   },
   "ai": {
     "analyzeWithAI": "Analüüsi AI-ga",
+    "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
       "cta": "Ava AI seaded",
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
       "title": "Ühenda AI teenusepakkuja"
     },
-    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?"
+    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
+    "rewriteDraftChanged": "Mustand muutus, seega ümberkirjutust ei rakendatud.",
+    "rewritePresets": {
+      "clarify": "Paranda selgust",
+      "concise": "Muuda lühemaks",
+      "formal": "Kasuta ametlikumat tooni",
+      "polish": "Viimistle sõnastust"
+    }
   },
   "app": {
     "versionMismatch": {
@@ -211,6 +219,7 @@
     "markBillableSelected": "Märgi arveldatavaks",
     "markNonBillableSelected": "Märgi mittearveldatavaks",
     "matterRequired": "Palun valige toimik",
+    "minutes": "Minutid",
     "narrative": "Selgitus",
     "narrativePlaceholder": "Kirjeldage tehtud tööd...",
     "noActiveTimer": "Aktiivset taimerit pole",

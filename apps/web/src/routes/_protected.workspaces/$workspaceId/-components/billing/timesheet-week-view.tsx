@@ -37,15 +37,15 @@ export const TimesheetWeekView = ({
 
   const days = getDaysInRange(weekStart, weekEnd);
 
-  // Grid: matterId -> { day -> { minutes } }
+  // Grid: optional workItemId -> { day -> { minutes } }
   type DayData = { minutes: number };
   const grid = (() => {
-    const map = new Map<string, Map<string, DayData>>();
+    const map = new Map<string | null, Map<string, DayData>>();
     for (const entry of entries) {
-      let dayMap = map.get(entry.matterId);
+      let dayMap = map.get(entry.workItemId);
       if (!dayMap) {
         dayMap = new Map<string, DayData>();
-        map.set(entry.matterId, dayMap);
+        map.set(entry.workItemId, dayMap);
       }
       const current = dayMap.get(entry.dateWorked) ?? {
         minutes: 0,
@@ -62,7 +62,7 @@ export const TimesheetWeekView = ({
     summarizeBillableAmountByMatterAndCurrency(entries);
   const weekAmountsByCurrency = summarizeBillableAmountByCurrency(entries);
 
-  const matterIds = [...grid.keys()];
+  const workItemIds = [...grid.keys()];
 
   const columnTotals = (() => {
     const totals = new Map<string, DayData>();
@@ -134,8 +134,8 @@ export const TimesheetWeekView = ({
           </tr>
         </thead>
         <tbody>
-          {matterIds.map((matterId) => {
-            const dayMap = grid.get(matterId);
+          {workItemIds.map((workItemId) => {
+            const dayMap = grid.get(workItemId);
             let rowMinutes = 0;
             for (const day of days) {
               const data = dayMap?.get(day);
@@ -143,14 +143,20 @@ export const TimesheetWeekView = ({
                 rowMinutes += data.minutes;
               }
             }
-            const storedAmounts = matterAmountsByCurrency.get(matterId);
+            const storedAmounts = matterAmountsByCurrency.get(workItemId);
             const rowAmountsByCurrency = normalizeOptionalArray(storedAmounts);
 
             return (
-              <tr className="hover:bg-muted/30 border-b" key={matterId}>
+              <tr
+                className="hover:bg-muted/30 border-b"
+                key={workItemId ?? "matter"}
+              >
                 <td className="bg-background sticky start-0 z-10 px-3 py-2 font-medium">
                   <span className="truncate">
-                    {matterNameMap.get(matterId) ?? t("workspaces.defaultName")}
+                    {workItemId
+                      ? (matterNameMap.get(workItemId) ??
+                        t("workspaces.defaultName"))
+                      : t("common.matter")}
                   </span>
                 </td>
                 {days.map((day) => {
@@ -183,7 +189,7 @@ export const TimesheetWeekView = ({
               </tr>
             );
           })}
-          {matterIds.length === 0 && (
+          {workItemIds.length === 0 && (
             <tr>
               <td
                 className="text-muted-foreground px-3 py-8 text-center"
@@ -194,7 +200,7 @@ export const TimesheetWeekView = ({
             </tr>
           )}
         </tbody>
-        {matterIds.length > 0 && (
+        {workItemIds.length > 0 && (
           <tfoot>
             <tr className="border-t font-medium">
               <td className="bg-background sticky start-0 z-10 px-3 py-2">

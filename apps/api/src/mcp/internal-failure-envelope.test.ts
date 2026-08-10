@@ -284,8 +284,6 @@ describe("save_time_entry threads backing handler errors correctly", () => {
     date_worked: "2024-01-01",
     timezone_id: "Europe/Prague",
     duration_minutes: 60,
-    rate_at_entry: 100,
-    currency: "EUR",
     narrative: "Reviewed the share purchase agreement.",
   };
 

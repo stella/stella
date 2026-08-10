@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { PlayIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -9,7 +8,6 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import { activeTimerOptions } from "@/lib/workspaces/queries/time-entries";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import {
@@ -32,20 +30,10 @@ const formatElapsed = (ms: number): string => {
 
 export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   const t = useTranslations();
-  const [matterId, setMatterId] = useState("");
+  const [workItemId, setWorkItemId] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
-
   const { data: activeTimer } = useQuery(activeTimerOptions(workspaceId));
-
-  const today = new Date().toISOString().split("T")[0] ?? "";
-  const { data: resolved } = useQuery(
-    resolvedRateOptions(workspaceId, userId, today),
-  );
 
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
@@ -67,7 +55,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   }, [isRunning, activeTimer?.timerStartedAt]);
 
   const handleStart = () => {
-    if (!matterId) {
+    if (!workItemId) {
       stellaToast.add({
         title: t("billing.matterRequired"),
         type: "error",
@@ -78,10 +66,8 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
     startTimer.mutate(
       {
         workspaceId,
-        matterId,
+        workItemId,
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        rateAtEntry: resolved?.hourlyRate ?? 0,
-        currency: resolved?.currency ?? "USD",
       },
       {
         onError: () => {
@@ -135,13 +121,13 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
     <div className="flex items-center gap-2">
       <div className="flex-1">
         <MatterCombobox
-          onChange={setMatterId}
-          value={matterId}
+          onChange={setWorkItemId}
+          value={workItemId}
           workspaceId={workspaceId}
         />
       </div>
       <Button
-        disabled={!matterId}
+        disabled={!workItemId}
         onClick={handleStart}
         size="sm"
         variant="outline"

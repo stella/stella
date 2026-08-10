@@ -645,7 +645,7 @@ const PropertyComposerBody = ({
     );
   };
 
-  const handleAutoPrompt = () => {
+  const handleAutoPrompt = (instruction: string) => {
     if (trimmedName.length === 0 || suggestPrompt.isPending) {
       return;
     }
@@ -654,6 +654,7 @@ const PropertyComposerBody = ({
         workspaceId,
         name: trimmedName,
         contentType,
+        instruction,
         ...(needsOptions && options.length > 0
           ? { options: options.map((o) => ({ value: o.value })) }
           : {}),
@@ -820,7 +821,7 @@ type ComposerCardProps = {
   onRemoveFile: (id: string) => void;
   availableFiles?: FileChip[];
   addFile?: (id: string) => void;
-  onAutoPrompt: () => void;
+  onAutoPrompt: (instruction: string) => void;
   autoPromptDisabled: boolean;
   autoPromptPending: boolean;
   typeChanged: boolean;

@@ -1951,7 +1951,9 @@ export default defineConfig({
               "apps/api/src/lib/deepl/client.ts",
               "apps/api/src/lib/document-processing-provider.ts",
               "apps/api/src/lib/files/gotenberg.ts",
-              "apps/api/src/lib/health/readiness.ts",
+              // This probe reaches only the operator-configured Gotenberg
+              // deployment; no request or persisted data selects the origin.
+              "apps/api/src/lib/health/probe-document-converter.ts",
               "apps/api/src/lib/hosted-usage-provider/client.ts",
               "apps/api/src/lib/legal-search/corpus-index-client.ts",
               "apps/api/src/lib/s3.ts",

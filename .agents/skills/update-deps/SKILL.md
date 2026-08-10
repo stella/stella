@@ -22,7 +22,24 @@ when relevant. Common sources include:
 
 Default to an inventory and recommendation unless the user asks to apply updates.
 When applying a broad sweep, split it into coherent, independently validated
-batches. Keep breaking majors separate from routine updates.
+batches. Give every major and heavy minor its own validated batch and commit. A
+heavy minor is a minor whose official release notes require migration or whose
+application requires source, configuration, or schema changes beyond dependency
+manifests and lockfiles.
+
+"Separate" means its own batch and commit, not its own pull request and not
+omitted. An applied sweep covers every applicable update within the requested
+scope and each dependency's intended registry channel. Keep stable dependencies
+on stable releases. Include prerelease updates only within an explicitly selected
+prerelease channel. The only reason to leave a version behind is a mechanical
+block: a release still inside the repository's release-age quarantine, a peer or
+engine constraint that cannot be satisfied, or an upstream break with no
+migration path. Report each block with its reason. Upgrade size, review burden,
+and "risky major" are not blocks.
+
+For every major and heavy minor, read the official release notes for capabilities
+worth adopting, not only for breakage. Report the relevant migration details and
+capabilities adopted or identified with the version moves.
 
 ## 2. Inventory the Full Requested Surface
 

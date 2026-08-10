@@ -848,6 +848,9 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.split": {
     load: async () => await import("@/api/handlers/time-entries/split"),
   },
+  "time-entries.summary.get": {
+    load: async () => await import("@/api/handlers/time-entries/summary/get"),
+  },
   "time-entries.timer-start": {
     load: async () => await import("@/api/handlers/time-entries/timer-start"),
   },

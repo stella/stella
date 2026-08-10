@@ -1673,6 +1673,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/properties/:id",
       "GET /v1/time-entries/:id",
+      "GET /v1/time-entries/:id/summary",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
       "GET /v1/workspaces/:id/activity",
@@ -1681,7 +1682,8 @@
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1694,6 +1696,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/properties/:id": 1,
       "GET /v1/time-entries/:id": 2,
+      "GET /v1/time-entries/:id/summary": 2,
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id": 1,
       "GET /v1/workspaces/:id/activity": 1,
@@ -1702,7 +1705,8 @@
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1715,6 +1719,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/properties/:id": 6,
       "GET /v1/time-entries/:id": 6,
+      "GET /v1/time-entries/:id/summary": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
@@ -1723,7 +1728,8 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1736,6 +1742,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/properties/:id": 1024,
       "GET /v1/time-entries/:id": 1024,
+      "GET /v1/time-entries/:id/summary": 1024,
       "GET /v1/views/:id": 1024,
       "GET /v1/workspaces/:id": 6144,
       "GET /v1/workspaces/:id/activity": 1024,
@@ -1743,7 +1750,8 @@
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/$viewId": {
@@ -1759,6 +1767,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/properties/:id",
       "GET /v1/time-entries/:id",
+      "GET /v1/time-entries/:id/summary",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
       "GET /v1/workspaces/:id/activity",
@@ -1767,7 +1776,8 @@
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1780,6 +1790,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/properties/:id": 1,
       "GET /v1/time-entries/:id": 2,
+      "GET /v1/time-entries/:id/summary": 2,
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id": 1,
       "GET /v1/workspaces/:id/activity": 1,
@@ -1788,7 +1799,8 @@
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1801,6 +1813,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/properties/:id": 6,
       "GET /v1/time-entries/:id": 6,
+      "GET /v1/time-entries/:id/summary": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
@@ -1809,7 +1822,8 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1822,6 +1836,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/properties/:id": 1024,
       "GET /v1/time-entries/:id": 1024,
+      "GET /v1/time-entries/:id/summary": 1024,
       "GET /v1/views/:id": 1024,
       "GET /v1/workspaces/:id": 6144,
       "GET /v1/workspaces/:id/activity": 1024,
@@ -1829,7 +1844,8 @@
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/$viewId/document": {
@@ -1859,7 +1875,8 @@
       "GET /v1/workspaces/:id/workflow",
       "GET /v1/workspaces/navigation",
       "POST /v1/chat/workspaces/:id/file-thread",
-      "POST /v1/workspaces/:id/justifications/query"
+      "POST /v1/workspaces/:id/justifications/query",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1886,7 +1903,8 @@
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1,
       "POST /v1/chat/workspaces/:id/file-thread": 1,
-      "POST /v1/workspaces/:id/justifications/query": 1
+      "POST /v1/workspaces/:id/justifications/query": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1913,7 +1931,8 @@
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/chat/workspaces/:id/file-thread": 13,
-      "POST /v1/workspaces/:id/justifications/query": 6
+      "POST /v1/workspaces/:id/justifications/query": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1939,7 +1958,8 @@
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480,
       "POST /v1/chat/workspaces/:id/file-thread": 1024,
-      "POST /v1/workspaces/:id/justifications/query": 1024
+      "POST /v1/workspaces/:id/justifications/query": 1024,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/expenses": {
@@ -1961,7 +1981,8 @@
       "GET /v1/workspaces/:id/events",
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -1980,7 +2001,8 @@
       "GET /v1/workspaces/:id/events": 1,
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -1998,7 +2020,8 @@
       "GET /v1/workspaces/:id/activity": 7,
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -2016,7 +2039,8 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/invoices": {
@@ -2037,7 +2061,8 @@
       "GET /v1/workspaces/:id/events",
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -2055,7 +2080,8 @@
       "GET /v1/workspaces/:id/events": 1,
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -2072,7 +2098,8 @@
       "GET /v1/workspaces/:id/activity": 7,
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -2089,7 +2116,8 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/lists target": {
@@ -2105,6 +2133,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/properties/:id",
       "GET /v1/time-entries/:id",
+      "GET /v1/time-entries/:id/summary",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
       "GET /v1/workspaces/:id/activity",
@@ -2113,7 +2142,8 @@
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -2126,6 +2156,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/properties/:id": 1,
       "GET /v1/time-entries/:id": 2,
+      "GET /v1/time-entries/:id/summary": 2,
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id": 1,
       "GET /v1/workspaces/:id/activity": 1,
@@ -2134,7 +2165,8 @@
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -2147,6 +2179,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/properties/:id": 6,
       "GET /v1/time-entries/:id": 6,
+      "GET /v1/time-entries/:id/summary": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
@@ -2155,7 +2188,8 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -2168,6 +2202,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/properties/:id": 1024,
       "GET /v1/time-entries/:id": 1024,
+      "GET /v1/time-entries/:id/summary": 1024,
       "GET /v1/views/:id": 1024,
       "GET /v1/workspaces/:id": 6144,
       "GET /v1/workspaces/:id/activity": 1024,
@@ -2175,10 +2210,11 @@
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
-  "/workspaces/$workspaceId/timesheets target": {
+  "/workspaces/$workspaceId/timesheets": {
     "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
@@ -2191,6 +2227,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/properties/:id",
       "GET /v1/time-entries/:id",
+      "GET /v1/time-entries/:id/summary",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
       "GET /v1/workspaces/:id/activity",
@@ -2199,7 +2236,8 @@
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -2211,7 +2249,8 @@
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/properties/:id": 1,
-      "GET /v1/time-entries/:id": 2,
+      "GET /v1/time-entries/:id": 1,
+      "GET /v1/time-entries/:id/summary": 1,
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id": 1,
       "GET /v1/workspaces/:id/activity": 1,
@@ -2220,7 +2259,8 @@
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -2233,6 +2273,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/properties/:id": 6,
       "GET /v1/time-entries/:id": 6,
+      "GET /v1/time-entries/:id/summary": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
@@ -2240,7 +2281,8 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -2253,6 +2295,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/properties/:id": 1024,
       "GET /v1/time-entries/:id": 1024,
+      "GET /v1/time-entries/:id/summary": 1024,
       "GET /v1/views/:id": 1024,
       "GET /v1/workspaces/:id": 6144,
       "GET /v1/workspaces/:id/activity": 1024,
@@ -2260,7 +2303,8 @@
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/workspaces/:id/active": 1024
     }
   },
   "/workspaces/$workspaceId/workflows": {
@@ -2283,7 +2327,8 @@
       "GET /v1/workspaces/:id/flows/runs",
       "GET /v1/workspaces/:id/overview",
       "GET /v1/workspaces/:id/workflow",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/workspaces/:id/active"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -2303,7 +2348,8 @@
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1,
       "GET /v1/flows": 1,
-      "GET /v1/workspaces/:id/flows/runs": 1
+      "GET /v1/workspaces/:id/flows/runs": 1,
+      "POST /v1/workspaces/:id/active": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -2322,7 +2368,8 @@
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6,
       "GET /v1/flows": 6,
-      "GET /v1/workspaces/:id/flows/runs": 6
+      "GET /v1/workspaces/:id/flows/runs": 6,
+      "POST /v1/workspaces/:id/active": 6
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -2341,7 +2388,8 @@
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480,
       "GET /v1/flows": 1024,
-      "GET /v1/workspaces/:id/flows/runs": 1024
+      "GET /v1/workspaces/:id/flows/runs": 1024,
+      "POST /v1/workspaces/:id/active": 1024
     }
   }
 }

@@ -15,6 +15,7 @@ describe("archiveWorkspaceHandler", () => {
   test("does not archive while OCR has an active dispatch claim", async () => {
     let selectCount = 0;
     const tx = asTestRaw<Transaction>({
+      execute: async () => undefined,
       select: () => {
         selectCount++;
         if (selectCount === 1) {
@@ -46,5 +47,48 @@ describe("archiveWorkspaceHandler", () => {
 
     expect(Result.isError(result)).toBe(true);
     expect(result).toMatchObject({ error: { status: 409 } });
+  });
+
+  test("does not archive while a timer is active", async () => {
+    let selectCount = 0;
+    const tx = asTestRaw<Transaction>({
+      execute: async () => undefined,
+      select: () => {
+        selectCount++;
+        if (selectCount === 1) {
+          return {
+            from: () => ({
+              where: () => ({
+                limit: () => ({
+                  for: async () => [{ id: workspaceId, status: "active" }],
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () =>
+                selectCount === 2 ? [] : [{ id: "timer_test" }],
+            }),
+          }),
+        };
+      },
+    });
+    const safeDb: SafeDb = async (operation) => Result.ok(await operation(tx));
+    const recordAuditEvent: AuditRecorder = async () => undefined;
+
+    const result = await Result.gen(() =>
+      archiveWorkspaceHandler({ safeDb, workspaceId, recordAuditEvent }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(result).toMatchObject({
+      error: {
+        status: 409,
+        message: "Stop active timers before archiving this matter",
+      },
+    });
   });
 });

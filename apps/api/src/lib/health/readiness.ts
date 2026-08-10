@@ -1,10 +1,8 @@
 import { Result } from "better-result";
 
-import { env } from "@/api/env";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { probeDatabase } from "@/api/lib/health/probe-database";
-import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
+import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { getS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -93,24 +91,6 @@ const probeObjectStorage = async (signal: AbortSignal): Promise<void> => {
   await probeObjectStorageReadiness(objectStorageReadinessProbe, signal);
 };
 
-const probeDocumentConverter = async (signal: AbortSignal): Promise<void> => {
-  const response = await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, {
-    headers: {
-      Authorization: basicAuthorizationHeader(
-        env.GOTENBERG_USERNAME,
-        env.GOTENBERG_PASSWORD,
-      ),
-    },
-    signal,
-    timeoutMs: PROBE_TIMEOUT_MS,
-  });
-  if (!response.ok) {
-    throw new HealthCheckError({
-      message: "Document converter health probe failed",
-    });
-  }
-};
-
 const probeScheduledJobs = async (): Promise<void> => {
   if (!scheduledJobsReady) {
     await Promise.reject(
@@ -125,7 +105,9 @@ const runtimeReadinessProbes = {
   [READINESS_DEPENDENCY.database]: async () => {
     await probeDatabase();
   },
-  [READINESS_DEPENDENCY.documentConverter]: probeDocumentConverter,
+  [READINESS_DEPENDENCY.documentConverter]: async (signal) => {
+    await probeDocumentConverter(signal, PROBE_TIMEOUT_MS);
+  },
   [READINESS_DEPENDENCY.objectStorage]: probeObjectStorage,
   [READINESS_DEPENDENCY.redis]: probeRedis,
   [READINESS_DEPENDENCY.scheduledJobs]: probeScheduledJobs,

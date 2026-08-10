@@ -1,16 +1,11 @@
-import type { Err } from "better-result";
 import { Result } from "better-result";
-import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+import { resolveRate } from "@/api/lib/billing-rates";
 import { tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const resolveRateQuerySchema = t.Object({
@@ -29,7 +24,7 @@ const resolveRateHandler = createSafeHandler(
       "first, then the table default). Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
-    permissions: { workspace: ["read"] },
+    permissions: { rate: ["read"] },
     mcp: { type: "tool", name: "resolve_rate" },
     access: "read",
     query: resolveRateQuerySchema,
@@ -66,103 +61,5 @@ const resolveRateHandler = createSafeHandler(
     return Result.ok(result ?? { hourlyRate: null, currency: null });
   },
 );
-
-// Shared effective-rate resolution reused by the HTTP handler and the
-// `resolve_rate` MCP tool: user-specific rate first, then the default table
-// rate, scoped to the workspace's default rate table.
-export const resolveRate = async function* ({
-  safeDb,
-  workspaceId,
-  userId,
-  dateWorked,
-}: {
-  safeDb: SafeDb;
-  workspaceId: SafeId<"workspace">;
-  userId: ValidatedOrgUserId;
-  dateWorked: string;
-}): AsyncGenerator<
-  Err<never, SafeDbError>,
-  { hourlyRate: number; currency: string } | null,
-  unknown
-> {
-  const defaultTable = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: { workspaceId: { eq: workspaceId }, isDefault: true },
-        columns: { id: true, currency: true },
-      }),
-    ),
-  );
-
-  if (!defaultTable) {
-    return null;
-  }
-
-  const dateCondition = and(
-    lte(rateEntries.effectiveFrom, dateWorked),
-    or(
-      isNull(rateEntries.effectiveTo),
-      gte(rateEntries.effectiveTo, dateWorked),
-    ),
-  );
-
-  // Try user-specific rate first
-  const userRate = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({
-          hourlyRate: rateEntries.hourlyRate,
-        })
-        .from(rateEntries)
-        .where(
-          and(
-            eq(rateEntries.rateTableId, defaultTable.id),
-            eq(rateEntries.userId, userId),
-            dateCondition,
-          ),
-        )
-        .orderBy(desc(rateEntries.effectiveFrom))
-        .limit(1),
-    ),
-  );
-
-  const userRateRow = userRate.at(0);
-  if (userRateRow) {
-    return {
-      hourlyRate: userRateRow.hourlyRate,
-      currency: defaultTable.currency,
-    };
-  }
-
-  // Fall back to table default rate (userId IS NULL)
-  const defaultRate = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({
-          hourlyRate: rateEntries.hourlyRate,
-        })
-        .from(rateEntries)
-        .where(
-          and(
-            eq(rateEntries.rateTableId, defaultTable.id),
-            isNull(rateEntries.userId),
-            dateCondition,
-          ),
-        )
-        .orderBy(desc(rateEntries.effectiveFrom))
-        .limit(1),
-    ),
-  );
-
-  const defaultRateRow = defaultRate.at(0);
-  if (defaultRateRow) {
-    return {
-      hourlyRate: defaultRateRow.hourlyRate,
-      currency: defaultTable.currency,
-    };
-  }
-
-  return null;
-};
 
 export default resolveRateHandler;

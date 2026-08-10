@@ -6,12 +6,13 @@ import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { resolveRate } from "@/api/handlers/rates/resolve";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -82,13 +83,6 @@ const TIME_ENTRY_STATUS_FILTERS = [
   "billed",
   "written_off",
 ] as const;
-
-/**
- * Statuses save_time_entry can flip an entry to. Mirrors update-by-id.ts, which
- * only accepts draft/approved: billed and written-off are reached through the
- * invoice and delete flows, not a direct status write.
- */
-const SAVE_TIME_ENTRY_STATUSES = ["draft", "approved"] as const;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -191,7 +185,7 @@ const invoiceListTextFieldSpecs = (
 type InvoiceTimeEntryTextItem = {
   narrative: string;
   invoiceNarrative: string | null;
-  entity: { name: string };
+  entity: { name: string } | null;
 };
 
 type InvoiceExpenseTextItem = {
@@ -257,7 +251,13 @@ const invoiceDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "invoice.timeEntries[].entity.name",
-    items: (payload) => payload.invoice.timeEntries,
+    items: (payload) =>
+      payload.invoice.timeEntries.filter(
+        (
+          item,
+        ): item is InvoiceTimeEntryTextItem & { entity: { name: string } } =>
+          item.entity !== null,
+      ),
     scope: () => workspaceId,
     read: (item) => item.entity.name,
     apply: (item, value) => {
@@ -311,7 +311,9 @@ export const BILLING_TOOL_DEFINITIONS = [
       "time was logged against), user_id, a date-worked range (date_from/" +
       "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
       "user, date, minutes, rate (minor currency units), currency, narrative, " +
-      "and status.",
+      "and status. The response includes visibility: all_entries for billing " +
+      "reviewers, or own_entries when the caller can see only their own time; " +
+      "own_entries is not a matter total.",
     inputSchema: {
       type: "object",
       properties: {
@@ -356,19 +358,21 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["read"] }).success,
     name: "list_time_entries",
     scope: "stella:read",
   },
   {
     description:
       "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
-      "entity_id, date_worked, timezone_id, duration_minutes, rate_at_entry, " +
-      "currency, and narrative all required). Pass time_entry_id to update: " +
-      "set date_worked, duration_minutes, narrative, invoice_narrative, " +
+      "date_worked, timezone_id, duration_minutes, and narrative required; " +
+      "entity_id is optional context). Pass time_entry_id to update: " +
+      "set date_worked (with timezone_id), duration_minutes, narrative, " +
+      "invoice_narrative, " +
       "billable, no_charge, entity_id (move the entry), task_code, " +
-      "activity_code, rate_at_entry, currency, and/or status (draft or " +
-      "approved). Rates and amounts are integer minor currency units (e.g. " +
-      "cents); durations are whole minutes. Returns the time entry ID.",
+      "and/or activity_code. The timekeeper's effective rate is resolved " +
+      "server-side. Durations are whole minutes. Returns the time entry ID.",
     inputSchema: {
       type: "object",
       properties: {
@@ -376,10 +380,10 @@ export const BILLING_TOOL_DEFINITIONS = [
         matter_id: stringProp(
           "Matter/workspace ID to create the entry in; required when creating",
         ),
-        entity_id: stringProp(
-          "Entity the time is logged against (document, folder, or task). " +
-            "Required when creating; when updating, moves the entry to a " +
-            "different entity in the same matter.",
+        entity_id: nullableStringProp(
+          "Optional work item context (document, folder, or task). When " +
+            "updating, moves the entry to a different entity in the same " +
+            "matter; pass null to clear.",
         ),
         date_worked: stringProp(
           "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -387,21 +391,12 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
         timezone_id: stringProp(
           "IANA time zone the date_worked is interpreted in (e.g. " +
-            "Europe/Prague); required when creating",
+            "Europe/Prague); required when creating or changing date_worked",
           { maxLength: 64 },
         ),
         duration_minutes: intProp(
           "Minutes worked (whole minutes); required when creating",
           { min: 1 },
-        ),
-        rate_at_entry: intProp(
-          "Hourly rate in integer minor currency units (e.g. cents); required " +
-            "when creating",
-          { min: 0 },
-        ),
-        currency: stringProp(
-          "3-letter ISO currency code; required when creating",
-          { maxLength: 3 },
         ),
         narrative: stringProp(
           "Description of the work; required when creating",
@@ -429,10 +424,6 @@ export const BILLING_TOOL_DEFINITIONS = [
           "UTBMS/LEDES activity code; pass null to clear",
           { maxLength: 20 },
         ),
-        status: enumProp(
-          "Set the entry's status. Only valid when updating.",
-          SAVE_TIME_ENTRY_STATUSES,
-        ),
       },
     },
     annotations: {
@@ -443,6 +434,9 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
+      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
     name: "save_time_entry",
     scope: "stella:billing_write",
   },
@@ -469,6 +463,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
     name: "delete_time_entry",
     scope: "stella:billing_write",
   },
@@ -498,6 +494,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ rate: ["read"] }).success,
     name: "resolve_rate",
     scope: "stella:read",
   },
@@ -540,6 +538,8 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ workspace: ["read"] }).success,
     name: "list_invoices",
     scope: "stella:read",
   },
@@ -561,6 +561,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ organizationSettings: ["update"] }).success,
     name: "get_usage",
     scope: "stella:read",
   },
@@ -709,7 +711,7 @@ const listTimeEntriesArgsSchema = v.pipe(
 /** Columns list_time_entries surfaces, shared by the list and detail branches. */
 const timeEntryColumns = {
   id: timeEntries.id,
-  entityId: timeEntries.matterId,
+  entityId: timeEntries.workItemId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
   durationMinutes: timeEntries.durationMinutes,
@@ -739,7 +741,7 @@ const decodeTimeEntryPageCursor = (
 };
 
 const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!roles[context.memberRole].authorize({ timeEntry: ["read"] }).success) {
     return errorResult("Forbidden");
   }
 
@@ -786,6 +788,12 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     if (!entryRow) {
       return notFoundResult("Time entry not found or not accessible");
     }
+    const canReview = roles[context.memberRole].authorize({
+      timeEntry: ["approve"],
+    }).success;
+    if (!canReview && entryRow.userId !== context.userId) {
+      return notFoundResult("Time entry not found or not accessible");
+    }
     const userNames = await loadUserNames({
       context,
       userIds: entryRow.userId ? [entryRow.userId] : [],
@@ -812,9 +820,12 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     );
     return {
       egress: "structured",
-      payload: { entry } satisfies v.InferInput<
-        typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION
-      >,
+      payload: {
+        visibility: canReview
+          ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
+          : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+        entry,
+      } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_DETAIL_PROJECTION>,
       textFields,
     };
   }
@@ -839,6 +850,25 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const canReview = roles[context.memberRole].authorize({
+    timeEntry: ["approve"],
+  }).success;
+  if (
+    !canReview &&
+    input.user_id !== undefined &&
+    input.user_id !== context.userId
+  ) {
+    return errorResult("Forbidden");
+  }
+
+  const accessConditions = [eq(timeEntries.workspaceId, workspaceId)];
+  if (input.user_id !== undefined) {
+    accessConditions.push(
+      eq(timeEntries.userId, brandPersistedUserId(input.user_id)),
+    );
+  } else if (!canReview) {
+    accessConditions.push(eq(timeEntries.userId, context.userId));
+  }
 
   const rows = await context.scopedDb((tx) =>
     tx
@@ -846,13 +876,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
       .from(timeEntries)
       .where(
         and(
-          eq(timeEntries.workspaceId, workspaceId),
+          ...accessConditions,
           input.entity_id === undefined
             ? undefined
-            : eq(timeEntries.matterId, brandPersistedEntityId(input.entity_id)),
-          input.user_id === undefined
-            ? undefined
-            : eq(timeEntries.userId, brandPersistedUserId(input.user_id)),
+            : eq(
+                timeEntries.workItemId,
+                brandPersistedEntityId(input.entity_id),
+              ),
           input.date_from === undefined
             ? undefined
             : gte(timeEntries.dateWorked, input.date_from),
@@ -908,9 +938,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
 
   return {
     egress: "structured",
-    payload: { entries, nextCursor: page.nextCursor } satisfies v.InferInput<
-      typeof LIST_TIME_ENTRIES_LIST_PROJECTION
-    >,
+    payload: {
+      visibility: canReview
+        ? TIME_ENTRY_VISIBILITY.ALL_ENTRIES
+        : TIME_ENTRY_VISIBILITY.OWN_ENTRIES,
+      entries,
+      nextCursor: page.nextCursor,
+    } satisfies v.InferInput<typeof LIST_TIME_ENTRIES_LIST_PROJECTION>,
     textFields,
   };
 };
@@ -921,7 +955,7 @@ const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
     time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
     date_worked: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
     timezone_id: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
@@ -929,8 +963,6 @@ const saveTimeEntryArgsSchema = v.pipe(
     duration_minutes: v.optional(
       v.pipe(v.number(), v.integer(), v.minValue(1)),
     ),
-    rate_at_entry: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
-    currency: v.optional(v.pipe(v.string(), v.length(3))),
     narrative: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
     ),
@@ -941,7 +973,6 @@ const saveTimeEntryArgsSchema = v.pipe(
     no_charge: v.optional(v.boolean()),
     task_code: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
     activity_code: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
-    status: v.optional(v.picklist(SAVE_TIME_ENTRY_STATUSES)),
   }),
   // Creating (no time_entry_id) requires the full set the backing create schema
   // demands; list them in one message so a partial create is rejected up front.
@@ -949,25 +980,19 @@ const saveTimeEntryArgsSchema = v.pipe(
     [
       ["time_entry_id"],
       ["matter_id"],
-      ["entity_id"],
       ["date_worked"],
       ["timezone_id"],
       ["duration_minutes"],
-      ["rate_at_entry"],
-      ["currency"],
       ["narrative"],
     ],
     (i) =>
       i.time_entry_id !== undefined ||
       (i.matter_id !== undefined &&
-        i.entity_id !== undefined &&
         i.date_worked !== undefined &&
         i.timezone_id !== undefined &&
         i.duration_minutes !== undefined &&
-        i.rate_at_entry !== undefined &&
-        i.currency !== undefined &&
         i.narrative !== undefined),
-    "Creating a time entry requires matter_id, entity_id, date_worked, timezone_id, duration_minutes, rate_at_entry, currency, and narrative",
+    "Creating a time entry requires matter_id, date_worked, timezone_id, duration_minutes, and narrative",
   ),
   // matter_id names the workspace to create in; it cannot change on update.
   v.forward(
@@ -979,16 +1004,14 @@ const saveTimeEntryArgsSchema = v.pipe(
     ),
     ["matter_id"],
   ),
-  // invoice_narrative, no_charge, and status are update-only in the backing
+  // invoice_narrative and no_charge are update-only in the backing
   // handler, so reject them on a create.
   v.partialCheck(
-    [["time_entry_id"], ["invoice_narrative"], ["no_charge"], ["status"]],
-    ({ time_entry_id, invoice_narrative, no_charge, status }) =>
+    [["time_entry_id"], ["invoice_narrative"], ["no_charge"]],
+    ({ time_entry_id, invoice_narrative, no_charge }) =>
       time_entry_id !== undefined ||
-      (invoice_narrative === undefined &&
-        no_charge === undefined &&
-        status === undefined),
-    "invoice_narrative, no_charge, and status apply to an existing time entry; pass time_entry_id",
+      (invoice_narrative === undefined && no_charge === undefined),
+    "invoice_narrative and no_charge apply to an existing time entry; pass time_entry_id",
   ),
   // An update must request at least one change.
   v.partialCheck(
@@ -1003,9 +1026,6 @@ const saveTimeEntryArgsSchema = v.pipe(
       ["no_charge"],
       ["task_code"],
       ["activity_code"],
-      ["status"],
-      ["rate_at_entry"],
-      ["currency"],
     ],
     (i) =>
       i.time_entry_id === undefined ||
@@ -1017,10 +1037,7 @@ const saveTimeEntryArgsSchema = v.pipe(
       i.billable !== undefined ||
       i.no_charge !== undefined ||
       i.task_code !== undefined ||
-      i.activity_code !== undefined ||
-      i.status !== undefined ||
-      i.rate_at_entry !== undefined ||
-      i.currency !== undefined,
+      i.activity_code !== undefined,
     "Provide at least one change to the time entry",
   ),
 );
@@ -1032,7 +1049,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
       issues: parsed.issues,
       message: crossFieldOrGeneric(
         parsed.issues,
-        "Invalid input: expected { time_entry_id?, matter_id?, entity_id?, date_worked?, timezone_id?, duration_minutes?, rate_at_entry?, currency?, narrative?, invoice_narrative?, billable?, no_charge?, task_code?, activity_code?, status? }",
+        "Invalid input: expected { time_entry_id?, matter_id?, entity_id?, date_worked?, timezone_id?, duration_minutes?, narrative?, invoice_narrative?, billable?, no_charge?, task_code?, activity_code? }",
       ),
     });
   }
@@ -1063,12 +1080,17 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
         userId: context.userId,
         recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
         body: {
-          matterId: brandPersistedEntityId(input.entity_id ?? ""),
+          ...(input.entity_id === undefined
+            ? {}
+            : {
+                workItemId:
+                  input.entity_id === null
+                    ? null
+                    : brandPersistedEntityId(input.entity_id),
+              }),
           dateWorked: input.date_worked ?? "",
           timezoneId: input.timezone_id ?? "",
           durationMinutes: input.duration_minutes ?? 0,
-          rateAtEntry: input.rate_at_entry ?? 0,
-          currency: input.currency ?? "",
           narrative: input.narrative ?? "",
           ...(input.billable === undefined ? {} : { billable: input.billable }),
           ...(input.task_code === undefined
@@ -1109,12 +1131,21 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     updateTimeEntryHandler({
       safeDb: context.safeDb,
       workspaceId,
+      actor: {
+        userId: context.userId,
+        memberRole: { role: context.memberRole },
+      },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: {
         id: timeEntryId,
         ...(input.date_worked === undefined
           ? {}
-          : { dateWorked: input.date_worked }),
+          : {
+              dateWorked: input.date_worked,
+              ...(input.timezone_id === undefined
+                ? {}
+                : { timezoneId: input.timezone_id }),
+            }),
         ...(input.duration_minutes === undefined
           ? {}
           : { durationMinutes: input.duration_minutes }),
@@ -1128,16 +1159,16 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
         ...(input.no_charge === undefined ? {} : { noCharge: input.no_charge }),
         ...(input.entity_id === undefined
           ? {}
-          : { matterId: brandPersistedEntityId(input.entity_id) }),
+          : {
+              workItemId:
+                input.entity_id === null
+                  ? null
+                  : brandPersistedEntityId(input.entity_id),
+            }),
         ...(input.task_code === undefined ? {} : { taskCode: input.task_code }),
         ...(input.activity_code === undefined
           ? {}
           : { activityCode: input.activity_code }),
-        ...(input.status === undefined ? {} : { status: input.status }),
-        ...(input.rate_at_entry === undefined
-          ? {}
-          : { rateAtEntry: input.rate_at_entry }),
-        ...(input.currency === undefined ? {} : { currency: input.currency }),
       },
     }),
   );
@@ -1184,6 +1215,10 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     deleteTimeEntryHandler({
       safeDb: context.safeDb,
       workspaceId,
+      actor: {
+        userId: context.userId,
+        memberRole: { role: context.memberRole },
+      },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { id: timeEntryId },
     }),
@@ -1205,7 +1240,7 @@ const resolveRateArgsSchema = v.strictObject({
 });
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!roles[context.memberRole].authorize({ rate: ["read"] }).success) {
     return errorResult("Forbidden");
   }
 
@@ -1313,7 +1348,7 @@ const readInvoiceDetail = async ({
         timeEntries: {
           columns: {
             id: true,
-            matterId: true,
+            workItemId: true,
             dateWorked: true,
             billedMinutes: true,
             rateAtEntry: true,
@@ -1322,7 +1357,7 @@ const readInvoiceDetail = async ({
             invoiceNarrative: true,
             status: true,
           },
-          with: { matter: { columns: { id: true, name: true } } },
+          with: { workItem: { columns: { id: true, name: true } } },
         },
         expenses: {
           columns: {
@@ -1397,13 +1432,10 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
       createdAt: invoiceRow.createdAt.toISOString(),
       updatedAt: invoiceRow.updatedAt.toISOString(),
       timeEntries: invoiceRow.timeEntries.map((te) => {
-        // matterId is a non-null FK (onDelete restrict), so the entity always
-        // exists — a missing relation is a broken invariant, not a data case.
-        const entity =
-          te.matter ?? panic("Invoiced time entry has no matter entity");
+        const workItem = te.workItem;
         return {
           id: te.id,
-          entityId: te.matterId,
+          entityId: te.workItemId,
           dateWorked: te.dateWorked,
           billedMinutes: te.billedMinutes,
           rateAtEntry: te.rateAtEntry,
@@ -1411,7 +1443,7 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
           narrative: te.narrative,
           invoiceNarrative: te.invoiceNarrative,
           status: te.status,
-          entity: { id: entity.id, name: entity.name },
+          entity: workItem ? { id: workItem.id, name: workItem.name } : null,
         };
       }),
       expenses: invoiceRow.expenses.map((ex) => {

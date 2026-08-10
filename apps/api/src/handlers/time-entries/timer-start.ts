@@ -3,24 +3,35 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
+  ACTIVE_TIMER_INDEX_NAME,
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { resolveRate } from "@/api/lib/billing-rates";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStartBodySchema = t.Object({
-  matterId: tSafeId("entity"),
+  workItemId: t.Optional(t.Nullable(tSafeId("entity"))),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  rateAtEntry: t.Integer({ minimum: 0 }),
-  currency: t.String({ minLength: 3, maxLength: 3 }),
   narrative: t.Optional(t.String({ maxLength: 10_000 })),
+});
+
+export const buildTimerBillingSnapshot = (
+  resolvedRate: { hourlyRate: number; currency: string } | null,
+) => ({
+  billable: resolvedRate !== null,
+  rateAtEntry: cents(resolvedRate?.hourlyRate ?? 0),
+  currency: resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY,
 });
 
 const timerStart = createSafeHandler(
@@ -43,22 +54,149 @@ const timerStart = createSafeHandler(
       now,
     });
 
-    // Check active timer limit
-    const activeTimerCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
-          timeEntries,
-          and(
-            eq(timeEntries.userId, user.id),
-            isNotNull(timeEntries.timerStartedAt),
-            eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
-            eq(timeEntries.status, BILLING_STATUS.DRAFT),
+    // Validate the optional work context belongs to this matter.
+    const workItemId = body.workItemId;
+    const workItem = workItemId
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx.query.entities.findFirst({
+              where: {
+                id: { eq: workItemId },
+                workspaceId: { eq: workspaceId },
+              },
+              columns: { id: true },
+            }),
           ),
-        ),
-      ),
-    );
+        )
+      : null;
 
-    if (activeTimerCount >= LIMITS.activeTimersPerUser) {
+    if (workItemId && !workItem) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Work item not found in this matter",
+        }),
+      );
+    }
+
+    const resolvedRate = yield* resolveRate({
+      safeDb,
+      workspaceId,
+      userId: user.id,
+      dateWorked: todayStr,
+    });
+    const billingSnapshot = buildTimerBillingSnapshot(resolvedRate);
+
+    // Advisory lock + count + insert in one transaction to
+    // prevent TOCTOU on the workspace time entry limit.
+    const txResult = await safeDb(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`);
+      const activeTimerCount = await tx.$count(
+        timeEntries,
+        and(
+          eq(timeEntries.userId, user.id),
+          isNotNull(timeEntries.timerStartedAt),
+          eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
+          eq(timeEntries.status, BILLING_STATUS.DRAFT),
+        ),
+      );
+      if (activeTimerCount >= LIMITS.activeTimersPerUser) {
+        return { type: "active_timer" as const };
+      }
+
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      const hasCurrentAccess = await hasCurrentTimerMatterAccess({
+        organizationId: session.activeOrganizationId,
+        tx,
+        userId: user.id,
+        workspaceId,
+      });
+      if (!hasCurrentAccess) {
+        return { type: "workspace_unavailable" as const };
+      }
+      const totalEntries = await tx.$count(
+        timeEntries,
+        eq(timeEntries.workspaceId, workspaceId),
+      );
+
+      if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
+        return { type: "limit" as const };
+      }
+
+      const [entry] = await tx
+        .insert(timeEntries)
+        .values({
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+          userId: user.id,
+          workItemId: workItemId ?? null,
+          dateWorked: todayStr,
+          timezoneId: body.timezoneId,
+          durationMinutes: 0,
+          billedMinutes: 0,
+          ...billingSnapshot,
+          narrative: body.narrative ?? "",
+          source: TIME_ENTRY_SOURCE.TIMER,
+          status: BILLING_STATUS.DRAFT,
+          timerStartedAt: now,
+        })
+        .returning({
+          id: timeEntries.id,
+          timerStartedAt: timeEntries.timerStartedAt,
+        });
+
+      if (entry) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: entry.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                workItemId: workItemId ?? null,
+                dateWorked: todayStr,
+                source: TIME_ENTRY_SOURCE.TIMER,
+                status: BILLING_STATUS.DRAFT,
+                billable: billingSnapshot.billable,
+                timerStartedAt: now.toISOString(),
+                rateAtEntry: billingSnapshot.rateAtEntry,
+                currency: billingSnapshot.currency,
+              },
+            },
+          },
+        });
+      }
+
+      return entry
+        ? { type: "created" as const, entry }
+        : { type: "limit" as const };
+    });
+
+    if (Result.isError(txResult)) {
+      if (
+        DatabaseError.is(txResult.error) &&
+        isPgConstraintError(
+          txResult.error.cause,
+          PG_ERROR.UNIQUE_VIOLATION,
+          ACTIVE_TIMER_INDEX_NAME,
+        )
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "You already have an active timer. Stop it first.",
+          }),
+        );
+      }
+      return Result.err(txResult.error);
+    }
+
+    const txValue = txResult.value;
+
+    if (txValue.type === "active_timer") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -67,94 +205,7 @@ const timerStart = createSafeHandler(
       );
     }
 
-    // Validate matter exists in workspace
-    const matter = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: body.matterId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!matter) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Matter not found in this workspace",
-        }),
-      );
-    }
-
-    // Advisory lock + count + insert in one transaction to
-    // prevent TOCTOU on the workspace time entry limit.
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
-        const totalEntries = await tx.$count(
-          timeEntries,
-          eq(timeEntries.workspaceId, workspaceId),
-        );
-
-        if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
-          return null;
-        }
-
-        const [entry] = await tx
-          .insert(timeEntries)
-          .values({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            userId: user.id,
-            matterId: body.matterId,
-            dateWorked: todayStr,
-            timezoneId: body.timezoneId,
-            durationMinutes: 0,
-            billedMinutes: 0,
-            rateAtEntry: cents(body.rateAtEntry),
-            currency: body.currency,
-            narrative: body.narrative ?? "",
-            source: TIME_ENTRY_SOURCE.TIMER,
-            status: BILLING_STATUS.DRAFT,
-            timerStartedAt: now,
-          })
-          .returning({
-            id: timeEntries.id,
-            timerStartedAt: timeEntries.timerStartedAt,
-          });
-
-        if (entry) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-            resourceId: entry.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  matterId: body.matterId,
-                  dateWorked: todayStr,
-                  source: TIME_ENTRY_SOURCE.TIMER,
-                  status: BILLING_STATUS.DRAFT,
-                  timerStartedAt: now.toISOString(),
-                  rateAtEntry: cents(body.rateAtEntry),
-                  currency: body.currency,
-                },
-              },
-            },
-          });
-        }
-
-        return entry;
-      }),
-    );
-
-    if (!txResult) {
+    if (txValue.type === "limit") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -163,9 +214,18 @@ const timerStart = createSafeHandler(
       );
     }
 
+    if (txValue.type === "workspace_unavailable") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Matter not found or not accessible",
+        }),
+      );
+    }
+
     return Result.ok({
-      id: txResult.id,
-      timerStartedAt: txResult.timerStartedAt?.toISOString(),
+      id: txValue.entry.id,
+      timerStartedAt: txValue.entry.timerStartedAt?.toISOString(),
     });
   },
 );

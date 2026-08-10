@@ -5678,7 +5678,7 @@ export async function seed(organizationId?: string, userId?: string) {
         organizationId: ORG_ID,
         workspaceId: toWs(te.workspaceId),
         userId: te.userId,
-        matterId: te.matterId,
+        workItemId: te.matterId,
         dateWorked: te.dateWorked,
         timezoneId: "Europe/Prague",
         durationMinutes: te.durationMinutes,

@@ -52,7 +52,6 @@ import { PersonMentionLabel } from "@/components/person-mention-label";
 import { UNKNOWN_USER_LABEL, UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
-import { AddMemberDialog } from "@/components/workspaces/members-section";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import {
   isTaskStatus,
@@ -61,16 +60,13 @@ import {
   TASK_STATUSES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useMountEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
-import {
-  getFormatter,
-  getFormattingLocale,
-  useI18nStore,
-} from "@/i18n/i18n-store";
+import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
@@ -80,9 +76,11 @@ import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import {
+  timeEntrySummaryOptions,
+  timeEntryTeamSummaryOptions,
+} from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
@@ -112,17 +110,11 @@ type UpcomingMenuState = {
 
 // ── Helpers ───────────────────────────────────────────────
 
-/**
- * Get the single-letter day abbreviation for a column index, where column 0
- * is the locale's first weekday (Monday in most of Europe, Saturday in the
- * Gulf, Sunday in the US).
- */
 const getLocaleDayLabel = (
   dayIndex: number,
   locale: string,
   firstWeekday: number,
 ) => {
-  // Jan 4, 2026 is a Sunday (getDay() === 0); offset to the first weekday.
   const date = new Date(2026, 0, 4 + firstWeekday + dayIndex);
   return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
 };
@@ -142,10 +134,12 @@ const formatHours = (hours: number) =>
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
+  const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
+  const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
+  const timeBillingEnabled = isTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
-  const lang = useI18nStore((s) => s.lang);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
@@ -307,14 +301,27 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return end;
   }, [weekStart]);
 
-  const { data: timeEntries } = useQuery(
-    routeQueryOptions(
-      timeEntriesOptions(workspaceId, {
-        dateFrom: toISODate(weekStart),
-        dateTo: toISODate(weekEnd),
-      }),
+  const { data: timeSummary } = useQuery({
+    ...routeQueryOptions(
+      timeEntrySummaryOptions(
+        workspaceId,
+        toISODate(weekStart),
+        toISODate(weekEnd),
+      ),
     ),
-  );
+    enabled: timeBillingEnabled && !canReviewTimeEntries,
+  });
+
+  const { data: teamTimeSummary } = useQuery({
+    ...routeQueryOptions(
+      timeEntryTeamSummaryOptions(
+        workspaceId,
+        toISODate(weekStart),
+        toISODate(weekEnd),
+      ),
+    ),
+    enabled: timeBillingEnabled && canReviewTimeEntries,
+  });
 
   // Previous week for trend comparison
   const prevWeekStart = useMemo(() => {
@@ -328,98 +335,49 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return d;
   }, [weekStart]);
 
-  const { data: prevTimeEntries } = useQuery(
-    routeQueryOptions(
-      timeEntriesOptions(workspaceId, {
-        dateFrom: toISODate(prevWeekStart),
-        dateTo: toISODate(prevWeekEnd),
-      }),
+  const { data: previousTimeSummary } = useQuery({
+    ...routeQueryOptions(
+      timeEntrySummaryOptions(
+        workspaceId,
+        toISODate(prevWeekStart),
+        toISODate(prevWeekEnd),
+      ),
     ),
-  );
+    enabled: timeBillingEnabled,
+  });
 
-  const prevWeekHours = useMemo(
-    () =>
-      prevTimeEntries
-        ? prevTimeEntries.reduce((sum, e) => sum + e.durationMinutes / 60, 0)
-        : null,
-    [prevTimeEntries],
-  );
+  const totalHoursThisWeek =
+    (teamTimeSummary
+      ? teamTimeSummary.viewerTotalMinutes
+      : (timeSummary?.totalMinutes ?? 0)) / 60;
+  const prevWeekHours = (previousTimeSummary?.totalMinutes ?? 0) / 60;
 
-  const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
-
-  // Build per-user daily heatmap from real time entries
   const teamHeatmap = useMemo(() => {
-    if (!members || !timeEntries) {
+    if (!teamTimeSummary) {
       return [];
     }
 
-    return members
-      .filter(
-        (
-          member,
-        ): member is typeof member & {
-          user: NonNullable<typeof member.user>;
-        } => member.user !== null,
-      )
-      .map((member) => {
-        const daily = Array.from({ length: 7 }, () => 0);
-        const dailyEntries: Record<
-          number,
-          { id: string; description: string; hours: number }[]
-        > = {};
+    return teamTimeSummary.members.map((member) => {
+      const daily = Array.from({ length: 7 }, () => 0);
+      for (const entry of member.daily) {
+        const parts = entry.dateWorked.split("-").map(Number);
+        const year = parts[0] ?? 0;
+        const month = parts[1] ?? 1;
+        const day = parts[2] ?? 1;
+        const entryDate = new Date(year, month - 1, day);
+        const dayIdx = (entryDate.getDay() - firstWeekday + 7) % 7;
+        daily[dayIdx] = (daily[dayIdx] ?? 0) + entry.totalMinutes / 60;
+      }
 
-        for (const entry of timeEntries) {
-          if (entry.userId !== member.userId) {
-            continue;
-          }
-          // Parse YYYY-MM-DD as local date (not UTC) to avoid
-          // timezone-shifted day attribution for UTC- users.
-          const parts = entry.dateWorked.split("-").map(Number);
-          const y = parts[0] ?? 0;
-          const m = parts[1] ?? 1;
-          const d = parts[2] ?? 1;
-          const entryDate = new Date(y, m - 1, d);
-          const dayOfWeek = entryDate.getDay();
-          // Column 0 is the locale's first weekday.
-          const dayIdx = (dayOfWeek - firstWeekday + 7) % 7;
-          const hours = entry.durationMinutes / 60;
-          daily[dayIdx] = (daily[dayIdx] ?? 0) + hours;
+      return {
+        ...member,
+        name: getDisplayName(member.name, member.email) ?? UNKNOWN_USER_LABEL,
+        daily,
+      };
+    });
+  }, [teamTimeSummary, firstWeekday]);
 
-          const storedEntries = dailyEntries[dayIdx];
-          const entries = normalizeOptionalArray(storedEntries);
-          entries.push({
-            id: entry.id,
-            description: entry.narrative || entry.taskCode || "—",
-            hours,
-          });
-          dailyEntries[dayIdx] = entries;
-        }
-
-        return {
-          userId: member.userId,
-          // `user.name` is empty for accounts created before signup started
-          // defaulting it to the email local-part, so fall back to the email
-          // rather than rendering a nameless row. The row shows this name in
-          // four places (label, avatar initials, cell aria-label, popover
-          // header), so resolve it once here.
-          name:
-            getDisplayName(member.user.name, member.user.email) ??
-            UNKNOWN_USER_LABEL,
-          image: member.user.image,
-          daily,
-          dailyEntries,
-        };
-      });
-  }, [members, timeEntries, firstWeekday]);
-
-  const totalHoursThisWeek = useMemo(
-    () =>
-      teamHeatmap.reduce(
-        (sum, m) => sum + m.daily.reduce((s, h) => s + h, 0),
-        0,
-      ),
-    [teamHeatmap],
-  );
+  const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
   // Tasks with due dates, sorted by nearest deadline first
   const tasksWithDue = useMemo(
@@ -502,20 +460,22 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             });
           })()}
         />
-        <StatCard
-          icon={<ClockIcon className="size-4" />}
-          label={t("workspaces.overview.timeThisWeek")}
-          onClick={() => {
-            detached(
-              navigate({
-                to: "/workspaces/$workspaceId/timesheets",
-                params: { workspaceId },
-              }),
-              "OverviewView",
-            );
-          }}
-          value={formatHours(totalHoursThisWeek)}
-        />
+        {timeBillingEnabled && (
+          <StatCard
+            icon={<ClockIcon className="size-4" />}
+            label={t("workspaces.overview.timeThisWeek")}
+            onClick={() => {
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/timesheets",
+                  params: { workspaceId },
+                }),
+                "OverviewView",
+              );
+            }}
+            value={formatHours(totalHoursThisWeek)}
+          />
+        )}
         {workflowsEnabled && (
           <StatCard
             icon={<WorkflowIcon className="size-4" />}
@@ -751,219 +711,240 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           </Menu>
         </section>
 
-        {/* Time & Team */}
-        <section className="flex min-w-0 flex-col">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
-              <ClockIcon className="me-1.5 inline size-3.5" />
-              {t("workspaces.overview.timeAndTeam")}
-            </h2>
-            <Button
-              className="h-7 shrink-0 text-xs"
-              disabled
-              size="sm"
-              variant="ghost"
-            >
-              <PlusIcon className="size-3" />
-              {t("common.logTime")}
-            </Button>
-          </div>
-          <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
-            <div
-              className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-12 border-b py-2")}
-            >
-              <span />
-              {Array.from({ length: 7 }, (_, i) => (
-                <span
-                  className="text-muted-foreground text-center text-[0.625rem]"
-                  key={i}
-                >
-                  {getLocaleDayLabel(i, lang, firstWeekday)}
-                </span>
-              ))}
-              <span className="hidden sm:block" />
+        {timeBillingEnabled && canReviewTimeEntries ? (
+          <section className="flex min-w-0 flex-col">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
+                <ClockIcon className="me-1.5 inline size-3.5" />
+                {t("workspaces.overview.timeAndTeam")}
+              </h2>
+              <Button
+                className="min-h-11 shrink-0 text-xs"
+                onClick={() => {
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId/timesheets",
+                      params: { workspaceId },
+                    }),
+                    "OverviewView",
+                  );
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <PlusIcon className="size-3" />
+                {t("common.logTime")}
+              </Button>
             </div>
-            <div className="divide-y">
-              {(() => {
-                const maxDaily = Math.max(
-                  ...teamHeatmap.flatMap((m) => m.daily),
-                  0,
-                );
-                return teamHeatmap.map((member) => {
-                  const total =
-                    Math.round(
-                      member.daily.reduce((sum, h) => sum + h, 0) * 10,
-                    ) / 10;
+            <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
+              <div
+                className={cn(
+                  TEAM_HEATMAP_GRID_CLASS,
+                  "min-h-12 border-b py-2",
+                )}
+              >
+                <span />
+                {Array.from({ length: 7 }, (_, i) => (
+                  <span
+                    className="text-muted-foreground text-center text-[0.625rem]"
+                    key={i}
+                  >
+                    {getLocaleDayLabel(i, locale, firstWeekday)}
+                  </span>
+                ))}
+                <span className="hidden sm:block" />
+              </div>
+              <div className="divide-y">
+                {(() => {
+                  const maxDaily = Math.max(
+                    ...teamHeatmap.flatMap((member) => member.daily),
+                    0,
+                  );
+                  return teamHeatmap.map((member) => {
+                    const total = member.daily.reduce(
+                      (sum, hours) => sum + hours,
+                      0,
+                    );
 
-                  return (
-                    <div
-                      className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-14 py-2.5")}
-                      key={member.userId}
-                    >
-                      <UserIdentity
-                        avatarClassName="size-5 shrink-0 text-[0.5rem]"
-                        image={member.image}
-                        name={member.name}
-                        nameClassName="text-sm font-normal"
-                      />
-                      {member.daily.map((hours, dayIdx) => {
-                        const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                        const storedEntries = member.dailyEntries[dayIdx];
-                        const entries = normalizeOptionalArray(storedEntries);
-                        const dayLabel = getLocaleDayLabel(
-                          dayIdx,
-                          lang,
-                          firstWeekday,
-                        );
+                    return (
+                      <div
+                        className={cn(
+                          TEAM_HEATMAP_GRID_CLASS,
+                          "min-h-14 py-2.5",
+                        )}
+                        key={member.userId}
+                      >
+                        <UserIdentity
+                          avatarClassName="size-5 shrink-0 text-[0.5rem]"
+                          image={member.image}
+                          name={member.name}
+                          nameClassName="text-sm font-normal"
+                        />
+                        {member.daily.map((hours, dayIdx) => {
+                          const dayLabel = getLocaleDayLabel(
+                            dayIdx,
+                            locale,
+                            firstWeekday,
+                          );
+                          const opacity = maxDaily > 0 ? hours / maxDaily : 0;
+                          const cell = (
+                            <div
+                              className={cn(
+                                "bg-primary/10 size-5 rounded-sm transition-transform",
+                                hours > 0 && "hover:scale-110",
+                              )}
+                              style={
+                                hours > 0
+                                  ? {
+                                      backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
+                                    }
+                                  : undefined
+                              }
+                            />
+                          );
 
-                        const cell = (
-                          <div
-                            className={cn(
-                              "bg-primary/10 size-5 rounded-sm transition-transform",
-                              hours > 0 && "hover:scale-110",
-                            )}
-                            style={
-                              hours > 0
-                                ? {
-                                    backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
-                                  }
-                                : undefined
-                            }
-                          />
-                        );
+                          if (hours === 0) {
+                            return (
+                              <div
+                                className="flex size-6 items-center justify-center sm:size-7"
+                                // eslint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                key={dayIdx}
+                              >
+                                {cell}
+                              </div>
+                            );
+                          }
 
-                        if (hours === 0) {
                           return (
                             <div
                               className="flex size-6 items-center justify-center sm:size-7"
-                              // eslint-disable-next-line react/no-array-index-key -- member.daily is a fixed 7-slot week array; dayIdx is the day-of-week itself (used to derive dayLabel), never reordered or resized.
+                              // eslint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
                               key={dayIdx}
                             >
-                              {cell}
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div
-                            className="flex size-6 items-center justify-center sm:size-7"
-                            // eslint-disable-next-line react/no-array-index-key -- member.daily is a fixed 7-slot week array; dayIdx is the day-of-week itself (used to derive dayLabel), never reordered or resized.
-                            key={dayIdx}
-                          >
-                            <Popover>
-                              <TooltipRoot>
-                                <PopoverTrigger
-                                  render={
-                                    <TooltipTrigger
-                                      render={
-                                        <button
-                                          aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
-                                          className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
-                                          type="button"
-                                        />
-                                      }
-                                    />
-                                  }
-                                >
-                                  {cell}
-                                </PopoverTrigger>
-                                <TooltipPopup>
-                                  {formatHours(hours)}
-                                </TooltipPopup>
-                              </TooltipRoot>
-                              <PopoverPopup className="w-56" sideOffset={8}>
-                                <div className="p-2">
-                                  <p className="text-muted-foreground mb-2 text-xs font-medium">
-                                    {member.name} · {dayLabel}
-                                    {" · "}
+                              <Popover>
+                                <TooltipRoot>
+                                  <PopoverTrigger
+                                    render={
+                                      <TooltipTrigger
+                                        render={
+                                          <button
+                                            aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
+                                            className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
+                                            type="button"
+                                          />
+                                        }
+                                      />
+                                    }
+                                  >
+                                    {cell}
+                                  </PopoverTrigger>
+                                  <TooltipPopup>
+                                    {formatHours(hours)}
+                                  </TooltipPopup>
+                                </TooltipRoot>
+                                <PopoverPopup className="w-56" sideOffset={8}>
+                                  <p className="text-muted-foreground p-2 text-xs font-medium">
+                                    {member.name} · {dayLabel} ·{" "}
                                     {formatHours(hours)}
                                   </p>
-                                  {entries.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {entries.map((entry) => (
-                                        <div
-                                          className="flex items-start justify-between gap-2"
-                                          key={entry.id}
-                                        >
-                                          <span className="text-xs">
-                                            {entry.description}
-                                          </span>
-                                          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                            {formatHours(entry.hours)}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-muted-foreground text-xs">
-                                      {t("common.noResults")}
-                                    </p>
-                                  )}
-                                </div>
-                              </PopoverPopup>
-                            </Popover>
-                          </div>
-                        );
-                      })}
-                      <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
-                        {total > 0 ? formatHours(total) : ""}
-                      </span>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-            <div className="border-t px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground text-xs">
-                  {t("workspaces.overview.totalThisWeek")}
-                </span>
-                <div className="flex items-center gap-2">
+                                </PopoverPopup>
+                              </Popover>
+                            </div>
+                          );
+                        })}
+                        <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
+                          {total > 0 ? formatHours(total) : ""}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              <div className="border-t px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground text-xs">
+                    {t("workspaces.overview.totalThisWeek")}
+                  </span>
                   <span className="text-sm font-medium tabular-nums">
-                    {totalHoursThisWeek > 0
-                      ? formatHours(totalHoursThisWeek)
+                    {totalTeamHoursThisWeek > 0
+                      ? formatHours(totalTeamHoursThisWeek)
                       : ""}
                   </span>
-                  {prevWeekHours !== null &&
-                    prevWeekHours > 0 &&
-                    totalHoursThisWeek !== prevWeekHours && (
-                      <span
-                        className={cn(
-                          "text-xs font-medium",
-                          totalHoursThisWeek > prevWeekHours
-                            ? "text-success"
-                            : "text-destructive",
-                        )}
-                      >
-                        {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
-                        {Math.round(
-                          Math.abs(
-                            ((totalHoursThisWeek - prevWeekHours) /
-                              prevWeekHours) *
-                              100,
-                          ),
-                        )}
-                        %
-                      </span>
-                    )}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground text-xs">
+                    {t("workspaces.overview.membersCount", {
+                      count: teamHeatmap.length,
+                    })}
+                  </span>
                 </div>
               </div>
-              <div className="mt-1.5 flex items-center justify-between">
-                <span className="text-muted-foreground text-xs">
-                  {t("workspaces.overview.membersCount", {
-                    count: teamHeatmap.length,
-                  })}
-                </span>
-                <AddMemberDialog
-                  triggerClassName="h-auto p-0 text-xs"
-                  triggerSize="sm"
-                  triggerVariant="link"
-                  workspaceId={workspaceId}
-                />
-              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : (
+          /* Personal time */
+          timeBillingEnabled && (
+            <section className="flex min-w-0 flex-col">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
+                  <ClockIcon className="me-1.5 inline size-3.5" />
+                  {t("workspaces.overview.timeThisWeek")}
+                </h2>
+                <Button
+                  className="min-h-11 shrink-0 text-xs"
+                  onClick={() => {
+                    detached(
+                      navigate({
+                        to: "/workspaces/$workspaceId/timesheets",
+                        params: { workspaceId },
+                      }),
+                      "OverviewView",
+                    );
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <PlusIcon className="size-3" />
+                  {t("common.logTime")}
+                </Button>
+              </div>
+              <div
+                className={cn(
+                  OVERVIEW_PANEL_CLASS,
+                  "flex flex-1 items-center justify-between gap-3 px-4 py-6",
+                )}
+              >
+                <div>
+                  <p className="text-muted-foreground text-xs">
+                    {t("workspaces.overview.totalThisWeek")}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums">
+                    {formatHours(totalHoursThisWeek)}
+                  </p>
+                </div>
+                {prevWeekHours > 0 && totalHoursThisWeek !== prevWeekHours && (
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      totalHoursThisWeek > prevWeekHours
+                        ? "text-success"
+                        : "text-destructive",
+                    )}
+                  >
+                    {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
+                    {Math.round(
+                      Math.abs(
+                        ((totalHoursThisWeek - prevWeekHours) / prevWeekHours) *
+                          100,
+                      ),
+                    )}
+                    %
+                  </span>
+                )}
+              </div>
+            </section>
+          )
+        )}
       </div>
 
       {!hasActivity && (

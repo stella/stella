@@ -408,6 +408,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `time-entries.get`          | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_time_entries`                                       |
 | `time-entries.list`         | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_time_entries`                                     |
 | `time-entries.split`        | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split`              |
+| `time-entries.summary.get`  | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries summary-get`        |
 | `time-entries.timer-start`  | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-start`        |
 | `time-entries.timer-stop`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries timer-stop`         |
 | `time-entries.update`       | write              | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry`                                         |
@@ -493,6 +494,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle      | 4     |
 | assistant_chat         | 13    |
 | auth_plumbing          | 8     |
+| billing_ui             | 1     |
 | chat_thread_ui         | 1     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
@@ -509,4 +511,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 5     |
 | url_preview            | 2     |
 
-Total: 110
+Total: 111
