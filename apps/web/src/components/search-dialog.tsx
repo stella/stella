@@ -19,15 +19,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FileTextIcon,
-  FolderIcon,
   HistoryIcon,
   LandmarkIcon,
-  LinkIcon,
   LoaderIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   PanelRightIcon,
-  SquareCheckIcon,
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -92,6 +89,7 @@ import type {
 } from "@/components/search-filters.logic";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
@@ -187,18 +185,13 @@ const ChatPreview = lazy(async () => {
   return { default: SearchChatPreview };
 });
 
-const KIND_ICONS = {
+const NON_ENTITY_KIND_ICONS = {
   contact: UserIcon,
   "case-law": LandmarkIcon,
-  document: FileTextIcon,
-  folder: FolderIcon,
-  task: SquareCheckIcon,
-  message: MessageSquareIcon,
-  link: LinkIcon,
   chat: MessagesSquareIcon,
 } as const satisfies Record<
-  Exclude<GlobalSearchResultType, "matter">,
-  typeof FileTextIcon
+  Exclude<GlobalSearchResultType, EntityKind | "matter">,
+  typeof UserIcon
 >;
 
 const KIND_TRANSLATION_KEYS = {
@@ -2490,24 +2483,35 @@ const SearchResultItem = ({
 };
 
 const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
-  if (hit.type === "document" && hit.mimeType) {
-    return (
-      <DocumentIcon
-        className="text-muted-foreground mt-0.5 size-4 shrink-0"
-        mimeType={hit.mimeType}
-      />
-    );
+  switch (hit.type) {
+    case "document":
+    case "folder":
+    case "task":
+    case "message":
+    case "link":
+      return (
+        <EntityKindIcon
+          className="text-muted-foreground mt-0.5 size-4 shrink-0"
+          kind={hit.type}
+          mimeType={hit.mimeType}
+        />
+      );
+    case "matter":
+      return (
+        <MatterIcon
+          className="mt-0.5 size-4 shrink-0"
+          matter={{ id: hit.workspaceId, color: hit.color }}
+        />
+      );
+    case "contact":
+    case "case-law":
+    case "chat": {
+      const Icon = NON_ENTITY_KIND_ICONS[hit.type];
+      return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;
+    }
+    default: {
+      const exhaustive: never = hit;
+      return exhaustive;
+    }
   }
-
-  if (hit.type === "matter") {
-    return (
-      <MatterIcon
-        className="mt-0.5 size-4 shrink-0"
-        matter={{ id: hit.workspaceId, color: hit.color }}
-      />
-    );
-  }
-
-  const Icon = KIND_ICONS[hit.type];
-  return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;
 };
