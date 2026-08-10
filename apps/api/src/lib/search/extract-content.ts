@@ -15,7 +15,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { resolveEmailMimeType } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
-import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
+import {
+  resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
+} from "@/api/lib/runtime-worker-path";
 import {
   canExtractMimeType,
   normalizeMimeType,
@@ -40,7 +43,7 @@ import {
 } from "@/api/mime-types";
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
-  outputFile: "extraction-worker.js",
+  outputFile: RUNTIME_WORKER_FILES.extraction,
   sourceDir: import.meta.dir,
   sourceFile: "extraction-worker.ts",
 });

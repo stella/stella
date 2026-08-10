@@ -1,7 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
 import { LIMITS } from "@/api/lib/limits";
-import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
+import {
+  resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
+} from "@/api/lib/runtime-worker-path";
 import { spawnWorker } from "@/api/lib/subprocess";
 
 class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
@@ -9,7 +12,7 @@ class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
 }> {}
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
-  outputFile: "pdf-worker.js",
+  outputFile: RUNTIME_WORKER_FILES.pdf,
   sourceDir: import.meta.dir,
   sourceFile: "pdf-worker.ts",
 });

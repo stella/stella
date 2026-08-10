@@ -790,6 +790,13 @@ jobs:
       - name: Test web container platform boundary
         run: bun test scripts/check-web-docker-platform.test.ts
 
+      # Bun links @stll dependencies to local workspaces only while versions
+      # match; a drift silently flips the resolution to the npm registry copy
+      # (or back). Needs only bun.lock, so it stays runnable when the
+      # dependency install is skipped.
+      - name: Test @stll resolution pin
+        run: bun test scripts/stll-registry-resolutions.test.ts
+
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
@@ -1718,6 +1725,13 @@ jobs:
             --outdir /tmp/runtime-workers \
             apps/api/src/lib/search/extraction-worker.ts
           test -s /tmp/runtime-workers/extraction-worker.js
+          # Compile (not run) the runtime-asset smoke probe: it executes
+          # inside the image build, where the hand-copied assets exist.
+          bun build \
+            --compile \
+            --target bun \
+            --outfile /tmp/image-smoke \
+            apps/api/src/scripts/image-smoke.ts
         env:
           NPM_TOKEN: ""
 

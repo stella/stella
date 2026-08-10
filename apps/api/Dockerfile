@@ -99,6 +99,15 @@ RUN mkdir -p /app/runtime-workers && \
     cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
       /app/runtime-workers/pptx_parser_bg.wasm
 RUN bun --filter @stll/legal-atlas-runner build
+# Runtime-asset smoke probe: initializes every lazily loaded asset the runner
+# stage copies by hand (anonymize engine, quickjs wasm, yara rules, worker
+# bundles, OCR font). Compiled like the server so its bundled asset URLs
+# resolve under $bunfs/root the same way; run by the verification stage below.
+RUN bun build \
+    --compile \
+    --target bun \
+    --outfile /app/image-smoke \
+    apps/api/src/scripts/image-smoke.ts
 
 # Run the compiled API as non-root. Built from the bare base image: every
 # entrypoint is either the compiled binary or a self-contained
@@ -157,3 +166,15 @@ WORKDIR /app/apps/api
 USER stella
 EXPOSE 3001
 CMD ["/app/server"]
+
+# Throwaway verification stage: run the runtime-asset probe on the exact
+# runner filesystem, so a missing or unloadable hand-copied asset fails the
+# image build instead of the first request that reaches it. The probe binary
+# never ships; the final stage below re-selects the runner and forces this
+# stage into the build by copying its marker.
+FROM runner AS runtime-asset-smoke
+COPY --from=builder /app/image-smoke /tmp/image-smoke
+RUN /tmp/image-smoke && touch /tmp/image-smoke-ok
+
+FROM runner
+COPY --chown=stella:stella --from=runtime-asset-smoke /tmp/image-smoke-ok /tmp/image-smoke-ok
