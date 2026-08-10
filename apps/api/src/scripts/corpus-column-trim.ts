@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 /**
@@ -30,7 +30,6 @@ import { corpusStorageMode } from "@/api/env-base";
 import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -55,6 +54,7 @@ import {
   parseColumnTrimArgs,
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
+import { toSafeId } from "@/api/types";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
@@ -106,6 +106,19 @@ let lastId: SafeId<"caseLawDecision"> | null =
 let trimmed = 0;
 let skipped = 0;
 let failed = 0;
+/** Rows whose first attempt threw; re-attempted by id before the summary. */
+const failedIds: SafeId<"caseLawDecision">[] = [];
+
+const TRIM_ROW_COLUMNS = {
+  id: caseLawDecisions.id,
+  textS3Key: caseLawDecisions.textS3Key,
+  normalizedS3Key: caseLawDecisions.normalizedS3Key,
+  astS3Key: caseLawDecisions.astS3Key,
+  contentHash: caseLawDecisions.contentHash,
+  fulltext: caseLawDecisions.fulltext,
+  sections: caseLawDecisions.sections,
+  documentAst: caseLawDecisions.documentAst,
+};
 let scanned = 0;
 
 // Rows whose payload is in object storage but whose Postgres columns are
@@ -269,7 +282,15 @@ const trimRow = async (row: TrimRow): Promise<void> => {
     console.log(`  skip ${row.id}: row changed under the scan`);
   } catch (error) {
     failed += 1;
+    failedIds.push(row.id);
     captureError(error, { decisionId: row.id, step: "corpusColumnTrim" });
+  }
+};
+
+const trimInChunks = async (rows: TrimRow[]): Promise<void> => {
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
+    await Promise.all(rows.slice(i, i + CONCURRENCY).map(trimRow));
   }
 };
 
@@ -286,14 +307,7 @@ while (true) {
   const rows: TrimRow[] = await ingestionDb((tx) =>
     tx
       .select({
-        id: caseLawDecisions.id,
-        textS3Key: caseLawDecisions.textS3Key,
-        normalizedS3Key: caseLawDecisions.normalizedS3Key,
-        astS3Key: caseLawDecisions.astS3Key,
-        contentHash: caseLawDecisions.contentHash,
-        fulltext: caseLawDecisions.fulltext,
-        sections: caseLawDecisions.sections,
-        documentAst: caseLawDecisions.documentAst,
+        ...TRIM_ROW_COLUMNS,
         updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
       })
       .from(caseLawDecisions)
@@ -306,16 +320,38 @@ while (true) {
     break;
   }
 
-  for (let i = 0; i < rows.length; i += CONCURRENCY) {
-    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
-    await Promise.all(rows.slice(i, i + CONCURRENCY).map(trimRow));
-  }
+  await trimInChunks(rows);
 
   scanned += rows.length;
   lastId = rows.at(-1)?.id ?? lastId;
   console.log(
     `  trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastId}`,
   );
+}
+
+// A failed row sits behind the published cursor, so a supervisor resuming
+// from a progress line would never revisit it, and a later clean run would
+// mask it. Re-attempt each one by id — indexed lookups, no prefix scan —
+// so a transient failure heals inside the run; only rows failing twice
+// reach the summary, printed with ids an operator can act on directly.
+if (failedIds.length > 0) {
+  console.log(`retrying ${failedIds.length} failed row(s) by id`);
+  const retryIds = [...failedIds];
+  failedIds.length = 0;
+  failed = 0;
+  const retryRows: TrimRow[] = await ingestionDb((tx) =>
+    tx
+      .select({
+        ...TRIM_ROW_COLUMNS,
+        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+      })
+      .from(caseLawDecisions)
+      .where(and(candidateFilter, inArray(caseLawDecisions.id, retryIds))),
+  );
+  await trimInChunks(retryRows);
+  for (const id of failedIds) {
+    console.log(`failed-row=${id}`);
+  }
 }
 
 console.log(
