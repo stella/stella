@@ -24,10 +24,8 @@ void mock.module("@/api/lib/sse", () => ({
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
 }));
 
-const {
-  default: removeWorkspaceMember,
-  removeWorkspaceMemberHandler,
-} = await import("./workspace-members-remove");
+const { default: removeWorkspaceMember, removeWorkspaceMemberHandler } =
+  await import("./workspace-members-remove");
 
 type RemoveMemberCtx = Parameters<typeof removeWorkspaceMember.handler>[0];
 

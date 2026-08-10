@@ -260,9 +260,7 @@ export const PersonalTimesheetDay = ({
             <AlertDialogTitle>{tCommon("delete")}</AlertDialogTitle>
             <AlertDialogDescription>
               {tCommon("deleteConfirmDescription", {
-                name: timeEntryNarrativeExcerpt(
-                  deletingEntry?.narrative ?? "",
-                ),
+                name: timeEntryNarrativeExcerpt(deletingEntry?.narrative ?? ""),
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

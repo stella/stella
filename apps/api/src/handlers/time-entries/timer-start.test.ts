@@ -4,6 +4,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -40,14 +41,14 @@ describe("timerStart (timezone validation)", () => {
   test("keeps a timer non-billable until it has an effective rate", () => {
     expect(buildTimerBillingSnapshot(null)).toEqual({
       billable: false,
-      rateAtEntry: 0,
+      rateAtEntry: cents(0),
       currency: "XXX",
     });
     expect(
       buildTimerBillingSnapshot({ hourlyRate: 24_000, currency: "EUR" }),
     ).toEqual({
       billable: true,
-      rateAtEntry: 24_000,
+      rateAtEntry: cents(24_000),
       currency: "EUR",
     });
   });
