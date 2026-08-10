@@ -32,7 +32,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -47,24 +47,6 @@ import {
   connectedAppsKeys,
   connectedAppsOptions,
 } from "@/routes/_protected.settings/-queries/connections";
-
-const conjunctionListFormatters = new Map<string, Intl.ListFormat>();
-
-/** `Intl.ListFormat` (style: "short", type: "conjunction") for `locale`,
- *  cached per locale so it isn't rebuilt on every {@link ScopeList} render. */
-const getConjunctionListFormatter = (locale: string): Intl.ListFormat => {
-  const cached = conjunctionListFormatters.get(locale);
-  if (cached) {
-    return cached;
-  }
-
-  const formatter = new Intl.ListFormat(locale, {
-    style: "short",
-    type: "conjunction",
-  });
-  conjunctionListFormatters.set(locale, formatter);
-  return formatter;
-};
 
 export const ConnectedAppsCard = () => {
   const t = useTranslations();
@@ -206,15 +188,12 @@ const ConnectedAppRow = ({ connection }: { connection: ConnectedApp }) => {
 
 const ScopeList = ({ entries }: { entries: OAuthScopeDisplayEntry[] }) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   const labels = entries.map((entry) => translateOAuthScopeEntry(t, entry));
 
-  // `Intl.ListFormat` (not a hardcoded ", ") so the separator and
-  // conjunction follow the active locale's conventions.
   return (
-    <span>
-      {getConjunctionListFormatter(getFormattingLocale()).format(labels)}
-    </span>
+    <span>{format.list(labels, { style: "short", type: "conjunction" })}</span>
   );
 };
 
