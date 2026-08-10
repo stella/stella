@@ -414,7 +414,7 @@ describe("chat prompt builders", () => {
   test("grounds active Office answers in source-bound locator blocks", () => {
     const entityId = toSafeId<"entity">("00000000-0000-4000-8000-000000000051");
     const fieldId = toSafeId<"field">("00000000-0000-4000-8000-000000000052");
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         entityId,
         fileFieldId: fieldId,
@@ -437,7 +437,6 @@ describe("chat prompt builders", () => {
         },
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       workspaceId: WORKSPACE_ID,
     });
@@ -452,14 +451,13 @@ describe("chat prompt builders", () => {
   });
 
   test("does not advertise Office citations without locator evidence", () => {
-    const prompt = appendActiveFilePromptIfEntityExists({
+    const prompt = buildActiveFileSection({
       activeFile: {
         entityId: toSafeId<"entity">("00000000-0000-4000-8000-000000000051"),
         fileFieldId: toSafeId<"field">("00000000-0000-4000-8000-000000000052"),
         fileName: "schedule.xlsx",
       },
       entityExists: true,
-      prompt: "Base prompt",
       refRegistry: createChatRefRegistry(),
       workspaceId: WORKSPACE_ID,
     });

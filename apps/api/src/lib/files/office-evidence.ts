@@ -595,12 +595,25 @@ export const findOfficeEvidenceBlock = async ({
     const evidenceRow = (
       await selectEvidenceRows(tx, { organizationId, workspaceId }, source)
     ).at(0);
-    return evidenceRow ? { evidenceRow, fieldSource } : null;
+    return evidenceRow
+      ? {
+          evidenceRow,
+          source: {
+            entityId,
+            entityName: fieldSource.entityName,
+            fieldId,
+            fileName: fieldSource.content.fileName,
+            mimeType: fieldSource.content.mimeType,
+            pdfFileId: fieldSource.content.pdfFileId,
+            propertyId: fieldSource.propertyId,
+          },
+        }
+      : null;
   });
   if (!resolved) {
     return null;
   }
-  const { evidenceRow, fieldSource } = resolved;
+  const { evidenceRow, source } = resolved;
   const payload = await decodeEvidenceRow(evidenceRow, organizationId);
   const block = payload?.blocks.find(({ id }) => id === blockId);
   if (!block) {
@@ -608,14 +621,6 @@ export const findOfficeEvidenceBlock = async ({
   }
   return {
     block,
-    source: {
-      entityId,
-      entityName: fieldSource.entityName,
-      fieldId,
-      fileName: fieldSource.content.fileName,
-      mimeType: fieldSource.content.mimeType,
-      pdfFileId: fieldSource.content.pdfFileId,
-      propertyId: fieldSource.propertyId,
-    },
+    source,
   };
 };

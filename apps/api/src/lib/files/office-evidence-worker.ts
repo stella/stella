@@ -70,7 +70,7 @@ const extractXlsxBlocks = async (
           cell,
           text: buildSpreadsheetCellText({
             cell,
-            date1904: worksheet.date1904,
+            date1904: worksheet.date1904 ?? false,
             sharedStrings,
             styles,
           }),
