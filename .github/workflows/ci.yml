@@ -1401,42 +1401,17 @@ jobs:
           nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
           echo $! > /tmp/web.pid
 
-      - name: Wait for web dev server and initial dependency optimization
+      - name: Wait for web dev server
         if: steps.e2e-stack.outputs.status == 'ready'
         run: |
-          web_ready=false
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
               echo "Web up after ${i}s"
-              web_ready=true
-              break
-            fi
-            sleep 1
-          done
-          if [[ "$web_ready" != "true" ]]; then
-            echo "::error::Web never came up"
-            tail -200 /tmp/web.log || true
-            exit 1
-          fi
-
-          # Vite serves HTML before its initial optimizer finishes. Starting
-          # the timed canary then makes compiler load consume the test budget,
-          # so wait until metadata exists and no optimizer working directory
-          # remains. An older metadata file can coexist with an active rebuild.
-          for i in {1..180}; do
-            if [[ -f apps/web/node_modules/.vite/deps/_metadata.json ]] &&
-              ! compgen -G 'apps/web/node_modules/.vite/deps_temp_*' > /dev/null; then
-              echo "Initial dependency optimization finished after ${i}s"
               exit 0
             fi
-            if ! kill -0 "$(cat /tmp/web.pid)" 2>/dev/null; then
-              echo "::error::Web exited during dependency optimization"
-              tail -200 /tmp/web.log || true
-              exit 1
-            fi
             sleep 1
           done
-          echo "::error::Vite dependency optimization did not finish"
+          echo "::error::Web never came up"
           tail -200 /tmp/web.log || true
           exit 1
 
