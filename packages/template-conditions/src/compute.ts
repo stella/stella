@@ -23,6 +23,20 @@
 
 import { resolvePath } from "./path.js";
 
+export const NUMERIC_FUNCTION_NAMES = [
+  "min",
+  "max",
+  "round",
+  "abs",
+  "floor",
+  "ceil",
+] as const;
+
+export type NumericFunctionName = (typeof NUMERIC_FUNCTION_NAMES)[number];
+
+const isNumericFunctionName = (name: string): name is NumericFunctionName =>
+  NUMERIC_FUNCTION_NAMES.some((candidate) => candidate === name);
+
 type Tok =
   | { t: "num"; v: number }
   | { t: "id"; v: string }
@@ -92,6 +106,10 @@ const applyOp = (op: string, a: number, b: number): number => {
 };
 
 const callFunction = (name: string, args: readonly number[]): number => {
+  if (!isNumericFunctionName(name)) {
+    throw new Error(`Unknown function: ${name}`);
+  }
+
   switch (name) {
     case "min":
       return Math.min(...args);
@@ -110,7 +128,7 @@ const callFunction = (name: string, args: readonly number[]): number => {
       return Math.round(value * factor) / factor;
     }
     default:
-      throw new Error(`Unknown function: ${name}`);
+      return name satisfies never;
   }
 };
 

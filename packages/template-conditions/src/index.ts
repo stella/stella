@@ -159,7 +159,11 @@ export { parseCondition } from "./parse.js";
 // Value-returning arithmetic evaluator for computed fields. Kept separate
 // from the boolean condition engine above; re-exported here as the package's
 // single entry point.
-export { evaluateNumericExpression } from "./compute.js";
+export {
+  evaluateNumericExpression,
+  NUMERIC_FUNCTION_NAMES,
+} from "./compute.js";
+export type { NumericFunctionName } from "./compute.js";
 
 // Single source of truth for the deterministic field-value transforms
 // (composite, formula, date). Both the api fill engine and the web live
