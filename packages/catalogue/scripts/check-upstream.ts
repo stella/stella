@@ -3,11 +3,12 @@
  *
  * Each github skill pins an immutable commit SHA (`rev`). This script
  * asks the GitHub API for the latest commit touching the skill's
- * directory (or repo root) on the repo's default branch and reports the
- * entries whose upstream has advanced past the pinned SHA. It never
+ * directory (or repo root) on the repo's default branch. A directory's
+ * latest commit can be its deletion, so the script verifies that the
+ * expected SKILL.md still exists before reporting an update. It never
  * edits manifests: the scheduled `catalogue-upstream` workflow consumes
- * the `--json` output, bumps the revs, regenerates, and opens a PR for
- * a maintainer to review the upstream diff before merging.
+ * the `--json` output, bumps installable revisions, regenerates, and
+ * opens a PR for a maintainer to review before merging.
  *
  * Usage:
  *   bun scripts/check-upstream.ts          # human-readable summary
@@ -26,8 +27,11 @@ class UpstreamFetchError extends TaggedError("UpstreamFetchError")<{
 
 const COMMITS_API_TIMEOUT_MS = 10_000;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
+const SKILL_FILE_NAME = "SKILL.md";
 
-type GithubSkillTarget = {
+type Fetcher = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
+
+export type GithubSkillTarget = {
   currentRev: string;
   directory: string | null;
   repo: string;
@@ -55,6 +59,11 @@ export type UpstreamCheckResult = {
   updates: UpstreamUpdate[];
 };
 
+export type UpstreamTargetState =
+  | { latestRev: string; status: "current" }
+  | { latestRev: string; status: "missing" }
+  | { latestRev: string; status: "update" };
+
 /**
  * GitHub commits API endpoint for the latest commit touching a path
  * (or the repo root when `directory` is null) on the default branch.
@@ -71,6 +80,25 @@ export const buildCommitsApiUrl = ({
   if (directory) {
     url.searchParams.set("path", directory);
   }
+  return url.toString();
+};
+
+/** GitHub Contents endpoint for the expected skill file at a candidate SHA. */
+export const buildSkillFileApiUrl = ({
+  directory,
+  repo,
+  rev,
+}: {
+  directory: string | null;
+  repo: string;
+  rev: string;
+}): string => {
+  const path = directory ? `${directory}/${SKILL_FILE_NAME}` : SKILL_FILE_NAME;
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const url = new URL(
+    `https://api.github.com/repos/${repo}/contents/${encodedPath}`,
+  );
+  url.searchParams.set("ref", rev);
   return url.toString();
 };
 
@@ -137,8 +165,11 @@ const githubHeaders = (): Record<string, string> => {
   return headers;
 };
 
-const fetchLatestRev = async (target: GithubSkillTarget): Promise<string> => {
-  const response = await fetch(
+const fetchLatestRev = async (
+  target: GithubSkillTarget,
+  fetcher: Fetcher,
+): Promise<string> => {
+  const response = await fetcher(
     buildCommitsApiUrl({ directory: target.directory, repo: target.repo }),
     {
       headers: githubHeaders(),
@@ -157,6 +188,61 @@ const fetchLatestRev = async (target: GithubSkillTarget): Promise<string> => {
     });
   }
   return sha;
+};
+
+const fetchCandidateStatus = async (
+  target: GithubSkillTarget,
+  latestRev: string,
+  fetcher: Fetcher,
+): Promise<"available" | "missing"> => {
+  const response = await fetcher(
+    buildSkillFileApiUrl({
+      directory: target.directory,
+      repo: target.repo,
+      rev: latestRev,
+    }),
+    {
+      headers: githubHeaders(),
+      signal: AbortSignal.timeout(COMMITS_API_TIMEOUT_MS),
+    },
+  );
+  if (response.status === 404) {
+    return "missing";
+  }
+  if (!response.ok) {
+    throw new UpstreamFetchError({
+      message: `GitHub contents API returned HTTP ${response.status}`,
+    });
+  }
+  const payload: unknown = await response.json();
+  if (!isRecord(payload) || payload["type"] !== "file") {
+    throw new UpstreamFetchError({
+      message: `GitHub contents response did not describe ${SKILL_FILE_NAME} as a file`,
+    });
+  }
+  return "available";
+};
+
+/**
+ * Resolve one target without turning a directory deletion into a revision bump.
+ */
+export const inspectUpstreamTarget = async (
+  target: GithubSkillTarget,
+  fetcher: Fetcher = fetch,
+): Promise<UpstreamTargetState> => {
+  const latestRev = await fetchLatestRev(target, fetcher);
+  if (!hasUpstreamUpdate(target.currentRev, latestRev)) {
+    return { latestRev, status: "current" };
+  }
+  const candidateStatus = await fetchCandidateStatus(
+    target,
+    latestRev,
+    fetcher,
+  );
+  return {
+    latestRev,
+    status: candidateStatus === "available" ? "update" : "missing",
+  };
 };
 
 const toUpdate = (
@@ -183,9 +269,22 @@ export const runUpstreamCheck = async (): Promise<UpstreamCheckResult> => {
   for (const target of collectGithubSkillTargets()) {
     try {
       // oxlint-disable-next-line no-await-in-loop -- sequential sweep keeps the GitHub API request rate low
-      const latestRev = await fetchLatestRev(target);
-      if (hasUpstreamUpdate(target.currentRev, latestRev)) {
-        updates.push(toUpdate(target, latestRev));
+      const state = await inspectUpstreamTarget(target);
+      switch (state.status) {
+        case "current":
+          break;
+        case "missing":
+          failures.push({
+            message: `${SKILL_FILE_NAME} is absent at the latest directory commit ${state.latestRev}; the tracked path may have moved (${buildCompareUrl({ currentRev: target.currentRev, latestRev: state.latestRev, repo: target.repo })})`,
+            repo: target.repo,
+            slug: target.slug,
+          });
+          break;
+        case "update":
+          updates.push(toUpdate(target, state.latestRev));
+          break;
+        default:
+          state satisfies never;
       }
     } catch (error) {
       failures.push({
