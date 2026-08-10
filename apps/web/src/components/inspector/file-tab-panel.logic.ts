@@ -40,6 +40,16 @@ export const getFileTabNativePreviewKind = ({
   return "pdf";
 };
 
+export const shouldSurfaceEmailResolutionAlert = ({
+  isEmailDisplay,
+  isPreviewVisible,
+  resolutionFailed,
+}: {
+  isEmailDisplay: boolean;
+  isPreviewVisible: boolean;
+  resolutionFailed: boolean;
+}): boolean => isEmailDisplay && !isPreviewVisible && resolutionFailed;
+
 export type MarkdownDraftSyncDecision =
   | {
       fieldId: string;

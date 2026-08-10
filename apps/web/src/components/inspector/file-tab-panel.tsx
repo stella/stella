@@ -18,6 +18,7 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
@@ -26,8 +27,14 @@ import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
-import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
+import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
 import {
+  EmailChatResolutionAlert,
+  EmailFileViewer,
+  EmailViewerWithAI,
+} from "@/components/inspector/email-html-viewer";
+import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   getEmailChatMode,
   getEmailExtractionRefetchInterval,
@@ -45,6 +52,7 @@ import {
   FULLVIEW_FACETS,
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
@@ -201,8 +209,7 @@ export const FileTabPanel = ({
     mimeType: tab.mimeType,
   });
   const isEmailDisplay = nativePreviewKind === "email";
-  const isEmailViewerActive =
-    isEmailDisplay && tab.id === activeId && !minimized;
+  const isEmailViewerActive = isEmailDisplay && isActive && !minimized;
   const isMarkdownDisplay = nativePreviewKind === "markdown";
   const officeViewerFormat = getNativeOfficeViewerFormat(tab.mimeType);
   const isOfficeDisplay = nativePreviewKind === "office";
@@ -224,7 +231,7 @@ export const FileTabPanel = ({
         isEmailViewerActive,
       }),
   });
-  const emailChatMode = getEmailChatMode({
+  const resolvedEmailChatMode = getEmailChatMode({
     extractionFileFieldId: entityQuery.data?.extractionFileFieldId,
     fieldId: tab.id,
   });
@@ -233,6 +240,49 @@ export const FileTabPanel = ({
       hasData: entityQuery.data !== undefined,
       isError: entityQuery.isError,
     });
+  const emailChatMode = shouldSurfaceEmailResolutionError
+    ? EMAIL_CHAT_MODE.resolutionError
+    : resolvedEmailChatMode;
+  const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
+    string | null
+  >(null);
+  const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
+    ? getEmailAttachmentPreviewId({
+        attachmentId: selectedEmailAttachmentId,
+        fieldId: tab.id,
+        workspaceId: tab.workspaceId,
+      })
+    : null;
+  const emailAttachmentScaleOffset = selectedEmailAttachmentPreviewId
+    ? (scaleOffsets.get(selectedEmailAttachmentPreviewId) ?? 0)
+    : 0;
+  const emailPreviewOverlayActivation =
+    isActive && (tab.facet ?? "preview") === "preview"
+      ? FILE_CHAT_OVERLAY_ACTIVATION.active
+      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
+  const emailAttachmentOverlayActivation =
+    isActive && tab.facet === "attachments"
+      ? FILE_CHAT_OVERLAY_ACTIVATION.active
+      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
+  const emailSidepeekOverlayActivation =
+    isActive &&
+    ((tab.facet ?? "preview") === "preview" || tab.facet === "attachments")
+      ? FILE_CHAT_OVERLAY_ACTIVATION.active
+      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
+  const openEmailAttachment = (attachmentId: string | null) => {
+    setSelectedEmailAttachmentId(attachmentId);
+    setFileFacet(tab.id, "attachments");
+  };
+  const resetEmailAttachmentZoom = () => {
+    if (selectedEmailAttachmentPreviewId) {
+      handleResetZoom(selectedEmailAttachmentPreviewId);
+    }
+  };
+  const zoomEmailAttachment = (direction: "in" | "out") => {
+    if (selectedEmailAttachmentPreviewId) {
+      handleZoom(selectedEmailAttachmentPreviewId, direction);
+    }
+  };
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
@@ -545,7 +595,17 @@ export const FileTabPanel = ({
           )}
           {tab.facet === "attachments" && isEmailDisplay && (
             <EmailAttachmentsFacet
+              chatMode={emailChatMode}
+              entityId={tab.entityId}
               fieldId={tab.id}
+              fileName={tab.fileName}
+              onResetZoom={resetEmailAttachmentZoom}
+              onSelectedIdChange={setSelectedEmailAttachmentId}
+              onZoomIn={() => zoomEmailAttachment("in")}
+              onZoomOut={() => zoomEmailAttachment("out")}
+              overlayActivation={emailAttachmentOverlayActivation}
+              scaleOffset={emailAttachmentScaleOffset}
+              selectedId={selectedEmailAttachmentId}
               workspaceId={tab.workspaceId}
             />
           )}
@@ -806,19 +866,25 @@ export const FileTabPanel = ({
             entityId={tab.entityId}
             fieldId={tab.id}
             fileName={tab.fileName}
+            onOpenAttachment={openEmailAttachment}
+            overlayActivation={emailPreviewOverlayActivation}
             onRetryChatResolution={() => {
               detached(entityQuery.refetch(), "FileTabPanel");
             }}
+            chatHost={EMAIL_CHAT_HOST.parent}
             workspaceId={tab.workspaceId}
           />
         );
       }
       return (
         <EmailFileViewer
-          chatMode={emailChatMode}
+          chatMode={resolvedEmailChatMode}
           entityId={tab.entityId}
           fieldId={tab.id}
           fileName={tab.fileName}
+          onOpenAttachment={openEmailAttachment}
+          overlayActivation={emailPreviewOverlayActivation}
+          chatHost={EMAIL_CHAT_HOST.parent}
           workspaceId={tab.workspaceId}
         />
       );
@@ -1087,7 +1153,18 @@ export const FileTabPanel = ({
           )}
           {sidepeekFacet === "attachments" && isEmailDisplay && (
             <EmailAttachmentsFacet
+              chatMode={emailChatMode}
+              entityId={tab.entityId}
               fieldId={tab.id}
+              fileName={tab.fileName}
+              onResetZoom={resetEmailAttachmentZoom}
+              onSelectedIdChange={setSelectedEmailAttachmentId}
+              onZoomIn={() => zoomEmailAttachment("in")}
+              onZoomOut={() => zoomEmailAttachment("out")}
+              overlayActivation={emailAttachmentOverlayActivation}
+              scaleOffset={emailAttachmentScaleOffset}
+              selectedId={selectedEmailAttachmentId}
+              chatHost={EMAIL_CHAT_HOST.parent}
               workspaceId={tab.workspaceId}
             />
           )}
@@ -1191,7 +1268,31 @@ export const FileTabPanel = ({
       )}
     </>
   );
-
+  const sidepeekContent = isEmailDisplay ? (
+    <EmailViewerWithAI
+      chatMode={emailChatMode}
+      entityId={tab.entityId}
+      fieldId={tab.id}
+      fileName={tab.fileName}
+      overlayActivation={emailSidepeekOverlayActivation}
+      workspaceId={tab.workspaceId}
+    >
+      {sidepeekBody}
+      {shouldSurfaceEmailResolutionAlert({
+        isEmailDisplay,
+        isPreviewVisible,
+        resolutionFailed: shouldSurfaceEmailResolutionError,
+      }) ? (
+        <EmailChatResolutionAlert
+          onRetry={() => {
+            detached(entityQuery.refetch(), "FileTabPanel");
+          }}
+        />
+      ) : null}
+    </EmailViewerWithAI>
+  ) : (
+    sidepeekBody
+  );
   return (
     <div
       className={cn(
@@ -1205,7 +1306,7 @@ export const FileTabPanel = ({
         <>
           {contextBar}
           {facetBar}
-          {sidepeekBody}
+          {sidepeekContent}
         </>
       ) : (
         <MeasuredPdfProvider
@@ -1226,7 +1327,7 @@ export const FileTabPanel = ({
         >
           {contextBar}
           {facetBar}
-          {sidepeekBody}
+          {sidepeekContent}
         </MeasuredPdfProvider>
       )}
     </div>

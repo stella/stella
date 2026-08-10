@@ -67,9 +67,12 @@ describe("resolveEmailMimeType", () => {
 });
 
 describe("email attachment preview policy", () => {
-  test("allows passive image and PDF types but not active or unknown content", () => {
+  test("allows passive document types but not active or unknown content", () => {
     expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
     expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
+    expect(isEmailAttachmentPreviewable("text/plain; charset=utf-8")).toBe(
+      true,
+    );
     expect(isEmailAttachmentPreviewable("image/bmp")).toBe(false);
     expect(isEmailAttachmentPreviewable("image/tiff")).toBe(false);
     expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
@@ -90,6 +93,12 @@ describe("email attachment preview policy", () => {
         mimeType: null,
       }),
     ).toBe("image/png");
+    expect(
+      resolveEmailAttachmentMimeType({
+        fileName: "NOTES.TXT",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("text/plain");
     expect(
       resolveEmailAttachmentMimeType({
         fileName: "payload.SVG",
@@ -355,6 +364,7 @@ describe("renderEmailHtml", () => {
         },
         attachments: [
           {
+            charset: null,
             contentId: "attachment-id",
             fileName: "evidence.pdf",
             mimeType: "application/pdf",
@@ -372,6 +382,7 @@ describe("renderEmailHtml", () => {
       bcc: ["عائشة <aisha@example.ae>"],
       attachments: [
         {
+          charset: null,
           id: "attachment-0",
           fileName: "evidence.pdf",
           mimeType: "application/pdf",
@@ -381,6 +392,7 @@ describe("renderEmailHtml", () => {
       ],
     });
     expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
+      "charset",
       "id",
       "fileName",
       "mimeType",
@@ -437,6 +449,7 @@ describe("renderEmailHtml", () => {
         ],
         attachments: [
           {
+            charset: null,
             contentId: "evidence",
             fileName: "evidence.png",
             mimeType: "image/png",
@@ -448,6 +461,7 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        charset: null,
         id: "attachment-0",
         fileName: "evidence.png",
         mimeType: "image/png",
@@ -462,6 +476,7 @@ describe("renderEmailHtml", () => {
 
   test("caps descriptors after removing referenced inline parts", () => {
     const inlineAttachments = Array.from({ length: 100 }, (_, index) => ({
+      charset: null,
       contentId: `inline-${String(index)}`,
       fileName: `inline-${String(index)}.png`,
       mimeType: "image/png",
@@ -486,6 +501,7 @@ describe("renderEmailHtml", () => {
         attachments: [
           ...inlineAttachments,
           {
+            charset: null,
             contentId: null,
             fileName: "evidence.pdf",
             mimeType: "application/pdf",
@@ -497,6 +513,7 @@ describe("renderEmailHtml", () => {
 
     expect(preview.attachments).toEqual([
       {
+        charset: null,
         id: "attachment-100",
         fileName: "evidence.pdf",
         mimeType: "application/pdf",
@@ -997,6 +1014,7 @@ describe("emailToHtml (.eml)", () => {
     );
 
     expect(attachment?.mimeType).toBe("text/plain");
+    expect(attachment?.charset).toBe("utf-8");
     expect(attachment).toBeDefined();
     if (!attachment) {
       return;
@@ -1004,6 +1022,34 @@ describe("emailToHtml (.eml)", () => {
     expect(new TextDecoder().decode(attachment.bytes).trim()).toBe(
       "Attachment text",
     );
+  });
+
+  test("preserves declared attachment text charsets", async () => {
+    for (const [declaredCharset, charset] of [
+      ["Windows-1252", "windows-1252"],
+      ["windows-1250", "windows-1250"],
+      ["iso-8859-2", "iso-8859-2"],
+      ["windows-31j", "shift_jis"],
+      ["gb2312", "gbk"],
+      ["koi", "koi8-r"],
+      ["utf-16", "utf-16"],
+    ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- each declared charset needs an independently parsed MIME tree
+      const parsed = await parseEmail(
+        toArrayBuffer(
+          eml.replace(
+            "Content-Type: text/plain; charset=utf-8",
+            () => `Content-Type: text/plain; charset=${declaredCharset}`,
+          ),
+        ),
+        "message/rfc822",
+      );
+
+      expect(
+        parsed.attachments.find(({ fileName }) => fileName === "notes.txt")
+          ?.charset,
+      ).toBe(charset);
+    }
   });
 
   test("hides referenced inline images but preserves unreferenced CID attachments", async () => {
@@ -1015,13 +1061,15 @@ describe("emailToHtml (.eml)", () => {
 
     expect(result.value.attachments).toEqual([
       {
+        charset: "utf-8",
         id: "attachment-1",
         fileName: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 16,
-        previewable: false,
+        previewable: true,
       },
       {
+        charset: null,
         id: "attachment-2",
         fileName: "evidence.png",
         mimeType: "image/png",

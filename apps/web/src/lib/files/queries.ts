@@ -1,6 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
 import * as v from "valibot";
 
+import type { EmailTextAttachmentCharset } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, unwrapEden } from "@/lib/errors/api";
@@ -30,6 +32,7 @@ type FileData = {
 };
 
 export type EmailAttachmentDescriptor = {
+  charset: EmailTextAttachmentCharset | null;
   id: string;
   fileName: string | null;
   mimeType: string | null;

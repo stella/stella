@@ -75,6 +75,11 @@ import {
   DEFAULT_DOCUMENT_TYPES,
   ensureDefaultDocumentTypes,
 } from "@/api/lib/document-types/defaults";
+import {
+  EML_MIME_TYPE,
+  parseEmail,
+  parsedEmailToText,
+} from "@/api/lib/files/email-to-html";
 import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -101,7 +106,7 @@ import {
 
 // ─── Mock file generators ───────────────────────────────
 
-const fileExtRe = /\.(?:pdf|docx)$/u;
+const fileExtRe = /\.(?:pdf|docx|eml)$/u;
 
 const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =
@@ -1176,6 +1181,274 @@ Extract under review:
 "${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."`;
 };
 
+export const SEED_EMAIL_FILE_NAMES = [
+  "Closing_tomorrow_final_checklist.eml",
+  "Fwd_ERU_clearance_condition_7.eml",
+  "Client_update_Praha.eml",
+] as const;
+
+type SeedEmailFileName = (typeof SEED_EMAIL_FILE_NAMES)[number];
+
+type SeedEmailAttachment =
+  | {
+      type: "pdf";
+      fileName: string;
+      title: string;
+      bodyText: string;
+    }
+  | {
+      type: "text";
+      fileName: string;
+      bodyText: string;
+    };
+
+type SeedEmail = {
+  from: string;
+  to: readonly string[];
+  cc: readonly string[];
+  date: string;
+  subject: string;
+  textBody: string;
+  htmlBody: string;
+  attachments: readonly SeedEmailAttachment[];
+};
+
+const SEED_EMAILS = {
+  "Closing_tomorrow_final_checklist.eml": {
+    from: "Elena Park <elena.park@northstar.example>",
+    to: [
+      "Marcus Chen <marcus.chen@northstarseed.example>",
+      "Katrin Vogel <katrin.vogel@meridian.example>",
+    ],
+    cc: [
+      "Clara Novak <clara.novak@counsel.example>",
+      "Closing Team <closing@northstar.example>",
+    ],
+    date: "Thu, 16 Jul 2026 17:42:00 +0200",
+    subject: "Closing tomorrow: final checklist and funds flow",
+    textBody: `Hi all,
+
+We are ready to sign tomorrow at 09:00 CET. Please treat the attached funds flow as final unless Clara circulates a replacement before 08:30.
+
+The EUR 2,500,000 escrow amount must not be released until both signature pages and the condition 7 waiver are confirmed in writing.
+
+Final actions:
+1. Katrin: return the signed supplier consent by 08:15.
+2. Marcus: confirm the originating account ending 2048.
+3. Clara: release the completion email after checking all signatures.
+
+If anything changes overnight, reply to this thread rather than starting a new one.
+
+Elena`,
+    htmlBody: `<p>Hi all,</p>
+<p>We are ready to sign tomorrow at <strong>09:00 CET</strong>. Please treat the attached funds flow as final unless Clara circulates a replacement before 08:30.</p>
+<table style="border-collapse:collapse;width:100%;margin:16px 0">
+  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Signing</strong></td><td style="border:1px solid #d1d5db;padding:8px">17 July 2026, 09:00 CET</td></tr>
+  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Escrow</strong></td><td style="border:1px solid #d1d5db;padding:8px">EUR 2,500,000</td></tr>
+  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Release gate</strong></td><td style="border:1px solid #d1d5db;padding:8px">Signatures + condition 7 waiver</td></tr>
+</table>
+<p><strong>The EUR 2,500,000 escrow amount must not be released until both signature pages and the condition 7 waiver are confirmed in writing.</strong></p>
+<p>Final actions:</p>
+<ol>
+  <li>Katrin: return the signed supplier consent by 08:15.</li>
+  <li>Marcus: confirm the originating account ending 2048.</li>
+  <li>Clara: release the completion email after checking all signatures.</li>
+</ol>
+<p>If anything changes overnight, reply to this thread rather than starting a new one.</p>
+<p>Elena</p>`,
+    attachments: [
+      {
+        type: "pdf",
+        fileName: "Final_Funds_Flow.pdf",
+        title: "Final Funds Flow",
+        bodyText:
+          "Northstar closing funds flow. Escrow: EUR 2,500,000. Release only after signed pages and the condition 7 waiver are confirmed by closing counsel.",
+      },
+      {
+        type: "text",
+        fileName: "Closing_contacts.txt",
+        bodyText:
+          "Closing counsel: Clara Novak\nEscrow desk: +420 555 010 204\nCompletion bridge: 08:45 CET",
+      },
+    ],
+  },
+  "Fwd_ERU_clearance_condition_7.eml": {
+    from: "Clara Novak <clara.novak@counsel.example>",
+    to: ["Elena Park <elena.park@northstar.example>"],
+    cc: ["Deal Team <deal-team@northstar.example>"],
+    date: "Wed, 15 Jul 2026 14:18:00 +0200",
+    subject: "Fwd: ERÚ clearance received — condition 7 remains open",
+    textBody: `Elena,
+
+The regulator has issued the clearance. Condition 7 is still open because the filing requires an updated grid-connection schedule by 20 July 2026.
+
+My recommendation: closing may proceed only if the seller gives the attached undertaking and EUR 2,500,000 remains in escrow.
+
+---------- Forwarded message ---------
+From: Regulatory Filings <filings@eru.example>
+Date: Wed, 15 Jul 2026 at 13:52
+Subject: Decision ERU-2026-184
+To: Clara Novak <clara.novak@counsel.example>
+
+The Energy Regulatory Office grants clearance subject to condition 7. The applicant must provide the updated grid-connection schedule no later than 20 July 2026.
+
+Clara`,
+    htmlBody: `<p>Elena,</p>
+<p>The regulator has issued the clearance. <strong>Condition 7 is still open</strong> because the filing requires an updated grid-connection schedule by 20 July 2026.</p>
+<p>My recommendation: closing may proceed only if the seller gives the attached undertaking and EUR 2,500,000 remains in escrow.</p>
+<div class="gmail_quote" style="border-left:3px solid #d1d5db;margin:20px 0;padding-left:16px;color:#4b5563">
+  <div>---------- Forwarded message ---------</div>
+  <div><strong>From:</strong> Regulatory Filings &lt;filings@eru.example&gt;</div>
+  <div><strong>Date:</strong> Wed, 15 Jul 2026 at 13:52</div>
+  <div><strong>Subject:</strong> Decision ERU-2026-184</div>
+  <div><strong>To:</strong> Clara Novak &lt;clara.novak@counsel.example&gt;</div>
+  <p>The Energy Regulatory Office grants clearance subject to condition 7. The applicant must provide the updated grid-connection schedule no later than 20 July 2026.</p>
+</div>
+<p>Clara</p>`,
+    attachments: [
+      {
+        type: "pdf",
+        fileName: "Seller_Undertaking_Condition_7.pdf",
+        title: "Seller Undertaking — Condition 7",
+        bodyText:
+          "The seller undertakes to provide the updated grid-connection schedule by 20 July 2026 and accepts that EUR 2,500,000 remains in escrow until written confirmation.",
+      },
+    ],
+  },
+  "Client_update_Praha.eml": {
+    from: "Karim Haddad <karim.haddad@counsel.example>",
+    to: [
+      "Petra Malá <petra.mala@energo.example>",
+      "ليلى منصور <layla.mansour@northstar.example>",
+    ],
+    cc: [],
+    date: "Tue, 14 Jul 2026 11:06:00 +0200",
+    subject: "Client update: Praha / تحديث العميل",
+    textBody: `Hello Petra and Layla,
+
+The Prague signing remains scheduled for 17 July 2026. No new corporate approvals are required.
+
+Česky: Prodávající musí dodat aktualizovaný harmonogram připojení nejpozději 20. července 2026. Částka 2 500 000 EUR zůstane v úschově do písemného potvrzení.
+
+العربية: سيبقى مبلغ 2,500,000 يورو في حساب الضمان حتى استلام التأكيد الكتابي. لا يجوز الإفراج عن المبلغ قبل ذلك.
+
+Regards,
+Karim`,
+    htmlBody: `<p>Hello Petra and Layla,</p>
+<p>The Prague signing remains scheduled for <strong>17 July 2026</strong>. No new corporate approvals are required.</p>
+<p lang="cs"><strong>Česky:</strong> Prodávající musí dodat aktualizovaný harmonogram připojení nejpozději 20. července 2026. Částka 2 500 000 EUR zůstane v úschově do písemného potvrzení.</p>
+<p lang="ar" dir="rtl"><strong>العربية:</strong> سيبقى مبلغ 2,500,000 يورو في حساب الضمان حتى استلام التأكيد الكتابي. لا يجوز الإفراج عن المبلغ قبل ذلك.</p>
+<p>Regards,<br>Karim</p>`,
+    attachments: [],
+  },
+} as const satisfies Record<SeedEmailFileName, SeedEmail>;
+
+const seedEmailFileNames = new Set<string>(SEED_EMAIL_FILE_NAMES);
+
+const isSeedEmailFileName = (fileName: string): fileName is SeedEmailFileName =>
+  seedEmailFileNames.has(fileName);
+
+const wrapBase64 = (value: Buffer): string =>
+  value
+    .toString("base64")
+    .match(/.{1,76}/gu)
+    ?.join("\r\n") ?? "";
+
+const createSeedEmailAttachment = (
+  attachment: SeedEmailAttachment,
+): { mimeType: string; bytes: Buffer } => {
+  if (attachment.type === "pdf") {
+    return {
+      mimeType: PDF_MIME,
+      bytes: createMockPdf(attachment.title, attachment.bodyText),
+    };
+  }
+
+  return {
+    mimeType: "text/plain; charset=utf-8",
+    bytes: Buffer.from(attachment.bodyText, "utf-8"),
+  };
+};
+
+export const createSeedEmail = (fileName: SeedEmailFileName): Buffer => {
+  const email = SEED_EMAILS[fileName];
+  const slug = fileName.replaceAll(/[^a-z0-9]/giu, "-");
+  const boundary = `stella-seed-mixed-${slug}`;
+  const alternativeBoundary = `stella-seed-alt-${slug}`;
+  const lines = [
+    `From: ${email.from}`,
+    `To: ${email.to.join(", ")}`,
+    ...(email.cc.length > 0 ? [`Cc: ${email.cc.join(", ")}`] : []),
+    `Date: ${email.date}`,
+    `Subject: ${email.subject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
+    "",
+    `--${alternativeBoundary}`,
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    email.textBody,
+    `--${alternativeBoundary}`,
+    "Content-Type: text/html; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    `<html><body>${email.htmlBody}</body></html>`,
+    `--${alternativeBoundary}--`,
+  ];
+
+  for (const attachment of email.attachments) {
+    const { bytes, mimeType } = createSeedEmailAttachment(attachment);
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${mimeType}; name="${attachment.fileName}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${attachment.fileName}"`,
+      "",
+      wrapBase64(bytes),
+    );
+  }
+
+  lines.push(`--${boundary}--`, "");
+  return Buffer.from(lines.join("\r\n"), "utf-8");
+};
+
+type SeedFileFormat =
+  | {
+      type: "docx";
+      extension: "docx";
+      mimeType: typeof DOCX_MIME;
+    }
+  | {
+      type: "email";
+      extension: "eml";
+      mimeType: typeof EML_MIME_TYPE;
+      fileName: SeedEmailFileName;
+    }
+  | {
+      type: "pdf";
+      extension: "pdf";
+      mimeType: typeof PDF_MIME;
+    };
+
+const resolveSeedFileFormat = (fileName: string): SeedFileFormat => {
+  if (fileName.endsWith(".docx")) {
+    return { type: "docx", extension: "docx", mimeType: DOCX_MIME };
+  }
+  if (isSeedEmailFileName(fileName)) {
+    return {
+      type: "email",
+      extension: "eml",
+      mimeType: EML_MIME_TYPE,
+      fileName,
+    };
+  }
+  return { type: "pdf", extension: "pdf", mimeType: PDF_MIME };
+};
+
 const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
     AKVIZICE_SPA_DOC_NAME,
@@ -1185,6 +1458,7 @@ const workspaceDocNames: Record<string, string[]> = {
     "Internal_SAFE_Agreement.docx",
     "Redacted_Due_Diligence_Extract.docx",
     SUPPLIER_AGREEMENT_DOC_NAME,
+    ...SEED_EMAIL_FILE_NAMES,
   ],
   "ws-stavebni-spor": [
     "Zaloba_o_nahradu_skody.pdf",
@@ -5310,7 +5584,10 @@ export async function seed(organizationId?: string, userId?: string) {
   // cloned into unrelated matters.
   const allDocNames = Object.values(workspaceDocNames)
     .flat()
-    .filter((name) => name !== SUPPLIER_AGREEMENT_DOC_NAME);
+    .filter(
+      (name) =>
+        name !== SUPPLIER_AGREEMENT_DOC_NAME && !seedEmailFileNames.has(name),
+    );
 
   /** Seed all document content for a single workspace. */
   const seedDocumentsForWorkspace = async (
@@ -5326,14 +5603,12 @@ export async function seed(organizationId?: string, userId?: string) {
     for (let j = 0; j < docEntities.length; j++) {
       const entity = at(docEntities, j);
       const fileName = at(docNames, j);
-      const isDocx = fileName.endsWith(".docx");
-      const mimeType = isDocx ? DOCX_MIME : PDF_MIME;
-      const ext = isDocx ? "docx" : "pdf";
+      const format = resolveSeedFileFormat(fileName);
 
       const title = fileName.replace(fileExtRe, "").replaceAll("_", " ");
 
       // Single source of truth for document content
-      const docText = documentTexts[fileName];
+      const configuredDocText = documentTexts[fileName];
 
       // ── S3 file ──
       // The Supplier Agreement ships real tracked changes and comments, so
@@ -5342,20 +5617,35 @@ export async function seed(organizationId?: string, userId?: string) {
         if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
           return await createSupplierAgreementDocx();
         }
-        if (isDocx) {
-          return await createMockDocx(title, docText);
+        switch (format.type) {
+          case "docx":
+            return await createMockDocx(title, configuredDocText);
+          case "email":
+            return createSeedEmail(format.fileName);
+          case "pdf":
+            return createMockPdf(title, configuredDocText);
+          default: {
+            format satisfies never;
+            return panic(`Unsupported seed file format for ${fileName}`);
+          }
         }
-        return createMockPdf(title, docText);
       };
       // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
       const content = await buildContent();
+      const docText =
+        format.type === "email"
+          ? parsedEmailToText(
+              // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
+              await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
+            )
+          : configuredDocText;
 
       const sha256Hex = new Bun.CryptoHasher("sha256")
         .update(content)
         .digest("hex");
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
-      const s3Key = `${ORG_ID}/${wsId}/${fileId}.${ext}`;
+      const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
       // oxlint-disable-next-line no-await-in-loop -- bounded memory: upload one document's bytes to S3 at a time
       await getS3().write(s3Key, new Uint8Array(content));
 
@@ -5367,7 +5657,7 @@ export async function seed(organizationId?: string, userId?: string) {
         type: "file",
         id: fileId,
         fileName,
-        mimeType,
+        mimeType: format.mimeType,
         sizeBytes: content.length,
         encrypted: false,
         sha256Hex,
@@ -5403,6 +5693,10 @@ export async function seed(organizationId?: string, userId?: string) {
           columns: { organizationId: true },
         });
         const ecOrgId = ws?.organizationId ?? ORG_ID;
+        const extractionEnvelope = {
+          ciphertext: Buffer.from(docText, "utf-8"),
+          iv: Buffer.alloc(IV_BYTES),
+        };
 
         // oxlint-disable-next-line no-await-in-loop -- depends on the org resolved from the workspace query above
         await rootDb
@@ -5411,8 +5705,8 @@ export async function seed(organizationId?: string, userId?: string) {
             entityId: entity.entityId,
             organizationId: ecOrgId,
             workspaceId: toWs(entity.workspaceId),
-            ciphertext: Buffer.from(docText, "utf-8"),
-            iv: Buffer.alloc(IV_BYTES),
+            ciphertext: extractionEnvelope.ciphertext,
+            iv: extractionEnvelope.iv,
             charCount: docText.length,
             language: null,
             extractedAt: new Date(),
@@ -5420,7 +5714,8 @@ export async function seed(organizationId?: string, userId?: string) {
           .onConflictDoUpdate({
             target: extractedContent.entityId,
             set: {
-              ciphertext: Buffer.from(docText, "utf-8"),
+              ciphertext: extractionEnvelope.ciphertext,
+              iv: extractionEnvelope.iv,
               charCount: docText.length,
               extractedAt: new Date(),
             },

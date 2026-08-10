@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Ukryj poprzednie wiadomości",
     "hideSignature": "Ukryj podpis",
     "noSubject": "(Brak tematu)",
+    "previewTruncated": "Podgląd został skrócony ze względów wydajnościowych.",
     "showQuotedHistory": "Pokaż poprzednie wiadomości",
     "showSignature": "Pokaż podpis",
     "to": "Odbiorcy",

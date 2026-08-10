@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldSurfaceEmailResolutionAlert,
 } from "./file-tab-panel.logic";
 
 describe("file tab native preview kind", () => {
@@ -45,6 +46,32 @@ describe("file tab native preview kind", () => {
         mimeType: "application/octet-stream",
       }),
     ).toBe("pdf");
+  });
+});
+
+describe("email chat resolution alert", () => {
+  test("surfaces recovery outside Preview only for failed email resolution", () => {
+    expect(
+      shouldSurfaceEmailResolutionAlert({
+        isEmailDisplay: true,
+        isPreviewVisible: false,
+        resolutionFailed: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSurfaceEmailResolutionAlert({
+        isEmailDisplay: true,
+        isPreviewVisible: true,
+        resolutionFailed: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldSurfaceEmailResolutionAlert({
+        isEmailDisplay: false,
+        isPreviewVisible: false,
+        resolutionFailed: true,
+      }),
+    ).toBe(false);
   });
 });
 

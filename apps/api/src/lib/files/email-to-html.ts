@@ -11,12 +11,17 @@
  * meta-refresh, javascript: URLs) are stripped before the browser sees
  * the document: email HTML is untrusted input.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { type Cheerio, load } from "cheerio";
 import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
-import { EMAIL_HEADER_CITATION_ID } from "@stll/api-contract";
+import {
+  EMAIL_HEADER_CITATION_ID,
+  EMAIL_TEXT_ATTACHMENT_CHARSET,
+  EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
+  type EmailTextAttachmentCharset,
+} from "@stll/api-contract";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
@@ -28,6 +33,7 @@ import {
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
 } from "@/api/lib/files/email-citations";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const EML_MIME_TYPE = "message/rfc822";
 export const MSG_MIME_TYPE = "application/vnd.ms-outlook";
@@ -48,6 +54,7 @@ const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
   pdf: "application/pdf",
   png: "image/png",
+  txt: "text/plain",
   webp: "image/webp",
 };
 
@@ -94,6 +101,7 @@ export class EmailParseError extends TaggedError("EmailParseError")<{
 type InlineImage = { cid: string; mimeType: string; dataBase64: string };
 
 export type EmailAttachment = {
+  charset: EmailTextAttachmentCharset | null;
   contentId: string | null;
   fileName: string | null;
   mimeType: string | null;
@@ -101,6 +109,7 @@ export type EmailAttachment = {
 };
 
 export type EmailAttachmentDescriptor = {
+  charset: EmailTextAttachmentCharset | null;
   id: string;
   fileName: string | null;
   mimeType: string | null;
@@ -230,6 +239,7 @@ export const buildEmailPreview = (
           mimeType: attachment.mimeType,
         });
         return {
+          charset: attachment.charset,
           id: createAttachmentId(attachmentIndex),
           fileName: attachment.fileName,
           mimeType,
@@ -267,6 +277,7 @@ export const isEmailAttachmentPreviewable = (
   const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
   return (
     normalized === "application/pdf" ||
+    normalized === "text/plain" ||
     /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
   );
 };
@@ -327,10 +338,99 @@ export const parsedEmailToText = (parsed: ParsedEmail): string => {
 
 // ── .eml parsing (postal-mime) ──────────────────────────
 
+const normalizeEmailAttachmentCharset = (
+  value: unknown,
+): EmailTextAttachmentCharset | null => {
+  const normalized =
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized.length === 0 ||
+    normalized.length > 64 ||
+    !/^[a-z0-9._:-]+$/iu.test(normalized)
+  ) {
+    return null;
+  }
+
+  return (
+    Object.values(EMAIL_TEXT_ATTACHMENT_CHARSET).find((charset) =>
+      EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS[charset].some(
+        (label) => label === normalized,
+      ),
+    ) ?? null
+  );
+};
+
+const resolveEmailAttachmentCharset = (
+  mimeType: string | null,
+): EmailTextAttachmentCharset | null => {
+  if (!mimeType) {
+    return null;
+  }
+  const charsetMatch =
+    /(?:^|;)\s*charset\s*=\s*(?:"(?<quoted>[^"]+)"|(?<bare>[^;\s]+))/iu.exec(
+      mimeType,
+    );
+  return normalizeEmailAttachmentCharset(
+    charsetMatch?.groups?.["quoted"] ?? charsetMatch?.groups?.["bare"],
+  );
+};
+
+const buildPostalMimeAttachmentCharsetLookup = (
+  parser: unknown,
+): Map<unknown, EmailTextAttachmentCharset | null> => {
+  const lookup = new Map<unknown, EmailTextAttachmentCharset | null>();
+  // PostalMime omits attachment Content-Type parameters from its public
+  // result. Its parsed node retains them; fail if that internal contract
+  // drifts so non-UTF-8 attachments cannot silently render as corrupted text.
+  if (!isRecord(parser) || !isRecord(parser["root"])) {
+    return panic("PostalMime parser tree has an unexpected shape");
+  }
+
+  const visit = (node: unknown): void => {
+    if (!isRecord(node)) {
+      return;
+    }
+
+    const content = node["content"];
+    if (content !== undefined) {
+      const contentType = node["contentType"];
+      if (!isRecord(contentType)) {
+        panic("PostalMime content type has an unexpected shape");
+      }
+      const parsed = contentType["parsed"];
+      if (!isRecord(parsed)) {
+        panic("PostalMime parsed content type has an unexpected shape");
+      }
+      const params = parsed["params"];
+      if (!isRecord(params)) {
+        panic("PostalMime content type parameters have an unexpected shape");
+      }
+      const charset = params["charset"];
+      if (charset !== undefined && typeof charset !== "string") {
+        panic("PostalMime attachment charset has an unexpected shape");
+      }
+      lookup.set(content, normalizeEmailAttachmentCharset(charset));
+    }
+
+    const childNodes = node["childNodes"];
+    if (!Array.isArray(childNodes)) {
+      return;
+    }
+    for (const childNode of childNodes) {
+      visit(childNode);
+    }
+  };
+
+  visit(parser["root"]);
+  return lookup;
+};
+
 const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
-  const email = await PostalMime.parse(fileBuffer, {
+  const parser = new PostalMime({
     attachmentEncoding: "arraybuffer",
   });
+  const email = await parser.parse(fileBuffer);
+  const attachmentCharsets = buildPostalMimeAttachmentCharsetLookup(parser);
 
   const inlineImages: InlineImage[] = [];
   const attachments: EmailAttachment[] = [];
@@ -339,8 +439,12 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     if (!bytes) {
       continue;
     }
+    if (!attachmentCharsets.has(attachment.content)) {
+      panic("PostalMime attachment is missing from its parser tree");
+    }
 
     attachments.push({
+      charset: attachmentCharsets.get(attachment.content) ?? null,
       contentId: attachment.contentId
         ? stripAngleBrackets(attachment.contentId)
         : null,
@@ -448,6 +552,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
     }
 
     attachments.push({
+      charset: resolveEmailAttachmentCharset(attachment.mimeType),
       contentId: attachment.contentId
         ? stripAngleBrackets(attachment.contentId)
         : null,

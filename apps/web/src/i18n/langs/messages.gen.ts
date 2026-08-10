@@ -1244,6 +1244,7 @@ type Messages = {
     "hideQuotedHistory": "Hide previous messages";
     "hideSignature": "Hide signature";
     "noSubject": "(No subject)";
+    "previewTruncated": "Preview shortened for performance.";
     "showQuotedHistory": "Show previous messages";
     "showSignature": "Show signature";
     "to": "Recipients";

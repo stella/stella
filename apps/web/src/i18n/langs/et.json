@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Peida varasemad kirjad",
     "hideSignature": "Peida allkiri",
     "noSubject": "(Teema puudub)",
+    "previewTruncated": "Eelvaadet lühendati jõudluse huvides.",
     "showQuotedHistory": "Kuva varasemad kirjad",
     "showSignature": "Kuva allkiri",
     "to": "Saajad",

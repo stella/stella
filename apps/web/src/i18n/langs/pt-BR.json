@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Ocultar mensagens anteriores",
     "hideSignature": "Ocultar assinatura",
     "noSubject": "(Sem assunto)",
+    "previewTruncated": "A prévia foi reduzida para melhorar o desempenho.",
     "showQuotedHistory": "Mostrar mensagens anteriores",
     "showSignature": "Mostrar assinatura",
     "to": "Destinatários",

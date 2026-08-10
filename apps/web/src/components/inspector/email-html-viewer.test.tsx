@@ -6,11 +6,14 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
   EmailFileViewer,
   EmailHtmlViewer,
+  EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
 import {
+  EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   EMAIL_EXTRACTION_POLL_INTERVAL_MS,
   EMAIL_VIEWER_LAYOUT,
@@ -62,6 +65,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       new QueryClient(),
@@ -131,6 +135,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-sibling"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       new QueryClient(),
@@ -142,6 +147,33 @@ describe("email viewer", () => {
     expect(html).toContain('role="status"');
   });
 
+  test("lets the persistent facet shell own the contextual chat runtime", () => {
+    const html = renderWithProviders(
+      <EmailViewerWithAI
+        chatMode={EMAIL_CHAT_MODE.contextual}
+        entityId="entity-1"
+        fieldId="field-1"
+        fileName="message.eml"
+        overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.active}
+        workspaceId="workspace-1"
+      >
+        <EmailFileViewer
+          chatMode={EMAIL_CHAT_MODE.contextual}
+          entityId="entity-1"
+          fieldId="field-1"
+          fileName="message.eml"
+          onOpenAttachment={() => undefined}
+          chatHost={EMAIL_CHAT_HOST.parent}
+          workspaceId="workspace-1"
+        />
+      </EmailViewerWithAI>,
+      new QueryClient(),
+    );
+
+    expect(html.match(/data-file-viewer-ai="true"/gu)).toHaveLength(1);
+    expect(html.match(/data-file-viewer-root="true"/gu)).toHaveLength(1);
+  });
+
   test("surfaces contextual chat resolution failures with retry", () => {
     const html = renderWithProviders(
       <EmailFileViewer
@@ -149,6 +181,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         fileName="message.eml"
+        onOpenAttachment={() => undefined}
         onRetryChatResolution={() => undefined}
         workspaceId="workspace-1"
       />,
@@ -162,7 +195,7 @@ describe("email viewer", () => {
     expect(html).not.toContain("pb-40");
   });
 
-  test("renders native metadata and keeps attachments informational", () => {
+  test("renders native metadata with directly accessible attachments", () => {
     const queryClient = new QueryClient();
     const options = emailHtmlPreviewOptions({
       fieldId: "field-1",
@@ -171,6 +204,7 @@ describe("email viewer", () => {
     queryClient.setQueryData(options.queryKey, {
       attachments: [
         {
+          charset: null,
           id: "attachment-1",
           fileName: "contract.pdf",
           mimeType: "application/pdf",
@@ -207,6 +241,7 @@ describe("email viewer", () => {
         entityId="entity-1"
         fieldId="field-1"
         layout={EMAIL_VIEWER_LAYOUT.contextualChat}
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-1"
       />,
       queryClient,
@@ -234,7 +269,10 @@ describe("email viewer", () => {
     expect(html).toContain("Hide signature");
     expect(html).toContain("Kind regards");
     expect(html).not.toContain("href=");
-    expect(html).not.toContain("<button");
+    expect(html).toContain('<button class="bg-muted/50');
+    expect(html).not.toContain("scrolling=");
+    expect(html).toContain("overflow-y-auto overscroll-contain");
+    expect(html).not.toContain("max-h-[45%]");
   });
 
   test("renders the scoped loading state", () => {
@@ -242,6 +280,7 @@ describe("email viewer", () => {
       <EmailHtmlViewer
         entityId="entity-2"
         fieldId="field-2"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-2"
       />,
       new QueryClient(),
@@ -286,6 +325,7 @@ describe("email viewer", () => {
       <EmailHtmlViewer
         entityId="entity-3"
         fieldId="field-3"
+        onOpenAttachment={() => undefined}
         workspaceId="workspace-3"
       />,
       queryClient,

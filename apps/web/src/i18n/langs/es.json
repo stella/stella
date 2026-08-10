@@ -1241,6 +1241,7 @@
     "hideQuotedHistory": "Ocultar mensajes anteriores",
     "hideSignature": "Ocultar firma",
     "noSubject": "(Sin asunto)",
+    "previewTruncated": "La vista previa se ha acortado para mejorar el rendimiento.",
     "showQuotedHistory": "Mostrar mensajes anteriores",
     "showSignature": "Mostrar firma",
     "to": "Destinatarios",
