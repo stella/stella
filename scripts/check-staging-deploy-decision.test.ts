@@ -12,6 +12,10 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/deploy-staging.yml",
   import.meta.url,
 );
+const STAGING_SETUP_URL = new URL(
+  "../apps/web/e2e/staging/global-setup.ts",
+  import.meta.url,
+);
 const TIP_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 const HOUR_SECONDS = 3600;
@@ -80,7 +84,6 @@ type Decision = { deploy: string; exitCode: number };
 let workspace = "";
 let scriptPath = "";
 let probeScriptPath = "";
-let postReadinessScriptPath = "";
 
 const runDecision = async ({
   committedHoursAgo = 1,
@@ -172,47 +175,10 @@ const runProbe = async ({
   };
 };
 
-const runPostReadiness = async ({
-  body,
-  expectedCommit = TIP_SHA,
-  status,
-}: {
-  body: string;
-  expectedCommit?: string;
-  status: string;
-}) => {
-  const callsPath = path.join(
-    workspace,
-    `post-readiness-calls-${Bun.randomUUIDv7()}.txt`,
-  );
-  await Bun.write(callsPath, "");
-
-  const result = Bun.spawnSync(["bash", postReadinessScriptPath], {
-    env: {
-      ...process.env,
-      EXPECTED_COMMIT: expectedCommit,
-      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
-      RUNNER_TEMP: workspace,
-      STAGING_READY_URL: "https://api-staging.stll.app/ready",
-      STUB_CALLS_PATH: callsPath,
-      STUB_HEALTH_BODY: body,
-      STUB_HEALTH_STATUS: status,
-      STUB_READY_BODY: body,
-      STUB_READY_STATUS: status,
-    },
-  });
-
-  return {
-    calls: await Bun.file(callsPath).text(),
-    exitCode: result.exitCode,
-  };
-};
-
 beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), "staging-deploy-decision-"));
   scriptPath = path.join(workspace, "decide.sh");
   probeScriptPath = path.join(workspace, "probe.sh");
-  postReadinessScriptPath = path.join(workspace, "post-readiness.sh");
 
   const workflow = await Bun.file(WORKFLOW_URL).text();
   const script = extractDecideScript(workflow);
@@ -227,15 +193,6 @@ beforeAll(async () => {
       "\n      # Absent staging defers",
     ),
   );
-  await Bun.write(
-    postReadinessScriptPath,
-    extractStepScript(
-      workflow,
-      "Verify staging readiness",
-      "\n      - name: Setup Bun",
-    ),
-  );
-
   // Stands in for the reads the script makes: the last recorded staging
   // deployment, the oldest commit staging has not taken, and the tip's own
   // timestamp.
@@ -453,24 +410,14 @@ describe("staging readiness cutover", () => {
     },
   );
 
-  test("requires post-deploy /ready to report the expected commit", async () => {
-    const matching = await runPostReadiness({
-      body: `{"status":"ok","commit":"${TIP_SHA}"}`,
-      status: "200",
-    });
-    const stale = await runPostReadiness({
-      body: `{"status":"ok","commit":"${OTHER_SHA}"}`,
-      status: "200",
-    });
-
-    expect(matching.exitCode).toBe(0);
-    expect(stale.exitCode).not.toBe(0);
-    expect(matching.calls).toBe("https://api-staging.stll.app/ready\n");
-    expect(stale.calls).toBe("https://api-staging.stll.app/ready\n");
-
+  test("delegates post-deploy readiness to the rollout-aware smoke waiter", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
-    expect(
-      workflow.indexOf("      - name: Verify staging readiness\n"),
-    ).toBeLessThan(workflow.indexOf("      - name: Run staging web smoke\n"));
+    const stagingSetup = await Bun.file(STAGING_SETUP_URL).text();
+
+    expect(workflow).not.toContain("      - name: Verify staging readiness\n");
+    expect(stagingSetup).toContain("const READINESS_TIMEOUT_MS = 1_200_000;");
+    expect(stagingSetup).toContain("const READINESS_STABLE_SAMPLES = 3;");
+    expect(stagingSetup).toContain(`url: \`\${API_URL}/ready\`,`);
+    expect(stagingSetup).not.toContain(`url: \`\${API_URL}/health\`,`);
   });
 });
