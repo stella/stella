@@ -394,14 +394,22 @@ const buildPostalMimeAttachmentCharsetLookup = (
     const content = node["content"];
     if (content !== undefined) {
       const contentType = node["contentType"];
-      const parsed = isRecord(contentType) ? contentType["parsed"] : null;
-      const params = isRecord(parsed) ? parsed["params"] : null;
-      lookup.set(
-        content,
-        isRecord(params)
-          ? normalizeEmailAttachmentCharset(params["charset"])
-          : null,
-      );
+      if (!isRecord(contentType)) {
+        panic("PostalMime content type has an unexpected shape");
+      }
+      const parsed = contentType["parsed"];
+      if (!isRecord(parsed)) {
+        panic("PostalMime parsed content type has an unexpected shape");
+      }
+      const params = parsed["params"];
+      if (!isRecord(params)) {
+        panic("PostalMime content type parameters have an unexpected shape");
+      }
+      const charset = params["charset"];
+      if (charset !== undefined && typeof charset !== "string") {
+        panic("PostalMime attachment charset has an unexpected shape");
+      }
+      lookup.set(content, normalizeEmailAttachmentCharset(charset));
     }
 
     const childNodes = node["childNodes"];

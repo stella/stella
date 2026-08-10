@@ -5693,6 +5693,10 @@ export async function seed(organizationId?: string, userId?: string) {
           columns: { organizationId: true },
         });
         const ecOrgId = ws?.organizationId ?? ORG_ID;
+        const extractionEnvelope = {
+          ciphertext: Buffer.from(docText, "utf-8"),
+          iv: Buffer.alloc(IV_BYTES),
+        };
 
         // oxlint-disable-next-line no-await-in-loop -- depends on the org resolved from the workspace query above
         await rootDb
@@ -5701,8 +5705,8 @@ export async function seed(organizationId?: string, userId?: string) {
             entityId: entity.entityId,
             organizationId: ecOrgId,
             workspaceId: toWs(entity.workspaceId),
-            ciphertext: Buffer.from(docText, "utf-8"),
-            iv: Buffer.alloc(IV_BYTES),
+            ciphertext: extractionEnvelope.ciphertext,
+            iv: extractionEnvelope.iv,
             charCount: docText.length,
             language: null,
             extractedAt: new Date(),
@@ -5710,7 +5714,8 @@ export async function seed(organizationId?: string, userId?: string) {
           .onConflictDoUpdate({
             target: extractedContent.entityId,
             set: {
-              ciphertext: Buffer.from(docText, "utf-8"),
+              ciphertext: extractionEnvelope.ciphertext,
+              iv: extractionEnvelope.iv,
               charCount: docText.length,
               extractedAt: new Date(),
             },
