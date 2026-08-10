@@ -1,5 +1,14 @@
 # @stll/anonymize-cli
 
+## 2.7.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/anonymize@2.7.6
+  - @stll/anonymize-pdf@2.7.6
+  - @stll/anonymize-docx@2.7.6
+
 ## 2.7.5
 
 ### Patch Changes

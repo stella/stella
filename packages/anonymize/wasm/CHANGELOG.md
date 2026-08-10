@@ -1,5 +1,11 @@
 # @stll/anonymize-wasm
 
+## 2.7.6
+
+### Patch Changes
+
+- [#449](https://github.com/stella/anonymize/pull/449) [`2b804b3`](https://github.com/stella/anonymize/commit/2b804b371ca1ec737c2443670881e5777e71bce8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support loading native assets from a real directory via `STLL_ANONYMIZE_ASSET_DIR`, so the wasm binding initializes inside compiled single binaries (`bun build --compile`), where `import.meta.url`-relative asset URLs resolve against the embedded filesystem and can never reach assets installed on disk.
+
 ## 2.7.5
 
 ## 2.7.4
