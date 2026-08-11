@@ -61,7 +61,9 @@ const findings: ReviewFinding[] = [
 
 const buildFindingsMock = mock(async () => findings);
 
+const realReviewGrade = await import("@/api/handlers/playbooks/review-grade");
 void mock.module("@/api/handlers/playbooks/review-grade", () => ({
+  ...realReviewGrade,
   buildFindings: buildFindingsMock,
 }));
 

@@ -15,11 +15,15 @@ const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
   return await Promise.resolve({ findings: [] });
 });
 
+const realTanstackAIGenerate = await import("@/api/lib/tanstack-ai-generate");
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
+  ...realTanstackAIGenerate,
   generateTanStackObjectForRole: generateObjectMock,
 }));
 
+const realTanstackAIAnalytics = await import("@/api/lib/analytics/tanstack-ai");
 void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
+  ...realTanstackAIAnalytics,
   createTanStackAIAnalyticsCallbacks: () => ({
     middleware: {},
     captureError: mock((_error: unknown) => undefined),
