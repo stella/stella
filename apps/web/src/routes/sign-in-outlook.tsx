@@ -3,14 +3,13 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-
 import { env } from "@/env";
 import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import {
   buildOutlookOrganizationSelectionUrl,
+  buildOutlookSignInPath,
   outlookSessionHandoff,
 } from "@/lib/outlook-auth";
 
@@ -21,8 +20,6 @@ const ALLOWED_PARENT_ORIGIN = new URL(env.VITE_OUTLOOK_ORIGIN).origin;
 
 type HandoffState =
   | { type: "loading" }
-  | { type: "signed-out" }
-  | { type: "signing-in" }
   | { type: "delivered" }
   | { message: string; type: "error" };
 
@@ -99,7 +96,9 @@ const SignInOutlook = () => {
       const handoff = outlookSessionHandoff(session.data?.session);
       switch (handoff) {
         case "signed-out":
-          setState({ type: "signed-out" });
+          window.location.replace(
+            buildOutlookSignInPath(ALLOWED_PARENT_ORIGIN),
+          );
           return;
         case "select-organization":
           window.location.replace(
@@ -135,23 +134,6 @@ const SignInOutlook = () => {
     detached(tryDeliverToken(), "SignInOutlook.tryDeliverToken");
   });
 
-  const handleSignIn = async () => {
-    setState({ type: "signing-in" });
-    const { error } = await authClient.signIn.social({
-      callbackURL: buildOutlookOrganizationSelectionUrl({
-        frontendOrigin: window.location.origin,
-        parentOrigin: ALLOWED_PARENT_ORIGIN,
-      }),
-      provider: "microsoft",
-    });
-    if (error) {
-      setState({
-        message: t("error.generic"),
-        type: "error",
-      });
-    }
-  };
-
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 text-center">
       <header className="space-y-2">
@@ -162,16 +144,8 @@ const SignInOutlook = () => {
       </header>
 
       {state.type === "loading" && <p>{tCommon("loading")}</p>}
-      {state.type === "signing-in" && <p>{tCommon("loading")}</p>}
       {state.type === "delivered" && (
         <p className="text-muted-foreground">{t("outlookHandoffSuccess")}</p>
-      )}
-      {state.type === "signed-out" && (
-        <Button
-          onClick={() => detached(handleSignIn(), "SignInOutlook.handleSignIn")}
-        >
-          {t("signIn")}
-        </Button>
       )}
       {state.type === "error" && (
         <p className="text-destructive">{state.message}</p>

@@ -76,6 +76,19 @@ export const getCurrentOfficeItem = (): OfficeItem | null =>
 export const getOfficeDisplayLanguage = (): string | undefined =>
   getOfficeRuntime()?.context.displayLanguage;
 
+export const isOfficeDialogApi = (value: unknown): value is Office.UI =>
+  isRecord(value) && typeof value["displayDialogAsync"] === "function";
+
+export const getOfficeDialogApi = (): Office.UI | null => {
+  const office = getOfficeRuntime();
+  if (!office) {
+    return null;
+  }
+
+  const value: unknown = office.context.ui;
+  return isOfficeDialogApi(value) ? value : null;
+};
+
 export const fromOfficeAsync = async <T>(
   invoke: (callback: OfficeAsyncCallback<T>) => void,
 ): Promise<T> => {
