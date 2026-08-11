@@ -11,6 +11,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -945,14 +948,18 @@ export const czRegionalAdapter = defineSourceAdapter({
       );
       let total = 0;
       for (const sum of perYear) {
+        // One unreadable year makes the sum a floor rather than a total, and a
+        // floor recorded as a total reads as coverage the corpus does not have.
         if (sum === null) {
-          return null;
+          return sourceTotalProbeFailed(
+            SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+          );
         }
         total += sum;
       }
-      return total > 0 ? total : null;
-    } catch {
-      return null;
+      return sourceTotalRead(total);
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 

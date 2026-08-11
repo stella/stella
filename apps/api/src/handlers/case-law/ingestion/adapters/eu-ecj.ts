@@ -11,6 +11,9 @@ import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
   STORED_RAW_REPARSE_REJECTION,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -40,6 +43,7 @@ import {
   AdapterFetchError,
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -1255,24 +1259,31 @@ WHERE {
         body: new URLSearchParams({ query }).toString(),
       });
       if (!response.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const json: unknown = await response.json();
       if (!isRecord(json)) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
       const results = json["results"];
       if (!isRecord(results) || !Array.isArray(results["bindings"])) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
       const binding: unknown = results["bindings"].at(0);
       if (!isRecord(binding) || !isRecord(binding["n"])) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
-      const parsed = Number.parseInt(String(binding["n"]["value"]), 10);
-      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
-    } catch {
-      return null;
+      return sourceTotalRead(
+        Number.parseInt(String(binding["n"]["value"]), 10),
+      );
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 

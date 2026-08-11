@@ -31,10 +31,9 @@ export const SOURCE_TOTAL_POLL_OUTCOME = {
   /** The publisher stated a number and it is now the recorded total. */
   RECORDED: "recorded",
   /**
-   * The adapter yielded no number. `SourceAdapter.getTotalCount` returns null
-   * both for a publisher that exposes no readable count and for a request
-   * that failed, and the contract keeps no way to tell them apart, so this
-   * cannot mean "the publisher states no total" — only that none was read.
+   * The publisher exposes no readable count, as the adapter itself states.
+   * Exact rather than inferred: a probe that broke is a failure, and only the
+   * adapter can tell the two apart.
    *
    * Not tallied as a failure: several publishers permanently expose no count,
    * and a sweep over them would otherwise always end in one. What keeps a

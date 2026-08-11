@@ -9,6 +9,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -32,6 +35,7 @@ import {
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1105,17 +1109,22 @@ export const plCourtsAdapter = defineSourceAdapter({
       );
 
       if (!response.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
       const json: unknown = await response.json();
       if (!isSaosSearchResponse(json)) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
 
-      return toOptionalValue(json.info?.totalResults) ?? null;
-    } catch {
-      return null;
+      const total = toOptionalValue(json.info?.totalResults);
+      return total === undefined
+        ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+        : sourceTotalRead(total);
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 

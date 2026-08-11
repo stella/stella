@@ -21,7 +21,9 @@ import {
 
 const adapter = (
   key: SourceAdapter["key"],
-  getTotalCount: SourceAdapter["getTotalCount"] = async () => null,
+  getTotalCount: SourceAdapter["getTotalCount"] = async () => ({
+    type: "no-count-endpoint",
+  }),
 ): SourceAdapter => ({
   key,
   name: `${key} fixture`,
@@ -58,9 +60,11 @@ describe("selectDueCountingAdapters", () => {
     // The capability is required, so the sweep no longer selects on it: an
     // adapter is either due or fresh, never exempt.
     const adapters = [
-      adapter(ADAPTER_KEYS.CZ_US, async () => 42),
+      adapter(ADAPTER_KEYS.CZ_US, async () => ({ type: "count", total: 42 })),
       adapter(ADAPTER_KEYS.CZ_NS),
-      adapter(ADAPTER_KEYS.PL_COURTS, async () => null),
+      adapter(ADAPTER_KEYS.PL_COURTS, async () => ({
+        type: "no-count-endpoint",
+      })),
     ];
 
     expect(
@@ -75,8 +79,14 @@ describe("selectDueCountingAdapters", () => {
   });
 });
 
-const czUs = adapter(ADAPTER_KEYS.CZ_US, async () => 1);
-const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => 2);
+const czUs = adapter(ADAPTER_KEYS.CZ_US, async () => ({
+  type: "count",
+  total: 1,
+}));
+const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => ({
+  type: "count",
+  total: 2,
+}));
 
 describe("selectDueCountingAdapters", () => {
   const capable = [czUs, czRegional];
@@ -146,10 +156,9 @@ describe("selectDueCountingAdapters", () => {
   });
 
   test("a source asked recently is not asked again, whatever it answered", () => {
-    // `getTotalCount` returns null both for a publisher exposing no count
-    // and for a request that failed, and neither persists a date. Gating on
-    // the recorded date alone would re-ask those sources every wake, hours
-    // apart, which no failure surfaces.
+    // Neither a publisher that exposes no count nor a request that failed
+    // persists a date. Gating on the recorded date alone would re-ask those
+    // sources every wake, hours apart, which no failure surfaces.
     expect(
       selectDueCountingAdapters({
         adapters: capable,

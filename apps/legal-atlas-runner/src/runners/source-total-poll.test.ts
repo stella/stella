@@ -35,7 +35,9 @@ const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
 
 const adapter = (
   key: SourceAdapter["key"],
-  getTotalCount: SourceAdapter["getTotalCount"] = async () => null,
+  getTotalCount: SourceAdapter["getTotalCount"] = async () => ({
+    type: "no-count-endpoint",
+  }),
 ): SourceAdapter => ({
   key,
   name: `${key} fixture`,
@@ -131,7 +133,12 @@ describe("runSourceTotalPoll", () => {
   test("records what a publisher states, once, and stays quiet while it is fresh", async () => {
     const sweeps = 3;
     const { reports, slept, written } = await runHarness({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       sweeps,
       totals: [unmeasured(ADAPTER_KEYS.CZ_US)],
     });
@@ -152,7 +159,7 @@ describe("runSourceTotalPoll", () => {
         noCount: 0,
         failed: 0,
         unknownSource: 0,
-        lastError: undefined,
+        lastErrorTag: undefined,
       },
     ]);
     // Sliced pacing: the gap between sweeps is the interval, not one sleep.
@@ -167,8 +174,9 @@ describe("runSourceTotalPoll", () => {
       adapters: [
         adapter(ADAPTER_KEYS.CZ_US, async () => {
           probes += 1;
-          // What a failed request looks like through the adapter contract.
-          return null;
+          // A publisher that exposes no count: nothing is persisted, so only
+          // the ask gate can stop the next wake re-probing it.
+          return { type: "no-count-endpoint" };
         }),
       ],
       sweeps: 4,
@@ -183,7 +191,12 @@ describe("runSourceTotalPoll", () => {
 
   test("a fresh total asks nobody and reports nothing", async () => {
     const { reports, written } = await runHarness({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       sweeps: 2,
       totals: [measuredAt(ADAPTER_KEYS.CZ_US, new Date(NOW - DAY_IN_MS))],
     });
@@ -198,7 +211,9 @@ describe("runSourceTotalPoll", () => {
         adapter(ADAPTER_KEYS.CZ_US, async () => {
           throw new Error("publisher unreachable");
         }),
-        adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => null),
+        adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => ({
+          type: "no-count-endpoint",
+        })),
       ],
       sweeps: 1,
       totals: [
@@ -217,7 +232,7 @@ describe("runSourceTotalPoll", () => {
       failed: 1,
       unknownSource: 0,
     });
-    expect(reports.at(0)?.lastError).toBeInstanceOf(Error);
+    expect(reports.at(0)?.lastErrorTag).toBe("Error");
   });
 
   test("one publisher's failure does not lose another's answer", async () => {
@@ -226,7 +241,10 @@ describe("runSourceTotalPoll", () => {
         adapter(ADAPTER_KEYS.CZ_US, async () => {
           throw new Error("publisher unreachable");
         }),
-        adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => 4321),
+        adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => ({
+          type: "count",
+          total: 4321,
+        })),
       ],
       sweeps: 1,
       totals: [
@@ -244,7 +262,12 @@ describe("runSourceTotalPoll", () => {
   test("a write rejection is counted, not thrown, and the loop continues", async () => {
     const sweeps = 2;
     const { reports, slept } = await runHarness({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       recordTotal: async () => {
         throw new TypeError("reported total must be a positive integer");
       },
@@ -262,7 +285,12 @@ describe("runSourceTotalPoll", () => {
 
   test("an adapter with no source row is counted as registry drift", async () => {
     const { reports } = await runHarness({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       recordTotal: async () => false,
       sweeps: 1,
       totals: [unmeasured(ADAPTER_KEYS.CZ_US)],
@@ -278,7 +306,12 @@ describe("runSourceTotalPoll", () => {
   test("a failed read is reported rather than read as a fresh corpus", async () => {
     let reads = 0;
     const { reports } = await runHarness({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       readTotals: async () => {
         reads += 1;
         throw new Error("database unreachable");
@@ -288,14 +321,19 @@ describe("runSourceTotalPoll", () => {
 
     expect(reads).toBeGreaterThan(0);
     expect(reports.at(0)).toMatchObject({ polled: 0, failed: 0 });
-    expect(reports.at(0)?.lastError).toBeInstanceOf(Error);
+    expect(reports.at(0)?.lastErrorTag).toBe("Error");
   });
 
   test("a draining process is not asked for a sweep", async () => {
     let reads = 0;
 
     await runSourceTotalPoll({
-      adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => ({
+          type: "count",
+          total: 8000,
+        })),
+      ],
       isDraining: () => true,
       now: () => NOW,
       readTotals: async () => {

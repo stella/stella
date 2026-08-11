@@ -1596,7 +1596,7 @@ export const runCaseLawIngest = async (
             `noCount=${summary.noCount} ` +
             `failed=${summary.failed} ` +
             `unknownSource=${summary.unknownSource} ` +
-            `lastErrorType=${summary.lastError === undefined ? "none" : errorTag(summary.lastError)}`,
+            `lastErrorType=${summary.lastErrorTag ?? "none"}`,
         );
       },
       sleep: async (ms) => {

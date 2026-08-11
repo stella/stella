@@ -5,25 +5,12 @@ import path from "node:path";
 import { createDevErrorLogger } from "@stll/errors";
 
 import { envBase } from "@/api/env-base";
+import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
-/**
- * Extract a safe, structural error identifier for observability.
- *
- * Returns the TaggedError `_tag`, the Error constructor name, or
- * "UnknownError". Never includes messages, causes, or stack
- * traces; those may contain privileged document content, file
- * names, or client data that must not reach analytics dashboards.
- */
-export const errorTag = (error: unknown): string => {
-  if (isTaggedError(error)) {
-    return error._tag;
-  }
-  if (error instanceof Error) {
-    return errorClassName(error);
-  }
-  return "UnknownError";
-};
+// Re-exported so callers keep one import path, while modules that must not
+// pay this file's import-time env read can take them from the split module.
+export { errorClassName, errorTag };
 
 /**
  * Non-PII connection/system fields for infra observability.
@@ -138,22 +125,6 @@ export const safeErrorCause = (error: Error): unknown => {
   } catch {
     return undefined;
   }
-};
-
-const errorClassName = (error: Error): string => {
-  try {
-    const constructorValue: unknown = Reflect.get(error, "constructor");
-    if (typeof constructorValue !== "function") {
-      return "Error";
-    }
-    const name: unknown = Reflect.get(constructorValue, "name");
-    if (typeof name === "string" && name) {
-      return name;
-    }
-  } catch {
-    return "Error";
-  }
-  return "Error";
 };
 
 export const safeErrorCode = (error: Error): string | undefined =>

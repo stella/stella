@@ -10,6 +10,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -34,6 +37,7 @@ import {
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -775,22 +779,25 @@ export const czNsAdapter = defineSourceAdapter({
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       });
       if (!response.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
       const json = await response.json();
       if (!isDominoViewResponse(json)) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
       const raw = json["@toplevelentries"];
       if (!raw) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
 
-      const parsed = Number.parseInt(raw, 10);
-      return Number.isNaN(parsed) ? null : parsed;
-    } catch {
-      return null;
+      return sourceTotalRead(Number.parseInt(raw, 10));
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 

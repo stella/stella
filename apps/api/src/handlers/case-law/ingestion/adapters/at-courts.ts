@@ -6,6 +6,9 @@ import {
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
@@ -18,6 +21,7 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -463,18 +467,20 @@ export const atCourtsAdapter = defineSourceAdapter({
         },
       );
       if (!response.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const json: unknown = await response.json();
       if (!isRisApiResponse(json)) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
       const raw = json.OgdSearchResult?.OgdDocumentResults?.Hits?.["#text"];
-      const parsed =
-        typeof raw === "string" ? Number.parseInt(raw, 10) : Number.NaN;
-      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
-    } catch {
-      return null;
+      return typeof raw === "string"
+        ? sourceTotalRead(Number.parseInt(raw, 10))
+        : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 

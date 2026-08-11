@@ -387,6 +387,58 @@ export type SourceReconciliation = {
 };
 
 /**
+ * What asking a source how much it holds produced.
+ *
+ * Three answers rather than a nullable number. "The publisher exposes no
+ * count" is a permanent property of the source; "the probe did not complete"
+ * is a statement about one request and nothing about the source. A caller
+ * given only null has to guess which it got, and every caller guessed the
+ * same way: it reported both as "no count" and alarmed on neither.
+ *
+ * `errorTag` is a structural, non-PII identifier — an `errorTag(...)` result
+ * where the adapter caught a throw, and an adapter-authored tag naming the
+ * step where it did not (a refused status, an unreadable payload). Never a
+ * message: these tags reach logs and dashboards.
+ */
+export type SourceTotalCount =
+  | { type: "count"; total: number }
+  | { type: "no-count-endpoint" }
+  | { type: "probe-failed"; errorTag: string };
+
+/**
+ * Tags for the count probe failures an adapter detects without a throw.
+ * Alongside `errorTag(...)`, which names the ones it catches.
+ */
+export const SOURCE_TOTAL_PROBE_FAILURE = {
+  /** The count endpoint answered with a status the adapter refuses. */
+  HTTP_STATUS: "http-status",
+  /** The answer carried no count this adapter can read. */
+  UNREADABLE_PAYLOAD: "unreadable-payload",
+} as const;
+
+export type SourceTotalProbeFailure =
+  (typeof SOURCE_TOTAL_PROBE_FAILURE)[keyof typeof SOURCE_TOTAL_PROBE_FAILURE];
+
+/** A failure the adapter detected without a throw. */
+export const sourceTotalProbeFailed = (
+  failure: SourceTotalProbeFailure,
+): SourceTotalCount => ({ type: "probe-failed", errorTag: failure });
+
+/**
+ * The count answer for a number an adapter read out of a publisher's payload.
+ *
+ * One rule for every source: a total is a positive, finite integer, and
+ * anything else is a payload the adapter could not read rather than a corpus
+ * of nothing. Zero especially — no publisher here holds no decisions, so a
+ * zero is a query that did not run, and recording it would state a false floor
+ * that every coverage figure is then measured against.
+ */
+export const sourceTotalRead = (value: number): SourceTotalCount =>
+  Number.isSafeInteger(value) && value > 0
+    ? { type: "count", total: value }
+    : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
+
+/**
  * An adapter that declares reconciliation and cannot do it.
  *
  * The capability is required rather than optional so that a new adapter has to
@@ -460,9 +512,10 @@ export type SourceAdapter = {
    *
    * Required: a source nobody can count is a source whose coverage nobody can
    * report, and that has to be a stated property of the adapter rather than a
-   * field somebody forgot.
+   * field somebody forgot. An adapter classifies its own answer, because only
+   * it knows whether its publisher states no total or its probe broke.
    */
-  getTotalCount: (signal: AbortSignal) => Promise<number | null>;
+  getTotalCount: (signal: AbortSignal) => Promise<SourceTotalCount>;
   /**
    * Ask the publisher what it lists for a slice, so the standing
    * reconciliation loop can compare that against what is held and ingest the
