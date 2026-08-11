@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { DocumentReviewTopic } from "@/api/handlers/document-reviews/schemas";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -9,6 +8,7 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   buildGroundedReviewFix,

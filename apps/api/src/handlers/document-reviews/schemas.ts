@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { tSafeId } from "@/api/lib/custom-schema";
+import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
 
 export const documentReviewRefSchema = t.Object({
   entityId: tSafeId("entity"),
@@ -35,7 +36,15 @@ export const documentReviewTopicSchema = t.Union([
   }),
 ]);
 
-export type DocumentReviewTopic = Static<typeof documentReviewTopicSchema>;
+type Assignable<Source extends Target, Target> = Source;
+
+// Bind the wire union to the engine contract: if the request schema stops
+// satisfying `ReviewEngineTopic`, this alias fails typecheck instead of the
+// mismatch surfacing inside the engine.
+export type DocumentReviewTopic = Assignable<
+  Static<typeof documentReviewTopicSchema>,
+  ReviewEngineTopic
+>;
 
 const reviewDocumentsSchema = {
   target: documentReviewRefSchema,

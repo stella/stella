@@ -1,10 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { extractAskContents } from "@/api/handlers/playbooks/review-extract";
-import type { ReviewAsk } from "@/api/handlers/playbooks/review-extract";
-import { buildFindings } from "@/api/handlers/playbooks/review-grade";
-import type { ReviewFinding } from "@/api/handlers/playbooks/review-grade";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -12,6 +8,10 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { extractAskContents } from "@/api/lib/document-review/review-extract";
+import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
+import { buildFindings } from "@/api/lib/document-review/review-grade";
+import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
