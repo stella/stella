@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { OUTLOOK_AI_INPUT_MAX_CHARS } from "@stll/api-contract";
+
 import { toOutlookGenerationError } from "@/api/handlers/ai/outlook-generation-error";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -9,13 +11,12 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
-const TEXT_MAX_CHARS = 20_000;
 const LANGUAGE_MAX_CHARS = 32;
 const SUMMARIZE_TIMEOUT_MS = 60_000;
 const SUMMARIZE_MAX_OUTPUT_TOKENS = 1024;
 
 const summarizeBodySchema = t.Object({
-  text: t.String({ minLength: 1, maxLength: TEXT_MAX_CHARS }),
+  text: t.String({ minLength: 1, maxLength: OUTLOOK_AI_INPUT_MAX_CHARS }),
   language: t.Optional(t.String({ maxLength: LANGUAGE_MAX_CHARS })),
 });
 

@@ -5,6 +5,7 @@ export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type { AgendaItemKind, AgendaItemSource } from "./agenda";
 
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
+export { OUTLOOK_AI_INPUT_MAX_CHARS, truncateOutlookAIInput } from "./ai";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
