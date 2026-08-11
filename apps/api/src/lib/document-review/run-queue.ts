@@ -585,7 +585,8 @@ const runPlaybookPass = async ({
 
   const positions = plan.playbookChecks.map((check) => check.position);
   const clauseSnapshots = await actor.scopedDb(
-    async (tx) => await loadClauseSnapshots(tx, actor.organizationId, positions),
+    async (tx) =>
+      await loadClauseSnapshots(tx, actor.organizationId, positions),
   );
   const tiersBySourceId = new Map<string, ResolvedTiers>();
   const asks: ReviewAsk[] = [];
