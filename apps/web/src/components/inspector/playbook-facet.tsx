@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -71,6 +72,7 @@ import type {
   PlaybookVerdict,
   ReferenceAssessment,
   ReferenceFinding,
+  ReviewCommentState,
   ReviewTopic,
   ReviewFindingFix,
   ReviewFixState,
@@ -133,6 +135,11 @@ export const PlaybookFacet = ({
   const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
   const setTopics = usePlaybookReviewStore((state) => state.setTopics);
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
+  const beginComment = usePlaybookReviewStore((state) => state.beginComment);
+  const completeComment = usePlaybookReviewStore(
+    (state) => state.completeComment,
+  );
+  const cancelComment = usePlaybookReviewStore((state) => state.cancelComment);
   const resetSession = usePlaybookReviewStore((state) => state.resetSession);
 
   const { data: playbooksData } = useQuery(
@@ -275,37 +282,50 @@ export const PlaybookFacet = ({
       return;
     }
     const editor = registration.editorRef.current;
-    if (!editor) {
+    if (!editor || !beginComment(entityId, fileFieldId, finding.findingId)) {
       return;
     }
-    const unlocked = registration.editable
-      ? true
-      : await registration.requestEditMode();
-    if (!unlocked) {
-      return;
-    }
-    const snapshot = editor.createAIEditSnapshot();
-    if (!snapshot) {
+    const application = await Result.tryPromise(async () => {
+      const unlocked = registration.editable
+        ? true
+        : await registration.requestEditMode();
+      if (!unlocked) {
+        return "cancelled" as const;
+      }
+      const snapshot = editor.createAIEditSnapshot();
+      if (!snapshot) {
+        return "failed" as const;
+      }
+      const result = editor.applyAIEditOperations({
+        snapshot,
+        operations: [
+          {
+            id: `review-comment-${uuidv7()}`,
+            type: "commentOnBlock",
+            blockId,
+            comment: { text: finding.explanation.text },
+          },
+        ],
+        mode: "tracked-changes",
+        ...(author.length > 0 && { author }),
+      });
+      return result.applied.length === 0 ? "failed" : "applied";
+    });
+    if (Result.isError(application)) {
+      analytics.captureError(application.error);
+      cancelComment(entityId, fileFieldId, finding.findingId);
       stellaToast.add({
         type: "error",
         title: t("inspector.review.commentFailed"),
       });
       return;
     }
-    const result = editor.applyAIEditOperations({
-      snapshot,
-      operations: [
-        {
-          id: `review-comment-${uuidv7()}`,
-          type: "commentOnBlock",
-          blockId,
-          comment: { text: finding.explanation.text },
-        },
-      ],
-      mode: "tracked-changes",
-      ...(author.length > 0 && { author }),
-    });
-    if (result.applied.length === 0) {
+    if (application.value === "applied") {
+      completeComment(entityId, fileFieldId, finding.findingId);
+      return;
+    }
+    cancelComment(entityId, fileFieldId, finding.findingId);
+    if (application.value === "failed") {
       stellaToast.add({
         type: "error",
         title: t("inspector.review.commentFailed"),
@@ -403,6 +423,7 @@ export const PlaybookFacet = ({
         playbookFindings={session.results.playbook}
         referenceFindings={session.results.references}
         references={reviewedReferences}
+        commentStateByFinding={session.commentState}
         fixStateByFinding={session.fixState}
         negotiationBySourceId={negotiationBySourceId}
         onAcceptFix={acceptFix}
@@ -566,9 +587,15 @@ const ReferenceFilePicker = ({
     (value: string) => setDebouncedQuery(value),
     250,
   );
-  const { data: sources = [] } = useQuery(
+  const {
+    data: sourcePages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(
     documentReviewSourcesOptions({ workspaceId, q: debouncedQuery }),
   );
+  const sources = sourcePages?.pages.flatMap((page) => page.items) ?? [];
   const selectedIds = new Set(
     references.map((reference) => reference.fileFieldId),
   );
@@ -647,6 +674,24 @@ const ReferenceFilePicker = ({
           <ComboboxEmpty>
             {t("inspector.review.noReferencesFound")}
           </ComboboxEmpty>
+          {hasNextPage && (
+            <div className="border-t p-1">
+              <Button
+                className="w-full"
+                disabled={isFetchingNextPage}
+                onClick={() =>
+                  detached(fetchNextPage(), "ReferenceFilePicker.fetchNextPage")
+                }
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {isFetchingNextPage
+                  ? t("common.loading")
+                  : t("common.loadMore")}
+              </Button>
+            </div>
+          )}
         </ComboboxPopup>
       </Combobox>
       {references.length > 0 && (
@@ -937,6 +982,7 @@ type ResultsViewProps = {
   playbookFindings: readonly PlaybookFinding[] | null;
   referenceFindings: readonly ReferenceFinding[] | null;
   references: readonly ReferenceFile[];
+  commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
@@ -960,6 +1006,7 @@ const ResultsView = ({
   playbookFindings,
   referenceFindings,
   references,
+  commentStateByFinding,
   fixStateByFinding,
   negotiationBySourceId,
   playbookName,
@@ -1009,6 +1056,7 @@ const ResultsView = ({
         {results.length > 0 ? (
           <ReviewResultList
             editorAvailable={editorAvailable}
+            commentStateByFinding={commentStateByFinding}
             fixStateByFinding={fixStateByFinding}
             items={results}
             negotiationBySourceId={negotiationBySourceId}
@@ -1083,6 +1131,7 @@ const NoReviewIssues = () => {
 type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
+  commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   editorAvailable: boolean;
@@ -1104,6 +1153,7 @@ type ReviewResultFilter = "actionable" | "all";
 const ReviewResultList = ({
   items,
   references,
+  commentStateByFinding,
   fixStateByFinding,
   negotiationBySourceId,
   editorAvailable,
@@ -1167,6 +1217,7 @@ const ReviewResultList = ({
         {visibleItems.map((item) => (
           <ReviewResultCard
             editorAvailable={editorAvailable}
+            commentStateByFinding={commentStateByFinding}
             expanded={visibleExpandedId === item.id}
             fixStateByFinding={fixStateByFinding}
             item={item}
@@ -1205,6 +1256,7 @@ const ReviewResultList = ({
 type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
+  commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   negotiation: Negotiation | undefined;
   editorAvailable: boolean;
@@ -1226,6 +1278,7 @@ type ReviewResultCardProps = {
 const ReviewResultCard = ({
   item,
   references,
+  commentStateByFinding,
   fixStateByFinding,
   negotiation,
   editorAvailable,
@@ -1383,6 +1436,7 @@ const ReviewResultCard = ({
           />
           <ReviewResultActions
             editorAvailable={editorAvailable}
+            commentStateByFinding={commentStateByFinding}
             fixStateByFinding={fixStateByFinding}
             onAcceptFix={onAcceptFix}
             onAddComment={onAddComment}
@@ -1526,6 +1580,7 @@ const CitationGroup = ({
 type ReviewResultActionsProps = {
   playbook: PlaybookFinding | null;
   reference: ReferenceFinding | null;
+  commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
   editorAvailable: boolean;
   onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
@@ -1538,6 +1593,7 @@ type ReviewResultActionsProps = {
 const ReviewResultActions = ({
   playbook,
   reference,
+  commentStateByFinding,
   fixStateByFinding,
   editorAvailable,
   onInsertFix,
@@ -1637,7 +1693,10 @@ const ReviewResultActions = ({
             reference.explanation.text.length > 0 && (
               <Button
                 className="mt-2 h-7 px-2.5 text-xs"
-                disabled={!editorAvailable}
+                disabled={
+                  !editorAvailable ||
+                  commentStateByFinding[reference.findingId] !== undefined
+                }
                 onClick={() => onAddComment(reference)}
                 size="sm"
                 variant="ghost"
@@ -1847,7 +1906,6 @@ const TopIssueRow = ({
     </li>
   );
 };
-
 
 type FixActionsProps = {
   fixStatus: ReviewFixState["status"];

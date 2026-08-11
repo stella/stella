@@ -45,6 +45,20 @@ const reference = {
   ],
 };
 
+const secondReference = {
+  ...reference,
+  fileFieldId: toSafeId<"field">("second-reference-field"),
+  fileId: "second-reference-file",
+  simplifiedName: "F2",
+  blocks: [
+    {
+      id: "reference-2",
+      kind: "paragraph" as const,
+      text: "Alternative example clause",
+    },
+  ],
+};
+
 describe("reference review normalization", () => {
   test("accepts excess model citations and bounds the trusted result", () => {
     const blocks = Array.from({ length: 10 }, (_, index) => ({
@@ -126,6 +140,30 @@ describe("reference review normalization", () => {
         },
       },
     ]);
+  });
+
+  test("never exposes single-document consensus for multiple references", () => {
+    const findings = normalizeReferenceReview({
+      target,
+      references: [reference, secondReference],
+      topics,
+      rawFindings: [
+        {
+          topicId,
+          assessment: "aligned",
+          consensus: "single",
+          rationale: "The examples use the same approach.",
+          targetCitations: [{ sourceKey: "F0", blockId: "target-1" }],
+          referenceCitations: [
+            { sourceKey: "F1", blockId: "reference-1" },
+            { sourceKey: "F2", blockId: "reference-2" },
+          ],
+          proposedText: null,
+        },
+      ],
+    });
+
+    expect(findings.at(0)?.consensus).toBe("consistent");
   });
 
   test("never uses a reference citation as a replacement anchor", () => {

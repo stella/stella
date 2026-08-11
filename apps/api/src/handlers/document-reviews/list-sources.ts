@@ -43,8 +43,7 @@ const listSourcesHandler = async function* ({
 }: ListSourcesArgs) {
   const limit = query.limit ?? LIMITS.documentReviewSourcesPageSizeDefault;
   const search = query.q?.trim() ?? "";
-  const cursor =
-    search.length === 0 ? decodeEntityFileListCursor(query.cursor) : null;
+  const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);
   const nameCondition =
     search.length === 0
@@ -83,7 +82,7 @@ const listSourcesHandler = async function* ({
           ),
         )
         .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
-        .limit(search.length === 0 ? limit + 1 : limit),
+        .limit(limit + 1),
     ),
   );
 

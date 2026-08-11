@@ -177,6 +177,25 @@ const hasEvidenceForAssessment = ({
   }
 };
 
+const normalizeReferenceConsensus = (
+  consensus: ReferenceConsensus,
+  referenceCount: number,
+): ReferenceConsensus => {
+  if (referenceCount === 1) {
+    return "single";
+  }
+  switch (consensus) {
+    case "mixed":
+      return "mixed";
+    case "consistent":
+    case "single":
+      return "consistent";
+    default:
+      consensus satisfies never;
+      return "consistent";
+  }
+};
+
 export const normalizeReferenceReview = ({
   rawFindings,
   topics,
@@ -269,7 +288,7 @@ export const normalizeReferenceReview = ({
       topicId: topic.topicId,
       issue: topic.title,
       assessment,
-      consensus: references.length === 1 ? "single" : raw.consensus,
+      consensus: normalizeReferenceConsensus(raw.consensus, references.length),
       explanation: hasGroundedEvidence
         ? { type: "comparison", text: raw.rationale.trim() }
         : { type: "insufficient-evidence" },

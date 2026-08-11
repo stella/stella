@@ -110,6 +110,8 @@ export type ReviewFixState = {
   revisionIds: readonly number[] | null;
 };
 
+export type ReviewCommentState = { status: "applying" } | { status: "applied" };
+
 export type ReviewTopic =
   | {
       type: "playbook";
@@ -144,6 +146,7 @@ export type DocumentReviewSession = {
   basis: ReviewBasis | null;
   results: ReviewResults;
   fixState: Record<string, ReviewFixState>;
+  commentState: Record<string, ReviewCommentState>;
   error: string | null;
   reviewedAt: number | null;
   runId: string | null;
@@ -176,6 +179,21 @@ type State = {
 };
 
 type Actions = {
+  beginComment: (
+    entityId: string,
+    fileFieldId: string,
+    findingId: string,
+  ) => boolean;
+  completeComment: (
+    entityId: string,
+    fileFieldId: string,
+    findingId: string,
+  ) => void;
+  cancelComment: (
+    entityId: string,
+    fileFieldId: string,
+    findingId: string,
+  ) => void;
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
   confirmTopics: (
     workspaceId: string,
@@ -302,6 +320,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           basis,
           results: existing?.results ?? EMPTY_RESULTS,
           fixState: existing?.fixState ?? {},
+          commentState: existing?.commentState ?? {},
           error: null,
           reviewedAt: existing?.reviewedAt ?? null,
           runId,
@@ -314,8 +333,8 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     const references = referencesFromBasis(basis);
     if (references.length > 0) {
       const proposalResult = await Result.tryPromise(
-        async () =>
-          await api
+        async () => {
+          const { data, error } = await api
             .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
             ["document-reviews"].topics.post(
               {
@@ -334,7 +353,9 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
                   signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
                 },
               },
-            ),
+            );
+          return { data, error };
+        },
       );
       const proposalError = Result.isError(proposalResult)
         ? null
@@ -407,6 +428,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               basis,
               results: current.results,
               fixState: current.fixState,
+              commentState: current.commentState,
               error: unexpectedErrorMessage,
               reviewedAt: current.reviewedAt,
               runId: null,
@@ -440,6 +462,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               basis,
               results: current.results,
               fixState: current.fixState,
+              commentState: current.commentState,
               error: message,
               reviewedAt: current.reviewedAt,
               runId: null,
@@ -478,6 +501,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             basis,
             results,
             fixState: {},
+            commentState: {},
             error: null,
             reviewedAt: Date.now(),
             runId: null,
@@ -574,6 +598,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               references: referenceResponse?.data?.findings ?? null,
             },
             fixState: {},
+            commentState: {},
             error: null,
             reviewedAt: Date.now(),
             runId: null,
@@ -614,6 +639,72 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             ...current,
             fixState: { ...current.fixState, [findingId]: next },
           },
+        },
+      };
+    });
+  },
+
+  beginComment: (entityId, fileFieldId, findingId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    const current = get().sessions[key];
+    if (!current || current.commentState[findingId] !== undefined) {
+      return false;
+    }
+    set((state) => {
+      const session = state.sessions[key];
+      if (!session) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...session,
+            commentState: {
+              ...session.commentState,
+              [findingId]: { status: "applying" },
+            },
+          },
+        },
+      };
+    });
+    return true;
+  },
+
+  completeComment: (entityId, fileFieldId, findingId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (current?.commentState[findingId]?.status !== "applying") {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...current,
+            commentState: {
+              ...current.commentState,
+              [findingId]: { status: "applied" },
+            },
+          },
+        },
+      };
+    });
+  },
+
+  cancelComment: (entityId, fileFieldId, findingId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (current?.commentState[findingId]?.status !== "applying") {
+        return state;
+      }
+      const { [findingId]: _cancelled, ...commentState } = current.commentState;
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, commentState },
         },
       };
     });
