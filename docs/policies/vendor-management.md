@@ -13,8 +13,8 @@ service providers integrated into Stella.
 ## Scope
 
 All third-party code that ships with or runs alongside Stella:
-npm packages, GitHub Actions, Docker base images, and external
-service SDKs (AI providers, email, analytics, storage).
+npm packages, Cargo crates, GitHub Actions, Docker base images,
+and external service SDKs (AI providers, email, analytics, storage).
 
 ## Controls
 
