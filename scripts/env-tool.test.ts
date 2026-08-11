@@ -7,16 +7,20 @@ import {
   ENV_OWNER,
   ENV_REQUIREMENT,
   requirementFor,
+  WEB_ENV_SCHEMA,
 } from "./env-catalog";
 import {
   doctorEnvFileNames,
   findEnvUsages,
+  findWebBuildArgGaps,
   formatEnvIssue,
   formatEnvValue,
+  formatWebBuildArgGap,
   isIgnoredAuditPath,
   normalizeEmptyEnvironment,
   parseEnvLayers,
   parseEnvText,
+  parseWebBuildContract,
   renderApiEnvExample,
   renderCollabEnvExample,
   renderWebEnvExample,
@@ -606,5 +610,117 @@ describe("environment usage auditing", () => {
         name: "STELLA_DESKTOP_BUILD_ID",
       },
     ]);
+  });
+});
+
+describe("web container build arguments", () => {
+  const DOLLAR = String.fromCodePoint(36);
+  const reference = (name: string) => `${DOLLAR}{${name}}`;
+
+  type BuilderStageOptions = {
+    declarations: string[];
+    exports: [name: string, value: string][];
+  };
+
+  const builderStage = ({ declarations, exports }: BuilderStageOptions) =>
+    [
+      "FROM oven/bun AS deps",
+      "ARG DEPS_STAGE_ONLY",
+      "FROM deps AS builder",
+      ...declarations.map((declaration) => `ARG ${declaration}`),
+      "ENV NODE_ENV=production",
+      "RUN \\",
+      ...exports.map(([name, value]) => `    ${name}="${value}" \\`),
+      "    bun --filter @stll/web build",
+    ].join("\n");
+
+  test("cover every client key in the committed web Dockerfile", async () => {
+    const dockerfile = await Bun.file(
+      new URL("../apps/web/Dockerfile", import.meta.url),
+    ).text();
+
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: Object.keys(WEB_ENV_SCHEMA),
+        dockerfile,
+      }),
+    ).toEqual([]);
+  });
+
+  test("report a schema key the build command never exports", () => {
+    const gaps = findWebBuildArgGaps({
+      clientKeys: ["VITE_API_URL", "VITE_WORKFLOWS_ENABLED"],
+      dockerfile: builderStage({
+        declarations: ["PUBLIC_API_URL"],
+        exports: [["VITE_API_URL", reference("PUBLIC_API_URL")]],
+      }),
+    });
+
+    expect(gaps).toEqual([{ name: "VITE_WORKFLOWS_ENABLED", type: "missing" }]);
+    expect(gaps.map(formatWebBuildArgGap).join("\n")).toContain(
+      "VITE_WORKFLOWS_ENABLED",
+    );
+  });
+
+  test("report an export whose build argument is never declared", () => {
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: ["VITE_API_URL"],
+        dockerfile: builderStage({
+          declarations: [],
+          exports: [["VITE_API_URL", reference("PUBLIC_API_URL")]],
+        }),
+      }),
+    ).toEqual([
+      { name: "VITE_API_URL", reference: "PUBLIC_API_URL", type: "undeclared" },
+    ]);
+  });
+
+  test("scope declared build arguments to the builder stage", () => {
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: ["VITE_API_URL"],
+        dockerfile: builderStage({
+          declarations: [],
+          exports: [["VITE_API_URL", reference("DEPS_STAGE_ONLY")]],
+        }),
+      }),
+    ).toEqual([
+      {
+        name: "VITE_API_URL",
+        reference: "DEPS_STAGE_ONLY",
+        type: "undeclared",
+      },
+    ]);
+  });
+
+  test("accept a declaration that carries a default", () => {
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: ["VITE_SELFHOST"],
+        dockerfile: builderStage({
+          declarations: ["VITE_SELFHOST=true"],
+          exports: [["VITE_SELFHOST", reference("VITE_SELFHOST")]],
+        }),
+      }),
+    ).toEqual([]);
+  });
+
+  test("report an export the client schema does not declare", () => {
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: [],
+        dockerfile: builderStage({
+          declarations: ["VITE_RETIRED_FLAG"],
+          exports: [["VITE_RETIRED_FLAG", reference("VITE_RETIRED_FLAG")]],
+        }),
+      }),
+    ).toEqual([{ name: "VITE_RETIRED_FLAG", type: "unknown" }]);
+  });
+
+  test("fail loudly when the build command moves", () => {
+    expect(() =>
+      parseWebBuildContract("FROM oven/bun AS builder\nRUN bun run build\n"),
+    ).toThrow();
   });
 });
