@@ -114,6 +114,7 @@ export type {
 } from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
+export { DOCUMENT_UPLOAD_POLICY } from "./upload-policy";
 export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,

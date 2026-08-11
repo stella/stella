@@ -1,18 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  APIError,
-  EMAIL_UPLOAD_POLICY,
-  shouldRetainPendingEmailUpload,
-} from "@/api";
+import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
+
+import { APIError, shouldRetainPendingEmailUpload } from "@/api";
 
 test("upload timeout covers a maximum-size email at the supported slow rate", () => {
   const minimumTransferMs = Math.ceil(
-    (EMAIL_UPLOAD_POLICY.maxBytes / EMAIL_UPLOAD_POLICY.minimumBytesPerSecond) *
+    (DOCUMENT_UPLOAD_POLICY.maxBytes /
+      DOCUMENT_UPLOAD_POLICY.minimumBytesPerSecond) *
       1000,
   );
 
-  expect(EMAIL_UPLOAD_POLICY.putTimeoutMs).toBeGreaterThanOrEqual(
+  expect(DOCUMENT_UPLOAD_POLICY.putTimeoutMs).toBeGreaterThanOrEqual(
     minimumTransferMs,
   );
 });

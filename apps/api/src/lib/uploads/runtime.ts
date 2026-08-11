@@ -10,18 +10,19 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
- * S3 lifetime of the issued URL. Short enough that an intercepted
- * URL has a tight window for abuse; long enough that a slow
- * client on a hotel uplink can still finish a 50 MB PUT. The
- * matching `tmp/` bucket-level lifecycle is 24h — plenty of margin
- * either way.
+ * S3 lifetime of the issued URL and the matching pending-upload reservation.
+ * The URL is scoped to the organization/workspace and exact size/checksum;
+ * this window covers the slowest supported maximum-size transfer.
  */
-export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
+export const PRESIGN_URL_EXPIRY_SECONDS =
+  DOCUMENT_UPLOAD_POLICY.putTimeoutMs / 1000;
 
 /**
  * Maximum time a `scanning` claim can sit before the next finalize
