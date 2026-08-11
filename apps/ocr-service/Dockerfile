@@ -1,7 +1,7 @@
 # Pin the complete multi-architecture manifest for Python 3.11 slim Bookworm.
 # PaddlePaddle's CUDA 12.6 wheel is currently published for amd64 Linux only;
 # the build guard below rejects an architecture that cannot run it.
-FROM python:3.11-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba AS builder
+FROM python:3.11-slim-bookworm@sha256:d29f48a31a8b408ed19272ca1e7b10ebae13b240a27e862d3d4217c528e2e0c3 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c /uv /uvx /bin/
 
@@ -54,7 +54,7 @@ RUN set -eux; \
     rm -rf \
       /tmp/models
 
-FROM python:3.11-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba AS runtime
+FROM python:3.11-slim-bookworm@sha256:d29f48a31a8b408ed19272ca1e7b10ebae13b240a27e862d3d4217c528e2e0c3 AS runtime
 
 ENV HOME=/tmp/stella/home \
     HF_HUB_OFFLINE=1 \
