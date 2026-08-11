@@ -11,7 +11,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
-import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import {
+  allocateFileObject,
+  resolveQueuedFileObject,
+} from "@/api/lib/files/file-object-ids";
 import {
   convertToPdf,
   shouldGeneratePdfDerivative,
@@ -26,7 +29,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -45,6 +48,11 @@ const DEFAULT_JOB_ATTEMPTS = 3;
 // PDF and thumbnail jobs carry the same identifiers; the job name on the
 // BullMQ job distinguishes which derivative to produce.
 type FileDerivativeJobData = {
+  // Object id for the derivative this job produces, allocated by the producer
+  // and replayed to every attempt, so the storage key a retry writes is the one
+  // the previous attempt wrote. Absent only on jobs enqueued before the field
+  // existed; see resolveQueuedFileObject.
+  derivativeFileId?: string;
   entityId: string;
   fieldId: string;
   organizationId: string;
@@ -99,6 +107,7 @@ export const enqueuePdfDerivative = async ({
   await getQueue().add(
     GENERATE_PDF_JOB_NAME,
     {
+      derivativeFileId: allocateFileObject(),
       entityId,
       fieldId,
       organizationId,
@@ -154,6 +163,7 @@ export const enqueueImageThumbnail = async ({
   await getQueue().add(
     GENERATE_THUMBNAIL_JOB_NAME,
     {
+      derivativeFileId: allocateFileObject(),
       entityId,
       fieldId,
       organizationId,
@@ -260,6 +270,7 @@ export const initFileDerivativeWorker = () => {
 };
 
 const processPdfDerivativeJob = async ({
+  derivativeFileId,
   entityId,
   fieldId,
   organizationId,
@@ -322,7 +333,7 @@ const processPdfDerivativeJob = async ({
     throw conversionResult.error;
   }
 
-  const pdfFileId = allocateFileObject();
+  const pdfFileId = resolveQueuedFileObject(derivativeFileId);
   const sourceFileId = content.id;
   const pdfKey = createFileKey({
     organizationId: branded.organizationId,
@@ -331,7 +342,15 @@ const processPdfDerivativeJob = async ({
     mimeType: PDF_MIME_TYPE,
   });
 
-  await getS3().write(pdfKey, new Uint8Array(conversionResult.value.buffer));
+  // The key is fixed by the job's derivative id, so a retry after an attempt
+  // died mid-write addresses the object that attempt left behind instead of
+  // adding a second one. That is also the deterministic-key contract
+  // writeS3ObjectWithRetry documents for its own attempts, which can time out
+  // here and still land in the bucket.
+  await writeS3ObjectWithRetry({
+    data: new Uint8Array(conversionResult.value.buffer),
+    key: pdfKey,
+  });
 
   try {
     const updatedRows = await scopedDb((tx) =>
@@ -436,6 +455,7 @@ const markPdfDerivativeFailed = async ({
 };
 
 const processImageThumbnailJob = async ({
+  derivativeFileId,
   organizationId,
   fieldId,
   userId,
@@ -496,7 +516,7 @@ const processImageThumbnailJob = async ({
     throw thumbnailResult.error;
   }
 
-  const thumbnailFileId = allocateFileObject();
+  const thumbnailFileId = resolveQueuedFileObject(derivativeFileId);
   const sourceFileId = content.id;
   const thumbnailKey = createFileKey({
     organizationId: branded.organizationId,
@@ -505,7 +525,11 @@ const processImageThumbnailJob = async ({
     mimeType: THUMBNAIL_MIME_TYPE,
   });
 
-  await getS3().write(thumbnailKey, thumbnailResult.value.webp);
+  // Same fixed key across this job's attempts as the PDF path above.
+  await writeS3ObjectWithRetry({
+    data: thumbnailResult.value.webp,
+    key: thumbnailKey,
+  });
 
   try {
     const updatedRows = await scopedDb((tx) =>
