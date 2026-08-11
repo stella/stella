@@ -1,15 +1,8 @@
 import { OutlookError } from "@/lib/outlook-error";
 
 export type OfficeRuntime = typeof Office;
-export type OfficeItem = NonNullable<Office.Mailbox["item"]>;
-
-export type OfficeAsyncResult<T> = {
-  error?: { message?: string };
-  status: Office.AsyncResultStatus | "failed" | "succeeded";
-  value: T;
-};
-
-export type OfficeAsyncCallback<T> = (result: OfficeAsyncResult<T>) => void;
+export type OfficeItem = Partial<NonNullable<Office.Mailbox["item"]>>;
+export type OfficeAsyncCallback<T> = (result: Office.AsyncResult<T>) => void;
 
 export type OfficeAttachmentMetadata = {
   contentType?: string;
@@ -85,18 +78,29 @@ export const getOfficeDisplayLanguage = (): string | undefined =>
 
 export const fromOfficeAsync = async <T>(
   invoke: (callback: OfficeAsyncCallback<T>) => void,
-): Promise<T> =>
-  await new Promise((resolve, reject) => {
+): Promise<T> => {
+  const office = getOfficeRuntime();
+  if (!office) {
+    throw new OutlookError({
+      message: "The Office runtime is unavailable.",
+    });
+  }
+
+  return await new Promise((resolve, reject) => {
     invoke((result) => {
-      const succeededStatus = getOfficeRuntime()?.AsyncResultStatus?.Succeeded;
-      if (result.status === "succeeded" || result.status === succeededStatus) {
+      if (result.status === office.AsyncResultStatus.Succeeded) {
         resolve(result.value);
         return;
       }
 
-      reject(new Error(result.error?.message ?? "Office request failed"));
+      reject(
+        new OutlookError({
+          message: result.error.message || "Office request failed.",
+        }),
+      );
     });
   });
+};
 
 export const isOfficeAsyncValue = <T>(
   value: unknown,
@@ -105,10 +109,6 @@ export const isOfficeAsyncValue = <T>(
 
 const supportsMailbox18 = (office: OfficeRuntime): boolean => {
   const requirements = office.context.requirements;
-  if (!requirements || typeof requirements.isSetSupported !== "function") {
-    return false;
-  }
-
   try {
     return requirements.isSetSupported("Mailbox", "1.8");
   } catch {
@@ -119,7 +119,6 @@ const supportsMailbox18 = (office: OfficeRuntime): boolean => {
 const attachmentMetadata = (
   attachment: Office.AttachmentDetails | Office.AttachmentDetailsCompose,
 ): OfficeAttachmentMetadata => ({
-  contentType: "contentType" in attachment ? attachment.contentType : undefined,
   id: attachment.id,
   isInline: attachment.isInline,
   name: attachment.name,
@@ -141,36 +140,39 @@ export const getOfficeAttachmentCapabilities = (
   const attachmentList = item.attachments;
   const getAttachmentsAsync = item.getAttachmentsAsync;
 
-  const list: OfficeAttachmentListCapability = Array.isArray(attachmentList)
-    ? {
-        read: async () => attachmentList.map(attachmentMetadata),
-        status: "available",
-      }
-    : mailbox18 && typeof getAttachmentsAsync === "function"
-      ? {
-          read: async () =>
-            (await fromOfficeAsync((callback) =>
-              getAttachmentsAsync.call(item, callback),
-            )).map(attachmentMetadata),
-          status: "available",
-        }
-      : unavailable(
-          mailbox18 ? "api-unavailable" : "requirement-unsupported",
-        );
+  let list: OfficeAttachmentListCapability;
+  if (Array.isArray(attachmentList)) {
+    list = {
+      read: () => Promise.resolve(attachmentList.map(attachmentMetadata)),
+      status: "available",
+    };
+  } else if (mailbox18 && typeof getAttachmentsAsync === "function") {
+    list = {
+      read: () =>
+        fromOfficeAsync<Office.AttachmentDetailsCompose[]>((callback) =>
+          getAttachmentsAsync.call(item, callback),
+        ).then((attachments) => attachments.map(attachmentMetadata)),
+      status: "available",
+    };
+  } else {
+    list = unavailable(mailbox18 ? "api-unavailable" : "requirement-unsupported");
+  }
 
   const getAttachmentContentAsync = item.getAttachmentContentAsync;
-  const content: OfficeAttachmentContentCapability =
-    mailbox18 && typeof getAttachmentContentAsync === "function"
-      ? {
-          read: async (attachmentId) =>
-            await fromOfficeAsync((callback) =>
-              getAttachmentContentAsync.call(item, attachmentId, callback),
-            ),
-          status: "available",
-        }
-      : unavailable(
-          mailbox18 ? "api-unavailable" : "requirement-unsupported",
-        );
+  let content: OfficeAttachmentContentCapability;
+  if (mailbox18 && typeof getAttachmentContentAsync === "function") {
+    content = {
+      read: (attachmentId) =>
+        fromOfficeAsync<Office.AttachmentContent>((callback) =>
+          getAttachmentContentAsync.call(item, attachmentId, callback),
+        ),
+      status: "available",
+    };
+  } else {
+    content = unavailable(
+      mailbox18 ? "api-unavailable" : "requirement-unsupported",
+    );
+  }
 
   return { content, list };
 };
@@ -190,22 +192,26 @@ export const attachmentCapabilityError = (
   });
 
 export const waitForOffice = async (): Promise<void> => {
-  await getOfficeRuntime()?.onReady();
+  const office = getOfficeRuntime();
+  if (!office) {
+    return;
+  }
+  await office.onReady();
 };
 
 export const subscribeMailboxItemChanges = (
   subscriber: () => void,
 ): (() => void) => {
   const office = getOfficeRuntime();
-  const mailbox = office?.context.mailbox;
-  if (!office || !mailbox?.addHandlerAsync) {
+  if (!office) {
     return () => undefined;
   }
 
+  const mailbox = office.context.mailbox;
   const handler = () => subscriber();
   mailbox.addHandlerAsync(office.EventType.ItemChanged, handler);
 
   return () => {
-    mailbox.removeHandlerAsync?.(office.EventType.ItemChanged, { handler });
+    mailbox.removeHandlerAsync(office.EventType.ItemChanged);
   };
 };

@@ -57,7 +57,7 @@ describe("Outlook release artifact contract", () => {
     expect(getHtmlAssetPaths(html).every(isContentHashedCodeAsset)).toBe(true);
   });
 
-  test("declares no-cache documents and a CSP limited to Stella and Office", () => {
+  test("declares no-cache documents and a CSP limited to stella and Office", () => {
     const rules = getOutlookDeploymentHeaderRules(ORIGINS);
     const taskpane = rules.find((rule) => rule.path === "/taskpane.html");
 

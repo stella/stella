@@ -173,6 +173,24 @@ const PENDING_RETRY_STAGE = {
   OutlookIngestionRetryStage
 >;
 
+const ingestErrorMessage = ({
+  attachmentErrorFallback,
+  error,
+  errorFallback,
+}: {
+  attachmentErrorFallback: string;
+  error: unknown;
+  errorFallback: string;
+}): string => {
+  if (isAttachmentReadError(error)) {
+    return attachmentErrorFallback;
+  }
+  if (error instanceof APIError) {
+    return userErrorMessage(error, errorFallback);
+  }
+  return errorFallback;
+};
+
 export const useIngestEmail = ({
   attachmentErrorFallback,
   errorFallback,
@@ -251,6 +269,8 @@ export const useIngestEmail = ({
           return await finalizeEmailUpload(pending);
         }
         return await finalizeEmailUpload(await uploadPending(pending));
+      default:
+        return panic("Unknown Outlook upload reconciliation state");
     }
   };
 
@@ -361,12 +381,11 @@ export const useIngestEmail = ({
       );
       transition({
         diagnostic,
-        message:
-          isAttachmentReadError(error)
-            ? attachmentErrorFallback
-            : error instanceof APIError
-            ? userErrorMessage(error, errorFallback)
-            : errorFallback,
+        message: ingestErrorMessage({
+          attachmentErrorFallback,
+          error,
+          errorFallback,
+        }),
         pendingUpload: retain ? pending : null,
         type: "error",
       });

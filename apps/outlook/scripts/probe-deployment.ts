@@ -46,14 +46,14 @@ const assertHeader = ({
   value: string;
 }): void => {
   if (headers.get(name) !== value) {
-    throw new Error(`${url.pathname} must return ${name}.`);
+    panic(`${url.pathname} must return ${name}.`);
   }
 };
 
 const fetchText = async (url: URL): Promise<Response> => {
   const response = await fetch(url, { redirect: "error" });
   if (!response.ok) {
-    throw new Error(`${url.pathname} returned HTTP ${response.status}.`);
+    panic(`${url.pathname} returned HTTP ${response.status}.`);
   }
   return response;
 };
@@ -63,7 +63,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const readReleaseMetadata = (value: unknown): ReleaseMetadata => {
   if (!isRecord(value)) {
-    throw new Error("release.json must be an object.");
+    panic("release.json must be an object.");
   }
   const metadata = value;
   const assets = metadata["assets"];
@@ -75,12 +75,12 @@ const readReleaseMetadata = (value: unknown): ReleaseMetadata => {
     !isRecord(assets) ||
     !isRecord(origins)
   ) {
-    throw new Error("release.json has an unsupported shape.");
+    panic("release.json has an unsupported shape.");
   }
   const parsedAssets: Record<string, string> = {};
   for (const [name, assetPath] of Object.entries(assets)) {
     if (typeof assetPath !== "string") {
-      throw new Error("release.json has invalid assets or origins.");
+      panic("release.json has invalid assets or origins.");
     }
     parsedAssets[name] = assetPath;
   }
@@ -92,16 +92,16 @@ const readReleaseMetadata = (value: unknown): ReleaseMetadata => {
   const parsedFrameAncestors: string[] = [];
   if (frameAncestors !== undefined) {
     if (!Array.isArray(frameAncestors)) {
-      throw new Error("release.json has invalid assets or origins.");
+      panic("release.json has invalid assets or origins.");
     }
     for (const ancestor of frameAncestors) {
       if (typeof ancestor !== "string") {
-        throw new Error("release.json has invalid assets or origins.");
+        panic("release.json has invalid assets or origins.");
       }
       parsedFrameAncestors.push(ancestor);
     }
     if (parsedFrameAncestors.length === 0) {
-      throw new Error("release.json has invalid assets or origins.");
+      panic("release.json has invalid assets or origins.");
     }
   }
   if (
@@ -111,7 +111,7 @@ const readReleaseMetadata = (value: unknown): ReleaseMetadata => {
     (uploadOrigin !== undefined && typeof uploadOrigin !== "string") ||
     typeof webOrigin !== "string"
   ) {
-    throw new Error("release.json has invalid assets or origins.");
+    panic("release.json has invalid assets or origins.");
   }
   assertOutlookReleaseVersion(version);
   return {
@@ -138,7 +138,7 @@ const readVersionBanner = async (
     redirect: "error",
   });
   if (!response.ok) {
-    throw new Error(`${url.pathname} returned HTTP ${response.status}.`);
+    panic(`${url.pathname} returned HTTP ${response.status}.`);
   }
   const match = VERSION_BANNER_PATTERN.exec(await response.text());
   return { headers: response.headers, version: match?.[1] ?? null };
@@ -150,7 +150,7 @@ const run = async () => {
   const releaseResponse = await fetchText(releaseUrl);
   const release = readReleaseMetadata(await releaseResponse.json());
   if (release.origins.taskpaneOrigin !== origin.origin) {
-    throw new Error("release.json taskpane origin does not match --origin.");
+    panic("release.json taskpane origin does not match --origin.");
   }
 
   const headerRules = getOutlookDeploymentHeaderRules(release.origins);
@@ -158,7 +158,7 @@ const run = async () => {
     (rule) => rule.path === "/release.json",
   )?.headers["Cache-Control"];
   if (!releaseCacheControl) {
-    throw new Error("release contract has no release metadata cache rule.");
+    panic("release contract has no release metadata cache rule.");
   }
   assertHeader({
     headers: releaseResponse.headers,
@@ -170,7 +170,7 @@ const run = async () => {
   const manifestRule = headerRules.find((rule) => rule.path === "/manifest.xml");
   const manifestCacheControl = manifestRule?.headers["Cache-Control"];
   if (!manifestCacheControl) {
-    throw new Error("release contract has no manifest cache rule.");
+    panic("release contract has no manifest cache rule.");
   }
   assertHeader({
     headers: manifestResponse.headers,
@@ -180,40 +180,40 @@ const run = async () => {
   });
   const manifest = await manifestResponse.text();
   if (!manifest.includes(`<Version>${release.version}</Version>`)) {
-    throw new Error("manifest version does not match release.json.");
+    panic("manifest version does not match release.json.");
   }
   if (!manifest.includes(`${origin.origin}/taskpane.html`)) {
-    throw new Error("manifest task pane location does not match --origin.");
+    panic("manifest task pane location does not match --origin.");
   }
 
-  const codeAssets = new Set<string>();
-  for (const fileName of REQUIRED_HTML_FILES) {
-    const url = urlAt(origin, `/${fileName}`);
-    const response = await fetchText(url);
-    const expectedHeaders = headerRules.find(
-      (rule) => rule.path === `/${fileName}`,
-    )?.headers;
-    if (!expectedHeaders) {
-      throw new Error(`release contract has no headers for ${fileName}.`);
-    }
-    for (const [name, value] of Object.entries(expectedHeaders)) {
-      assertHeader({ headers: response.headers, name, url, value });
-    }
-    const html = await response.text();
-    if (getHtmlReleaseVersion(html) !== release.version) {
-      throw new Error(`${fileName} version does not match release.json.`);
-    }
-    for (const assetPath of getHtmlAssetPaths(html)) {
-      if (!isContentHashedCodeAsset(assetPath)) {
-        throw new Error(`${fileName} references a non-hashed code asset.`);
+  const htmlAssetPaths = await Promise.all(
+    REQUIRED_HTML_FILES.map(async (fileName) => {
+      const url = urlAt(origin, `/${fileName}`);
+      const expectedHeaders = headerRules.find(
+        (rule) => rule.path === `/${fileName}`,
+      )?.headers;
+      if (!expectedHeaders) {
+        panic(`release contract has no headers for ${fileName}.`);
       }
-      codeAssets.add(assetPath);
-    }
-  }
-
-  for (const assetPath of Object.values(release.assets)) {
+      const response = await fetchText(url);
+      for (const [name, value] of Object.entries(expectedHeaders)) {
+        assertHeader({ headers: response.headers, name, url, value });
+      }
+      const html = await response.text();
+      if (getHtmlReleaseVersion(html) !== release.version) {
+        panic(`${fileName} version does not match release.json.`);
+      }
+      const assetPaths = getHtmlAssetPaths(html);
+      if (assetPaths.some((assetPath) => !isContentHashedCodeAsset(assetPath))) {
+        panic(`${fileName} references a non-hashed code asset.`);
+      }
+      return assetPaths;
+    }),
+  );
+  const codeAssets = new Set(htmlAssetPaths.flat());
+  const assetProbes = Object.values(release.assets).map((assetPath) => {
     if (!codeAssets.has(assetPath)) {
-      throw new Error(`release.json asset ${assetPath} is not referenced by HTML.`);
+      panic(`release.json asset ${assetPath} is not referenced by HTML.`);
     }
     const url = urlAt(origin, assetPath);
     const assetRule = headerRules.find(
@@ -222,16 +222,21 @@ const run = async () => {
         (assetPath.endsWith(".css") && rule.path === "/assets/*.css"),
     );
     if (!assetRule) {
-      throw new Error(`release contract has no headers for ${assetPath}.`);
+      panic(`release contract has no headers for ${assetPath}.`);
     }
-    const asset = await readVersionBanner(url);
-    if (asset.version !== release.version) {
-      throw new Error(`${assetPath} version banner does not match release.json.`);
-    }
-    for (const [name, value] of Object.entries(assetRule.headers)) {
-      assertHeader({ headers: asset.headers, name, url, value });
-    }
-  }
+    return { assetPath, assetRule, url };
+  });
+  await Promise.all(
+    assetProbes.map(async ({ assetPath, assetRule, url }) => {
+      const asset = await readVersionBanner(url);
+      if (asset.version !== release.version) {
+        panic(`${assetPath} version banner does not match release.json.`);
+      }
+      for (const [name, value] of Object.entries(assetRule.headers)) {
+        assertHeader({ headers: asset.headers, name, url, value });
+      }
+    }),
+  );
 
   console.log(`Outlook deployment probe passed for ${origin.origin} (${release.version}).`);
 };

@@ -3,10 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 type DeploymentHeaders = {
-  rules: Array<{
+  rules: {
     headers: Record<string, string>;
     path: string;
-  }>;
+  }[];
   schemaVersion: number;
   version: string;
 };

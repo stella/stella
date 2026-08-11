@@ -45,7 +45,7 @@ const normalizeAddress = (
 
   return {
     email: address.emailAddress,
-    name: address.displayName ?? "",
+    name: address.displayName,
   };
 };
 
@@ -63,7 +63,7 @@ const normalizeAddresses = (
 };
 
 const readAddressList = async (
-  value: OfficeItem["to"] | OfficeItem["cc"] | OfficeItem["bcc"],
+  value: OfficeItem["to"],
 ): Promise<MailAddress[]> =>
   normalizeAddresses(
     await readMaybeAsync<Office.EmailAddressDetails[]>(value, []),
@@ -97,7 +97,7 @@ const normalizeAttachment = (attachment: {
 }): OutlookAttachment => ({
   contentType: attachment.contentType ?? null,
   id: attachment.id,
-  isInline: attachment.isInline ?? false,
+  isInline: attachment.isInline,
   name: attachment.name,
   size: attachment.size ?? null,
 });
@@ -112,9 +112,9 @@ const readAttachments = async (
 
   try {
     return (await capability.read()).map(normalizeAttachment);
-  } catch (cause) {
+  } catch (error) {
     throw new OutlookError({
-      cause,
+      cause: error,
       code: "attachment-read-unavailable",
       message: "Outlook could not read the message attachments.",
     });
@@ -197,7 +197,7 @@ export const loadMailSnapshot = async (
     sentAt: toIsoString(item.dateTimeCreated ?? item.dateTimeModified),
     subject: subject.trim() || "(No subject)",
     to,
-    userEmail: office.context.mailbox.userProfile?.emailAddress ?? null,
+    userEmail: office.context.mailbox.userProfile.emailAddress,
   };
 };
 
@@ -245,9 +245,9 @@ export const downloadAttachment = async (
   let content: { content: string; format: string };
   try {
     content = await capability.read(attachment.id);
-  } catch (cause) {
+  } catch (error) {
     throw new OutlookError({
-      cause,
+      cause: error,
       code: "attachment-read-unavailable",
       message: `${attachment.name}: Outlook could not read this attachment.`,
     });
@@ -295,7 +295,7 @@ export const placeDraft = async (draft: string): Promise<DraftPlacement> => {
 
   if (item.body && getMode(item) === "compose") {
     const body = item.body;
-    await fromOfficeAsync<void>((callback) =>
+    await fromOfficeAsync((callback) =>
       body.prependAsync(draft, { coercionType: "text" }, callback),
     );
     return "composeBody";
