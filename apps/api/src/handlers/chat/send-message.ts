@@ -1863,12 +1863,10 @@ const selectMessagesForContextInput = async ({
     return messages;
   }
 
-  return (
-    applyChatCompactionCheckpoint({
-      checkpoint: checkpointResult.value,
-      messages,
-    }) ?? messages
-  );
+  return applyChatCompactionCheckpoint({
+    checkpoint: checkpointResult.value,
+    messages,
+  });
 };
 
 const compactMessagesForContext = async ({

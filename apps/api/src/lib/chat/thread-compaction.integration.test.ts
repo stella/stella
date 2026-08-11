@@ -179,9 +179,9 @@ const runCompaction = async ({
     organizationId: ids.orgA,
     preserveTokens,
     safeDb: countedSafeDb(),
-    summarize: (prompt) => {
+    summarize: async (prompt) => {
       prompts.push(prompt);
-      return Promise.resolve(SUMMARY_MARKDOWN);
+      return await Promise.resolve(SUMMARY_MARKDOWN);
     },
     threadId,
     triggerTokens,

@@ -18,7 +18,10 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
-import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import {
+  ChatCompactionError,
+  runChatThreadCompaction,
+} from "@/api/lib/chat/thread-compaction";
 import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
@@ -132,7 +135,25 @@ const compactThread = async ({
   signal,
   thread,
 }: CompactThreadOptions): ReturnType<typeof runChatThreadCompaction> => {
-  const orgAIConfig = await loadOrgAIConfig(thread.organizationId);
+  // `loadOrgAIConfig` throws rather than returning a Result, and a corrupt
+  // encrypted configuration is a property of one organization. Outside the
+  // per-thread boundary that rejection would escape before this thread is
+  // settled, leaving the rest of the claimed batch leased until expiry and
+  // letting the same poison thread abort the batch again on every run.
+  const configResult = await Result.tryPromise({
+    try: async () => await loadOrgAIConfig(thread.organizationId),
+    catch: (cause) =>
+      new ChatCompactionError({
+        cause,
+        message: "failed to load the organization AI configuration",
+        threadId: thread.threadId,
+      }),
+  });
+  if (Result.isError(configResult)) {
+    return configResult;
+  }
+  const orgAIConfig = configResult.value;
+
   const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
     chatModelOverride: thread.chatModel ?? undefined,
     orgAIConfig,
