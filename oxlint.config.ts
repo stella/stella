@@ -26,6 +26,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
     "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
   ]),
+  fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
+    "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
+  ]),
   fixtureRuleOverride("mcp-security.fixture.ts", [
     "mcp-security/no-direct-oauth-client-join",
     "mcp-security/redact-oauth-registration-response",
@@ -516,6 +519,7 @@ export default defineConfig({
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
+    "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
@@ -1832,6 +1836,16 @@ export default defineConfig({
             ],
           },
         ],
+      },
+    },
+    {
+      // Configuration must be parsed before dev-runner starts any side effect.
+      // The parser adapter is the only owner of process.argv and runner offset
+      // environment reads; the orchestration module is guarded here.
+      files: ["packages/scripts/src/dev-runner.ts"],
+      rules: {
+        "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads":
+          "error",
       },
     },
     {

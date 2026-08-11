@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import {
   copyFileSync,
   existsSync,
@@ -11,7 +11,14 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
-const DEV_MODES = ["dev", "dev:web", "dev:api", "dev:desktop"] as const;
+import {
+  DEFAULT_INFRA_PORTS,
+  DEFAULT_PORTS,
+  MAX_PORT_OFFSET,
+  type DevMode,
+  readDevRunnerConfig,
+} from "./dev-runner-config";
+
 const ENV_FILE_SPECS = [
   {
     example: "apps/api/.env.example",
@@ -23,22 +30,9 @@ const ENV_FILE_SPECS = [
   },
 ] as const;
 const PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0"] as const;
-const DEFAULT_PORTS = {
-  api: 3001,
-  desktopBridge: 45_901,
-  desktopView: 5177,
-  web: 3000,
-} as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
 const DEFAULT_HTTP_READY_TIMEOUT_MS = 120_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
-const DEFAULT_INFRA_PORTS = {
-  gotenberg: 3003,
-  minio: 9000,
-  minioConsole: 9001,
-  postgres: 5432,
-  valkey: 6379,
-} as const;
 const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
 const SHARED_DOCKER_HEALTHY_SERVICES = [
   "postgres",
@@ -48,10 +42,6 @@ const SHARED_DOCKER_HEALTHY_SERVICES = [
 ] as const;
 const SHARED_DOCKER_COMPLETED_SERVICES = ["minio-setup"] as const;
 const MAX_HASH_OFFSET = 400;
-const MAX_PORT = 65_535;
-const MAX_INFRA_OFFSET =
-  MAX_PORT - Math.max(...Object.values(DEFAULT_INFRA_PORTS));
-const MAX_PORT_OFFSET = MAX_PORT - Math.max(...Object.values(DEFAULT_PORTS));
 const PORT_SEARCH_LIMIT = 2000;
 // The web app renders via TanStack Start SSR (root document from __root.tsx),
 // which mounts into <body> directly — there is no `<div id="app">` SPA mount.
@@ -59,25 +49,12 @@ const PORT_SEARCH_LIMIT = 2000;
 // (which can change with branding), so readiness reflects a real rendered shell.
 const WEB_HTML_MARKER = 'src="/prepaint-init.js"';
 
-export type DevMode = (typeof DEV_MODES)[number];
-
 export type InfraPorts = {
   gotenberg: number;
   minio: number;
   minioConsole: number;
   postgres: number;
   valkey: number;
-};
-
-type ParsedArgs = {
-  devInstance: string | undefined;
-  dryRun: boolean;
-  infraOffset: number | undefined;
-  mode: DevMode;
-  noBrowser: boolean;
-  portOffset: number | undefined;
-  skipDbPush: boolean;
-  skipInstall: boolean;
 };
 
 export type OffsetConfig = {
@@ -155,9 +132,6 @@ type ReadinessChecks = {
 
 type CheckReusableApiPort = (apiPort: number) => Promise<boolean>;
 
-const isDevMode = (value: string): value is DevMode =>
-  DEV_MODES.some((mode) => mode === value);
-
 const modeIncludesApi = (mode: DevMode) =>
   mode === "dev" || mode === "dev:api" || mode === "dev:desktop";
 
@@ -193,104 +167,6 @@ const validateOffset = (offset: number, source: string) => {
       `${source} must be an integer between 0 and ${String(MAX_PORT_OFFSET)}`,
     );
   }
-};
-
-const parseIntegerValue = (value: string, source: string) => {
-  if (!/^[+-]?\d+$/u.test(value)) {
-    panic(`${source} must be an integer`);
-  }
-
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    panic(`${source} must be an integer`);
-  }
-  return parsed;
-};
-
-export const parseArgs = (args: readonly string[]): ParsedArgs => {
-  let mode: DevMode = "dev";
-  let portOffset: number | undefined;
-  let infraOffset: number | undefined;
-  let devInstance: string | undefined;
-  let skipInstall = false;
-  let skipDbPush = false;
-  let dryRun = false;
-  let noBrowser = false;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (!arg) {
-      continue;
-    }
-
-    if (isDevMode(arg)) {
-      mode = arg;
-      continue;
-    }
-
-    if (arg === "--skip-install") {
-      skipInstall = true;
-      continue;
-    }
-
-    if (arg === "--skip-db-push") {
-      skipDbPush = true;
-      continue;
-    }
-
-    if (arg === "--dry-run") {
-      dryRun = true;
-      continue;
-    }
-
-    if (arg === "--no-browser") {
-      noBrowser = true;
-      continue;
-    }
-
-    if (arg === "--port-offset") {
-      const value = args[i + 1];
-      if (!value) {
-        panic("--port-offset requires a value");
-      }
-      portOffset = parseIntegerValue(value, "--port-offset");
-      i++;
-      continue;
-    }
-
-    if (arg === "--dev-instance") {
-      const value = args[i + 1];
-      if (!value) {
-        panic("--dev-instance requires a value");
-      }
-      devInstance = value;
-      i++;
-      continue;
-    }
-
-    if (arg === "--infra-offset") {
-      const value = args[i + 1];
-      if (!value) {
-        panic("--infra-offset requires a value");
-      }
-      infraOffset = parseIntegerValue(value, "--infra-offset");
-      i++;
-      continue;
-    }
-
-    panic(`Unknown argument: ${arg}`);
-  }
-
-  return {
-    devInstance,
-    dryRun,
-    infraOffset,
-    mode,
-    noBrowser,
-    portOffset,
-    skipDbPush,
-    skipInstall,
-  };
 };
 
 export const resolveOffset = ({
@@ -1761,7 +1637,11 @@ const printDryRun = ({
 };
 
 const main = async () => {
-  const parsedArgs = parseArgs(process.argv.slice(2));
+  const config = readDevRunnerConfig();
+  if (Result.isError(config)) {
+    panic(config.error.message);
+  }
+  const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
   const preparedEnvFiles = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
@@ -1769,34 +1649,10 @@ const main = async () => {
     mainRoot: gitContext.mainRoot,
   });
 
-  const portOffset =
-    parsedArgs.portOffset ??
-    (process.env["STELLA_PORT_OFFSET"]
-      ? parseIntegerValue(
-          process.env["STELLA_PORT_OFFSET"],
-          "STELLA_PORT_OFFSET",
-        )
-      : undefined);
-  const infraOffset =
-    parsedArgs.infraOffset ??
-    (process.env["STELLA_INFRA_OFFSET"]
-      ? parseIntegerValue(
-          process.env["STELLA_INFRA_OFFSET"],
-          "STELLA_INFRA_OFFSET",
-        )
-      : 0);
-  if (
-    !Number.isInteger(infraOffset) ||
-    infraOffset < 0 ||
-    infraOffset > MAX_INFRA_OFFSET
-  ) {
-    panic(
-      `STELLA_INFRA_OFFSET must be an integer between 0 and ${String(MAX_INFRA_OFFSET)}`,
-    );
-  }
+  const { devInstance, infraOffset, mode, portOffset } = parsedArgs;
   const infraPorts = infraPortsForOffset(infraOffset);
 
-  if (!parsedArgs.dryRun && modeIncludesApi(parsedArgs.mode)) {
+  if (!parsedArgs.dryRun && modeIncludesApi(mode)) {
     console.log("==> Checking Docker engine...");
     runStep({
       cmd: [resolveCommandPath("docker"), "ps"],
@@ -1812,13 +1668,13 @@ const main = async () => {
 
   const initialOffset = resolveOffset({
     branchName: gitContext.branchName,
-    devInstance: parsedArgs.devInstance ?? process.env["STELLA_DEV_INSTANCE"],
+    devInstance,
     isWorktree: gitContext.isWorktree,
     portOffset,
     worktreeName: path.basename(gitContext.currentRoot),
   });
   const resolvedOffset = await findFirstAvailableOffset({
-    mode: parsedArgs.mode,
+    mode,
     startOffset: initialOffset.offset,
   });
   const ports = portsForOffset(resolvedOffset);
@@ -1829,7 +1685,7 @@ const main = async () => {
   const preparationSteps = buildPreparationSteps({
     infraOffset,
     infraPorts,
-    mode: parsedArgs.mode,
+    mode,
     ports,
     rootDir: gitContext.currentRoot,
     skipDbPush: parsedArgs.skipDbPush,
@@ -1838,16 +1694,16 @@ const main = async () => {
   const persistentSteps = buildPersistentSteps({
     infraOffset,
     infraPorts,
-    mode: parsedArgs.mode,
+    mode,
     ports,
     rootDir: gitContext.currentRoot,
   });
   const readinessChecks = buildReadinessChecks({
-    mode: parsedArgs.mode,
+    mode,
     ports,
   });
   const browserWillOpen = shouldAutoOpenBrowser({
-    mode: parsedArgs.mode,
+    mode,
     noBrowser: parsedArgs.noBrowser,
   });
 
@@ -1857,7 +1713,7 @@ const main = async () => {
       infraOffset,
       infraPorts,
       preparedEnvFiles,
-      mode: parsedArgs.mode,
+      mode,
       offset: resolvedOffset,
       offsetSource,
       persistentSteps,
@@ -1948,7 +1804,7 @@ const main = async () => {
       infraOffset,
       infraPorts,
       preparedEnvFiles,
-      mode: parsedArgs.mode,
+      mode,
       offset: resolvedOffset,
       offsetSource,
       ports,
