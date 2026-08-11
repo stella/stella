@@ -9,6 +9,10 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
+import {
+  agentSkillsQueryRoot,
+  mcpQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { CatalogueEntry } from "./catalogue-types";
@@ -66,11 +70,11 @@ export const useUninstallEntry = (
         "onSuccess",
       );
       detached(
-        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
+        queryClient.invalidateQueries({ queryKey: mcpQueryRoot() }),
         "onSuccess",
       );
       detached(
-        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+        queryClient.invalidateQueries({ queryKey: agentSkillsQueryRoot() }),
         "onSuccess",
       );
       detached(

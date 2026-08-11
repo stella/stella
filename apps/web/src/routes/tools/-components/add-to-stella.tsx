@@ -28,6 +28,10 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import {
+  agentSkillsQueryRoot,
+  mcpQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import { resolveAddToStellaState } from "@/routes/tools/-components/add-to-stella.logic";
 
 const SignInDialog = lazy(async () => {
@@ -104,8 +108,8 @@ export function AddToStella({
         queryClient.invalidateQueries({
           queryKey: catalogueKeys.all(organizationId),
         }),
-        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
-        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+        queryClient.invalidateQueries({ queryKey: mcpQueryRoot() }),
+        queryClient.invalidateQueries({ queryKey: agentSkillsQueryRoot() }),
       ]);
       stellaToast.add({
         title: t("catalogue.installed", { name: displayName }),

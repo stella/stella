@@ -8,7 +8,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { invalidateChatThread } from "@/features/chat/queries";
+import {
+  invalidateChatThread,
+  matchesChatThread,
+} from "@/features/chat/queries";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
@@ -34,28 +37,6 @@ export const ChatWebSearchToggle = ({
     (state) => state.setEnabledPreference,
   );
 
-  // Every cached query for this thread (the thread page's `chatThreadOptions`
-  // and the new-chat hero's draft-meta both sit under the same
-  // `chat/<org>/thread/<scope>/<…ids>` prefix) that carries a
-  // `webSearchEnabled` field. Flipping them in `onMutate` turns the icon on/off
-  // instantly and smoothly instead of snapping only once the PATCH round-trips.
-  const matchesThisThread = (queryKey: readonly unknown[]): boolean => {
-    if (
-      queryKey.at(0) !== "chat" ||
-      queryKey.at(2) !== "thread" ||
-      queryKey.at(3) !== threadRef.scope
-    ) {
-      return false;
-    }
-    if (threadRef.scope === "global") {
-      return queryKey.at(4) === threadRef.threadId;
-    }
-    return (
-      queryKey.at(4) === threadRef.workspaceId &&
-      queryKey.at(5) === threadRef.threadId
-    );
-  };
-
   const { mutate } = useMutation({
     scope: {
       id: `chat-web-search-toggle:${threadRef.scope}:${threadRef.threadId}`,
@@ -75,8 +56,13 @@ export const ChatWebSearchToggle = ({
       return unwrapEden(response);
     },
     onMutate: async (nextEnabled) => {
+      // Every cached query for this thread (the thread page's
+      // `chatThreadOptions` and the new-chat hero's draft-meta both hang off
+      // `chatKeys.threadPrefix`) that carries a `webSearchEnabled` field.
+      // Flipping them here turns the icon on/off instantly and smoothly
+      // instead of snapping only once the PATCH round-trips.
       const filters = {
-        predicate: (q: Query) => matchesThisThread(q.queryKey),
+        predicate: (q: Query) => matchesChatThread(q.queryKey, threadRef),
       };
       await queryClient.cancelQueries(filters);
       const previous = queryClient.getQueriesData(filters);

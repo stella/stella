@@ -3,6 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
+import {
+  agentSkillsQueryRoot,
+  mcpQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 
 import type { CatalogueEntry } from "./catalogue-types";
 
@@ -25,11 +29,11 @@ export const useInstallEntry = (organizationId: string) => {
         "onSuccess",
       );
       detached(
-        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
+        queryClient.invalidateQueries({ queryKey: mcpQueryRoot() }),
         "onSuccess",
       );
       detached(
-        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+        queryClient.invalidateQueries({ queryKey: agentSkillsQueryRoot() }),
         "onSuccess",
       );
     },

@@ -291,82 +291,60 @@ export const chatKeys = {
     key.workspaceId ?? "global",
     key.threadId,
   ],
-  thread: (activeOrganizationId: string, key: ChatThreadQueryKey) =>
-    key.scope === "global"
+  // The prefix (chat, org, thread, scope, …ids) every thread-scoped entry
+  // hangs off, so `invalidateChatThread` matches them all. Every such entry
+  // composes this instead of restating the positions, which is what the
+  // matching predicates walk.
+  threadPrefix: (activeOrganizationId: string, threadRef: ChatThreadRef) =>
+    threadRef.scope === "global"
       ? [
           ...chatKeys.all,
           activeOrganizationId,
           "thread",
-          key.scope,
-          key.threadId,
-          key.allowMissingThread ?? false,
-          key.contextKind ?? "plain",
-          CHAT_TRANSPORT_VERSION,
+          threadRef.scope,
+          threadRef.threadId,
         ]
       : [
           ...chatKeys.all,
           activeOrganizationId,
           "thread",
-          key.scope,
-          key.workspaceId,
-          key.threadId,
-          key.allowMissingThread ?? false,
-          key.contextKind ?? "plain",
-          CHAT_TRANSPORT_VERSION,
+          threadRef.scope,
+          threadRef.workspaceId,
+          threadRef.threadId,
         ],
-  // Sits under the per-thread prefix (chat, org, thread, scope, …ids)
-  // so `invalidateChatThread` drops it too; keyed by the latest
-  // message id so a new turn yields a fresh entry.
+  thread: (activeOrganizationId: string, key: ChatThreadQueryKey) => [
+    ...chatKeys.threadPrefix(activeOrganizationId, key),
+    key.allowMissingThread ?? false,
+    key.contextKind ?? "plain",
+    CHAT_TRANSPORT_VERSION,
+  ],
+  // The chat-home draft's standalone metadata fetch (web search availability,
+  // model, context floor). Shares the thread prefix so the web-search PATCH's
+  // `invalidateChatThread` refetches it; a private key would leave the hero
+  // showing a toggle state the server no longer holds.
+  draftMeta: (activeOrganizationId: string, threadRef: ChatThreadRef) => [
+    ...chatKeys.threadPrefix(activeOrganizationId, threadRef),
+    "draftMeta",
+  ],
+  // Keyed by the latest message id so a new turn yields a fresh entry.
   recap: (
     activeOrganizationId: string,
     threadRef: ChatThreadRef,
     lastMessageId: string,
-  ) =>
-    threadRef.scope === "global"
-      ? [
-          ...chatKeys.all,
-          activeOrganizationId,
-          "thread",
-          threadRef.scope,
-          threadRef.threadId,
-          "recap",
-          lastMessageId,
-        ]
-      : [
-          ...chatKeys.all,
-          activeOrganizationId,
-          "thread",
-          threadRef.scope,
-          threadRef.workspaceId,
-          threadRef.threadId,
-          "recap",
-          lastMessageId,
-        ],
+  ) => [
+    ...chatKeys.threadPrefix(activeOrganizationId, threadRef),
+    "recap",
+    lastMessageId,
+  ],
   suggestedPrompts: (
     activeOrganizationId: string,
     threadRef: ChatThreadRef,
     lastMessageId: string,
-  ) =>
-    threadRef.scope === "global"
-      ? [
-          ...chatKeys.all,
-          activeOrganizationId,
-          "thread",
-          threadRef.scope,
-          threadRef.threadId,
-          "suggestedPrompts",
-          lastMessageId,
-        ]
-      : [
-          ...chatKeys.all,
-          activeOrganizationId,
-          "thread",
-          threadRef.scope,
-          threadRef.workspaceId,
-          threadRef.threadId,
-          "suggestedPrompts",
-          lastMessageId,
-        ],
+  ) => [
+    ...chatKeys.threadPrefix(activeOrganizationId, threadRef),
+    "suggestedPrompts",
+    lastMessageId,
+  ],
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<
@@ -2638,6 +2616,43 @@ const fetchChatThreadTitle = async ({
   return unwrapEden(response).title;
 };
 
+type ChatDraftMetaOptionsArgs = {
+  activeOrganizationId: string;
+  threadRef: ChatThreadRef;
+};
+
+// Standalone, non-suspense fetch of a draft thread's metadata for the chat
+// home. `chatThreadOptions` is deliberately not reused: it instantiates a
+// stateful `Chat<>` inside its queryFn on every miss, and doing that on the
+// chat-home render path froze the tab. Web search availability, the model,
+// and the context floor come from a plain GET instead.
+export const chatDraftMetaOptions = ({
+  activeOrganizationId,
+  threadRef,
+}: ChatDraftMetaOptionsArgs) =>
+  queryOptions({
+    queryKey: chatKeys.draftMeta(activeOrganizationId, threadRef),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async ({ signal }) => {
+      const response = await api.chat
+        .threads({ threadId: threadRef.threadId })
+        .messages.get({
+          query: { allowMissingThread: true },
+          fetch: { signal },
+        });
+      const data = unwrapEden(response);
+      return {
+        webSearchAvailable: data.webSearchAvailable,
+        webSearchEnabled: data.webSearchEnabled,
+        model: data.model,
+        reasoningEffort: data.reasoningEffort,
+        // The draft's cache-stable context floor (system prompt + tools), so
+        // the hero meter shows the honest baseline instead of 0% before send.
+        context: data.context,
+      };
+    },
+  });
+
 type ChatThreadTitleOptionsArgs = {
   activeOrganizationId: string;
   enabled: boolean;
@@ -2694,6 +2709,36 @@ export const invalidateChatThreadLists = async ({
       : []),
   ]);
 
+/**
+ * Whether a query key targets the given chat thread in its own scope:
+ * every entry composed from `chatKeys.threadPrefix` (thread page, recap,
+ * suggested prompts, the chat-home draft metadata) matches, whatever it
+ * appends. Callers that need to touch the same thread's cache — cache
+ * writers as well as invalidators — use this instead of restating the
+ * positions, so a prefix change cannot desynchronize them.
+ */
+export const matchesChatThread = (
+  queryKey: readonly unknown[],
+  threadRef: ChatThreadRef,
+): boolean => {
+  if (
+    queryKey.at(0) !== "chat" ||
+    queryKey.at(2) !== "thread" ||
+    queryKey.at(3) !== threadRef.scope
+  ) {
+    return false;
+  }
+
+  if (threadRef.scope === "global") {
+    return queryKey.at(4) === threadRef.threadId;
+  }
+
+  return (
+    queryKey.at(4) === threadRef.workspaceId &&
+    queryKey.at(5) === threadRef.threadId
+  );
+};
+
 export const invalidateChatThread = async ({
   queryClient,
   threadRef,
@@ -2702,25 +2747,7 @@ export const invalidateChatThread = async ({
   threadRef: ChatThreadRef;
 }) =>
   await queryClient.invalidateQueries({
-    predicate: (query) => {
-      const queryKey = query.queryKey;
-      if (
-        queryKey.at(0) !== "chat" ||
-        queryKey.at(2) !== "thread" ||
-        queryKey.at(3) !== threadRef.scope
-      ) {
-        return false;
-      }
-
-      if (threadRef.scope === "global") {
-        return queryKey.at(4) === threadRef.threadId;
-      }
-
-      return (
-        queryKey.at(4) === threadRef.workspaceId &&
-        queryKey.at(5) === threadRef.threadId
-      );
-    },
+    predicate: (query) => matchesChatThread(query.queryKey, threadRef),
   });
 
 /**

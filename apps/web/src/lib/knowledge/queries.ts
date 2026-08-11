@@ -139,6 +139,15 @@ export const knowledgeKeys = {
   clauseCategories: {
     all: (organizationId: string) => ["clause-categories", organizationId],
   },
+  // The settings editor and the playbook editor's Type picker read the same
+  // taxonomy, so the editor's mutations invalidate `root` and refresh both.
+  documentTypes: {
+    root: ["document-types"],
+    all: (organizationId: string) => [
+      ...knowledgeKeys.documentTypes.root,
+      organizationId,
+    ],
+  },
   playbooks: {
     all: (organizationId: string) => ["playbooks", organizationId],
     list: (organizationId: string, { limit }: PlaybooksPageKey) => [
@@ -568,7 +577,7 @@ export const playbooksOptions = (
 // switch doesn't serve a stale taxonomy.
 export const documentTypesOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: ["document-types", organizationId] as const,
+    queryKey: knowledgeKeys.documentTypes.all(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api["document-types"].get({ fetch: { signal } });
 
