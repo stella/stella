@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { normalizeRedirectTo } from "@/lib/redirect";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { OnboardingWizard } from "@/routes/onboarding/-components/onboarding-wizard";
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
@@ -11,6 +12,7 @@ const isDev = import.meta.env.DEV;
 
 const searchSchema = v.strictObject({
   preview: v.optional(v.boolean()),
+  redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
 
 export const Route = createFileRoute("/onboarding")({
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/onboarding")({
     }
 
     if (authContext.session.activeOrganizationId) {
-      throw redirect({ to: "/", replace: true });
+      throw redirect({ href: search.redirectTo ?? "/", replace: true });
     }
 
     return authContext;

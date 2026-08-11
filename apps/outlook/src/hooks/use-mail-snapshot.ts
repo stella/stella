@@ -70,6 +70,7 @@ export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
       return snapshot;
     },
     refresh: () => {
+      itemInstanceSequence.current += 1;
       setState({ type: "loading" });
       void load(`item-${String(itemInstanceSequence.current)}`);
     },
