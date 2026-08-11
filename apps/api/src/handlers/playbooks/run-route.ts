@@ -3,7 +3,6 @@ import Elysia from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import autoRunPlaybooks from "@/api/handlers/playbooks/auto-run";
-import reviewPlaybook from "@/api/handlers/playbooks/review";
 import runPlaybook from "@/api/handlers/playbooks/run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
@@ -42,12 +41,4 @@ export const playbookRunsRoute = new Elysia({
     params: autoRunPlaybooks.config.params,
     resourceSetUpdated: playbookRunRealtimeUpdates,
     permissions: autoRunPlaybooks.config.permissions,
-  })
-  // Single-document review: synchronous, returns Findings inline. No
-  // No realtime update: it persists no columns/findings, so there is no
-  // server cache to bust.
-  .post("/:playbookId/review", reviewPlaybook.handler, {
-    body: reviewPlaybook.config.body,
-    params: reviewPlaybook.config.params,
-    permissions: reviewPlaybook.config.permissions,
   });

@@ -1,8 +1,16 @@
 /**
- * In-memory document-review sessions. A review can use an authored playbook,
- * reference documents, or both. Transport keeps the result groups separate so
- * reference examples can never change an authoritative playbook verdict; the
- * result UI joins them by confirmed topic into one composable review card.
+ * Document-review sessions: a client cache over durable server runs.
+ *
+ * A review is a row on the server, not a promise in this tab. The store keeps
+ * only what the server does not: the basis and topics a reviewer is still
+ * assembling, the id of the run the facet is tracking, and the fix/comment
+ * state of the open editor session (revision ids are editor-scoped and mean
+ * nothing after a reload, so they never leave the client). Status, progress
+ * and findings are read back from the run itself.
+ *
+ * A session key with no entry means "the facet has not decided yet" — that is
+ * what lets a freshly opened facet restore the document's latest run instead of
+ * starting from the launcher.
  */
 
 import { Result } from "better-result";
@@ -13,14 +21,21 @@ import {
   playbookIdFromBasis,
   referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
-import { topicsFromPlaybookFindings } from "@/components/ai-suggestions/playbook-review-topics.logic";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
+import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
+import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
 import { api } from "@/lib/api";
-import type { toAPIError } from "@/lib/errors/api";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
-const REVIEW_CLIENT_TIMEOUT_MS = 130_000;
+const TOPIC_PROPOSAL_TIMEOUT_MS = 130_000;
+const RUN_CREATE_TIMEOUT_MS = 30_000;
+
+/** The create endpoint answers this when the document already has a run in
+ *  flight. A second run would spend twice and race the first to the same
+ *  findings, so the client attaches to the active one instead. */
+const RUN_ALREADY_ACTIVE_STATUS = 409;
 
 export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
 
@@ -90,16 +105,13 @@ export type PlaybookFinding = {
   matchedRef?: PlaybookMatchedRef | null;
 };
 
-type WorkspaceApi = ReturnType<typeof api.workspaces>;
-type ReferenceReviewResponse = Awaited<
-  ReturnType<WorkspaceApi["document-reviews"]["references"]["post"]>
->;
-type ReferenceReviewData = Exclude<
-  NonNullable<Extract<ReferenceReviewResponse, { data: unknown }>["data"]>,
-  Response
->;
-
-export type ReferenceFinding = ReferenceReviewData["findings"][number];
+/** The reference-comparison finding as the run persisted it. Inferred from the
+ *  run read rather than restated here, so the card cannot drift from the shape
+ *  the engine writes. */
+export type ReferenceFinding = Extract<
+  DocumentReviewFindingRow["payload"],
+  { checkKind: "reference" }
+>["finding"];
 export type ReferenceAssessment = ReferenceFinding["assessment"];
 export type ReferenceConsensus = ReferenceFinding["consensus"];
 
@@ -129,11 +141,16 @@ export type ReviewTopic =
       included: boolean;
     };
 
+/**
+ * Where the client-side flow stands. It deliberately does not mirror the run's
+ * lifecycle: once a run exists, `runId` points at it and the server row is the
+ * only source of progress, findings and failure.
+ */
 export type ReviewStatus =
   | "idle"
   | "proposing-topics"
   | "editing-topics"
-  | "reviewing"
+  | "starting"
   | "error";
 
 export type ReviewResults = {
@@ -141,20 +158,35 @@ export type ReviewResults = {
   references: ReferenceFinding[] | null;
 };
 
+/**
+ * Whether the facet may still adopt the document's latest server run. A
+ * reviewer who goes back to the launcher has decided otherwise, and that
+ * decision has to outlive the run itself — without it, the restore would
+ * immediately put the finished review back on screen.
+ */
+export type ReviewRestoreMode = "allowed" | "dismissed";
+
 export type DocumentReviewSession = {
   status: ReviewStatus;
   basis: ReviewBasis | null;
-  results: ReviewResults;
   fixState: Record<string, ReviewFixState>;
   commentState: Record<string, ReviewCommentState>;
   error: string | null;
-  reviewedAt: number | null;
+  /** The durable run this facet tracks, or `null` while none has started. */
   runId: string | null;
+  restore: ReviewRestoreMode;
+  /** Guards a stale response from overwriting a newer request's session. */
+  requestId: string | null;
   topics: ReviewTopic[];
-  workspaceId: string;
 };
 
 type ReviewRequestError = Parameters<typeof toAPIError>[0];
+
+/** Whether a rejected create was refused because the document already has a
+ *  run in flight, read through the normalized error so the check does not
+ *  depend on how narrowly the transport types a status. */
+const isRunAlreadyActive = (error: ReviewRequestError): boolean =>
+  toAPIError(error).status === RUN_ALREADY_ACTIVE_STATUS;
 
 export const reviewSessionKey = (
   entityId: string,
@@ -172,6 +204,18 @@ type StartReviewArgs = {
   fileFieldId: string;
   unexpectedErrorMessage: string;
   seededTopics: ReviewTopic[];
+};
+
+/** What a run needs, flattened from whatever produced it: the launcher's
+ *  basis, the confirmed topic editor, or a failed run being retried. */
+export type StartRunArgs = {
+  workspaceId: string;
+  entityId: string;
+  fileFieldId: string;
+  playbookId: string | null;
+  references: readonly { entityId: string; fileFieldId: string }[];
+  topics: readonly ReviewTopic[];
+  unexpectedErrorMessage: string;
 };
 
 type State = {
@@ -195,6 +239,7 @@ type Actions = {
     findingId: string,
   ) => void;
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
+  startRun: (args: StartRunArgs) => Promise<StartReviewResult>;
   confirmTopics: (
     workspaceId: string,
     entityId: string,
@@ -215,77 +260,51 @@ type Actions = {
   resetSession: (entityId: string, fileFieldId: string) => void;
 };
 
-const EMPTY_RESULTS: ReviewResults = {
-  playbook: null,
-  references: null,
-};
+const blankSession = (): DocumentReviewSession => ({
+  status: "idle",
+  basis: null,
+  fixState: {},
+  commentState: {},
+  error: null,
+  runId: null,
+  restore: "allowed",
+  requestId: null,
+  topics: [],
+});
 
-type ExecuteReviewArgs = {
-  workspaceId: string;
-  basis: ReviewBasis;
-  entityId: string;
-  fileFieldId: string;
-  topics: readonly ReviewTopic[];
-};
-
-const executeReview = async ({
+const requestRun = async ({
   workspaceId,
-  basis,
   entityId,
   fileFieldId,
+  playbookId,
+  references,
   topics,
-}: ExecuteReviewArgs) => {
-  const playbookId = playbookIdFromBasis(basis);
-  const references = referencesFromBasis(basis);
-  const includedTopics = topics.filter((topic) => topic.included);
-  const playbookRequest =
-    playbookId === null
-      ? Promise.resolve(null)
-      : api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .playbooks({
-            playbookId: toSafeId<"playbookDefinition">(playbookId),
-          })
-          .review.post(
-            {
-              entityId: toSafeId<"entity">(entityId),
-              fileFieldId: toSafeId<"field">(fileFieldId),
-              ...(references.length > 0 && {
-                positionIds: includedTopics.flatMap((topic) =>
-                  topic.type === "playbook" ? [topic.positionId] : [],
-                ),
-              }),
-            },
-            {
-              fetch: {
-                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-              },
-            },
-          );
-  const referenceRequest =
-    references.length === 0
-      ? Promise.resolve(null)
-      : api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["document-reviews"].references.post(
-            {
-              target: {
-                entityId: toSafeId<"entity">(entityId),
-                fileFieldId: toSafeId<"field">(fileFieldId),
-              },
-              references: references.map((reference) => ({
-                entityId: toSafeId<"entity">(reference.entityId),
-                fileFieldId: toSafeId<"field">(reference.fileFieldId),
-              })),
-              topics: includedTopics,
-            },
-            {
-              fetch: {
-                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-              },
-            },
-          );
-  return await Promise.all([playbookRequest, referenceRequest]);
+}: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
+  // Both channels are read here rather than handed on as one response: the
+  // caller decides between attaching to an already active run and surfacing
+  // the failure, and neither decision may depend on an unexamined `.data`.
+  const { data, error } = await api
+    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["document-reviews"].runs.post(
+      {
+        target: {
+          entityId: toSafeId<"entity">(entityId),
+          fileFieldId: toSafeId<"field">(fileFieldId),
+        },
+        ...(playbookId === null
+          ? {}
+          : { playbookId: toSafeId<"playbookDefinition">(playbookId) }),
+        references: references.map((reference) => ({
+          entityId: toSafeId<"entity">(reference.entityId),
+          fileFieldId: toSafeId<"field">(reference.fileFieldId),
+        })),
+        // The run stores the confirmed plan, and the endpoint rejects an
+        // unconfirmed topic: send exactly what the reviewer approved.
+        topics: topics.filter((topic) => topic.included),
+      },
+      { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
+    );
+  return { data, error };
 };
 
 export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
@@ -302,88 +321,97 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     const key = reviewSessionKey(entityId, fileFieldId);
     const existing = get().sessions[key];
     if (
-      existing?.status === "reviewing" ||
+      existing?.status === "starting" ||
       existing?.status === "proposing-topics"
     ) {
       return { ok: true };
     }
-    const runId = crypto.randomUUID();
 
+    const references = referencesFromBasis(basis);
+    const playbookId = playbookIdFromBasis(basis);
+    if (references.length === 0) {
+      // No reference documents means no topics to agree on: the playbook's
+      // enabled positions are the plan, so the run starts immediately.
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...blankSession(),
+            ...(existing === undefined
+              ? {}
+              : {
+                  fixState: existing.fixState,
+                  commentState: existing.commentState,
+                }),
+            basis,
+            topics: seededTopics,
+          },
+        },
+      }));
+      return await get().startRun({
+        workspaceId,
+        entityId,
+        fileFieldId,
+        playbookId,
+        references: [],
+        topics: seededTopics,
+        unexpectedErrorMessage,
+      });
+    }
+
+    const requestId = crypto.randomUUID();
     set((state) => ({
       sessions: {
         ...state.sessions,
         [key]: {
-          status:
-            referencesFromBasis(basis).length > 0
-              ? "proposing-topics"
-              : "reviewing",
+          ...blankSession(),
+          ...(existing === undefined
+            ? {}
+            : {
+                fixState: existing.fixState,
+                commentState: existing.commentState,
+              }),
+          status: "proposing-topics",
           basis,
-          results: existing?.results ?? EMPTY_RESULTS,
-          fixState: existing?.fixState ?? {},
-          commentState: existing?.commentState ?? {},
-          error: null,
-          reviewedAt: existing?.reviewedAt ?? null,
-          runId,
+          requestId,
           topics: seededTopics,
-          workspaceId,
         },
       },
     }));
 
-    const references = referencesFromBasis(basis);
-    if (references.length > 0) {
-      const proposalResult = await Result.tryPromise(async () => {
-        const { data, error } = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["document-reviews"].topics.post(
-            {
-              target: {
-                entityId: toSafeId<"entity">(entityId),
-                fileFieldId: toSafeId<"field">(fileFieldId),
-              },
-              references: references.map((reference) => ({
-                entityId: toSafeId<"entity">(reference.entityId),
-                fileFieldId: toSafeId<"field">(reference.fileFieldId),
-              })),
-              seededTopics,
+    const proposalResult = await Result.tryPromise(async () => {
+      const { data, error } = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["document-reviews"].topics.post(
+          {
+            target: {
+              entityId: toSafeId<"entity">(entityId),
+              fileFieldId: toSafeId<"field">(fileFieldId),
             },
-            {
-              fetch: {
-                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-              },
+            references: references.map((reference) => ({
+              entityId: toSafeId<"entity">(reference.entityId),
+              fileFieldId: toSafeId<"field">(reference.fileFieldId),
+            })),
+            seededTopics,
+          },
+          {
+            fetch: {
+              signal: AbortSignal.timeout(TOPIC_PROPOSAL_TIMEOUT_MS),
             },
-          );
-        return { data, error };
-      });
-      const proposalError = Result.isError(proposalResult)
-        ? null
-        : proposalResult.value.error;
-      if (Result.isError(proposalResult) || proposalError) {
-        const message = proposalError
-          ? userErrorMessage(proposalError, unexpectedErrorMessage)
-          : unexpectedErrorMessage;
-        set((state) => {
-          const current = state.sessions[key];
-          if (current?.runId !== runId) {
-            return state;
-          }
-          return {
-            sessions: {
-              ...state.sessions,
-              [key]: {
-                ...current,
-                status: "error",
-                error: message,
-                runId: null,
-              },
-            },
-          };
-        });
-        return { ok: false, message, error: proposalError };
-      }
+          },
+        );
+      return { data, error };
+    });
+    const proposalError = Result.isError(proposalResult)
+      ? null
+      : proposalResult.value.error;
+    if (Result.isError(proposalResult) || proposalError) {
+      const message = proposalError
+        ? userErrorMessage(proposalError, unexpectedErrorMessage)
+        : unexpectedErrorMessage;
       set((state) => {
         const current = state.sessions[key];
-        if (current?.runId !== runId) {
+        if (current?.requestId !== requestId) {
           return state;
         }
         return {
@@ -391,81 +419,132 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             ...state.sessions,
             [key]: {
               ...current,
-              status: "editing-topics",
-              topics: proposalResult.value.data?.topics ?? seededTopics,
-              runId: null,
+              status: "error",
+              error: message,
+              requestId: null,
             },
           },
         };
       });
-      return { ok: true };
+      return { ok: false, message, error: proposalError };
     }
+
+    set((state) => {
+      const current = state.sessions[key];
+      if (current?.requestId !== requestId) {
+        return state;
+      }
+      const proposed = proposalResult.value.data;
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...current,
+            status: "editing-topics",
+            topics: proposed === null ? seededTopics : proposed.topics,
+            requestId: null,
+          },
+        },
+      };
+    });
+    return { ok: true };
+  },
+
+  startRun: async ({
+    workspaceId,
+    entityId,
+    fileFieldId,
+    playbookId,
+    references,
+    topics,
+    unexpectedErrorMessage,
+  }) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    const requestId = crypto.randomUUID();
+    set((state) => {
+      const current = state.sessions[key];
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...(current ?? blankSession()),
+            status: "starting",
+            error: null,
+            runId: null,
+            requestId,
+            topics: [...topics],
+          },
+        },
+      };
+    });
 
     const requestResult = await Result.tryPromise(
       async () =>
-        await executeReview({
+        await requestRun({
           workspaceId,
-          basis,
           entityId,
           fileFieldId,
-          topics: seededTopics,
+          playbookId,
+          references,
+          topics,
         }),
     );
 
-    if (Result.isError(requestResult)) {
-      set((state) => {
-        const current = state.sessions[key];
-        if (current?.runId !== runId) {
-          return state;
-        }
-        return {
-          sessions: {
-            ...state.sessions,
-            [key]: {
-              status: "error",
-              basis,
-              results: current.results,
-              fixState: current.fixState,
-              commentState: current.commentState,
-              error: unexpectedErrorMessage,
-              reviewedAt: current.reviewedAt,
-              runId: null,
-              topics: current.topics,
-              workspaceId,
+    const responseError = Result.isError(requestResult)
+      ? null
+      : requestResult.value.error;
+
+    if (responseError && isRunAlreadyActive(responseError)) {
+      // Another tab (or a reload that raced this click) already started a run
+      // for this document. Attach to it: it is executing the same document,
+      // and a second run is exactly what the server refused to create.
+      const attached = await Result.tryPromise(
+        async () =>
+          await fetchDocumentReviewRuns({ workspaceId, entityId, fileFieldId }),
+      );
+      const attachedRunId = Result.isError(attached)
+        ? null
+        : resolveRunConflictAttachment(attached.value.items);
+      if (attachedRunId !== null) {
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "idle",
+                error: null,
+                runId: attachedRunId,
+                requestId: null,
+              },
             },
-          },
-        };
-      });
-      return {
-        ok: false as const,
-        message: unexpectedErrorMessage,
-        error: null,
-      };
+          };
+        });
+        return { ok: true };
+      }
     }
 
-    const [playbookResponse, referenceResponse] = requestResult.value;
-    const responseError = playbookResponse?.error ?? referenceResponse?.error;
-    if (responseError) {
-      const message = userErrorMessage(responseError, unexpectedErrorMessage);
+    if (Result.isError(requestResult) || responseError) {
+      const message = responseError
+        ? userErrorMessage(responseError, unexpectedErrorMessage)
+        : unexpectedErrorMessage;
       set((state) => {
         const current = state.sessions[key];
-        if (current?.runId !== runId) {
+        if (current?.requestId !== requestId) {
           return state;
         }
         return {
           sessions: {
             ...state.sessions,
             [key]: {
+              ...current,
               status: "error",
-              basis,
-              results: current.results,
-              fixState: current.fixState,
-              commentState: current.commentState,
               error: message,
-              reviewedAt: current.reviewedAt,
-              runId: null,
-              topics: current.topics,
-              workspaceId,
+              requestId: null,
             },
           },
         };
@@ -473,52 +552,51 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       return { ok: false, message, error: responseError };
     }
 
-    const results: ReviewResults = {
-      playbook: playbookResponse?.data ?? null,
-      references: referenceResponse?.data?.findings ?? null,
-    };
-    const completedTopics =
-      references.length === 0 && results.playbook !== null
-        ? topicsFromPlaybookFindings(
-            results.playbook,
-            seededTopics.filter(
-              (topic): topic is Extract<ReviewTopic, { type: "playbook" }> =>
-                topic.type === "playbook",
-            ),
-          )
-        : seededTopics;
+    const created = requestResult.value.data;
+    if (created === null) {
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.requestId !== requestId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              status: "error",
+              error: unexpectedErrorMessage,
+              requestId: null,
+            },
+          },
+        };
+      });
+      return { ok: false, message: unexpectedErrorMessage, error: null };
+    }
+
+    const runId = created.runId;
     set((state) => {
-      if (state.sessions[key]?.runId !== runId) {
+      const current = state.sessions[key];
+      if (current?.requestId !== requestId) {
         return state;
       }
       return {
         sessions: {
           ...state.sessions,
           [key]: {
+            ...current,
             status: "idle",
-            basis,
-            results,
+            error: null,
+            // A new run supersedes whatever the previous one left applied: the
+            // fixes it proposes are keyed by its own findings.
             fixState: {},
             commentState: {},
-            error: null,
-            reviewedAt: Date.now(),
-            runId: null,
-            topics: completedTopics,
-            workspaceId,
+            runId,
+            requestId: null,
           },
         },
       };
     });
-
-    const inspectorState = useInspectorTabsStore.getState();
-    const tab = inspectorState.tabs.find(
-      (candidate) =>
-        candidate.type === "pdf" && candidate.entityId === entityId,
-    );
-    if (tab) {
-      inspectorState.setFileFacet(tab.id, "playbook", { pulse: true });
-    }
-
     return { ok: true };
   },
 
@@ -533,78 +611,15 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     if (!session?.basis || session.status !== "editing-topics") {
       return { ok: true };
     }
-    const basis = session.basis;
-    const runId = crypto.randomUUID();
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [key]: { ...session, status: "reviewing", error: null, runId },
-      },
-    }));
-    const requestResult = await Result.tryPromise(
-      async () =>
-        await executeReview({
-          workspaceId,
-          basis,
-          entityId,
-          fileFieldId,
-          topics: session.topics,
-        }),
-    );
-    const responseError = Result.isError(requestResult)
-      ? null
-      : (requestResult.value.at(0)?.error ??
-        requestResult.value.at(1)?.error ??
-        null);
-    if (Result.isError(requestResult) || responseError) {
-      const message = responseError
-        ? userErrorMessage(responseError, unexpectedErrorMessage)
-        : unexpectedErrorMessage;
-      set((state) => {
-        const current = state.sessions[key];
-        if (current?.runId !== runId) {
-          return state;
-        }
-        return {
-          sessions: {
-            ...state.sessions,
-            [key]: {
-              ...current,
-              status: "editing-topics",
-              error: message,
-              runId: null,
-            },
-          },
-        };
-      });
-      return { ok: false, message, error: responseError };
-    }
-    const [playbookResponse, referenceResponse] = requestResult.value;
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.runId !== runId) {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            status: "idle",
-            results: {
-              playbook: playbookResponse?.data ?? null,
-              references: referenceResponse?.data?.findings ?? null,
-            },
-            fixState: {},
-            commentState: {},
-            error: null,
-            reviewedAt: Date.now(),
-            runId: null,
-          },
-        },
-      };
+    return await get().startRun({
+      workspaceId,
+      entityId,
+      fileFieldId,
+      playbookId: playbookIdFromBasis(session.basis),
+      references: referencesFromBasis(session.basis),
+      topics: session.topics,
+      unexpectedErrorMessage,
     });
-    return { ok: true };
   },
 
   setTopics: (entityId, fileFieldId, topics) => {
@@ -623,13 +638,13 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     });
   },
 
+  // Fix and comment state can be the first thing a restored review writes:
+  // the facet adopts a server run without a session, so these upsert one
+  // rather than dropping the reviewer's edit on the floor.
   setFixState: (entityId, fileFieldId, findingId, next) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
-      const current = state.sessions[key];
-      if (!current) {
-        return state;
-      }
+      const current = state.sessions[key] ?? blankSession();
       return {
         sessions: {
           ...state.sessions,
@@ -644,15 +659,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
 
   beginComment: (entityId, fileFieldId, findingId) => {
     const key = reviewSessionKey(entityId, fileFieldId);
-    const current = get().sessions[key];
-    if (!current || current.commentState[findingId] !== undefined) {
+    if (get().sessions[key]?.commentState[findingId] !== undefined) {
       return false;
     }
     set((state) => {
-      const session = state.sessions[key];
-      if (!session) {
-        return state;
-      }
+      const session = state.sessions[key] ?? blankSession();
       return {
         sessions: {
           ...state.sessions,
@@ -708,11 +719,18 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     });
   },
 
+  /**
+   * Back to the launcher. The blank session stays in the map with the restore
+   * dismissed: choosing a new basis is a decision the facet must remember, or
+   * the document's finished run would be put straight back on screen.
+   */
   resetSession: (entityId, fileFieldId) => {
     const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const { [key]: _removed, ...rest } = state.sessions;
-      return { sessions: rest };
-    });
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [key]: { ...blankSession(), restore: "dismissed" },
+      },
+    }));
   },
 }));

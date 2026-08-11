@@ -127,7 +127,6 @@
   "playbooks.list-starters",
   "playbooks.list-versions",
   "playbooks.restore-version",
-  "playbooks.review",
   "playbooks.update",
   "properties.create",
   "properties.create-batch",

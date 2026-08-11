@@ -251,7 +251,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `playbooks.list-starters`   | read               | stella:read            | —       | generic invoke → `stella capability playbooks list-starters`   |
 | `playbooks.list-versions`   | read               | stella:read            | —       | generic invoke → `stella capability playbooks list-versions`   |
 | `playbooks.restore-version` | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks restore-version` |
-| `playbooks.review`          | read               | stella:read            | —       | generic invoke → `stella capability playbooks review`          |
 | `playbooks.run`             | write              | stella:knowledge_write | —       | curated tool `run_playbook`                                    |
 | `playbooks.update`          | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks update`          |
 
@@ -498,7 +497,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 1     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 17    |
+| document_processing    | 16    |
 | health_infra           | 1     |
 | hosted_billing         | 3     |
 | mcp_transport          | 11    |
@@ -511,4 +510,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 9     |
 | url_preview            | 2     |
 
-Total: 122
+Total: 121

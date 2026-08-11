@@ -1,6 +1,5 @@
 import Elysia from "elysia";
 
-import compareReferences from "@/api/handlers/document-reviews/compare-references";
 import createDocumentReviewRun from "@/api/handlers/document-reviews/create-run";
 import listDocumentReviewRuns from "@/api/handlers/document-reviews/list-runs";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
@@ -17,10 +16,6 @@ export const documentReviewsRoute = new Elysia({
   .get("/sources", listDocumentReviewSources.handler, {
     query: listDocumentReviewSources.config.query,
     permissions: listDocumentReviewSources.config.permissions,
-  })
-  .post("/references", compareReferences.handler, {
-    body: compareReferences.config.body,
-    permissions: compareReferences.config.permissions,
   })
   .post("/topics", proposeTopics.handler, {
     body: proposeTopics.config.body,
