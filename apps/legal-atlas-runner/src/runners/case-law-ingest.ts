@@ -19,7 +19,7 @@
 
 import { panic } from "better-result";
 
-import { caseLawIngestionEvents } from "@/api/db/schema";
+import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
   hasResolvedCitations,
@@ -31,9 +31,16 @@ import {
   BACKFILL_STATUS,
   backfillCorpusIndex,
 } from "@/api/handlers/case-law/corpus-index";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  getAdapter,
+  listAdapters,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  readSourceReportedTotals,
+  setSourceReportedTotal,
+} from "@/api/handlers/case-law/ingestion/source-totals";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -99,6 +106,10 @@ import {
   SK_DOCUMENT_DRAIN_TIMING,
   runSkDocumentDrain,
 } from "./sk-document-drain";
+import {
+  SOURCE_TOTAL_POLL_TIMING,
+  runSourceTotalPoll,
+} from "./source-total-poll";
 
 const formatLogDetail = (detail: unknown): string => {
   if (detail === undefined) {
@@ -1528,6 +1539,43 @@ export const runCaseLawIngest = async (
     });
   })();
 
+  // Publisher-reported totals: the denominator held-vs-total coverage is
+  // measured against. Only some publishers expose a count; those adapters
+  // are asked here, and the rest keep the figure an operator recorded. The
+  // cadence is the recorded date rather than this loop's interval, so a
+  // deployment neither loses a cycle nor re-asks every publisher on boot.
+  const sourceTotalLoop = (async () => {
+    await runSourceTotalPoll({
+      adapters: listAdapters(),
+      isDraining,
+      now: Date.now,
+      readTotals: async () => await readSourceReportedTotals(ingestionDb),
+      recordTotal: async ({ adapterKey, asOf, total }) =>
+        await setSourceReportedTotal({
+          scopedDb: ingestionDb,
+          adapterKey,
+          total,
+          asOf,
+          origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
+        }),
+      report: (summary) => {
+        logInfo(
+          `[source-totals] case_law.source_totals.polled ` +
+            `polled=${summary.polled} ` +
+            `recorded=${summary.recorded} ` +
+            `noCount=${summary.noCount} ` +
+            `failed=${summary.failed} ` +
+            `unknownSource=${summary.unknownSource} ` +
+            `lastErrorType=${summary.lastError === undefined ? "none" : errorTag(summary.lastError)}`,
+        );
+      },
+      sleep: async (ms) => {
+        await Bun.sleep(ms);
+      },
+      timing: SOURCE_TOTAL_POLL_TIMING,
+    });
+  })();
+
   await Promise.all([
     ...adapterLoops,
     healthLoop,
@@ -1538,6 +1586,7 @@ export const runCaseLawIngest = async (
     legislationCorpusIndexLoop,
     skDocumentLoop,
     reconciliationLoop,
+    sourceTotalLoop,
   ]);
   return 0;
 };
