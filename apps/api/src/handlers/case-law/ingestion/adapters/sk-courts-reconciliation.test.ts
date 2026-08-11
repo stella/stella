@@ -197,9 +197,10 @@ describe("sk-courts slice arithmetic", () => {
 
     expect(slices).toHaveLength(reconciliation.tipWindowDays);
     expect(slices.at(0)).toBe("2026-08-11");
-    // The publisher fills a decision date in for months after it happens, so
-    // the window has to still be over the date once it has settled.
-    expect(slices.at(-1)).toBe("2026-04-14");
+    // The publisher fills a decision date in for months after it happens, and
+    // a date recorded fully collected is settled for good, so the window has
+    // to reach past the point where the date stops growing.
+    expect(slices.at(-1)).toBe("2026-03-25");
     expect(slices).toEqual([...slices].toSorted().toReversed());
   });
 
@@ -361,6 +362,48 @@ describe("sk-courts listSlicePage", () => {
     mockJustice({ list: { body: JSON.stringify({ rozhodnutieList: [] }) } });
 
     expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
+  });
+
+  test("a count with no item list is refused, not read as an empty date", async () => {
+    // The single worst envelope to accept: the date would be recorded holding
+    // nothing, and a date recorded empty is settled and never revisited.
+    mockJustice({ list: { body: JSON.stringify({ numFound: 800 }) } });
+    const absent = await sliceRejection(SLICE);
+
+    mockJustice({
+      list: { body: JSON.stringify({ numFound: 800, rozhodnutieList: null }) },
+    });
+    const nulled = await sliceRejection(SLICE);
+
+    expect(absent).toBeInstanceOf(AdapterFetchError);
+    expect(nulled).toBeInstanceOf(AdapterFetchError);
+  });
+
+  test("a page the count says is populated cannot come back empty", async () => {
+    // 2,559 at 1000 a page means page 1 holds items. Answering it with none is
+    // the publisher contradicting its own count, and taking it at face value
+    // would write that page's decisions out of the date's ledger row.
+    mockJustice({ list: { body: listBody([], 2559) } });
+
+    const rejection = await reconciliation
+      .listSlicePage({ slice: SLICE, page: 1 })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toBeInstanceOf(AdapterFetchError);
+  });
+
+  test("the page past the last one may be empty", async () => {
+    // The same shape is legitimate once the offset is past the count, which is
+    // where the walk stops; refusing it would make every slice unwalkable.
+    mockJustice({ list: { body: listBody([], 2559) } });
+
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 3 });
+
+    expect(page.items).toEqual([]);
+    expect(page.totalPages).toBe(3);
   });
 
   test("an upstream failure is raised rather than reported as an empty date", async () => {

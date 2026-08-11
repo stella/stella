@@ -21,6 +21,7 @@ import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adap
 import {
   INGESTION_USER_AGENT,
   hashContent,
+  isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -522,21 +523,33 @@ export const SK_COURTS_FIRST_SLICE = "1965-07-11";
  * Days near the tip that get re-walked on a fast cadence.
  *
  * A slice here is the decision date, and this publisher posts a decision long
- * after it is handed down. Measured against the volume the same weekday
- * settles at, a date holds under half its eventual decisions at seven weeks
- * and only flattens out around four months. That is the whole reason this
- * number is not the fortnight a same-day publisher needs: a slice recorded as
- * fully collected is settled, and a settled slice is never re-walked and never
- * swept again, so a date walked while it is still filling is a date the loop
- * has finished with at a fraction of its content.
+ * after it is handed down. That is the whole reason this is not the fortnight
+ * a same-day publisher needs: a slice recorded as fully collected is settled,
+ * and a settled slice is never re-walked and never swept again, so a date
+ * walked while it is still filling is a date the loop has finished with at a
+ * fraction of its content. Measured against the volume the same weekday
+ * settles at, a date holds under half its eventual decisions at seven weeks.
  *
- * Four months is where the curve flattens, not where it ends, and this
- * deliberately stops there: every tip slice is re-walked daily, so each extra
- * day of window is a standing daily request for good. The thin tail arriving
- * past the window is left to the crawl, which reaches it by walking the newest
- * decision dates each cycle.
+ * The window is sized past where that filling stops, sampling ten Wednesdays
+ * per age band so court sitting patterns cannot explain the difference: the
+ * median at 130-200 days old is 615 decisions, at 330-400 days 621, and at
+ * 700-770 days 637. A date has therefore effectively stopped growing well
+ * inside a window this wide, and the ~3% still arriving over the two years
+ * after that is the residual below.
+ *
+ * Known limit, stated because it is invisible otherwise: a decision published
+ * past the window is not recovered. Its slice is settled, so no reconciliation
+ * unit selects it again, and the crawl does not reach it either — the
+ * newest-first lap orders by decision date and stops after
+ * {@link LIVE_WINDOW_ITEMS}, which at this source's volume spans about two
+ * months of dates, so an old-dated new record is nowhere near the head it
+ * walks. Closing it needs the loop to re-survey settled slices on a slow
+ * cadence, which is the engine's decision to make, not an adapter's: the
+ * capability's only lever over what gets re-walked is this number, and buying
+ * the last few percent with it would mean re-walking hundreds of dates daily
+ * for good.
  */
-const SK_COURTS_TIP_WINDOW_DAYS = 120;
+const SK_COURTS_TIP_WINDOW_DAYS = 140;
 
 /**
  * Page size for a listing walk. The crawl takes 100 at a time because every
@@ -609,20 +622,24 @@ const skCourtsPreviousSlice = (slice: string): string | null => {
 /**
  * The envelope a slice walk reads.
  *
- * Deliberately looser than {@link isSkApiResponse}, which requires every item
- * to validate: one malformed item would make the whole date unwalkable and so
- * permanently unreconcilable. The items stay unknown here and are validated
- * one at a time by the identity rule, exactly as the crawl validates them.
+ * Both fields are required, unlike {@link isSkApiResponse}, whose optionality
+ * exists so the crawl can shrug off a page: an envelope that states a count
+ * but no list would otherwise read as a date holding nothing, which is the one
+ * answer a ledger row must never be written from. The items themselves stay
+ * unknown, because the opposite mistake is just as bad — requiring every item
+ * to validate would let one malformed row make a date permanently unwalkable —
+ * so they are validated one at a time by the identity rule, exactly as the
+ * crawl validates them.
  */
 type SkSliceResponse = {
-  rozhodnutieList?: Record<string, unknown>[] | null;
-  numFound?: number | null;
+  rozhodnutieList: Record<string, unknown>[];
+  numFound: number;
 };
 
 const isSkSliceResponse = (value: unknown): value is SkSliceResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value["rozhodnutieList"], isRecord) &&
-  isOptionalNumber(value["numFound"]);
+  isArrayOf(value["rozhodnutieList"], isRecord) &&
+  typeof value["numFound"] === "number";
 
 /**
  * One page of the publisher's own listing for a decision date.
@@ -674,23 +691,29 @@ const listSkCourtsSlicePage = async ({
   const json: unknown = await response.json();
   if (!isSkSliceResponse(json)) {
     throw new AdapterFetchError({
-      message: "SK courts listing API returned an invalid payload",
+      message:
+        "SK courts listing API stated no count and item list for the slice",
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       cursor: slice,
     });
   }
 
-  const total = toOptionalValue(json.numFound);
-  if (total === undefined) {
+  const { numFound: total, rozhodnutieList: listed } = json;
+  // The count and the list have to agree about this page existing. They are
+  // read from one response, so an offset the count says is populated answering
+  // with nothing is the publisher contradicting itself, not a date running out
+  // — and a page dropped here is not merely lost, it is written to the ledger
+  // as part of what the date holds.
+  if (total > page * LISTING_PAGE_SIZE && listed.length === 0) {
     throw new AdapterFetchError({
-      message: "SK courts listing API stated no count for the slice",
+      message: `SK courts listing API stated ${total} for ${slice} but listed nothing at page ${page}`,
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       cursor: slice,
     });
   }
 
   return {
-    items: arrayOrEmpty(json.rozhodnutieList).map((item) => ({
+    items: listed.map((item) => ({
       identity: skCourtsListingIdentity(item),
       payload: item,
     })),
