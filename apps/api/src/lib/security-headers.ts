@@ -32,9 +32,11 @@ export const setSecurityHeaders = (set: Context["set"]) => {
  * would otherwise be served without nosniff/frame/CSP protection and could be
  * MIME-sniffed (e.g. a `text/html` upload rendered inline) or framed. Every
  * raw document `Response` must spread these into its headers so that class of
- * gap cannot recur per-endpoint.
+ * gap cannot recur per-endpoint. Sensitive document bytes must also remain out
+ * of browser and intermediary caches.
  */
 export const RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS = {
+  "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",

@@ -4,6 +4,8 @@
 //   1. no-raw-filename-write  — raw user input in fileName properties
 //   2. no-unsanitized-href    — dynamic href without sanitization
 //   3. no-unscoped-user-query — user table import without member scoping
+//   4. require-raw-document-security-headers — raw document responses
+//      without the shared cache/sniff/frame/CSP policy
 
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
@@ -95,6 +97,39 @@ const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 // Only applies to handler files (configured via overrides).
 
 const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
+
+// ── Rule 4: require-raw-document-security-headers ─────────────
+//
+// Production file handlers return privileged document bytes through the
+// global Response constructor. Null-body status responses carry no document
+// data; every other Response must spread the shared security-header policy.
+
+const RAW_DOCUMENT_SECURITY_HEADERS = "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS";
+const SECURITY_HEADERS_MODULE = "@/api/lib/security-headers";
+
+const hasRawDocumentSecurityHeaders = (node): boolean => {
+  if (node.type !== "ObjectExpression") {
+    return false;
+  }
+
+  const headersProperty = node.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      getPropertyName(property.key) === "headers",
+  );
+  if (!headersProperty || headersProperty.type !== "Property") {
+    return false;
+  }
+  if (headersProperty.value.type !== "ObjectExpression") {
+    return false;
+  }
+
+  return headersProperty.value.properties.some(
+    (property) =>
+      property.type === "SpreadElement" &&
+      isIdentifier(property.argument, RAW_DOCUMENT_SECURITY_HEADERS),
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
@@ -348,6 +383,59 @@ export default eslintCompatPlugin({
                 messageId: "unscopedUserQuery",
               });
             }
+          },
+        };
+      },
+    },
+
+    // ── require-raw-document-security-headers ─────────────────
+    "require-raw-document-security-headers": {
+      meta: {
+        type: "problem",
+        messages: {
+          missingHeaders:
+            "Raw document responses must spread " +
+            "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS into their headers.",
+        },
+      },
+      createOnce(context) {
+        let hasSecurityHeadersImport = false;
+
+        return {
+          before() {
+            hasSecurityHeadersImport = false;
+          },
+          ImportDeclaration(node) {
+            if (node.source.value !== SECURITY_HEADERS_MODULE) {
+              return;
+            }
+
+            hasSecurityHeadersImport = node.specifiers.some(
+              (specifier) =>
+                getImportedName(specifier) === RAW_DOCUMENT_SECURITY_HEADERS &&
+                isIdentifier(specifier.local, RAW_DOCUMENT_SECURITY_HEADERS),
+            );
+          },
+          NewExpression(node) {
+            if (!isIdentifier(node.callee, "Response")) {
+              return;
+            }
+
+            const body = node.arguments.at(0);
+            if (!body || (body.type === "Literal" && body.value === null)) {
+              return;
+            }
+
+            const init = node.arguments.at(1);
+            if (
+              hasSecurityHeadersImport &&
+              init &&
+              hasRawDocumentSecurityHeaders(init)
+            ) {
+              return;
+            }
+
+            context.report({ node, messageId: "missingHeaders" });
           },
         };
       },
