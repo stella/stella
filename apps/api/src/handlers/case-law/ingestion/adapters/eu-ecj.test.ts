@@ -1,9 +1,26 @@
 import { Result } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { celexToCaseNumber } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
+  celexToCaseNumber,
+  ecjListingIdentity,
+  euEcjAdapter as ecjAdapter,
+  SPARQL_LIMIT,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
+import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import { logger } from "@/api/lib/observability/logger";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
@@ -96,6 +113,14 @@ describe("celexToCaseNumber", () => {
 });
 
 // -- fetchPage snapshot --
+
+/**
+ * Budget for a test that parses the fixture judgment. One parse runs for
+ * seconds, close enough to the 5s default that such a test fails on load
+ * rather than on a defect when the runner schedules another parse-heavy file
+ * beside this one. A real hang still ends the run.
+ */
+const PARSE_TEST_TIMEOUT = { timeout: 30_000 } as const;
 
 describe("euEcjAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
@@ -228,7 +253,7 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(hasUsableAst(first.documentAst)).toBe(true);
       expect(first.sections?.length).toBeGreaterThan(1);
     },
-    { timeout: 30_000 },
+    PARSE_TEST_TIMEOUT,
   );
 
   test("handles SPARQL error", async () => {
@@ -276,56 +301,60 @@ describe("euEcjAdapter.fetchPage", () => {
     expect(page.nextCursor).toBe("2024-01-19");
   });
 
-  test("skips languages without fulltext", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((url: string) => {
-        const urlStr = url;
+  test(
+    "skips languages without fulltext",
+    async () => {
+      globalThis.fetch = asFetchMock(
+        mock((url: string) => {
+          const urlStr = url;
 
-        if (urlStr.includes("sparql")) {
-          const fixture = {
-            results: {
-              bindings: [enBinding, frBinding, deBinding],
-            },
-          };
-          return Promise.resolve(
-            new Response(JSON.stringify(fixture), {
-              status: 200,
-            }),
-          );
-        }
+          if (urlStr.includes("sparql")) {
+            const fixture = {
+              results: {
+                bindings: [enBinding, frBinding, deBinding],
+              },
+            };
+            return Promise.resolve(
+              new Response(JSON.stringify(fixture), {
+                status: 200,
+              }),
+            );
+          }
 
-        // Only the EN and FR Cellar manifestations return fulltext.
-        if (
-          urlStr.includes(EN_MANIFESTATION_ID) ||
-          urlStr.includes(FR_MANIFESTATION_ID)
-        ) {
-          return Promise.resolve(
-            new Response(fulltextHtml, {
-              status: 200,
-              headers: { "Content-Type": "text/html" },
-            }),
-          );
-        }
+          // Only the EN and FR Cellar manifestations return fulltext.
+          if (
+            urlStr.includes(EN_MANIFESTATION_ID) ||
+            urlStr.includes(FR_MANIFESTATION_ID)
+          ) {
+            return Promise.resolve(
+              new Response(fulltextHtml, {
+                status: 200,
+                headers: { "Content-Type": "text/html" },
+              }),
+            );
+          }
 
-        return Promise.resolve(new Response("Not found", { status: 404 }));
-      }),
-    );
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }),
+      );
 
-    const { euEcjAdapter } =
-      await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
+      const { euEcjAdapter } =
+        await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
 
-    const result = await euEcjAdapter.fetchPage("2024-01-18", {});
+      const result = await euEcjAdapter.fetchPage("2024-01-18", {});
 
-    if (!Result.isOk(result)) {
-      throw new TypeError("Expected Ok result");
-    }
-    const page = result.value;
+      if (!Result.isOk(result)) {
+        throw new TypeError("Expected Ok result");
+      }
+      const page = result.value;
 
-    // Only EN and FR variants
-    expect(page.decisions).toHaveLength(2);
-    const langs = page.decisions.map((d) => d.language).sort();
-    expect(langs).toEqual(["en", "fr"]);
-  });
+      // Only EN and FR variants
+      expect(page.decisions).toHaveLength(2);
+      const langs = page.decisions.map((d) => d.language).sort();
+      expect(langs).toEqual(["en", "fr"]);
+    },
+    PARSE_TEST_TIMEOUT,
+  );
 
   test("no decisions when all languages 404", async () => {
     globalThis.fetch = asFetchMock(
@@ -449,5 +478,512 @@ describe("euEcjAdapter.fetchPage", () => {
     }
     expect(result.value.decisions).toHaveLength(0);
     expect(externalFetches).toBe(0);
+  });
+});
+
+// -- Reconciliation --
+
+/**
+ * What the standing reconciliation loop drives this source through. Read once
+ * here so every test below exercises the capability the adapter actually
+ * publishes, not a copy of it.
+ */
+const reconciliation = ((): SourceReconciliation => {
+  const capability = ecjAdapter.reconciliation;
+  if (capability === undefined) {
+    throw new TypeError("eu-ecj must declare the reconciliation capability");
+  }
+  return capability;
+})();
+
+/**
+ * bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+ * type-aware lint; capture the rejection explicitly instead.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+const rejectionMessage = (rejection: unknown): string =>
+  rejection instanceof Error ? rejection.message : "";
+
+const LANGUAGE_PREFIX =
+  "http://publications.europa.eu/resource/authority/language/";
+
+/** The key the engine's held-lookup builds for a row stored without a
+ * publisher document id: the docket and the language, exactly the pair the
+ * decision identity index is keyed on. */
+const storedIdentityKey = (decision: {
+  caseNumber: string;
+  language: string;
+}): string | null =>
+  listingIdentityKey({
+    type: "case-number",
+    caseNumber: decision.caseNumber,
+    language: decision.language,
+  });
+
+/**
+ * Enough text for the adapter to accept the response as a document. These
+ * tests are about which variant is keyed, listed and built, so they stay off
+ * the parser's own fixture: parsing a real judgment for each of them costs
+ * seconds and proves nothing they assert.
+ */
+const shortDocumentHtml = `<html><body><p>${"Judgment of the Court. ".repeat(
+  20,
+)}</p></body></html>`;
+
+type SparqlMockOptions = {
+  bindings: readonly unknown[];
+  /** Manifestation ids Cellar serves a document for. */
+  served?: readonly string[];
+};
+
+const requestUrl = (input: string | URL | Request): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+};
+
+/** Queries the mock was asked, so a test can assert the range it listed. */
+const installSparqlMock = ({
+  bindings,
+  served = [],
+}: SparqlMockOptions): { queries: string[]; documentFetches: string[] } => {
+  const queries: string[] = [];
+  const documentFetches: string[] = [];
+  globalThis.fetch = asFetchMock(
+    mock((input: string | URL | Request, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.includes("sparql")) {
+        const body = typeof init?.body === "string" ? init.body : "";
+        queries.push(new URLSearchParams(body).get("query") ?? "");
+        return Promise.resolve(
+          new Response(JSON.stringify({ results: { bindings } }), {
+            status: 200,
+          }),
+        );
+      }
+      documentFetches.push(url);
+      return served.some((id) => url.includes(id))
+        ? Promise.resolve(
+            new Response(shortDocumentHtml, {
+              status: 200,
+              headers: { "Content-Type": "text/html" },
+            }),
+          )
+        : Promise.resolve(new Response("Not found", { status: 404 }));
+    }),
+  );
+  return { queries, documentFetches };
+};
+
+describe("ecjListingIdentity", () => {
+  test("keys a variant on the docket and the stored language tag", () => {
+    // This source publishes no document id of its own, so the fallback half
+    // of the identity index is the whole rule.
+    expect(
+      ecjListingIdentity({ celex: "62021CJ0128", language: "EN" }),
+    ).toEqual({ type: "case-number", caseNumber: "C-128/21", language: "en" });
+    expect(
+      ecjListingIdentity({ celex: "62023TJ0201", language: "MT" }),
+    ).toEqual({ type: "case-number", caseNumber: "T-201/23", language: "mt" });
+  });
+
+  test("the key it produces fits the ledger and reads back", () => {
+    const identity = ecjListingIdentity({
+      celex: "62009FJ0100",
+      language: "SV",
+    });
+    expect(listingIdentityKey(identity)).toBe("case-number:sv:F-100/09");
+  });
+
+  test("a CELEX in a format the adapter cannot parse still keys", () => {
+    // The crawl stores such a row under the raw CELEX as its docket, so the
+    // listing has to ask about it under the same key or the row reads as
+    // missing on every pass.
+    expect(
+      ecjListingIdentity({ celex: "62021XX0128", language: "EN" }),
+    ).toEqual({
+      type: "case-number",
+      caseNumber: "62021XX0128",
+      language: "en",
+    });
+  });
+});
+
+describe("euEcjAdapter.reconciliation slices", () => {
+  test("a slice is a decision year, and years sort in walk order", () => {
+    expect(reconciliation.firstSlice).toBe("1952");
+    expect(reconciliation.sliceOf(new Date("2024-06-30T12:00:00.000Z"))).toBe(
+      "2024",
+    );
+    // The boundary is UTC, like every other slice this loop compares.
+    expect(reconciliation.sliceOf(new Date("2023-12-31T23:30:00.000Z"))).toBe(
+      "2023",
+    );
+    expect(reconciliation.sliceOf(new Date("2024-01-01T00:30:00.000Z"))).toBe(
+      "2024",
+    );
+  });
+
+  test("the walk steps one year at a time in both directions", () => {
+    expect(reconciliation.nextSlice("2023")).toBe("2024");
+    expect(reconciliation.previousSlice("2024")).toBe("2023");
+    expect(reconciliation.previousSlice(reconciliation.firstSlice)).toBeNull();
+    expect(
+      reconciliation.nextSlice(reconciliation.sliceOf(new Date())),
+    ).toBeNull();
+  });
+
+  test("the sweep reaches the Court's first decisions and stops there", () => {
+    const walked: string[] = [];
+    let cursor: string | null = "1955";
+    while (cursor !== null) {
+      walked.push(cursor);
+      cursor = reconciliation.previousSlice(cursor);
+    }
+    expect(walked).toEqual(["1955", "1954", "1953", "1952"]);
+    // Lexicographic descending is the order the ledger is compared in.
+    expect(walked.toSorted().toReversed()).toEqual(walked);
+  });
+
+  test("the tip window is the current year and the one before it", () => {
+    // `tipWindowDays` counts slices, so with year slices the window is two
+    // years, not two days.
+    expect(
+      tipWindowSlices(reconciliation, new Date("2026-08-11T09:30:00Z")),
+    ).toEqual(["2026", "2025"]);
+    // A source younger than the window yields only the slices that exist.
+    expect(
+      tipWindowSlices(reconciliation, new Date("1952-03-04T09:30:00Z")),
+    ).toEqual(["1952"]);
+  });
+
+  test("a slice that is not a year is refused rather than guessed at", () => {
+    expect(() => reconciliation.nextSlice("2024-01")).toThrow();
+    expect(() => reconciliation.previousSlice("202")).toThrow();
+  });
+});
+
+describe("euEcjAdapter.reconciliation.listSlicePage", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+
+  beforeEach(() => {
+    Bun.sleep = () => Promise.resolve();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  test("pages a year one calendar month at a time", async () => {
+    const { queries } = installSparqlMock({ bindings: [enBinding] });
+
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 1 });
+
+    expect(page.totalPages).toBe(12);
+    // February of a leap year: the range ends on the month's own last day.
+    expect(queries.at(0)).toContain('FILTER(STR(?date) >= "2024-02-01")');
+    expect(queries.at(0)).toContain('FILTER(STR(?date) <= "2024-02-29")');
+  });
+
+  test("the last page covers December", async () => {
+    const { queries } = installSparqlMock({ bindings: [] });
+
+    await reconciliation.listSlicePage({ slice: "1998", page: 11 });
+
+    expect(queries.at(0)).toContain('FILTER(STR(?date) >= "1998-12-01")');
+    expect(queries.at(0)).toContain('FILTER(STR(?date) <= "1998-12-31")');
+  });
+
+  test("lists one item per variant, whatever the manifestations", async () => {
+    const republishedEn = withManifestation(firstFixtureBinding, {
+      cellarLanguage: "ENG",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0002.05",
+    });
+    const unpublishedLanguage = withManifestation(firstFixtureBinding, {
+      cellarLanguage: "ZZZ",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0003.05",
+    });
+    installSparqlMock({
+      bindings: [enBinding, republishedEn, frBinding, unpublishedLanguage],
+    });
+
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+    // The re-published EN manifestation is the same variant, and a language
+    // this adapter does not publish is one the crawl would never store.
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(["case-number:en:C-128/21", "case-number:fr:C-128/21"]);
+    expect(page.items.map(({ payload }) => payload)).toEqual([
+      { celex: "62021CJ0128", language: "EN" },
+      { celex: "62021CJ0128", language: "FR" },
+    ]);
+  });
+
+  test("refuses a listing the endpoint truncated", async () => {
+    // A short page banked as a whole slice reads as settled, and the
+    // variants the cap left out would be recorded as never published.
+    const capped = Array.from({ length: SPARQL_LIMIT }, (_, index) => ({
+      ecli: { type: "literal", value: `ECLI:EU:C:2024:${index}` },
+      date: { type: "literal", value: "2024-01-18" },
+      celex: {
+        type: "literal",
+        value: `62021CJ${String(index).padStart(4, "0")}`,
+      },
+      type: {
+        type: "uri",
+        value: "http://publications.europa.eu/ontology/cdm#judgement",
+      },
+      language: { type: "uri", value: `${LANGUAGE_PREFIX}ENG` },
+      manifestation: {
+        type: "uri",
+        value: `${CELLAR_RESOURCE_PREFIX}${EN_MANIFESTATION_ID}`,
+      },
+    }));
+    installSparqlMock({ bindings: capped });
+
+    const rejection = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2024", page: 0 }),
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejectionMessage(rejection)).toContain("truncated");
+  });
+
+  test("a request that gives up throws rather than shortening the page", async () => {
+    // The other half of the truncation rule: an aborted or failed listing
+    // must reach the caller as a failure. Answering with the items that did
+    // arrive would bank a partial slice as the whole of it.
+    globalThis.fetch = asFetchMock(
+      mock(() =>
+        Promise.reject(
+          new DOMException("The operation timed out", "TimeoutError"),
+        ),
+      ),
+    );
+
+    const rejection = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2024", page: 0 }),
+    );
+
+    expect(rejection).toBeInstanceOf(DOMException);
+  });
+
+  test("records listed variants that share one stored identity", async () => {
+    // An opinion, a judgment and an order can settle one docket, and this
+    // source keys rows on the docket: those are one identity and one row, so
+    // the slice settles with one of the three held. The listing cannot key
+    // them apart without the persisted identity changing too — it must ask
+    // the question the ingest answers — so the collapse is counted instead of
+    // being left to look like completeness.
+    const orderBinding = {
+      ...withManifestation(firstFixtureBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0004.05",
+      }),
+      celex: { type: "literal", value: "62021CO0128" },
+    };
+    installSparqlMock({ bindings: [enBinding, orderBinding] });
+    const warn = spyOn(logger, "warn");
+
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2024",
+        page: 0,
+      });
+
+      // Both are listed; the engine is what collapses them, on the key the
+      // ingest would store.
+      expect(page.items.map(({ payload }) => payload)).toEqual([
+        { celex: "62021CJ0128", language: "EN" },
+        { celex: "62021CO0128", language: "EN" },
+      ]);
+      expect(
+        page.items.map(({ identity }) => listingIdentityKey(identity)),
+      ).toEqual(["case-number:en:C-128/21", "case-number:en:C-128/21"]);
+
+      const reported = warn.mock.calls.find(
+        ([message]) => message === "case_law.reconciliation.shared_identity",
+      );
+      expect(reported).toBeDefined();
+      expect(reported?.[1]?.["identities"]).toBe(1);
+      expect(reported?.[1]?.["documents"]).toBe(2);
+      expect(reported?.[1]?.["sample"]).toBe(
+        "case-number:en:C-128/21=62021CJ0128,62021CO0128",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("says nothing when every listed variant keys to its own row", async () => {
+    installSparqlMock({ bindings: [enBinding, frBinding] });
+    const warn = spyOn(logger, "warn");
+
+    try {
+      await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+      expect(
+        warn.mock.calls.filter(
+          ([message]) => message === "case_law.reconciliation.shared_identity",
+        ),
+      ).toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("refuses a page the slice does not have", async () => {
+    installSparqlMock({ bindings: [] });
+
+    const rejection = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2024", page: 12 }),
+    );
+
+    expect(rejectionMessage(rejection)).toContain("slice page out of range");
+  });
+
+  test("keys a listed variant exactly as the crawl stores it", async () => {
+    // The drift this guards is silent in both directions: key a stored row
+    // differently and the loop re-fetches it forever, key a listed item
+    // differently and the slice never settles.
+    installSparqlMock({
+      bindings: [enBinding, frBinding],
+      served: [EN_MANIFESTATION_ID, FR_MANIFESTATION_ID],
+    });
+
+    const crawled = await ecjAdapter.fetchPage("2024-01-18", {});
+    if (!Result.isOk(crawled)) {
+      throw new TypeError("Expected Ok result");
+    }
+    const listed = await reconciliation.listSlicePage({
+      slice: "2024",
+      page: 0,
+    });
+
+    // The premise of the case-number identity: this adapter states no
+    // publisher document id, so its rows fall to the fallback index.
+    expect(
+      crawled.value.decisions.every(
+        ({ sourceDocumentId }) => sourceDocumentId === undefined,
+      ),
+    ).toBe(true);
+    expect(
+      listed.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(crawled.value.decisions.map(storedIdentityKey));
+  });
+});
+
+describe("euEcjAdapter.reconciliation.buildDecision", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+
+  beforeEach(() => {
+    Bun.sleep = () => Promise.resolve();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  test("builds the variant a stored payload names", async () => {
+    installSparqlMock({
+      bindings: [enBinding, frBinding],
+      served: [EN_MANIFESTATION_ID, FR_MANIFESTATION_ID],
+    });
+
+    // Through JSON, as the loop stores a parked payload and replays it.
+    const parked = JSON.stringify({ celex: "62021CJ0128", language: "FR" });
+    const payload: unknown = JSON.parse(parked);
+    const outcome = await reconciliation.buildDecision(payload);
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(outcome.decision.caseNumber).toBe("C-128/21");
+    expect(outcome.decision.language).toBe("fr");
+    expect(outcome.decision.documentUrl).toContain(FR_MANIFESTATION_ID);
+  });
+
+  test("builds from a later manifestation when the first is unreadable", async () => {
+    // A work can expose several XHTML manifestations of one language. The
+    // crawl treats a variant as done only once one of them builds, so a
+    // rebuild that stopped at the first would park — and eventually retire —
+    // a document the crawl ingests without trouble.
+    const staleManifestation = withManifestation(firstFixtureBinding, {
+      cellarLanguage: "ENG",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0005.05",
+    });
+    installSparqlMock({
+      bindings: [staleManifestation, enBinding],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(outcome.decision.documentUrl).toContain(EN_MANIFESTATION_ID);
+  });
+
+  test("reports a variant the publisher lists but does not serve", async () => {
+    installSparqlMock({ bindings: [enBinding, frBinding], served: [] });
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    // Not an error and not a written row: the loop parks it, widens its
+    // schedule and eventually retires it, which is what settles the slice.
+    expect(outcome).toEqual({ type: "detail-unavailable" });
+  });
+
+  test("reports a language the publisher no longer lists", async () => {
+    installSparqlMock({
+      bindings: [frBinding],
+      served: [EN_MANIFESTATION_ID, FR_MANIFESTATION_ID],
+    });
+
+    expect(
+      await reconciliation.buildDecision({
+        celex: "62021CJ0128",
+        language: "EN",
+      }),
+    ).toEqual({ type: "detail-unavailable" });
+  });
+
+  test("reports a payload no current identity rule keys", async () => {
+    const { queries, documentFetches } = installSparqlMock({ bindings: [] });
+
+    // A payload parked by an older adapter version, or one whose CELEX the
+    // query boundary would reject. Retired rather than retried, and the
+    // publisher is not contacted about it at all.
+    for (const payload of [
+      { celex: "62021cj0128", language: "EN" },
+      { celex: "62021CJ0128", language: "XX" },
+      { celex: "62021CJ0128" },
+      "62021CJ0128",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- each payload is asserted in turn
+      expect(await reconciliation.buildDecision(payload)).toEqual({
+        type: "unkeyable",
+      });
+    }
+    expect(queries).toHaveLength(0);
+    expect(documentFetches).toHaveLength(0);
   });
 });

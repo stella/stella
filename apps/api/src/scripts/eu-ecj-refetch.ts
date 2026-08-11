@@ -5,6 +5,7 @@ import { caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
+  ECJ_LISTING_TIMEOUT_MS,
   fetchDecisionsByCelex,
   isValidCelex,
   listCelexVariants,
@@ -57,8 +58,8 @@ import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 const DEFAULT_DELAY_MS = 500;
 /** Consecutive failed CELEX before the run halts; mirrors the crawl. */
 const FAILURE_HALT_THRESHOLD = 10;
+/** Whole-CELEX budget: one listing plus every language variant behind it. */
 const CELEX_FETCH_TIMEOUT_MS = 5 * 60_000;
-const SPARQL_TIMEOUT_MS = 60_000;
 const DEFAULT_FAILED_OUT = "eu-ecj-refetch-failed.json";
 
 const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
@@ -269,7 +270,7 @@ try {
       // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
       const expected = await listCelexVariants({
         celexNumbers: [celex],
-        signal: AbortSignal.timeout(SPARQL_TIMEOUT_MS),
+        signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
       });
       counts.variantsExpected += expected.length;
       // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
