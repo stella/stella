@@ -547,6 +547,24 @@ describe("entity-create presigned upload validation", () => {
           organizationId: seeded.organizationId,
           workspaceId: seeded.workspaceId,
           userId: seeded.userId,
+          purpose: "email_ingest",
+          purposeData: {
+            type: "email_ingest",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "message.eml",
+          declaredMime: "message/rfc822",
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "pending",
+          expiresAt: future,
+          createdAt,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
           purpose: "entity_create",
           purposeData: {
             type: "entity_create",
@@ -612,8 +630,8 @@ describe("entity-create presigned upload validation", () => {
       };
     });
 
-    expect(result.all).toBe(4);
-    expect(result.withoutCurrent).toBe(3);
+    expect(result.all).toBe(5);
+    expect(result.withoutCurrent).toBe(4);
   });
 });
 

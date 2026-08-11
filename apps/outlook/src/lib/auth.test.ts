@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseHandoffToken } from "@/lib/auth";
+import { buildDialogStartAddress, parseHandoffToken } from "@/lib/auth";
+
+describe("buildDialogStartAddress", () => {
+  test("bootstraps the dialog on the task-pane origin", () => {
+    expect(buildDialogStartAddress("https://outlook.example.test/path")).toBe(
+      "https://outlook.example.test/dialog.html?parentOrigin=https%3A%2F%2Foutlook.example.test",
+    );
+  });
+});
 
 const EXPECTED_ORIGIN = "https://my.stll.app";
 

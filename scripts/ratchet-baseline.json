@@ -350,7 +350,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 1,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
-      "apps/api/src/lib/auth.ts": 3,
+      "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/backfill-pacing.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 10,

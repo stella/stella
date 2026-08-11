@@ -8,6 +8,7 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  getOAuthState,
 } from "better-auth/api";
 import {
   bearer,
@@ -322,6 +323,61 @@ export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
  * schema defaults `redirectTo`, so no query string is required here.
  */
 const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
+const ORGANIZATION_SELECTION_PATH = "/auth/organization";
+const DEFAULT_AUTH_REDIRECT = "/";
+
+const isSafeRelativeRedirect = (value: string): boolean =>
+  /^\/(?![/\\])/u.test(value);
+
+type RelativeFrontendCallbackOptions = {
+  callbackURL: string | undefined;
+  frontendURL: string;
+};
+
+const relativeFrontendCallback = ({
+  callbackURL,
+  frontendURL,
+}: RelativeFrontendCallbackOptions): string => {
+  if (!callbackURL) {
+    return DEFAULT_AUTH_REDIRECT;
+  }
+
+  try {
+    const callback = new URL(callbackURL);
+    if (callback.origin !== new URL(frontendURL).origin) {
+      return DEFAULT_AUTH_REDIRECT;
+    }
+
+    if (callback.pathname === ORGANIZATION_SELECTION_PATH) {
+      const redirectTo = callback.searchParams.get("redirectTo");
+      return redirectTo && isSafeRelativeRedirect(redirectTo)
+        ? redirectTo
+        : DEFAULT_AUTH_REDIRECT;
+    }
+
+    const relative = `${callback.pathname}${callback.search}${callback.hash}`;
+    return isSafeRelativeRedirect(relative) ? relative : DEFAULT_AUTH_REDIRECT;
+  } catch {
+    return DEFAULT_AUTH_REDIRECT;
+  }
+};
+
+type SocialTwoFactorRedirectUrlOptions = {
+  callbackURL: string | undefined;
+  frontendURL: string;
+};
+
+export const socialTwoFactorRedirectUrl = ({
+  callbackURL,
+  frontendURL,
+}: SocialTwoFactorRedirectUrlOptions): string => {
+  const target = new URL(TWO_FACTOR_CHALLENGE_PATH, frontendURL);
+  const redirectTo = relativeFrontendCallback({ callbackURL, frontendURL });
+  if (redirectTo !== DEFAULT_AUTH_REDIRECT) {
+    target.searchParams.set("redirectTo", redirectTo);
+  }
+  return target.toString();
+};
 
 /**
  * Frontend route that lists the account's active sessions (the settings page
@@ -749,12 +805,17 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // eslint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
           if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
             return;
           }
-          throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
+          const oauthState = await getOAuthState();
+          throw ctx.redirect(
+            socialTwoFactorRedirectUrl({
+              callbackURL: oauthState?.callbackURL,
+              frontendURL: env.FRONTEND_URL,
+            }),
+          );
         }),
       },
     ],

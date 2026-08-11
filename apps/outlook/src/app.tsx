@@ -34,26 +34,24 @@ export const App = () => {
 
   useEffect(() => subscribeAuthToken(setToken), []);
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     setSignInState({ type: "signing-in" });
-    try {
-      await signInViaDialog(env.signInOrigin, env.taskpaneOrigin);
-      setSignInState({ type: "idle" });
-    } catch (error) {
-      setSignInState({
-        message: error instanceof Error ? error.message : t("loadError"),
-        type: "error",
+    signInViaDialog({
+      signInOrigin: env.signInOrigin,
+      taskpaneOrigin: env.taskpaneOrigin,
+    })
+      .then(() => setSignInState({ type: "idle" }))
+      .catch((error: unknown) => {
+        setSignInState({
+          message: error instanceof Error ? error.message : t("loadError"),
+          type: "error",
+        });
       });
-    }
   };
 
   if (!token) {
     return (
-      <SignInPanel
-        onSignIn={() => void handleSignIn()}
-        signInState={signInState}
-        t={t}
-      />
+      <SignInPanel onSignIn={handleSignIn} signInState={signInState} t={t} />
     );
   }
 
@@ -70,10 +68,9 @@ type DraftEdit = {
   value: string;
 };
 
-type DraftPlacementState = {
-  source: string;
-  value: DraftPlacement;
-};
+type DraftPlacementState =
+  | { source: string; type: "placed"; value: DraftPlacement }
+  | { message: string; source: string; type: "error" };
 
 const AuthedApp = ({ t }: { t: Translate }) => {
   const { refresh, state: loadState } = useMailSnapshot(t("loadError"));
@@ -173,14 +170,31 @@ const MessageApp = ({
       ? draftEdit.value
       : (draftSource?.draft ?? "");
   const draftPlacement =
-    placementState?.source === draft ? placementState.value : null;
+    placementState?.source === draft && placementState.type === "placed"
+      ? placementState.value
+      : null;
+  const draftPlacementError =
+    placementState?.source === draft && placementState.type === "error"
+      ? placementState.message
+      : null;
   const checks = runDraftChecks({ selectedWorkspaceId, snapshot });
 
-  const handlePlaceDraft = async () => {
+  const handlePlaceDraft = () => {
     if (!draft) {
       return;
     }
-    setPlacementState({ source: draft, value: await placeDraft(draft) });
+    placeDraft(draft)
+      .then((value) =>
+        setPlacementState({ source: draft, type: "placed", value }),
+      )
+      .catch((error: unknown) => {
+        setPlacementState({
+          message:
+            error instanceof Error ? error.message : t("draftPlacementError"),
+          source: draft,
+          type: "error",
+        });
+      });
   };
 
   const handleSave = () => {
@@ -225,13 +239,14 @@ const MessageApp = ({
         draft={draft}
         draftIntent={draftIntent}
         draftPlacement={draftPlacement}
+        draftPlacementError={draftPlacementError}
         draftState={aiDraft.state}
         onDraftChange={(value) => setDraftEdit({ source: draftSource, value })}
         onDraftReply={() =>
           aiDraft.draftReply({ intent: draftIntent, snapshot })
         }
         onIntentChange={setDraftIntent}
-        onPlaceDraft={() => void handlePlaceDraft()}
+        onPlaceDraft={handlePlaceDraft}
         onSummarize={() => summary.summarize({ text: snapshot.bodyText })}
         summaryState={summary.state}
         t={t}

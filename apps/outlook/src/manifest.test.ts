@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { renderManifest } from "../scripts/render-manifest";
+import {
+  renderManifest,
+  resolveManifestPlaceholders,
+  resolveOutlookRuntimeConfig,
+} from "../scripts/render-manifest";
 import {
   ManifestValidationError,
   validateManifestFile,
@@ -55,5 +59,31 @@ describe("manifest XSD validation", () => {
     const manifest = renderManifest("prod");
 
     expect(manifest).toContain("<Version>1.0.0.0</Version>");
+  });
+
+  test("applies custom deployment origins to the shared build configuration", () => {
+    const runtimeEnv = {
+      STELLA_API_ORIGIN: "https://api.example.test",
+      STELLA_TASKPANE_ORIGIN: "https://outlook.example.test",
+      STELLA_WEB_ORIGIN: "https://app.example.test",
+    };
+    const placeholders = resolveManifestPlaceholders("prod", runtimeEnv);
+
+    expect(placeholders).toMatchObject({
+      API_ORIGIN: "https://api.example.test",
+      TASKPANE_ORIGIN: "https://outlook.example.test",
+      WEB_ORIGIN: "https://app.example.test",
+    });
+    expect(
+      resolveOutlookRuntimeConfig({
+        env: "prod",
+        placeholders,
+        runtimeEnv,
+      }),
+    ).toEqual({
+      apiBaseUrl: "https://api.example.test",
+      taskpaneOrigin: "https://outlook.example.test",
+      webOrigin: "https://app.example.test",
+    });
   });
 });
