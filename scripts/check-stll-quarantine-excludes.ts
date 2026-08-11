@@ -108,11 +108,18 @@ const readExcludeBlock = (bunfig: string): string => {
 };
 
 const readExcludes = (bunfig: string): Set<string> => {
-  const install = Bun.TOML.parse(bunfig)["install"];
+  const parsed = Bun.TOML.parse(bunfig);
+  if (!("install" in parsed)) {
+    return new Set();
+  }
+  const install = parsed.install;
   if (typeof install !== "object" || install === null) {
     return new Set();
   }
-  const excludes = install["minimumReleaseAgeExcludes"];
+  if (!("minimumReleaseAgeExcludes" in install)) {
+    return new Set();
+  }
+  const excludes = install.minimumReleaseAgeExcludes;
   if (!Array.isArray(excludes)) {
     return new Set();
   }
