@@ -1032,6 +1032,7 @@ type Messages = {
     "save": "Save";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
     "search": "Search...";
     "selectAMatter": "Select a matter";

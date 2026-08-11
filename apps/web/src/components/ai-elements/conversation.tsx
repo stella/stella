@@ -3,6 +3,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
@@ -111,6 +112,7 @@ export const ConversationScrollButton = ({
   className,
   ...props
 }: ConversationScrollButtonProps) => {
+  const t = useTranslations();
   const { isAtBottom, isScrollable, scrollToBottom } =
     useStickToBottomContext();
 
@@ -118,7 +120,7 @@ export const ConversationScrollButton = ({
     isScrollable &&
     !isAtBottom && (
       <Button
-        aria-label="Scroll to bottom"
+        aria-label={t("common.scrollToBottom")}
         className={cn(
           // The outline variant is translucent in dark mode (content shows
           // through the button) and its `::before` highlight is a rounded
