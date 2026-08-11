@@ -17,37 +17,42 @@ type UseMailSnapshot = {
 
 export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   const [state, setState] = useState<MailSnapshotState>({ type: "loading" });
+  const itemInstanceSequence = useRef(0);
   const loadSequence = useRef(0);
 
-  const load = useCallback(async () => {
-    const sequence = ++loadSequence.current;
-    const result = await Result.tryPromise(
-      async () => await loadMailSnapshot(),
-    );
-    if (sequence !== loadSequence.current) {
-      return;
-    }
-    if (Result.isError(result)) {
-      const { error } = result;
-      setState({
-        message: error instanceof Error ? error.message : errorFallback,
-        type: "error",
-      });
-      return;
-    }
-    setState({ snapshot: result.value, type: "ready" });
-  }, [errorFallback]);
+  const load = useCallback(
+    async (itemInstanceKey: string) => {
+      const sequence = ++loadSequence.current;
+      const result = await Result.tryPromise(
+        async () => await loadMailSnapshot(itemInstanceKey),
+      );
+      if (sequence !== loadSequence.current) {
+        return;
+      }
+      if (Result.isError(result)) {
+        const { error } = result;
+        setState({
+          message: error instanceof Error ? error.message : errorFallback,
+          type: "error",
+        });
+        return;
+      }
+      setState({ snapshot: result.value, type: "ready" });
+    },
+    [errorFallback],
+  );
 
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (active) {
-        void load();
+        void load(`item-${String(itemInstanceSequence.current)}`);
       }
     });
     const unsubscribe = subscribeMailboxItemChanges(() => {
+      itemInstanceSequence.current += 1;
       setState({ type: "loading" });
-      void load();
+      void load(`item-${String(itemInstanceSequence.current)}`);
     });
     return () => {
       active = false;
@@ -59,7 +64,7 @@ export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   return {
     refresh: () => {
       setState({ type: "loading" });
-      void load();
+      void load(`item-${String(itemInstanceSequence.current)}`);
     },
     state,
   };

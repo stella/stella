@@ -5,11 +5,13 @@ import type { AttachmentDownloadResult, MailSnapshot } from "@/types";
 
 const baseSnapshot: MailSnapshot = {
   attachments: [],
+  bcc: [{ email: "blind@example.net", name: "Blind Recipient" }],
   bodyText: "Please review the attached draft before Friday.",
   cc: [{ email: "partner@firm.example", name: "Partner" }],
   conversationId: "conv-1",
   from: { email: "client@example.com", name: "Jane Client" },
   internetMessageId: "<msg-1@example.com>",
+  itemInstanceKey: "item-instance-1",
   itemId: "item-1",
   mode: "read",
   sentAt: "2026-06-13T09:00:00.000Z",
@@ -40,6 +42,7 @@ describe("buildEmlFile", () => {
     expect(raw).toContain("client@example.com");
     expect(raw).toContain("lawyer@firm.example");
     expect(raw).toContain("partner@firm.example");
+    expect(raw).toContain("blind@example.net");
     expect(raw).toContain("Message-ID: <msg-1@example.com>");
     expect(raw).toContain("Please review the attached draft before Friday.");
   });

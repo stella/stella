@@ -64,6 +64,9 @@ export const buildEmlFile = async ({
   if (snapshot.cc.length > 0) {
     message.setRecipients(snapshot.cc.map(toMailbox), { type: "Cc" });
   }
+  if (snapshot.bcc.length > 0) {
+    message.setRecipients(snapshot.bcc.map(toMailbox), { type: "Bcc" });
+  }
 
   message.setSubject(snapshot.subject || "(No subject)");
   if (snapshot.sentAt) {

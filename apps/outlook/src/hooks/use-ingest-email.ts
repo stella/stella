@@ -17,6 +17,7 @@ export type IngestState =
   | {
       attachmentCount: number;
       entityId: string;
+      fieldId: string;
       skippedAttachments: string[];
       type: "saved";
       workspaceId: string;
@@ -68,6 +69,7 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
     setState({
       attachmentCount: result.value.attachmentCount,
       entityId: result.value.entityId,
+      fieldId: result.value.fieldId,
       skippedAttachments: result.value.skippedAttachments,
       type: "saved",
       workspaceId,

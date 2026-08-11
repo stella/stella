@@ -72,6 +72,7 @@ declare namespace Office {
 
   type MailboxItem = {
     attachments?: AttachmentDetails[];
+    bcc?: AsyncValue<EmailAddressDetails[]> | EmailAddressDetails[];
     body?: Body;
     cc?: AsyncValue<EmailAddressDetails[]> | EmailAddressDetails[];
     conversationId?: string;
@@ -146,6 +147,7 @@ declare namespace Office {
   };
 
   const context: {
+    displayLanguage?: string;
     diagnostics?: {
       host?: string;
       platform?: string;

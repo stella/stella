@@ -177,7 +177,7 @@ const MessageApp = ({
     placementState?.source === draft && placementState.type === "error"
       ? placementState.message
       : null;
-  const checks = runDraftChecks({ selectedWorkspaceId, snapshot });
+  const checks = runDraftChecks({ selectedWorkspaceId, snapshot, t });
 
   const handlePlaceDraft = () => {
     if (!draft) {
@@ -265,10 +265,7 @@ const MessageApp = ({
 };
 
 const snapshotKey = (snapshot: MailSnapshot): string =>
-  snapshot.itemId ??
-  snapshot.internetMessageId ??
-  snapshot.conversationId ??
-  [snapshot.mode, snapshot.subject, snapshot.sentAt].join(":");
+  snapshot.itemInstanceKey;
 
 const modeLabel = (
   mode: "browser" | "compose" | "read",

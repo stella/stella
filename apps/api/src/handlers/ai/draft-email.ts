@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { toOutlookGenerationError } from "@/api/handlers/ai/outlook-generation-error";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const INTENT_MAX_CHARS = 2000;
@@ -142,11 +142,10 @@ const draftEmail = createSafeRootHandler(
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);
-          return new HandlerError({
-            status: 502,
-            message: "Could not draft the email. Please try again.",
+          return toOutlookGenerationError(
             cause,
-          });
+            "Could not draft the email. Please try again.",
+          );
         },
       }),
     );
