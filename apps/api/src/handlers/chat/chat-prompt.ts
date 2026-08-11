@@ -10,6 +10,7 @@ import * as cheerio from "cheerio";
 import { and, asc, count, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -36,7 +37,6 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { estimateTextTokens } from "@/api/handlers/chat/compaction";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
-import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
 import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";

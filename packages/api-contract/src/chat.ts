@@ -2,6 +2,13 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeId } from "./safe-id";
 
+/**
+ * Title a thread is persisted with until its first message generates a real
+ * one. Deliberately untranslated: it is a sentinel both sides compare
+ * against, and the UI substitutes a localized label when it matches.
+ */
+export const CHAT_THREAD_PLACEHOLDER_TITLE = "New chat";
+
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;

@@ -1,13 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
-// Server page-size ceiling; each hydration fetch requests a full page.
-const DOCX_SUGGESTIONS_HYDRATION_LIMIT = 200;
+// Each hydration fetch requests a full page.
 // Page ALL pending rows up to this safety cap: pending drives the actionable
 // panel and must never be crowded out of hydration by resolved history. Well
 // past any realistic pending set for one entity; a capped pending hydration is
@@ -46,7 +47,7 @@ export const docxSuggestionsOptions = ({
         max: number,
       ) => {
         const firstPage = await endpoint.get({
-          query: { status, limit: DOCX_SUGGESTIONS_HYDRATION_LIMIT },
+          query: { status, limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX },
           fetch: { signal },
         });
         const firstData = unwrapEden(firstPage);
@@ -59,7 +60,7 @@ export const docxSuggestionsOptions = ({
           const page = await endpoint.get({
             query: {
               status,
-              limit: DOCX_SUGGESTIONS_HYDRATION_LIMIT,
+              limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
               cursor: nextCursor,
             },
             fetch: { signal },

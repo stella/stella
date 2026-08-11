@@ -24,7 +24,12 @@ export {
   isBusinessRegistrySlug,
 } from "./business-registries";
 export type { BusinessRegistrySlug } from "./business-registries";
-export { CHAT_RUN_MODE, CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "./chat";
+export {
+  CHAT_RUN_MODE,
+  CHAT_THREAD_PLACEHOLDER_TITLE,
+  CHAT_TOOL_SCOPE,
+  CHAT_TURN_INTENT,
+} from "./chat";
 export type {
   ChatContinuation,
   ChatInterruptResolution,
@@ -155,6 +160,11 @@ export type {
   FlowTriggerType,
   TerminalFlowRunStatus,
 } from "./flow-status";
+export {
+  AGENT_SKILLS_CHAT_METADATA_MAX,
+  DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
+  FLOW_RUN_INPUT_ENTITIES_MAX,
+} from "./limits";
 export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
 export type { GlobalSearchResultType } from "./search";
 export {

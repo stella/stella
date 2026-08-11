@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+
 import {
   aiTitlingMayReplace,
-  CHAT_THREAD_PLACEHOLDER_TITLE,
   shouldRefreshEmptyThreadTitle,
 } from "./thread-title";
 

@@ -1,3 +1,5 @@
+import { AGENT_SKILLS_CHAT_METADATA_MAX } from "@stll/api-contract";
+
 import type {
   SlashItem,
   SlashSkillScope,
@@ -36,10 +38,6 @@ type SlashSkillPage = {
   builtIn: readonly SlashSkillRow[];
   installed: readonly SlashSkillRow[];
 };
-
-// Mirrors LIMITS.agentSkillsChatMetadataMax on the API side. The chat backend
-// only exposes this many enabled installed skills to `load-skill`.
-const CHAT_VISIBLE_INSTALLED_SKILL_LIMIT = 200;
 
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
@@ -156,7 +154,7 @@ const getChatVisibleInstalledSkillRows = (
   const chatVisibleEnabled = installedRows
     .filter((row) => row.enabled)
     .toSorted(compareChatInstalledSkillRows)
-    .slice(0, CHAT_VISIBLE_INSTALLED_SKILL_LIMIT);
+    .slice(0, AGENT_SKILLS_CHAT_METADATA_MAX);
   // Every chat-visible installed slug shadows the built-in entry of
   // the same name — including ones that carry a command. The
   // backend load-skill resolves the slug to the installed row, so

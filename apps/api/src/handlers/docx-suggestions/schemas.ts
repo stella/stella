@@ -4,9 +4,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 /** Ceiling on one persist batch; mirrors the edit tool's operation cap. */
 export const MAX_DOCX_SUGGESTIONS_PER_BATCH = 200;
-/** Default and max page size for the entity suggestion list. */
+/** Default page size for the entity suggestion list. The max is
+ *  `DOCX_SUGGESTIONS_PAGE_SIZE_MAX` in @stll/api-contract, which the client
+ *  requests per hydration fetch. */
 export const DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT = 100;
-export const DOCX_SUGGESTIONS_PAGE_SIZE_MAX = 200;
 
 export const tDocxSuggestionSeverity = t.Union([
   t.Literal("low"),

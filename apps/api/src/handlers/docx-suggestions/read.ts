@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import {
@@ -13,10 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 
 import { docxSuggestionCursor } from "./cursor";
-import {
-  DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT,
-  DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
-} from "./schemas";
+import { DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT } from "./schemas";
 
 /**
  * List an entity's persisted suggestions (pending and resolved), oldest

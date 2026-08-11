@@ -1,4 +1,8 @@
-import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
+import {
+  AGENT_SKILLS_CHAT_METADATA_MAX,
+  CHAT_RICH_PART_LIMITS,
+  FLOW_RUN_INPUT_ENTITIES_MAX,
+} from "@stll/api-contract";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
@@ -82,7 +86,7 @@ export const LIMITS = {
   flowRunsPageSizeDefault: 50,
   flowRunsPageSizeMax: 100,
   /** Max input documents a single flow run may be launched against. */
-  flowRunInputEntitiesMax: 50,
+  flowRunInputEntitiesMax: FLOW_RUN_INPUT_ENTITIES_MAX,
   /** Per-org cap on the editable document-type taxonomy. The taxonomy is
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */
@@ -109,7 +113,7 @@ export const LIMITS = {
    *  (org-wide) plus the caller's private skills. Kept >=
    *  agentSkillsTeamPerOrganization + agentSkillsPerUser so the catalogue never
    *  truncates and silently hides a skill from the model. */
-  agentSkillsChatMetadataMax: 200,
+  agentSkillsChatMetadataMax: AGENT_SKILLS_CHAT_METADATA_MAX,
   /** Per-org cap on team-scoped skills, enforced on create/install. With
    *  agentSkillsPerUser it keeps team (org-wide) + the caller's private skills
    *  within agentSkillsChatMetadataMax (100 + 100 <= 200). Mirrors
