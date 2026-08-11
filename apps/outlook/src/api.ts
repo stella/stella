@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
 import type { SafeId } from "@stll/api/types";
 import { toSafeId } from "@stll/api/types";
@@ -87,6 +89,67 @@ export type PendingEmailUpload = {
   workspaceId: SafeId<"workspace">;
 };
 
+type DirectEmailUploadDependencies = {
+  abortReservation: (
+    workspaceId: SafeId<"workspace">,
+    uploadId: SafeId<"pendingUpload">,
+  ) => Promise<void>;
+  put: typeof fetch;
+};
+
+const directEmailUploadDependencies: DirectEmailUploadDependencies = {
+  abortReservation: async (workspaceId, uploadId) => {
+    const aborted = await api
+      .uploads({ workspaceId })({ uploadId })
+      .delete({}, withTimeout());
+    if (aborted.error) {
+      throw toAPIError(aborted.error);
+    }
+  },
+  put: fetch,
+};
+
+type PutPresignedEmailOptions = {
+  eml: File;
+  headers: Record<string, string>;
+  uploadId: SafeId<"pendingUpload">;
+  url: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const putPresignedEmail = async (
+  { eml, headers, uploadId, url, workspaceId }: PutPresignedEmailOptions,
+  dependencies: DirectEmailUploadDependencies = directEmailUploadDependencies,
+): Promise<void> => {
+  const putResult = await Result.tryPromise({
+    try: async () =>
+      await dependencies.put(url, {
+        body: eml,
+        headers,
+        method: "PUT",
+        signal: AbortSignal.timeout(DOCUMENT_UPLOAD_POLICY.putTimeoutMs),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(putResult) && putResult.value.ok) {
+    return;
+  }
+
+  const abortResult = await Result.tryPromise({
+    try: async () => await dependencies.abortReservation(workspaceId, uploadId),
+    catch: (cause) => cause,
+  });
+  const cleanupSuffix = Result.isError(abortResult)
+    ? "; reservation cleanup could not be confirmed"
+    : "";
+  const status = Result.isOk(putResult) ? putResult.value.status : 502;
+  const responseSuffix = Result.isOk(putResult) ? ` (${status})` : "";
+  throw new APIError({
+    message: `Upload failed${responseSuffix}${cleanupSuffix}`,
+    status,
+  });
+};
+
 /**
  * Reconstruct the message as a single `.eml`, then upload it through the
  * standard presigned flow with the `email_ingest` purpose. The API parses
@@ -125,18 +188,13 @@ export const prepareEmailUpload = async ({
     throw toAPIError(presign.error);
   }
 
-  const putResponse = await fetch(presign.data.url, {
-    body: eml,
+  await putPresignedEmail({
+    eml,
     headers: presign.data.headers,
-    method: "PUT",
-    signal: AbortSignal.timeout(DOCUMENT_UPLOAD_POLICY.putTimeoutMs),
+    uploadId: presign.data.uploadId,
+    url: presign.data.url,
+    workspaceId,
   });
-  if (!putResponse.ok) {
-    throw new APIError({
-      message: `Upload failed (${putResponse.status})`,
-      status: putResponse.status,
-    });
-  }
 
   return {
     skippedAttachments: attachments
