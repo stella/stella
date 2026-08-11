@@ -371,6 +371,146 @@ const getScopedAwsS3Client = async (
   return built.client;
 };
 
+const getTenantAwsS3Client = async ({
+  actions,
+  key,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  key: string;
+  scope: S3SigningScope;
+}): Promise<AwsS3Client> => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  if (!shouldUseScopedSigning()) {
+    return await getAwsS3Client();
+  }
+  return await getScopedAwsS3Client(scope, actions, 0);
+};
+
+type TenantS3OperationHooks = {
+  resolveClient: typeof getTenantAwsS3Client;
+  readObject: (
+    client: AwsS3Client,
+    command: GetObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<Uint8Array>;
+  writeObject: (
+    client: AwsS3Client,
+    command: PutObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<void>;
+};
+
+export const createTenantS3RequestSignal = (
+  signal: AbortSignal,
+  timeoutMs = AWS_SDK_REQUEST_TIMEOUT_MS,
+): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+
+const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
+  resolveClient: getTenantAwsS3Client,
+  readObject: async (client, command, signal) => {
+    const response = await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
+    if (!response.Body) {
+      throw new S3PresignError({
+        message: "S3 returned an object without a response body",
+      });
+    }
+    return await response.Body.transformToByteArray();
+  },
+  writeObject: async (client, command, signal) => {
+    await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
+  },
+};
+
+let tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
+
+/** Replace tenant-object I/O seams for unit tests. */
+export const setTenantS3OperationHooksForTesting = (
+  hooks: TenantS3OperationHooks,
+): void => {
+  tenantS3OperationHooks = hooks;
+};
+
+/** Read an object after enforcing its organization/workspace key scope. */
+export const readTenantS3ArrayBuffer = async ({
+  key,
+  scope,
+  signal,
+}: {
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<ArrayBuffer> => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  const client = await tenantS3OperationHooks.resolveClient({
+    actions: ["s3:GetObject"],
+    key,
+    scope,
+  });
+  const bytes = await tenantS3OperationHooks.readObject(
+    client,
+    new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    signal,
+  );
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
+  }
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+};
+
+/** Write an object after enforcing its organization/workspace key scope. */
+export const writeTenantS3Object = async ({
+  contentType,
+  data,
+  key,
+  scope,
+  signal,
+}: {
+  contentType: string;
+  data: Uint8Array;
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<void> => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  const client = await tenantS3OperationHooks.resolveClient({
+    actions: ["s3:PutObject"],
+    key,
+    scope,
+  });
+  await tenantS3OperationHooks.writeObject(
+    client,
+    new PutObjectCommand({
+      Body: data,
+      Bucket: envBase.S3_BUCKET,
+      ContentType: contentType,
+      Key: key,
+    }),
+    signal,
+  );
+};
+
 const getPresignClient = async ({
   actions,
   expiresIn,
@@ -404,6 +544,7 @@ export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
   _stsClientPromise = null;
   _scopedClientPromises = new Map();
+  tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
 
 /**

@@ -238,10 +238,12 @@ type NativeExtractionRun = Pick<
 export const executeNativeExtraction = async ({
   fileField,
   lifecycleSignal,
+  readSource = getS3ObjectWithSignal,
   run,
 }: {
   fileField: Extract<FieldContent, { type: "file" }>;
   lifecycleSignal: AbortSignal;
+  readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   run: NativeExtractionRun;
 }): Promise<NativeExtractionProjectionOutcome> => {
   const source = pickExtractionSource(fileField);
@@ -252,7 +254,7 @@ export const executeNativeExtraction = async ({
     mimeType: source.storageMimeType,
   });
   const buffer = await withTimeout(
-    async (signal) => await getS3ObjectWithSignal(key, signal),
+    async (signal) => await readSource(key, signal),
     {
       label: "native extraction source read",
       signal: lifecycleSignal,

@@ -359,6 +359,78 @@ describe("processExtraction", () => {
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
   });
 
+  test("reads native extraction input through the caller-provided storage scope", async () => {
+    const readSource = mock(async () => new ArrayBuffer(8));
+
+    await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(readSource).toHaveBeenCalledWith(
+      `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
+      expect.any(AbortSignal),
+    );
+    expect(getS3ObjectWithSignalMock).not.toHaveBeenCalled();
+  });
+
+  test("propagates lifecycle cancellation to the caller-provided storage reader", async () => {
+    const controller = new AbortController();
+    const started = Promise.withResolvers<undefined>();
+    const observedSignals: AbortSignal[] = [];
+    const readSource = mock(async (_key: string, signal: AbortSignal) => {
+      observedSignals.push(signal);
+      started.resolve(undefined);
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("Storage read aborted")),
+          {
+            once: true,
+          },
+        );
+      });
+      return new ArrayBuffer();
+    });
+
+    const extraction = executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: controller.signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+    await started.promise;
+    controller.abort("test cancellation");
+    const rejection = await extraction.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(observedSignals).toHaveLength(1);
+    expect(observedSignals.at(0)?.aborted).toBe(true);
+    expect(rejection).not.toBeNull();
+    expect(getS3ObjectWithSignalMock).not.toHaveBeenCalled();
+    expect(encryptContentMock).not.toHaveBeenCalled();
+  });
+
   test("restores manual OCR after native PDF extraction without automatic eligibility", async () => {
     const outcome = await executeNativeExtraction({
       fileField: fileContent,

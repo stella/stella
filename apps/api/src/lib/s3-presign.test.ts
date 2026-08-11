@@ -1,15 +1,28 @@
+import { S3Client as AwsS3Client } from "@aws-sdk/client-s3";
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
+  createTenantS3RequestSignal,
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
   presignDownloadUrl,
   presignUploadUrl,
+  readTenantS3ArrayBuffer,
   resetAwsS3ClientForTesting,
+  setTenantS3OperationHooksForTesting,
+  writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 
 const sha256Base64 = (data: string): string =>
@@ -214,6 +227,135 @@ describe("hasScopedSessionTimeForPresign", () => {
         now: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("scoped object operations", () => {
+  const scope = {
+    organizationId: "org_1",
+    workspaceId: "ws_1",
+  } as const;
+  const client = new AwsS3Client({
+    credentials: {
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+    },
+    region: "us-east-1",
+  });
+  const installHooks = () => {
+    const hooks = {
+      readObject: mock(async (_client, _command, _signal) => HELLO_BYTES),
+      resolveClient: mock(async () => client),
+      writeObject: mock(async (_client, _command, _signal) => undefined),
+    } satisfies Parameters<typeof setTenantS3OperationHooksForTesting>[0];
+    setTenantS3OperationHooksForTesting(hooks);
+    return hooks;
+  };
+
+  afterEach(() => {
+    resetAwsS3ClientForTesting();
+  });
+
+  test("bounds tenant requests by caller cancellation and request timeout", async () => {
+    const controller = new AbortController();
+    const callerSignal = createTenantS3RequestSignal(controller.signal);
+    const callerReason = new Error("Caller cancelled");
+    controller.abort(callerReason);
+
+    expect(callerSignal.aborted).toBe(true);
+    expect(callerSignal.reason).toBe(callerReason);
+
+    const timeoutSignal = createTenantS3RequestSignal(
+      new AbortController().signal,
+      1,
+    );
+    await new Promise<void>((resolve) => {
+      timeoutSignal.addEventListener("abort", () => resolve(), { once: true });
+    });
+
+    expect(timeoutSignal.aborted).toBe(true);
+    expect(timeoutSignal.reason).toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("executes an allowed tenant read with the requested key and signal", async () => {
+    const signal = new AbortController().signal;
+    const hooks = installHooks();
+
+    const result = await readTenantS3ArrayBuffer({
+      key: "org_1/ws_1/file.pdf",
+      scope,
+      signal,
+    });
+
+    expect(new Uint8Array(result)).toEqual(HELLO_BYTES);
+    expect(hooks.readObject).toHaveBeenCalledTimes(1);
+    const call = hooks.readObject.mock.calls.at(0);
+    expect(call?.at(0)).toBe(client);
+    expect(call?.at(1).input).toEqual({
+      Bucket: "stella",
+      Key: "org_1/ws_1/file.pdf",
+    });
+    expect(call?.at(2)).toBe(signal);
+  });
+
+  test("executes an allowed tenant write with the requested object and signal", async () => {
+    const signal = new AbortController().signal;
+    const hooks = installHooks();
+
+    await writeTenantS3Object({
+      contentType: "application/pdf",
+      data: HELLO_BYTES,
+      key: "org_1/ws_1/derivative.pdf",
+      scope,
+      signal,
+    });
+
+    expect(hooks.writeObject).toHaveBeenCalledTimes(1);
+    const call = hooks.writeObject.mock.calls.at(0);
+    expect(call?.at(0)).toBe(client);
+    expect(call?.at(1).input).toEqual({
+      Body: HELLO_BYTES,
+      Bucket: "stella",
+      ContentType: "application/pdf",
+      Key: "org_1/ws_1/derivative.pdf",
+    });
+    expect(call?.at(2)).toBe(signal);
+  });
+
+  test("rejects a cross-workspace read before resolving credentials", async () => {
+    const hooks = installHooks();
+    const rejection = await readTenantS3ArrayBuffer({
+      key: "org_1/ws_2/file.pdf",
+      scope,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: "S3 key is outside the requested signing scope",
+    });
+    expect(hooks.resolveClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects a cross-workspace write before resolving credentials", async () => {
+    const hooks = installHooks();
+    const rejection = await writeTenantS3Object({
+      contentType: "application/pdf",
+      data: new Uint8Array(),
+      key: "org_2/ws_1/derivative.pdf",
+      scope,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: "S3 key is outside the requested signing scope",
+    });
+    expect(hooks.resolveClient).not.toHaveBeenCalled();
   });
 });
 
