@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
+import type { PendingEmailUpload } from "@/api";
 import { runDraftChecks } from "@/checks";
 import { ActionPanel } from "@/components/action-panel";
 import { AppHeader } from "@/components/app-header";
@@ -73,6 +74,7 @@ type DraftPlacementState =
   | { message: string; source: string; type: "error" };
 
 const AuthedApp = ({ t }: { t: Translate }) => {
+  const pendingEmailUpload = useRef<PendingEmailUpload | null>(null);
   const {
     isCurrent,
     loadLatest,
@@ -119,6 +121,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
             isCurrent={isCurrent}
             key={snapshotKey(snapshot)}
             loadLatest={loadLatest}
+            pendingEmailUpload={pendingEmailUpload}
             snapshot={snapshot}
             t={t}
             workspaceError={workspaceError}
@@ -134,6 +137,7 @@ const MessageApp = ({
   isCurrent,
   snapshot,
   loadLatest,
+  pendingEmailUpload,
   t,
   workspaceError,
   workspaces,
@@ -141,6 +145,7 @@ const MessageApp = ({
   isCurrent: (itemInstanceKey: string) => boolean;
   snapshot: MailSnapshot;
   loadLatest: () => Promise<MailSnapshot>;
+  pendingEmailUpload: { current: PendingEmailUpload | null };
   t: Translate;
   workspaceError: string | null;
   workspaces: ReturnType<typeof useWorkspaces>["workspaces"];
@@ -157,7 +162,7 @@ const MessageApp = ({
 
   const summary = useAISummary(t("saveErrorFallback"));
   const aiDraft = useAIDraft(t("saveErrorFallback"));
-  const ingest = useIngestEmail(t("saveErrorFallback"));
+  const ingest = useIngestEmail(t("saveErrorFallback"), pendingEmailUpload);
 
   const [attachmentSelection, setAttachmentSelection] =
     useState<AttachmentSelection | null>(null);
