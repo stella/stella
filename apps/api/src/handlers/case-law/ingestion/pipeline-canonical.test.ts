@@ -520,6 +520,9 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
+      reportedTotal: null,
+      reportedTotalAsOf: null,
+      reportedTotalOrigin: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     } satisfies typeof caseLawSources.$inferSelect;
@@ -572,6 +575,9 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
+      reportedTotal: null,
+      reportedTotalAsOf: null,
+      reportedTotalOrigin: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     } satisfies typeof caseLawSources.$inferSelect;

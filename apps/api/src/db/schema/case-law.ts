@@ -40,6 +40,19 @@ export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS = {
   CLEANUP: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[1],
 } as const;
 
+/**
+ * How a source's reported total was obtained. Not a boolean: a third
+ * provenance (an operator-approved import, say) must be able to land as a
+ * new member rather than as a second flag.
+ */
+export const SOURCE_TOTAL_ORIGIN = {
+  ADAPTER_POLL: "adapter-poll",
+  OPERATOR: "operator",
+} as const;
+
+export type SourceTotalOrigin =
+  (typeof SOURCE_TOTAL_ORIGIN)[keyof typeof SOURCE_TOTAL_ORIGIN];
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -65,6 +78,20 @@ export const caseLawSources = p.pgTable(
     // migration-owned trigger validates inserts and descriptor changes while
     // permitting unrelated checkpoint updates on legacy malformed rows.
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
+    /**
+     * How many decisions the publisher itself reports holding, with when it
+     * was observed and where the number came from. Held-vs-total coverage is
+     * otherwise uncomputable for a publisher that exposes no cheap count.
+     *
+     * The three move together — all set or all null. That invariant belongs
+     * to the single writer (`ingestion/source-totals.ts`), not to a check
+     * constraint, because the writer is also what validates the number.
+     */
+    reportedTotal: p.integer("reported_total"),
+    reportedTotalAsOf: timestamptz("reported_total_as_of"),
+    reportedTotalOrigin: p
+      .varchar("reported_total_origin", { length: 16 })
+      .$type<SourceTotalOrigin>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
