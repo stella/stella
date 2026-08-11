@@ -10,8 +10,8 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="stella" />
   <Description DefaultValue="Summarize, draft, check, and save Outlook email into stella matters." />
-  <IconUrl DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-32.png" />
-  <HighResolutionIconUrl DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-80.png" />
+  <IconUrl DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-80.png" />
   <SupportUrl DefaultValue="{{SUPPORT_URL}}" />
   <AppDomains>
     <AppDomain>{{TASKPANE_ORIGIN}}</AppDomain>
@@ -105,11 +105,11 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-16.png" />
-        <bt:Image id="Icon.25x25" DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-25.png" />
-        <bt:Image id="Icon.32x32" DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-32.png" />
-        <bt:Image id="Icon.48x48" DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-48.png" />
-        <bt:Image id="Icon.80x80" DefaultValue="{{TASKPANE_ORIGIN}}/assets/icon-80.png" />
+        <bt:Image id="Icon.16x16" DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-16.png" />
+        <bt:Image id="Icon.25x25" DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-25.png" />
+        <bt:Image id="Icon.32x32" DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-32.png" />
+        <bt:Image id="Icon.48x48" DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-48.png" />
+        <bt:Image id="Icon.80x80" DefaultValue="{{TASKPANE_ORIGIN}}/assets/stella-icon-80.png" />
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="{{TASKPANE_ORIGIN}}/commands.html" />

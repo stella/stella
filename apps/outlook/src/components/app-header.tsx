@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { StellaMark } from "@stll/ui/components/stella-mark";
+
 export const AppHeader = ({
   action,
   subtitle,
@@ -13,9 +15,9 @@ export const AppHeader = ({
     <div className="flex min-w-0 items-start gap-2.5">
       <span
         aria-hidden="true"
-        className="bg-primary text-primary-foreground inline-flex size-7 shrink-0 items-center justify-center rounded-md font-serif text-lg leading-none"
+        className="bg-primary text-primary-foreground inline-flex size-7 shrink-0 items-center justify-center rounded-md"
       >
-        §
+        <StellaMark className="size-4.5" />
       </span>
       <div className="min-w-0">
         <h1 className="truncate text-sm/5 font-medium">{title}</h1>
