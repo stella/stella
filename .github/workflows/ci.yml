@@ -391,7 +391,7 @@ jobs:
             --volume "$RUNNER_TEMP/mcp-canary-server.mjs:/workspace/mcp-canary-server.mjs:ro" \
             "$AGENT_ENGINE_DOCKER_IMAGE" \
             node /workspace/mcp-canary-server.mjs
-          for attempt in {1..40}; do
+          for _ in {1..40}; do
             if docker exec "$NETWORK_CANARY_CONTAINER" node -e \
               'fetch("http://127.0.0.1:8787/health", { signal: AbortSignal.timeout(1000) }).then(async (response) => process.exit(response.ok && await response.text() === "sandbox-network-canary" ? 0 : 1), () => process.exit(1))'; then
               exit 0
