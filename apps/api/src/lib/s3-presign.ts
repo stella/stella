@@ -391,6 +391,45 @@ const getTenantAwsS3Client = async ({
   return await getScopedAwsS3Client(scope, actions, 0);
 };
 
+type TenantS3OperationHooks = {
+  resolveClient: typeof getTenantAwsS3Client;
+  readObject: (
+    client: AwsS3Client,
+    command: GetObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<Uint8Array>;
+  writeObject: (
+    client: AwsS3Client,
+    command: PutObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<void>;
+};
+
+const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
+  resolveClient: getTenantAwsS3Client,
+  readObject: async (client, command, signal) => {
+    const response = await client.send(command, { abortSignal: signal });
+    if (!response.Body) {
+      throw new S3PresignError({
+        message: "S3 returned an object without a response body",
+      });
+    }
+    return await response.Body.transformToByteArray();
+  },
+  writeObject: async (client, command, signal) => {
+    await client.send(command, { abortSignal: signal });
+  },
+};
+
+let tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
+
+/** Replace tenant-object I/O seams for unit tests. */
+export const setTenantS3OperationHooksForTesting = (
+  hooks: TenantS3OperationHooks,
+): void => {
+  tenantS3OperationHooks = hooks;
+};
+
 /** Read an object after enforcing its organization/workspace key scope. */
 export const readTenantS3ArrayBuffer = async ({
   key,
@@ -401,21 +440,21 @@ export const readTenantS3ArrayBuffer = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<ArrayBuffer> => {
-  const client = await getTenantAwsS3Client({
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  const client = await tenantS3OperationHooks.resolveClient({
     actions: ["s3:GetObject"],
     key,
     scope,
   });
-  const response = await client.send(
+  const bytes = await tenantS3OperationHooks.readObject(
+    client,
     new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-    { abortSignal: signal },
+    signal,
   );
-  if (!response.Body) {
-    throw new S3PresignError({
-      message: "S3 returned an object without a response body",
-    });
-  }
-  const bytes = await response.Body.transformToByteArray();
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,
@@ -441,19 +480,25 @@ export const writeTenantS3Object = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<void> => {
-  const client = await getTenantAwsS3Client({
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  const client = await tenantS3OperationHooks.resolveClient({
     actions: ["s3:PutObject"],
     key,
     scope,
   });
-  await client.send(
+  await tenantS3OperationHooks.writeObject(
+    client,
     new PutObjectCommand({
       Body: data,
       Bucket: envBase.S3_BUCKET,
       ContentType: contentType,
       Key: key,
     }),
-    { abortSignal: signal },
+    signal,
   );
 };
 
@@ -490,6 +535,7 @@ export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
   _stsClientPromise = null;
   _scopedClientPromises = new Map();
+  tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
 
 /**
