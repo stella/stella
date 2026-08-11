@@ -332,10 +332,26 @@ const MODULE_ANCHOR = "<module>";
 // Statement kinds that carry a name worth keying a waiver on. Import
 // declarations are named by their module specifier rather than their bindings,
 // so adding or removing an imported symbol does not rekey the entry.
-const declarationName = (statement: ts.Statement): string | null => {
+const declarationName = (
+  statement: ts.Statement,
+  directivePos: number,
+): string | null => {
   if (ts.isVariableStatement(statement)) {
-    const first = statement.declarationList.declarations.at(0);
-    return first && ts.isIdentifier(first.name) ? first.name.text : null;
+    // `const a = ..., b = () => { ... }` is one statement with two names. Key
+    // on the declarator the directive actually sits in, or two suppressions in
+    // the same statement would collapse onto one waiver identity.
+    const { declarations } = statement.declarationList;
+    const containing = declarations.find(
+      (declaration) =>
+        declaration.pos <= directivePos && directivePos < declaration.end,
+    );
+    const declarator = containing ?? declarations.at(0);
+    return declarator && ts.isIdentifier(declarator.name)
+      ? declarator.name.text
+      : null;
+  }
+  if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
+    return statement.name.text;
   }
   if (ts.isImportDeclaration(statement)) {
     return ts.isStringLiteral(statement.moduleSpecifier)
@@ -360,8 +376,8 @@ const declarationName = (statement: ts.Statement): string | null => {
 
 // A statement with no usable name (a bare expression, an `export {}` list)
 // anchors to the module itself. The key stays total, never absent.
-const anchorNameFor = (statement: ts.Statement): string =>
-  declarationName(statement) ?? MODULE_ANCHOR;
+const anchorNameFor = (statement: ts.Statement, directivePos: number): string =>
+  declarationName(statement, directivePos) ?? MODULE_ANCHOR;
 
 export const resolveDirectiveAnchors = (
   content: string,
@@ -373,7 +389,7 @@ export const resolveDirectiveAnchors = (
     source.getLineAndCharacterOfPosition(pos).line;
 
   const statements = source.statements.map((statement) => ({
-    name: anchorNameFor(statement),
+    statement,
     pos: statement.pos,
     end: statement.end,
     startLine: lineOf(statement.getStart(source)),
@@ -390,7 +406,7 @@ export const resolveDirectiveAnchors = (
       (statement) => statement.startLine <= line && line <= statement.endLine,
     );
     if (onCodeLine) {
-      return onCodeLine.name;
+      return anchorNameFor(onCodeLine.statement, pos);
     }
     // Otherwise the directive stands on its own line. Trivia-inclusive
     // statement ranges tile the file, so it belongs to the statement it
@@ -398,6 +414,6 @@ export const resolveDirectiveAnchors = (
     const owner = statements.find(
       (statement) => statement.pos <= pos && pos < statement.end,
     );
-    return owner?.name ?? MODULE_ANCHOR;
+    return owner ? anchorNameFor(owner.statement, pos) : MODULE_ANCHOR;
   });
 };

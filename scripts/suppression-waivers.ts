@@ -670,6 +670,32 @@ const TRAILING_FIXTURE_LINES = [
 ];
 const TRAILING_FIXTURE = `${TRAILING_FIXTURE_LINES.join("\n")}\n`;
 
+// One statement, two names. A directive in the second declarator must key on
+// the second: anchoring both to the first would let two separate security
+// suppressions collapse onto a single waiver identity.
+const SECOND_DECLARATOR_FIXTURE_LINES = [
+  'import { user } from "@/api/db/auth-schema";',
+  "",
+  "export const firstExample = () => db.select().from(workspaces),",
+  "  secondExample = () => {",
+  "    // eslint-disable-next-line security-guards/no-unscoped-user-query -- rows are already org-scoped",
+  "    return db.select().from(user);",
+  "  };",
+];
+const SECOND_DECLARATOR_FIXTURE = `${SECOND_DECLARATOR_FIXTURE_LINES.join("\n")}\n`;
+
+// A named namespace is a stable anchor; falling back to <module> would put
+// every namespace in a file under one key.
+const NAMESPACE_FIXTURE_LINES = [
+  'import { user } from "@/api/db/auth-schema";',
+  "",
+  "export namespace Audit {",
+  "  // eslint-disable-next-line security-guards/no-unscoped-user-query -- rows are already org-scoped",
+  "  export const rows = db.select().from(user);",
+  "}",
+];
+const NAMESPACE_FIXTURE = `${NAMESPACE_FIXTURE_LINES.join("\n")}\n`;
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
 
@@ -889,6 +915,26 @@ const runSelfTest = (): number => {
   if (trailing?.symbol !== "import @/api/db/auth-schema") {
     failures.push(
       `a trailing disable-line directive anchored to ${trailing?.symbol ?? "none"} instead of its own import`,
+    );
+  }
+
+  const secondDeclarator = observeSecurityDirectives(
+    ["apps/api/src/handlers/declarators.ts"],
+    () => SECOND_DECLARATOR_FIXTURE,
+  ).observed.at(0);
+  if (secondDeclarator?.symbol !== "secondExample") {
+    failures.push(
+      `a directive in the second declarator anchored to ${secondDeclarator?.symbol ?? "none"} instead of secondExample`,
+    );
+  }
+
+  const namespaced = observeSecurityDirectives(
+    ["apps/api/src/handlers/namespaced.ts"],
+    () => NAMESPACE_FIXTURE,
+  ).observed.at(0);
+  if (namespaced?.symbol !== "Audit") {
+    failures.push(
+      `a directive inside a named namespace anchored to ${namespaced?.symbol ?? "none"} instead of Audit`,
     );
   }
 
