@@ -151,6 +151,7 @@ Project: root
 - scslre 0.3.0 — MIT
 - sharp 0.35.3 — Apache-2.0
 - slimdom 4.3.5 — MIT
+- ssf 0.11.2 — Apache-2.0
 - streamdown 2.5.0 — Apache-2.0
 - tailwind-merge 3.6.0 — MIT
 - thinking-orbs 0.2.0 — MIT
