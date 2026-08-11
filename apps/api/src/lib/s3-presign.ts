@@ -405,10 +405,17 @@ type TenantS3OperationHooks = {
   ) => Promise<void>;
 };
 
+export const createTenantS3RequestSignal = (
+  signal: AbortSignal,
+  timeoutMs = AWS_SDK_REQUEST_TIMEOUT_MS,
+): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
   readObject: async (client, command, signal) => {
-    const response = await client.send(command, { abortSignal: signal });
+    const response = await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
     if (!response.Body) {
       throw new S3PresignError({
         message: "S3 returned an object without a response body",
@@ -417,7 +424,9 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
     return await response.Body.transformToByteArray();
   },
   writeObject: async (client, command, signal) => {
-    await client.send(command, { abortSignal: signal });
+    await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
   },
 };
 

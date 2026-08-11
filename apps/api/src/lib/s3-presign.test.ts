@@ -13,6 +13,7 @@ import {
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
+  createTenantS3RequestSignal,
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
@@ -253,6 +254,27 @@ describe("scoped object operations", () => {
 
   afterEach(() => {
     resetAwsS3ClientForTesting();
+  });
+
+  test("bounds tenant requests by caller cancellation and request timeout", async () => {
+    const controller = new AbortController();
+    const callerSignal = createTenantS3RequestSignal(controller.signal);
+    const callerReason = new Error("Caller cancelled");
+    controller.abort(callerReason);
+
+    expect(callerSignal.aborted).toBe(true);
+    expect(callerSignal.reason).toBe(callerReason);
+
+    const timeoutSignal = createTenantS3RequestSignal(
+      new AbortController().signal,
+      1,
+    );
+    await new Promise<void>((resolve) => {
+      timeoutSignal.addEventListener("abort", () => resolve(), { once: true });
+    });
+
+    expect(timeoutSignal.aborted).toBe(true);
+    expect(timeoutSignal.reason).toMatchObject({ name: "TimeoutError" });
   });
 
   test("executes an allowed tenant read with the requested key and signal", async () => {
