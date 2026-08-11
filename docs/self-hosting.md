@@ -113,12 +113,16 @@ docker run --detach \
 - An HTTPS PaddleOCR-compatible service is optional. Configure it only when
   organizations should be able to turn scanned PDFs into searchable text.
 
-RustFS is the supported self-hosted object store. Run it with TLS, unique
-credentials, persistent local storage, and a tested backup-and-restore plan.
-Single-node, single-disk mode has no storage redundancy; use RustFS's multi-node
-deployment for production data that must survive a host or disk failure. Set
-`RUSTFS_CORS_ALLOWED_ORIGINS` to the exact stella web origins so browsers can
-use presigned upload and download URLs; do not use a wildcard in production.
+RustFS is the supported self-hosted object store. Run it with TLS, persistent
+local storage, and a tested backup-and-restore plan. Never use RustFS's default
+`rustfsadmin` credentials. Give stella a dedicated, non-default IAM identity
+restricted to its configured buckets and the object read, write, delete, and
+bucket-list actions it needs. Single-node, single-disk mode has no storage
+redundancy. For production data that must survive a host or disk failure, follow
+RustFS's [production checklist](https://docs.rustfs.com/en/installation/requirement/checklists)
+and place erasure-set drives across independent node and disk failure domains.
+Set `RUSTFS_CORS_ALLOWED_ORIGINS` to the exact stella web origins so browsers
+can use presigned upload and download URLs; do not use a wildcard in production.
 Put the service URLs and credentials in `deploy/selfhost/.env`.
 
 ## Configure The API
