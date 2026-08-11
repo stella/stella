@@ -22,6 +22,11 @@ checks.
    bun run dev --dry-run --skip-install --no-browser
    ```
 
+   If this exits before the runner starts with a missing-package or
+   module-resolution error, run `bun ci` once and retry the exact same
+   dry-run command. Do not treat other failures as bootstrap errors or retry
+   them this way.
+
    Parse the numeric `offset:` and the `web:` and `api:` URLs. This
    offset covers application ports only; do not copy it into
    `--infra-offset` without the independent ownership check below.
