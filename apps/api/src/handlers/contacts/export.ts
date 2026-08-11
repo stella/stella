@@ -33,9 +33,40 @@ const config = {
   query: exportQuerySchema,
 } satisfies HandlerConfig;
 
+type ContactExportFormat = "csv" | "json";
+
+const serializeContactExport = (
+  portable: ReturnType<typeof contactToPortableImport>[],
+  format: ContactExportFormat,
+) => {
+  if (format === "json") {
+    return {
+      body: JSON.stringify({
+        version: CONTACT_IMPORT_SCHEMA_VERSION,
+        contacts: portable,
+      }),
+      contentType: "application/json",
+      fileName: "contacts-export.json",
+    };
+  }
+
+  const csvRows = [CONTACT_IMPORT_FIELDS.join(",")];
+  for (const contact of portable) {
+    csvRows.push(
+      CONTACT_IMPORT_FIELDS.map((field) => escapeCSV(contact[field])).join(","),
+    );
+  }
+  return {
+    body: csvRows.join("\n"),
+    contentType: "text/csv; charset=utf-8",
+    fileName: "contacts-export.csv",
+  };
+};
+
 const exportContacts = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query, recordAuditEvent }) {
+    const format = query.format ?? "csv";
     const exportResult = yield* Result.await(
       safeDb(async (tx) => {
         const [size] = await tx
@@ -70,12 +101,22 @@ const exportContacts = createSafeRootHandler(
           .where(eq(contacts.organizationId, session.activeOrganizationId))
           .orderBy(asc(contacts.displayName), asc(contacts.id))
           .limit(LIMITS.contactsCount);
+        const document = serializeContactExport(
+          contactsToExport.map(contactToPortableImport),
+          format,
+        );
+        if (
+          Buffer.byteLength(document.body, "utf-8") >
+          LIMITS.contactExportByteLimit
+        ) {
+          return { status: "too-large" as const };
+        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DOWNLOAD,
           resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
           resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
         });
-        return { status: "ready" as const, rows: contactsToExport };
+        return { status: "ready" as const, document };
       }),
     );
     if (exportResult.status === "too-large") {
@@ -87,38 +128,12 @@ const exportContacts = createSafeRootHandler(
       );
     }
 
-    const portable = exportResult.rows.map(contactToPortableImport);
-    const format = query.format ?? "csv";
-
-    if (format === "json") {
-      return Result.ok(
-        secureDocumentResponse({
-          body: JSON.stringify({
-            version: CONTACT_IMPORT_SCHEMA_VERSION,
-            contacts: portable,
-          }),
-          contentType: "application/json",
-          disposition: "attachment",
-          fileName: sanitizeFilename("contacts-export.json"),
-        }),
-      );
-    }
-
-    const csvRows = [CONTACT_IMPORT_FIELDS.join(",")];
-    for (const contact of portable) {
-      csvRows.push(
-        CONTACT_IMPORT_FIELDS.map((field) => escapeCSV(contact[field])).join(
-          ",",
-        ),
-      );
-    }
-
     return Result.ok(
       secureDocumentResponse({
-        body: csvRows.join("\n"),
-        contentType: "text/csv; charset=utf-8",
+        body: exportResult.document.body,
+        contentType: exportResult.document.contentType,
         disposition: "attachment",
-        fileName: sanitizeFilename("contacts-export.csv"),
+        fileName: sanitizeFilename(exportResult.document.fileName),
       }),
     );
   },

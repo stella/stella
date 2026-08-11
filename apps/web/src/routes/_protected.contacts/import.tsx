@@ -617,13 +617,13 @@ const MappingStep = ({
         <p className="text-muted-foreground text-sm">
           {t("contacts.importStudio.mapDescription")}
         </p>
-        <p
-          aria-label={t("contacts.importStudio.fileSummary", {
-            name: isolateBidi(state.file.name),
-            count: state.inspection.rowCount,
-          })}
-          className="text-muted-foreground mt-1 text-sm"
-        >
+        <p className="text-muted-foreground mt-1 text-sm">
+          <span className="sr-only">
+            {t("contacts.importStudio.fileSummary", {
+              name: isolateBidi(state.file.name),
+              count: state.inspection.rowCount,
+            })}
+          </span>
           <span aria-hidden="true" className="flex items-center gap-1">
             <BidiText>{state.file.name}</BidiText>
             <span>·</span>

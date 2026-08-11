@@ -1172,7 +1172,7 @@
     "emptyDescription": "Vytvořte kontakty jednou a pak je používejte napříč spisy, stranami a fakturačními údaji.",
     "emptyTitle": "Vytvořte první kontakt",
     "emptyVideoLabel": "Přehled kontaktů",
-    "exportFailed": "Kontakt: export se nezdařil.",
+    "exportFailed": "Soubor s kontakty se nepodařilo uložit.",
     "fields": {
       "bankAccountBankName": "Název banky",
       "bankAccountBic": "BIC/SWIFT",

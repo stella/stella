@@ -281,7 +281,32 @@ function ContactsPage() {
               className="self-center"
               loading={isFetchingNextPage}
               onClick={() => {
-                detached(fetchNextPage(), "ContactsPage.fetchNextPage");
+                const request = fetchNextPage()
+                  .then((result) => {
+                    if (result.isError) {
+                      stellaToast.add({
+                        description: userErrorFromThrown(
+                          result.error,
+                          t("common.unexpectedError"),
+                        ),
+                        title: t("errors.actionFailed"),
+                        type: "error",
+                      });
+                    }
+                    return result;
+                  })
+                  .catch((error: unknown) => {
+                    stellaToast.add({
+                      description: userErrorFromThrown(
+                        error,
+                        t("common.unexpectedError"),
+                      ),
+                      title: t("errors.actionFailed"),
+                      type: "error",
+                    });
+                    throw error;
+                  });
+                detached(request, "ContactsPage.fetchNextPage");
               }}
               variant="outline"
             >
