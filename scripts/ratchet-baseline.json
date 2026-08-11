@@ -87,7 +87,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 614,
+    "count": 612,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -103,7 +103,7 @@
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 6,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 5,
+      "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 2,
