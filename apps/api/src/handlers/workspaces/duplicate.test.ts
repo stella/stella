@@ -61,8 +61,18 @@ const flushWorkspaceSearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
+// The full export set, not just the two this suite asserts on: a partial
+// factory silently leaves the rest of the module real, so a handler reaching
+// the queue through another entry point would open a transaction here.
+const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
 void mock.module("@/api/lib/search/projection-repair-queue", () => ({
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
+  drainSearchProjectionRepairQueue: idleRepairOutcome,
+  enqueueContactSearchRepairs: async () => undefined,
+  enqueueEntitySearchRepairs: async () => undefined,
   enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,
+  flushContactSearchRepairs: idleRepairOutcome,
+  flushEntitySearchRepairs: idleRepairOutcome,
   flushWorkspaceSearchRepairs: flushWorkspaceSearchRepairsMock,
 }));
 
