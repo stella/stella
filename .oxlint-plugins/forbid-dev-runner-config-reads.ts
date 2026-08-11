@@ -16,6 +16,7 @@ const CONFIG_ENV_NAMES = new Set([
   "STELLA_INFRA_OFFSET",
   "STELLA_PORT_OFFSET",
 ]);
+const ARGV_NAMES = new Set(["argv"]);
 
 const staticPropertyName = (node: Record<string, unknown>): string | null => {
   if (node.computed === false) {
@@ -41,6 +42,39 @@ const isRunnerConfigEnvironmentAccess = (node: unknown): boolean => {
   return name !== null && CONFIG_ENV_NAMES.has(name);
 };
 
+const isObjectPatternWithProperty = (
+  node: unknown,
+  names: ReadonlySet<string>,
+): boolean => {
+  if (!isAstNode(node) || node.type !== "ObjectPattern") {
+    return false;
+  }
+  const properties = node.properties;
+  if (!Array.isArray(properties)) {
+    return false;
+  }
+  return properties.some((property) => {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return false;
+    }
+    const key = getPropertyName(property.key);
+    return key !== null && names.has(key);
+  });
+};
+
+const isRunnerConfigDestructuring = (node: unknown): boolean => {
+  if (!isAstNode(node) || node.type !== "VariableDeclarator") {
+    return false;
+  }
+  if (isIdentifier(node.init, "process")) {
+    return isObjectPatternWithProperty(node.id, ARGV_NAMES);
+  }
+  return (
+    isProcessAccess(node.init, "env") &&
+    isObjectPatternWithProperty(node.id, CONFIG_ENV_NAMES)
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "forbid-dev-runner-config-reads" },
   rules: {
@@ -59,6 +93,11 @@ export default eslintCompatPlugin({
               isProcessAccess(node, "argv") ||
               isRunnerConfigEnvironmentAccess(node)
             ) {
+              context.report({ node, messageId: "configRead" });
+            }
+          },
+          VariableDeclarator(node) {
+            if (isRunnerConfigDestructuring(node)) {
               context.report({ node, messageId: "configRead" });
             }
           },
