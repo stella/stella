@@ -11,11 +11,12 @@ import {
   isStringLiteral,
 } from "./utils.ts";
 
-const CONFIG_ENV_NAMES = new Set([
+export const DEV_RUNNER_CONFIG_ENV_NAMES = [
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
   "STELLA_PORT_OFFSET",
-]);
+] as const;
+const CONFIG_ENV_NAMES = new Set(DEV_RUNNER_CONFIG_ENV_NAMES);
 const ARGV_NAMES = new Set(["argv"]);
 
 const staticPropertyName = (node: Record<string, unknown>): string | null => {
