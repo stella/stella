@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { t } from "elysia";
 
+import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import {
   authorizeUploadPurpose,
   uploadRoutePermission,
@@ -10,7 +11,10 @@ import {
   outlookIngestionDiagnosticSchema,
 } from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -40,6 +44,16 @@ const config = {
   params: reconcileParamsSchema,
 } satisfies HandlerConfig;
 
+type ReconcileUploadResult =
+  | { expiresAt: Date; state: "reserved" }
+  | { claimedAt: Date | null; state: "finalizing" }
+  | { reason: string; state: "retryable" }
+  | { reason: string; state: "rejected" }
+  | {
+      finalizedResult: PendingUploadFinalizedResult;
+      state: "complete";
+    };
+
 const reconcileUpload = createSafeHandler(
   config,
   async function* ({
@@ -50,7 +64,7 @@ const reconcileUpload = createSafeHandler(
     session,
     user,
     workspaceId,
-  }) {
+  }): SafeHandlerGenerator<ReconcileUploadResult> {
     const upload = yield* Result.await(
       safeDb((tx) =>
         tx.query.pendingUploads.findFirst({
