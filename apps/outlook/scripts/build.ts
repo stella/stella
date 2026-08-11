@@ -74,13 +74,7 @@ const writeContentHashedAsset = ({
   return `/assets/${hashedFileName}`;
 };
 
-const writeHtml = ({
-  fileName,
-  html,
-}: {
-  fileName: string;
-  html: string;
-}) => {
+const writeHtml = ({ fileName, html }: { fileName: string; html: string }) => {
   writeFileSync(path.resolve(DIST_DIR, fileName), html);
 };
 
@@ -289,17 +283,15 @@ if (targetEnv === "prod") {
   const origins = normalizeOutlookReleaseOrigins(releaseMetadata.origins);
   writeFileSync(
     path.resolve(DIST_DIR, "deployment-headers.json"),
-    `${
-      JSON.stringify(
-        {
-          rules: getOutlookDeploymentHeaderRules(origins),
-          schemaVersion: 1,
-          version: placeholders.VERSION,
-        },
-        null,
-        2,
-      )
-    }\n`,
+    `${JSON.stringify(
+      {
+        rules: getOutlookDeploymentHeaderRules(origins),
+        schemaVersion: 1,
+        version: placeholders.VERSION,
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 

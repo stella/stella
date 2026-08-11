@@ -23,7 +23,9 @@ const VERSION_BANNER_PATTERN =
 const parseOrigin = (): URL => {
   const flag = process.argv.find((arg) => arg.startsWith("--origin="));
   if (!flag) {
-    panic("Usage: bun scripts/probe-deployment.ts --origin=https://outlook.example");
+    panic(
+      "Usage: bun scripts/probe-deployment.ts --origin=https://outlook.example",
+    );
   }
   const origin = new URL(flag.slice("--origin=".length));
   if (origin.protocol !== "https:" || origin.pathname !== "/") {
@@ -167,7 +169,9 @@ const run = async () => {
     value: releaseCacheControl,
   });
   const manifestResponse = await fetchText(urlAt(origin, "/manifest.xml"));
-  const manifestRule = headerRules.find((rule) => rule.path === "/manifest.xml");
+  const manifestRule = headerRules.find(
+    (rule) => rule.path === "/manifest.xml",
+  );
   const manifestCacheControl = manifestRule?.headers["Cache-Control"];
   if (!manifestCacheControl) {
     panic("release contract has no manifest cache rule.");
@@ -204,7 +208,9 @@ const run = async () => {
         panic(`${fileName} version does not match release.json.`);
       }
       const assetPaths = getHtmlAssetPaths(html);
-      if (assetPaths.some((assetPath) => !isContentHashedCodeAsset(assetPath))) {
+      if (
+        assetPaths.some((assetPath) => !isContentHashedCodeAsset(assetPath))
+      ) {
         panic(`${fileName} references a non-hashed code asset.`);
       }
       return assetPaths;
@@ -238,11 +244,14 @@ const run = async () => {
     }),
   );
 
-  console.log(`Outlook deployment probe passed for ${origin.origin} (${release.version}).`);
+  console.log(
+    `Outlook deployment probe passed for ${origin.origin} (${release.version}).`,
+  );
 };
 
 run().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : "Unknown probe failure.";
+  const message =
+    error instanceof Error ? error.message : "Unknown probe failure.";
   console.error(`Outlook deployment probe failed: ${message}`);
   process.exit(1);
 });

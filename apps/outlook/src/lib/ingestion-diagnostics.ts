@@ -19,9 +19,7 @@ type DiagnosticBase = Omit<
 const normalizeHost = (value: unknown): "Outlook" | null =>
   value === "Outlook" ? value : null;
 
-const normalizePlatform = (
-  value: unknown,
-): DiagnosticBase["platform"] => {
+const normalizePlatform = (value: unknown): DiagnosticBase["platform"] => {
   switch (value) {
     case "Android":
     case "iOS":
@@ -81,7 +79,10 @@ export const createIngestionDiagnosticBase = (
   aggregateAttachmentBytes: attachments.every(
     (attachment) => attachment.size !== null,
   )
-    ? attachments.reduce((total, attachment) => total + (attachment.size ?? 0), 0)
+    ? attachments.reduce(
+        (total, attachment) => total + (attachment.size ?? 0),
+        0,
+      )
     : null,
   attachmentCount: attachments.length,
   ...readRuntimeDiagnostics(),
@@ -101,8 +102,7 @@ export const diagnosticBase = (
   attachmentCount: diagnostic.attachmentCount,
   host: diagnostic.host,
   hostVersion: diagnostic.hostVersion,
-  mailboxRequirementSetSupported:
-    diagnostic.mailboxRequirementSetSupported,
+  mailboxRequirementSetSupported: diagnostic.mailboxRequirementSetSupported,
   platform: diagnostic.platform,
   traceId: diagnostic.traceId,
 });

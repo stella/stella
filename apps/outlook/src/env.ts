@@ -31,10 +31,7 @@ export const env = {
     defaults.apiBaseUrl,
   ),
   buildEnvironment: BUILD_ENV,
-  releaseVersion: readBuildString(
-    globalThis.STELLA_OUTLOOK_VERSION,
-    "0.0.0.0",
-  ),
+  releaseVersion: readBuildString(globalThis.STELLA_OUTLOOK_VERSION, "0.0.0.0"),
   signInOrigin: readBuildString(
     globalThis.STELLA_WEB_ORIGIN,
     defaults.stellaWebUrl,

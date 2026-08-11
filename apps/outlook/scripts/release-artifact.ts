@@ -139,8 +139,7 @@ export const getOutlookHtmlSecurityHeaders = (
     "Permissions-Policy":
       "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
     "Referrer-Policy": "no-referrer",
-    "Strict-Transport-Security":
-      "max-age=63072000; includeSubDomains; preload",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "X-Content-Type-Options": "nosniff",
     "X-DNS-Prefetch-Control": "off",
     "X-Permitted-Cross-Domain-Policies": "none",
@@ -235,9 +234,10 @@ const HTML_RELEASE_VERSION_PATTERN =
 export const getHtmlReleaseVersion = (html: string): string | null =>
   HTML_RELEASE_VERSION_PATTERN.exec(html)?.at(1) ?? null;
 
-export const getHtmlAssetPaths = (html: string): string[] => [
-  ...html.matchAll(/(?:href|src)="(\/assets\/[^"?#]+)"/gu),
-].map((match) => match[1] ?? "");
+export const getHtmlAssetPaths = (html: string): string[] =>
+  [...html.matchAll(/(?:href|src)="(\/assets\/[^"?#]+)"/gu)].map(
+    (match) => match[1] ?? "",
+  );
 
 export const isContentHashedCodeAsset = (assetPath: string): boolean =>
   /^\/assets\/[a-z-]+\.[a-f0-9]{16}\.(?:css|js)$/u.test(assetPath);
@@ -248,8 +248,8 @@ export const isContentHashedCodeAsset = (assetPath: string): boolean =>
  */
 export const assertOfficeRuntimeEntryIsIsolated = (source: string): void => {
   const forbiddenImports = [
-    "from \"react\"",
-    "from \"react-dom\"",
+    'from "react"',
+    'from "react-dom"',
     'from "@/app"',
     'from "@/components/',
     'from "@/hooks/',
