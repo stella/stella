@@ -186,9 +186,14 @@ ${decisionText}`;
       .update(caseLawDecisions)
       .set({ analysis: null })
       .where(eq(caseLawDecisions.id, decisionId))
-      .catch(() => {
-        // Best-effort sentinel cleanup; swallow to avoid
-        // losing the original failure from the outer catch.
+      .catch((cleanupError: unknown) => {
+        // Best-effort sentinel cleanup. Capture rather than swallow: a
+        // failure here leaves the decision pinned in the generating state,
+        // which is a distinct fault from the one the outer catch reported.
+        captureError(cleanupError, {
+          source: "case-law-analysis-sentinel-cleanup",
+          decisionId,
+        });
       });
   }
 };

@@ -321,12 +321,18 @@ const pdfFileName = (fileName: string): string => {
 const fetchStoredFileResponse = async (
   key: string,
 ): Promise<Response | null> => {
+  // Both callers translate `null` into a 502, so the status is already the
+  // right one; what the discarded rejection cost was any way to tell a
+  // storage outage from a timeout.
   const response = await fetchWithTimeout(
     getS3().presign(key, { expiresIn: FILE_READ_URL_EXPIRY_SECONDS }),
     {
       timeoutMs: 30_000,
     },
-  ).catch(() => null);
+  ).catch((error: unknown) => {
+    captureError(error, { source: "stored-file-fetch" });
+    return null;
+  });
 
   if (!response?.ok) {
     return null;

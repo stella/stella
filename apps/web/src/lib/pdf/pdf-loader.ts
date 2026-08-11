@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type * as PDFJS from "pdfjs-dist";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { DEFAULT_PDF_WIDTH } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
 import type { PDFAttachment } from "@/lib/pdf/parse-attachments";
@@ -213,7 +214,12 @@ export const loadPDF = async ({
 
       let isXfa = false;
       if (!isPortfolio) {
-        const xfaHtml = await firstPage.proxy.getXfa().catch(() => null);
+        const xfaHtml = await firstPage.proxy
+          .getXfa()
+          .catch((error: unknown) => {
+            getAnalytics().captureError(error);
+            return null;
+          });
         isXfa = xfaHtml !== null;
       }
 

@@ -90,6 +90,9 @@ export type { Messages as default };
 if (checkOnly) {
   const existing = await Bun.file(outputPath)
     .text()
+    // A missing generated file is the "stale" answer this check is asking
+    // for, not a failure to report.
+    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
     .catch(() => "");
   if (existing !== declaration) {
     console.error(

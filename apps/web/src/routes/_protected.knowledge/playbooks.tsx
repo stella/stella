@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { playbooksRouteAvailable } from "@/hooks/use-playbooks-preview";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { knowledgeKeys, playbooksOptions } from "@/lib/knowledge/queries";
@@ -166,13 +167,12 @@ function RouteComponent() {
     setLoadingMore(false);
     setExtraPlaybooks([]);
     setNextCursor(undefined);
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.playbooks.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "knowledge-playbooks.invalidate",
+    );
   }, [queryClient, activeOrganizationId]);
 
   const handleBackToList = useCallback(() => {
@@ -212,9 +212,7 @@ function RouteComponent() {
         nextCursor={currentNextCursor}
         onBrowseStarters={() => setStarterGalleryOpen(true)}
         onLoadMore={() => {
-          handleLoadMore().catch(() => {
-            /* fire-and-forget */
-          });
+          detached(handleLoadMore(), "knowledge-playbooks.load-more");
         }}
         onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
         onRefresh={handleRefresh}

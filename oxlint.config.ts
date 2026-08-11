@@ -590,6 +590,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
+    "./.oxlint-plugins/no-swallowed-rejection.ts",
   ],
 
   overrides: [
@@ -1025,6 +1026,39 @@ export default defineConfig({
       ],
       rules: {
         "no-detached-void/no-detached-void": "error",
+      },
+    },
+    {
+      // The other half of the detached-promise guard: `.catch(() => null)`
+      // passes every floating-promise check while discarding the rejection,
+      // which is what the `void` ban exists to prevent. Product code only;
+      // resource teardown and response-body reads are allowlisted in the rule.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-rejection.fixture.ts",
+      ],
+      rules: {
+        "no-swallowed-rejection/no-swallowed-rejection": "error",
+      },
+    },
+    {
+      // Swallowing a rejection in a test is how a test asserts that nothing
+      // downstream depends on it. Mirror the detached-promise exclusion.
+      files: [
+        "apps/api/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/**/tests/**",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/**/tests/**",
+        "apps/web/src/**/__tests__/**",
+        "packages/*/src/**/*.{test,spec}.{ts,tsx}",
+        "packages/*/src/**/tests/**",
+        "packages/*/src/**/__tests__/**",
+      ],
+      rules: {
+        "no-swallowed-rejection/no-swallowed-rejection": "off",
       },
     },
     {

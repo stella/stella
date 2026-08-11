@@ -257,6 +257,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
     // Mark the eager pump's rejection as observed even when a caller kills the
     // process without calling wait(). wait() still awaits the original promise
     // and surfaces the same failure to callers that do observe completion.
+    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
     void pump.catch(() => undefined);
 
     return {

@@ -468,10 +468,10 @@ function ProfilePageBody() {
                 });
                 return;
               }
-              await updateDisplayName.mutateAsync().catch(() => {
-                // The error toast is surfaced via the mutation's
-                // `onError`; swallow here so the action settles.
-              });
+              detached(
+                updateDisplayName.mutateAsync(),
+                "account-profile.update-display-name",
+              );
             }}
             className="flex flex-col gap-4 p-4"
           >
@@ -528,10 +528,10 @@ function ProfilePageBody() {
           </div>
           <form
             action={async () => {
-              await updateWordEditIdentity.mutateAsync().catch(() => {
-                // The error toast is surfaced via the mutation's
-                // `onError`; swallow here so the action settles.
-              });
+              detached(
+                updateWordEditIdentity.mutateAsync(),
+                "account-profile.update-word-edit-identity",
+              );
             }}
             className="border-border flex flex-col gap-4 border-t p-4"
           >

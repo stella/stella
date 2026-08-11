@@ -330,6 +330,9 @@ const main = async (): Promise<void> => {
   const rendered = renderCapabilitiesModule(rows);
   const existing = await Bun.file(OUTPUT_PATH)
     .text()
+    // A missing generated file is the "stale" answer this check is asking
+    // for, not a failure to report.
+    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
     .catch(() => null);
   if (checkOnly) {
     if (existing === rendered) {

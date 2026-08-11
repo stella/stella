@@ -203,7 +203,10 @@ export const useEditSession = ({
 
     const fileResponse = await fetchWithTimeout(downloadUrl, {
       timeoutMs: 30_000,
-    }).catch(() => null);
+    }).catch((error: unknown) => {
+      getAnalytics().captureError(error);
+      return null;
+    });
     if (!fileResponse?.ok) {
       sessionRef.current = null;
       await releaseEditSession(releaseContext);

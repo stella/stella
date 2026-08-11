@@ -9,8 +9,9 @@ import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { safeErrorCode } from "@/api/lib/errors/utils";
+import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { logger } from "@/api/lib/observability/logger";
 import {
   credentialsFromEnvValues,
   type OptionalS3Credentials,
@@ -132,12 +133,21 @@ const fetchEcsCredentials = async ({
   if (authorizationToken) {
     headers["Authorization"] = authorizationToken;
   } else if (authorizationTokenFile) {
-    const token = await Bun.file(authorizationTokenFile)
-      .text()
-      .catch(() => null);
-    if (token) {
-      headers["Authorization"] = token.trim();
+    // The token file is configured, so an unreadable one is a
+    // misconfiguration, not an optional read. Sending the credential request
+    // without the header can only fail at the endpoint, several layers away
+    // from the cause; report it here and let the caller fall through to the
+    // next credential source.
+    const token = await Result.tryPromise(
+      async () => await Bun.file(authorizationTokenFile).text(),
+    );
+    if (token.isErr()) {
+      logger.warn("s3.container_credentials_token_unreadable", {
+        "error.type": errorTag(token.error),
+      });
+      return null;
     }
+    headers["Authorization"] = token.value.trim();
   }
 
   return await fetchCredentialJson(url, { fetchImpl, headers });

@@ -642,9 +642,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                           key={day.date}
                           mode="month"
                           onCreate={(kind) => {
-                            handleCreate(day.date, kind).catch(() => {
-                              // Error handled inside handleCreate
-                            });
+                            detached(
+                              handleCreate(day.date, kind),
+                              "calendar-view.create-entry-month",
+                            );
                           }}
                           onDrop={(entityId, kind) =>
                             handleDrop({ date: day.date, entityId, kind })
@@ -676,9 +677,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                   key={day.date}
                   mode={mode}
                   onCreate={(kind) => {
-                    handleCreate(day.date, kind).catch(() => {
-                      // Error handled inside handleCreate
-                    });
+                    detached(
+                      handleCreate(day.date, kind),
+                      "calendar-view.create-entry-week",
+                    );
                   }}
                   onDrop={(entityId, kind) =>
                     handleDrop({ date: day.date, entityId, kind })

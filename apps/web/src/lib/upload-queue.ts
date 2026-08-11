@@ -1,3 +1,4 @@
+import { detached } from "@/lib/detached";
 import { transformUnknownError } from "@/lib/errors/utils";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -265,9 +266,10 @@ export class UploadQueue<T> {
       const next = this.pending.shift();
       if (next) {
         this.fileRunIds.set(next.file, this.runId);
-        this.processFile(next.file, next.attempt).catch(() => {
-          // Errors are handled inside processFile
-        });
+        detached(
+          this.processFile(next.file, next.attempt),
+          "upload-queue.process-file",
+        );
       }
     }
   }

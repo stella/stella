@@ -213,7 +213,7 @@ export const TemplateList = ({
     const file = e.target.files?.item(0);
     if (file) {
       // Errors are surfaced as toasts inside discover
-      discover(file).catch(() => undefined);
+      detached(discover(file), "template-list.discover-selected");
     }
     e.target.value = "";
   };
@@ -252,8 +252,7 @@ export const TemplateList = ({
       return;
     }
     // Errors are surfaced as toasts inside discover
-    // oxlint-disable-next-line no-empty-function
-    discover(file).catch(() => {});
+    detached(discover(file), "template-list.discover-dropped");
   };
 
   if (templates.length === 0 && !selectedCategoryId) {
@@ -1449,12 +1448,11 @@ const useInvalidateTemplates = () => {
   });
 
   return () => {
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "template-list.invalidate-templates",
+    );
   };
 };

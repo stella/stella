@@ -28,6 +28,7 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -283,9 +284,7 @@ export const AddEntityMenu = ({
             <MenuItem
               disabled={isCreationDisabled}
               onClick={() => {
-                handleCreateTask().catch(() => {
-                  // Error handled inside handleCreateTask
-                });
+                detached(handleCreateTask(), "add-entity-menu.create-task");
               }}
             >
               <SquareCheckIcon />

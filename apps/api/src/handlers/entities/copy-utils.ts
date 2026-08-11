@@ -4,6 +4,7 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -312,15 +313,15 @@ export const remapFileIds = (
 };
 
 /**
- * Best-effort cleanup of S3 keys. Failures are silently ignored
- * since this is rollback/cleanup code.
+ * Best-effort cleanup of S3 keys. A failure never fails the rollback, but
+ * it is reported: the object stays in the bucket, billed and unreferenced.
  */
 export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   const s3 = getS3();
   await Promise.all(
     keys.map(async (key) => {
-      await s3.delete(key).catch(() => {
-        // Intentional no-op: best-effort cleanup
+      await s3.delete(key).catch((error: unknown) => {
+        captureError(error, { source: "entity-copy-rollback" });
       });
     }),
   );

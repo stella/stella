@@ -39,7 +39,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
@@ -78,9 +78,18 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
       .fetchQuery(availabilityOptions)
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        getAnalytics().captureError(error);
+        return null;
+      });
 
-    if (availability?.available) {
+    // A failed availability check is not evidence that no key is configured,
+    // so it must not open the configure-key dialog.
+    if (availability === null) {
+      return false;
+    }
+
+    if (availability.available) {
       return true;
     }
 
