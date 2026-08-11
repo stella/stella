@@ -119,6 +119,36 @@ describe("canonicalDecisionDate", () => {
     expect(canonicalDecisionDate("2024-03-05X00:00:00")).toBeNull();
     expect(canonicalDecisionDate("")).toBeNull();
   });
+
+  test("rejects a malformed suffix instead of taking the prefix on faith", () => {
+    // A value whose tail is not a time is not a datetime, and its first ten
+    // characters are not a date the source stated.
+    expect(canonicalDecisionDate("2024-03-05T")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05Tgarbage")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05T25:99:99Z")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05-extra")).toBeNull();
+  });
+
+  test("accepts the datetime forms sources publish", () => {
+    expect(canonicalDecisionDate("2024-03-05T14:30")).toBe("2024-03-05");
+    expect(canonicalDecisionDate("2024-03-05T14:30:59.123Z")).toBe(
+      "2024-03-05",
+    );
+    expect(canonicalDecisionDate("2024-03-05T14:30:00+02:00")).toBe(
+      "2024-03-05",
+    );
+  });
+
+  test("does not depend on the host timezone's calendar", () => {
+    // Samoa crossed the date line at the end of 2011, so 2011-12-30 never
+    // happened there in local time. A decision dated that day is still a
+    // real record, and ingestion must not accept or reject it based on
+    // where the code runs.
+    process.env.TZ = "Pacific/Apia";
+    expect(parseIsoDateLocal("2011-12-30")).toBeNull();
+
+    expect(canonicalDecisionDate("2011-12-30")).toBe("2011-12-30");
+  });
 });
 
 describe("addDays", () => {

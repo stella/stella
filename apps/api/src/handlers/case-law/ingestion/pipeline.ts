@@ -616,16 +616,24 @@ const processDecisionAttempt = async ({
   refresh,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
-  if (input.decisionDate !== undefined && result.decisionDate === undefined) {
+  const rejectedDecisionDate =
+    result.decisionDate === undefined ? input.decisionDate : undefined;
+  if (rejectedDecisionDate !== undefined) {
     logger.warn(DECISION_DATE_OUT_OF_BOUNDS, {
       sourceId,
       caseNumber: result.caseNumber,
-      decisionDate: input.decisionDate.slice(
+      decisionDate: rejectedDecisionDate.slice(
         0,
         MAX_LOGGED_DECISION_DATE_LENGTH,
       ),
     });
   }
+  // The column needs all three states an observation can carry, and an
+  // update omits an undefined field: a usable date is written, a stated but
+  // unusable one clears the column rather than leaving in place the value it
+  // was meant to replace, and an unstated one leaves the row as it is.
+  const persistedDecisionDate =
+    rejectedDecisionDate === undefined ? result.decisionDate : null;
   const proposedDecisionId = createSafeId<"caseLawDecision">();
   const exactSourceIdentityCandidates = (() => {
     if (!result.sourceDocumentId) {
@@ -1406,7 +1414,7 @@ const processDecisionAttempt = async ({
                   language: result.language,
                   sheetNumber: result.sheetNumber,
                   languageGroupKey,
-                  decisionDate: result.decisionDate,
+                  decisionDate: persistedDecisionDate,
                   decisionType: result.decisionType,
                   sourceUrl: result.sourceUrl,
                   documentUrl: result.documentUrl,
@@ -1544,7 +1552,7 @@ const processDecisionAttempt = async ({
           country: result.country,
           language: result.language,
           languageGroupKey,
-          decisionDate: result.decisionDate,
+          decisionDate: persistedDecisionDate,
           decisionType: result.decisionType,
           ...payloadColumns,
           sourceUrl: result.sourceUrl,
