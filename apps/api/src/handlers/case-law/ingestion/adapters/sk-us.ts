@@ -765,6 +765,10 @@ export const skUsAdapter = defineSourceAdapter({
     nextSlice: skUsNextSlice,
     previousSlice: skUsPreviousSlice,
     tipWindowDays: SK_US_TIP_WINDOW_SLICES,
+    // The crawl keeps the listing-only row a failed PDF leaves behind and
+    // `buildSkUsDecision` marks it `isListingOnly`; unset, that row would count
+    // as held and its document would never be hunted again.
+    heldRequiresDetail: true,
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
   },

@@ -489,6 +489,22 @@ describe("sk-us buildDecision", () => {
     });
   });
 
+  test("the marker the crawl stores is what makes heldness require detail", async () => {
+    mockFetch({ search: [], download: { type: "status", status: 404 } });
+
+    // Two halves of one decision, asserted together because either alone is
+    // silently wrong. The crawl keeps the row the reconciliation refuses and
+    // marks it `isListingOnly`; the capability declares that such a row is not
+    // held. Drop the marker and the declaration filters nothing; drop the
+    // declaration and the marked row reads as held, the slice reads reconciled,
+    // and the court is never asked for that document again.
+    expect(await buildSkUsDecision(CHAMBER_RESOLUTION)).toMatchObject({
+      type: "detail-unavailable",
+      decision: { isListingOnly: true },
+    });
+    expect(reconciliation.heldRequiresDetail).toBe(true);
+  });
+
   test("a 200 that is not a PDF is no document either", async () => {
     mockFetch({ search: [], download: { type: "not-a-pdf" } });
 
