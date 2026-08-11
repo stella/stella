@@ -29,6 +29,8 @@ const exportQuerySchema = t.Object({
 const CONTACT_EXPORT_BYTE_LIMIT = 25 * 1024 * 1024;
 
 const config = {
+  description:
+    "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "contact_directory" },
   access: "read",

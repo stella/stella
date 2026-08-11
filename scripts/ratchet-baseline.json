@@ -573,10 +573,10 @@
     }
   },
   "capability-file-transport-suppressed": {
-    "count": 42,
+    "count": 44,
     "files": {
-      "apps/api/src/mcp/generated/capability-catalog.json": 21,
-      "packages/cli/src/generated/capability-catalog.json": 21
+      "apps/api/src/mcp/generated/capability-catalog.json": 22,
+      "packages/cli/src/generated/capability-catalog.json": 22
     }
   },
   "read-capabilities-with-write-scope": {
