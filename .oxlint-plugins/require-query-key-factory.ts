@@ -53,17 +53,24 @@ const calleeMethodName = (callee) => {
   return getPropertyName(unwrapped.property);
 };
 
-// The initializer of a local `const` binding the node names, so a filters
-// object or a key hoisted into a variable resolves to the same literal the
-// inline form would have carried. One level only: a binding initialized from
-// another binding is not a hand-typed key at this call site. `let` is skipped
-// because a later write can replace the value this would report on.
+// A module-scoped `const` holding a key is the file's own factory: the query
+// that defines the cache entry and the call that clears it read the same
+// declaration, so neither can drift from the other. A binding inside the
+// function is the opposite — a literal written at the call site and moved up a
+// few lines — so only those resolve.
+const MODULE_SCOPES = new Set(["global", "module"]);
+
+// The initializer of a function-local `const` binding the node names, so a
+// filters object or a key hoisted into a variable resolves to the same literal
+// the inline form would have carried. One level only: a binding initialized
+// from another binding is not a hand-typed key at this call site. `let` is
+// skipped because a later write can replace the value this would report on.
 const constInitializer = (identifier, context) => {
   let scope = context.sourceCode.getScope(identifier);
   while (scope) {
     const variable = scope.set.get(identifier.name);
     if (variable) {
-      if (variable.defs.length !== 1) {
+      if (MODULE_SCOPES.has(scope.type) || variable.defs.length !== 1) {
         return null;
       }
       const definition = variable.defs.at(0);

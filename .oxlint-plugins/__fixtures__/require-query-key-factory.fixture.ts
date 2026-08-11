@@ -130,6 +130,15 @@ export const invalidatesHoistedFactoryKey = async () => {
   await queryClient.invalidateQueries(filters);
 };
 
+// A module-scoped key const is the file's own factory: the query that defines
+// the entry and the call that clears it read this one declaration.
+const MODULE_QUERY_KEY = ["fixture", "module"] as const;
+
+export const invalidatesModuleScopedKey = async () => {
+  await queryClient.invalidateQueries({ queryKey: MODULE_QUERY_KEY });
+  queryClient.setQueryData(MODULE_QUERY_KEY, { items: [] });
+};
+
 export const invalidatesFactoryKey = async () => {
   await queryClient.invalidateQueries({
     queryKey: fixtureKeys.scoped(organizationId),
