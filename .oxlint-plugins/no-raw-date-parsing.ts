@@ -19,8 +19,8 @@ import type { ESTree } from "@oxlint/plugins";
 //    the clocks-change day is 23 or 25 hours, not 24. Calendar math must
 //    use `addDays` from `lib/dates.ts`; a genuine 24-hour DURATION (TTL,
 //    staleness window, polling interval) must use the named `DAY_IN_MS`
-//    from the `@stll/time` package (its one home, outside this rule's
-//    apps/{web,api}/src scope).
+//    from the `@stll/time` package (its one home, which sits outside the
+//    app source trees this rule is scoped to in oxlint.config.ts).
 //
 // Flagged:
 //   new Date("2024-01-01")

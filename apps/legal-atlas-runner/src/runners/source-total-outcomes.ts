@@ -8,16 +8,10 @@
 
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
-
-/**
- * A plain 24-hour day. The window below is an elapsed duration, not
- * calendar arithmetic, so no DST-aware helper applies. Spelled out here
- * rather than taken from `@stll/time`, which this package does not depend
- * on.
- */
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How old a recorded total may be before its source is asked again.
@@ -27,8 +21,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * after a poll finds every total fresh and asks nobody. Set below the
  * effective weekly cadence it produces, so a wake that lands slightly early
  * still refreshes rather than deferring a whole extra interval.
+ *
+ * An elapsed duration, not calendar arithmetic, so `DAY_IN_MS` applies and
+ * no DST-aware helper is needed.
  */
-export const SOURCE_TOTAL_STALE_AFTER_MS = 6 * DAY_MS;
+export const SOURCE_TOTAL_STALE_AFTER_MS = 6 * DAY_IN_MS;
 
 export const SOURCE_TOTAL_POLL_OUTCOME = {
   /** The publisher stated a number and it is now the recorded total. */

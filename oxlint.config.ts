@@ -1163,6 +1163,7 @@ export default defineConfig({
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
+        "apps/legal-atlas-runner/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-raw-date-parsing.fixture.ts",
       ],
       rules: {
@@ -1174,10 +1175,11 @@ export default defineConfig({
       // deliberately demonstrate the footguns (e.g. the dates.test.ts DST
       // assertions), so the date-parsing rule stays out of them. The day-length
       // literal's one home now lives in the `@stll/time` package, which this
-      // rule (scoped to apps/{api,web}/src) does not cover.
+      // rule (scoped to the app source trees above) does not cover.
       files: [
         "apps/api/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/legal-atlas-runner/src/**/*.{test,spec}.{ts,tsx}",
         "apps/api/src/**/__tests__/**",
         "apps/api/src/tests/**",
       ],

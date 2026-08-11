@@ -8,6 +8,8 @@
 
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 export const CYCLE_OUTCOME = {
   COMPLETED: "completed",
   FAILED: "failed",
@@ -125,7 +127,6 @@ export const CYCLE_CADENCE = {
 export type CycleCadence = (typeof CYCLE_CADENCE)[keyof typeof CYCLE_CADENCE];
 
 const FAST_DELAY_MS = 5000;
-const DAILY_DELAY_MS = 24 * 60 * 60 * 1000;
 
 const HOURLY_DELAY_MS = 60 * 60 * 1000;
 
@@ -148,7 +149,7 @@ const HOURLY_DELAY_MS = 60 * 60 * 1000;
  */
 export const CYCLE_CADENCE_DELAY_MS = {
   [CYCLE_CADENCE.FAST]: FAST_DELAY_MS,
-  [CYCLE_CADENCE.CAUGHT_UP]: DAILY_DELAY_MS,
+  [CYCLE_CADENCE.CAUGHT_UP]: DAY_IN_MS,
   [CYCLE_CADENCE.UNPRODUCTIVE_BACKOFF]: HOURLY_DELAY_MS,
 } as const satisfies Record<CycleCadence, number>;
 
