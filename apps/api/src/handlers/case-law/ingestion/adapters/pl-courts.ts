@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -6,10 +8,15 @@ import {
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
@@ -23,6 +30,8 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -46,6 +55,50 @@ const PUBLIC_JUDGMENT_URL = "https://www.saos.org.pl/judgments";
 const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
+
+/** The only language this source publishes; half of the fallback identity. */
+export const PL_COURTS_LANGUAGE = "pl";
+
+/**
+ * Earliest judgment date the publisher holds, and so the oldest slice the
+ * historical sweep walks back to.
+ *
+ * Determined from the source itself: the search endpoint sorted
+ * `JUDGMENT_DATE` ascending answers with the Constitutional Tribunal's first
+ * rulings, of which `U 1/86` of this date is the earliest — the Tribunal began
+ * adjudicating in 1986, so the corpus has nothing genuinely older. The single
+ * row the sort puts ahead of it carries a mangled four-digit year and is a
+ * publisher typo rather than a judgment from that year; the crawl still
+ * ingests it, since `fetchPage` walks the dump in id order and never consults
+ * a date.
+ */
+export const PL_COURTS_FIRST_SLICE = "1986-05-28";
+
+/**
+ * Slices near the tip the reconciliation re-walks on a fast cadence.
+ *
+ * A slice here is the judgment date, not the date the publisher listed it, and
+ * SAOS posts a judgment some time after it is handed down. So the tip window
+ * is where the newest dates fill in, and it is deliberately not sized to the
+ * publication lag: the loop re-walks every tip slice daily, so a window wide
+ * enough to cover a months-long lag would spend the source's whole turn on
+ * dates that mostly gain nothing. A fortnight keeps the fast lane a fixed,
+ * small amount of work; a date that fills in later is reached by the ledger's
+ * standing re-check of short slices and by the historical sweep, and the crawl
+ * itself never misses one, since it walks the dump in id order and new
+ * judgments take new ids whatever date they carry.
+ */
+const PL_COURTS_TIP_WINDOW_DAYS = 14;
+
+/**
+ * Ordering for a slice listing. Database id ascending is the only ordering
+ * this API offers that is stable under concurrent publication: ids are
+ * assigned once and never move, so a judgment added between two page requests
+ * appends past the last page instead of shifting every item onto a page the
+ * walk has already read.
+ */
+const SLICE_SORTING_FIELD = "DATABASE_ID";
+const SLICE_SORTING_DIRECTION = "ASC";
 
 const COURT_TYPE_MAP: Record<string, string> = {
   COMMON: "Sąd powszechny",
@@ -131,7 +184,12 @@ type SaosReferencedCourtCase = {
   generated?: boolean | null;
 };
 
-type SaosItem = {
+/**
+ * One judgment as SAOS states it. The dump, the search listing and the
+ * per-judgment detail all answer with this shape; the listing endpoints simply
+ * leave more of it out.
+ */
+export type SaosItem = {
   id?: number | null | undefined;
   href?: string | null | undefined;
   courtType?: string | null | undefined;
@@ -512,30 +570,127 @@ const normalizeOptionalArray = <T>(
   return [];
 };
 
-const parseItemWithDetail = async (
-  raw: unknown,
-  signal?: AbortSignal,
-): Promise<IngestionResult | null> => {
-  if (!isRecord(raw)) {
-    return null;
+/**
+ * The publisher's own document id for an item, or undefined where the item
+ * carries none.
+ *
+ * Stated here rather than at each use so the crawl and the reconciliation
+ * cannot key a decision differently. Returning undefined for a missing id is
+ * the point: stringifying it would key every id-less item on the same literal
+ * `"undefined"` and collapse them onto one row.
+ */
+export const plCourtsSourceDocumentId = (
+  id: number | null | undefined,
+): string | undefined => {
+  if (id === undefined || id === null || !Number.isInteger(id)) {
+    return undefined;
   }
+  const candidate = String(id);
+  return isPersistableSourceDocumentId(candidate) ? candidate : undefined;
+};
 
+type PrimaryCaseNumberOptions = {
+  /** The record to read first; the detail where one was fetched. */
+  preferred: SaosItem;
+  /** Consulted only where the preferred record states no docket. */
+  fallback?: SaosItem | undefined;
+};
+
+/** The docket this source keys a decision on, preferring the richer record. */
+const primaryCaseNumber = ({
+  preferred,
+  fallback,
+}: PrimaryCaseNumberOptions): string | undefined =>
+  toOptionalValue(
+    (
+      preferred.courtCases?.find((courtCase) => courtCase.caseNumber) ??
+      fallback?.courtCases?.find((courtCase) => courtCase.caseNumber)
+    )?.caseNumber,
+  );
+
+/**
+ * The identity the ingest would store for this listing item.
+ *
+ * Stated once, here, rather than restated by every caller that has to decide
+ * whether a listed item is already held: the crawl and the reconciliation loop
+ * key rows the same way, and a second copy of the rule would let them disagree
+ * about which rows exist. Both halves are the same expressions the build path
+ * uses, so the two cannot drift apart.
+ */
+export const plCourtsListingIdentity = (item: SaosItem): ListingIdentity => {
+  const sourceDocumentId = plCourtsSourceDocumentId(item.id);
+  if (sourceDocumentId !== undefined) {
+    return { type: "document", sourceDocumentId };
+  }
+  const caseNumber = primaryCaseNumber({ preferred: item });
+  if (caseNumber === undefined) {
+    return { type: "unidentifiable" };
+  }
+  return {
+    type: "case-number",
+    caseNumber,
+    language: PL_COURTS_LANGUAGE,
+  };
+};
+
+/**
+ * What asking the per-judgment endpoint about a listed item produced.
+ *
+ * `listing-only` and `unavailable` are kept apart on purpose. The crawl treats
+ * both as "no detail" and stores the listing observation either way, which is
+ * right for a page that must keep moving. A caller filling gaps needs the
+ * difference: storing a detail-less row would make the identity held and take
+ * the document out of every later reconciliation, so a fetch that returned
+ * nothing has to be reported rather than folded into the decision.
+ */
+type PlCourtsDetailFetch =
+  | { type: "detail"; detail: SaosItem }
+  /** The item carries no id, so there is no detail record to ask for. */
+  | { type: "listing-only" }
+  /** An id was asked about and nothing came back. */
+  | { type: "unavailable" };
+
+const fetchDetailForItem = async (
+  item: SaosItem,
+  signal?: AbortSignal,
+): Promise<PlCourtsDetailFetch> => {
+  const id = item.id;
+  if (id === undefined || id === null) {
+    return { type: "listing-only" };
+  }
+  const detail = await fetchDetail(id, signal);
+  return detail === null ? { type: "unavailable" } : { type: "detail", detail };
+};
+
+type BuildPlDecisionOptions = {
+  /** The item exactly as the publisher listed it. */
+  listingItem: SaosItem;
+  /** The per-judgment record, where one was read. */
+  detail: SaosItem | null;
+};
+
+/**
+ * Build one decision from a listing item and whatever detail was read for it.
+ *
+ * Export-only refactor of what the crawl page already did, kept as one
+ * function so the listing walk and the crawl cannot parse or enrich
+ * differently.
+ */
+const buildPlDecision = ({
+  listingItem,
+  detail,
+}: BuildPlDecisionOptions): IngestionResult | null => {
   // SAFETY: All SaosItem fields are optional/nullable. The function
   // accesses them with optional chaining and null checks throughout.
   // Full isSaosItem validation was moved out of the hot path because
   // a single unexpected field type (e.g. dissentingOpinions as object)
   // would reject the entire page, blocking all ingestion.
-  const dumpItem = normalizeSaosDumpItem(raw);
-  const detail =
-    dumpItem.id !== undefined && dumpItem.id !== null
-      ? await fetchDetail(dumpItem.id, signal)
-      : null;
+  // Aliased rather than renamed throughout: the body below reads the listing
+  // half under this name in some sixty places, none of which changed.
+  const dumpItem = listingItem;
   const item = detail ?? dumpItem;
 
-  const primaryCase =
-    item.courtCases?.find((courtCase) => courtCase.caseNumber) ??
-    dumpItem.courtCases?.find((courtCase) => courtCase.caseNumber);
-  const caseNumber = toOptionalValue(primaryCase?.caseNumber);
+  const caseNumber = primaryCaseNumber({ preferred: item, fallback: dumpItem });
   const courtName =
     toOptionalValue(item.division?.court?.name) ??
     courtNameForItem(dumpItem) ??
@@ -620,7 +775,7 @@ const parseItemWithDetail = async (
     decisionDate,
     decisionType,
     fulltext,
-    sourceDocumentId: String(item.id ?? dumpItem.id),
+    sourceDocumentId: plCourtsSourceDocumentId(item.id ?? dumpItem.id),
     sourceUrl: publicSourceUrl(item.id ?? dumpItem.id),
     documentUrl,
     publisherCitedCases,
@@ -690,6 +845,202 @@ const parseItemWithDetail = async (
   };
 };
 
+const parseItemWithDetail = async (
+  raw: unknown,
+  signal?: AbortSignal,
+): Promise<IngestionResult | null> => {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const listingItem = normalizeSaosDumpItem(raw);
+  const fetched = await fetchDetailForItem(listingItem, signal);
+  return buildPlDecision({
+    listingItem,
+    detail: fetched.type === "detail" ? fetched.detail : null,
+  });
+};
+
+/**
+ * A reconciliation slice for this source is one judgment date, which is what
+ * the search endpoint's `judgmentDateFrom`/`judgmentDateTo` pair addresses
+ * — the API states both as `yyyy-MM-dd` in its own query template, and a
+ * filtered listing answers only with judgments carrying that date.
+ * `YYYY-MM-DD` sorts lexicographically in chronological order, which is the
+ * ordering the ledger relies on.
+ */
+const plCourtsDayStart = (slice: string): Date => {
+  const day = isoCalendarDay(slice);
+  if (day === null || day !== slice) {
+    panic(`pl-courts slice is not a UTC calendar day: ${slice}`);
+  }
+  return new Date(`${day}T00:00:00.000Z`);
+};
+
+const plCourtsStepSlice = (slice: string, days: number): string =>
+  toUtcDateString(addUtcDays(plCourtsDayStart(slice), days));
+
+const plCourtsNextSlice = (slice: string): string | null => {
+  const next = plCourtsStepSlice(slice, 1);
+  return next > toUtcDateString(new Date()) ? null : next;
+};
+
+const plCourtsPreviousSlice = (slice: string): string | null => {
+  const previous = plCourtsStepSlice(slice, -1);
+  return previous < PL_COURTS_FIRST_SLICE ? null : previous;
+};
+
+/** The search endpoint's answer, read only for what a slice walk needs. */
+type SaosSliceResponse = {
+  items?: Record<string, unknown>[] | null;
+  info?: { totalResults?: number | null } | null;
+};
+
+const isSaosSliceResponse = (value: unknown): value is SaosSliceResponse =>
+  isRecord(value) &&
+  isNullishArrayOf(value["items"], isRecord) &&
+  isSaosSearchResponse(value);
+
+type ListPlCourtsDayPageOptions = {
+  /** Judgment date, `YYYY-MM-DD`. */
+  date: string;
+  /** 0-indexed page within the day. */
+  page: number;
+  signal?: AbortSignal | undefined;
+};
+
+export type PlCourtsDayPage = {
+  items: SaosItem[];
+  /** 0 for a day the publisher lists no judgment for. */
+  totalPages: number;
+};
+
+/**
+ * One page of the publisher's own listing for a judgment date.
+ *
+ * The crawl reaches a judgment by walking the dump forward in id order and
+ * pays a detail fetch for every item on the page, which is the wrong shape for
+ * asking what a date contains. This is the same politeness, the same payload
+ * normalization and the same identity rule, stopping at the listing.
+ *
+ * The page count is derived from the filtered result total rather than read
+ * from the response, which states no page count. A payload without that total
+ * is refused rather than reported as a short day: an undercounted `reported`
+ * reads to the ledger as a fully collected slice.
+ */
+export const listPlCourtsDayPage = async ({
+  date,
+  page,
+  signal,
+}: ListPlCourtsDayPageOptions): Promise<PlCourtsDayPage> => {
+  const url = `${SEARCH_URL}?${new URLSearchParams({
+    pageSize: String(PAGE_SIZE),
+    pageNumber: String(page),
+    sortingField: SLICE_SORTING_FIELD,
+    sortingDirection: SLICE_SORTING_DIRECTION,
+    judgmentDateFrom: date,
+    judgmentDateTo: date,
+  }).toString()}`;
+
+  const response = await fetchWithTimeout(url, {
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.LIST,
+    headers: {
+      Accept: "application/json",
+      "User-Agent": INGESTION_USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    throw new AdapterFetchError({
+      message: `SAOS search API error: ${response.status}`,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      cursor: date,
+      httpStatus: response.status,
+    });
+  }
+
+  const json: unknown = await response.json();
+  if (!isSaosSliceResponse(json)) {
+    throw new AdapterFetchError({
+      message: "SAOS search API returned an invalid payload",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      cursor: date,
+    });
+  }
+
+  const totalResults = json.info?.totalResults;
+  if (totalResults === undefined || totalResults === null) {
+    throw new AdapterFetchError({
+      message: "SAOS search API stated no result total for the slice",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      cursor: date,
+    });
+  }
+
+  return {
+    items: normalizeOptionalArray(json.items).map(normalizeSaosDumpItem),
+    totalPages: Math.ceil(totalResults / PAGE_SIZE),
+  };
+};
+
+const listPlCourtsSlicePage = async ({
+  slice,
+  page,
+  signal,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const { items, totalPages } = await listPlCourtsDayPage({
+    date: slice,
+    page,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  return {
+    items: items.map((item) => ({
+      identity: plCourtsListingIdentity(item),
+      payload: item,
+    })),
+    totalPages,
+  };
+};
+
+/**
+ * Rebuild a decision from a payload the loop stored verbatim.
+ *
+ * The payload is renormalized rather than trusted: it may have been parked for
+ * days, and a shape the adapter no longer recognises has to be reported as
+ * unbuildable instead of parsed on faith.
+ */
+const buildPlCourtsFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (!isRecord(payload)) {
+    return { type: "unkeyable" };
+  }
+  const listingItem = normalizeSaosDumpItem(payload);
+  const fetched = await fetchDetailForItem(listingItem, signal);
+  switch (fetched.type) {
+    case "unavailable":
+      return { type: "detail-unavailable" };
+    case "listing-only":
+    case "detail": {
+      const decision = buildPlDecision({
+        listingItem,
+        detail: fetched.type === "detail" ? fetched.detail : null,
+      });
+      return decision === null
+        ? { type: "unkeyable" }
+        : { type: "built", decision };
+    }
+    default: {
+      const exhaustive: never = fetched;
+      return panic(
+        `Unhandled pl-courts detail fetch: ${JSON.stringify(exhaustive)}`,
+      );
+    }
+  }
+};
+
 export const plCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.PL_COURTS,
   name: "Polish Courts (SAOS)",
@@ -731,6 +1082,22 @@ export const plCourtsAdapter = defineSourceAdapter({
     } catch {
       return null;
     }
+  },
+
+  /**
+   * The publisher lists each judgment date independently of the crawl's dump
+   * cursor, so what a date contains is answerable without re-crawling it:
+   * enumerate the date, key each item the way the ingest would, and compare
+   * against what is held.
+   */
+  reconciliation: {
+    firstSlice: PL_COURTS_FIRST_SLICE,
+    sliceOf: toUtcDateString,
+    nextSlice: plCourtsNextSlice,
+    previousSlice: plCourtsPreviousSlice,
+    tipWindowDays: PL_COURTS_TIP_WINDOW_DAYS,
+    listSlicePage: listPlCourtsSlicePage,
+    buildDecision: buildPlCourtsFromPayload,
   },
 
   fetchPage: createPagePaginatedFetch<SaosDumpResponse>({
